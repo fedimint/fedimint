@@ -42,6 +42,10 @@ pub struct CipherText {
     pub signature: EphemeralSignature,
 }
 
+pub fn derive_public_key_share(sk: &SecretKeyShare) -> PublicKeyShare {
+    PublicKeyShare(G1Projective::generator().mul(sk.0).to_affine())
+}
+
 pub fn encrypt_preimage(
     agg_pk: &AggregatePublicKey,
     encryption_seed: &[u8; 32],

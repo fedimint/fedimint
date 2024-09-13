@@ -94,10 +94,13 @@ impl GatewayConnection for MockGatewayConnection {
             lightning_public_key: self.keypair.public_key(),
             module_public_key: self.keypair.public_key(),
             send_fee_default: PaymentFee::SEND_FEE_LIMIT_DEFAULT,
-            send_fee_minimum: PaymentFee::SEND_FEE_MINIMUM,
-            receive_fee: PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
+            send_fee_minimum: PaymentFee {
+                base: Amount::from_sats(50),
+                parts_per_million: 5_000,
+            },
             expiration_delta_default: 500,
             expiration_delta_minimum: 144,
+            receive_fee: PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
         }))
     }
 

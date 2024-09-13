@@ -60,7 +60,7 @@ pub struct LightningConfigConsensus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningConfigPrivate {
-    pub sk: SecretKeyShare,
+    pub tpe_sk: SecretKeyShare,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -154,7 +154,7 @@ fn migrate_config_private(
     config: &fedimint_ln_common::config::LightningConfigPrivate,
 ) -> LightningConfigPrivate {
     LightningConfigPrivate {
-        sk: SecretKeyShare(config.threshold_sec_key.0 .0 .0),
+        tpe_sk: SecretKeyShare(config.threshold_sec_key.0 .0 .0),
     }
 }
 
@@ -187,5 +187,10 @@ fn test_fee_consensus() {
     assert_eq!(
         FeeConsensus::default().fee(Amount::from_bitcoins(1)),
         Amount::from_sats(100_001)
+    );
+
+    assert_eq!(
+        FeeConsensus::default().fee(Amount::from_bitcoins(100_000)),
+        Amount::from_bitcoins(100) + Amount::from_sats(1)
     );
 }

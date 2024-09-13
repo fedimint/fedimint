@@ -1801,12 +1801,15 @@ impl Gateway {
                 // The base fee ensures that the gateway does not loose sats sending the payment due
                 // to fees paid on the transaction claiming the outgoing contract or
                 // subsequent transactions spending the newly issued ecash
-                send_fee_minimum: PaymentFee::SEND_FEE_MINIMUM,
+                send_fee_minimum: PaymentFee {
+                    base: Amount::from_sats(50),
+                    parts_per_million: 5_000,
+                },
+                expiration_delta_default: EXPIRATION_DELTA_LIMIT_DEFAULT,
+                expiration_delta_minimum: EXPIRATION_DELTA_MINIMUM_V2,
                 // The base fee ensures that the gateway does not loose sats receiving the payment
                 // due to fees paid on the transaction funding the incoming contract
                 receive_fee: PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
-                expiration_delta_default: EXPIRATION_DELTA_LIMIT_DEFAULT,
-                expiration_delta_minimum: EXPIRATION_DELTA_MINIMUM_V2,
             }))
     }
 
@@ -1851,9 +1854,7 @@ impl Gateway {
             ));
         }
 
-        let contract_amount = payment_info
-            .receive_fee
-            .subtract_fee(payload.invoice_amount.msats);
+        let contract_amount = payment_info.receive_fee.subtract_from(payload.amount.msats);
 
         if contract_amount == Amount::ZERO {
             return Err(GatewayError::IncomingContractError(
@@ -1885,9 +1886,9 @@ impl Gateway {
         let invoice = self
             .create_invoice_via_lnrpc_v2(
                 payment_hash,
-                payload.invoice_amount,
+                payload.amount,
                 payload.description.clone(),
-                payload.expiry_time,
+                payload.expiry_secs,
             )
             .await
             .map_err(|e| anyhow!(e))?;
@@ -1897,7 +1898,7 @@ impl Gateway {
         if dbtx
             .save_registered_incoming_contract(
                 payload.federation_id,
-                payload.invoice_amount,
+                payload.amount,
                 payload.contract,
             )
             .await

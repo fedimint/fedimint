@@ -12,7 +12,7 @@ normal = ["aquamarine"]
 
 [features]
 default = []
-cli = ["dep:clap", "dep:serde_json"]
+cli = ["dep:clap"]
 
 [lib]
 name = "fedimint_lnv2_client"
@@ -36,7 +36,7 @@ lightning-invoice = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true, optional = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tpe = { workspace = true }
 tracing = { workspace = true }
