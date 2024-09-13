@@ -499,16 +499,16 @@ impl LightningClientModule {
             ));
         }
 
-        let consensus_block_count = self
+        let consensus_block_height = self
             .module_api
-            .consensus_block_count()
+            .consensus_block_height()
             .await
             .map_err(|e| SendPaymentError::FederationError(e.to_string()))?;
 
         let contract = OutgoingContract {
             payment_image: PaymentImage::Hash(*invoice.payment_hash()),
             amount: send_fee.add_fee(amount),
-            expiration: consensus_block_count + expiration_delta + CONTRACT_CONFIRMATION_BUFFER,
+            expiration: consensus_block_height + expiration_delta + CONTRACT_CONFIRMATION_BUFFER,
             claim_pk: routing_info.module_public_key,
             refund_pk: refund_keypair.public_key(),
             ephemeral_pk,

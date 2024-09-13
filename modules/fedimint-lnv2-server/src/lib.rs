@@ -38,7 +38,7 @@ use fedimint_lnv2_common::config::{
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::endpoint_constants::{
     ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT,
-    CONSENSUS_BLOCK_COUNT_ENDPOINT, GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
+    CONSENSUS_BLOCK_HEIGHT_ENDPOINT, GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
     REMOVE_GATEWAY_ENDPOINT,
 };
 use fedimint_lnv2_common::{
@@ -57,7 +57,7 @@ use strum::IntoEnumIterator;
 use tpe::{AggregatePublicKey, PublicKeyShare, SecretKeyShare};
 
 use crate::db::{
-    BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, GatewayKey, GatewayPrefix,
+    BlockHeightVoteKey, BlockHeightVotePrefix, DbKeyPrefix, GatewayKey, GatewayPrefix,
     IncomingContractKey, IncomingContractPrefix, LightningOutputOutcomePrefix, OutgoingContractKey,
     OutgoingContractPrefix, OutputOutcomeKey, PreimageKey, PreimagePrefix, UnixTimeVoteKey,
     UnixTimeVotePrefix,
@@ -84,14 +84,14 @@ impl ModuleInit for LightningInit {
 
         for table in filtered_prefixes {
             match table {
-                DbKeyPrefix::BlockCountVote => {
+                DbKeyPrefix::BlockHeightVote => {
                     push_db_pair_items!(
                         dbtx,
-                        BlockCountVotePrefix,
-                        BlockCountVoteKey,
+                        BlockHeightVotePrefix,
+                        BlockHeightVoteKey,
                         u64,
                         lightning,
-                        "Lightning Block Count Votes"
+                        "Lightning Block Height Votes"
                     );
                 }
                 DbKeyPrefix::UnixTimeVote => {
@@ -332,7 +332,9 @@ impl ServerModule for Lightning {
         )];
 
         if let Ok(block_count) = self.btc_rpc.get_block_count().await {
-            items.push(LightningConsensusItem::BlockCountVote(block_count));
+            items.push(LightningConsensusItem::BlockHeightVote(
+                block_count.saturating_sub(1),
+            ));
         }
 
         items
@@ -345,13 +347,13 @@ impl ServerModule for Lightning {
         peer: PeerId,
     ) -> anyhow::Result<()> {
         match consensus_item {
-            LightningConsensusItem::BlockCountVote(vote) => {
+            LightningConsensusItem::BlockHeightVote(vote) => {
                 let current_vote = dbtx
-                    .insert_entry(&BlockCountVoteKey(peer), &vote)
+                    .insert_entry(&BlockHeightVoteKey(peer), &vote)
                     .await
                     .unwrap_or(0);
 
-                ensure!(current_vote < vote, "Block count vote is redundant");
+                ensure!(current_vote < vote, "Block height vote is redundant");
 
                 Ok(())
             }
@@ -387,7 +389,7 @@ impl ServerModule for Lightning {
 
                 let pub_key = match outgoing_witness {
                     OutgoingWitness::Claim(preimage) => {
-                        if contract.expiration <= self.consensus_block_count(dbtx).await {
+                        if contract.expiration <= self.consensus_block_height(dbtx).await {
                             return Err(LightningInputError::Expired);
                         }
 
@@ -401,7 +403,7 @@ impl ServerModule for Lightning {
                         contract.claim_pk
                     }
                     OutgoingWitness::Refund => {
-                        if contract.expiration > self.consensus_block_count(dbtx).await {
+                        if contract.expiration > self.consensus_block_height(dbtx).await {
                             return Err(LightningInputError::NotExpired);
                         }
 
@@ -418,19 +420,17 @@ impl ServerModule for Lightning {
 
                 (pub_key, contract.amount)
             }
-            LightningInputV0::Incoming(contract_id, agg_decryption_key) => {
+            LightningInputV0::Incoming(contract_id, agg_dk) => {
                 let contract = dbtx
                     .remove_entry(&IncomingContractKey(*contract_id))
                     .await
                     .ok_or(LightningInputError::UnknownContract)?;
 
-                if !contract
-                    .verify_agg_decryption_key(&self.cfg.consensus.tpe_agg_pk, agg_decryption_key)
-                {
+                if !contract.verify_agg_decryption_key(&self.cfg.consensus.tpe_agg_pk, agg_dk) {
                     return Err(LightningInputError::InvalidDecryptionKey);
                 }
 
-                let pub_key = match contract.decrypt_preimage(agg_decryption_key) {
+                let pub_key = match contract.decrypt_preimage(agg_dk) {
                     Some(..) => contract.commitment.claim_pk,
                     None => contract.commitment.refund_pk,
                 };
@@ -551,13 +551,13 @@ impl ServerModule for Lightning {
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
             api_endpoint! {
-                CONSENSUS_BLOCK_COUNT_ENDPOINT,
+                CONSENSUS_BLOCK_HEIGHT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, _params : () | -> u64 {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
 
-                    Ok(module.consensus_block_count(&mut dbtx).await)
+                    Ok(module.consensus_block_height(&mut dbtx).await)
                 }
             },
             api_endpoint! {
@@ -629,11 +629,11 @@ impl Lightning {
         Ok(Lightning { cfg, btc_rpc })
     }
 
-    async fn consensus_block_count(&self, dbtx: &mut DatabaseTransaction<'_>) -> u64 {
+    async fn consensus_block_height(&self, dbtx: &mut DatabaseTransaction<'_>) -> u64 {
         let num_peers = self.cfg.consensus.tpe_pks.to_num_peers();
 
         let mut counts = dbtx
-            .find_by_prefix(&BlockCountVotePrefix)
+            .find_by_prefix(&BlockHeightVotePrefix)
             .await
             .map(|entry| entry.1)
             .collect::<Vec<u64>>()
@@ -733,7 +733,7 @@ impl Lightning {
                 return Some(preimage);
             }
 
-            if expiration <= self.consensus_block_count(&mut dbtx).await {
+            if expiration <= self.consensus_block_height(&mut dbtx).await {
                 return None;
             }
         }
@@ -748,7 +748,7 @@ impl Lightning {
 
         let contract = dbtx.get_value(&OutgoingContractKey(contract_id)).await?;
 
-        let consensus_block_count = self.consensus_block_count(&mut dbtx).await;
+        let consensus_block_count = self.consensus_block_height(&mut dbtx).await;
 
         Some(contract.expiration.saturating_sub(consensus_block_count))
     }

@@ -14,7 +14,7 @@ use fedimint_core::{apply, async_trait_maybe_send, Amount, NumPeersExt, PeerId};
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::endpoint_constants::{
     ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT,
-    CONSENSUS_BLOCK_COUNT_ENDPOINT, CREATE_BOLT11_INVOICE_ENDPOINT, GATEWAYS_ENDPOINT,
+    CONSENSUS_BLOCK_HEIGHT_ENDPOINT, CREATE_BOLT11_INVOICE_ENDPOINT, GATEWAYS_ENDPOINT,
     OUTGOING_CONTRACT_EXPIRATION_ENDPOINT, REMOVE_GATEWAY_ENDPOINT, ROUTING_INFO_ENDPOINT,
     SEND_PAYMENT_ENDPOINT,
 };
@@ -32,7 +32,7 @@ const RETRY_DELAY: Duration = Duration::from_secs(1);
 
 #[apply(async_trait_maybe_send!)]
 pub trait LnFederationApi {
-    async fn consensus_block_count(&self) -> FederationResult<u64>;
+    async fn consensus_block_height(&self) -> FederationResult<u64>;
 
     async fn await_incoming_contract(&self, contract_id: &ContractId, expiration: u64) -> bool;
 
@@ -57,9 +57,9 @@ impl<T: ?Sized> LnFederationApi for T
 where
     T: IModuleFederationApi + MaybeSend + MaybeSync + 'static,
 {
-    async fn consensus_block_count(&self) -> FederationResult<u64> {
+    async fn consensus_block_height(&self) -> FederationResult<u64> {
         self.request_current_consensus(
-            CONSENSUS_BLOCK_COUNT_ENDPOINT.to_string(),
+            CONSENSUS_BLOCK_HEIGHT_ENDPOINT.to_string(),
             ApiRequestErased::new(()),
         )
         .await

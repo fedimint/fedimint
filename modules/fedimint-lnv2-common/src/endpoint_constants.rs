@@ -1,7 +1,7 @@
 pub const ADD_GATEWAY_ENDPOINT: &str = "add_gateway";
 pub const AWAIT_INCOMING_CONTRACT_ENDPOINT: &str = "await_incoming_contract";
 pub const AWAIT_PREIMAGE_ENDPOINT: &str = "await_preimage";
-pub const CONSENSUS_BLOCK_COUNT_ENDPOINT: &str = "consensus_block_count";
+pub const CONSENSUS_BLOCK_HEIGHT_ENDPOINT: &str = "consensus_block_height";
 pub const CREATE_BOLT11_INVOICE_ENDPOINT: &str = "/create_bolt11_invoice";
 pub const CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT: &str = "/create_bolt11_invoice_for_self";
 pub const GATEWAYS_ENDPOINT: &str = "gateways";

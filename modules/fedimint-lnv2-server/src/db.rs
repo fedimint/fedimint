@@ -9,13 +9,13 @@ use strum_macros::EnumIter;
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
-    BlockCountVote = 0x45,
-    UnixTimeVote = 0x46,
-    IncomingContract = 0x47,
-    OutgoingContract = 0x48,
-    OutputOutcome = 0x49,
-    Preimage = 0x50,
-    Gateway = 0x51,
+    BlockHeightVote = 0x1,
+    UnixTimeVote = 0x2,
+    IncomingContract = 0x3,
+    OutgoingContract = 0x4,
+    OutputOutcome = 0x5,
+    Preimage = 0x6,
+    Gateway = 0x7,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -25,18 +25,21 @@ impl std::fmt::Display for DbKeyPrefix {
 }
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct BlockCountVoteKey(pub PeerId);
+pub struct BlockHeightVoteKey(pub PeerId);
 
 #[derive(Clone, Debug, Encodable, Decodable)]
-pub struct BlockCountVotePrefix;
+pub struct BlockHeightVotePrefix;
 
 impl_db_record!(
-    key = BlockCountVoteKey,
+    key = BlockHeightVoteKey,
     value = u64,
-    db_prefix = DbKeyPrefix::BlockCountVote,
+    db_prefix = DbKeyPrefix::BlockHeightVote,
 );
 
-impl_db_lookup!(key = BlockCountVoteKey, query_prefix = BlockCountVotePrefix);
+impl_db_lookup!(
+    key = BlockHeightVoteKey,
+    query_prefix = BlockHeightVotePrefix
+);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct UnixTimeVoteKey(pub PeerId);
