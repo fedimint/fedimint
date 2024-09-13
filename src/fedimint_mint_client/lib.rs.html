@@ -2543,7 +2543,11 @@
 <a href="#2542" id="2542">2542</a>
 <a href="#2543" id="2543">2543</a>
 <a href="#2544" id="2544">2544</a>
-<a href="#2545" id="2545">2545</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2545" id="2545">2545</a>
+<a href="#2546" id="2546">2546</a>
+<a href="#2547" id="2547">2547</a>
+<a href="#2548" id="2548">2548</a>
+<a href="#2549" id="2549">2549</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -3223,7 +3227,11 @@
         }
     }
 
-    <span class="kw">fn </span>input_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, _input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+    <span class="kw">fn </span>input_fee(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _amount: Amount,
+        _input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
         <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.note_spend_abs)
     }
 

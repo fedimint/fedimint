@@ -1090,7 +1090,16 @@
 <a href="#1089" id="1089">1089</a>
 <a href="#1090" id="1090">1090</a>
 <a href="#1091" id="1091">1091</a>
-<a href="#1092" id="1092">1092</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1092" id="1092">1092</a>
+<a href="#1093" id="1093">1093</a>
+<a href="#1094" id="1094">1094</a>
+<a href="#1095" id="1095">1095</a>
+<a href="#1096" id="1096">1096</a>
+<a href="#1097" id="1097">1097</a>
+<a href="#1098" id="1098">1098</a>
+<a href="#1099" id="1099">1099</a>
+<a href="#1100" id="1100">1100</a>
+<a href="#1101" id="1101">1101</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -1453,12 +1462,21 @@
         }
     }
 
-    <span class="kw">fn </span>input_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, _input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
-        <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.spend_contract)
+    <span class="kw">fn </span>input_fee(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        amount: Amount,
+        _input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+        <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.fee(amount))
     }
 
-    <span class="kw">fn </span>output_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, _output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
-        <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.create_contract)
+    <span class="kw">fn </span>output_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+        <span class="kw">let </span>amount = <span class="kw">match </span>output.ensure_v0_ref().ok()<span class="question-mark">? </span>{
+            LightningOutputV0::Outgoing(contract) =&gt; contract.amount,
+            LightningOutputV0::Incoming(contract) =&gt; contract.commitment.amount,
+        };
+
+        <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.fee(amount))
     }
 
     <span class="attr">#[cfg(feature = <span class="string">"cli"</span>)]

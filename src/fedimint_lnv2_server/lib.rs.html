@@ -781,7 +781,9 @@
 <a href="#780" id="780">780</a>
 <a href="#781" id="781">781</a>
 <a href="#782" id="782">782</a>
-<a href="#783" id="783">783</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 
@@ -1225,7 +1227,7 @@
         <span class="prelude-val">Ok</span>(InputMeta {
             amount: TransactionItemAmount {
                 amount,
-                fee: <span class="self">self</span>.cfg.consensus.fee_consensus.spend_contract,
+                fee: <span class="self">self</span>.cfg.consensus.fee_consensus.fee(amount),
             },
             pub_key,
         })
@@ -1285,12 +1287,14 @@
             <span class="macro">panic!</span>(<span class="string">"Output Outcome for {out_point:?} already exists"</span>);
         }
 
+        <span class="kw">let </span>amount = <span class="kw">match </span>output {
+            LightningOutputV0::Outgoing(contract) =&gt; contract.amount,
+            LightningOutputV0::Incoming(contract) =&gt; contract.commitment.amount,
+        };
+
         <span class="prelude-val">Ok</span>(TransactionItemAmount {
-            amount: <span class="kw">match </span>output {
-                LightningOutputV0::Outgoing(contract) =&gt; contract.amount,
-                LightningOutputV0::Incoming(contract) =&gt; contract.commitment.amount,
-            },
-            fee: <span class="self">self</span>.cfg.consensus.fee_consensus.create_contract,
+            amount,
+            fee: <span class="self">self</span>.cfg.consensus.fee_consensus.fee(amount),
         })
     }
 

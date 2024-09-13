@@ -3741,7 +3741,7 @@
         <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>builder.inputs {
             <span class="kw">let </span>module = <span class="self">self</span>.get_module(input.input.module_instance_id());
 
-            <span class="kw">let </span>item_fee = module.input_fee(<span class="kw-2">&amp;</span>input.input).expect(
+            <span class="kw">let </span>item_fee = module.input_fee(input.amount, <span class="kw-2">&amp;</span>input.input).expect(
                 <span class="string">"We only build transactions with input versions that are supported by the module"</span>,
             );
 

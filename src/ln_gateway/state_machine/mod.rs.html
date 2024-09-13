@@ -815,7 +815,8 @@
 <a href="#814" id="814">814</a>
 <a href="#815" id="815">815</a>
 <a href="#816" id="816">816</a>
-<a href="#817" id="817">817</a></pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a></pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -1033,6 +1034,7 @@
 
     <span class="kw">fn </span>input_fee(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _amount: Amount,
         _input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>fedimint_core::module::ModuleCommon&gt;::Input,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
         <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.contract_input)

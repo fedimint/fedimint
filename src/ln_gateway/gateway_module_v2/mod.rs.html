@@ -508,7 +508,15 @@
 <a href="#507" id="507">507</a>
 <a href="#508" id="508">508</a>
 <a href="#509" id="509">509</a>
-<a href="#510" id="510">510</a></pre></div><pre class="rust"><code><span class="kw">mod </span>complete_sm;
+<a href="#510" id="510">510</a>
+<a href="#511" id="511">511</a>
+<a href="#512" id="512">512</a>
+<a href="#513" id="513">513</a>
+<a href="#514" id="514">514</a>
+<a href="#515" id="515">515</a>
+<a href="#516" id="516">516</a>
+<a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a></pre></div><pre class="rust"><code><span class="kw">mod </span>complete_sm;
 <span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
 
@@ -643,13 +651,21 @@
             gateway: <span class="self">self</span>.gateway.clone(),
         }
     }
-
-    <span class="kw">fn </span>input_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, _input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
-        <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.spend_contract)
+    <span class="kw">fn </span>input_fee(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        amount: Amount,
+        _input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+        <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.fee(amount))
     }
 
-    <span class="kw">fn </span>output_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, _output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
-        <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.create_contract)
+    <span class="kw">fn </span>output_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+        <span class="kw">let </span>amount = <span class="kw">match </span>output.ensure_v0_ref().ok()<span class="question-mark">? </span>{
+            LightningOutputV0::Outgoing(contract) =&gt; contract.amount,
+            LightningOutputV0::Incoming(contract) =&gt; contract.commitment.amount,
+        };
+
+        <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.fee(amount))
     }
 }
 
