@@ -368,7 +368,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceResponse,
+    InterceptHtlcRequest, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
 };
 <span class="kw">use </span><span class="kw">crate</span>::GatewayError;
 
@@ -516,7 +516,7 @@
         host: String,
         channel_size_sats: u64,
         push_amount_sats: u64,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt;;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OpenChannelResponse, LightningRpcError&gt;;
 
     <span class="doccomment">/// Close all channels with a peer lightning node from the gateway's
     /// lightning node.

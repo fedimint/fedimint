@@ -317,7 +317,7 @@
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::{
     <span class="self">self</span>, CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
     EmptyResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
-    GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceResponse,
+    GetRouteHintsResponse, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
 };
 <span class="kw">use </span>ln_gateway::lightning::{
     ChannelInfo, HtlcResult, ILnRpcClient, LightningRpcError, RouteHtlcStream,
@@ -567,7 +567,7 @@
         _host: String,
         _channel_size_sats: u64,
         _push_amount_sats: u64,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OpenChannelResponse, LightningRpcError&gt; {
         <span class="prelude-val">Err</span>(LightningRpcError::FailedToOpenChannel {
             failure_reason: <span class="string">"FakeLightningTest does not support opening channels"</span>.to_string(),
         })

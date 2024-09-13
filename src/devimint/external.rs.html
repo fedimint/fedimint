@@ -1120,7 +1120,38 @@
 <a href="#1119" id="1119">1119</a>
 <a href="#1120" id="1120">1120</a>
 <a href="#1121" id="1121">1121</a>
-<a href="#1122" id="1122">1122</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
+<a href="#1122" id="1122">1122</a>
+<a href="#1123" id="1123">1123</a>
+<a href="#1124" id="1124">1124</a>
+<a href="#1125" id="1125">1125</a>
+<a href="#1126" id="1126">1126</a>
+<a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
+<a href="#1131" id="1131">1131</a>
+<a href="#1132" id="1132">1132</a>
+<a href="#1133" id="1133">1133</a>
+<a href="#1134" id="1134">1134</a>
+<a href="#1135" id="1135">1135</a>
+<a href="#1136" id="1136">1136</a>
+<a href="#1137" id="1137">1137</a>
+<a href="#1138" id="1138">1138</a>
+<a href="#1139" id="1139">1139</a>
+<a href="#1140" id="1140">1140</a>
+<a href="#1141" id="1141">1141</a>
+<a href="#1142" id="1142">1142</a>
+<a href="#1143" id="1143">1143</a>
+<a href="#1144" id="1144">1144</a>
+<a href="#1145" id="1145">1145</a>
+<a href="#1146" id="1146">1146</a>
+<a href="#1147" id="1147">1147</a>
+<a href="#1148" id="1148">1148</a>
+<a href="#1149" id="1149">1149</a>
+<a href="#1150" id="1150">1150</a>
+<a href="#1151" id="1151">1151</a>
+<a href="#1152" id="1152">1152</a>
+<a href="#1153" id="1153">1153</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -2022,18 +2053,49 @@
         gateways.iter().circular_tuple_windows::&lt;(<span class="kw">_</span>, <span class="kw">_</span>)&gt;().collect()
     };
 
-    <span class="kw">for </span>((gw_a, gw_a_name), (gw_b, gw_b_name)) <span class="kw">in </span><span class="kw-2">&amp;</span>gateway_pairs {
-        <span class="kw">let </span>push_amount = <span class="number">5_000_000</span>;
-        <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"Opening channel between {gw_a_name} and {gw_b_name} gateway lightning nodes with {push_amount} on each side..."</span>);
-        gw_a.open_channel(gw_b, <span class="number">10_000_000</span>, <span class="prelude-val">Some</span>(push_amount))
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>open_channel_tasks = gateway_pairs.iter()
+        .map(|((gw_a, gw_a_name), (gw_b, gw_b_name))| {
+            <span class="kw">let </span>gw_a = (<span class="kw-2">*</span>gw_a).clone();
+            <span class="kw">let </span>gw_b = (<span class="kw-2">*</span>gw_b).clone();
+
+            <span class="kw">let </span>push_amount = <span class="number">5_000_000</span>;
+            <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"Opening channel between {gw_a_name} and {gw_b_name} gateway lightning nodes with {push_amount} on each side..."</span>);
+            tokio::task::spawn(<span class="kw">async move </span>{
+                gw_a.open_channel(<span class="kw-2">&amp;</span>gw_b, <span class="number">10_000_000</span>, <span class="prelude-val">Some</span>(push_amount)).<span class="kw">await
+            </span>})
+        })
+        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+    <span class="kw">let </span>open_channel_task_results: Vec&lt;<span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt; =
+        futures::future::join_all(open_channel_tasks).<span class="kw">await</span>;
+
+    <span class="kw">let </span><span class="kw-2">mut </span>channel_funding_txids = Vec::new();
+    <span class="kw">for </span>open_channel_task_result <span class="kw">in </span>open_channel_task_results {
+        <span class="kw">match </span>open_channel_task_result {
+            <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(txid)) =&gt; {
+                channel_funding_txids.push(txid);
+            }
+            <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(e)) =&gt; {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(e));
+            }
+            <span class="prelude-val">Err</span>(e) =&gt; {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(e));
+            }
+        }
     }
 
-    <span class="comment">// `open_channel` may not send out the channel funding transaction immediately
-    // so we need to wait for it to get to the mempool.
-    // TODO: LDK is the culprit here. Find a way to ensure that
-    // `GatewayLdkClient::open_channel` is fully done before it returns.
-    </span>fedimint_core::runtime::sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
+    <span class="comment">// Wait for all channel funding transaction to be known by bitcoind.
+    </span><span class="kw">for </span>txid <span class="kw">in </span><span class="kw-2">&amp;</span>channel_funding_txids {
+        <span class="kw">loop </span>{
+            <span class="comment">// Bitcoind's getrawtransaction RPC call will return an error if the transaction
+            // is not known.
+            </span><span class="kw">if </span>bitcoind.get_raw_transaction(txid).is_ok() {
+                <span class="kw">break</span>;
+            }
+
+            <span class="comment">// Wait for a bit, then restart the check.
+            </span>fedimint_core::runtime::sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+        }
+    }
 
     bitcoind.mine_blocks(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 

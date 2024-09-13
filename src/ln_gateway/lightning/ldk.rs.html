@@ -508,7 +508,29 @@
 <a href="#507" id="507">507</a>
 <a href="#508" id="508">508</a>
 <a href="#509" id="509">509</a>
-<a href="#510" id="510">510</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
+<a href="#510" id="510">510</a>
+<a href="#511" id="511">511</a>
+<a href="#512" id="512">512</a>
+<a href="#513" id="513">513</a>
+<a href="#514" id="514">514</a>
+<a href="#515" id="515">515</a>
+<a href="#516" id="516">516</a>
+<a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a>
+<a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
+<a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
+<a href="#527" id="527">527</a>
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -536,7 +558,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceResponse,
+    InterceptHtlcRequest, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
 };
 
 <span class="kw">pub struct </span>GatewayLdkClient {
@@ -933,14 +955,15 @@
         host: String,
         channel_size_sats: u64,
         push_amount_sats: u64,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OpenChannelResponse, LightningRpcError&gt; {
         <span class="kw">let </span>push_amount_msats_or = <span class="kw">if </span>push_amount_sats == <span class="number">0 </span>{
             <span class="prelude-val">None
         </span>} <span class="kw">else </span>{
             <span class="prelude-val">Some</span>(push_amount_sats * <span class="number">1000</span>)
         };
 
-        <span class="self">self</span>.node
+        <span class="kw">let </span>user_channel_id = <span class="self">self
+            </span>.node
             .connect_open_channel(
                 pubkey,
                 SocketAddress::from_str(<span class="kw-2">&amp;</span>host).map_err(|e| {
@@ -957,7 +980,28 @@
                 failure_reason: e.to_string(),
             })<span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(EmptyResponse {})
+        <span class="comment">// The channel isn't always visible immediately, so we need to poll for it.
+        </span><span class="kw">for _ in </span><span class="number">0</span>..<span class="number">10 </span>{
+            <span class="kw">let </span>funding_txid_or = <span class="self">self
+                </span>.node
+                .list_channels()
+                .iter()
+                .find(|channel| channel.user_channel_id == user_channel_id)
+                .and_then(|channel| channel.funding_txo)
+                .map(|funding_txo| funding_txo.txid);
+
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(funding_txid) = funding_txid_or {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(OpenChannelResponse {
+                    funding_txid: funding_txid.to_string(),
+                });
+            }
+
+            fedimint_core::runtime::sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+        }
+
+        <span class="prelude-val">Err</span>(LightningRpcError::FailedToOpenChannel {
+            failure_reason: <span class="string">"Channel could not be opened"</span>.to_string(),
+        })
     }
 
     <span class="kw">async fn </span>close_channels_with_peer(

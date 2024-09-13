@@ -256,7 +256,8 @@
 <a href="#255" id="255">255</a>
 <a href="#256" id="256">256</a>
 <a href="#257" id="257">257</a>
-<a href="#258" id="258">258</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -276,7 +277,8 @@
     <span class="self">self</span>, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetBalancesResponse,
     GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
-    InterceptHtlcResponse, OpenChannelRequest, PayInvoiceResponse, PayPrunedInvoiceRequest,
+    InterceptHtlcResponse, OpenChannelRequest, OpenChannelResponse, PayInvoiceResponse,
+    PayPrunedInvoiceRequest,
 };
 <span class="kw">use </span><span class="kw">crate</span>::lightning::MAX_LIGHTNING_RETRIES;
 
@@ -446,7 +448,7 @@
         host: String,
         channel_size_sats: u64,
         push_amount_sats: u64,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OpenChannelResponse, LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>res = client

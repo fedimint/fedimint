@@ -2054,7 +2054,11 @@
 <a href="#2053" id="2053">2053</a>
 <a href="#2054" id="2054">2054</a>
 <a href="#2055" id="2055">2055</a>
-<a href="#2056" id="2056">2056</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2056" id="2056">2056</a>
+<a href="#2057" id="2057">2057</a>
+<a href="#2058" id="2058">2058</a>
+<a href="#2059" id="2059">2059</a>
+<a href="#2060" id="2060">2060</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -3391,13 +3395,17 @@
             channel_size_sats,
             push_amount_sats,
         }: OpenChannelPayload,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Txid&gt; {
         <span class="kw">let </span>context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
-        context
+        <span class="kw">let </span>res = context
             .lnrpc
             .open_channel(pubkey, host, channel_size_sats, push_amount_sats)
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(())
+        Txid::from_str(<span class="kw-2">&amp;</span>res.funding_txid).map_err(|e| {
+            GatewayError::InvalidMetadata(<span class="macro">format!</span>(
+                <span class="string">"Received invalid channel funding txid string: {e}"
+            </span>))
+        })
     }
 
     <span class="doccomment">/// Instructs the Gateway's Lightning node to close all channels with a peer

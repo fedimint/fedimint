@@ -827,8 +827,8 @@
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;OpenChannelPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
-    gateway.handle_open_channel_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(())))
+    <span class="kw">let </span>funding_txid = gateway.handle_open_channel_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(funding_txid)))
 }
 
 <span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]

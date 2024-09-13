@@ -1414,7 +1414,19 @@
 <a href="#1413" id="1413">1413</a>
 <a href="#1414" id="1414">1414</a>
 <a href="#1415" id="1415">1415</a>
-<a href="#1416" id="1416">1416</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
+<a href="#1416" id="1416">1416</a>
+<a href="#1417" id="1417">1417</a>
+<a href="#1418" id="1418">1418</a>
+<a href="#1419" id="1419">1419</a>
+<a href="#1420" id="1420">1420</a>
+<a href="#1421" id="1421">1421</a>
+<a href="#1422" id="1422">1422</a>
+<a href="#1423" id="1423">1423</a>
+<a href="#1424" id="1424">1424</a>
+<a href="#1425" id="1425">1425</a>
+<a href="#1426" id="1426">1426</a>
+<a href="#1427" id="1427">1427</a>
+<a href="#1428" id="1428">1428</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -1438,6 +1450,7 @@
     AddHoldInvoiceRequest, CancelInvoiceMsg, LookupInvoiceMsg, SettleInvoiceMsg,
     SubscribeSingleInvoiceRequest,
 };
+<span class="kw">use </span>tonic_lnd::lnrpc::channel_point::FundingTxid;
 <span class="kw">use </span>tonic_lnd::lnrpc::failure::FailureCode;
 <span class="kw">use </span>tonic_lnd::lnrpc::invoice::InvoiceState;
 <span class="kw">use </span>tonic_lnd::lnrpc::payment::PaymentStatus;
@@ -1463,7 +1476,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceResponse,
+    InterceptHtlcRequest, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
 };
 
 <span class="kw">type </span>HtlcSubscriptionSender = mpsc::Sender&lt;<span class="prelude-ty">Result</span>&lt;InterceptHtlcRequest, Status&gt;&gt;;
@@ -2545,7 +2558,7 @@
         host: String,
         channel_size_sats: u64,
         push_amount_sats: u64,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OpenChannelResponse, LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// Connect to the peer first
@@ -2567,7 +2580,7 @@
         <span class="comment">// Open the channel
         </span><span class="kw">match </span>client
             .lightning()
-            .open_channel(OpenChannelRequest {
+            .open_channel_sync(OpenChannelRequest {
                 node_pubkey: pubkey.serialize().to_vec(),
                 local_funding_amount: channel_size_sats.try_into().expect(<span class="string">"u64 -&gt; i64"</span>),
                 push_sat: push_amount_sats.try_into().expect(<span class="string">"u64 -&gt; i64"</span>),
@@ -2575,7 +2588,18 @@
             })
             .<span class="kw">await
         </span>{
-            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(EmptyResponse {}),
+            <span class="prelude-val">Ok</span>(res) =&gt; <span class="prelude-val">Ok</span>(OpenChannelResponse {
+                funding_txid: <span class="kw">match </span>res.into_inner().funding_txid {
+                    <span class="prelude-val">Some</span>(txid) =&gt; <span class="kw">match </span>txid {
+                        FundingTxid::FundingTxidBytes(<span class="kw-2">mut </span>bytes) =&gt; {
+                            bytes.reverse();
+                            hex::encode(bytes)
+                        }
+                        FundingTxid::FundingTxidStr(str) =&gt; str,
+                    },
+                    <span class="prelude-val">None </span>=&gt; String::new(),
+                },
+            }),
             <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(LightningRpcError::FailedToOpenChannel {
                 failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to open channel {e:?}"</span>),
             }),
