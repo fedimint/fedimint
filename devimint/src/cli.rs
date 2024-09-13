@@ -250,24 +250,20 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                     let pegin_start_time = Instant::now();
                     debug!(target: LOG_DEVIMINT, "Peging in client and gateways");
 
-                    let gw_pegin_amount = 1_000_000;
-                    let client_pegin_amount = 1_000_000;
                     if !skip_setup {
-                        let ((), _, _, _) = tokio::try_join!(
+                        const GW_PEGIN_AMOUNT: u64 = 1_000_000;
+                        const CLIENT_PEGIN_AMOUNT: u64 = 1_000_000;
+
+                        let (operation_id, (), (), ()) = tokio::try_join!(
                             async {
                                 let (address, operation_id) =
                                     dev_fed.internal_client().await?.get_deposit_addr().await?;
                                 dev_fed
                                     .bitcoind()
                                     .await?
-                                    .send_to(address, client_pegin_amount)
+                                    .send_to(address, CLIENT_PEGIN_AMOUNT)
                                     .await?;
-                                dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await?;
-                                dev_fed
-                                    .internal_client()
-                                    .await?
-                                    .await_deposit(&operation_id)
-                                    .await
+                                Ok(operation_id)
                             },
                             async {
                                 let pegin_addr = dev_fed
@@ -278,9 +274,9 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                 dev_fed
                                     .bitcoind()
                                     .await?
-                                    .send_to(pegin_addr, gw_pegin_amount)
-                                    .await?;
-                                dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await
+                                    .send_to(pegin_addr, GW_PEGIN_AMOUNT)
+                                    .await
+                                    .map(|_| ())
                             },
                             async {
                                 let pegin_addr = dev_fed
@@ -291,9 +287,9 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                 dev_fed
                                     .bitcoind()
                                     .await?
-                                    .send_to(pegin_addr, gw_pegin_amount)
-                                    .await?;
-                                dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await
+                                    .send_to(pegin_addr, GW_PEGIN_AMOUNT)
+                                    .await
+                                    .map(|_| ())
                             },
                             async {
                                 if let Some(gw_ldk) = dev_fed.gw_ldk_registered().await? {
@@ -305,13 +301,21 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                     dev_fed
                                         .bitcoind()
                                         .await?
-                                        .send_to(pegin_addr, gw_pegin_amount)
-                                        .await?;
+                                        .send_to(pegin_addr, GW_PEGIN_AMOUNT)
+                                        .await
+                                        .map(|_| ())
+                                } else {
+                                    Ok(())
                                 }
-
-                                dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await
                             },
                         )?;
+
+                        dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await?;
+                        dev_fed
+                            .internal_client()
+                            .await?
+                            .await_deposit(&operation_id)
+                            .await?;
 
                         info!(target: LOG_DEVIMINT,
                         elapsed_ms = %pegin_start_time.elapsed().as_millis(),
