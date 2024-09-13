@@ -488,7 +488,11 @@
 <a href="#487" id="487">487</a>
 <a href="#488" id="488">488</a>
 <a href="#489" id="489">489</a>
-<a href="#490" id="490">490</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ffi;
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -740,25 +744,21 @@
                     <span class="kw">let </span>pegin_start_time = Instant::now();
                     <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Peging in client and gateways"</span>);
 
-                    <span class="kw">let </span>gw_pegin_amount = <span class="number">1_000_000</span>;
-                    <span class="kw">let </span>client_pegin_amount = <span class="number">1_000_000</span>;
                     <span class="kw">if </span>!skip_setup {
-                        <span class="kw">let </span>((), <span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>) = <span class="macro">tokio::try_join!</span>(
+                        <span class="kw">const </span>GW_PEGIN_AMOUNT: u64 = <span class="number">1_000_000</span>;
+                        <span class="kw">const </span>CLIENT_PEGIN_AMOUNT: u64 = <span class="number">1_000_000</span>;
+
+                        <span class="kw">let </span>(operation_id, (), (), ()) = <span class="macro">tokio::try_join!</span>(
                             <span class="kw">async </span>{
                                 <span class="kw">let </span>(address, operation_id) =
                                     dev_fed.internal_client().<span class="kw">await</span><span class="question-mark">?</span>.get_deposit_addr().<span class="kw">await</span><span class="question-mark">?</span>;
                                 dev_fed
                                     .bitcoind()
                                     .<span class="kw">await</span><span class="question-mark">?
-                                    </span>.send_to(address, client_pegin_amount)
+                                    </span>.send_to(address, CLIENT_PEGIN_AMOUNT)
                                     .<span class="kw">await</span><span class="question-mark">?</span>;
-                                dev_fed.bitcoind().<span class="kw">await</span><span class="question-mark">?</span>.mine_blocks_no_wait(<span class="number">11</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-                                dev_fed
-                                    .internal_client()
-                                    .<span class="kw">await</span><span class="question-mark">?
-                                    </span>.await_deposit(<span class="kw-2">&amp;</span>operation_id)
-                                    .<span class="kw">await
-                            </span>},
+                                <span class="prelude-val">Ok</span>(operation_id)
+                            },
                             <span class="kw">async </span>{
                                 <span class="kw">let </span>pegin_addr = dev_fed
                                     .gw_cln_registered()
@@ -768,10 +768,10 @@
                                 dev_fed
                                     .bitcoind()
                                     .<span class="kw">await</span><span class="question-mark">?
-                                    </span>.send_to(pegin_addr, gw_pegin_amount)
-                                    .<span class="kw">await</span><span class="question-mark">?</span>;
-                                dev_fed.bitcoind().<span class="kw">await</span><span class="question-mark">?</span>.mine_blocks_no_wait(<span class="number">11</span>).<span class="kw">await
-                            </span>},
+                                    </span>.send_to(pegin_addr, GW_PEGIN_AMOUNT)
+                                    .<span class="kw">await
+                                    </span>.map(|<span class="kw">_</span>| ())
+                            },
                             <span class="kw">async </span>{
                                 <span class="kw">let </span>pegin_addr = dev_fed
                                     .gw_lnd_registered()
@@ -781,10 +781,10 @@
                                 dev_fed
                                     .bitcoind()
                                     .<span class="kw">await</span><span class="question-mark">?
-                                    </span>.send_to(pegin_addr, gw_pegin_amount)
-                                    .<span class="kw">await</span><span class="question-mark">?</span>;
-                                dev_fed.bitcoind().<span class="kw">await</span><span class="question-mark">?</span>.mine_blocks_no_wait(<span class="number">11</span>).<span class="kw">await
-                            </span>},
+                                    </span>.send_to(pegin_addr, GW_PEGIN_AMOUNT)
+                                    .<span class="kw">await
+                                    </span>.map(|<span class="kw">_</span>| ())
+                            },
                             <span class="kw">async </span>{
                                 <span class="kw">if let </span><span class="prelude-val">Some</span>(gw_ldk) = dev_fed.gw_ldk_registered().<span class="kw">await</span><span class="question-mark">? </span>{
                                     <span class="kw">let </span>pegin_addr = gw_ldk
@@ -795,13 +795,21 @@
                                     dev_fed
                                         .bitcoind()
                                         .<span class="kw">await</span><span class="question-mark">?
-                                        </span>.send_to(pegin_addr, gw_pegin_amount)
-                                        .<span class="kw">await</span><span class="question-mark">?</span>;
+                                        </span>.send_to(pegin_addr, GW_PEGIN_AMOUNT)
+                                        .<span class="kw">await
+                                        </span>.map(|<span class="kw">_</span>| ())
+                                } <span class="kw">else </span>{
+                                    <span class="prelude-val">Ok</span>(())
                                 }
-
-                                dev_fed.bitcoind().<span class="kw">await</span><span class="question-mark">?</span>.mine_blocks_no_wait(<span class="number">11</span>).<span class="kw">await
-                            </span>},
+                            },
                         )<span class="question-mark">?</span>;
+
+                        dev_fed.bitcoind().<span class="kw">await</span><span class="question-mark">?</span>.mine_blocks_no_wait(<span class="number">11</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+                        dev_fed
+                            .internal_client()
+                            .<span class="kw">await</span><span class="question-mark">?
+                            </span>.await_deposit(<span class="kw-2">&amp;</span>operation_id)
+                            .<span class="kw">await</span><span class="question-mark">?</span>;
 
                         <span class="macro">info!</span>(target: LOG_DEVIMINT,
                         elapsed_ms = %pegin_start_time.elapsed().as_millis(),
