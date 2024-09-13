@@ -26,7 +26,9 @@ use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest};
 use tonic_lnd::Client as LndClient;
 use tracing::{debug, info, trace, warn};
 
-use crate::util::{poll, ClnLightningCli, GatewayClnExtension, ProcessHandle, ProcessManager};
+use crate::util::{
+    poll, poll_with_timeout, ClnLightningCli, GatewayClnExtension, ProcessHandle, ProcessManager,
+};
 use crate::vars::utf8;
 use crate::version_constants::VERSION_0_4_0_ALPHA;
 use crate::{cmd, poll_eq, Gatewayd};
@@ -908,7 +910,12 @@ pub async fn open_channels_between_gateways(
             let push_amount = 5_000_000;
             info!(target: LOG_DEVIMINT, "Opening channel between {gw_a_name} and {gw_b_name} gateway lightning nodes with {push_amount} on each side...");
             tokio::task::spawn(async move {
-                gw_a.open_channel(&gw_b, 10_000_000, Some(push_amount)).await
+                // Sometimes channel openings just after funding the lightning nodes don't work right away.
+                // This resolves itself after a few seconds, so we don't need to poll for very long.
+                poll_with_timeout("Open channel", Duration::from_secs(10), || async {
+                    gw_a.open_channel(&gw_b, 10_000_000, Some(push_amount)).await.map_err(ControlFlow::Continue)
+                })
+                .await
             })
         })
         .collect::<Vec<_>>();
@@ -945,6 +952,14 @@ pub async fn open_channels_between_gateways(
     }
 
     bitcoind.mine_blocks(10).await?;
+
+    debug!(target: LOG_DEVIMINT, "Syncing gateway lightning nodes to chain tip...");
+    futures::future::try_join_all(
+        gateways
+            .iter()
+            .map(|(gw, _gw_name)| gw.wait_for_chain_sync(bitcoind)),
+    )
+    .await?;
 
     for ((gw_a, _gw_a_name), (gw_b, _gw_b_name)) in &gateway_pairs {
         let gw_a_node_pubkey = gw_a.lightning_pubkey().await?;
