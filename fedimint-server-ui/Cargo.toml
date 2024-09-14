@@ -23,6 +23,7 @@ fedimint-lnv2-server = { workspace = true }
 fedimint-meta-server = { workspace = true }
 fedimint-server-core = { workspace = true }
 fedimint-wallet-server = { workspace = true }
+fedimint-walletv2-server = { workspace = true }
 maud = "0.27.0"
 qrcode = { version = "0.12", features = ["svg"] }
 serde = { workspace = true }
