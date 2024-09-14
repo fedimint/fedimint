@@ -650,6 +650,14 @@ impl Federation {
         Ok(())
     }
 
+    pub async fn send_to_address(&self, address: String, amount: u64) -> Result<()> {
+        self.bitcoind.send_to(address, amount).await?;
+
+        self.bitcoind.mine_blocks(21).await?;
+
+        Ok(())
+    }
+
     pub async fn pegin_client_no_wait(&self, amount: u64, client: &Client) -> Result<String> {
         let deposit_fees_msat = self.deposit_fees()?.msats;
         assert_eq!(

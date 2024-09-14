@@ -20,9 +20,11 @@ use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
 use fedimint_ui_common::{LOGIN_ROUTE, ROOT_ROUTE, UiState, dashboard_layout, login_form_response};
 use maud::html;
-use {fedimint_lnv2_server, fedimint_meta_server, fedimint_wallet_server};
+use {
+    fedimint_lnv2_server, fedimint_meta_server, fedimint_wallet_server, fedimint_walletv2_server,
+};
 
-use crate::dashboard::modules::{lnv2, meta, wallet};
+use crate::dashboard::modules::{lnv2, meta, wallet, walletv2};
 use crate::{
     CHANGE_PASSWORD_ROUTE, DOWNLOAD_BACKUP_ROUTE, EXPLORER_IDX_ROUTE, EXPLORER_ROUTE, LoginInput,
     METRICS_ROUTE, login_submit_response,
@@ -242,6 +244,11 @@ async fn dashboard_view(
                     (meta::render(meta_module).await)
                 }
             }
+        }
+
+        // Conditionally add Wallet V2 UI if the module is available
+        @if let Some(walletv2_module) = state.api.get_module::<fedimint_walletv2_server::Wallet>() {
+            (walletv2::render(walletv2_module).await)
         }
 
         // Guardian Configuration Backup section

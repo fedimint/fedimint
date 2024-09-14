@@ -421,6 +421,8 @@ pub fn default_modules() -> ServerModuleInitRegistry {
         server_gens.attach(fedimint_lnv2_server::LightningInit);
     }
 
+    server_gens.attach(fedimint_walletv2_server::WalletInit);
+
     if !is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
         server_gens.attach(MetaInit);
     }

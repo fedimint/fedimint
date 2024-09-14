@@ -25,6 +25,7 @@ fedimint-metrics = { workspace = true }
 fedimint-server-core = { workspace = true }
 fedimint-ui-common = { workspace = true }
 fedimint-wallet-server = { workspace = true }
+fedimint-walletv2-server = { workspace = true }
 maud = { workspace = true }
 qrcode = { workspace = true }
 serde = { workspace = true }
