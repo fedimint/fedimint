@@ -1248,6 +1248,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "console"
+version = "0.15.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e1f83fc076bd6dd27517eacdf25fef6c4dfe5f1d7448bafaaf3a26f13b5e4eb"
+dependencies = [
+ "encode_unicode",
+ "lazy_static",
+ "libc",
+ "unicode-width",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
 name = "console-api"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1761,6 +1774,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "dialoguer"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "658bce805d770f407bc62102fca7c2c64ceef2fbcb2b8bd19d2765ce093980de"
+dependencies = [
+ "console",
+ "shell-words",
+ "tempfile",
+ "thiserror",
+ "zeroize",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1910,6 +1936,12 @@ checksum = "c1019fa28f600f5b581b7a603d515c3f1635da041ca211b5055804788673abfe"
 dependencies = [
  "serde",
 ]
+
+[[package]]
+name = "encode_unicode"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a357d28ed41a50f9c765dbfe56cbc04a64e53e5fc58ba79fbc34c10ef3df831f"
 
 [[package]]
 name = "encoding_rs"
@@ -3177,6 +3209,7 @@ dependencies = [
  "fedimint-rocksdb",
  "fedimint-server",
  "fedimint-testing-core",
+ "fedimint-walletv2-common",
  "fs-lock",
  "lightning-invoice",
  "rand",
@@ -3420,6 +3453,96 @@ dependencies = [
  "fedimint-wallet-client",
  "fedimint-wallet-common",
  "fedimint-wallet-server",
+ "futures",
+ "rand",
+ "strum 0.26.3",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-walletv2-client"
+version = "0.6.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-stream",
+ "async-trait",
+ "bitcoin",
+ "clap",
+ "dialoguer",
+ "erased-serde",
+ "fedimint-api-client",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-walletv2-common",
+ "reqwest 0.12.9",
+ "secp256k1",
+ "serde",
+ "serde_json",
+ "strum 0.26.3",
+ "strum_macros 0.26.4",
+ "thiserror",
+]
+
+[[package]]
+name = "fedimint-walletv2-common"
+version = "0.6.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bitcoin",
+ "fedimint-core",
+ "miniscript",
+ "reqwest 0.12.9",
+ "secp256k1",
+ "serde",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-walletv2-server"
+version = "0.6.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bitcoin",
+ "erased-serde",
+ "fedimint-bitcoind",
+ "fedimint-core",
+ "fedimint-logging",
+ "fedimint-metrics",
+ "fedimint-server",
+ "fedimint-walletv2-common",
+ "futures",
+ "hex",
+ "miniscript",
+ "rand",
+ "secp256k1",
+ "serde",
+ "strum 0.26.3",
+ "strum_macros 0.26.4",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-walletv2-tests"
+version = "0.6.0-alpha"
+dependencies = [
+ "anyhow",
+ "bitcoin",
+ "bitcoincore-rpc",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-dummy-client",
+ "fedimint-dummy-common",
+ "fedimint-dummy-server",
+ "fedimint-logging",
+ "fedimint-testing",
+ "fedimint-walletv2-client",
+ "fedimint-walletv2-common",
+ "fedimint-walletv2-server",
  "futures",
  "rand",
  "strum 0.26.3",
@@ -6948,6 +7071,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "shell-words"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24188a676b6ae68c3b2cb3a01be17fbf7240ce009799bb56d5b1409051e78fde"
+
+[[package]]
 name = "shellexpand"
 version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8631,6 +8760,12 @@ checksum = "5c5713f0fc4b5db668a2ac63cdb7bb4469d8c9fed047b1d0292cc7b0ce2ba921"
 dependencies = [
  "tinyvec",
 ]
+
+[[package]]
+name = "unicode-width"
+version = "0.1.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7dd6e30e90baa6f72411720665d41d89b9a3d039dc45b8faea1ddd07f617f6af"
 
 [[package]]
 name = "unicode-xid"
