@@ -492,6 +492,21 @@ pub fn default_modules(
         );
     }
 
+    server_gens.attach(fedimint_walletv2_server::WalletInit);
+    server_gen_params.attach_config_gen_params(
+        fedimint_walletv2_server::WalletInit::kind(),
+        fedimint_walletv2_common::config::WalletGenParams {
+            local: fedimint_walletv2_common::config::WalletGenParamsLocal {
+                bitcoin_rpc: bitcoin_rpc_config.clone(),
+            },
+            consensus: fedimint_walletv2_common::config::WalletGenParamsConsensus {
+                fee_consensus: fedimint_walletv2_common::config::FeeConsensus::new(10_000)
+                    .expect("Relative fee is within range"),
+                network,
+            },
+        },
+    );
+
     if !is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
         server_gens.attach(MetaInit);
         server_gen_params.attach_config_gen_params(MetaInit::kind(), MetaGenParams::default());

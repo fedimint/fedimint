@@ -27,6 +27,7 @@ use fedimint_server_bitcoin_rpc::bitcoind::BitcoindClient;
 use fedimint_server_bitcoin_rpc::esplora::EsploraClient;
 use fedimint_server_core::bitcoin_rpc::{DynServerBitcoinRpc, IServerBitcoinRpc};
 use fedimint_testing_core::test_dir;
+use fedimint_walletv2_common::esplora_api::{DynEsploraConnection, RealEsploraConnection};
 
 use crate::btc::BitcoinTest;
 use crate::btc::mock::FakeBitcoinTest;
@@ -53,6 +54,7 @@ pub struct Fixtures {
     fake_bitcoin_rpc: Option<DynBitcoindRpc>,
     server_bitcoin_rpc: DynServerBitcoinRpc,
     primary_module_kind: ModuleKind,
+    dyn_esplora_connection: DynEsploraConnection,
     id: ModuleInstanceId,
 }
 
@@ -65,11 +67,12 @@ impl Fixtures {
         // Ensure tracing has been set once
         let _ = TracingSetup::default().init();
         let real_testing = Fixtures::is_real_test();
-        let (bitcoin, config, bitcoin_rpc_connection, fake_bitcoin_rpc): (
+        let (bitcoin, config, bitcoin_rpc_connection, fake_bitcoin_rpc, dyn_esplora_connection): (
             Arc<dyn BitcoinTest>,
             BitcoinRpcConfig,
             DynServerBitcoinRpc,
             Option<DynBitcoindRpc>,
+            DynEsploraConnection,
         ) = if real_testing {
             // `backend-test.sh` overrides which Bitcoin RPC to use for esplora
             // backend tests
@@ -113,7 +116,9 @@ impl Fixtures {
                 .expect("Invalid bitcoind RPC URL");
             let bitcoin = RealBitcoinTest::new(&bitcoincore_url, server_bitcoin_rpc.clone());
 
-            (Arc::new(bitcoin), rpc_config, server_bitcoin_rpc, None)
+            let dyn_esplora_connection = DynEsploraConnection::from(RealEsploraConnection);
+
+            (Arc::new(bitcoin), rpc_config, server_bitcoin_rpc, None, dyn_esplora_connection)
         } else {
             let bitcoin = FakeBitcoinTest::new();
 
@@ -126,6 +131,8 @@ impl Fixtures {
 
             let server_bitcoin_rpc = IServerBitcoinRpc::into_dyn(bitcoin.clone());
 
+            let dyn_esplora_connection = DynEsploraConnection::from(bitcoin.clone());
+
             let bitcoin = Arc::new(bitcoin);
 
             (
@@ -133,6 +140,7 @@ impl Fixtures {
                 config,
                 server_bitcoin_rpc,
                 Some(dyn_bitcoin_rpc),
+                dyn_esplora_connection,
             )
         };
 
@@ -145,6 +153,7 @@ impl Fixtures {
             bitcoin,
             server_bitcoin_rpc: bitcoin_rpc_connection,
             primary_module_kind: IClientModuleInit::module_kind(&client),
+            dyn_esplora_connection,
             id: 0,
         }
         .with_module(client, server, params)
@@ -320,6 +329,14 @@ impl Fixtures {
         }
     }
 
+    pub fn esplora_api(&self) -> SafeUrl {
+        SafeUrl::parse(&format!(
+            "http://127.0.0.1:{}/",
+            env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from("50002"))
+        ))
+        .expect("Failed to parse default esplora server")
+    }
+
     /// Get a test bitcoin fixture
     pub fn bitcoin(&self) -> Arc<dyn BitcoinTest> {
         self.bitcoin.clone()
@@ -327,5 +344,9 @@ impl Fixtures {
 
     pub fn server_bitcoin_rpc(&self) -> DynServerBitcoinRpc {
         self.server_bitcoin_rpc.clone()
+    }
+
+    pub fn dyn_esplora_connection(&self) -> DynEsploraConnection {
+        self.dyn_esplora_connection.clone()
     }
 }
