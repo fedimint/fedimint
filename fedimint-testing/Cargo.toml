@@ -36,6 +36,7 @@ fedimint-portalloc = { workspace = true }
 fedimint-rocksdb = { workspace = true }
 fedimint-server = { workspace = true }
 fedimint-testing-core = { workspace = true }
+fedimint-walletv2-common = { workspace = true }
 fs-lock = { workspace = true }
 lightning-invoice = { workspace = true }
 ln-gateway = { package = "fedimint-ln-gateway", path = "../gateway/ln-gateway", version = "=0.6.0-alpha", default-features = false }
