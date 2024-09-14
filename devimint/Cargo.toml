@@ -42,6 +42,8 @@ fedimint-testing-core = { workspace = true }
 fedimint-unknown-server = { workspace = true }
 fedimint-wallet-client = { workspace = true, features = ["cli"] }
 fedimint-wallet-server = { workspace = true }
+fedimint-walletv2-common = { workspace = true }
+fedimint-walletv2-server = { workspace = true }
 fedimintd = { workspace = true }
 fs-lock = { workspace = true }
 futures = { workspace = true }
