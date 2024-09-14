@@ -36,7 +36,7 @@ futures = { workspace = true }
 hex = { workspace = true }
 hyper = { workspace = true }
 itertools = { workspace = true }
-jsonrpsee = { version = "0.24.3", features = ["server"] }
+jsonrpsee = { version = "0.24.4", features = ["server"] }
 parity-scale-codec = "3.6.12"
 pin-project = "1.1.5"
 rand = { workspace = true }
@@ -54,7 +54,7 @@ tbs = { workspace = true }
 threshold_crypto = { workspace = true }
 tokio = { workspace = true }
 tokio-rustls = { workspace = true }
-tokio-util = { version = "0.7.11", features = ["codec"] }
+tokio-util = { version = "0.7.12", features = ["codec"] }
 tower = { version = "0.4.13", default-features = false }
 tracing = { workspace = true }
 
