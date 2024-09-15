@@ -20,7 +20,7 @@ anyhow = { workspace = true }
 async-recursion = "1.1.1"
 async-trait = { workspace = true }
 backon = "=0.4.4" # don't upgrade unless really needed
-backtrace = "0.3.73"
+backtrace = "0.3.74"
 base64-url = { workspace = true }
 bech32 = "0.11.0"
 bincode = { workspace = true }
@@ -39,7 +39,7 @@ futures = { workspace = true }
 hex = { workspace = true, features = ["serde"] }
 imbl = "3.0.0"
 itertools = { workspace = true }
-jsonrpsee-core = { version = "0.24.3", features = ["client"] }
+jsonrpsee-core = { version = "0.24.4", features = ["client"] }
 lightning = { workspace = true }
 lightning-invoice = { workspace = true }
 macro_rules_attribute = "0.2.0"

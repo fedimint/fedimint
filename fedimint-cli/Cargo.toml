@@ -29,7 +29,7 @@ async-trait = { workspace = true }
 bip39 = { version = "2.0.0", features = ["rand"] }
 bitcoin = { workspace = true }
 clap = { workspace = true }
-clap_complete = "4.5.24"
+clap_complete = "4.5.26"
 fedimint-aead = { workspace = true }
 fedimint-api-client = { path = "../fedimint-api-client", version = "=0.5.0-alpha", default-features = false }
 fedimint-bip39 = { workspace = true }
