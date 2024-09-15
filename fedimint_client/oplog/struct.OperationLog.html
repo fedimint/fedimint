@@ -5,7 +5,7 @@
     dbtx: &amp;mut <a class="struct" href="../../fedimint_core/db/struct.DatabaseTransaction.html" title="struct fedimint_core::db::DatabaseTransaction">DatabaseTransaction</a>&lt;'_&gt;,
     operation_id: <a class="struct" href="../../fedimint_core/core/struct.OperationId.html" title="struct fedimint_core::core::OperationId">OperationId</a>,
     operation_type: &amp;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.str.html">str</a>,
-    operation_meta: impl <a class="trait" href="https://docs.rs/serde/1.0.209/serde/ser/trait.Serialize.html" title="trait serde::ser::Serialize">Serialize</a>,
+    operation_meta: impl <a class="trait" href="https://docs.rs/serde/1.0.210/serde/ser/trait.Serialize.html" title="trait serde::ser::Serialize">Serialize</a>,
 )</h4></section><details class="toggle method-toggle" open><summary><section id="method.list_operations" class="method"><a class="src rightside" href="../../src/fedimint_client/oplog.rs.html#61-105">source</a><h4 class="code-header">pub async fn <a href="#method.list_operations" class="fn">list_operations</a>(
     &amp;self,
     limit: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.usize.html">usize</a>,
@@ -21,12 +21,12 @@ last operation’s <a href="../db/struct.ChronologicalOperationLogKey.html" titl
 ) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="struct.OperationLogEntry.html" title="struct fedimint_client::oplog::OperationLogEntry">OperationLogEntry</a>&gt;</h4></section><details class="toggle method-toggle" open><summary><section id="method.set_operation_outcome" class="method"><a class="src rightside" href="../../src/fedimint_client/oplog.rs.html#123">source</a><h4 class="code-header">pub async fn <a href="#method.set_operation_outcome" class="fn">set_operation_outcome</a>(
     db: &amp;<a class="struct" href="../../fedimint_core/db/struct.Database.html" title="struct fedimint_core::db::Database">Database</a>,
     operation_id: <a class="struct" href="../../fedimint_core/core/struct.OperationId.html" title="struct fedimint_core::core::OperationId">OperationId</a>,
-    outcome: &amp;(impl <a class="trait" href="https://docs.rs/serde/1.0.209/serde/ser/trait.Serialize.html" title="trait serde::ser::Serialize">Serialize</a> + <a class="trait" href="https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a>),
-) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.85/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Sets the outcome of an operation</p>
+    outcome: &amp;(impl <a class="trait" href="https://docs.rs/serde/1.0.210/serde/ser/trait.Serialize.html" title="trait serde::ser::Serialize">Serialize</a> + <a class="trait" href="https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a>),
+) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.88/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Sets the outcome of an operation</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.optimistically_set_operation_outcome" class="method"><a class="src rightside" href="../../src/fedimint_client/oplog.rs.html#147-155">source</a><h4 class="code-header">pub async fn <a href="#method.optimistically_set_operation_outcome" class="fn">optimistically_set_operation_outcome</a>(
     db: &amp;<a class="struct" href="../../fedimint_core/db/struct.Database.html" title="struct fedimint_core::db::Database">Database</a>,
     operation_id: <a class="struct" href="../../fedimint_core/core/struct.OperationId.html" title="struct fedimint_core::core::OperationId">OperationId</a>,
-    outcome: &amp;(impl <a class="trait" href="https://docs.rs/serde/1.0.209/serde/ser/trait.Serialize.html" title="trait serde::ser::Serialize">Serialize</a> + <a class="trait" href="https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a>),
+    outcome: &amp;(impl <a class="trait" href="https://docs.rs/serde/1.0.210/serde/ser/trait.Serialize.html" title="trait serde::ser::Serialize">Serialize</a> + <a class="trait" href="https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a>),
 )</h4></section></summary><div class="docblock"><p>Tries to set the outcome of an operation, but only logs an error if it
 fails and does not return it. Since the outcome can always be recomputed
 from an update stream, failing to save it isn’t a problem in cases where
