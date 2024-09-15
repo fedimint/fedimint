@@ -2118,7 +2118,7 @@ dependencies = [
  "fedimint-ln-client",
  "fedimint-mint-client",
  "futures",
- "imbl 2.0.3",
+ "imbl",
  "js-sys",
  "rexie",
  "serde_json",
@@ -2154,7 +2154,7 @@ dependencies = [
  "getrandom",
  "gloo-timers 0.3.0",
  "hex",
- "imbl 3.0.0",
+ "imbl",
  "itertools 0.13.0",
  "js-sys",
  "jsonrpsee-core",
@@ -4117,19 +4117,6 @@ checksum = "634d9b1461af396cad843f47fdba5597a4f9e6ddd4bfb6ff5d85028c25cb12f6"
 dependencies = [
  "unicode-bidi",
  "unicode-normalization",
-]
-
-[[package]]
-name = "imbl"
-version = "2.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "978d142c8028edf52095703af2fad11d6f611af1246685725d6b850634647085"
-dependencies = [
- "bitmaps",
- "imbl-sized-chunks",
- "rand_core",
- "rand_xoshiro",
- "version_check",
 ]
 
 [[package]]
