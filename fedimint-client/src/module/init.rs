@@ -343,13 +343,14 @@ where
                     .expect("can't convert client module backup to desired type")
             });
 
+        let (module_db, global_dbtx_access_token) = db.with_prefix_module_id(instance_id);
         Ok(self
             .recover(
                 &ClientModuleRecoverArgs {
                     federation_id,
                     num_peers,
                     cfg: typed_cfg.clone(),
-                    db: db.with_prefix_module_id(instance_id),
+                    db: module_db.clone(),
                     core_api_version,
                     module_api_version,
                     module_root_secret,
@@ -360,7 +361,8 @@ where
                     context: ClientContext {
                         client: final_client,
                         module_instance_id: instance_id,
-                        module_db: db.with_prefix_module_id(instance_id),
+                        global_dbtx_access_token,
+                        module_db,
                         _marker: marker::PhantomData,
                     },
                     progress_tx,
@@ -389,12 +391,13 @@ where
         task_group: TaskGroup,
     ) -> anyhow::Result<DynClientModule> {
         let typed_cfg: &<<T as fedimint_core::module::ModuleInit>::Common as CommonModuleInit>::ClientConfig = cfg.cast()?;
+        let (module_db, global_dbtx_access_token) = db.with_prefix_module_id(instance_id);
         Ok(self
             .init(&ClientModuleInitArgs {
                 federation_id,
                 peer_num,
                 cfg: typed_cfg.clone(),
-                db: db.with_prefix_module_id(instance_id),
+                db: module_db.clone(),
                 core_api_version,
                 module_api_version,
                 module_root_secret,
@@ -405,7 +408,8 @@ where
                 context: ClientContext {
                     client: final_client,
                     module_instance_id: instance_id,
-                    module_db: db.with_prefix_module_id(instance_id),
+                    module_db,
+                    global_dbtx_access_token,
                     _marker: marker::PhantomData,
                 },
                 task_group,

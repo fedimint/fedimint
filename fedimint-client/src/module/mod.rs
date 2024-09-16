@@ -13,7 +13,9 @@ use fedimint_core::core::{
     Decoder, DynInput, DynOutput, IInput, IntoDynInstance, ModuleInstanceId, ModuleKind,
     OperationId,
 };
-use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, PhantomBound};
+use fedimint_core::db::{
+    AutocommitError, Database, DatabaseTransaction, GlobalDBTxAccessToken, PhantomBound,
+};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleInit};
@@ -72,6 +74,7 @@ impl FinalClient {
 pub struct ClientContext<M> {
     client: FinalClient,
     module_instance_id: ModuleInstanceId,
+    global_dbtx_access_token: GlobalDBTxAccessToken,
     module_db: Database,
     _marker: marker::PhantomData<M>,
 }
@@ -83,6 +86,7 @@ impl<M> Clone for ClientContext<M> {
             module_db: self.module_db.clone(),
             module_instance_id: self.module_instance_id,
             _marker: marker::PhantomData,
+            global_dbtx_access_token: self.global_dbtx_access_token,
         }
     }
 }
@@ -133,6 +137,7 @@ where
     pub fn module_dbtx(&mut self) -> DatabaseTransaction<'_> {
         self.dbtx
             .to_ref_with_prefix_module_id(self.client.module_instance_id)
+            .0
     }
 
     pub fn client_ctx(&self) -> &ClientContext<M> {
@@ -950,7 +955,7 @@ where
     ) -> anyhow::Result<(Vec<ClientInput>, Vec<ClientOutput>)> {
         let (inputs, outputs) = <T as ClientModule>::create_final_inputs_and_outputs(
             self,
-            &mut dbtx.to_ref_with_prefix_module_id(module_instance),
+            &mut dbtx.to_ref_with_prefix_module_id(module_instance).0,
             operation_id,
             input_amount,
             output_amount,
@@ -985,7 +990,7 @@ where
     ) -> Amount {
         <T as ClientModule>::get_balance(
             self,
-            &mut dbtx.to_ref_with_prefix_module_id(module_instance),
+            &mut dbtx.to_ref_with_prefix_module_id(module_instance).0,
         )
         .await
     }

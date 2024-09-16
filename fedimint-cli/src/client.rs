@@ -650,7 +650,8 @@ async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json
                 .db()
                 .begin_transaction_nc()
                 .await
-                .to_ref_with_prefix_module_id(1),
+                .to_ref_with_prefix_module_id(1)
+                .0,
         )
         .await;
     Ok(serde_json::to_value(InfoResponse {
