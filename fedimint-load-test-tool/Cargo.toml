@@ -16,16 +16,16 @@ anyhow = { workspace = true }
 base64 = "0.22.1"
 bitcoin = { workspace = true }
 clap = { workspace = true }
-devimint = { version = "=0.4.2-rc.4", path = "../devimint" }
+devimint = { version = "=0.4.2", path = "../devimint" }
 fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-ln-client = { workspace = true }
 fedimint-ln-common = { path = "../modules/fedimint-ln-common" }
 fedimint-logging = { workspace = true }
-fedimint-mint-client = { version = "=0.4.2-rc.4", path = "../modules/fedimint-mint-client" }
-fedimint-rocksdb = { version = "=0.4.2-rc.4", path = "../fedimint-rocksdb" }
-fedimint-wallet-client = { version = "=0.4.2-rc.4", path = "../modules/fedimint-wallet-client" }
+fedimint-mint-client = { version = "=0.4.2", path = "../modules/fedimint-mint-client" }
+fedimint-rocksdb = { version = "=0.4.2", path = "../fedimint-rocksdb" }
+fedimint-wallet-client = { version = "=0.4.2", path = "../modules/fedimint-wallet-client" }
 futures = { workspace = true }
 jsonrpsee-core = { version = "0.24.0", features = ["client"] }
 jsonrpsee-types = "0.23.0"
@@ -41,4 +41,4 @@ url = { version = "2.5.2", features = ["serde"] }
 jsonrpsee-ws-client = { version = "0.24.0", default-features = false }
 
 [build-dependencies]
-fedimint-build = { version = "=0.4.2-rc.4", path = "../fedimint-build" }
+fedimint-build = { version = "=0.4.2", path = "../fedimint-build" }
