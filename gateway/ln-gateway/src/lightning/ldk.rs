@@ -375,24 +375,21 @@ impl ILnRpcClient for GatewayLdkClient {
         // See https://github.com/lightningdevkit/ldk-node/issues/325.
         // TODO: Once the above issue is resolved, we should support
         // description hashes as well.
-        let Some(Description::Direct(description_str)) = &create_invoice_request.description else {
-            return Err(LightningRpcError::FailedToGetInvoice {
-                failure_reason:
-                    "Only direct descriptions are supported for LDK gateways at this time"
-                        .to_string(),
-            });
+        let description_str = match create_invoice_request.description {
+            Some(Description::Direct(desc)) => desc,
+            _ => String::new(),
         };
 
         let invoice = match payment_hash_or {
             Some(payment_hash) => self.node.bolt11_payment().receive_for_hash(
                 create_invoice_request.amount_msat,
-                description_str,
+                description_str.as_str(),
                 create_invoice_request.expiry_secs,
                 payment_hash,
             ),
             None => self.node.bolt11_payment().receive(
                 create_invoice_request.amount_msat,
-                description_str,
+                description_str.as_str(),
                 create_invoice_request.expiry_secs,
             ),
         }
