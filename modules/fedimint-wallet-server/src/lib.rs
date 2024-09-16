@@ -447,7 +447,7 @@ impl ServerModule for Wallet {
                 if new_consensus_block_count != old_consensus_block_count {
                     // We do not sync blocks that predate the federation itself
                     if old_consensus_block_count != 0 {
-                        self.sync_up_to_consensus_height(
+                        self.sync_up_to_consensus_count(
                             dbtx,
                             old_consensus_block_count,
                             new_consensus_block_count,
@@ -1005,19 +1005,19 @@ impl Wallet {
         nonce_from_idx(nonce_idx)
     }
 
-    async fn sync_up_to_consensus_height<'a>(
+    async fn sync_up_to_consensus_count<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
-        old_height: u32,
-        new_height: u32,
+        old_count: u32,
+        new_count: u32,
     ) {
         info!(
-            new_height,
-            blocks_to_go = new_height - old_height,
-            "New consensus height, syncing up",
+            new_count,
+            blocks_to_go = new_count - old_count,
+            "New consensus count, syncing up",
         );
 
-        for height in old_height..new_height {
+        for height in old_count..new_count {
             if height % 100 == 0 {
                 debug!("Caught up to block {height}");
             }
