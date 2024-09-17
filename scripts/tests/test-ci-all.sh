@@ -114,6 +114,11 @@ function lnv2_module() {
 }
 export -f lnv2_module
 
+function lnv2_inter_federation() {
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/lnv2-inter-federation.sh
+}
+export -f lnv2_inter_federation
+
 function mint_client_sanity() {
   fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/mint-client-sanity.sh
 }
@@ -303,6 +308,7 @@ tests_to_run_in_parallel+=(
   "gateway_config_test_lnd"
   "gateway_restore_test"
   "lnv2_module"
+  "lnv2_inter_federation"
   "devimint_cli_test"
   "devimint_cli_test_single"
   "load_test_tool_test"

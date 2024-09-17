@@ -55,9 +55,6 @@ async fn main() -> anyhow::Result<()> {
 
                 test_self_payments_success(&dev_fed).await?;
                 test_lightning_payments(&dev_fed).await?;
-
-                // TODO: Inter-federation tests have been deactivated from CI
-                // due to flakiness with CLN: https://github.com/fedimint/fedimint/issues/5944
             }
             TestOpts::GatewayRegistration => {
                 test_gateway_registration(&dev_fed).await?;
