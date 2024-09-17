@@ -2316,7 +2316,7 @@
                 <span class="kw">if </span>new_consensus_block_count != old_consensus_block_count {
                     <span class="comment">// We do not sync blocks that predate the federation itself
                     </span><span class="kw">if </span>old_consensus_block_count != <span class="number">0 </span>{
-                        <span class="self">self</span>.sync_up_to_consensus_height(
+                        <span class="self">self</span>.sync_up_to_consensus_count(
                             dbtx,
                             old_consensus_block_count,
                             new_consensus_block_count,
@@ -2874,19 +2874,19 @@
         nonce_from_idx(nonce_idx)
     }
 
-    <span class="kw">async fn </span>sync_up_to_consensus_height&lt;<span class="lifetime">'a</span>&gt;(
+    <span class="kw">async fn </span>sync_up_to_consensus_count&lt;<span class="lifetime">'a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'a</span>&gt;,
-        old_height: u32,
-        new_height: u32,
+        old_count: u32,
+        new_count: u32,
     ) {
         <span class="macro">info!</span>(
-            new_height,
-            blocks_to_go = new_height - old_height,
-            <span class="string">"New consensus height, syncing up"</span>,
+            new_count,
+            blocks_to_go = new_count - old_count,
+            <span class="string">"New consensus count, syncing up"</span>,
         );
 
-        <span class="kw">for </span>height <span class="kw">in </span>old_height..new_height {
+        <span class="kw">for </span>height <span class="kw">in </span>old_count..new_count {
             <span class="kw">if </span>height % <span class="number">100 </span>== <span class="number">0 </span>{
                 <span class="macro">debug!</span>(<span class="string">"Caught up to block {height}"</span>);
             }
