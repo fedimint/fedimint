@@ -30,9 +30,7 @@ use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest};
 use tonic_lnd::Client as LndClient;
 use tracing::{debug, error, info, trace, warn};
 
-use crate::util::{
-    poll, poll_with_timeout, ClnLightningCli, GatewayClnExtension, ProcessHandle, ProcessManager,
-};
+use crate::util::{poll, ClnLightningCli, GatewayClnExtension, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
 use crate::version_constants::VERSION_0_4_0_ALPHA;
 use crate::{cmd, poll_eq, Gatewayd};
@@ -958,8 +956,12 @@ pub async fn open_channels_between_gateways(
             info!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Opening channel with {sats_per_side} sats on each side...");
             tokio::task::spawn(async move {
                 // Sometimes channel openings just after funding the lightning nodes don't work right away.
-                let res = poll_with_timeout(&format!("Open channel from {gw_a_name} to {gw_b_name}"), Duration::from_secs(30), || async {
-                    gw_a.open_channel(&gw_b, sats_per_side * 2, Some(sats_per_side)).await.map_err(ControlFlow::Continue)
+                // This resolves itself after a few seconds, so we don't need to poll for very long.
+                let res = poll(&format!("Open channel from {gw_a_name} to {gw_b_name}"), || async {
+                    let gw_a_name = gw_a_name.clone();
+                    let gw_b_name = gw_b_name.clone();
+                    let txid = gw_a.open_channel(&gw_b, sats_per_side * 2, Some(sats_per_side)).await.map_err(ControlFlow::Continue)?;
+                    Ok((gw_a_name, gw_b_name, txid))
                 })
                 .await;
 
@@ -993,7 +995,7 @@ pub async fn open_channels_between_gateways(
 
     // Wait for all channel funding transaction to be known by bitcoind.
     let mut is_missing_any_txids = false;
-    for txid_or in &channel_funding_txids {
+    for (gw_a_name, gw_b_name, txid_or) in &channel_funding_txids {
         if let Some(txid) = txid_or {
             loop {
                 if bitcoind.get_transaction(*txid).await.is_ok() {
@@ -1006,6 +1008,7 @@ pub async fn open_channels_between_gateways(
         } else {
             is_missing_any_txids = true;
         }
+        info!(target: LOG_DEVIMINT, "Channel funding transaction between {gw_a_name} and {gw_b_name} is known by bitcoind");
     }
 
     // `open_channel` may not have sent out the channel funding transaction
@@ -1025,12 +1028,13 @@ pub async fn open_channels_between_gateways(
     )
     .await?;
 
-    for ((gw_a, _gw_a_name), (gw_b, _gw_b_name)) in &gateway_pairs {
+    for ((gw_a, gw_a_name), (gw_b, gw_b_name)) in &gateway_pairs {
         let gw_a_node_pubkey = gw_a.lightning_pubkey().await?;
         let gw_b_node_pubkey = gw_b.lightning_pubkey().await?;
 
         wait_for_ready_channel_on_gateway_with_counterparty(gw_b, gw_a_node_pubkey).await?;
         wait_for_ready_channel_on_gateway_with_counterparty(gw_a, gw_b_node_pubkey).await?;
+        info!(target: LOG_DEVIMINT, "Channels between {gw_a_name} and {gw_b_name} are ready");
     }
 
     Ok(())
