@@ -881,7 +881,7 @@ pub async fn open_channels_between_gateways(
         bitcoind.send_to(funding_addr, 100_000_000).await?;
     }
 
-    bitcoind.mine_blocks(10).await?;
+    bitcoind.mine_blocks(20).await?;
 
     debug!(target: LOG_DEVIMINT, "Syncing gateway lightning nodes to chain tip...");
     futures::future::try_join_all(
@@ -951,7 +951,7 @@ pub async fn open_channels_between_gateways(
         }
     }
 
-    bitcoind.mine_blocks(10).await?;
+    bitcoind.mine_blocks(20).await?;
 
     debug!(target: LOG_DEVIMINT, "Syncing gateway lightning nodes to chain tip...");
     futures::future::try_join_all(
