@@ -40,8 +40,8 @@ pub struct GatewayOpts {
 
     /// Configured gateway routing fees
     /// Format: <base_msat>,<proportional_millionths>
-    #[arg(long = "fees", env = envs::FM_GATEWAY_FEES_ENV)]
-    fees: Option<GatewayFee>,
+    #[arg(long = "default-fees", env = envs::FM_DEFAULT_GATEWAY_FEES_ENV)]
+    default_fees: Option<GatewayFee>,
 
     /// Number of route hints to return in invoices
     #[arg(
@@ -68,7 +68,7 @@ impl GatewayOpts {
             password: self.password.clone(),
             network: self.network,
             num_route_hints: self.num_route_hints,
-            fees: self.fees.clone(),
+            fees: self.default_fees.clone(),
         })
     }
 }
