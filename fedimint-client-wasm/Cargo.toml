@@ -23,7 +23,7 @@ fedimint-core = { workspace = true }
 fedimint-ln-client = { workspace = true, features = ["cli"] }
 fedimint-mint-client = { workspace = true }
 futures = { workspace = true }
-imbl = "2.0.0"
+imbl = "3.0.0"
 js-sys = "0.3.69"
 rexie = "0.6.2"
 serde_json = { workspace = true }
