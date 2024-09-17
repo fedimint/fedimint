@@ -497,10 +497,7 @@
 <a href="#496" id="496">496</a>
 <a href="#497" id="497">497</a>
 <a href="#498" id="498">498</a>
-<a href="#499" id="499">499</a>
-<a href="#500" id="500">500</a>
-<a href="#501" id="501">501</a>
-<a href="#502" id="502">502</a></pre></div><pre class="rust"><code><span class="kw">use </span>clap::Parser;
+<a href="#499" id="499">499</a></pre></div><pre class="rust"><code><span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>devimint::devfed::DevJitFed;
 <span class="kw">use </span>devimint::federation::{Client, Federation};
 <span class="kw">use </span>devimint::util::ProcessManager;
@@ -557,10 +554,7 @@
 
                 test_self_payments_success(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
                 test_lightning_payments(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
-
-                <span class="comment">// TODO: Inter-federation tests have been deactivated from CI
-                // due to flakiness with CLN: https://github.com/fedimint/fedimint/issues/5944
-            </span>}
+            }
             TestOpts::GatewayRegistration =&gt; {
                 test_gateway_registration(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
             }
