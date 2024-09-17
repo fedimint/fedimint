@@ -169,7 +169,7 @@ declare_vars! {
         FM_GATEWAY_PASSWORD: String = "theresnosecondbest"; env: "FM_GATEWAY_PASSWORD";
 
          // Enable to us to make an unbounded number of payments
-        FM_GATEWAY_FEES: String = "0,0"; env: "FM_GATEWAY_FEES";
+        FM_DEFAULT_GATEWAY_FEES: String = "0,0"; env: "FM_DEFAULT_GATEWAY_FEES";
 
         FM_CLN_EXTENSION_LISTEN_ADDRESS: String = f!("0.0.0.0:{FM_PORT_CLN_EXTENSION}"); env: "FM_CLN_EXTENSION_LISTEN_ADDRESS";
         FM_GATEWAY_LIGHTNING_ADDR: String = f!("http://localhost:{FM_PORT_CLN_EXTENSION}"); env: "FM_GATEWAY_LIGHTNING_ADDR";

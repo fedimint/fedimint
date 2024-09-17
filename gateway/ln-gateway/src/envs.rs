@@ -17,7 +17,7 @@ pub const FM_GATEWAY_PASSWORD_ENV: &str = "FM_GATEWAY_PASSWORD";
 pub const FM_GATEWAY_NETWORK_ENV: &str = "FM_GATEWAY_NETWORK";
 
 // Env variable to TODO
-pub const FM_GATEWAY_FEES_ENV: &str = "FM_GATEWAY_FEES";
+pub const FM_DEFAULT_GATEWAY_FEES_ENV: &str = "FM_DEFAULT_GATEWAY_FEES";
 
 // Env variable to TODO
 pub const FM_NUMBER_OF_ROUTE_HINTS_ENV: &str = "FM_NUMBER_OF_ROUTE_HINTS";
