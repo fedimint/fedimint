@@ -73,10 +73,6 @@ impl GatewayLdkClient {
                 addr: [0, 0, 0, 0],
                 port: lightning_port,
             }]),
-            // TODO: Remove these and rely on the default values.
-            // See here for details: https://github.com/lightningdevkit/ldk-node/issues/339#issuecomment-2344230472
-            onchain_wallet_sync_interval_secs: 10,
-            wallet_sync_interval_secs: 10,
             ..Default::default()
         });
         node_builder.set_entropy_bip39_mnemonic(mnemonic, None);
@@ -196,42 +192,13 @@ impl Drop for GatewayLdkClient {
 #[async_trait]
 impl ILnRpcClient for GatewayLdkClient {
     async fn info(&self) -> Result<GetNodeInfoResponse, LightningRpcError> {
-        let node_status = self.node.status();
-
-        let Some(chain_tip_block_summary) = self
-            .esplora_client
-            .get_blocks(None)
-            .await
-            .map_err(|e| LightningRpcError::FailedToGetNodeInfo {
-                failure_reason: format!("Failed get chain tip block summary: {e:?}"),
-            })?
-            .into_iter()
-            .next()
-        else {
-            return Err(LightningRpcError::FailedToGetNodeInfo {
-                failure_reason:
-                    "Failed to get chain tip block summary (empty block list was returned)"
-                        .to_string(),
-            });
-        };
-
-        let esplora_chain_tip_timestamp = chain_tip_block_summary.time.timestamp;
-        let block_height: u32 = chain_tip_block_summary.time.height;
-
-        let synced_to_chain = node_status.latest_wallet_sync_timestamp.unwrap_or_default()
-            > esplora_chain_tip_timestamp
-            && node_status
-                .latest_onchain_wallet_sync_timestamp
-                .unwrap_or_default()
-                > esplora_chain_tip_timestamp;
-
         Ok(GetNodeInfoResponse {
             pub_key: self.node.node_id().serialize().to_vec(),
             // TODO: This is a placeholder. We need to get the actual alias from the LDK node.
             alias: format!("LDK Fedimint Gateway Node {}", self.node.node_id()),
             network: self.node.config().network.to_string(),
-            block_height,
-            synced_to_chain,
+            block_height: self.node.status().current_best_block.height,
+            synced_to_chain: true,
         })
     }
 
