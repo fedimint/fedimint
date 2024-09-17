@@ -17,7 +17,7 @@ mod tls;
 
 use std::any::TypeId;
 use std::borrow::Cow;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt::{Debug, Formatter};
 use std::io::{self, Error, Read, Write};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -493,6 +493,19 @@ where
     }
 }
 
+impl<T> Encodable for VecDeque<T>
+where
+    T: Encodable + 'static,
+{
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        let mut len = (self.len() as u64).consensus_encode(writer)?;
+        for i in self {
+            len += i.consensus_encode(writer)?;
+        }
+        Ok(len)
+    }
+}
+
 #[test]
 fn vec_decode_sanity() {
     let buf = [
@@ -500,10 +513,33 @@ fn vec_decode_sanity() {
     ];
 
     // On malicious large len, return an error instead of panicking.
-    // Note: This was supposed to expose the panic, but I was not able to trigger it
-    // for some reason.
     assert!(Vec::<u8>::consensus_decode(&mut buf.as_slice(), &Default::default()).is_err());
     assert!(Vec::<u16>::consensus_decode(&mut buf.as_slice(), &Default::default()).is_err());
+}
+
+impl<T> Decodable for VecDeque<T>
+where
+    T: Decodable + 'static,
+{
+    fn consensus_decode_from_finite_reader<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(VecDeque::from(
+            Vec::<T>::consensus_decode_from_finite_reader(d, modules)?,
+        ))
+    }
+}
+
+#[test]
+fn vec_deque_decode_sanity() {
+    let buf = [
+        0xffu8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ];
+
+    // On malicious large len, return an error instead of panicking.
+    assert!(VecDeque::<u8>::consensus_decode(&mut buf.as_slice(), &Default::default()).is_err());
+    assert!(VecDeque::<u16>::consensus_decode(&mut buf.as_slice(), &Default::default()).is_err());
 }
 
 impl<T, const SIZE: usize> Encodable for [T; SIZE]

@@ -36,7 +36,7 @@ use async_stream::{stream, try_stream};
 use backup::recovery::MintRecovery;
 use base64::Engine as _;
 use bitcoin_hashes::{sha256, sha256t, Hash, HashEngine as BitcoinHashEngine};
-use client_db::{DbKeyPrefix, NoteKeyPrefix};
+use client_db::{DbKeyPrefix, NoteKeyPrefix, RecoveryFinalizedKey};
 use fedimint_client::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
@@ -559,7 +559,12 @@ impl ModuleInit for MintClientInit {
                         "CancelledOOBSpendKey"
                     );
                 }
-                DbKeyPrefix::RecoveryState | DbKeyPrefix::RecoveryFinalized => {}
+                DbKeyPrefix::RecoveryFinalized => {
+                    if let Some(val) = dbtx.get_value(&RecoveryFinalizedKey).await {
+                        mint_client_items.insert("RecoveryFinalized".to_string(), Box::new(val));
+                    }
+                }
+                DbKeyPrefix::RecoveryState => {}
             }
         }
 
@@ -592,7 +597,8 @@ impl ClientModuleInit for MintClientInit {
         args: &ClientModuleRecoverArgs<Self>,
         snapshot: Option<&<Self::Module as ClientModule>::Backup>,
     ) -> anyhow::Result<()> {
-        args.recover_from_history::<MintRecovery>(snapshot).await
+        args.recover_from_history::<MintRecovery>(self, snapshot)
+            .await
     }
 }
 

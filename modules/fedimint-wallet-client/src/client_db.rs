@@ -2,11 +2,14 @@ use core::fmt;
 use std::ops;
 use std::time::SystemTime;
 
+use fedimint_client::module::init::recovery::RecoveryFromHistoryCommon;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record, TransactionId};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
+
+use crate::backup::WalletRecoveryState;
 
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
@@ -14,6 +17,7 @@ pub enum DbKeyPrefix {
     PegInTweakIndex = 0x2d,
     ClaimedPegIn = 0x2e,
     RecoveryFinalized = 0x2f,
+    RecoveryState = 0x30,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -64,6 +68,10 @@ impl TweakIdx {
     #[must_use]
     pub fn advance(self, i: u64) -> Self {
         Self(self.0 + i)
+    }
+
+    pub fn saturating_sub(&self, rhs: TweakIdx) -> u64 {
+        self.0.saturating_sub(rhs.0)
     }
 }
 
@@ -146,4 +154,16 @@ impl_db_record!(
     key = RecoveryFinalizedKey,
     value = bool,
     db_prefix = DbKeyPrefix::RecoveryFinalized,
+);
+
+#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+pub struct RecoveryStateKey;
+
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct RestoreStateKeyPrefix;
+
+impl_db_record!(
+    key = RecoveryStateKey,
+    value = (WalletRecoveryState, RecoveryFromHistoryCommon),
+    db_prefix = DbKeyPrefix::RecoveryState,
 );
