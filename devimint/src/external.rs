@@ -26,9 +26,7 @@ use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest};
 use tonic_lnd::Client as LndClient;
 use tracing::{debug, info, trace, warn};
 
-use crate::util::{
-    poll, poll_with_timeout, ClnLightningCli, GatewayClnExtension, ProcessHandle, ProcessManager,
-};
+use crate::util::{poll, ClnLightningCli, GatewayClnExtension, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
 use crate::version_constants::VERSION_0_4_0_ALPHA;
 use crate::{cmd, poll_eq, Gatewayd};
@@ -914,7 +912,7 @@ pub async fn open_channels_between_gateways(
             tokio::task::spawn(async move {
                 // Sometimes channel openings just after funding the lightning nodes don't work right away.
                 // This resolves itself after a few seconds, so we don't need to poll for very long.
-                poll_with_timeout("Open channel", Duration::from_secs(10), || async {
+                poll("Open channel", || async {
                     gw_a.open_channel(&gw_b, 10_000_000, Some(push_amount)).await.map_err(ControlFlow::Continue)
                 })
                 .await
