@@ -130,8 +130,8 @@
 
     <span class="doccomment">/// Configured gateway routing fees
     /// Format: &lt;base_msat&gt;,&lt;proportional_millionths&gt;
-    </span><span class="attr">#[arg(long = <span class="string">"fees"</span>, env = envs::FM_GATEWAY_FEES_ENV)]
-    </span>fees: <span class="prelude-ty">Option</span>&lt;GatewayFee&gt;,
+    </span><span class="attr">#[arg(long = <span class="string">"default-fees"</span>, env = envs::FM_DEFAULT_GATEWAY_FEES_ENV)]
+    </span>default_fees: <span class="prelude-ty">Option</span>&lt;GatewayFee&gt;,
 
     <span class="doccomment">/// Number of route hints to return in invoices
     </span><span class="attr">#[arg(
@@ -158,7 +158,7 @@
             password: <span class="self">self</span>.password.clone(),
             network: <span class="self">self</span>.network,
             num_route_hints: <span class="self">self</span>.num_route_hints,
-            fees: <span class="self">self</span>.fees.clone(),
+            fees: <span class="self">self</span>.default_fees.clone(),
         })
     }
 }
