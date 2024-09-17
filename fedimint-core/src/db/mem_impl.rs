@@ -1,4 +1,5 @@
 use std::fmt::{self, Debug};
+use std::ops::Range;
 use std::path::Path;
 
 use anyhow::Result;
@@ -178,6 +179,18 @@ impl<'a> IDatabaseTransactionOpsCore for MemTransaction<'a> {
 
         Ok(Box::pin(stream::iter(data)))
     }
+
+    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> Result<PrefixStream<'_>> {
+        let data = self
+            .tx_data
+            .range(Range {
+                start: range.start.to_vec(),
+                end: range.end.to_vec(),
+            })
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect::<Vec<_>>();
+        Ok(Box::pin(stream::iter(data)))
+    }
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -266,6 +279,11 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn test_dbtx_prevent_dirty_reads() {
         fedimint_core::db::verify_prevent_dirty_reads(database()).await;
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_dbtx_find_by_range() {
+        fedimint_core::db::verify_find_by_range(database()).await;
     }
 
     #[test_log::test(tokio::test)]

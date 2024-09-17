@@ -107,7 +107,7 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::{self, Debug};
 use std::marker::{self, PhantomData};
-use std::ops::{self, DerefMut};
+use std::ops::{self, DerefMut, Range};
 use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -707,9 +707,15 @@ impl<Inner> PrefixDatabaseTransaction<Inner> {
         full_key
     }
 
+    fn get_full_range(&self, range: Range<&[u8]>) -> Range<Vec<u8>> {
+        Range {
+            start: self.get_full_key(range.start),
+            end: self.get_full_key(range.end),
+        }
+    }
+
     fn adapt_prefix_stream(stream: PrefixStream<'_>, prefix_len: usize) -> PrefixStream<'_> {
-        Box::pin(stream.map(move |(k, v)| (k[prefix_len..].to_owned(), v))) /* as Pin<Box<dyn Stream<Item =
-                                                                             * _>>> */
+        Box::pin(stream.map(move |(k, v)| (k[prefix_len..].to_owned(), v)))
     }
 }
 
@@ -765,6 +771,18 @@ where
         Ok(Self::adapt_prefix_stream(stream, self.prefix.len()))
     }
 
+    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> Result<PrefixStream<'_>> {
+        let range = self.get_full_range(range);
+        let stream = self
+            .inner
+            .raw_find_by_range(Range {
+                start: &range.start,
+                end: &range.start,
+            })
+            .await?;
+        Ok(Self::adapt_prefix_stream(stream, self.prefix.len()))
+    }
+
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
         let key = self.get_full_key(key_prefix);
         self.inner.raw_remove_by_prefix(&key).await
@@ -790,10 +808,13 @@ where
 /// Used to enforce the same signature on all types supporting it
 #[apply(async_trait_maybe_send!)]
 pub trait IDatabaseTransactionOpsCore: MaybeSend {
+    /// Insert entry
     async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>>;
 
+    /// Get key value
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
+    /// Remove entry by `key`
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
     /// Returns an stream of key-value pairs with keys that start with
@@ -805,6 +826,11 @@ pub trait IDatabaseTransactionOpsCore: MaybeSend {
         &mut self,
         key_prefix: &[u8],
     ) -> Result<PrefixStream<'_>>;
+
+    /// Returns an stream of key-value pairs with keys within a `range`, sorted
+    /// by key. [`Range`] is an (half-open) range bounded inclusively below and
+    /// exclusively above.
+    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> Result<PrefixStream<'_>>;
 
     /// Delete keys matching prefix
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()>;
@@ -840,6 +866,10 @@ where
             .await
     }
 
+    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> Result<PrefixStream<'_>> {
+        (**self).raw_find_by_range(range).await
+    }
+
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
         (**self).raw_remove_by_prefix(key_prefix).await
     }
@@ -873,6 +903,10 @@ where
         (**self)
             .raw_find_by_prefix_sorted_descending(key_prefix)
             .await
+    }
+
+    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> Result<PrefixStream<'_>> {
+        (**self).raw_find_by_range(range).await
     }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
@@ -945,6 +979,14 @@ pub trait IDatabaseTransactionOpsCoreTyped<'a> {
         K::Value: MaybeSend + MaybeSync;
 
     async fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value)
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+        K::Value: MaybeSend + MaybeSync;
+
+    async fn find_by_range<K>(
+        &mut self,
+        key_range: Range<K>,
+    ) -> Pin<Box<maybe_add_send!(dyn Stream<Item = (K, K::Value)> + '_)>>
     where
         K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
         K::Value: MaybeSend + MaybeSync;
@@ -1046,6 +1088,30 @@ where
                 "Database overwriting element when expecting insertion of new entry. Key: {key:?} Prev Value: {prev:?}"
             );
         }
+    }
+
+    async fn find_by_range<K>(
+        &mut self,
+        key_range: Range<K>,
+    ) -> Pin<Box<maybe_add_send!(dyn Stream<Item = (K, K::Value)> + '_)>>
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+        K::Value: MaybeSend + MaybeSync,
+    {
+        let decoders = self.decoders().clone();
+        Box::pin(
+            self.raw_find_by_range(Range {
+                start: &key_range.start.to_bytes(),
+                end: &key_range.end.to_bytes(),
+            })
+            .await
+            .expect("Unrecoverable error occurred while listing entries from the database")
+            .map(move |(key_bytes, value_bytes)| {
+                let key = decode_key_expect(&key_bytes, &decoders);
+                let value = decode_value_expect(&value_bytes, &decoders, &key_bytes);
+                (key, value)
+            }),
+        )
     }
 
     async fn find_by_prefix<KP>(
@@ -1249,6 +1315,14 @@ impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOpsCore for BaseDatabaseTr
             .as_mut()
             .context("Cannot remove from already consumed transaction")?
             .raw_remove_entry(key)
+            .await
+    }
+
+    async fn raw_find_by_range(&mut self, key_range: Range<&[u8]>) -> Result<PrefixStream<'_>> {
+        self.raw
+            .as_mut()
+            .context("Cannot retrieve from already consumed transaction")?
+            .raw_find_by_range(key_range)
             .await
     }
 
@@ -1661,6 +1735,10 @@ where
 
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         self.tx.raw_remove_entry(key).await
+    }
+
+    async fn raw_find_by_range(&mut self, key_range: Range<&[u8]>) -> Result<PrefixStream<'_>> {
+        self.tx.raw_find_by_range(key_range).await
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
@@ -2324,6 +2402,52 @@ mod test_utils {
         dbtx.commit_tx().await;
     }
 
+    pub async fn verify_find_by_range(db: Database) {
+        let mut dbtx = db.begin_transaction().await;
+        dbtx.insert_entry(&TestKey(55), &TestVal(9999)).await;
+        dbtx.insert_entry(&TestKey(54), &TestVal(8888)).await;
+        dbtx.insert_entry(&TestKey(56), &TestVal(7777)).await;
+
+        dbtx.insert_entry(&AltTestKey(55), &TestVal(7777)).await;
+        dbtx.insert_entry(&AltTestKey(54), &TestVal(6666)).await;
+        dbtx.commit_tx().await;
+
+        // Verify finding by prefix returns the correct set of key pairs
+        let mut dbtx = db.begin_transaction().await;
+
+        let returned_keys = dbtx
+            .find_by_range(TestKey(55)..TestKey(56))
+            .await
+            .collect::<Vec<_>>()
+            .await;
+
+        let expected = vec![(TestKey(55), TestVal(9999))];
+
+        assert_eq!(returned_keys, expected);
+
+        let returned_keys = dbtx
+            .find_by_range(TestKey(54)..TestKey(56))
+            .await
+            .collect::<Vec<_>>()
+            .await;
+
+        let expected = vec![(TestKey(54), TestVal(8888)), (TestKey(55), TestVal(9999))];
+        assert_eq!(returned_keys, expected);
+
+        let returned_keys = dbtx
+            .find_by_range(TestKey(54)..TestKey(57))
+            .await
+            .collect::<Vec<_>>()
+            .await;
+
+        let expected = vec![
+            (TestKey(54), TestVal(8888)),
+            (TestKey(55), TestVal(9999)),
+            (TestKey(56), TestVal(7777)),
+        ];
+        assert_eq!(returned_keys, expected);
+    }
+
     pub async fn verify_find_by_prefix(db: Database) {
         let mut dbtx = db.begin_transaction().await;
         dbtx.insert_entry(&TestKey(55), &TestVal(9999)).await;
@@ -2907,6 +3031,7 @@ mod test_utils {
     #[tokio::test]
     async fn test_autocommit() {
         use std::marker::PhantomData;
+        use std::ops::Range;
         use std::path::Path;
 
         use anyhow::anyhow;
@@ -2952,6 +3077,13 @@ mod test_utils {
             }
 
             async fn raw_remove_entry(&mut self, _key: &[u8]) -> anyhow::Result<Option<Vec<u8>>> {
+                unimplemented!()
+            }
+
+            async fn raw_find_by_range(
+                &mut self,
+                _key_range: Range<&[u8]>,
+            ) -> anyhow::Result<crate::db::PrefixStream<'_>> {
                 unimplemented!()
             }
 
