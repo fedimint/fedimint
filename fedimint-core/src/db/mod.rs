@@ -1832,10 +1832,11 @@ macro_rules! push_db_key_items {
 
 /// `ServerMigrationFn` that modules can implement to "migrate" the database
 /// to the next database version.
-pub type ServerMigrationFn =
-    for<'r, 'tx> fn(
-        &'r mut DatabaseTransaction<'tx>,
-    ) -> Pin<Box<dyn futures::Future<Output = anyhow::Result<()>> + Send + 'r>>;
+pub type ServerMigrationFn = for<'tx> fn(
+    MigrationContext<'tx>,
+) -> Pin<
+    Box<maybe_add_send!(dyn futures::Future<Output = anyhow::Result<()>> + 'tx)>,
+>;
 
 /// Applies the database migrations to a non-isolated database.
 pub async fn apply_migrations_server(
@@ -1892,17 +1893,12 @@ pub async fn apply_migrations(
 
         while current_db_version < target_db_version {
             if let Some(migration) = migrations.get(&current_db_version) {
-                info!(target: LOG_DB, "Migrating module {kind} from {current_db_version} to {target_db_version}");
-                if let Some(module_instance_id) = module_instance_id {
-                    migration(
-                        &mut global_dbtx
-                            .to_ref_with_prefix_module_id(module_instance_id)
-                            .into_nc(),
-                    )
-                    .await?;
-                } else {
-                    migration(&mut global_dbtx.to_ref_nc()).await?;
-                }
+                info!(target: LOG_DB, ?kind, ?current_db_version, ?target_db_version, "Migrating module...");
+                migration(MigrationContext {
+                    dbtx: global_dbtx.to_ref_nc(),
+                    module_instance_id,
+                })
+                .await?;
             } else {
                 warn!(target: LOG_DB, "Missing server db migration for version {current_db_version}");
             }
@@ -1999,12 +1995,37 @@ fn module_instance_id_or_global(module_instance_id: Option<ModuleInstanceId>) ->
     }
 }
 
+pub struct MigrationContext<'tx> {
+    dbtx: DatabaseTransaction<'tx>,
+    module_instance_id: Option<ModuleInstanceId>,
+}
+
+impl<'tx> MigrationContext<'tx> {
+    pub fn dbtx(&mut self) -> DatabaseTransaction {
+        if let Some(module_instance_id) = self.module_instance_id {
+            self.dbtx.to_ref_with_prefix_module_id(module_instance_id)
+        } else {
+            self.dbtx.to_ref_nc()
+        }
+    }
+
+    pub fn module_instance_id(&self) -> Option<ModuleInstanceId> {
+        self.module_instance_id
+    }
+
+    #[doc(hidden)]
+    pub fn __global_dbtx(&mut self) -> &mut DatabaseTransaction<'tx> {
+        &mut self.dbtx
+    }
+}
+
 #[allow(unused_imports)]
 mod test_utils {
     use std::collections::BTreeMap;
     use std::thread::sleep;
     use std::time::Duration;
 
+    use fedimint_core::db::MigrationContext;
     use futures::future::ready;
     use futures::{Future, FutureExt, StreamExt};
     use rand::Rng;
@@ -2701,8 +2722,8 @@ mod test_utils {
 
         let mut migrations: BTreeMap<DatabaseVersion, ServerMigrationFn> = BTreeMap::new();
 
-        migrations.insert(DatabaseVersion(0), move |dbtx| {
-            migrate_test_db_version_0(dbtx).boxed()
+        migrations.insert(DatabaseVersion(0), |ctx| {
+            migrate_test_db_version_0(ctx).boxed()
         });
 
         apply_migrations(
@@ -2739,9 +2760,8 @@ mod test_utils {
     }
 
     #[allow(dead_code)]
-    async fn migrate_test_db_version_0<'a, 'b>(
-        dbtx: &'b mut DatabaseTransaction<'a>,
-    ) -> Result<(), anyhow::Error> {
+    async fn migrate_test_db_version_0(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Error> {
+        let mut dbtx = ctx.dbtx();
         let example_keys_v0 = dbtx
             .find_by_prefix(&DbPrefixTestPrefixV0)
             .await

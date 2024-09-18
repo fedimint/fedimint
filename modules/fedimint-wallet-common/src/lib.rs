@@ -80,6 +80,118 @@ pub struct SpendableUTXO {
     pub amount: bitcoin::Amount,
 }
 
+/// A transaction output, either unspent or consumed
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct TxOutputSummary {
+    pub outpoint: bitcoin::OutPoint,
+    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    pub amount: bitcoin::Amount,
+}
+
+/// Summary of the coins within the wallet.
+///
+/// Coins within the wallet go from spendable, to consumed in a transaction that
+/// does not have threshold signatures (unsigned), to threshold signed and
+/// unconfirmed on-chain (unconfirmed).
+///
+/// This summary provides the most granular view possible of coins in the
+/// wallet.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct WalletSummary {
+    /// All UTXOs available as inputs for transactions
+    pub spendable_utxos: Vec<TxOutputSummary>,
+    /// Transaction outputs consumed in peg-out transactions that have not
+    /// reached threshold signatures
+    pub unsigned_peg_out_txos: Vec<TxOutputSummary>,
+    /// Change UTXOs created from peg-out transactions that have not reached
+    /// threshold signatures
+    pub unsigned_change_utxos: Vec<TxOutputSummary>,
+    /// Transaction outputs consumed in peg-out transactions that have reached
+    /// threshold signatures waiting for finality delay confirmations
+    pub unconfirmed_peg_out_txos: Vec<TxOutputSummary>,
+    /// Change UTXOs created from peg-out transactions that have reached
+    /// threshold signatures waiting for finality delay confirmations
+    pub unconfirmed_change_utxos: Vec<TxOutputSummary>,
+}
+
+impl WalletSummary {
+    fn sum<'a>(txos: impl Iterator<Item = &'a TxOutputSummary>) -> Amount {
+        txos.fold(Amount::ZERO, |acc, txo| txo.amount + acc)
+    }
+
+    /// Total amount of all spendable UTXOs
+    pub fn total_spendable_balance(&self) -> Amount {
+        WalletSummary::sum(self.spendable_utxos.iter())
+    }
+
+    /// Total amount of all transaction outputs from peg-out transactions that
+    /// have not reached threshold signatures
+    pub fn total_unsigned_peg_out_balance(&self) -> Amount {
+        WalletSummary::sum(self.unsigned_peg_out_txos.iter())
+    }
+
+    /// Total amount of all change UTXOs from peg-out transactions that have not
+    /// reached threshold signatures
+    pub fn total_unsigned_change_balance(&self) -> Amount {
+        WalletSummary::sum(self.unsigned_change_utxos.iter())
+    }
+
+    /// Total amount of all transaction outputs from peg-out transactions that
+    /// have reached threshold signatures waiting for finality delay
+    /// confirmations
+    pub fn total_unconfirmed_peg_out_balance(&self) -> Amount {
+        WalletSummary::sum(self.unconfirmed_peg_out_txos.iter())
+    }
+
+    /// Total amount of all change UTXOs from peg-out transactions that have
+    /// reached threshold signatures waiting for finality delay confirmations
+    pub fn total_unconfirmed_change_balance(&self) -> Amount {
+        WalletSummary::sum(self.unconfirmed_change_utxos.iter())
+    }
+
+    /// Total amount of all transaction outputs from peg-out transactions that
+    /// are either waiting for threshold signatures or confirmations. This is
+    /// the total in-flight amount leaving the wallet.
+    pub fn total_pending_peg_out_balance(&self) -> Amount {
+        self.total_unsigned_peg_out_balance() + self.total_unconfirmed_peg_out_balance()
+    }
+
+    /// Total amount of all change UTXOs from peg-out transactions that are
+    /// either waiting for threshold signatures or confirmations. This is the
+    /// total in-flight amount that will become spendable by the wallet.
+    pub fn total_pending_change_balance(&self) -> Amount {
+        self.total_unsigned_change_balance() + self.total_unconfirmed_change_balance()
+    }
+
+    /// Total amount of immediately spendable UTXOs and pending change UTXOs.
+    /// This is the spendable balance once all transactions confirm.
+    pub fn total_owned_balance(&self) -> Amount {
+        self.total_spendable_balance() + self.total_pending_change_balance()
+    }
+
+    /// All transaction outputs from peg-out transactions that are either
+    /// waiting for threshold signatures or confirmations. These are all the
+    /// in-flight coins leaving the wallet.
+    pub fn pending_peg_out_txos(&self) -> Vec<TxOutputSummary> {
+        self.unsigned_peg_out_txos
+            .clone()
+            .into_iter()
+            .chain(self.unconfirmed_peg_out_txos.clone())
+            .collect()
+    }
+
+    /// All change UTXOs from peg-out transactions that are either waiting for
+    /// threshold signatures or confirmations. These are all the in-flight coins
+    /// that will become spendable by the wallet.
+    pub fn pending_change_utxos(&self) -> Vec<TxOutputSummary> {
+        self.unsigned_change_utxos
+            .clone()
+            .into_iter()
+            .chain(self.unconfirmed_change_utxos.clone())
+            .collect()
+    }
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct PegOutFees {
     pub fee_rate: Feerate,

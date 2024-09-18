@@ -45,3 +45,4 @@ pub const AWAIT_TRANSACTION_ENDPOINT: &str = "await_transaction";
 pub const INVITE_CODE_ENDPOINT: &str = "invite_code";
 pub const FEDERATION_ID_ENDPOINT: &str = "federation_id";
 pub const RESTART_FEDERATION_SETUP_ENDPOINT: &str = "restart_federation_setup";
+pub const WALLET_SUMMARY_ENDPOINT: &str = "wallet_summary";

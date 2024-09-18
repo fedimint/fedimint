@@ -339,6 +339,11 @@ impl WalletClientModule {
             .context("Federation didn't return peg-out fees")
     }
 
+    /// Returns a summary of the wallet's coins
+    pub async fn get_wallet_summary(&self) -> anyhow::Result<WalletSummary> {
+        Ok(self.module_api.fetch_wallet_summary().await?)
+    }
+
     pub async fn create_withdraw_output(
         &self,
         operation_id: OperationId,
