@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::time::Duration;
 
 use anyhow::{bail, Context};
@@ -23,7 +24,7 @@ use fedimint_wallet_client::{DepositStateV2, WalletClientInit, WalletClientModul
 use fedimint_wallet_common::config::{WalletConfig, WalletGenParams};
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::txoproof::PegInProof;
-use fedimint_wallet_common::{PegOutFees, Rbf};
+use fedimint_wallet_common::{PegOutFees, Rbf, TxOutputSummary};
 use fedimint_wallet_server::WalletInit;
 use futures::stream::StreamExt;
 use tokio::select;
@@ -43,13 +44,13 @@ fn bsats(satoshi: u64) -> bitcoin::Amount {
 const PEG_IN_AMOUNT_SATS: u64 = 10000;
 const PEG_OUT_AMOUNT_SATS: u64 = 1000;
 
-async fn initial_peg_in<'a>(
+async fn peg_in<'a>(
     client: &'a ClientHandleArc,
     bitcoin: &dyn BitcoinTest,
     finality_delay: u64,
-) -> anyhow::Result<BoxStream<'a, Amount>> {
+) -> anyhow::Result<(BoxStream<'a, Amount>, bitcoin::Transaction)> {
     let mut balance_sub = client.subscribe_balance_changes().await;
-    assert_eq!(balance_sub.ok().await?, sats(0));
+    let initial_balance = balance_sub.ok().await?;
 
     let wallet_module = &client.get_first_module::<WalletClientModule>();
     let (op, address, _) = wallet_module
@@ -67,16 +68,24 @@ async fn initial_peg_in<'a>(
         .get_tx_block_height(&tx.txid())
         .await
         .context("expected tx to be mined")?;
-    info!(?height, ?tx, txid = ?tx.txid(), "Peg-in transaction mined");
+    info!(?height, ?tx, "Peg-in transaction mined");
+
     bitcoin.mine_blocks(finality_delay).await;
+
     wallet_module
         .await_num_deposit_by_operation_id(op, 1)
         .await?;
-    assert_eq!(client.get_balance().await, sats(PEG_IN_AMOUNT_SATS));
-    assert_eq!(balance_sub.ok().await?, sats(PEG_IN_AMOUNT_SATS));
+    assert_eq!(
+        client.get_balance().await,
+        initial_balance + sats(PEG_IN_AMOUNT_SATS)
+    );
+    assert_eq!(
+        balance_sub.ok().await?,
+        initial_balance + sats(PEG_IN_AMOUNT_SATS)
+    );
     info!(?height, ?tx, "Peg-in transaction claimed");
 
-    Ok(balance_sub)
+    Ok((balance_sub, tx))
 }
 
 async fn await_consensus_to_catch_up(
@@ -381,7 +390,7 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
     bitcoin.mine_blocks(finality_delay).await;
     await_consensus_to_catch_up(&client, 1).await?;
 
-    let mut balance_sub = initial_peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
+    let (mut balance_sub, _) = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
 
     info!("Peg-in finished for test peg_out_fail_refund");
     // Peg-out test, requires block to recognize change UTXOs
@@ -429,7 +438,7 @@ async fn rbf_withdrawals_are_rejected() -> anyhow::Result<()> {
     bitcoin.mine_blocks(finality_delay).await;
     await_consensus_to_catch_up(&client, 1).await?;
 
-    let mut balance_sub = initial_peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
+    let (mut balance_sub, _) = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
 
     info!("Peg-in finished for test rbf_withdrawals_are_rejected");
     let address = checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
@@ -510,7 +519,7 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     bitcoin.mine_blocks(finality_delay).await;
     await_consensus_to_catch_up(&client, 1).await?;
 
-    let mut balance_sub = initial_peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
+    let (mut balance_sub, _) = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
 
     info!("Peg-in finished for test peg_outs_must_wait_for_available_utxos");
     let address = checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
@@ -697,6 +706,218 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn construct_wallet_summary() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_default_fed().await;
+    let client = fed.new_client().await;
+    let bitcoin = fixtures.bitcoin();
+    let bitcoin = bitcoin.lock_exclusive().await;
+    let wallet_module = client.get_first_module::<WalletClientModule>();
+    info!("Starting test construct_wallet_summary");
+
+    let finality_delay = 10;
+    bitcoin.mine_blocks(finality_delay).await;
+    await_consensus_to_catch_up(&client, 1).await?;
+
+    let mut expected_available_utxos: HashSet<TxOutputSummary> = HashSet::new();
+    fn sum_utxos<'a>(utxos: impl Iterator<Item = &'a TxOutputSummary>) -> bitcoin::Amount {
+        utxos.fold(bsats(0), |acc, utxo| bsats(utxo.amount.to_sat()) + acc)
+    }
+
+    // generate 3 peg-ins, verifying wallet summary after each
+    for _ in 0..3 {
+        let (_, tx) = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
+        let expected_peg_in_amount =
+            PEG_IN_AMOUNT_SATS + (wallet_module.get_fee_consensus().peg_in_abs.msats / 1000);
+
+        let expected_available_utxo = tx
+            .output
+            .iter()
+            .enumerate()
+            .find_map(|(idx, output)| {
+                // bitcoin core randomizes the change output index so we can't assume the fed's
+                // utxo is always index 0
+                if output.value == expected_peg_in_amount {
+                    Some(TxOutputSummary {
+                        outpoint: bitcoin::OutPoint {
+                            txid: tx.txid(),
+                            vout: idx as u32,
+                        },
+                        amount: bitcoin::Amount::from_sat(output.value),
+                    })
+                } else {
+                    None
+                }
+            })
+            .expect("peg-in transaction must contain federation's UTXO");
+
+        assert!(expected_available_utxos.insert(expected_available_utxo));
+
+        let wallet_summary = wallet_module.get_wallet_summary().await?;
+        assert_eq!(
+            sum_utxos(expected_available_utxos.iter()),
+            wallet_summary.total_spendable_balance()
+        );
+        assert_eq!(bsats(0), wallet_summary.total_pending_change_balance());
+        assert_eq!(
+            expected_available_utxos,
+            wallet_summary
+                .spendable_utxos
+                .clone()
+                .into_iter()
+                .collect::<HashSet<_>>()
+        );
+        assert_eq!(wallet_summary.pending_peg_out_txos(), vec![]);
+        assert_eq!(wallet_summary.pending_change_utxos(), vec![]);
+    }
+
+    // generate a peg-out, verifying the summary:
+    //   - while the tx is pending in the mempool
+    //   - after the tx is mined and finalized
+    let address = checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
+    let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
+    let fees = wallet_module
+        .get_withdraw_fees(address.clone(), peg_out)
+        .await?;
+    let op = wallet_module
+        .withdraw(address.clone(), peg_out, fees, ())
+        .await?;
+
+    let sub = wallet_module.subscribe_withdraw_updates(op).await?;
+    let mut sub = sub.into_stream();
+    assert_eq!(sub.ok().await?, WithdrawState::Created);
+
+    let txid = match sub.ok().await? {
+        WithdrawState::Succeeded(txid) => txid,
+        other => panic!("Unexpected state: {other:?}"),
+    };
+
+    let wallet_summary_before_mining = wallet_module.get_wallet_summary().await?;
+    info!(?wallet_summary_before_mining);
+
+    let mempool_tx = fedimint_core::util::retry(
+        "get peg-out mempool tx",
+        fedimint_core::util::backon::FibonacciBuilder::default()
+            .with_min_delay(Duration::from_millis(100))
+            .with_max_delay(Duration::from_millis(100))
+            .with_max_times(100),
+        || async {
+            bitcoin
+                .get_mempool_tx(&txid)
+                .await
+                .ok_or(anyhow::anyhow!("No mempool tx found"))
+        },
+    )
+    .await
+    .expect("couldn't fetch mempool tx within 10s");
+    info!(?mempool_tx);
+
+    for input in mempool_tx.input {
+        // using `find` is clunky, however it's necessary since `getrawtransaction`
+        // doesn't include an amount with inputs so we cannot manually construct a
+        // TxOutputSummary
+        let consumed_utxo = expected_available_utxos
+            .iter()
+            .find(|utxo| utxo.outpoint == input.previous_output)
+            .expect("wallet should have consumed spendable UTXO")
+            .to_owned();
+
+        assert!(expected_available_utxos.remove(&consumed_utxo))
+    }
+
+    let expected_pending_peg_out_txo = TxOutputSummary {
+        outpoint: bitcoin::OutPoint { txid, vout: 0 },
+        amount: bitcoin::Amount::from_sat(
+            mempool_tx
+                .output
+                .first()
+                .expect("peg-out tx includes withdrawal output")
+                .value,
+        ),
+    };
+
+    let expected_pending_change_utxo = TxOutputSummary {
+        outpoint: bitcoin::OutPoint { txid, vout: 1 },
+        amount: bitcoin::Amount::from_sat(
+            mempool_tx
+                .output
+                .last()
+                .expect("peg-out tx includes change output")
+                .value,
+        ),
+    };
+
+    assert_eq!(
+        sum_utxos(expected_available_utxos.iter()),
+        wallet_summary_before_mining.total_spendable_balance()
+    );
+
+    assert_eq!(
+        bsats(
+            mempool_tx
+                .output
+                .last()
+                .expect("peg-out tx includes change output")
+                .value
+        ),
+        wallet_summary_before_mining.total_pending_change_balance()
+    );
+
+    assert_eq!(
+        wallet_summary_before_mining
+            .spendable_utxos
+            .clone()
+            .into_iter()
+            .collect::<HashSet<_>>(),
+        expected_available_utxos
+    );
+
+    assert_eq!(
+        wallet_summary_before_mining.pending_peg_out_txos(),
+        vec![expected_pending_peg_out_txo]
+    );
+
+    assert_eq!(
+        wallet_summary_before_mining.pending_change_utxos(),
+        vec![expected_pending_change_utxo]
+    );
+
+    bitcoin.mine_blocks(finality_delay + 1).await;
+    let block_count = bitcoin.get_block_count().await;
+    await_consensus_to_catch_up(&client, block_count - finality_delay).await?;
+
+    let wallet_summary_after_mining = wallet_module.get_wallet_summary().await?;
+    info!(?wallet_summary_after_mining);
+
+    assert!(expected_available_utxos.insert(expected_pending_change_utxo));
+
+    assert_eq!(
+        sum_utxos(expected_available_utxos.iter()),
+        wallet_summary_after_mining.total_spendable_balance()
+    );
+
+    assert_eq!(
+        bsats(0),
+        wallet_summary_after_mining.total_pending_change_balance()
+    );
+
+    assert_eq!(
+        wallet_summary_after_mining
+            .spendable_utxos
+            .clone()
+            .into_iter()
+            .collect::<HashSet<_>>(),
+        expected_available_utxos
+    );
+
+    assert_eq!(wallet_summary_after_mining.pending_peg_out_txos(), vec![]);
+
+    assert_eq!(wallet_summary_after_mining.pending_change_utxos(), vec![]);
+
+    Ok(())
+}
+
 async fn sync_wallet_to_block(
     dbtx: &mut DatabaseTransaction<'_>,
     wallet: &mut fedimint_wallet_server::Wallet,
@@ -760,8 +981,10 @@ mod fedimint_migration_tests {
         Amount, BlockHash, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, WPubkeyHash,
     };
     use fedimint_client::module::init::DynClientModuleInit;
+    use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
     use fedimint_core::db::{
-        Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
+        Database, DatabaseVersion, DatabaseVersionKey, DatabaseVersionKeyV0,
+        IDatabaseTransactionOpsCoreTyped,
     };
     use fedimint_core::module::DynServerModuleInit;
     use fedimint_core::{Feerate, OutPoint, PeerId, TransactionId};
@@ -776,11 +999,12 @@ mod fedimint_migration_tests {
         PegOutFees, Rbf, SpendableUTXO, WalletCommonInit, WalletOutputOutcome,
     };
     use fedimint_wallet_server::db::{
-        BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix,
-        FeeRateVoteKey, FeeRateVotePrefix, PegOutBitcoinTransaction,
-        PegOutBitcoinTransactionPrefix, PegOutNonceKey, PegOutTxSignatureCI,
-        PegOutTxSignatureCIPrefix, PendingTransactionKey, PendingTransactionPrefixKey, UTXOKey,
-        UTXOPrefixKey, UnsignedTransactionKey, UnsignedTransactionPrefixKey,
+        BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix,
+        ClaimedPegInOutpointKey, ClaimedPegInOutpointPrefixKey, DbKeyPrefix, FeeRateVoteKey,
+        FeeRateVotePrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix,
+        PegOutNonceKey, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
+        PendingTransactionPrefixKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
+        UnsignedTransactionPrefixKey,
     };
     use fedimint_wallet_server::{PendingTransaction, UnsignedTransaction};
     use futures::StreamExt;
@@ -965,11 +1189,27 @@ mod fedimint_migration_tests {
         dbtx.commit_tx().await;
     }
 
+    async fn create_server_db_with_v1_data(db: Database) {
+        let mut dbtx = db.begin_transaction().await;
+
+        dbtx.insert_new_entry(
+            &DatabaseVersionKey(LEGACY_HARDCODED_INSTANCE_ID_WALLET),
+            &DatabaseVersion(1),
+        )
+        .await;
+
+        dbtx.insert_new_entry(&ClaimedPegInOutpointKey(bitcoin::OutPoint::null()), &())
+            .await;
+
+        dbtx.commit_tx().await;
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn snapshot_server_db_migrations() -> anyhow::Result<()> {
         snapshot_db_migrations::<_, WalletCommonInit>("wallet-server-v0", |db| {
             Box::pin(async {
-                create_server_db_with_v0_data(db).await;
+                create_server_db_with_v0_data(db.clone()).await;
+                create_server_db_with_v1_data(db).await;
             })
         })
         .await
@@ -1098,6 +1338,19 @@ mod fedimint_migration_tests {
                                 "validate_migrations was not able to read any fee rate votes"
                             );
                             info!("Validated FeeRateVote");
+                        }
+                        DbKeyPrefix::ClaimedPegInOutpoint => {
+                            let claimed_peg_ins = dbtx
+                                .find_by_prefix(&ClaimedPegInOutpointPrefixKey)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_peg_ins = claimed_peg_ins.len();
+                            ensure!(
+                                num_peg_ins > 0,
+                                "validate_migrations was not able to read any claimed peg-in outpoints"
+                            );
+                            info!("Validated PeggedInOutpoint");
                         }
                     }
                 }
