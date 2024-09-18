@@ -29,9 +29,9 @@ use bitcoin::{Address, BlockHash, Network, ScriptBuf, Sequence, Transaction, TxI
 use common::config::WalletConfigConsensus;
 use common::{
     proprietary_tweak_key, PegOutFees, PegOutSignatureItem, ProcessPegOutSigError, SpendableUTXO,
-    WalletCommonInit, WalletConsensusItem, WalletCreationError, WalletInput, WalletModuleTypes,
-    WalletOutput, WalletOutputOutcome, CONFIRMATION_TARGET, DEPRECATED_RBF_ERROR,
-    FEERATE_MULTIPLIER,
+    TxOutputSummary, WalletCommonInit, WalletConsensusItem, WalletCreationError, WalletInput,
+    WalletModuleTypes, WalletOutput, WalletOutputOutcome, WalletSummary, CONFIRMATION_TARGET,
+    DEPRECATED_RBF_ERROR, FEERATE_MULTIPLIER,
 };
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
@@ -40,7 +40,8 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+    CoreMigrationFn, Database, DatabaseTransaction, DatabaseVersion,
+    IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{is_rbf_withdrawal_enabled, is_running_in_test_env};
@@ -66,13 +67,14 @@ pub use fedimint_wallet_common as common;
 use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
 use fedimint_wallet_common::endpoint_constants::{
     BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, PEG_OUT_FEES_ENDPOINT,
+    WALLET_SUMMARY_ENDPOINT,
 };
 use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::{
     Rbf, WalletInputError, WalletOutputError, WalletOutputV0, MODULE_CONSENSUS_VERSION,
 };
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt};
 use hex::ToHex;
 use metrics::{
     WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS, WALLET_PEGIN_SATS,
@@ -88,9 +90,10 @@ use tokio::sync::watch;
 use tracing::{debug, info, instrument, trace, warn};
 
 use crate::db::{
-    BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix,
-    FeeRateVoteKey, FeeRateVotePrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix,
-    PegOutNonceKey, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
+    migrate_to_v1, BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix,
+    ClaimedPegInOutpointKey, ClaimedPegInOutpointPrefixKey, DbKeyPrefix, FeeRateVoteKey,
+    FeeRateVotePrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix, PegOutNonceKey,
+    PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
     PendingTransactionPrefixKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
     UnsignedTransactionPrefixKey,
 };
@@ -103,7 +106,7 @@ pub struct WalletInit;
 
 impl ModuleInit for WalletInit {
     type Common = WalletCommonInit;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
 
     async fn dump_database(
         &self,
@@ -174,7 +177,6 @@ impl ModuleInit for WalletInit {
                         "UTXOs"
                     );
                 }
-
                 DbKeyPrefix::BlockCountVote => {
                     push_db_pair_items!(
                         dbtx,
@@ -185,7 +187,6 @@ impl ModuleInit for WalletInit {
                         "Block Count Votes"
                     );
                 }
-
                 DbKeyPrefix::FeeRateVote => {
                     push_db_pair_items!(
                         dbtx,
@@ -194,6 +195,16 @@ impl ModuleInit for WalletInit {
                         Feerate,
                         wallet,
                         "Fee Rate Votes"
+                    );
+                }
+                DbKeyPrefix::ClaimedPegInOutpoint => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ClaimedPegInOutpointPrefixKey,
+                        PeggedInOutpointKey,
+                        (),
+                        wallet,
+                        "Claimed Peg-in Outpoint"
                     );
                 }
             }
@@ -345,6 +356,13 @@ impl ServerModuleInit for WalletInit {
             finality_delay: config.finality_delay,
             default_bitcoin_rpc: config.client_default_bitcoin_rpc,
         })
+    }
+
+    /// DB migrations to move from old to newer versions
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
+        let mut migrations: BTreeMap<DatabaseVersion, CoreMigrationFn> = BTreeMap::new();
+        migrations.insert(DatabaseVersion(0), |ctx| migrate_to_v1(ctx).boxed());
+        migrations
     }
 }
 
@@ -522,18 +540,22 @@ impl ServerModule for Wallet {
         debug!(outpoint = %input.outpoint(), "Claiming peg-in");
 
         if dbtx
-            .insert_entry(
-                &UTXOKey(input.outpoint()),
-                &SpendableUTXO {
-                    tweak: input.tweak_contract_key().serialize(),
-                    amount: bitcoin::Amount::from_sat(input.tx_output().value),
-                },
-            )
+            .insert_entry(&ClaimedPegInOutpointKey(input.outpoint()), &())
             .await
             .is_some()
         {
             return Err(WalletInputError::PegInAlreadyClaimed);
         }
+
+        dbtx.insert_entry(
+            &UTXOKey(input.outpoint()),
+            &SpendableUTXO {
+                tweak: input.tweak_contract_key().serialize(),
+                amount: bitcoin::Amount::from_sat(input.tx_output().value),
+            },
+        )
+        .await;
+
         let amount = fedimint_core::Amount::from_sats(input.tx_output().value);
         let fee = self.cfg.consensus.fee_consensus.peg_in_abs;
         calculate_pegin_metrics(dbtx, amount, fee);
@@ -719,6 +741,13 @@ impl ServerModule for Wallet {
                         }
                         Ok(tx) => Ok(Some(tx.fees))
                     }
+                }
+            },
+            api_endpoint! {
+                WALLET_SUMMARY_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |module: &Wallet, context, _params: ()| -> WalletSummary {
+                    Ok(module.get_wallet_summary(&mut context.dbtx().into_nc()).await)
                 }
             },
         ]
@@ -1187,6 +1216,80 @@ impl Wallet {
             .map(|(_, utxo)| utxo.amount.to_sat())
             .sum();
         bitcoin::Amount::from_sat(sat_sum)
+    }
+
+    async fn get_wallet_summary(&self, dbtx: &mut DatabaseTransaction<'_>) -> WalletSummary {
+        fn partition_peg_out_and_change(
+            transactions: Vec<Transaction>,
+        ) -> (Vec<TxOutputSummary>, Vec<TxOutputSummary>) {
+            let mut peg_out_txos: Vec<TxOutputSummary> = Vec::new();
+            let mut change_utxos: Vec<TxOutputSummary> = Vec::new();
+
+            for tx in transactions {
+                let txid = tx.txid();
+
+                // to identify outputs for the peg_out (idx = 0) and change (idx = 1), we lean
+                // on how the wallet constructs the transaction
+                let peg_out_output = tx
+                    .output
+                    .first()
+                    .expect("tx must contain withdrawal output");
+
+                let change_output = tx.output.last().expect("tx must contain change output");
+
+                peg_out_txos.push(TxOutputSummary {
+                    outpoint: bitcoin::OutPoint { txid, vout: 0 },
+                    amount: bitcoin::Amount::from_sat(peg_out_output.value),
+                });
+
+                change_utxos.push(TxOutputSummary {
+                    outpoint: bitcoin::OutPoint { txid, vout: 1 },
+                    amount: bitcoin::Amount::from_sat(change_output.value),
+                });
+            }
+
+            (peg_out_txos, change_utxos)
+        }
+
+        let spendable_utxos = self
+            .available_utxos(dbtx)
+            .await
+            .iter()
+            .map(|(utxo_key, spendable_utxo)| TxOutputSummary {
+                outpoint: utxo_key.0,
+                amount: spendable_utxo.amount,
+            })
+            .collect::<Vec<_>>();
+
+        // constructed peg-outs without threshold signatures
+        let unsigned_transactions = dbtx
+            .find_by_prefix(&UnsignedTransactionPrefixKey)
+            .await
+            .map(|(_tx_key, tx)| tx.psbt.unsigned_tx)
+            .collect::<Vec<_>>()
+            .await;
+
+        // peg-outs with threshold signatures, awaiting finality delay confirmations
+        let unconfirmed_transactions = dbtx
+            .find_by_prefix(&PendingTransactionPrefixKey)
+            .await
+            .map(|(_tx_key, tx)| tx.tx)
+            .collect::<Vec<_>>()
+            .await;
+
+        let (unsigned_peg_out_txos, unsigned_change_utxos) =
+            partition_peg_out_and_change(unsigned_transactions);
+
+        let (unconfirmed_peg_out_txos, unconfirmed_change_utxos) =
+            partition_peg_out_and_change(unconfirmed_transactions);
+
+        WalletSummary {
+            spendable_utxos,
+            unsigned_peg_out_txos,
+            unsigned_change_utxos,
+            unconfirmed_peg_out_txos,
+            unconfirmed_change_utxos,
+        }
     }
 
     fn offline_wallet(&self) -> StatelessWallet {
