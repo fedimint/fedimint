@@ -1,5 +1,6 @@
 //! Uses immutable data structures and saves to indexeddb on commit.
 use std::fmt::Debug;
+use std::ops::Range;
 use std::sync::Arc;
 
 use anyhow::{Context as _, Result};
@@ -75,7 +76,7 @@ impl MemAndIndexedDb {
 
         let idb_store = idb_tx.store("default").map_err(rexie_to_anyhow)?;
         let entries = idb_store
-            .get_all(None, None, None, None)
+            .scan(None, None, None, None)
             .await
             .map_err(rexie_to_anyhow)?;
 
@@ -153,6 +154,19 @@ impl<'a> IDatabaseTransactionOpsCore for MemAndIndexedDbTransaction<'a> {
             }));
         self.num_pending_operations += 1;
         Ok(old_value)
+    }
+
+    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> Result<PrefixStream<'_>> {
+        let data = self
+            .tx_data
+            .range::<_, Vec<u8>>(Range {
+                start: range.start.to_vec(),
+                end: range.end.to_vec(),
+            })
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect::<Vec<_>>();
+
+        Ok(Box::pin(stream::iter(data)))
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
@@ -252,7 +266,10 @@ impl<'a> IRawDatabaseTransaction for MemAndIndexedDbTransaction<'a> {
                     }
                     DatabaseOperation::Delete(delete_op) => {
                         let key = js_sys::Uint8Array::from(&delete_op.key[..]);
-                        idb_store.delete(&key).await.map_err(rexie_to_anyhow)?;
+                        idb_store
+                            .delete(key.into())
+                            .await
+                            .map_err(rexie_to_anyhow)?;
                         let old_value = data_new.remove(&delete_op.key);
                         anyhow::ensure!(old_value == delete_op.old_value, "write-write conflict");
                     }
