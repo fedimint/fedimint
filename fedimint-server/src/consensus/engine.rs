@@ -797,11 +797,6 @@ impl ConsensusEngine {
         };
 
         loop {
-            // We only want to initiate the request if we have not ordered a unit in a
-            // while. This indicates that we have fallen behind and our peers
-            // have already switched sessions without us
-            sleep(Duration::from_secs(5)).await;
-
             let result = federation_api
                 .request_with_strategy(
                     FilterMap::new(filter_map.clone(), self.num_peers()),
