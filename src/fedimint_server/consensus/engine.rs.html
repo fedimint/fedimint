@@ -1181,6 +1181,11 @@
     ) -&gt; anyhow::Result&lt;SignedSessionOutcome&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>item_index = <span class="number">0</span>;
 
+        <span class="kw">let </span><span class="kw-2">mut </span>request_signed_session_outcome = Box::pin(<span class="kw">async </span>{
+            <span class="self">self</span>.request_signed_session_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>.federation_api, session_index)
+                .<span class="kw">await
+        </span>});
+
         <span class="comment">// We build a session outcome out of the ordered batches until either we have
         // processed broadcast_rounds_per_session rounds or a threshold signed
         // session outcome is obtained from our peers
@@ -1227,7 +1232,7 @@
                         }
                     }
                 },
-                signed_session_outcome = <span class="self">self</span>.request_signed_session_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>.federation_api, session_index) =&gt; {
+                signed_session_outcome = <span class="kw-2">&amp;mut </span>request_signed_session_outcome =&gt; {
                     <span class="kw">let </span>pending_accepted_items = <span class="self">self</span>.pending_accepted_items().<span class="kw">await</span>;
 
                     <span class="comment">// this panics if we have more accepted items than the signed session outcome
@@ -1298,7 +1303,7 @@
                         }
                     }
                 }
-                signed_session_outcome = <span class="self">self</span>.request_signed_session_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>.federation_api, session_index) =&gt; {
+                signed_session_outcome = <span class="kw-2">&amp;mut </span>request_signed_session_outcome =&gt; {
                     <span class="macro">assert_eq!</span>(
                         header,
                         signed_session_outcome.session_outcome.header(session_index),
@@ -1632,11 +1637,6 @@
         };
 
         <span class="kw">loop </span>{
-            <span class="comment">// We only want to initiate the request if we have not ordered a unit in a
-            // while. This indicates that we have fallen behind and our peers
-            // have already switched sessions without us
-            </span>sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
-
             <span class="kw">let </span>result = federation_api
                 .request_with_strategy(
                     FilterMap::new(filter_map.clone(), <span class="self">self</span>.num_peers()),
