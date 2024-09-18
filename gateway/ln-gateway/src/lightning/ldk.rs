@@ -1,3 +1,4 @@
+use std::cmp::max;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -215,23 +216,19 @@ impl ILnRpcClient for GatewayLdkClient {
             });
         };
 
-        let esplora_chain_tip_timestamp = chain_tip_block_summary.time.timestamp;
-        let block_height: u32 = chain_tip_block_summary.time.height;
-
-        let synced_to_chain = node_status.latest_wallet_sync_timestamp.unwrap_or_default()
-            > esplora_chain_tip_timestamp
-            && node_status
-                .latest_onchain_wallet_sync_timestamp
-                .unwrap_or_default()
-                > esplora_chain_tip_timestamp;
+        let esplora_chain_tip_block_height = chain_tip_block_summary.time.height;
+        let ldk_node_chain_tip_block_height = node_status.current_best_block.height;
 
         Ok(GetNodeInfoResponse {
             pub_key: self.node.node_id().serialize().to_vec(),
             // TODO: This is a placeholder. We need to get the actual alias from the LDK node.
             alias: format!("LDK Fedimint Gateway Node {}", self.node.node_id()),
             network: self.node.config().network.to_string(),
-            block_height,
-            synced_to_chain,
+            block_height: max(
+                ldk_node_chain_tip_block_height,
+                esplora_chain_tip_block_height,
+            ),
+            synced_to_chain: ldk_node_chain_tip_block_height >= esplora_chain_tip_block_height,
         })
     }
 
