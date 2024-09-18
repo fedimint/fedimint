@@ -346,6 +346,11 @@ impl ConsensusEngine {
     ) -> anyhow::Result<SignedSessionOutcome> {
         let mut item_index = 0;
 
+        let mut request_signed_session_outcome = Box::pin(async {
+            self.request_signed_session_outcome(&self.federation_api, session_index)
+                .await
+        });
+
         // We build a session outcome out of the ordered batches until either we have
         // processed broadcast_rounds_per_session rounds or a threshold signed
         // session outcome is obtained from our peers
@@ -392,7 +397,7 @@ impl ConsensusEngine {
                         }
                     }
                 },
-                signed_session_outcome = self.request_signed_session_outcome(&self.federation_api, session_index) => {
+                signed_session_outcome = &mut request_signed_session_outcome => {
                     let pending_accepted_items = self.pending_accepted_items().await;
 
                     // this panics if we have more accepted items than the signed session outcome
@@ -463,7 +468,7 @@ impl ConsensusEngine {
                         }
                     }
                 }
-                signed_session_outcome = self.request_signed_session_outcome(&self.federation_api, session_index) => {
+                signed_session_outcome = &mut request_signed_session_outcome => {
                     assert_eq!(
                         header,
                         signed_session_outcome.session_outcome.header(session_index),
@@ -797,11 +802,6 @@ impl ConsensusEngine {
         };
 
         loop {
-            // We only want to initiate the request if we have not ordered a unit in a
-            // while. This indicates that we have fallen behind and our peers
-            // have already switched sessions without us
-            sleep(Duration::from_secs(5)).await;
-
             let result = federation_api
                 .request_with_strategy(
                     FilterMap::new(filter_map.clone(), self.num_peers()),
