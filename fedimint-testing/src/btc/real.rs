@@ -177,6 +177,18 @@ impl BitcoinTest for RealBitcoinTestNoLock {
             })
             .map(|height| height as u64)
     }
+
+    async fn get_block_count(&self) -> u64 {
+        self.client
+            .get_block_count()
+            // The RPC function is confusingly named and actually returns the block height
+            .map(|count| count + 1)
+            .expect("failed to fetch block count")
+    }
+
+    async fn get_mempool_tx(&self, txid: &Txid) -> Option<bitcoin::Transaction> {
+        self.client.get_raw_transaction(txid, None).ok()
+    }
 }
 
 /// Fixture implementing bitcoin node under test by talking to a `bitcoind` -
@@ -270,6 +282,16 @@ impl BitcoinTest for RealBitcoinTest {
         let _lock = self.lock_exclusive().await;
         self.inner.get_tx_block_height(txid).await
     }
+
+    async fn get_block_count(&self) -> u64 {
+        let _lock = self.lock_exclusive().await;
+        self.inner.get_block_count().await
+    }
+
+    async fn get_mempool_tx(&self, txid: &Txid) -> Option<bitcoin::Transaction> {
+        let _lock = self.lock_exclusive().await;
+        self.inner.get_mempool_tx(txid).await
+    }
 }
 
 #[async_trait]
@@ -312,5 +334,13 @@ impl BitcoinTest for RealBitcoinTestLocked {
 
     async fn get_tx_block_height(&self, txid: &Txid) -> Option<u64> {
         self.inner.get_tx_block_height(txid).await
+    }
+
+    async fn get_block_count(&self) -> u64 {
+        self.inner.get_block_count().await
+    }
+
+    async fn get_mempool_tx(&self, txid: &Txid) -> Option<bitcoin::Transaction> {
+        self.inner.get_mempool_tx(txid).await
     }
 }

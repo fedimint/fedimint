@@ -37,7 +37,7 @@ pub async fn process_transaction_with_dbtx(
             .await
             .map_err(TransactionError::Input)?;
 
-        funding_verifier.add_input(meta.amount);
+        funding_verifier.add_input(meta.amount)?;
         public_keys.push(meta.pub_key);
     }
 
@@ -55,7 +55,7 @@ pub async fn process_transaction_with_dbtx(
             .await
             .map_err(TransactionError::Output)?;
 
-        funding_verifier.add_output(amount);
+        funding_verifier.add_output(amount)?;
     }
 
     funding_verifier.verify_funding()?;
@@ -70,18 +70,43 @@ pub struct FundingVerifier {
 }
 
 impl FundingVerifier {
-    pub fn add_input(&mut self, input_amount: TransactionItemAmount) {
-        self.input_amount += input_amount.amount;
-        self.fee_amount += input_amount.fee;
+    pub fn add_input(
+        &mut self,
+        input_amount: TransactionItemAmount,
+    ) -> Result<(), TransactionError> {
+        self.input_amount = self
+            .input_amount
+            .checked_add(input_amount.amount)
+            .ok_or(TransactionError::AmountOverflow)?;
+        self.fee_amount = self
+            .fee_amount
+            .checked_add(input_amount.fee)
+            .ok_or(TransactionError::AmountOverflow)?;
+        Ok(())
     }
 
-    pub fn add_output(&mut self, output_amount: TransactionItemAmount) {
-        self.output_amount += output_amount.amount;
-        self.fee_amount += output_amount.fee;
+    pub fn add_output(
+        &mut self,
+        output_amount: TransactionItemAmount,
+    ) -> Result<(), TransactionError> {
+        self.output_amount = self
+            .output_amount
+            .checked_add(output_amount.amount)
+            .ok_or(TransactionError::AmountOverflow)?;
+        self.fee_amount = self
+            .fee_amount
+            .checked_add(output_amount.fee)
+            .ok_or(TransactionError::AmountOverflow)?;
+        Ok(())
     }
 
     pub fn verify_funding(self) -> Result<(), TransactionError> {
-        if self.input_amount == (self.output_amount + self.fee_amount) {
+        let outputs_and_fees = self
+            .output_amount
+            .checked_add(self.fee_amount)
+            .ok_or(TransactionError::AmountOverflow)?;
+
+        if self.input_amount == outputs_and_fees {
             Ok(())
         } else {
             Err(TransactionError::UnbalancedTransaction {

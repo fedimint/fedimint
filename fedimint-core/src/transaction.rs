@@ -131,6 +131,8 @@ pub enum TransactionError {
         outputs: Amount,
         fee: Amount,
     },
+    #[error("The inputs or outputs of the transaction overflowed when being added up")]
+    AmountOverflow,
     #[error("The transaction's signature is invalid: tx={tx}, hash={hash}, sig={sig}, key={key}")]
     InvalidSignature {
         tx: String,

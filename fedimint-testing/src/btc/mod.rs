@@ -48,4 +48,10 @@ pub trait BitcoinTest {
     /// for finding a tx block height.
     /// see: `<https://github.com/fedimint/fedimint/issues/5329>`
     async fn get_tx_block_height(&self, txid: &Txid) -> Option<u64>;
+
+    /// Returns the current block count
+    async fn get_block_count(&self) -> u64;
+
+    /// Returns a transaction with the provided txid if it exists in the mempool
+    async fn get_mempool_tx(&self, txid: &Txid) -> Option<bitcoin::Transaction>;
 }

@@ -676,7 +676,12 @@ impl ConsensusServer {
             timing_prom.observe_duration();
         }
 
-        if audit.net_assets().milli_sat < 0 {
+        if audit
+            .net_assets()
+            .expect("Overflow while checking balance sheet")
+            .milli_sat
+            < 0
+        {
             panic!("Balance sheet of the fed has gone negative, this should never happen! {audit}")
         }
 

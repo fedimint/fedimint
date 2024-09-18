@@ -283,6 +283,18 @@ impl BitcoinTest for FakeBitcoinTest {
             .get(txid)
             .map(|height| height.to_owned() as u64)
     }
+
+    async fn get_block_count(&self) -> u64 {
+        self.blocks.lock().expect("RwLock poisoned").len() as u64
+    }
+
+    async fn get_mempool_tx(&self, txid: &Txid) -> Option<bitcoin::Transaction> {
+        let mempool_transactions = self.pending.lock().expect("RwLock poisoned").clone();
+        mempool_transactions
+            .iter()
+            .find(|tx| tx.txid() == *txid)
+            .map(std::borrow::ToOwned::to_owned)
+    }
 }
 
 #[async_trait]
