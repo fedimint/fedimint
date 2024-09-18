@@ -26,6 +26,10 @@ impl Audit {
         }
     }
 
+    pub fn add_item(&mut self, item: AuditItem) {
+        self.items.push(item);
+    }
+
     pub async fn add_items<KP, F>(
         &mut self,
         dbtx: &mut DatabaseTransaction<'_>,
