@@ -895,6 +895,8 @@ pub async fn open_channels_between_gateways(
     bitcoind: &Bitcoind,
     gateways: &[NamedGateway<'_>],
 ) -> Result<()> {
+    bitcoind.mine_blocks(20).await?;
+
     info!(target: LOG_DEVIMINT, "Syncing gateway lightning nodes to chain tip...");
     futures::future::try_join_all(
         gateways
