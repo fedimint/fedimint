@@ -192,13 +192,14 @@ impl Drop for GatewayLdkClient {
 #[async_trait]
 impl ILnRpcClient for GatewayLdkClient {
     async fn info(&self) -> Result<GetNodeInfoResponse, LightningRpcError> {
+        let node_status = self.node.status();
         Ok(GetNodeInfoResponse {
             pub_key: self.node.node_id().serialize().to_vec(),
             // TODO: This is a placeholder. We need to get the actual alias from the LDK node.
             alias: format!("LDK Fedimint Gateway Node {}", self.node.node_id()),
             network: self.node.config().network.to_string(),
-            block_height: self.node.status().current_best_block.height,
-            synced_to_chain: true,
+            block_height: node_status.current_best_block.height,
+            synced_to_chain: node_status.is_running && node_status.is_listening,
         })
     }
 
