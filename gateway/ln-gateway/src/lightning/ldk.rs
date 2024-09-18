@@ -79,10 +79,9 @@ impl GatewayLdkClient {
             wallet_sync_interval_secs: 10,
             ..Default::default()
         });
-        node_builder.set_entropy_bip39_mnemonic(mnemonic, None);
         node_builder
-            .set_esplora_server(esplora_server_url.to_string())
-            .set_gossip_source_p2p();
+            .set_entropy_bip39_mnemonic(mnemonic, None)
+            .set_esplora_server(esplora_server_url.to_string());
         let Some(data_dir_str) = data_dir.to_str() else {
             return Err(anyhow::anyhow!("Invalid data dir path"));
         };
