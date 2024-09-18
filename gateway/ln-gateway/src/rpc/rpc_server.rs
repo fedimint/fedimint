@@ -165,8 +165,7 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
             CREATE_BOLT11_INVOICE_ENDPOINT,
             post(create_bolt11_invoice_v2),
         )
-        .route(RECEIVE_ECASH_ENDPOINT, post(receive_ecash))
-        .route(SYNC_TO_CHAIN_ENDPOINT, post(sync_to_chain));
+        .route(RECEIVE_ECASH_ENDPOINT, post(receive_ecash));
 
     // Authenticated, public routes used for gateway administration
     let always_authenticated_routes = Router::new()
@@ -191,6 +190,7 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
         .route(SPEND_ECASH_ENDPOINT, post(spend_ecash))
         .route(MNEMONIC_ENDPOINT, get(mnemonic))
         .route(STOP_ENDPOINT, get(stop))
+        .route(SYNC_TO_CHAIN_ENDPOINT, post(sync_to_chain))
         .layer(middleware::from_fn(auth_middleware));
 
     // Routes that are un-authenticated before gateway configuration, then become
