@@ -542,6 +542,14 @@ rec {
     ];
   };
 
+  fedimint-wasm = fedimintBuildPackageGroup {
+    pname = "fedimint-wasm";
+
+    packages = [
+      "fedimint-wasm"
+    ];
+  };
+
   devimint = fedimintBuildPackageGroup {
     pname = "devimint";
     packages = [

@@ -358,7 +358,12 @@ jobs:
       - name: Build client packages for ${{ matrix.toolchain }}
         if: github.event_name != 'pull_request' || matrix.build-in-pr
         run: |
-          nix build -L .#ci.client-pkgs
+          nix build -L .#${{ matrix.toolchain }}.ci.client-pkgs
+
+      - name: Build fedimint-client-wasm package for ${{ matrix.toolchain }}
+        if: (github.event_name != 'pull_request' || matrix.build-in-pr) && (${{ matrix.toolchain }} == wasm32-unknown)
+        run: |
+          nix build -L .#${{ matrix.toolchain }}.ci.fedimint-client-wasm
 
   containers:
     if: github.repository == 'fedimint/fedimint'
