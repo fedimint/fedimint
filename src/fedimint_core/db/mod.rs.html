@@ -3319,7 +3319,118 @@
 <a href="#3318" id="3318">3318</a>
 <a href="#3319" id="3319">3319</a>
 <a href="#3320" id="3320">3320</a>
-<a href="#3321" id="3321">3321</a></pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
+<a href="#3321" id="3321">3321</a>
+<a href="#3322" id="3322">3322</a>
+<a href="#3323" id="3323">3323</a>
+<a href="#3324" id="3324">3324</a>
+<a href="#3325" id="3325">3325</a>
+<a href="#3326" id="3326">3326</a>
+<a href="#3327" id="3327">3327</a>
+<a href="#3328" id="3328">3328</a>
+<a href="#3329" id="3329">3329</a>
+<a href="#3330" id="3330">3330</a>
+<a href="#3331" id="3331">3331</a>
+<a href="#3332" id="3332">3332</a>
+<a href="#3333" id="3333">3333</a>
+<a href="#3334" id="3334">3334</a>
+<a href="#3335" id="3335">3335</a>
+<a href="#3336" id="3336">3336</a>
+<a href="#3337" id="3337">3337</a>
+<a href="#3338" id="3338">3338</a>
+<a href="#3339" id="3339">3339</a>
+<a href="#3340" id="3340">3340</a>
+<a href="#3341" id="3341">3341</a>
+<a href="#3342" id="3342">3342</a>
+<a href="#3343" id="3343">3343</a>
+<a href="#3344" id="3344">3344</a>
+<a href="#3345" id="3345">3345</a>
+<a href="#3346" id="3346">3346</a>
+<a href="#3347" id="3347">3347</a>
+<a href="#3348" id="3348">3348</a>
+<a href="#3349" id="3349">3349</a>
+<a href="#3350" id="3350">3350</a>
+<a href="#3351" id="3351">3351</a>
+<a href="#3352" id="3352">3352</a>
+<a href="#3353" id="3353">3353</a>
+<a href="#3354" id="3354">3354</a>
+<a href="#3355" id="3355">3355</a>
+<a href="#3356" id="3356">3356</a>
+<a href="#3357" id="3357">3357</a>
+<a href="#3358" id="3358">3358</a>
+<a href="#3359" id="3359">3359</a>
+<a href="#3360" id="3360">3360</a>
+<a href="#3361" id="3361">3361</a>
+<a href="#3362" id="3362">3362</a>
+<a href="#3363" id="3363">3363</a>
+<a href="#3364" id="3364">3364</a>
+<a href="#3365" id="3365">3365</a>
+<a href="#3366" id="3366">3366</a>
+<a href="#3367" id="3367">3367</a>
+<a href="#3368" id="3368">3368</a>
+<a href="#3369" id="3369">3369</a>
+<a href="#3370" id="3370">3370</a>
+<a href="#3371" id="3371">3371</a>
+<a href="#3372" id="3372">3372</a>
+<a href="#3373" id="3373">3373</a>
+<a href="#3374" id="3374">3374</a>
+<a href="#3375" id="3375">3375</a>
+<a href="#3376" id="3376">3376</a>
+<a href="#3377" id="3377">3377</a>
+<a href="#3378" id="3378">3378</a>
+<a href="#3379" id="3379">3379</a>
+<a href="#3380" id="3380">3380</a>
+<a href="#3381" id="3381">3381</a>
+<a href="#3382" id="3382">3382</a>
+<a href="#3383" id="3383">3383</a>
+<a href="#3384" id="3384">3384</a>
+<a href="#3385" id="3385">3385</a>
+<a href="#3386" id="3386">3386</a>
+<a href="#3387" id="3387">3387</a>
+<a href="#3388" id="3388">3388</a>
+<a href="#3389" id="3389">3389</a>
+<a href="#3390" id="3390">3390</a>
+<a href="#3391" id="3391">3391</a>
+<a href="#3392" id="3392">3392</a>
+<a href="#3393" id="3393">3393</a>
+<a href="#3394" id="3394">3394</a>
+<a href="#3395" id="3395">3395</a>
+<a href="#3396" id="3396">3396</a>
+<a href="#3397" id="3397">3397</a>
+<a href="#3398" id="3398">3398</a>
+<a href="#3399" id="3399">3399</a>
+<a href="#3400" id="3400">3400</a>
+<a href="#3401" id="3401">3401</a>
+<a href="#3402" id="3402">3402</a>
+<a href="#3403" id="3403">3403</a>
+<a href="#3404" id="3404">3404</a>
+<a href="#3405" id="3405">3405</a>
+<a href="#3406" id="3406">3406</a>
+<a href="#3407" id="3407">3407</a>
+<a href="#3408" id="3408">3408</a>
+<a href="#3409" id="3409">3409</a>
+<a href="#3410" id="3410">3410</a>
+<a href="#3411" id="3411">3411</a>
+<a href="#3412" id="3412">3412</a>
+<a href="#3413" id="3413">3413</a>
+<a href="#3414" id="3414">3414</a>
+<a href="#3415" id="3415">3415</a>
+<a href="#3416" id="3416">3416</a>
+<a href="#3417" id="3417">3417</a>
+<a href="#3418" id="3418">3418</a>
+<a href="#3419" id="3419">3419</a>
+<a href="#3420" id="3420">3420</a>
+<a href="#3421" id="3421">3421</a>
+<a href="#3422" id="3422">3422</a>
+<a href="#3423" id="3423">3423</a>
+<a href="#3424" id="3424">3424</a>
+<a href="#3425" id="3425">3425</a>
+<a href="#3426" id="3426">3426</a>
+<a href="#3427" id="3427">3427</a>
+<a href="#3428" id="3428">3428</a>
+<a href="#3429" id="3429">3429</a>
+<a href="#3430" id="3430">3430</a>
+<a href="#3431" id="3431">3431</a>
+<a href="#3432" id="3432">3432</a></pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! This module provides the core key-value database for Fedimint.
 //!
@@ -3728,19 +3839,27 @@
     }
 
     <span class="doccomment">/// Create [`Database`] isolated to a partition with a given `prefix`
-    </span><span class="kw">pub fn </span>with_prefix(<span class="kw-2">&amp;</span><span class="self">self</span>, prefix: Vec&lt;u8&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            inner: Arc::new(PrefixDatabase {
-                inner: <span class="self">self</span>.inner.clone(),
-                prefix,
-            }),
-            module_decoders: <span class="self">self</span>.module_decoders.clone(),
-        }
+    </span><span class="kw">pub fn </span>with_prefix(<span class="kw-2">&amp;</span><span class="self">self</span>, prefix: Vec&lt;u8&gt;) -&gt; (<span class="self">Self</span>, GlobalDBTxAccessToken) {
+        <span class="kw">let </span>global_dbtx_access_token = GlobalDBTxAccessToken::from_prefix(<span class="kw-2">&amp;</span>prefix);
+        (
+            <span class="self">Self </span>{
+                inner: Arc::new(PrefixDatabase {
+                    inner: <span class="self">self</span>.inner.clone(),
+                    global_dbtx_access_token,
+                    prefix,
+                }),
+                module_decoders: <span class="self">self</span>.module_decoders.clone(),
+            },
+            global_dbtx_access_token,
+        )
     }
 
     <span class="doccomment">/// Create [`Database`] isolated to a partition with a prefix for a given
     /// `module_instance_id`
-    </span><span class="kw">pub fn </span>with_prefix_module_id(<span class="kw-2">&amp;</span><span class="self">self</span>, module_instance_id: ModuleInstanceId) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>with_prefix_module_id(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        module_instance_id: ModuleInstanceId,
+    ) -&gt; (<span class="self">Self</span>, GlobalDBTxAccessToken) {
         <span class="kw">let </span>prefix = module_instance_id_to_byte_prefix(module_instance_id);
         <span class="self">self</span>.with_prefix(prefix)
     }
@@ -3963,6 +4082,7 @@
     </span>Inner: Debug,
 {
     prefix: Vec&lt;u8&gt;,
+    global_dbtx_access_token: GlobalDBTxAccessToken,
     inner: Inner,
 }
 
@@ -3988,6 +4108,7 @@
     <span class="kw">async fn </span>begin_transaction&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>IDatabaseTransaction + <span class="lifetime">'a</span>&gt; {
         Box::new(PrefixDatabaseTransaction {
             inner: <span class="self">self</span>.inner.begin_transaction().<span class="kw">await</span>,
+            global_dbtx_access_token: <span class="self">self</span>.global_dbtx_access_token,
             prefix: <span class="self">self</span>.prefix.clone(),
         })
     }
@@ -4015,6 +4136,7 @@
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">struct </span>PrefixDatabaseTransaction&lt;Inner&gt; {
     inner: Inner,
+    global_dbtx_access_token: GlobalDBTxAccessToken,
     prefix: Vec&lt;u8&gt;,
 }
 
@@ -4051,6 +4173,17 @@
 
     <span class="kw">fn </span>prefix_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.inner.prefix_len() + <span class="self">self</span>.prefix.len()
+    }
+
+    <span class="kw">fn </span>global_dbtx(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        access_token: GlobalDBTxAccessToken,
+    ) -&gt; <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>IDatabaseTransaction {
+        <span class="macro">assert_eq!</span>(
+            access_token, <span class="self">self</span>.global_dbtx_access_token,
+            <span class="string">"Invalid access key used to access global_dbtx"
+        </span>);
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>.inner
     }
 }
 
@@ -4542,6 +4675,14 @@
 
     <span class="doccomment">/// The prefix len of this database instance
     </span><span class="kw">fn </span>prefix_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize;
+
+    <span class="doccomment">/// Get the global database tx from a module-prefixed database transaction
+    ///
+    /// Meant to be called only by core internals, and module developers should
+    /// not call it directly.
+    </span><span class="attr">#[doc(hidden)]
+    </span><span class="kw">fn </span>global_dbtx(<span class="kw-2">&amp;mut </span><span class="self">self</span>, access_token: GlobalDBTxAccessToken)
+        -&gt; <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>IDatabaseTransaction;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -4552,8 +4693,16 @@
     <span class="kw">async fn </span>commit_tx(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         (<span class="kw-2">**</span><span class="self">self</span>).commit_tx().<span class="kw">await
     </span>}
+
     <span class="kw">fn </span>prefix_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         (<span class="kw-2">**</span><span class="self">self</span>).prefix_len()
+    }
+
+    <span class="kw">fn </span>global_dbtx(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        access_token: GlobalDBTxAccessToken,
+    ) -&gt; <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>IDatabaseTransaction {
+        (<span class="kw-2">**</span><span class="self">self</span>).global_dbtx(access_token)
     }
 }
 
@@ -4567,6 +4716,10 @@
     </span>}
     <span class="kw">fn </span>prefix_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         (<span class="kw-2">**</span><span class="self">self</span>).prefix_len()
+    }
+
+    <span class="kw">fn </span>global_dbtx(<span class="kw-2">&amp;mut </span><span class="self">self</span>, access_key: GlobalDBTxAccessToken) -&gt; <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>IDatabaseTransaction {
+        (<span class="kw-2">**</span><span class="self">self</span>).global_dbtx(access_key)
     }
 }
 
@@ -4718,6 +4871,13 @@
     <span class="kw">fn </span>prefix_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="number">0
     </span>}
+
+    <span class="kw">fn </span>global_dbtx(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        _access_token: GlobalDBTxAccessToken,
+    ) -&gt; <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>IDatabaseTransaction {
+        <span class="macro">panic!</span>(<span class="string">"Illegal to call global_dbtx on BaseDatabaseTransaction"</span>);
+    }
 }
 
 <span class="doccomment">/// A helper for tracking and logging on `Drop` any instances of uncommitted
@@ -4876,20 +5036,28 @@
     }
 
     <span class="doccomment">/// Get [`DatabaseTransaction`] isolated to a `prefix`
-    </span><span class="kw">pub fn </span>with_prefix&lt;<span class="lifetime">'a</span>: <span class="lifetime">'tx</span>&gt;(<span class="self">self</span>, prefix: Vec&lt;u8&gt;) -&gt; DatabaseTransaction&lt;<span class="lifetime">'a</span>, Cap&gt;
+    </span><span class="kw">pub fn </span>with_prefix&lt;<span class="lifetime">'a</span>: <span class="lifetime">'tx</span>&gt;(
+        <span class="self">self</span>,
+        prefix: Vec&lt;u8&gt;,
+    ) -&gt; (DatabaseTransaction&lt;<span class="lifetime">'a</span>, Cap&gt;, GlobalDBTxAccessToken)
     <span class="kw">where
         </span><span class="lifetime">'tx</span>: <span class="lifetime">'a</span>,
     {
-        DatabaseTransaction {
-            tx: Box::new(PrefixDatabaseTransaction {
-                inner: <span class="self">self</span>.tx,
-                prefix,
-            }),
-            decoders: <span class="self">self</span>.decoders,
-            commit_tracker: <span class="self">self</span>.commit_tracker,
-            on_commit_hooks: <span class="self">self</span>.on_commit_hooks,
-            capability: <span class="self">self</span>.capability,
-        }
+        <span class="kw">let </span>global_dbtx_access_token = GlobalDBTxAccessToken::from_prefix(<span class="kw-2">&amp;</span>prefix);
+        (
+            DatabaseTransaction {
+                tx: Box::new(PrefixDatabaseTransaction {
+                    inner: <span class="self">self</span>.tx,
+                    global_dbtx_access_token,
+                    prefix,
+                }),
+                decoders: <span class="self">self</span>.decoders,
+                commit_tracker: <span class="self">self</span>.commit_tracker,
+                on_commit_hooks: <span class="self">self</span>.on_commit_hooks,
+                capability: <span class="self">self</span>.capability,
+            },
+            global_dbtx_access_token,
+        )
     }
 
     <span class="doccomment">/// Get [`DatabaseTransaction`] isolated to a prefix of a given
@@ -4897,7 +5065,7 @@
     </span><span class="kw">pub fn </span>with_prefix_module_id&lt;<span class="lifetime">'a</span>: <span class="lifetime">'tx</span>&gt;(
         <span class="self">self</span>,
         module_instance_id: ModuleInstanceId,
-    ) -&gt; DatabaseTransaction&lt;<span class="lifetime">'a</span>, Cap&gt;
+    ) -&gt; (DatabaseTransaction&lt;<span class="lifetime">'a</span>, Cap&gt;, GlobalDBTxAccessToken)
     <span class="kw">where
         </span><span class="lifetime">'tx</span>: <span class="lifetime">'a</span>,
     {
@@ -4928,32 +5096,40 @@
     }
 
     <span class="doccomment">/// Get [`DatabaseTransaction`] isolated to a `prefix` of `self`
-    </span><span class="kw">pub fn </span>to_ref_with_prefix&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span><span class="self">self</span>, prefix: Vec&lt;u8&gt;) -&gt; DatabaseTransaction&lt;<span class="lifetime">'a</span>, Cap&gt;
+    </span><span class="kw">pub fn </span>to_ref_with_prefix&lt;<span class="lifetime">'a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span><span class="self">self</span>,
+        prefix: Vec&lt;u8&gt;,
+    ) -&gt; (DatabaseTransaction&lt;<span class="lifetime">'a</span>, Cap&gt;, GlobalDBTxAccessToken)
     <span class="kw">where
         </span><span class="lifetime">'tx</span>: <span class="lifetime">'a</span>,
     {
-        DatabaseTransaction {
-            tx: Box::new(PrefixDatabaseTransaction {
-                inner: <span class="kw-2">&amp;mut </span><span class="self">self</span>.tx,
-                prefix,
-            }),
-            decoders: <span class="self">self</span>.decoders.clone(),
-            commit_tracker: <span class="kw">match </span><span class="self">self</span>.commit_tracker {
-                MaybeRef::Owned(<span class="kw-2">ref mut </span>o) =&gt; MaybeRef::Borrowed(o),
-                MaybeRef::Borrowed(<span class="kw-2">ref mut </span>b) =&gt; MaybeRef::Borrowed(b),
+        <span class="kw">let </span>global_dbtx_access_token = GlobalDBTxAccessToken::from_prefix(<span class="kw-2">&amp;</span>prefix);
+        (
+            DatabaseTransaction {
+                tx: Box::new(PrefixDatabaseTransaction {
+                    inner: <span class="kw-2">&amp;mut </span><span class="self">self</span>.tx,
+                    global_dbtx_access_token,
+                    prefix,
+                }),
+                decoders: <span class="self">self</span>.decoders.clone(),
+                commit_tracker: <span class="kw">match </span><span class="self">self</span>.commit_tracker {
+                    MaybeRef::Owned(<span class="kw-2">ref mut </span>o) =&gt; MaybeRef::Borrowed(o),
+                    MaybeRef::Borrowed(<span class="kw-2">ref mut </span>b) =&gt; MaybeRef::Borrowed(b),
+                },
+                on_commit_hooks: <span class="kw">match </span><span class="self">self</span>.on_commit_hooks {
+                    MaybeRef::Owned(<span class="kw-2">ref mut </span>o) =&gt; MaybeRef::Borrowed(o),
+                    MaybeRef::Borrowed(<span class="kw-2">ref mut </span>b) =&gt; MaybeRef::Borrowed(b),
+                },
+                capability: <span class="self">self</span>.capability,
             },
-            on_commit_hooks: <span class="kw">match </span><span class="self">self</span>.on_commit_hooks {
-                MaybeRef::Owned(<span class="kw-2">ref mut </span>o) =&gt; MaybeRef::Borrowed(o),
-                MaybeRef::Borrowed(<span class="kw-2">ref mut </span>b) =&gt; MaybeRef::Borrowed(b),
-            },
-            capability: <span class="self">self</span>.capability,
-        }
+            global_dbtx_access_token,
+        )
     }
 
     <span class="kw">pub fn </span>to_ref_with_prefix_module_id&lt;<span class="lifetime">'a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span><span class="self">self</span>,
         module_instance_id: ModuleInstanceId,
-    ) -&gt; DatabaseTransaction&lt;<span class="lifetime">'a</span>, Cap&gt;
+    ) -&gt; (DatabaseTransaction&lt;<span class="lifetime">'a</span>, Cap&gt;, GlobalDBTxAccessToken)
     <span class="kw">where
         </span><span class="lifetime">'tx</span>: <span class="lifetime">'a</span>,
     {
@@ -5000,6 +5176,50 @@
     </span><span class="attr">#[instrument(level = <span class="string">"trace"</span>, skip_all)]
     </span><span class="kw">pub fn </span>on_commit(<span class="kw-2">&amp;mut </span><span class="self">self</span>, f: <span class="macro">maybe_add_send!</span>(<span class="kw">impl </span>FnOnce() + <span class="lifetime">'static</span>)) {
         <span class="self">self</span>.on_commit_hooks.push(Box::new(f));
+    }
+
+    <span class="kw">pub fn </span>global_dbtx&lt;<span class="lifetime">'a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span><span class="self">self</span>,
+        access_token: GlobalDBTxAccessToken,
+    ) -&gt; DatabaseTransaction&lt;<span class="lifetime">'a</span>, Cap&gt;
+    <span class="kw">where
+        </span><span class="lifetime">'tx</span>: <span class="lifetime">'a</span>,
+    {
+        <span class="kw">let </span>decoders = <span class="self">self</span>.decoders.clone();
+
+        DatabaseTransaction {
+            tx: Box::new(<span class="self">self</span>.tx.global_dbtx(access_token)),
+            decoders,
+            commit_tracker: <span class="kw">match </span><span class="self">self</span>.commit_tracker {
+                MaybeRef::Owned(<span class="kw-2">ref mut </span>o) =&gt; MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(<span class="kw-2">ref mut </span>b) =&gt; MaybeRef::Borrowed(b),
+            },
+            on_commit_hooks: <span class="kw">match </span><span class="self">self</span>.on_commit_hooks {
+                MaybeRef::Owned(<span class="kw-2">ref mut </span>o) =&gt; MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(<span class="kw-2">ref mut </span>b) =&gt; MaybeRef::Borrowed(b),
+            },
+            capability: <span class="self">self</span>.capability,
+        }
+    }
+}
+
+<span class="doccomment">/// Code used to access `global_dbtx`
+</span><span class="attr">#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+</span><span class="kw">pub struct </span>GlobalDBTxAccessToken(u32);
+
+<span class="kw">impl </span>GlobalDBTxAccessToken {
+    <span class="doccomment">/// Calculate an access code for accessing global_dbtx from a prefixed
+    /// database tx
+    ///
+    /// Since we need to do it at runtime, we want the user modules not to be
+    /// able to call `global_dbtx` too easily. But at the same time we don't
+    /// need to be paranoid.
+    ///
+    /// This must be deterministic during whole instance of the software running
+    /// (because it's being rederived independently in multiple codepahs) , but
+    /// it could be somewhat randomized between different runs and releases.
+    </span><span class="kw">fn </span>from_prefix(prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>(prefix.iter().fold(<span class="number">0</span>, |acc, b| acc + u32::from(<span class="kw-2">*</span>b)) + <span class="number">513</span>)
     }
 }
 
@@ -5429,7 +5649,8 @@
                     migration(
                         <span class="kw-2">&amp;mut </span>global_dbtx
                             .to_ref_with_prefix_module_id(module_instance_id)
-                            .into_nc(),
+                            .<span class="number">0
+                            </span>.into_nc(),
                     )
                     .<span class="kw">await</span><span class="question-mark">?</span>;
                 } <span class="kw">else </span>{
@@ -5491,7 +5712,8 @@
             remove_current_db_version_if_exists(
                 <span class="kw-2">&amp;mut </span>global_dbtx
                     .to_ref_with_prefix_module_id(module_instance_id)
-                    .into_nc(),
+                    .<span class="number">0
+                    </span>.into_nc(),
                 is_new_db,
                 target_db_version,
             )
@@ -6201,7 +6423,7 @@
     <span class="kw">pub async fn </span>verify_module_prefix(db: Database) {
         <span class="kw">let </span><span class="kw-2">mut </span>test_dbtx = db.begin_transaction().<span class="kw">await</span>;
         {
-            <span class="kw">let </span><span class="kw-2">mut </span>test_module_dbtx = test_dbtx.to_ref_with_prefix_module_id(TEST_MODULE_PREFIX);
+            <span class="kw">let </span><span class="kw-2">mut </span>test_module_dbtx = test_dbtx.to_ref_with_prefix_module_id(TEST_MODULE_PREFIX).<span class="number">0</span>;
 
             test_module_dbtx
                 .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>))
@@ -6216,7 +6438,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>alt_dbtx = db.begin_transaction().<span class="kw">await</span>;
         {
-            <span class="kw">let </span><span class="kw-2">mut </span>alt_module_dbtx = alt_dbtx.to_ref_with_prefix_module_id(ALT_MODULE_PREFIX);
+            <span class="kw">let </span><span class="kw-2">mut </span>alt_module_dbtx = alt_dbtx.to_ref_with_prefix_module_id(ALT_MODULE_PREFIX).<span class="number">0</span>;
 
             alt_module_dbtx
                 .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">103</span>))
@@ -6231,7 +6453,7 @@
 
         <span class="comment">// verify test_module_dbtx can only see key/value pairs from its own module
         </span><span class="kw">let </span><span class="kw-2">mut </span>test_dbtx = db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>test_module_dbtx = test_dbtx.to_ref_with_prefix_module_id(TEST_MODULE_PREFIX);
+        <span class="kw">let </span><span class="kw-2">mut </span>test_module_dbtx = test_dbtx.to_ref_with_prefix_module_id(TEST_MODULE_PREFIX).<span class="number">0</span>;
         <span class="macro">assert_eq!</span>(
             test_module_dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>)).<span class="kw">await</span>,
             <span class="prelude-val">Some</span>(TestVal(<span class="number">101</span>))
@@ -6591,7 +6813,7 @@
         <span class="kw">let </span>key = TestKey(<span class="number">1</span>);
         <span class="kw">let </span>val = TestVal(<span class="number">2</span>);
         <span class="kw">let </span>db = MemDatabase::new().into_database();
-        <span class="kw">let </span>db = db.with_prefix_module_id(module_instance_id);
+        <span class="kw">let </span>db = db.with_prefix_module_id(module_instance_id).<span class="number">0</span>;
 
         <span class="kw">let </span>key_task = waiter(<span class="kw-2">&amp;</span>db, TestKey(<span class="number">1</span>)).<span class="kw">await</span>;
 
@@ -6613,10 +6835,10 @@
         <span class="kw">let </span>val = TestVal(<span class="number">2</span>);
         <span class="kw">let </span>db = MemDatabase::new().into_database();
 
-        <span class="kw">let </span>key_task = waiter(<span class="kw-2">&amp;</span>db.with_prefix_module_id(module_instance_id), TestKey(<span class="number">1</span>)).<span class="kw">await</span>;
+        <span class="kw">let </span>key_task = waiter(<span class="kw-2">&amp;</span>db.with_prefix_module_id(module_instance_id).<span class="number">0</span>, TestKey(<span class="number">1</span>)).<span class="kw">await</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>tx = db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>tx_mod = tx.to_ref_with_prefix_module_id(module_instance_id);
+        <span class="kw">let </span><span class="kw-2">mut </span>tx_mod = tx.to_ref_with_prefix_module_id(module_instance_id).<span class="number">0</span>;
         tx_mod.insert_new_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>val).<span class="kw">await</span>;
         drop(tx_mod);
         tx.commit_tx().<span class="kw">await</span>;

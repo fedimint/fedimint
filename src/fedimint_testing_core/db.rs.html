@@ -535,7 +535,8 @@
 <a href="#534" id="534">534</a>
 <a href="#535" id="535">535</a>
 <a href="#536" id="536">536</a>
-<a href="#537" id="537">537</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::ErrorKind;
 <span class="kw">use </span>std::path::{Path, PathBuf};
 <span class="kw">use </span>std::{env, fs, io};
@@ -605,7 +606,8 @@
                 .with_context(|| <span class="macro">format!</span>(<span class="string">"Preparing snapshot in {}"</span>, snapshot_dir.display()))<span class="question-mark">?</span>,
             decoders,
         )
-        .with_prefix_module_id(TEST_MODULE_INSTANCE_ID))
+        .with_prefix_module_id(TEST_MODULE_INSTANCE_ID)
+        .<span class="number">0</span>)
     } <span class="kw">else </span>{
         <span class="prelude-val">Ok</span>(Database::new(
             RocksDb::open(snapshot_dir)
@@ -721,7 +723,7 @@
 
     <span class="kw">let </span>snapshot_fn = |db: Database| {
         <span class="kw">async move </span>{
-            <span class="kw">let </span>isolated_db = db.with_prefix_module_id(TEST_MODULE_INSTANCE_ID);
+            <span class="kw">let </span>isolated_db = db.with_prefix_module_id(TEST_MODULE_INSTANCE_ID).<span class="number">0</span>;
             data_prepare(isolated_db).<span class="kw">await</span>;
 
             <span class="kw">let </span>(active_states, inactive_states) = state_machine_prepare();
@@ -866,7 +868,7 @@
     .<span class="kw">await
     </span>.context(<span class="string">"Error applying migrations to temp database"</span>)<span class="question-mark">?</span>;
 
-    <span class="kw">let </span>module_db = db.with_prefix_module_id(TEST_MODULE_INSTANCE_ID);
+    <span class="kw">let </span>module_db = db.with_prefix_module_id(TEST_MODULE_INSTANCE_ID).<span class="number">0</span>;
     validate(module_db)
         .<span class="kw">await
         </span>.with_context(|| <span class="macro">format!</span>(<span class="string">"Validating {db_prefix}"</span>))<span class="question-mark">?</span>;
@@ -953,7 +955,7 @@
         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
         .<span class="kw">await</span>;
 
-    <span class="kw">let </span>module_db = db.with_prefix_module_id(TEST_MODULE_INSTANCE_ID);
+    <span class="kw">let </span>module_db = db.with_prefix_module_id(TEST_MODULE_INSTANCE_ID).<span class="number">0</span>;
     validate(module_db, active_states, inactive_states)
         .<span class="kw">await
         </span>.with_context(|| <span class="macro">format!</span>(<span class="string">"Validating {db_prefix}"</span>))<span class="question-mark">?</span>;

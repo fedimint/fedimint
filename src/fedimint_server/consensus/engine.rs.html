@@ -833,7 +833,8 @@
 <a href="#832" id="832">832</a>
 <a href="#833" id="833">833</a>
 <a href="#834" id="834">834</a>
-<a href="#835" id="835">835</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -1520,7 +1521,8 @@
                 .audit(
                     <span class="kw-2">&amp;mut </span>dbtx
                         .to_ref_with_prefix_module_id(module_instance_id)
-                        .into_nc(),
+                        .<span class="number">0
+                        </span>.into_nc(),
                     <span class="kw-2">&amp;mut </span>audit,
                     module_instance_id,
                 )
@@ -1559,7 +1561,7 @@
             ConsensusItem::Module(module_item) =&gt; {
                 <span class="kw">let </span>instance_id = module_item.module_instance_id();
 
-                <span class="kw">let </span>module_dbtx = <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(instance_id);
+                <span class="kw">let </span>module_dbtx = <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(instance_id).<span class="number">0</span>;
 
                 <span class="self">self</span>.modules
                     .get_expect(instance_id)

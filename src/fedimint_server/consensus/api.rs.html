@@ -873,7 +873,7 @@
             </span>.modules
             .get_expect(module_id)
             .output_status(
-                <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(module_id).into_nc(),
+                <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(module_id).<span class="number">0</span>.into_nc(),
                 outpoint,
                 module_id,
             )
@@ -979,7 +979,7 @@
             module_instance_id_to_kind.insert(module_instance_id, kind.as_str().to_string());
             module
                 .audit(
-                    <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(module_instance_id),
+                    <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(module_instance_id).<span class="number">0</span>,
                     <span class="kw-2">&amp;mut </span>audit,
                     module_instance_id,
                 )
@@ -1198,8 +1198,8 @@
         <span class="kw">let </span><span class="kw-2">mut </span>db = <span class="self">self</span>.db.clone();
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(id) = id {
-            db = <span class="self">self</span>.db.with_prefix_module_id(id);
-            dbtx = dbtx.with_prefix_module_id(id);
+            db = <span class="self">self</span>.db.with_prefix_module_id(id).<span class="number">0</span>;
+            dbtx = dbtx.with_prefix_module_id(id).<span class="number">0</span>;
         }
         (
             <span class="self">self</span>,

@@ -767,7 +767,8 @@
 <a href="#766" id="766">766</a>
 <a href="#767" id="767">767</a>
 <a href="#768" id="768">768</a>
-<a href="#769" id="769">769</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::time::SystemTime;
 
@@ -1312,7 +1313,8 @@
                 migration(
                     <span class="kw-2">&amp;mut </span>global_dbtx
                         .to_ref_with_prefix_module_id(module_instance_id)
-                        .into_nc(),
+                        .<span class="number">0
+                        </span>.into_nc(),
                     active_states.clone(),
                     inactive_states.clone(),
                 )

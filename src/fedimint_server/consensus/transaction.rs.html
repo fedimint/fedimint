@@ -114,7 +114,11 @@
 <a href="#113" id="113">113</a>
 <a href="#114" id="114">114</a>
 <a href="#115" id="115">115</a>
-<a href="#116" id="116">116</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_core::module::registry::ServerModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionError};
@@ -158,7 +162,9 @@
         <span class="kw">let </span>meta = modules
             .get_expect(input.module_instance_id())
             .process_input(
-                <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(input.module_instance_id()),
+                <span class="kw-2">&amp;mut </span>dbtx
+                    .to_ref_with_prefix_module_id(input.module_instance_id())
+                    .<span class="number">0</span>,
                 input,
             )
             .<span class="kw">await
@@ -176,7 +182,9 @@
         <span class="kw">let </span>amount = modules
             .get_expect(output.module_instance_id())
             .process_output(
-                <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(output.module_instance_id()),
+                <span class="kw-2">&amp;mut </span>dbtx
+                    .to_ref_with_prefix_module_id(output.module_instance_id())
+                    .<span class="number">0</span>,
                 output,
                 OutPoint { txid, out_idx },
             )

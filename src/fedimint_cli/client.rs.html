@@ -691,7 +691,8 @@
 <a href="#690" id="690">690</a>
 <a href="#691" id="691">691</a>
 <a href="#692" id="692">692</a>
-<a href="#693" id="693">693</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#693" id="693">693</a>
+<a href="#694" id="694">694</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -1343,7 +1344,8 @@
                 .db()
                 .begin_transaction_nc()
                 .<span class="kw">await
-                </span>.to_ref_with_prefix_module_id(<span class="number">1</span>),
+                </span>.to_ref_with_prefix_module_id(<span class="number">1</span>)
+                .<span class="number">0</span>,
         )
         .<span class="kw">await</span>;
     <span class="prelude-val">Ok</span>(serde_json::to_value(InfoResponse {

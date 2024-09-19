@@ -2008,8 +2008,8 @@
         <span class="kw">let </span><span class="kw-2">mut </span>db = <span class="self">self</span>.db.clone();
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(id) = id {
-            db = <span class="self">self</span>.db.with_prefix_module_id(id);
-            dbtx = dbtx.with_prefix_module_id(id);
+            db = <span class="self">self</span>.db.with_prefix_module_id(id).<span class="number">0</span>;
+            dbtx = dbtx.with_prefix_module_id(id).<span class="number">0</span>;
         }
         <span class="kw">let </span>state = <span class="self">self</span>.state.lock().<span class="kw">await</span>;
         <span class="kw">let </span>auth = request.auth.as_ref();

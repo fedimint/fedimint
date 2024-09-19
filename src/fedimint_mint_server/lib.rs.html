@@ -808,7 +808,13 @@
 <a href="#807" id="807">807</a>
 <a href="#808" id="808">808</a>
 <a href="#809" id="809">809</a>
-<a href="#810" id="810">810</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -1608,12 +1614,18 @@
 
         <span class="comment">// Double spend in same session is detected
         </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
-        mint.process_input(<span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>).into_nc(), <span class="kw-2">&amp;</span>input)
-            .<span class="kw">await
-            </span>.expect(<span class="string">"Spend of valid e-cash works"</span>);
+        mint.process_input(
+            <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>).<span class="number">0</span>.into_nc(),
+            <span class="kw-2">&amp;</span>input,
+        )
+        .<span class="kw">await
+        </span>.expect(<span class="string">"Spend of valid e-cash works"</span>);
         <span class="macro">assert_matches!</span>(
-            mint.process_input(<span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>).into_nc(), <span class="kw-2">&amp;</span>input,)
-                .<span class="kw">await</span>,
+            mint.process_input(
+                <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>).<span class="number">0</span>.into_nc(),
+                <span class="kw-2">&amp;</span>input,
+            )
+            .<span class="kw">await</span>,
             <span class="prelude-val">Err</span>(<span class="kw">_</span>)
         );
     }

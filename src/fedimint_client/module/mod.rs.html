@@ -1008,7 +1008,12 @@
 <a href="#1007" id="1007">1007</a>
 <a href="#1008" id="1008">1008</a>
 <a href="#1009" id="1009">1009</a>
-<a href="#1010" id="1010">1010</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
+<a href="#1010" id="1010">1010</a>
+<a href="#1011" id="1011">1011</a>
+<a href="#1012" id="1012">1012</a>
+<a href="#1013" id="1013">1013</a>
+<a href="#1014" id="1014">1014</a>
+<a href="#1015" id="1015">1015</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::marker::PhantomData;
@@ -1023,7 +1028,9 @@
     Decoder, DynInput, DynOutput, IInput, IntoDynInstance, ModuleInstanceId, ModuleKind,
     OperationId,
 };
-<span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, PhantomBound};
+<span class="kw">use </span>fedimint_core::db::{
+    AutocommitError, Database, DatabaseTransaction, GlobalDBTxAccessToken, PhantomBound,
+};
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleInit};
@@ -1082,6 +1089,7 @@
 </span><span class="kw">pub struct </span>ClientContext&lt;M&gt; {
     client: FinalClient,
     module_instance_id: ModuleInstanceId,
+    global_dbtx_access_token: GlobalDBTxAccessToken,
     module_db: Database,
     _marker: marker::PhantomData&lt;M&gt;,
 }
@@ -1093,6 +1101,7 @@
             module_db: <span class="self">self</span>.module_db.clone(),
             module_instance_id: <span class="self">self</span>.module_instance_id,
             _marker: marker::PhantomData,
+            global_dbtx_access_token: <span class="self">self</span>.global_dbtx_access_token,
         }
     }
 }
@@ -1143,7 +1152,8 @@
     </span><span class="kw">pub fn </span>module_dbtx(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt; {
         <span class="self">self</span>.dbtx
             .to_ref_with_prefix_module_id(<span class="self">self</span>.client.module_instance_id)
-    }
+            .<span class="number">0
+    </span>}
 
     <span class="kw">pub fn </span>client_ctx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ClientContext&lt;M&gt; {
         <span class="self">self</span>.client
@@ -1960,7 +1970,7 @@
     ) -&gt; anyhow::Result&lt;(Vec&lt;ClientInput&gt;, Vec&lt;ClientOutput&gt;)&gt; {
         <span class="kw">let </span>(inputs, outputs) = &lt;T <span class="kw">as </span>ClientModule&gt;::create_final_inputs_and_outputs(
             <span class="self">self</span>,
-            <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(module_instance),
+            <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(module_instance).<span class="number">0</span>,
             operation_id,
             input_amount,
             output_amount,
@@ -1995,7 +2005,7 @@
     ) -&gt; Amount {
         &lt;T <span class="kw">as </span>ClientModule&gt;::get_balance(
             <span class="self">self</span>,
-            <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(module_instance),
+            <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(module_instance).<span class="number">0</span>,
         )
         .<span class="kw">await
     </span>}

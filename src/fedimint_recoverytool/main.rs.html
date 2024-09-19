@@ -396,7 +396,8 @@
 <a href="#395" id="395">395</a>
 <a href="#396" id="396">396</a>
 <a href="#397" id="397">397</a>
-<a href="#398" id="398">398</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 
 </span><span class="kw">mod </span>envs;
 <span class="kw">mod </span>key;
@@ -577,7 +578,8 @@
                 db
             } <span class="kw">else </span>{
                 db.with_prefix_module_id(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
-            };
+                    .<span class="number">0
+            </span>};
 
             <span class="kw">let </span>utxos: Vec&lt;ImportableWallet&gt; = db
                 .begin_transaction_nc()

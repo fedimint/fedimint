@@ -2780,7 +2780,8 @@
 <a href="#2779" id="2779">2779</a>
 <a href="#2780" id="2780">2780</a>
 <a href="#2781" id="2781">2781</a>
-<a href="#2782" id="2782">2782</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2782" id="2782">2782</a>
+<a href="#2783" id="2783">2783</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
@@ -4050,9 +4051,10 @@
             </span>.as_any()
             .downcast_ref::&lt;M&gt;()
             .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Module is not of type {}"</span>, std::any::type_name::&lt;M&gt;()))<span class="question-mark">?</span>;
+        <span class="kw">let </span>(db, <span class="kw">_</span>) = <span class="self">self</span>.db().with_prefix_module_id(id);
         <span class="prelude-val">Ok</span>(ClientModuleInstance {
             id,
-            db: <span class="self">self</span>.db().with_prefix_module_id(id),
+            db,
             api: <span class="self">self</span>.api().with_module(id),
             module,
         })

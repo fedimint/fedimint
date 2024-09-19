@@ -1392,7 +1392,7 @@
 
         fedimint_core::db::verify_module_db(
             open_temp_db(<span class="string">"fcb-rocksdb-test-module-db"</span>),
-            module_db.with_prefix_module_id(module_instance_id),
+            module_db.with_prefix_module_id(module_instance_id).<span class="number">0</span>,
         )
         .<span class="kw">await</span>;
     }

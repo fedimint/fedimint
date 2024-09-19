@@ -435,7 +435,11 @@
 <a href="#434" id="434">434</a>
 <a href="#435" id="435">435</a>
 <a href="#436" id="436">436</a>
-<a href="#437" id="437">437</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>recovery;
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>recovery;
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
@@ -780,13 +784,14 @@
                     .expect(<span class="string">"can't convert client module backup to desired type"</span>)
             });
 
+        <span class="kw">let </span>(module_db, global_dbtx_access_token) = db.with_prefix_module_id(instance_id);
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.recover(
                 <span class="kw-2">&amp;</span>ClientModuleRecoverArgs {
                     federation_id,
                     num_peers,
                     cfg: typed_cfg.clone(),
-                    db: db.with_prefix_module_id(instance_id),
+                    db: module_db.clone(),
                     core_api_version,
                     module_api_version,
                     module_root_secret,
@@ -797,7 +802,8 @@
                     context: ClientContext {
                         client: final_client,
                         module_instance_id: instance_id,
-                        module_db: db.with_prefix_module_id(instance_id),
+                        global_dbtx_access_token,
+                        module_db,
                         _marker: marker::PhantomData,
                     },
                     progress_tx,
@@ -826,12 +832,13 @@
         task_group: TaskGroup,
     ) -&gt; anyhow::Result&lt;DynClientModule&gt; {
         <span class="kw">let </span>typed_cfg: <span class="kw-2">&amp;</span>&lt;&lt;T <span class="kw">as </span>fedimint_core::module::ModuleInit&gt;::Common <span class="kw">as </span>CommonModuleInit&gt;::ClientConfig = cfg.cast()<span class="question-mark">?</span>;
+        <span class="kw">let </span>(module_db, global_dbtx_access_token) = db.with_prefix_module_id(instance_id);
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.init(<span class="kw-2">&amp;</span>ClientModuleInitArgs {
                 federation_id,
                 peer_num,
                 cfg: typed_cfg.clone(),
-                db: db.with_prefix_module_id(instance_id),
+                db: module_db.clone(),
                 core_api_version,
                 module_api_version,
                 module_root_secret,
@@ -842,7 +849,8 @@
                 context: ClientContext {
                     client: final_client,
                     module_instance_id: instance_id,
-                    module_db: db.with_prefix_module_id(instance_id),
+                    module_db,
+                    global_dbtx_access_token,
                     _marker: marker::PhantomData,
                 },
                 task_group,

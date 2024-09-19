@@ -2826,7 +2826,7 @@
 
         server
             .process_output(
-                <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>).into_nc(),
+                <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>).<span class="number">0</span>.into_nc(),
                 <span class="kw-2">&amp;</span>output,
                 out_point,
             )
@@ -2849,7 +2849,7 @@
         <span class="macro">assert_matches!</span>(
             server
                 .process_output(
-                    <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>).into_nc(),
+                    <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>).<span class="number">0</span>.into_nc(),
                     <span class="kw-2">&amp;</span>output2,
                     out_point2
                 )
@@ -2863,7 +2863,7 @@
         <span class="kw">let </span>(server_cfg, client_cfg) = build_configs();
         <span class="kw">let </span>db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>).<span class="number">0</span>;
         <span class="kw">let </span>tg = TaskGroup::new();
         <span class="kw">let </span>server = Lightning::new(server_cfg[<span class="number">0</span>].clone(), <span class="kw-2">&amp;</span>tg, <span class="number">0</span>.into()).unwrap();
 
@@ -2924,7 +2924,7 @@
         <span class="kw">let </span>(server_cfg, <span class="kw">_</span>) = build_configs();
         <span class="kw">let </span>db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>).<span class="number">0</span>;
         <span class="kw">let </span>tg = TaskGroup::new();
         <span class="kw">let </span>server = Lightning::new(server_cfg[<span class="number">0</span>].clone(), <span class="kw-2">&amp;</span>tg, <span class="number">0</span>.into()).unwrap();
 

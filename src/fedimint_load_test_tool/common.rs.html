@@ -395,7 +395,8 @@
 <a href="#394" id="394">394</a>
 <a href="#395" id="395">395</a>
 <a href="#396" id="396">396</a>
-<a href="#397" id="397">397</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -734,7 +735,8 @@
                 .db()
                 .begin_transaction_nc()
                 .<span class="kw">await
-                </span>.to_ref_with_prefix_module_id(<span class="number">1</span>),
+                </span>.to_ref_with_prefix_module_id(<span class="number">1</span>)
+                .<span class="number">0</span>,
         )
         .<span class="kw">await</span>;
     <span class="prelude-val">Ok</span>(summary)
@@ -747,7 +749,7 @@
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>mint_client = client.get_first_module::&lt;MintClientModule&gt;()<span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client.db().begin_transaction().<span class="kw">await</span>;
-    <span class="kw">let </span><span class="kw-2">mut </span>module_transaction = dbtx.to_ref_with_prefix_module_id(mint_client.id);
+    <span class="kw">let </span><span class="kw-2">mut </span>module_transaction = dbtx.to_ref_with_prefix_module_id(mint_client.id).<span class="number">0</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::new();
     <span class="kw">let </span>operation_id = OperationId::new_random();
     <span class="kw">for _ in </span><span class="number">0</span>..quantity {
