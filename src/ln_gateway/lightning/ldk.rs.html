@@ -546,8 +546,7 @@
 <a href="#545" id="545">545</a>
 <a href="#546" id="546">546</a>
 <a href="#547" id="547">547</a>
-<a href="#548" id="548">548</a>
-<a href="#549" id="549">549</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
+<a href="#548" id="548">548</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -628,10 +627,9 @@
             wallet_sync_interval_secs: <span class="number">10</span>,
             ..Default::default()
         });
-        node_builder.set_entropy_bip39_mnemonic(mnemonic, <span class="prelude-val">None</span>);
         node_builder
-            .set_esplora_server(esplora_server_url.to_string())
-            .set_gossip_source_p2p();
+            .set_entropy_bip39_mnemonic(mnemonic, <span class="prelude-val">None</span>)
+            .set_esplora_server(esplora_server_url.to_string());
         <span class="kw">let </span><span class="prelude-val">Some</span>(data_dir_str) = data_dir.to_str() <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Invalid data dir path"</span>));
         };
