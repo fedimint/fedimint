@@ -141,7 +141,7 @@ impl DatabaseDump {
         }
         let mut dbtx = self.read_only_db.begin_transaction_nc().await;
         let db_version = dbtx.get_value(&DatabaseVersionKey(*module_id)).await;
-        let mut isolated_dbtx = dbtx.to_ref_with_prefix_module_id(*module_id);
+        let mut isolated_dbtx = dbtx.to_ref_with_prefix_module_id(*module_id).0;
 
         match inits.get(kind) {
             None => {

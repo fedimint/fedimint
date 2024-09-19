@@ -156,7 +156,7 @@ impl ConsensusApi {
             .modules
             .get_expect(module_id)
             .output_status(
-                &mut dbtx.to_ref_with_prefix_module_id(module_id).into_nc(),
+                &mut dbtx.to_ref_with_prefix_module_id(module_id).0.into_nc(),
                 outpoint,
                 module_id,
             )
@@ -262,7 +262,7 @@ impl ConsensusApi {
             module_instance_id_to_kind.insert(module_instance_id, kind.as_str().to_string());
             module
                 .audit(
-                    &mut dbtx.to_ref_with_prefix_module_id(module_instance_id),
+                    &mut dbtx.to_ref_with_prefix_module_id(module_instance_id).0,
                     &mut audit,
                     module_instance_id,
                 )
@@ -481,8 +481,8 @@ impl HasApiContext<ConsensusApi> for ConsensusApi {
         let mut db = self.db.clone();
         let mut dbtx = self.db.begin_transaction().await;
         if let Some(id) = id {
-            db = self.db.with_prefix_module_id(id);
-            dbtx = dbtx.with_prefix_module_id(id);
+            db = self.db.with_prefix_module_id(id).0;
+            dbtx = dbtx.with_prefix_module_id(id).0;
         }
         (
             self,

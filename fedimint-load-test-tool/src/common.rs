@@ -337,7 +337,8 @@ pub async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<Tiered
                 .db()
                 .begin_transaction_nc()
                 .await
-                .to_ref_with_prefix_module_id(1),
+                .to_ref_with_prefix_module_id(1)
+                .0,
         )
         .await;
     Ok(summary)
@@ -350,7 +351,7 @@ pub async fn remint_denomination(
 ) -> anyhow::Result<()> {
     let mint_client = client.get_first_module::<MintClientModule>()?;
     let mut dbtx = client.db().begin_transaction().await;
-    let mut module_transaction = dbtx.to_ref_with_prefix_module_id(mint_client.id);
+    let mut module_transaction = dbtx.to_ref_with_prefix_module_id(mint_client.id).0;
     let mut tx = TransactionBuilder::new();
     let operation_id = OperationId::new_random();
     for _ in 0..quantity {

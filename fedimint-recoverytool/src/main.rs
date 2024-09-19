@@ -179,6 +179,7 @@ async fn process_and_print_tweak_source(
                 db
             } else {
                 db.with_prefix_module_id(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
+                    .0
             };
 
             let utxos: Vec<ImportableWallet> = db
