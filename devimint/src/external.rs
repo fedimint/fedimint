@@ -913,8 +913,7 @@ pub async fn open_channels_between_gateways(
             info!(target: LOG_DEVIMINT, "Opening channel between {gw_a_name} and {gw_b_name} gateway lightning nodes with {push_amount} on each side...");
             tokio::task::spawn(async move {
                 // Sometimes channel openings just after funding the lightning nodes don't work right away.
-                // This resolves itself after a few seconds, so we don't need to poll for very long.
-                poll_with_timeout("Open channel", Duration::from_secs(10), || async {
+                poll_with_timeout("Open channel", Duration::from_secs(30), || async {
                     gw_a.open_channel(&gw_b, 10_000_000, Some(push_amount)).await.map_err(ControlFlow::Continue)
                 })
                 .await
