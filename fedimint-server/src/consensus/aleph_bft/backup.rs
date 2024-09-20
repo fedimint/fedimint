@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
-use futures::StreamExt;
+use futures::StreamExt as _;
 use tracing::info;
 
 use crate::consensus::db::{AlephUnitsKey, AlephUnitsPrefix};
@@ -38,11 +38,21 @@ impl aleph_bft::BackupReader for BackupReader {
 
 pub struct BackupWriter {
     db: Database,
+    units_index: u64,
 }
 
 impl BackupWriter {
-    pub fn new(db: Database) -> Self {
-        Self { db }
+    pub async fn new(db: Database) -> Self {
+        let units_index = db
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix_sorted_descending(&AlephUnitsPrefix)
+            .await
+            .next()
+            .await
+            .map_or(0, |entry| (entry.0 .0) + 1);
+
+        Self { db, units_index }
     }
 }
 
@@ -51,15 +61,10 @@ impl aleph_bft::BackupWriter for BackupWriter {
     async fn append(&mut self, data: &[u8]) -> std::io::Result<()> {
         let mut dbtx = self.db.begin_transaction().await;
 
-        let index = dbtx
-            .find_by_prefix_sorted_descending(&AlephUnitsPrefix)
-            .await
-            .next()
-            .await
-            .map_or(0, |entry| (entry.0 .0) + 1);
-
-        dbtx.insert_new_entry(&AlephUnitsKey(index), &data.to_owned())
+        dbtx.insert_new_entry(&AlephUnitsKey(self.units_index), &data.to_owned())
             .await;
+
+        self.units_index += 1;
 
         dbtx.commit_tx_result()
             .await

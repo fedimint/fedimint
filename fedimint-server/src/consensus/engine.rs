@@ -302,7 +302,7 @@ impl ConsensusEngine {
                         timestamp_sender,
                     ),
                     FinalizationHandler::new(unit_data_sender),
-                    BackupWriter::new(self.db.clone()),
+                    BackupWriter::new(self.db.clone()).await,
                     BackupReader::new(self.db.clone()),
                 ),
                 Network::new(connections),
