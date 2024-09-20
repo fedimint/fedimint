@@ -99,8 +99,7 @@ impl GatewayClientBuilder {
         let federation_id = config.invite_code.federation_id();
         let db = gateway
             .gateway_db
-            .with_prefix(config.federation_index.to_le_bytes().to_vec())
-            .0;
+            .with_prefix(config.federation_index.to_le_bytes().to_vec());
         let client_builder = self
             .create_client_builder(db, &config, gateway.clone())
             .await?;
@@ -148,8 +147,7 @@ impl GatewayClientBuilder {
         } else {
             let db = gateway
                 .gateway_db
-                .with_prefix(config.federation_index.to_le_bytes().to_vec())
-                .0;
+                .with_prefix(config.federation_index.to_le_bytes().to_vec());
             let secret = Self::derive_federation_secret(mnemonic, &federation_id);
             (db, secret)
         };
