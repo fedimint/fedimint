@@ -18,6 +18,7 @@ use fedimint_lnv2_common::config::LightningGenParams;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
 use fedimint_lnv2_server::LightningInit;
 use fedimint_testing::fixtures::Fixtures;
+use serde_json::Value;
 
 use crate::mock::{MockGatewayConnection, MOCK_INVOICE_PREIMAGE};
 
@@ -241,6 +242,7 @@ async fn receive_operation_expires() -> anyhow::Result<()> {
             Bolt11InvoiceDescription::Direct(String::new()),
             PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
             Some(mock::gateway_api()),
+            Value::Null,
         )
         .await?
         .1;

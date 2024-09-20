@@ -186,9 +186,9 @@ pub trait GatewayConnection: std::fmt::Debug {
         gateway_api: SafeUrl,
         federation_id: FederationId,
         contract: IncomingContract,
-        invoice_amount: Amount,
+        amount: Amount,
         description: Bolt11InvoiceDescription,
-        expiry_time: u32,
+        expiry_secs: u32,
     ) -> Result<Bolt11Invoice, GatewayConnectionError>;
 
     async fn send_payment(
@@ -232,9 +232,9 @@ impl GatewayConnection for RealGatewayConnection {
         gateway_api: SafeUrl,
         federation_id: FederationId,
         contract: IncomingContract,
-        invoice_amount: Amount,
+        amount: Amount,
         description: Bolt11InvoiceDescription,
-        expiry_time: u32,
+        expiry_secs: u32,
     ) -> Result<Bolt11Invoice, GatewayConnectionError> {
         reqwest::Client::new()
             .post(
@@ -246,9 +246,9 @@ impl GatewayConnection for RealGatewayConnection {
             .json(&CreateBolt11InvoicePayload {
                 federation_id,
                 contract,
-                invoice_amount,
+                amount,
                 description,
-                expiry_time,
+                expiry_secs,
             })
             .send()
             .await
