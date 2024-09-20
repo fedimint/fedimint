@@ -197,9 +197,7 @@ impl Drop for GatewayLdkClient {
 #[async_trait]
 impl ILnRpcClient for GatewayLdkClient {
     async fn info(&self) -> Result<GetNodeInfoResponse, LightningRpcError> {
-        let node_status = self.node.status();
-
-        let Some(chain_tip_block_summary) = self
+        let Some(esplora_chain_tip_block_summary) = self
             .esplora_client
             .get_blocks(None)
             .await
@@ -216,19 +214,36 @@ impl ILnRpcClient for GatewayLdkClient {
             });
         };
 
-        let esplora_chain_tip_block_height = chain_tip_block_summary.time.height;
-        let ldk_node_chain_tip_block_height = node_status.current_best_block.height;
+        let esplora_chain_tip_block_height = esplora_chain_tip_block_summary.time.height;
+        let mut ldk_node_chain_tip_block_height = self.node.status().current_best_block.height;
+
+        let mut block_height = max(
+            ldk_node_chain_tip_block_height,
+            esplora_chain_tip_block_height,
+        );
+        let mut synced_to_chain = ldk_node_chain_tip_block_height >= esplora_chain_tip_block_height;
+
+        // TODO: This is here for backwards compatibility with CLI v0.2.1 since it
+        // doesn't tell the gateway to perform a chain sync when waiting for the
+        // node to sync to the chain.
+        if !synced_to_chain {
+            self.sync_to_chain(block_height).await?;
+            ldk_node_chain_tip_block_height = self.node.status().current_best_block.height;
+
+            block_height = max(
+                ldk_node_chain_tip_block_height,
+                esplora_chain_tip_block_height,
+            );
+            synced_to_chain = ldk_node_chain_tip_block_height >= esplora_chain_tip_block_height;
+        }
 
         Ok(GetNodeInfoResponse {
             pub_key: self.node.node_id().serialize().to_vec(),
             // TODO: This is a placeholder. We need to get the actual alias from the LDK node.
             alias: format!("LDK Fedimint Gateway Node {}", self.node.node_id()),
             network: self.node.config().network.to_string(),
-            block_height: max(
-                ldk_node_chain_tip_block_height,
-                esplora_chain_tip_block_height,
-            ),
-            synced_to_chain: ldk_node_chain_tip_block_height >= esplora_chain_tip_block_height,
+            block_height,
+            synced_to_chain,
         })
     }
 
