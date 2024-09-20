@@ -68,9 +68,14 @@
 <a href="#67" id="67">67</a>
 <a href="#68" id="68">68</a>
 <a href="#69" id="69">69</a>
-<a href="#70" id="70">70</a></pre></div><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a></pre></div><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
-<span class="kw">use </span>futures::StreamExt;
+<span class="kw">use </span>futures::StreamExt <span class="kw">as _</span>;
 <span class="kw">use </span>tracing::info;
 
 <span class="kw">use </span><span class="kw">crate</span>::consensus::db::{AlephUnitsKey, AlephUnitsPrefix};
@@ -108,11 +113,21 @@
 
 <span class="kw">pub struct </span>BackupWriter {
     db: Database,
+    units_index: u64,
 }
 
 <span class="kw">impl </span>BackupWriter {
-    <span class="kw">pub fn </span>new(db: Database) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{ db }
+    <span class="kw">pub async fn </span>new(db: Database) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>units_index = db
+            .begin_transaction_nc()
+            .<span class="kw">await
+            </span>.find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>AlephUnitsPrefix)
+            .<span class="kw">await
+            </span>.next()
+            .<span class="kw">await
+            </span>.map_or(<span class="number">0</span>, |entry| (entry.<span class="number">0 </span>.<span class="number">0</span>) + <span class="number">1</span>);
+
+        <span class="self">Self </span>{ db, units_index }
     }
 }
 
@@ -121,15 +136,10 @@
     <span class="kw">async fn </span>append(<span class="kw-2">&amp;mut </span><span class="self">self</span>, data: <span class="kw-2">&amp;</span>[u8]) -&gt; std::io::Result&lt;()&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
 
-        <span class="kw">let </span>index = dbtx
-            .find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>AlephUnitsPrefix)
-            .<span class="kw">await
-            </span>.next()
-            .<span class="kw">await
-            </span>.map_or(<span class="number">0</span>, |entry| (entry.<span class="number">0 </span>.<span class="number">0</span>) + <span class="number">1</span>);
-
-        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>AlephUnitsKey(index), <span class="kw-2">&amp;</span>data.to_owned())
+        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>AlephUnitsKey(<span class="self">self</span>.units_index), <span class="kw-2">&amp;</span>data.to_owned())
             .<span class="kw">await</span>;
+
+        <span class="self">self</span>.units_index += <span class="number">1</span>;
 
         dbtx.commit_tx_result()
             .<span class="kw">await

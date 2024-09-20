@@ -1138,7 +1138,7 @@
                         timestamp_sender,
                     ),
                     FinalizationHandler::new(unit_data_sender),
-                    BackupWriter::new(<span class="self">self</span>.db.clone()),
+                    BackupWriter::new(<span class="self">self</span>.db.clone()).<span class="kw">await</span>,
                     BackupReader::new(<span class="self">self</span>.db.clone()),
                 ),
                 Network::new(connections),
