@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["get_default_options","is_power_of_two","next_prefix"],"mod":["envs"],"struct":["RocksDb","RocksDbReadOnly","RocksDbReadOnlyTransaction","RocksDbTransaction"]};
+window.SIDEBAR_ITEMS = {"fn":["convert_to_async_stream","get_default_options","is_power_of_two","next_prefix"],"mod":["envs"],"struct":["RocksDb","RocksDbReadOnly","RocksDbReadOnlyTransaction","RocksDbTransaction"]};
