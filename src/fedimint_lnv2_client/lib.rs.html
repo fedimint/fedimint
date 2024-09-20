@@ -1099,7 +1099,14 @@
 <a href="#1098" id="1098">1098</a>
 <a href="#1099" id="1099">1099</a>
 <a href="#1100" id="1100">1100</a>
-<a href="#1101" id="1101">1101</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1101" id="1101">1101</a>
+<a href="#1102" id="1102">1102</a>
+<a href="#1103" id="1103">1103</a>
+<a href="#1104" id="1104">1104</a>
+<a href="#1105" id="1105">1105</a>
+<a href="#1106" id="1106">1106</a>
+<a href="#1107" id="1107">1107</a>
+<a href="#1108" id="1108">1108</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -1147,6 +1154,7 @@
 <span class="kw">use </span>secp256k1::schnorr::Signature;
 <span class="kw">use </span>secp256k1::{ecdh, KeyPair, PublicKey, Scalar, SecretKey};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>serde_json::Value;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tpe::{derive_agg_decryption_key, AggregateDecryptionKey, AggregatePublicKey, PublicKeyShare};
 
@@ -1167,11 +1175,37 @@
     <span class="kw">pub </span>gateway_api: SafeUrl,
     <span class="kw">pub </span>contract: OutgoingContract,
     <span class="kw">pub </span>invoice: Bolt11Invoice,
+    <span class="kw">pub </span>custom_meta: Value,
+}
+
+<span class="kw">impl </span>SendOperationMeta {
+    <span class="doccomment">/// Calculate the absolute fee paid to the gateway on success.
+    </span><span class="kw">pub fn </span>gateway_fee(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
+        <span class="self">self</span>.contract.amount
+            - Amount::from_msats(
+                <span class="self">self</span>.invoice
+                    .amount_milli_satoshis()
+                    .expect(<span class="string">"Invoice has amount"</span>),
+            )
+    }
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ReceiveOperationMeta {
     <span class="kw">pub </span>contract: IncomingContract,
+    <span class="kw">pub </span>invoice: Bolt11Invoice,
+    <span class="kw">pub </span>custom_meta: Value,
+}
+
+<span class="kw">impl </span>ReceiveOperationMeta {
+    <span class="doccomment">/// Calculate the absolute fee paid to the gateway on success.
+    </span><span class="kw">pub fn </span>gateway_fee(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
+        Amount::from_msats(
+            <span class="self">self</span>.invoice
+                .amount_milli_satoshis()
+                .expect(<span class="string">"Invoice has amount"</span>),
+        ) - <span class="self">self</span>.contract.commitment.amount
+    }
 }
 
 <span class="doccomment">/// Number of blocks until outgoing lightning contracts times out and user
@@ -1204,19 +1238,28 @@
 /// misbehaves.
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>SendState {
-    Funding,
-    Funded,
-    Success,
-    Refunding,
-    Refunded,
-    Failure,
+    <span class="doccomment">/// We are funding the outgoing contract.
+    </span>Funding,
+    <span class="doccomment">/// We are waiting for the gateway to complete the payment.
+    </span>Funded,
+    <span class="doccomment">/// The payment was successful.
+    </span>Success,
+    <span class="doccomment">/// The payment has failed. We are refunding the outgoing contract.
+    </span>Refunding,
+    <span class="doccomment">/// The outgoing contract has been refunded.
+    </span>Refunded,
+    <span class="doccomment">/// Either a programming error has occurred or the federation is malicious.
+    </span>Failure,
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>FinalSendState {
-    Success,
-    Refunded,
-    Failure,
+    <span class="doccomment">/// The payment was successful.
+    </span>Success,
+    <span class="doccomment">/// The outgoing contract has been refunded.
+    </span>Refunded,
+    <span class="doccomment">/// Either a programming error has occurred or the federation is malicious.
+    </span>Failure,
 }
 
 <span class="kw">pub type </span>SendResult = <span class="prelude-ty">Result</span>&lt;OperationId, SendPaymentError&gt;;
@@ -1235,38 +1278,46 @@
 /// ```
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>ReceiveState {
-    Pending,
-    Expired,
-    Claiming,
-    Claimed,
-    Failure,
+    <span class="doccomment">/// We are waititng for the gateway to fund the incoming contract.
+    </span>Pending,
+    <span class="doccomment">/// The incoming contract has expired.
+    </span>Expired,
+    <span class="doccomment">/// The gateway has funded the incoming contract.
+    </span>Claiming,
+    <span class="doccomment">/// The payment was successful.
+    </span>Claimed,
+    <span class="doccomment">/// Either a programming error has occurred or the federation is malicious.
+    </span>Failure,
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>FinalReceiveState {
-    Expired,
-    Claimed,
-    Failure,
+    <span class="doccomment">/// The incoming contract has expired.
+    </span>Expired,
+    <span class="doccomment">/// The payment was successful.
+    </span>Claimed,
+    <span class="doccomment">/// Either a programming error has occurred or the federation is malicious.
+    </span>Failure,
 }
 
-<span class="kw">pub type </span>ReceiveResult = <span class="prelude-ty">Result</span>&lt;(Bolt11Invoice, OperationId), FetchInvoiceError&gt;;
+<span class="kw">pub type </span>ReceiveResult = <span class="prelude-ty">Result</span>&lt;(Bolt11Invoice, OperationId), ReceiveError&gt;;
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>CreateBolt11InvoicePayload {
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="kw">pub </span>contract: IncomingContract,
-    <span class="kw">pub </span>invoice_amount: Amount,
+    <span class="kw">pub </span>amount: Amount,
     <span class="kw">pub </span>description: Bolt11InvoiceDescription,
-    <span class="kw">pub </span>expiry_time: u32,
+    <span class="kw">pub </span>expiry_secs: u32,
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>Bolt11InvoiceDescription {
     Direct(String),
     Hash(sha256::Hash),
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>SendPaymentPayload {
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="kw">pub </span>contract: OutgoingContract,
@@ -1279,7 +1330,7 @@
     Bolt11(Bolt11Invoice),
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>RoutingInfo {
     <span class="doccomment">/// The public key of the gateways lightning node. Since this key signs the
     /// gateways invoices the senders client uses it to differentiate between a
@@ -1293,10 +1344,8 @@
     </span><span class="kw">pub </span>send_fee_minimum: PaymentFee,
     <span class="doccomment">/// This is the default total fee the gateway recommends for an outgoing
     /// payment in case of a lightning swap. It accounts for the additional fee
-    /// required to successfully route this payment over lightning.
+    /// required to reliably route this payment over lightning.
     </span><span class="kw">pub </span>send_fee_default: PaymentFee,
-    <span class="doccomment">/// This is the fee the gateway charges for an incoming payment.
-    </span><span class="kw">pub </span>receive_fee: PaymentFee,
     <span class="doccomment">/// This is the minimum expiration delta in block the gateway requires for
     /// an outgoing payment. The senders client will use this expiration delta
     /// in case of a direct swap.
@@ -1306,6 +1355,8 @@
     /// additional expiration delta required to successfully route this payment
     /// over lightning.
     </span><span class="kw">pub </span>expiration_delta_default: u64,
+    <span class="doccomment">/// This is the fee the gateway charges for an incoming payment.
+    </span><span class="kw">pub </span>receive_fee: PaymentFee,
 }
 
 <span class="kw">impl </span>RoutingInfo {
@@ -1318,44 +1369,37 @@
     }
 }
 
-<span class="attr">#[derive(
-    Debug, Clone, Eq, PartialEq, PartialOrd, Hash, Serialize, Deserialize, Decodable, Encodable,
-)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Hash, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>PaymentFee {
     <span class="kw">pub </span>base: Amount,
     <span class="kw">pub </span>parts_per_million: u64,
 }
 
-<span class="kw">const </span>DUST_LIMIT: Amount = Amount::from_sats(<span class="number">50</span>);
-
 <span class="kw">impl </span>PaymentFee {
-    <span class="kw">pub const </span>SEND_FEE_MINIMUM: PaymentFee = PaymentFee {
-        base: DUST_LIMIT,
-        parts_per_million: <span class="number">5_000</span>,
-    };
-
-    <span class="comment">// The difference between the SEND_FEE_LIMIT_DEFAULT and the SEND_FEE_MINIMUM
-    // leaves the gateway with a limit of one percent + 50 sats for lightning
-    // routing fees which is the LDK default
+    <span class="doccomment">/// This is the maximum send fee of one and a half percent plus one hundred
+    /// satoshis a correct gateway may recommend as a default. It accounts for
+    /// the fee required to reliably route this payment over lightning.
     </span><span class="kw">pub const </span>SEND_FEE_LIMIT_DEFAULT: PaymentFee = PaymentFee {
         base: Amount::from_sats(<span class="number">100</span>),
         parts_per_million: <span class="number">15_000</span>,
     };
 
-    <span class="kw">pub const </span>RECEIVE_FEE_LIMIT_DEFAULT: PaymentFee = PaymentFee {
-        base: DUST_LIMIT,
+    <span class="doccomment">/// This is the maximum receive fee of half of one percent plus fifty
+    /// satoshis a correct gateway may recommend as a default.
+    </span><span class="kw">pub const </span>RECEIVE_FEE_LIMIT_DEFAULT: PaymentFee = PaymentFee {
+        base: Amount::from_sats(<span class="number">50</span>),
         parts_per_million: <span class="number">5_000</span>,
     };
 
-    <span class="kw">pub fn </span>add_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, msats: u64) -&gt; Amount {
-        Amount::from_msats(msats.saturating_add(<span class="self">self</span>.fee(msats)))
+    <span class="kw">pub fn </span>add_to(<span class="kw-2">&amp;</span><span class="self">self</span>, msats: u64) -&gt; Amount {
+        Amount::from_msats(msats.saturating_add(<span class="self">self</span>.absolute_fee(msats)))
     }
 
-    <span class="kw">pub fn </span>subtract_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, msats: u64) -&gt; Amount {
-        Amount::from_msats(msats.saturating_sub(<span class="self">self</span>.fee(msats)))
+    <span class="kw">pub fn </span>subtract_from(<span class="kw-2">&amp;</span><span class="self">self</span>, msats: u64) -&gt; Amount {
+        Amount::from_msats(msats.saturating_sub(<span class="self">self</span>.absolute_fee(msats)))
     }
 
-    <span class="kw">fn </span>fee(<span class="kw-2">&amp;</span><span class="self">self</span>, msats: u64) -&gt; u64 {
+    <span class="kw">fn </span>absolute_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, msats: u64) -&gt; u64 {
         <span class="self">self</span>.base.msats
             + msats
                 .saturating_mul(<span class="self">self</span>.parts_per_million)
@@ -1385,7 +1429,7 @@
         _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         _prefix_names: Vec&lt;String&gt;,
     ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">'_</span>&gt; {
-        <span class="macro">todo!</span>()
+        Box::new(BTreeMap::new().into_iter())
     }
 }
 
@@ -1538,6 +1582,7 @@
             PaymentFee::SEND_FEE_LIMIT_DEFAULT,
             EXPIRATION_DELTA_LIMIT_DEFAULT,
             gateway_api,
+            Value::Null,
         )
         .<span class="kw">await
     </span>}
@@ -1550,6 +1595,7 @@
         payment_fee_limit: PaymentFee,
         expiration_delta_limit: u64,
         gateway_api: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
+        custom_meta: Value,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OperationId, SendPaymentError&gt; {
         <span class="kw">let </span>amount = invoice
             .amount_milli_satoshis()
@@ -1608,7 +1654,7 @@
 
         <span class="kw">let </span>contract = OutgoingContract {
             payment_image: PaymentImage::Hash(<span class="kw-2">*</span>invoice.payment_hash()),
-            amount: send_fee.add_fee(amount),
+            amount: send_fee.add_to(amount),
             expiration: consensus_block_count + expiration_delta + CONTRACT_CONFIRMATION_BUFFER,
             claim_pk: routing_info.module_public_key,
             refund_pk: refund_keypair.public_key(),
@@ -1651,6 +1697,7 @@
                         gateway_api: gateway_api.clone(),
                         contract: contract.clone(),
                         invoice: invoice.clone(),
+                        custom_meta: custom_meta.clone(),
                     })
                 },
                 transaction,
@@ -1694,8 +1741,7 @@
         <span class="macro">panic!</span>(<span class="string">"We could not find an unused operation id for sending a lightning payment"</span>);
     }
 
-    <span class="doccomment">/// Subscribe to all updates of the send operation. No specific order is not
-    /// guaranteed.
+    <span class="doccomment">/// Subscribe to all updates of the send operation.
     </span><span class="kw">pub async fn </span>subscribe_send(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
@@ -1778,17 +1824,14 @@
     <span class="doccomment">/// Request an invoice. For testing you can optionally specify a gateway to
     /// generate the invoice, otherwise a gateway will be selected
     /// automatically.
-    </span><span class="kw">pub async fn </span>receive(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        invoice_amount: Amount,
-        gateway_api: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
-    ) -&gt; ReceiveResult {
+    </span><span class="kw">pub async fn </span>receive(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount, gateway_api: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;) -&gt; ReceiveResult {
         <span class="self">self</span>.receive_custom(
-            invoice_amount,
+            amount,
             INVOICE_EXPIRATION_SECONDS_DEFAULT,
             Bolt11InvoiceDescription::Direct(String::new()),
             PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
             gateway_api,
+            Value::Null,
         )
         .<span class="kw">await
     </span>}
@@ -1798,17 +1841,18 @@
     /// automatically.
     </span><span class="kw">pub async fn </span>receive_custom(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        invoice_amount: Amount,
-        expiry_time: u32,
+        amount: Amount,
+        expiry_secs: u32,
         description: Bolt11InvoiceDescription,
         payment_fee_limit: PaymentFee,
         gateway_api: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(Bolt11Invoice, OperationId), FetchInvoiceError&gt; {
-        <span class="kw">let </span>(contract, .., invoice) = <span class="self">self
-            </span>.create_contract_and_fetch_invoice_custom(
+        custom_meta: Value,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(Bolt11Invoice, OperationId), ReceiveError&gt; {
+        <span class="kw">let </span>(contract, invoice) = <span class="self">self
+            </span>.create_contract_and_fetch_invoice(
                 <span class="self">self</span>.keypair.public_key(),
-                invoice_amount,
-                expiry_time,
+                amount,
+                expiry_secs,
                 description,
                 payment_fee_limit,
                 gateway_api,
@@ -1816,7 +1860,7 @@
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>operation_id = <span class="self">self
-            </span>.receive_incoming_contract(contract)
+            </span>.receive_incoming_contract(contract, invoice.clone(), custom_meta)
             .<span class="kw">await
             </span>.expect(<span class="string">"The contract has been generated with our public key"</span>);
 
@@ -1825,42 +1869,16 @@
 
     <span class="doccomment">/// Create an incoming contract locked to a public key derived from the
     /// recipient's static module public key and fetches the corresponding
-    /// invoice. To receive the payment the recipient needs to call
-    /// [`Self::receive_incoming_contract`] on the returned contract. For
-    /// testing you can optionally specify a gateway to generate the
-    /// invoice, otherwise a gateway will be selected automatically.
-    </span><span class="kw">pub async fn </span>create_contract_and_fetch_invoice(
+    /// invoice.
+    </span><span class="kw">async fn </span>create_contract_and_fetch_invoice(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         recipient_static_pk: PublicKey,
-        invoice_amount: Amount,
-        gateway_api: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(IncomingContract, [u8; <span class="number">32</span>], Bolt11Invoice), FetchInvoiceError&gt; {
-        <span class="self">self</span>.create_contract_and_fetch_invoice_custom(
-            recipient_static_pk,
-            invoice_amount,
-            INVOICE_EXPIRATION_SECONDS_DEFAULT,
-            Bolt11InvoiceDescription::Direct(String::new()),
-            PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
-            gateway_api,
-        )
-        .<span class="kw">await
-    </span>}
-
-    <span class="doccomment">/// Create an incoming contract locked to a public key derived from the
-    /// recipient's static module public key and fetches the corresponding
-    /// invoice. To receive the payment the recipient needs to call
-    /// [`Self::receive_incoming_contract`] on the returned contract. For
-    /// testing you can optionally specify a gateway to generate the
-    /// invoice, otherwise a gateway will be selected automatically.
-    </span><span class="kw">pub async fn </span>create_contract_and_fetch_invoice_custom(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        recipient_static_pk: PublicKey,
-        invoice_amount: Amount,
-        expiry_time: u32,
+        amount: Amount,
+        expiry_secs: u32,
         description: Bolt11InvoiceDescription,
         payment_fee_limit: PaymentFee,
         gateway_api: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(IncomingContract, [u8; <span class="number">32</span>], Bolt11Invoice), FetchInvoiceError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(IncomingContract, Bolt11Invoice), ReceiveError&gt; {
         <span class="kw">let </span>(ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(recipient_static_pk);
 
         <span class="kw">let </span>encryption_seed = ephemeral_tweak
@@ -1876,32 +1894,32 @@
                 gateway_api.clone(),
                 <span class="self">self</span>.routing_info(<span class="kw-2">&amp;</span>gateway_api)
                     .<span class="kw">await
-                    </span>.map_err(FetchInvoiceError::GatewayConnectionError)<span class="question-mark">?
-                    </span>.ok_or(FetchInvoiceError::UnknownFederation)<span class="question-mark">?</span>,
+                    </span>.map_err(ReceiveError::GatewayConnectionError)<span class="question-mark">?
+                    </span>.ok_or(ReceiveError::UnknownFederation)<span class="question-mark">?</span>,
             ),
             <span class="prelude-val">None </span>=&gt; <span class="self">self
                 </span>.select_gateway()
                 .<span class="kw">await
-                </span>.map_err(FetchInvoiceError::FailedToSelectGateway)<span class="question-mark">?</span>,
+                </span>.map_err(ReceiveError::FailedToSelectGateway)<span class="question-mark">?</span>,
         };
 
         <span class="kw">if </span>!routing_info.receive_fee.le(<span class="kw-2">&amp;</span>payment_fee_limit) {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(FetchInvoiceError::PaymentFeeExceedsLimit(
+            <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveError::PaymentFeeExceedsLimit(
                 routing_info.receive_fee,
             ));
         }
 
-        <span class="kw">let </span>contract_amount = routing_info.receive_fee.subtract_fee(invoice_amount.msats);
+        <span class="kw">let </span>contract_amount = routing_info.receive_fee.subtract_from(amount.msats);
 
         <span class="comment">// The dust limit ensures that the incoming contract can be claimed without
         // additional funds as the contracts amount is sufficient to cover the fees
-        </span><span class="kw">if </span>contract_amount &lt; DUST_LIMIT {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(FetchInvoiceError::DustAmount);
+        </span><span class="kw">if </span>contract_amount &lt; Amount::from_sats(<span class="number">50</span>) {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveError::DustAmount);
         }
 
         <span class="kw">let </span>expiration = duration_since_epoch()
             .as_secs()
-            .saturating_add(u64::from(expiry_time));
+            .saturating_add(u64::from(expiry_secs));
 
         <span class="kw">let </span>claim_pk = recipient_static_pk
             .mul_tweak(
@@ -1928,38 +1946,31 @@
                 gateway_api,
                 <span class="self">self</span>.federation_id,
                 contract.clone(),
-                invoice_amount,
+                amount,
                 description,
-                expiry_time,
+                expiry_secs,
             )
             .<span class="kw">await
-            </span>.map_err(FetchInvoiceError::GatewayConnectionError)<span class="question-mark">?</span>;
+            </span>.map_err(ReceiveError::GatewayConnectionError)<span class="question-mark">?</span>;
 
         <span class="kw">if </span>invoice.payment_hash() != <span class="kw-2">&amp;</span>preimage.consensus_hash() {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(FetchInvoiceError::InvalidInvoicePaymentHash);
+            <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveError::InvalidInvoicePaymentHash);
         }
 
-        <span class="kw">if </span>invoice.amount_milli_satoshis() != <span class="prelude-val">Some</span>(invoice_amount.msats) {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(FetchInvoiceError::InvalidInvoiceAmount);
+        <span class="kw">if </span>invoice.amount_milli_satoshis() != <span class="prelude-val">Some</span>(amount.msats) {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveError::InvalidInvoiceAmount);
         }
 
-        <span class="prelude-val">Ok</span>((contract, preimage, invoice))
+        <span class="prelude-val">Ok</span>((contract, invoice))
     }
 
-    <span class="doccomment">/// Await an incoming contract to be confirmed or to expire. The return
-    /// value indicates whether the contract was confirmed in time.
-    </span><span class="kw">pub async fn </span>await_incoming_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: IncomingContract) -&gt; bool {
-        <span class="self">self</span>.module_api
-            .await_incoming_contract(<span class="kw-2">&amp;</span>contract.contract_id(), contract.commitment.expiration)
-            .<span class="kw">await
-    </span>}
-
-    <span class="doccomment">/// Receive an incoming contract locked to a public key derived from our
-    /// static module public key such as a contract generated by a lightning
-    /// address provider.
-    </span><span class="kw">pub async fn </span>receive_incoming_contract(
+    <span class="comment">// Receive an incoming contract locked to a public key derived from our
+    // static module public key.
+    </span><span class="kw">async fn </span>receive_incoming_contract(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         contract: IncomingContract,
+        invoice: Bolt11Invoice,
+        custom_meta: Value,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;OperationId&gt; {
         <span class="kw">let </span>operation_id = OperationId::from_encodable(<span class="kw-2">&amp;</span>contract.clone());
 
@@ -1981,7 +1992,11 @@
             .manual_operation_start(
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
-                LightningOperationMeta::Receive(ReceiveOperationMeta { contract }),
+                LightningOperationMeta::Receive(ReceiveOperationMeta {
+                    contract,
+                    invoice,
+                    custom_meta,
+                }),
                 <span class="macro">vec!</span>[<span class="self">self</span>.client_ctx.make_dyn_state(receive_sm)],
             )
             .<span class="kw">await
@@ -2026,8 +2041,7 @@
         <span class="prelude-val">Some</span>((claim_keypair, agg_decryption_key))
     }
 
-    <span class="doccomment">/// Subscribe to all updates of the receive operation. No specific order is
-    /// not guaranteed.
+    <span class="doccomment">/// Subscribe to all updates of the receive operation.
     </span><span class="kw">pub async fn </span>subscribe_receive(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
@@ -2138,7 +2152,7 @@
 }
 
 <span class="attr">#[derive(Error, Debug, Clone, Eq, PartialEq)]
-</span><span class="kw">pub enum </span>FetchInvoiceError {
+</span><span class="kw">pub enum </span>ReceiveError {
     <span class="attr">#[error(<span class="string">"Failed to select gateway: {0}"</span>)]
     </span>FailedToSelectGateway(SelectGatewayError),
     <span class="attr">#[error(<span class="string">"Gateway connection error: {0}"</span>)]

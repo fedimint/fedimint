@@ -813,7 +813,7 @@
             .<span class="kw">await</span><span class="question-mark">?
             </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"Routing Info not available"</span>))<span class="question-mark">?
             </span>.send_fee_minimum
-            .add_fee(amount);
+            .add_to(amount);
 
         <span class="kw">let </span>send_sm = GatewayClientStateMachinesV2::Send(SendStateMachine {
             common: SendSMCommon {

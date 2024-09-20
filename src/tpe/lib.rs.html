@@ -311,7 +311,11 @@
 <a href="#310" id="310">310</a>
 <a href="#311" id="311">311</a>
 <a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::Mul;
 
@@ -353,6 +357,10 @@
     </span><span class="kw">pub </span>encrypted_preimage: [u8; <span class="number">32</span>],
     <span class="kw">pub </span>pk: EphemeralPublicKey,
     <span class="kw">pub </span>signature: EphemeralSignature,
+}
+
+<span class="kw">pub fn </span>derive_public_key_share(sk: <span class="kw-2">&amp;</span>SecretKeyShare) -&gt; PublicKeyShare {
+    PublicKeyShare(G1Projective::generator().mul(sk.<span class="number">0</span>).to_affine())
 }
 
 <span class="kw">pub fn </span>encrypt_preimage(

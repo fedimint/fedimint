@@ -2068,7 +2068,8 @@
 <a href="#2067" id="2067">2067</a>
 <a href="#2068" id="2068">2068</a>
 <a href="#2069" id="2069">2069</a>
-<a href="#2070" id="2070">2070</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2070" id="2070">2070</a>
+<a href="#2071" id="2071">2071</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -3885,12 +3886,15 @@
                 <span class="comment">// The base fee ensures that the gateway does not loose sats sending the payment due
                 // to fees paid on the transaction claiming the outgoing contract or
                 // subsequent transactions spending the newly issued ecash
-                </span>send_fee_minimum: PaymentFee::SEND_FEE_MINIMUM,
+                </span>send_fee_minimum: PaymentFee {
+                    base: Amount::from_sats(<span class="number">50</span>),
+                    parts_per_million: <span class="number">5_000</span>,
+                },
+                expiration_delta_default: EXPIRATION_DELTA_LIMIT_DEFAULT,
+                expiration_delta_minimum: EXPIRATION_DELTA_MINIMUM_V2,
                 <span class="comment">// The base fee ensures that the gateway does not loose sats receiving the payment
                 // due to fees paid on the transaction funding the incoming contract
                 </span>receive_fee: PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
-                expiration_delta_default: EXPIRATION_DELTA_LIMIT_DEFAULT,
-                expiration_delta_minimum: EXPIRATION_DELTA_MINIMUM_V2,
             }))
     }
 
@@ -3935,9 +3939,7 @@
             ));
         }
 
-        <span class="kw">let </span>contract_amount = payment_info
-            .receive_fee
-            .subtract_fee(payload.invoice_amount.msats);
+        <span class="kw">let </span>contract_amount = payment_info.receive_fee.subtract_from(payload.amount.msats);
 
         <span class="kw">if </span>contract_amount == Amount::ZERO {
             <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::IncomingContractError(
@@ -3969,9 +3971,9 @@
         <span class="kw">let </span>invoice = <span class="self">self
             </span>.create_invoice_via_lnrpc_v2(
                 payment_hash,
-                payload.invoice_amount,
+                payload.amount,
                 payload.description.clone(),
-                payload.expiry_time,
+                payload.expiry_secs,
             )
             .<span class="kw">await
             </span>.map_err(|e| <span class="macro">anyhow!</span>(e))<span class="question-mark">?</span>;
@@ -3981,7 +3983,7 @@
         <span class="kw">if </span>dbtx
             .save_registered_incoming_contract(
                 payload.federation_id,
-                payload.invoice_amount,
+                payload.amount,
                 payload.contract,
             )
             .<span class="kw">await

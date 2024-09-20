@@ -13,9 +13,9 @@
         gateway_api: <a class="struct" href="../../fedimint_core/util/struct.SafeUrl.html" title="struct fedimint_core::util::SafeUrl">SafeUrl</a>,
         federation_id: <a class="struct" href="../../fedimint_core/config/struct.FederationId.html" title="struct fedimint_core::config::FederationId">FederationId</a>,
         contract: <a class="struct" href="../../fedimint_lnv2_common/contracts/struct.IncomingContract.html" title="struct fedimint_lnv2_common::contracts::IncomingContract">IncomingContract</a>,
-        invoice_amount: <a class="struct" href="../../fedimint_core/amount/struct.Amount.html" title="struct fedimint_core::amount::Amount">Amount</a>,
+        amount: <a class="struct" href="../../fedimint_core/amount/struct.Amount.html" title="struct fedimint_core::amount::Amount">Amount</a>,
         description: <a class="enum" href="../enum.Bolt11InvoiceDescription.html" title="enum fedimint_lnv2_client::Bolt11InvoiceDescription">Bolt11InvoiceDescription</a>,
-        expiry_time: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u32.html">u32</a>,
+        expiry_secs: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u32.html">u32</a>,
     ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Bolt11Invoice, <a class="enum" href="../enum.GatewayConnectionError.html" title="enum fedimint_lnv2_client::GatewayConnectionError">GatewayConnectionError</a>&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
        <span class="where">where Self: 'async_trait,
              'life0: 'async_trait</span>;
@@ -41,9 +41,9 @@
     gateway_api: <a class="struct" href="../../fedimint_core/util/struct.SafeUrl.html" title="struct fedimint_core::util::SafeUrl">SafeUrl</a>,
     federation_id: <a class="struct" href="../../fedimint_core/config/struct.FederationId.html" title="struct fedimint_core::config::FederationId">FederationId</a>,
     contract: <a class="struct" href="../../fedimint_lnv2_common/contracts/struct.IncomingContract.html" title="struct fedimint_lnv2_common::contracts::IncomingContract">IncomingContract</a>,
-    invoice_amount: <a class="struct" href="../../fedimint_core/amount/struct.Amount.html" title="struct fedimint_core::amount::Amount">Amount</a>,
+    amount: <a class="struct" href="../../fedimint_core/amount/struct.Amount.html" title="struct fedimint_core::amount::Amount">Amount</a>,
     description: <a class="enum" href="../enum.Bolt11InvoiceDescription.html" title="enum fedimint_lnv2_client::Bolt11InvoiceDescription">Bolt11InvoiceDescription</a>,
-    expiry_time: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u32.html">u32</a>,
+    expiry_secs: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u32.html">u32</a>,
 ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Bolt11Invoice, <a class="enum" href="../enum.GatewayConnectionError.html" title="enum fedimint_lnv2_client::GatewayConnectionError">GatewayConnectionError</a>&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
     Self: 'async_trait,
     'life0: 'async_trait,</div></h4></section><section id="tymethod.send_payment" class="method"><a class="src rightside" href="../../src/fedimint_lnv2_client/api.rs.html#194-201">source</a><h4 class="code-header">fn <a href="#tymethod.send_payment" class="fn">send_payment</a>&lt;'life0, 'async_trait&gt;(

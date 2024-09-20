@@ -783,7 +783,15 @@
 <a href="#782" id="782">782</a>
 <a href="#783" id="783">783</a>
 <a href="#784" id="784">784</a>
-<a href="#785" id="785">785</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 
@@ -792,7 +800,7 @@
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::{anyhow, ensure};
+<span class="kw">use </span>anyhow::{anyhow, ensure, Context};
 <span class="kw">use </span>bls12_381::{G1Projective, Scalar};
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_core::config::{
@@ -996,7 +1004,7 @@
                             network: params.consensus.network,
                         },
                         private: LightningConfigPrivate {
-                            sk: sks[peer.to_usize()],
+                            tpe_sk: sks[peer.to_usize()],
                         },
                     }
                     .to_erased(),
@@ -1038,18 +1046,26 @@
                 network: params.consensus.network,
             },
             private: LightningConfigPrivate {
-                sk: SecretKeyShare(sk),
+                tpe_sk: SecretKeyShare(sk),
             },
         };
 
         <span class="prelude-val">Ok</span>(server.to_erased())
     }
 
-    <span class="kw">fn </span>validate_config(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _identity: <span class="kw-2">&amp;</span>PeerId,
-        _config: ServerModuleConfig,
-    ) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>config = config.to_typed::&lt;LightningConfig&gt;()<span class="question-mark">?</span>;
+
+        <span class="macro">ensure!</span>(
+            tpe::derive_public_key_share(<span class="kw-2">&amp;</span>config.private.tpe_sk)
+                == <span class="kw-2">*</span>config
+                    .consensus
+                    .tpe_pks
+                    .get(identity)
+                    .context(<span class="string">"Public key set has no key for our identity"</span>)<span class="question-mark">?</span>,
+            <span class="string">"Preimge encryption secret key share does not match our public key share"
+        </span>);
+
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -1270,7 +1286,7 @@
                     <span class="kw">return </span><span class="prelude-val">Err</span>(LightningOutputError::ContractAlreadyExists);
                 }
 
-                <span class="kw">let </span>dk_share = contract.create_decryption_key_share(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.private.sk);
+                <span class="kw">let </span>dk_share = contract.create_decryption_key_share(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.private.tpe_sk);
 
                 LightningOutputOutcomeV0::Incoming(dk_share)
             }

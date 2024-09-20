@@ -137,7 +137,7 @@ and requests to remove the registration record.</p>
     federation_id: &amp;<a class="struct" href="../fedimint_core/config/struct.FederationId.html" title="struct fedimint_core::config::FederationId">FederationId</a>,
 ) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../fedimint_lnv2_client/struct.RoutingInfo.html" title="struct fedimint_lnv2_client::RoutingInfo">RoutingInfo</a>&gt;, <a class="enum" href="../ln_gateway/enum.GatewayError.html" title="enum ln_gateway::GatewayError">GatewayError</a>&gt;</h4></section></summary><div class="docblock"><p>Returns payment information that LNv2 clients can use to instruct this
 Gateway to pay an invoice or receive a payment.</p>
-</div></details><details class="toggle method-toggle" open><summary><section id="method.create_invoice_via_lnrpc_v2" class="method"><a class="src rightside" href="../src/ln_gateway/lib.rs.html#1934-1940">source</a><h4 class="code-header">pub async fn <a href="#method.create_invoice_via_lnrpc_v2" class="fn">create_invoice_via_lnrpc_v2</a>(
+</div></details><details class="toggle method-toggle" open><summary><section id="method.create_invoice_via_lnrpc_v2" class="method"><a class="src rightside" href="../src/ln_gateway/lib.rs.html#1935-1941">source</a><h4 class="code-header">pub async fn <a href="#method.create_invoice_via_lnrpc_v2" class="fn">create_invoice_via_lnrpc_v2</a>(
     &amp;self,
     payment_hash: Hash,
     amount: <a class="struct" href="../fedimint_core/amount/struct.Amount.html" title="struct fedimint_core::amount::Amount">Amount</a>,
@@ -145,7 +145,7 @@ Gateway to pay an invoice or receive a payment.</p>
     expiry_time: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u32.html">u32</a>,
 ) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Bolt11Invoice, <a class="enum" href="../ln_gateway/enum.GatewayError.html" title="enum ln_gateway::GatewayError">GatewayError</a>&gt;</h4></section></summary><div class="docblock"><p>Retrieves a BOLT11 invoice from the connected Lightning node with a
 specific <code>payment_hash</code>.</p>
-</div></details><details class="toggle method-toggle" open><summary><section id="method.get_registered_incoming_contract_and_client_v2" class="method"><a class="src rightside" href="../src/ln_gateway/lib.rs.html#1976-1980">source</a><h4 class="code-header">pub async fn <a href="#method.get_registered_incoming_contract_and_client_v2" class="fn">get_registered_incoming_contract_and_client_v2</a>(
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_registered_incoming_contract_and_client_v2" class="method"><a class="src rightside" href="../src/ln_gateway/lib.rs.html#1977-1981">source</a><h4 class="code-header">pub async fn <a href="#method.get_registered_incoming_contract_and_client_v2" class="fn">get_registered_incoming_contract_and_client_v2</a>(
     &amp;self,
     payment_image: <a class="enum" href="../fedimint_lnv2_common/contracts/enum.PaymentImage.html" title="enum fedimint_lnv2_common::contracts::PaymentImage">PaymentImage</a>,
     amount_msats: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>,

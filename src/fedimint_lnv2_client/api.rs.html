@@ -475,9 +475,9 @@
         gateway_api: SafeUrl,
         federation_id: FederationId,
         contract: IncomingContract,
-        invoice_amount: Amount,
+        amount: Amount,
         description: Bolt11InvoiceDescription,
-        expiry_time: u32,
+        expiry_secs: u32,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Bolt11Invoice, GatewayConnectionError&gt;;
 
     <span class="kw">async fn </span>send_payment(
@@ -521,9 +521,9 @@
         gateway_api: SafeUrl,
         federation_id: FederationId,
         contract: IncomingContract,
-        invoice_amount: Amount,
+        amount: Amount,
         description: Bolt11InvoiceDescription,
-        expiry_time: u32,
+        expiry_secs: u32,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Bolt11Invoice, GatewayConnectionError&gt; {
         reqwest::Client::new()
             .post(
@@ -535,9 +535,9 @@
             .json(<span class="kw-2">&amp;</span>CreateBolt11InvoicePayload {
                 federation_id,
                 contract,
-                invoice_amount,
+                amount,
                 description,
-                expiry_time,
+                expiry_secs,
             })
             .send()
             .<span class="kw">await

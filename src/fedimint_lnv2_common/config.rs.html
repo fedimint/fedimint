@@ -189,7 +189,12 @@
 <a href="#188" id="188">188</a>
 <a href="#189" id="189">189</a>
 <a href="#190" id="190">190</a>
-<a href="#191" id="191">191</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">pub use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
@@ -251,7 +256,7 @@
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>LightningConfigPrivate {
-    <span class="kw">pub </span>sk: SecretKeyShare,
+    <span class="kw">pub </span>tpe_sk: SecretKeyShare,
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -345,7 +350,7 @@
     config: <span class="kw-2">&amp;</span>fedimint_ln_common::config::LightningConfigPrivate,
 ) -&gt; LightningConfigPrivate {
     LightningConfigPrivate {
-        sk: SecretKeyShare(config.threshold_sec_key.<span class="number">0 </span>.<span class="number">0 </span>.<span class="number">0</span>),
+        tpe_sk: SecretKeyShare(config.threshold_sec_key.<span class="number">0 </span>.<span class="number">0 </span>.<span class="number">0</span>),
     }
 }
 
@@ -378,6 +383,11 @@
     <span class="macro">assert_eq!</span>(
         FeeConsensus::default().fee(Amount::from_bitcoins(<span class="number">1</span>)),
         Amount::from_sats(<span class="number">100_001</span>)
+    );
+
+    <span class="macro">assert_eq!</span>(
+        FeeConsensus::default().fee(Amount::from_bitcoins(<span class="number">100_000</span>)),
+        Amount::from_bitcoins(<span class="number">100</span>) + Amount::from_sats(<span class="number">1</span>)
     );
 }
 </code></pre></div></section></main></body></html>
