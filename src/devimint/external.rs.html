@@ -1167,8 +1167,7 @@
 <a href="#1166" id="1166">1166</a>
 <a href="#1167" id="1167">1167</a>
 <a href="#1168" id="1168">1168</a>
-<a href="#1169" id="1169">1169</a>
-<a href="#1170" id="1170">1170</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
+<a href="#1169" id="1169">1169</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -2083,8 +2082,7 @@
             <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"Opening channel between {gw_a_name} and {gw_b_name} gateway lightning nodes with {push_amount} on each side..."</span>);
             tokio::task::spawn(<span class="kw">async move </span>{
                 <span class="comment">// Sometimes channel openings just after funding the lightning nodes don't work right away.
-                // This resolves itself after a few seconds, so we don't need to poll for very long.
-                </span>poll_with_timeout(<span class="string">"Open channel"</span>, Duration::from_secs(<span class="number">10</span>), || <span class="kw">async </span>{
+                </span>poll_with_timeout(<span class="string">"Open channel"</span>, Duration::from_secs(<span class="number">30</span>), || <span class="kw">async </span>{
                     gw_a.open_channel(<span class="kw-2">&amp;</span>gw_b, <span class="number">10_000_000</span>, <span class="prelude-val">Some</span>(push_amount)).<span class="kw">await</span>.map_err(ControlFlow::Continue)
                 })
                 .<span class="kw">await
