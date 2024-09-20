@@ -235,9 +235,9 @@ in
                 (if cfg.bitcoin.rpc.secretFile != null then
                   ''
                     secret=$(${pkgs.coreutils}/bin/head -n 1 "${cfg.bitcoin.rpc.secretFile}")
-                    prefix="''${FM_BITCOIN_RPC_URL%*@*}"  # Everything before the last '@'
-                    suffix="''${FM_BITCOIN_RPC_URL##*@}"  # Everything after the last '@'
-                    FM_BITCOIN_RPC_URL="''${prefix}:''${secret}@''${suffix}"
+                    prefix="''${FM_DEFAULT_BITCOIN_RPC_URL%*@*}"  # Everything before the last '@'
+                    suffix="''${FM_DEFAULT_BITCOIN_RPC_URL##*@}"  # Everything after the last '@'
+                    FM_DEFAULT_BITCOIN_RPC_URL="''${prefix}:''${secret}@''${suffix}"
                   ''
                 else
                   "") +
@@ -258,6 +258,10 @@ in
                   FM_API_URL = cfg.api.address;
                   FM_DATA_DIR = cfg.dataDir;
                   FM_BITCOIN_NETWORK = cfg.bitcoin.network;
+                  FM_DEFAULT_BITCOIN_RPC_URL = cfg.bitcoin.rpc.address;
+                  FM_DEFAULT_BITCOIN_RPC_KIND = cfg.bitcoin.rpc.kind;
+
+                  # Deprecated envvars, for backward compatibility
                   FM_BITCOIN_RPC_URL = cfg.bitcoin.rpc.address;
                   FM_BITCOIN_RPC_KIND = cfg.bitcoin.rpc.kind;
                 }
