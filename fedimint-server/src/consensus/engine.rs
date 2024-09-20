@@ -297,7 +297,7 @@ impl ConsensusEngine {
                 aleph_bft::LocalIO::new(
                     DataProvider::new(self.submission_receiver.clone(), signature_receiver),
                     FinalizationHandler::new(unit_data_sender),
-                    BackupWriter::new(self.db.clone()),
+                    BackupWriter::new(self.db.clone()).await,
                     BackupReader::new(self.db.clone()),
                 ),
                 Network::new(connections),
