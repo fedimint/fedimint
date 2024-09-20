@@ -32,8 +32,8 @@ use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, NumPeersExt, OutPoint, PeerId, ServerModule,
 };
 use fedimint_lnv2_common::config::{
-    FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
-    LightningConfigLocal, LightningConfigPrivate, LightningGenParams,
+    LightningClientConfig, LightningConfig, LightningConfigConsensus, LightningConfigLocal,
+    LightningConfigPrivate, LightningGenParams,
 };
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::endpoint_constants::{
@@ -207,7 +207,7 @@ impl ServerModuleInit for LightningInit {
                         consensus: LightningConfigConsensus {
                             tpe_agg_pk,
                             tpe_pks: tpe_pks.clone(),
-                            fee_consensus: FeeConsensus::default(),
+                            fee_consensus: params.consensus.fee_consensus.clone(),
                             network: params.consensus.network,
                         },
                         private: LightningConfigPrivate {
@@ -249,7 +249,7 @@ impl ServerModuleInit for LightningInit {
                         (*peer, PublicKeyShare(pk))
                     })
                     .collect(),
-                fee_consensus: FeeConsensus::default(),
+                fee_consensus: params.consensus.fee_consensus.clone(),
                 network: params.consensus.network,
             },
             private: LightningConfigPrivate {
