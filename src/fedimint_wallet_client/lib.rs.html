@@ -1352,7 +1352,12 @@
 <a href="#1351" id="1351">1351</a>
 <a href="#1352" id="1352">1352</a>
 <a href="#1353" id="1353">1353</a>
-<a href="#1354" id="1354">1354</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1354" id="1354">1354</a>
+<a href="#1355" id="1355">1355</a>
+<a href="#1356" id="1356">1356</a>
+<a href="#1357" id="1357">1357</a>
+<a href="#1358" id="1358">1358</a>
+<a href="#1359" id="1359">1359</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1905,6 +1910,11 @@
             .fetch_peg_out_fees(<span class="kw-2">&amp;</span>address.assume_checked(), amount)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.context(<span class="string">"Federation didn't return peg-out fees"</span>)
+    }
+
+    <span class="doccomment">/// Returns a summary of the wallet's coins
+    </span><span class="kw">pub async fn </span>get_wallet_summary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;WalletSummary&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.module_api.fetch_wallet_summary().<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
     <span class="kw">pub fn </span>create_withdraw_output(

@@ -401,7 +401,20 @@
 <a href="#400" id="400">400</a>
 <a href="#401" id="401">401</a>
 <a href="#402" id="402">402</a>
-<a href="#403" id="403">403</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::repeat;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -701,6 +714,19 @@
             .txid_to_block_height
             .get(txid)
             .map(|height| height.to_owned() <span class="kw">as </span>u64)
+    }
+
+    <span class="kw">async fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+        <span class="self">self</span>.inner.read().expect(<span class="string">"RwLock poisoned"</span>).blocks.len() <span class="kw">as </span>u64
+    }
+
+    <span class="kw">async fn </span>get_mempool_tx(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;bitcoin::Transaction&gt; {
+        <span class="kw">let </span>inner = <span class="self">self</span>.inner.read().unwrap();
+        <span class="kw">let </span>mempool_transactions = inner.pending.clone();
+        mempool_transactions
+            .iter()
+            .find(|tx| tx.txid() == <span class="kw-2">*</span>txid)
+            .map(std::borrow::ToOwned::to_owned)
     }
 }
 

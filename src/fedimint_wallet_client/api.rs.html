@@ -70,7 +70,18 @@
 <a href="#69" id="69">69</a>
 <a href="#70" id="70">70</a>
 <a href="#71" id="71">71</a>
-<a href="#72" id="72">72</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
@@ -79,9 +90,10 @@
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, PeerId};
 <span class="kw">use </span>fedimint_wallet_common::endpoint_constants::{
-    BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT, BLOCK_COUNT_ENDPOINT, PEG_OUT_FEES_ENDPOINT,
+    BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT, BLOCK_COUNT_ENDPOINT,
+    PEG_OUT_FEES_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
 };
-<span class="kw">use </span>fedimint_wallet_common::PegOutFees;
+<span class="kw">use </span>fedimint_wallet_common::{PegOutFees, WalletSummary};
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>WalletFederationApi {
@@ -96,6 +108,8 @@
     <span class="kw">async fn </span>fetch_bitcoin_rpc_kind(<span class="kw-2">&amp;</span><span class="self">self</span>, peer_id: PeerId) -&gt; FederationResult&lt;String&gt;;
 
     <span class="kw">async fn </span>fetch_bitcoin_rpc_config(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;BitcoinRpcConfig&gt;;
+
+    <span class="kw">async fn </span>fetch_wallet_summary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;WalletSummary&gt;;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -138,6 +152,14 @@
             BITCOIN_RPC_CONFIG_ENDPOINT,
             ApiRequestErased::default(),
             auth,
+        )
+        .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>fetch_wallet_summary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;WalletSummary&gt; {
+        <span class="self">self</span>.request_current_consensus(
+            WALLET_SUMMARY_ENDPOINT.to_string(),
+            ApiRequestErased::default(),
         )
         .<span class="kw">await
     </span>}
