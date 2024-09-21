@@ -25,10 +25,10 @@ aquamarine = "0.5.0"
 async-stream = "0.3.5"
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
-fedimint-aead = { version = "=0.4.3-rc.0", path = "../crypto/aead" }
+fedimint-aead = { version = "=0.4.3-rc.1", path = "../crypto/aead" }
 fedimint-api-client  = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-derive-secret = { version = "=0.4.3-rc.0", path = "../crypto/derive-secret" }
+fedimint-derive-secret = { version = "=0.4.3-rc.1", path = "../crypto/derive-secret" }
 fedimint-logging = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
@@ -51,4 +51,4 @@ ring = { version = "0.17.8", features = ["wasm32_unknown_unknown_js"] }
 tracing-test = "0.2.5"
 
 [build-dependencies]
-fedimint-build = { version = "=0.4.3-rc.0", path = "../fedimint-build" }
+fedimint-build = { version = "=0.4.3-rc.1", path = "../fedimint-build" }

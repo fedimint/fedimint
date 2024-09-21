@@ -55,4 +55,4 @@ tracing-subscriber = "0.3.18"
 url = { workspace = true }
 
 [build-dependencies]
-fedimint-build = { version = "=0.4.3-rc.0", path = "../fedimint-build" }
+fedimint-build = { version = "=0.4.3-rc.1", path = "../fedimint-build" }
