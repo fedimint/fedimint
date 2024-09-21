@@ -4,7 +4,7 @@ use bitcoin::Network;
 use bitcoin_hashes::sha256;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{
-    CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+    CoreMigrationFn, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, MigrationContext,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
@@ -130,11 +130,13 @@ impl_db_lookup!(
 
 pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
     let mut migrations: BTreeMap<DatabaseVersion, CoreMigrationFn> = BTreeMap::new();
-    migrations.insert(DatabaseVersion(0), |dbtx| migrate_to_v1(dbtx).boxed());
+    migrations.insert(DatabaseVersion(0), |ctx| migrate_to_v1(ctx).boxed());
     migrations
 }
 
-async fn migrate_to_v1(dbtx: &mut DatabaseTransaction<'_>) -> Result<(), anyhow::Error> {
+async fn migrate_to_v1(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Error> {
+    let mut dbtx = ctx.dbtx();
+
     // If there is no old gateway configuration, there is nothing to do.
     if let Some(old_gateway_config) = dbtx.remove_entry(&GatewayConfigurationKeyV0).await {
         let password_salt: [u8; 16] = rand::thread_rng().gen();

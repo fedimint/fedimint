@@ -3,17 +3,22 @@ use fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFedera
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send};
-use fedimint_wallet_common::endpoint_constants::{BLOCK_COUNT_ENDPOINT, PEG_OUT_FEES_ENDPOINT};
-use fedimint_wallet_common::PegOutFees;
+use fedimint_wallet_common::endpoint_constants::{
+    BLOCK_COUNT_ENDPOINT, PEG_OUT_FEES_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
+};
+use fedimint_wallet_common::{PegOutFees, WalletSummary};
 
 #[apply(async_trait_maybe_send!)]
 pub trait WalletFederationApi {
     async fn fetch_consensus_block_count(&self) -> FederationResult<u64>;
+
     async fn fetch_peg_out_fees(
         &self,
         address: &Address,
         amount: bitcoin::Amount,
     ) -> FederationResult<Option<PegOutFees>>;
+
+    async fn fetch_wallet_summary(&self) -> FederationResult<WalletSummary>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -37,6 +42,14 @@ where
         self.request_current_consensus(
             PEG_OUT_FEES_ENDPOINT.to_string(),
             ApiRequestErased::new((address, amount.to_sat())),
+        )
+        .await
+    }
+
+    async fn fetch_wallet_summary(&self) -> FederationResult<WalletSummary> {
+        self.request_current_consensus(
+            WALLET_SUMMARY_ENDPOINT.to_string(),
+            ApiRequestErased::default(),
         )
         .await
     }
