@@ -60,7 +60,7 @@ hex = { workspace = true }
 ldk-node = "0.3.0"
 lightning = { workspace = true }
 lightning-invoice = { workspace = true }
-prost = "0.13.2"
+prost = "0.13.3"
 rand = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
