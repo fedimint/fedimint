@@ -3,7 +3,7 @@
     decoders: <a class="type" href="../../fedimint_core/module/registry/type.ModuleDecoderRegistry.html" title="type fedimint_core::module::registry::ModuleDecoderRegistry">ModuleDecoderRegistry</a>,
     is_isolated: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>,
     prepare_fn: F,
-) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.88/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;<div class="where">where
+) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.89/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;<div class="where">where
     F: <a class="trait" href="https://doc.rust-lang.org/nightly/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="struct" href="../../fedimint_core/db/struct.Database.html" title="struct fedimint_core::db::Database">Database</a>) -&gt; BoxFuture&lt;'a, <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Creates a backup database in the <code>snapshot_dir</code> according to the
 <code>FM_PREPARE_DB_MIGRATION_SNAPSHOTS</code>, since we do not want to re-create a
 backup database every time we run the tests.</p>
