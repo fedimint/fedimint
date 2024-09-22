@@ -128,8 +128,7 @@
 <a href="#127" id="127">127</a>
 <a href="#128" id="128">128</a>
 <a href="#129" id="129">129</a>
-<a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#130" id="130">130</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -188,8 +187,7 @@
                             </span>.with_context(<span class="kw">move </span>|| <span class="macro">format!</span>(<span class="string">"Fetching API announcements from peer {peer_id} failed"</span>))
                     },
                 )
-                .<span class="kw">await
-                </span>.map_err(|<span class="kw">_</span>| <span class="macro">anyhow::anyhow!</span>(<span class="string">"Timed out waiting for chain sync"</span>))<span class="question-mark">?</span>;
+                .<span class="kw">await</span><span class="question-mark">?</span>;
 
                 <span class="comment">// If any of the announcements is invalid something is fishy with that
                 // guardian and we ignore all its responses
