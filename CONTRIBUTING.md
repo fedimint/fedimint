@@ -2,83 +2,64 @@
 
 Welcome to the Fedimint project! We're thrilled that you're interested in contributing to our open-source community. Below are some resources to help you get started:
 
-> Please note that all contributions happen under the MIT license as described at the bottom of this page.
+**Note:** All contributions are made under the MIT license, as described at the bottom of this page.
 
-## Getting involved
+## Table of Contents
+
+- [Getting Involved](#getting-involved)
+- [Areas of Contribution](#areas-of-contribution)
+- [Code Review Policy](#code-review-policy)
+- [Developer Certificate of Origin](#developer-certificate-of-origin)
+
+## Getting Involved
 
 Here are the recommended steps for new developers:
 
-1. Start by reading our [non-technical primer](https://fedimint.org/docs/intro) and viewing the [videos and articles on the blog](https://fedimint.org/blog)
-2. Before writing code you will need to [set up the dev environment](docs/dev-env.md)
-3. [Run the dev environment](docs/tutorial.md) to ensure that everything works on your computer
-4. Contact @kodylow to get a good first issue matched to your skillset: you can schedule a [call with Kody here](https://cal.com/kody-low-ix8qoa/30min) or just shoot him a DM in our [Developer discord](https://chat.fedimint.org) with your background, skillset, and what you're interested in working on.
-5. Now take a look at our [GitHub Issues](https://github.com/fedimint/fedimint/issues) you may want to search for [good first issues](https://github.com/fedimint/fedimint/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
-6. Join our [Developer calls](https://calendar.google.com/calendar/u/0/embed?src=fedimintcalendar@gmail.com) especially the ones for new contributors
+1. **Learn the Basics**: Start by reading our [non-technical primer](https://fedimint.org/docs/intro) and exploring the [videos and articles on our blog](https://fedimint.org/blog).
+2. **Set Up Your Development Environment**: Follow our [dev environment setup guide](docs/dev-env.md) to install the necessary tools.
+3. **Run the Development Environment**: Use [this tutorial](docs/tutorial.md) to launch the development environment and ensure everything works correctly on your machine.
+4. **Find Your First Issue**:
+   - Contact @kodylow to get a good first issue matched to your skillset. You can schedule a [call with Kody here](https://cal.com/kody-low-ix8qoa/30min) or send him a direct message in our [Developer Discord](https://chat.fedimint.org) with your background, skillset, and areas of interest.
+   - Browse our [GitHub Issues](https://github.com/fedimint/fedimint/issues) and filter by [good first issues](https://github.com/fedimint/fedimint/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22).
+5. **Join Developer Calls**: Participate in our [Developer Calls](https://calendar.google.com/calendar/u/0/embed?src=fedimintcalendar@gmail.com), especially our Weekly Dev Calls every Monday.
 
-> Small PRs fixing typos, TODOs, broken links are always welcome, but please discuss bigger changes on Discord or GitHub first.
+Small PRs fixing typos, TODOs, or broken links are always welcome. Please discuss larger changes on Discord or GitHub before proceeding.
 
 <!-- markdown-link-check-disable -->
 
-For commits, please use [imperative mood](https://stackoverflow.com/questions/3580013/should-i-use-past-or-present-tense-in-git-commit-messages/3580764#3580764).
+For commit messages, please use the [imperative mood](https://stackoverflow.com/questions/3580013/should-i-use-past-or-present-tense-in-git-commit-messages/3580764#3580764).
 
 <!-- markdown-link-check-enable -->
 
+**Note:** Contributing to the core Fedimint repo requires expertise in Rust and distributed systems. If you're new to coding, Bitcoin, or Rust, consider starting with our more approachable projects like UIs, clients, or other services to familiarize yourself with Fedimint before tackling the core repo. Finding a good issue that matches your skillset is crucial—please reach out to @kodylow to ensure a smooth start.
+
+Once you've found an issue to work on, please post any blockers or questions in the [#new-contributors](https://discord.gg/BGFMXSkNJW) channel on Discord. There are almost always fast and simple answers to early contributor problems. We're here to help you overcome those challenges quickly so you can make valuable contributions.
+
+Happy Hacking!
+
 ## Areas of Contribution
 
-Below are some broad and general areas of contribution to get you started
+Below are some broad and general areas where you can contribute:
 
 - [Fedimint Modules](docs/architecture.md)
 - [Fedimint Database System](docs/database.md)
-- [The Lightning Gateway](docs/gateway.md)
-  - [Developing gateway-lnrpc-extension](docs/gateway.md#developing-gateway-lnrpc-extension)
-  - [Developing Gateway UI](https://github.com/fedimint/ui)
-- [Fedimint Guardian UI](https://github.com/fedimint/ui)
+- [Fedimint Lightning Gateway](docs/gateway.md)
+- [Fedimint Guardian & Lightning Gateway UI](https://github.com/fedimint/ui)
 - [Nix Build System](docs/nix-ci.md)
 - [Devimint](devimint/)
 - [Scripts](scripts/README.md)
 
-### New Contributors
+## Code Review Policy
 
-If you are new to contributing to Fedimint, please come through @kodylow as your point of contact to get a good first issue matched to your skillset. You can schedule a [call with Kody here](https://cal.com/kody-low-ix8qoa/30min) or just shoot him a DM with your background, skillset, and what you're interested in working on.
+**Objective:** We aim to balance thorough code reviews with fast iteration, accommodating our globally distributed team of mostly volunteers with varying availability.
 
-**Contributing to the core Fedimint repo requires expertise with Rust and distributed systems**. There are a bunch of other projects in and around fedimint like UIs, clients, and other services that are far more approachable, so if you're new to coding/bitcoin/rust please try to start with one of those to get a feel for Fedimint before trying to contribute to the core repo. The hardest part with new contributors is finding a good issue to match your skillset! Again, please go through @kodylow so we can get a good match for you so you can get started.
+- **Continuous Integration (CI):** All PRs must pass CI checks before merging. CI ensures your code doesn't break existing functionality and adheres to our quality standards.
+- **Mandatory Reviews:** Each PR requires at least **one** approved review. We recommend having **two or more** reviewers. However, for minor changes such as fixing typos or correcting broken links, one review is acceptable.
+- **Labeling for Further Review:** If a PR contains simple or non-controversial changes and you'd like to avoid merge conflicts or unblock subsequent work, label it with the `needs further review` label and merge it. PRs with this label will be discussed during our weekly "Code Review" meetings.
 
-Once you have an issue you're working on, please post blockers or questions in the [#new-contributors channel](https://discord.gg/BGFMXSkNJW) if you're stuck on something.
+Contributors are encouraged to review PRs even after they have been merged.
 
-There is almost always a simple/fast answer to early contributor problems and we'd like to get you past those as quickly as possible to making valuable contributions.
-
-Things like dev environment issues, build errors, "what does this state machine do", "I don't understand how this contract is structured", etc. Just ask in the #new-contributors channel and someone will get back to you ASAP.
-
-If you have any questions or need assistance, don't hesitate to reach out to us on our [Developer Discord](https://chat.fedimint.org) in the [#new-contributors channel](https://discord.gg/BGFMXSkNJW). Our community is friendly and supportive, and we're here to help you succeed.
-
-Happy Hacking!
-
-
-# Code Review Policy
-
-* CI must pass (enforced)
-* 1 review is mandatory (enforced), 2 or more ideal
-* If you believe your change is simple, and non-controversial enough, and you want
-  to avoid merge conflicts, or blocking work before it gets enough reviews, label it with
-  `needs further review` label and Merge it.
-
-Feel free to post a link to a PR on #code-review to ask for more code reviews.
-
-The goal of the policy is to strike a balance between good review coverage
-and fast iteration time in a globally distributed team consisting of mostly
-volunteers with varying levels of availability.
-
-1 mandatory review is meant to enforce basic sanity and security cross-checking.
-
-2 ideal reviews is a target we would like to maintain at the current level of project
-maturity.
-
-PRs labeled with `needs further review` label are meant to enable flexible
-"code review debt". The label can be removed after further reviews are done.
-Regular contributors are encouraged to review PRs even after they were merged.
-Furthermore, PRs with `needs further review` will be reviewed during weekly
-"Code Review" meetings.
-
+If you need additional reviews, feel free to post a link to your PR in the #code-review channel on Discord.
 
 ## Developer Certificate of Origin
 
