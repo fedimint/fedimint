@@ -57,8 +57,7 @@ pub async fn run_api_announcement_sync(client_inner: Arc<Client>) {
                             .with_context(move || format!("Fetching API announcements from peer {peer_id} failed"))
                     },
                 )
-                .await
-                .map_err(|_| anyhow::anyhow!("Timed out waiting for chain sync"))?;
+                .await?;
 
                 // If any of the announcements is invalid something is fishy with that
                 // guardian and we ignore all its responses
