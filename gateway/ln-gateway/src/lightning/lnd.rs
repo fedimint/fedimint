@@ -1331,6 +1331,10 @@ impl ILnRpcClient for GatewayLndClient {
                 .local_balance
                 .unwrap_or_default()
                 .msat,
+            inbound_lightning_liquidity_msats: channel_balance_response
+                .remote_balance
+                .unwrap_or_default()
+                .msat,
         })
     }
 

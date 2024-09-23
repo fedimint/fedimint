@@ -1395,6 +1395,8 @@ impl Gateway {
             onchain_balance_sats: lightning_node_balances.onchain_balance_sats,
             lightning_balance_msats: lightning_node_balances.lightning_balance_msats,
             ecash_balances,
+            inbound_lightning_liquidity_msats: lightning_node_balances
+                .inbound_lightning_liquidity_msats,
         })
     }
 

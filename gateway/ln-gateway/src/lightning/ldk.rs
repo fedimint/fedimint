@@ -522,9 +522,17 @@ impl ILnRpcClient for GatewayLdkClient {
 
     async fn get_balances(&self) -> Result<GetBalancesResponse, LightningRpcError> {
         let balances = self.node.list_balances();
+        let channel_lists = self.node.list_channels();
+        // map and get the total inbound_capacity_msat in the channels
+        let total_inbound_liquidity_balance_msat: u64 = channel_lists
+            .iter()
+            .map(|channel| channel.inbound_capacity_msat)
+            .sum();
+
         Ok(GetBalancesResponse {
             onchain_balance_sats: balances.total_onchain_balance_sats,
             lightning_balance_msats: balances.total_lightning_balance_sats * 1000,
+            inbound_lightning_liquidity_msats: total_inbound_liquidity_balance_msat,
         })
     }
 
