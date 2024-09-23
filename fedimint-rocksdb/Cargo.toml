@@ -15,6 +15,10 @@ rustc-args = ["--cfg", "tokio_unstable"]
 name = "fedimint_rocksdb"
 path = "src/lib.rs"
 
+[[bench]]
+name = "db_access"
+harness = false
+
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
@@ -24,6 +28,7 @@ rocksdb = { version = "0.22.0" }
 tracing = { workspace = true }
 
 [dev-dependencies]
+criterion = { workspace = true }
 tempfile = "3.12.0"
 
 [target.'cfg(not(target_family="wasm"))'.dependencies]

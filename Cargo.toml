@@ -99,7 +99,7 @@ bls12_381 = "0.8.0"
 bytes = "1.7.2"
 clap = { version = "4.5.18", features = ["derive", "env"] }
 cln-rpc = "0.1.9"
-criterion = "0.5.1"
+criterion = { version = "0.5.1", features = ["async_tokio"] }
 devimint = { path = "./devimint", version = "=0.5.0-alpha" }
 electrum-client = { version = "0.18.0", features = ["use-rustls"] }
 erased-serde = "0.4"

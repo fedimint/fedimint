@@ -1295,6 +1295,7 @@ dependencies = [
  "ciborium",
  "clap",
  "criterion-plot",
+ "futures",
  "is-terminal",
  "itertools 0.10.5",
  "num-traits",
@@ -1307,6 +1308,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "tinytemplate",
+ "tokio",
  "walkdir",
 ]
 
@@ -2979,6 +2981,7 @@ version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
+ "criterion",
  "fedimint-core",
  "futures",
  "rocksdb",
