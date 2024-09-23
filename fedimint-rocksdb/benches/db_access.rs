@@ -104,6 +104,27 @@ async fn reverse_prefix_search_only_first(db: &Database) {
     assert_eq!(query.0 .0, (ENTRIES - 1).to_be_bytes().to_vec());
 }
 
+async fn prefix_search(db: &Database) {
+    let mut dbtx = db.begin_transaction().await;
+    let query = dbtx
+        .find_by_prefix(&DbPrefixTestPrefix)
+        .await
+        .collect::<Vec<_>>()
+        .await;
+    assert_eq!(query.len(), ENTRIES);
+}
+
+async fn prefix_search_only_first(db: &Database) {
+    let mut dbtx = db.begin_transaction().await;
+    let query = dbtx
+        .find_by_prefix(&DbPrefixTestPrefix)
+        .await
+        .next()
+        .await
+        .expect("No entries found");
+    assert_eq!(query.0 .0, vec![0u8; 8]);
+}
+
 async fn increment_last(db: &Database) {
     let mut dbtx = db.begin_transaction().await;
     let query = dbtx
@@ -138,6 +159,14 @@ fn benchmark_reverse_retrieval(c: &mut Criterion) {
 
     group.bench_function("reverse_prefix_search", |b| {
         b.to_async(&rt).iter(|| reverse_prefix_search(&db));
+    });
+
+    group.bench_function("prefix_search_only_first", |b| {
+        b.to_async(&rt).iter(|| prefix_search_only_first(&db));
+    });
+
+    group.bench_function("prefix_search", |b| {
+        b.to_async(&rt).iter(|| prefix_search(&db));
     });
 
     group.bench_function("increment_last", |b| {
