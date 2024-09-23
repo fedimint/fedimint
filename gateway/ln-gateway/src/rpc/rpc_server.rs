@@ -142,6 +142,24 @@ async fn authenticate(
     Err(StatusCode::UNAUTHORIZED)
 }
 
+/// Public routes that are used in the LNv1 protocol
+fn lnv1_routes() -> Router {
+    Router::new()
+        .route(PAY_INVOICE_ENDPOINT, post(pay_invoice))
+        .route(GET_GATEWAY_ID_ENDPOINT, get(get_gateway_id))
+}
+
+/// Public routes that are used in the LNv2 protocol
+fn lnv2_routes() -> Router {
+    Router::new()
+        .route(ROUTING_INFO_ENDPOINT, post(routing_info_v2))
+        .route(SEND_PAYMENT_ENDPOINT, post(pay_bolt11_invoice_v2))
+        .route(
+            CREATE_BOLT11_INVOICE_ENDPOINT,
+            post(create_bolt11_invoice_v2),
+        )
+}
+
 /// Gateway Webserver Routes. The gateway supports three types of routes
 /// - Always Authenticated: these routes always require a Bearer token. Used by
 ///   gateway administrators.
@@ -152,21 +170,20 @@ async fn authenticate(
 ///   clients.
 fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
     // Public routes on gateway webserver
-    let public_routes = Router::new()
+    let mut public_routes = Router::new()
         .route(
             CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT,
             post(create_invoice_for_self),
         )
-        .route(PAY_INVOICE_ENDPOINT, post(pay_invoice))
-        .route(GET_GATEWAY_ID_ENDPOINT, get(get_gateway_id))
-        // These routes are for next generation lightning
-        .route(ROUTING_INFO_ENDPOINT, post(routing_info_v2))
-        .route(SEND_PAYMENT_ENDPOINT, post(pay_bolt11_invoice_v2))
-        .route(
-            CREATE_BOLT11_INVOICE_ENDPOINT,
-            post(create_bolt11_invoice_v2),
-        )
         .route(RECEIVE_ECASH_ENDPOINT, post(receive_ecash));
+
+    if gateway.is_running_lnv1() {
+        public_routes = public_routes.merge(lnv1_routes());
+    }
+
+    if gateway.is_running_lnv2() {
+        public_routes = public_routes.merge(lnv2_routes());
+    }
 
     // Authenticated, public routes used for gateway administration
     let always_authenticated_routes = Router::new()

@@ -67,14 +67,19 @@ impl GatewayClientBuilder {
 
         let mut registry = self.registry.clone();
 
-        registry.attach(GatewayClientInit {
-            timelock_delta,
-            federation_index,
-            gateway: gateway.clone(),
-        });
-        registry.attach(GatewayClientInitV2 {
-            gateway: gateway.clone(),
-        });
+        if gateway.is_running_lnv1() {
+            registry.attach(GatewayClientInit {
+                timelock_delta,
+                federation_index,
+                gateway: gateway.clone(),
+            });
+        }
+
+        if gateway.is_running_lnv2() {
+            registry.attach(GatewayClientInitV2 {
+                gateway: gateway.clone(),
+            });
+        }
 
         let mut client_builder = Client::builder(db)
             .await

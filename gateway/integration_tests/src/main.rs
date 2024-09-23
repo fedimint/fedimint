@@ -87,7 +87,7 @@ async fn backup_restore_test() -> anyhow::Result<()> {
             }
 
             let gw_ldk = dev_fed
-                .gw_ldk_registered()
+                .gw_ldk_connected()
                 .await?
                 .as_ref()
                 .expect("LDK Gateway should be available");
@@ -343,7 +343,7 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                 LightningNodeType::Lnd => dev_fed.gw_lnd_registered().await?,
                 LightningNodeType::Cln => dev_fed.gw_cln_registered().await?,
                 LightningNodeType::Ldk => dev_fed
-                    .gw_ldk_registered()
+                    .gw_ldk_connected()
                     .await?
                     .as_ref()
                     .expect("LDK Gateway should be available"),

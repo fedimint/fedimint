@@ -100,6 +100,7 @@ use state_machine::{GatewayClientModule, GatewayExtPayStates};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
+use crate::config::LightningModuleMode;
 use crate::db::{get_gatewayd_database_migrations, FederationConfig};
 use crate::envs::FM_GATEWAY_MNEMONIC_ENV;
 use crate::error::{AdminGatewayError, LNv1Error, LNv2Error, PublicGatewayError};
@@ -107,7 +108,7 @@ use crate::gateway_lnrpc::create_invoice_request::Description;
 use crate::gateway_lnrpc::intercept_htlc_response::Forward;
 use crate::gateway_lnrpc::CreateInvoiceRequest;
 use crate::gateway_module_v2::GatewayClientModuleV2;
-use crate::lightning::{GatewayLightningBuilder, LightningContext, RouteHtlcStream};
+use crate::lightning::{GatewayLightningBuilder, LightningContext, LightningMode, RouteHtlcStream};
 use crate::rpc::rpc_server::{hash_password, run_webserver};
 use crate::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
@@ -228,6 +229,8 @@ pub struct Gateway {
 
     /// The socket the gateway listens on.
     listen: SocketAddr,
+
+    lightning_module_mode: LightningModuleMode,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -273,6 +276,7 @@ impl Gateway {
                 num_route_hints,
                 fees: Some(GatewayFee(fees)),
                 network,
+                lightning_module_mode: LightningModuleMode::All,
             },
             gateway_db,
             client_builder,
@@ -310,7 +314,14 @@ impl Gateway {
             fedimint_build_code_version_env!()
         );
 
-        let gateway_parameters = opts.to_gateway_parameters()?;
+        let mut gateway_parameters = opts.to_gateway_parameters()?;
+
+        if gateway_parameters.lightning_module_mode != LightningModuleMode::LNv2
+            && matches!(opts.mode, LightningMode::Ldk { .. })
+        {
+            warn!("Overriding LDK Gateway to only run LNv2...");
+            gateway_parameters.lightning_module_mode = LightningModuleMode::LNv2;
+        }
 
         let mnemonic = Self::load_or_generate_mnemonic(&gateway_db).await?;
         Gateway::new(
@@ -362,6 +373,7 @@ impl Gateway {
             gateway_db,
             versioned_api: gateway_parameters.versioned_api,
             listen: gateway_parameters.listen,
+            lightning_module_mode: gateway_parameters.lightning_module_mode,
         })
     }
 
@@ -1122,18 +1134,23 @@ impl Gateway {
             routing_fees: Some(gateway_config.routing_fees.into()),
         };
 
-        Self::check_federation_network(&client, gateway_config.network).await?;
+        if self.is_running_lnv1() {
+            Self::check_lnv1_federation_network(&client, gateway_config.network).await?;
+            client
+                .get_first_module::<GatewayClientModule>()?
+                .register_with_federation(
+                    // Route hints will be updated in the background
+                    Vec::new(),
+                    GW_ANNOUNCEMENT_TTL,
+                    federation_config.fees,
+                    lightning_context,
+                )
+                .await?;
+        }
 
-        client
-            .get_first_module::<GatewayClientModule>()?
-            .register_with_federation(
-                // Route hints will be updated in the background
-                Vec::new(),
-                GW_ANNOUNCEMENT_TTL,
-                federation_config.fees,
-                lightning_context,
-            )
-            .await?;
+        if self.is_running_lnv2() {
+            Self::check_lnv2_federation_network(&client, gateway_config.network).await?;
+        }
 
         // no need to enter span earlier, because connect-fed has a span
         federation_manager.add_client(
@@ -1731,46 +1748,51 @@ impl Gateway {
     /// has successfully connected to the Lightning node, so that it can
     /// include route hints in the registration.
     fn register_clients_timer(&self, task_group: &TaskGroup) {
-        let gateway = self.clone();
-        task_group.spawn_cancellable("register clients", async move {
-            loop {
-                let mut registration_result: Option<AdminResult<()>> = None;
-                let gateway_config = gateway.clone_gateway_config().await;
-                if let Some(gateway_config) = gateway_config {
-                    let gateway_state = gateway.get_state().await;
-                    if let GatewayState::Running { .. } = &gateway_state {
-                        let mut dbtx = gateway.gateway_db.begin_transaction_nc().await;
-                        let all_federations_configs: Vec<_> = dbtx.load_federation_configs().await.into_iter().collect();
-                        let result = gateway.register_federations(&gateway_config, &all_federations_configs).await;
-                        registration_result = Some(result);
+        // Only spawn background registration thread if gateway is running LNv1
+        if self.is_running_lnv1() {
+            let lightning_module_mode = self.lightning_module_mode;
+            info!(?lightning_module_mode, "Spawning register task...");
+            let gateway = self.clone();
+            task_group.spawn_cancellable("register clients", async move {
+                loop {
+                    let mut registration_result: Option<AdminResult<()>> = None;
+                    let gateway_config = gateway.clone_gateway_config().await;
+                    if let Some(gateway_config) = gateway_config {
+                        let gateway_state = gateway.get_state().await;
+                        if let GatewayState::Running { .. } = &gateway_state {
+                            let mut dbtx = gateway.gateway_db.begin_transaction_nc().await;
+                            let all_federations_configs: Vec<_> = dbtx.load_federation_configs().await.into_iter().collect();
+                            let result = gateway.register_federations(&gateway_config, &all_federations_configs).await;
+                            registration_result = Some(result);
+                        } else {
+                            // We need to retry more often if the gateway is not in the Running state
+                            const NOT_RUNNING_RETRY: Duration = Duration::from_secs(10);
+                            info!("Will not register federation yet because gateway still not in Running state. Current state: {gateway_state:?}. Will keep waiting, next retry in {NOT_RUNNING_RETRY:?}...");
+                            sleep(NOT_RUNNING_RETRY).await;
+                            continue;
+                        }
                     } else {
-                        // We need to retry more often if the gateway is not in the Running state
-                        const NOT_RUNNING_RETRY: Duration = Duration::from_secs(10);
-                        info!("Will not register federation yet because gateway still not in Running state. Current state: {gateway_state:?}. Will keep waiting, next retry in {NOT_RUNNING_RETRY:?}...");
-                        sleep(NOT_RUNNING_RETRY).await;
-                        continue;
+                        warn!("Cannot register clients because gateway configuration is not set.");
                     }
-                } else {
-                    warn!("Cannot register clients because gateway configuration is not set.");
+
+                    let registration_delay: Duration = if let Some(Err(AdminGatewayError::RegistrationError { .. })) = registration_result {
+                        // Retry to register gateway with federations in 10 seconds since it failed
+                        Duration::from_secs(10)
+                    } else {
+                        // Allow a 15% buffer of the TTL before the re-registering gateway
+                        // with the federations.
+                        GW_ANNOUNCEMENT_TTL.mul_f32(0.85)
+                    };
+
+                    sleep(registration_delay).await;
                 }
-
-                let registration_delay: Duration = if let Some(Err(AdminGatewayError::RegistrationError { .. })) = registration_result {
-                    // Retry to register gateway with federations in 10 seconds since it failed
-                    Duration::from_secs(10)
-                } else {
-                    // Allow a 15% buffer of the TTL before the re-registering gateway
-                    // with the federations.
-                    GW_ANNOUNCEMENT_TTL.mul_f32(0.85)
-                };
-
-                sleep(registration_delay).await;
-            }
-        });
+            });
+        }
     }
 
     /// Verifies that the supplied `network` matches the Bitcoin network in the
-    /// connected client's configuration.
-    async fn check_federation_network(
+    /// connected client's LNv1 configuration.
+    async fn check_lnv1_federation_network(
         client: &ClientHandleArc,
         network: Network,
     ) -> AdminResult<()> {
@@ -1781,9 +1803,40 @@ impl Gateway {
             .values()
             .find(|m| LightningCommonInit::KIND == m.kind)
             .ok_or(AdminGatewayError::ClientCreationError(anyhow!(format!(
-                "Federation {federation_id} does not have a lightning module"
+                "Federation {federation_id} does not have an LNv1 module"
             ))))?;
         let ln_cfg: &LightningClientConfig = cfg.cast()?;
+
+        if ln_cfg.network != network {
+            error!(
+                "Federation {federation_id} runs on {} but this gateway supports {network}",
+                ln_cfg.network,
+            );
+            return Err(AdminGatewayError::ClientCreationError(anyhow!(format!(
+                "Unsupported network {}",
+                ln_cfg.network
+            ))));
+        }
+
+        Ok(())
+    }
+
+    /// Verifies that the supplied `network` matches the Bitcoin network in the
+    /// connected client's LNv2 configuration.
+    async fn check_lnv2_federation_network(
+        client: &ClientHandleArc,
+        network: Network,
+    ) -> AdminResult<()> {
+        let federation_id = client.federation_id();
+        let config = client.config().await;
+        let cfg = config
+            .modules
+            .values()
+            .find(|m| fedimint_lnv2_common::LightningCommonInit::KIND == m.kind)
+            .ok_or(AdminGatewayError::ClientCreationError(anyhow!(format!(
+                "Federation {federation_id} does not have an LNv2 module"
+            ))))?;
+        let ln_cfg: &fedimint_lnv2_common::config::LightningClientConfig = cfg.cast()?;
 
         if ln_cfg.network != network {
             error!(
@@ -2055,5 +2108,15 @@ impl Gateway {
             .into_value();
 
         Ok((registered_incoming_contract.contract, client))
+    }
+
+    fn is_running_lnv2(&self) -> bool {
+        self.lightning_module_mode == LightningModuleMode::LNv2
+            || self.lightning_module_mode == LightningModuleMode::All
+    }
+
+    fn is_running_lnv1(&self) -> bool {
+        self.lightning_module_mode == LightningModuleMode::LNv1
+            || self.lightning_module_mode == LightningModuleMode::All
     }
 }

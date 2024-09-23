@@ -91,7 +91,7 @@ pub struct DevJitFed {
     start_time: std::time::SystemTime,
     gw_cln_registered: JitArc<()>,
     gw_lnd_registered: JitArc<()>,
-    gw_ldk_registered: JitArc<()>,
+    gw_ldk_connected: JitArc<()>,
     fed_epoch_generated: JitArc<()>,
     channel_opened: JitArc<()>,
 }
@@ -229,7 +229,7 @@ impl DevJitFed {
                 }
             }
         });
-        let gw_ldk_registered = JitTryAnyhow::new_try({
+        let gw_ldk_connected = JitTryAnyhow::new_try({
             let gw_ldk = gw_ldk.clone();
             let fed = fed.clone();
             move || async move {
@@ -311,7 +311,7 @@ impl DevJitFed {
             start_time,
             gw_cln_registered,
             gw_lnd_registered,
-            gw_ldk_registered,
+            gw_ldk_connected,
             fed_epoch_generated,
             channel_opened,
         })
@@ -346,8 +346,8 @@ impl DevJitFed {
     pub async fn gw_ldk(&self) -> anyhow::Result<&Option<Gatewayd>> {
         Ok(self.gw_ldk.get_try().await?.deref())
     }
-    pub async fn gw_ldk_registered(&self) -> anyhow::Result<&Option<Gatewayd>> {
-        self.gw_ldk_registered.get_try().await?;
+    pub async fn gw_ldk_connected(&self) -> anyhow::Result<&Option<Gatewayd>> {
+        self.gw_ldk_connected.get_try().await?;
         Ok(self.gw_ldk.get_try().await?.deref())
     }
     pub async fn fed(&self) -> anyhow::Result<&Federation> {
@@ -380,7 +380,7 @@ impl DevJitFed {
         let _ = self.channel_opened.get_try().await?;
         let _ = self.gw_cln_registered().await?;
         let _ = self.gw_lnd_registered().await?;
-        let _ = self.gw_ldk_registered().await?;
+        let _ = self.gw_ldk_connected().await?;
         let _ = self.cln().await?;
         let _ = self.lnd().await?;
         let _ = self.electrs().await?;

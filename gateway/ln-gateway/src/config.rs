@@ -1,5 +1,7 @@
+use std::fmt::Display;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use bitcoin::Network;
 use clap::Parser;
@@ -50,6 +52,10 @@ pub struct GatewayOpts {
         default_value_t = super::DEFAULT_NUM_ROUTE_HINTS
     )]
     num_route_hints: u32,
+
+    /// The Lightning module to use: LNv1, LNv2, or both
+    #[arg(long = "lightning-module-mode", env = envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV, default_value_t = LightningModuleMode::All)]
+    lightning_module_mode: LightningModuleMode,
 }
 
 impl GatewayOpts {
@@ -69,6 +75,7 @@ impl GatewayOpts {
             network: self.network,
             num_route_hints: self.num_route_hints,
             fees: self.default_fees.clone(),
+            lightning_module_mode: self.lightning_module_mode,
         })
     }
 }
@@ -87,4 +94,36 @@ pub struct GatewayParameters {
     pub network: Option<Network>,
     pub num_route_hints: u32,
     pub fees: Option<GatewayFee>,
+    pub lightning_module_mode: LightningModuleMode,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum LightningModuleMode {
+    LNv1,
+    LNv2,
+    All,
+}
+
+impl Display for LightningModuleMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LightningModuleMode::LNv1 => write!(f, "LNv1"),
+            LightningModuleMode::LNv2 => write!(f, "LNv2"),
+            LightningModuleMode::All => write!(f, "All"),
+        }
+    }
+}
+
+impl FromStr for LightningModuleMode {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mode = match s {
+            "LNv1" => LightningModuleMode::LNv1,
+            "LNv2" => LightningModuleMode::LNv2,
+            _ => LightningModuleMode::All,
+        };
+
+        Ok(mode)
+    }
 }

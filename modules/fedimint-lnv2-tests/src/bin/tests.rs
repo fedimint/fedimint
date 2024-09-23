@@ -89,7 +89,7 @@ async fn pegin_gateways(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     let gw_lnd = dev_fed.gw_lnd_registered().await?;
     let gw_cln = dev_fed.gw_cln_registered().await?;
     let gw_ldk = dev_fed
-        .gw_ldk_registered()
+        .gw_ldk_connected()
         .await?
         .as_ref()
         .expect("Gateways of version 0.5.0 or higher support LDK");
@@ -113,7 +113,7 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         .await?;
 
     let gw_ldk = dev_fed
-        .gw_ldk_registered()
+        .gw_ldk_connected()
         .await?
         .as_ref()
         .expect("Gateways of version 0.5.0 or higher support LDK");
@@ -192,7 +192,7 @@ async fn test_self_payments_refund(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     let gw_lnd = dev_fed.gw_lnd_registered().await?;
     let gw_cln = dev_fed.gw_cln_registered().await?;
     let gw_ldk = dev_fed
-        .gw_ldk_registered()
+        .gw_ldk_connected()
         .await?
         .as_ref()
         .expect("Gateways of version 0.5.0 or higher support LDK");
@@ -332,7 +332,7 @@ async fn test_inter_federation_payments(
     let gw_lnd = dev_fed.gw_lnd_registered().await?;
     let gw_cln = dev_fed.gw_cln_registered().await?;
     let gw_ldk = dev_fed
-        .gw_ldk_registered()
+        .gw_ldk_connected()
         .await?
         .as_ref()
         .expect("LDK Gateway should be available");
