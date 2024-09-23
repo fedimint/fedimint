@@ -10,10 +10,11 @@ use fedimint_core::util::Spanned;
 use tracing::info;
 
 use crate::db::GatewayDbtxNcExt;
+use crate::error::{AdminGatewayError, FederationNotConnected};
 use crate::gateway_module_v2::GatewayClientModuleV2;
 use crate::rpc::FederationInfo;
 use crate::state_machine::GatewayClientModule;
-use crate::{GatewayError, Result};
+use crate::AdminResult;
 
 /// The first index that the gateway will assign to a federation.
 /// Note: This starts at 1 because LNv1 uses the `federation_index` as an SCID.
@@ -61,7 +62,7 @@ impl FederationManager {
         &mut self,
         federation_id: FederationId,
         dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
-    ) -> Result<FederationInfo> {
+    ) -> AdminResult<FederationInfo> {
         let federation_info = self.federation_info(federation_id, dbtx).await?;
 
         let gateway_keypair = dbtx.load_gateway_keypair_assert_exists().await;
@@ -74,13 +75,13 @@ impl FederationManager {
         Ok(federation_info)
     }
 
-    async fn remove_client(&mut self, federation_id: FederationId) -> Result<()> {
+    async fn remove_client(&mut self, federation_id: FederationId) -> AdminResult<()> {
         let client = self
             .clients
             .remove(&federation_id)
-            .ok_or(GatewayError::InvalidMetadata(format!(
-                "No federation with id {federation_id}"
-            )))?
+            .ok_or(FederationNotConnected {
+                federation_id_prefix: federation_id.to_prefix(),
+            })?
             .into_value();
 
         self.index_to_federation
@@ -90,15 +91,15 @@ impl FederationManager {
             client.shutdown().await;
             Ok(())
         } else {
-            Err(GatewayError::UnexpectedState(
-                "Federation client is not unique, failed to shutdown client".to_string(),
-            ))
+            Err(AdminGatewayError::ClientRemovalError(format!(
+                "Federation client {federation_id} is not unique, failed to shutdown client"
+            )))
         }
     }
 
     /// Waits for ongoing incoming LNv1 and LNv2 payments to complete before
     /// returning.
-    pub async fn wait_for_incoming_payments(&self) -> Result<()> {
+    pub async fn wait_for_incoming_payments(&self) -> AdminResult<()> {
         for client in self.clients.values() {
             let active_operations = client.value().get_active_operations().await;
             let operation_log = client.value().operation_log();
@@ -129,13 +130,13 @@ impl FederationManager {
         &self,
         federation_id: FederationId,
         gateway_keypair: KeyPair,
-    ) -> Result<()> {
+    ) -> AdminResult<()> {
         let client = self
             .clients
             .get(&federation_id)
-            .ok_or(GatewayError::InvalidMetadata(format!(
-                "No federation with id {federation_id}"
-            )))?;
+            .ok_or(FederationNotConnected {
+                federation_id_prefix: federation_id.to_prefix(),
+            })?;
 
         client
             .value()
@@ -212,11 +213,11 @@ impl FederationManager {
         &self,
         federation_id: FederationId,
         dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
-    ) -> Result<FederationInfo> {
+    ) -> std::result::Result<FederationInfo, FederationNotConnected> {
         let Some(federation_index) = self.get_index_for_federation(federation_id) else {
-            return Err(GatewayError::InvalidMetadata(format!(
-                "No federation with id {federation_id}"
-            )));
+            return Err(FederationNotConnected {
+                federation_id_prefix: federation_id.to_prefix(),
+            });
         };
 
         self.clients
@@ -269,13 +270,13 @@ impl FederationManager {
     pub async fn get_federation_config(
         &self,
         federation_id: FederationId,
-    ) -> Result<JsonClientConfig> {
+    ) -> AdminResult<JsonClientConfig> {
         let client = self
             .clients
             .get(&federation_id)
-            .ok_or(GatewayError::InvalidMetadata(format!(
-                "No federation with id {federation_id}"
-            )))?;
+            .ok_or(FederationNotConnected {
+                federation_id_prefix: federation_id.to_prefix(),
+            })?;
         Ok(client
             .borrow()
             .with(|client| client.get_config_json())
@@ -301,12 +302,12 @@ impl FederationManager {
         self.next_index.store(next_index, Ordering::SeqCst);
     }
 
-    pub fn pop_next_index(&self) -> Result<u64> {
+    pub fn pop_next_index(&self) -> AdminResult<u64> {
         let next_index = self.next_index.fetch_add(1, Ordering::Relaxed);
 
         // Check for overflow.
         if next_index == INITIAL_INDEX.wrapping_sub(1) {
-            return Err(GatewayError::GatewayConfigurationError(
+            return Err(AdminGatewayError::GatewayConfigurationError(
                 "Federation Index overflow".to_string(),
             ));
         }
