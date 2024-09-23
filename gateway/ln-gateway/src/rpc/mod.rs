@@ -47,11 +47,6 @@ pub struct ConfigPayload {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct BalancePayload {
-    pub federation_id: FederationId,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DepositAddressPayload {
     pub federation_id: FederationId,
 }

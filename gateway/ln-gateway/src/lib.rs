@@ -115,7 +115,7 @@ use crate::gateway_module_v2::GatewayClientModuleV2;
 use crate::lightning::{GatewayLightningBuilder, LightningContext, RouteHtlcStream};
 use crate::rpc::rpc_server::{hash_password, run_webserver};
 use crate::rpc::{
-    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
+    BackupPayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
     GatewayBalances, WithdrawPayload,
 };
 use crate::types::PrettyInterceptHtlcRequest;
@@ -824,18 +824,6 @@ impl Gateway {
         };
 
         Ok(GatewayFedConfig { federations })
-    }
-
-    /// Returns the balance of the requested federation that the Gateway is
-    /// connected to.
-    pub async fn handle_balance_msg(&self, payload: BalancePayload) -> Result<Amount> {
-        // no need for instrument, it is done on api layer
-        Ok(self
-            .select_client(payload.federation_id)
-            .await?
-            .value()
-            .get_balance()
-            .await)
     }
 
     /// Returns a Bitcoin deposit on-chain address for pegging in Bitcoin for a

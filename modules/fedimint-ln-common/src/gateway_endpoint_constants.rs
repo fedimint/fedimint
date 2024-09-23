@@ -2,7 +2,6 @@
 
 pub const ADDRESS_ENDPOINT: &str = "/address";
 pub const BACKUP_ENDPOINT: &str = "/backup";
-pub const BALANCE_ENDPOINT: &str = "/balance";
 pub const CONFIGURATION_ENDPOINT: &str = "/config";
 pub const CONNECT_FED_ENDPOINT: &str = "/connect_fed";
 pub const GATEWAY_INFO_ENDPOINT: &str = "/info";

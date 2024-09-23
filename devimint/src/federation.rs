@@ -32,6 +32,7 @@ use fedimint_wallet_client::WalletClientModule;
 use fedimintd::envs::FM_EXTRA_DKG_META_ENV;
 use fs_lock::FileLock;
 use futures::future::join_all;
+use ln_gateway::rpc::GatewayBalances;
 use rand::Rng;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
@@ -745,13 +746,22 @@ impl Federation {
             .await?;
         self.bitcoind.mine_blocks(21).await?;
         poll("gateway pegin", || async {
-            let gateway_balance = cmd!(gw, "balance", "--federation-id={fed_id}")
-                .out_json()
-                .await
-                .map_err(ControlFlow::Continue)?
-                .as_u64()
-                .unwrap();
-            poll_eq!(gateway_balance, amount * 1000)
+            let gateway_balances: GatewayBalances = serde_json::from_value(
+                cmd!(gw, "get-balances")
+                    .out_json()
+                    .await
+                    .map_err(ControlFlow::Continue)?,
+            )
+            .expect("failed to parse gateway balances");
+            let federation_ecash_balance = gateway_balances
+                .ecash_balances
+                .iter()
+                .find(|federation_balance_info| {
+                    federation_balance_info.federation_id.to_string() == fed_id
+                })
+                .expect("federation balance not found")
+                .ecash_balance_msats;
+            poll_eq!(federation_ecash_balance, Amount::from_sats(amount))
         })
         .await?;
         Ok(())
