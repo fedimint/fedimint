@@ -303,7 +303,10 @@
 <a href="#302" id="302">302</a>
 <a href="#303" id="303">303</a>
 <a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -341,7 +344,6 @@
     <span class="kw">pub </span>gateway_node_pub_key: secp256k1::PublicKey,
     gateway_node_sec_key: secp256k1::SecretKey,
     amount_sent: AtomicU64,
-    receiver: mpsc::Receiver&lt;HtlcResult&gt;,
 }
 
 <span class="kw">impl </span>FakeLightningTest {
@@ -350,13 +352,11 @@
         <span class="kw">let </span>ctx = bitcoin::secp256k1::Secp256k1::new();
         <span class="kw">let </span>kp = KeyPair::new(<span class="kw-2">&amp;</span>ctx, <span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>amount_sent = AtomicU64::new(<span class="number">0</span>);
-        <span class="kw">let </span>(<span class="kw">_</span>, receiver) = mpsc::channel::&lt;HtlcResult&gt;(<span class="number">10</span>);
 
         FakeLightningTest {
             gateway_node_sec_key: SecretKey::from_keypair(<span class="kw-2">&amp;</span>kp),
             gateway_node_pub_key: PublicKey::from_keypair(<span class="kw-2">&amp;</span>kp),
             amount_sent,
-            receiver,
         }
     }
 }
@@ -449,8 +449,12 @@
         _max_delay: u64,
         _max_fee: Amount,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, LightningRpcError&gt; {
-        <span class="self">self</span>.amount_sent
-            .fetch_add(invoice.amount_milli_satoshis().unwrap(), Ordering::Relaxed);
+        <span class="self">self</span>.amount_sent.fetch_add(
+            invoice
+                .amount_milli_satoshis()
+                .expect(<span class="string">"Invoice missing amount"</span>),
+            Ordering::Relaxed,
+        );
 
         <span class="kw">if </span><span class="kw-2">*</span>invoice.payment_secret() == PaymentSecret(INVALID_INVOICE_PAYMENT_SECRET) {
             <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedPayment {
@@ -488,7 +492,7 @@
     }
 
     <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">'a</span>&gt;(
-        <span class="kw-2">mut </span><span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;,
+        <span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;,
         task_group: <span class="kw-2">&amp;</span>TaskGroup,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">'a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), LightningRpcError&gt; {
         <span class="kw">let </span>handle = task_group.make_handle();
@@ -497,9 +501,11 @@
         <span class="comment">// `FakeLightningTest` will never intercept any HTLCs because there is no
         // lightning connection, so instead we just create a stream that blocks
         // until the task group is shutdown.
-        </span><span class="kw">let </span>stream: BoxStream&lt;<span class="lifetime">'a</span>, HtlcResult&gt; = Box::pin(<span class="macro">stream!</span> {
+        </span><span class="kw">let </span>(<span class="kw">_</span>, <span class="kw-2">mut </span>receiver) = mpsc::channel::&lt;HtlcResult&gt;(<span class="number">0</span>);
+        <span class="kw">let </span>stream: BoxStream&lt;<span class="lifetime">'a</span>, HtlcResult&gt; = Box::pin(<span class="macro">stream!</span> {
             shutdown_receiver.<span class="kw">await</span>;
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(htlc_result) = <span class="self">self</span>.receiver.recv().<span class="kw">await </span>{
+            <span class="comment">// This block, and `receiver`, exist solely to satisfy the type checker.
+            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(htlc_result) = receiver.recv().<span class="kw">await </span>{
                 <span class="kw">yield </span>htlc_result;
             }
         });
@@ -547,9 +553,9 @@
                 .build_signed(|m| ctx.sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span><span class="self">self</span>.gateway_node_sec_key))
                 .unwrap(),
             <span class="prelude-val">None </span>=&gt; {
-                <span class="macro">unimplemented!</span>(
-                    <span class="string">"FakeLightningTest does not support creating invoices without a payment hash"
-                </span>)
+                <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedToGetInvoice {
+                    failure_reason: <span class="string">"FakeLightningTest does not support creating invoices without a payment hash"</span>.to_string(),
+                });
             }
         };
 
@@ -604,7 +610,7 @@
 
     <span class="kw">async fn </span>sync_to_chain(<span class="kw-2">&amp;</span><span class="self">self</span>, _block_height: u32) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
         <span class="prelude-val">Err</span>(LightningRpcError::FailedToSyncToChain {
-            failure_reason: <span class="string">"FakeLightningTest does not support getting balances"</span>.to_string(),
+            failure_reason: <span class="string">"FakeLightningTest does not support syncing to chain"</span>.to_string(),
         })
     }
 }
