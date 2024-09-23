@@ -3430,7 +3430,111 @@
 <a href="#3429" id="3429">3429</a>
 <a href="#3430" id="3430">3430</a>
 <a href="#3431" id="3431">3431</a>
-<a href="#3432" id="3432">3432</a></pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
+<a href="#3432" id="3432">3432</a>
+<a href="#3433" id="3433">3433</a>
+<a href="#3434" id="3434">3434</a>
+<a href="#3435" id="3435">3435</a>
+<a href="#3436" id="3436">3436</a>
+<a href="#3437" id="3437">3437</a>
+<a href="#3438" id="3438">3438</a>
+<a href="#3439" id="3439">3439</a>
+<a href="#3440" id="3440">3440</a>
+<a href="#3441" id="3441">3441</a>
+<a href="#3442" id="3442">3442</a>
+<a href="#3443" id="3443">3443</a>
+<a href="#3444" id="3444">3444</a>
+<a href="#3445" id="3445">3445</a>
+<a href="#3446" id="3446">3446</a>
+<a href="#3447" id="3447">3447</a>
+<a href="#3448" id="3448">3448</a>
+<a href="#3449" id="3449">3449</a>
+<a href="#3450" id="3450">3450</a>
+<a href="#3451" id="3451">3451</a>
+<a href="#3452" id="3452">3452</a>
+<a href="#3453" id="3453">3453</a>
+<a href="#3454" id="3454">3454</a>
+<a href="#3455" id="3455">3455</a>
+<a href="#3456" id="3456">3456</a>
+<a href="#3457" id="3457">3457</a>
+<a href="#3458" id="3458">3458</a>
+<a href="#3459" id="3459">3459</a>
+<a href="#3460" id="3460">3460</a>
+<a href="#3461" id="3461">3461</a>
+<a href="#3462" id="3462">3462</a>
+<a href="#3463" id="3463">3463</a>
+<a href="#3464" id="3464">3464</a>
+<a href="#3465" id="3465">3465</a>
+<a href="#3466" id="3466">3466</a>
+<a href="#3467" id="3467">3467</a>
+<a href="#3468" id="3468">3468</a>
+<a href="#3469" id="3469">3469</a>
+<a href="#3470" id="3470">3470</a>
+<a href="#3471" id="3471">3471</a>
+<a href="#3472" id="3472">3472</a>
+<a href="#3473" id="3473">3473</a>
+<a href="#3474" id="3474">3474</a>
+<a href="#3475" id="3475">3475</a>
+<a href="#3476" id="3476">3476</a>
+<a href="#3477" id="3477">3477</a>
+<a href="#3478" id="3478">3478</a>
+<a href="#3479" id="3479">3479</a>
+<a href="#3480" id="3480">3480</a>
+<a href="#3481" id="3481">3481</a>
+<a href="#3482" id="3482">3482</a>
+<a href="#3483" id="3483">3483</a>
+<a href="#3484" id="3484">3484</a>
+<a href="#3485" id="3485">3485</a>
+<a href="#3486" id="3486">3486</a>
+<a href="#3487" id="3487">3487</a>
+<a href="#3488" id="3488">3488</a>
+<a href="#3489" id="3489">3489</a>
+<a href="#3490" id="3490">3490</a>
+<a href="#3491" id="3491">3491</a>
+<a href="#3492" id="3492">3492</a>
+<a href="#3493" id="3493">3493</a>
+<a href="#3494" id="3494">3494</a>
+<a href="#3495" id="3495">3495</a>
+<a href="#3496" id="3496">3496</a>
+<a href="#3497" id="3497">3497</a>
+<a href="#3498" id="3498">3498</a>
+<a href="#3499" id="3499">3499</a>
+<a href="#3500" id="3500">3500</a>
+<a href="#3501" id="3501">3501</a>
+<a href="#3502" id="3502">3502</a>
+<a href="#3503" id="3503">3503</a>
+<a href="#3504" id="3504">3504</a>
+<a href="#3505" id="3505">3505</a>
+<a href="#3506" id="3506">3506</a>
+<a href="#3507" id="3507">3507</a>
+<a href="#3508" id="3508">3508</a>
+<a href="#3509" id="3509">3509</a>
+<a href="#3510" id="3510">3510</a>
+<a href="#3511" id="3511">3511</a>
+<a href="#3512" id="3512">3512</a>
+<a href="#3513" id="3513">3513</a>
+<a href="#3514" id="3514">3514</a>
+<a href="#3515" id="3515">3515</a>
+<a href="#3516" id="3516">3516</a>
+<a href="#3517" id="3517">3517</a>
+<a href="#3518" id="3518">3518</a>
+<a href="#3519" id="3519">3519</a>
+<a href="#3520" id="3520">3520</a>
+<a href="#3521" id="3521">3521</a>
+<a href="#3522" id="3522">3522</a>
+<a href="#3523" id="3523">3523</a>
+<a href="#3524" id="3524">3524</a>
+<a href="#3525" id="3525">3525</a>
+<a href="#3526" id="3526">3526</a>
+<a href="#3527" id="3527">3527</a>
+<a href="#3528" id="3528">3528</a>
+<a href="#3529" id="3529">3529</a>
+<a href="#3530" id="3530">3530</a>
+<a href="#3531" id="3531">3531</a>
+<a href="#3532" id="3532">3532</a>
+<a href="#3533" id="3533">3533</a>
+<a href="#3534" id="3534">3534</a>
+<a href="#3535" id="3535">3535</a>
+<a href="#3536" id="3536">3536</a></pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! This module provides the core key-value database for Fedimint.
 //!
@@ -3839,29 +3943,37 @@
     }
 
     <span class="doccomment">/// Create [`Database`] isolated to a partition with a given `prefix`
-    </span><span class="kw">pub fn </span>with_prefix(<span class="kw-2">&amp;</span><span class="self">self</span>, prefix: Vec&lt;u8&gt;) -&gt; (<span class="self">Self</span>, GlobalDBTxAccessToken) {
+    </span><span class="kw">pub fn </span>with_prefix(<span class="kw-2">&amp;</span><span class="self">self</span>, prefix: Vec&lt;u8&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            inner: Arc::new(PrefixDatabase {
+                inner: <span class="self">self</span>.inner.clone(),
+                global_dbtx_access_token: <span class="prelude-val">None</span>,
+                prefix,
+            }),
+            module_decoders: <span class="self">self</span>.module_decoders.clone(),
+        }
+    }
+
+    <span class="doccomment">/// Create [`Database`] isolated to a partition with a prefix for a given
+    /// `module_instance_id`, allowing the module to access `global_dbtx` with
+    /// the right `access_token`
+    </span><span class="kw">pub fn </span>with_prefix_module_id(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        module_instance_id: ModuleInstanceId,
+    ) -&gt; (<span class="self">Self</span>, GlobalDBTxAccessToken) {
+        <span class="kw">let </span>prefix = module_instance_id_to_byte_prefix(module_instance_id);
         <span class="kw">let </span>global_dbtx_access_token = GlobalDBTxAccessToken::from_prefix(<span class="kw-2">&amp;</span>prefix);
         (
             <span class="self">Self </span>{
                 inner: Arc::new(PrefixDatabase {
                     inner: <span class="self">self</span>.inner.clone(),
-                    global_dbtx_access_token,
+                    global_dbtx_access_token: <span class="prelude-val">Some</span>(global_dbtx_access_token),
                     prefix,
                 }),
                 module_decoders: <span class="self">self</span>.module_decoders.clone(),
             },
             global_dbtx_access_token,
         )
-    }
-
-    <span class="doccomment">/// Create [`Database`] isolated to a partition with a prefix for a given
-    /// `module_instance_id`
-    </span><span class="kw">pub fn </span>with_prefix_module_id(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        module_instance_id: ModuleInstanceId,
-    ) -&gt; (<span class="self">Self</span>, GlobalDBTxAccessToken) {
-        <span class="kw">let </span>prefix = module_instance_id_to_byte_prefix(module_instance_id);
-        <span class="self">self</span>.with_prefix(prefix)
     }
 
     <span class="kw">pub fn </span>with_decoders(<span class="kw-2">&amp;</span><span class="self">self</span>, module_decoders: ModuleDecoderRegistry) -&gt; <span class="self">Self </span>{
@@ -4082,7 +4194,7 @@
     </span>Inner: Debug,
 {
     prefix: Vec&lt;u8&gt;,
-    global_dbtx_access_token: GlobalDBTxAccessToken,
+    global_dbtx_access_token: <span class="prelude-ty">Option</span>&lt;GlobalDBTxAccessToken&gt;,
     inner: Inner,
 }
 
@@ -4136,7 +4248,7 @@
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">struct </span>PrefixDatabaseTransaction&lt;Inner&gt; {
     inner: Inner,
-    global_dbtx_access_token: GlobalDBTxAccessToken,
+    global_dbtx_access_token: <span class="prelude-ty">Option</span>&lt;GlobalDBTxAccessToken&gt;,
     prefix: Vec&lt;u8&gt;,
 }
 
@@ -4179,11 +4291,15 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         access_token: GlobalDBTxAccessToken,
     ) -&gt; <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>IDatabaseTransaction {
-        <span class="macro">assert_eq!</span>(
-            access_token, <span class="self">self</span>.global_dbtx_access_token,
-            <span class="string">"Invalid access key used to access global_dbtx"
-        </span>);
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>.inner
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(self_global_dbtx_access_token) = <span class="self">self</span>.global_dbtx_access_token {
+            <span class="macro">assert_eq!</span>(
+                access_token, self_global_dbtx_access_token,
+                <span class="string">"Invalid access key used to access global_dbtx"
+            </span>);
+            <span class="kw-2">&amp;mut </span><span class="self">self</span>.inner
+        } <span class="kw">else </span>{
+            <span class="self">self</span>.inner.global_dbtx(access_token)
+        }
     }
 }
 
@@ -5036,19 +5152,40 @@
     }
 
     <span class="doccomment">/// Get [`DatabaseTransaction`] isolated to a `prefix`
-    </span><span class="kw">pub fn </span>with_prefix&lt;<span class="lifetime">'a</span>: <span class="lifetime">'tx</span>&gt;(
+    </span><span class="kw">pub fn </span>with_prefix&lt;<span class="lifetime">'a</span>: <span class="lifetime">'tx</span>&gt;(<span class="self">self</span>, prefix: Vec&lt;u8&gt;) -&gt; DatabaseTransaction&lt;<span class="lifetime">'a</span>, Cap&gt;
+    <span class="kw">where
+        </span><span class="lifetime">'tx</span>: <span class="lifetime">'a</span>,
+    {
+        DatabaseTransaction {
+            tx: Box::new(PrefixDatabaseTransaction {
+                inner: <span class="self">self</span>.tx,
+                global_dbtx_access_token: <span class="prelude-val">None</span>,
+                prefix,
+            }),
+            decoders: <span class="self">self</span>.decoders,
+            commit_tracker: <span class="self">self</span>.commit_tracker,
+            on_commit_hooks: <span class="self">self</span>.on_commit_hooks,
+            capability: <span class="self">self</span>.capability,
+        }
+    }
+
+    <span class="doccomment">/// Get [`DatabaseTransaction`] isolated to a prefix of a given
+    /// `module_instance_id`, allowing the module to access global_dbtx
+    /// with the right access token.
+    </span><span class="kw">pub fn </span>with_prefix_module_id&lt;<span class="lifetime">'a</span>: <span class="lifetime">'tx</span>&gt;(
         <span class="self">self</span>,
-        prefix: Vec&lt;u8&gt;,
+        module_instance_id: ModuleInstanceId,
     ) -&gt; (DatabaseTransaction&lt;<span class="lifetime">'a</span>, Cap&gt;, GlobalDBTxAccessToken)
     <span class="kw">where
         </span><span class="lifetime">'tx</span>: <span class="lifetime">'a</span>,
     {
+        <span class="kw">let </span>prefix = module_instance_id_to_byte_prefix(module_instance_id);
         <span class="kw">let </span>global_dbtx_access_token = GlobalDBTxAccessToken::from_prefix(<span class="kw-2">&amp;</span>prefix);
         (
             DatabaseTransaction {
                 tx: Box::new(PrefixDatabaseTransaction {
                     inner: <span class="self">self</span>.tx,
-                    global_dbtx_access_token,
+                    global_dbtx_access_token: <span class="prelude-val">Some</span>(global_dbtx_access_token),
                     prefix,
                 }),
                 decoders: <span class="self">self</span>.decoders,
@@ -5058,19 +5195,6 @@
             },
             global_dbtx_access_token,
         )
-    }
-
-    <span class="doccomment">/// Get [`DatabaseTransaction`] isolated to a prefix of a given
-    /// `module_instance_id`
-    </span><span class="kw">pub fn </span>with_prefix_module_id&lt;<span class="lifetime">'a</span>: <span class="lifetime">'tx</span>&gt;(
-        <span class="self">self</span>,
-        module_instance_id: ModuleInstanceId,
-    ) -&gt; (DatabaseTransaction&lt;<span class="lifetime">'a</span>, Cap&gt;, GlobalDBTxAccessToken)
-    <span class="kw">where
-        </span><span class="lifetime">'tx</span>: <span class="lifetime">'a</span>,
-    {
-        <span class="kw">let </span>prefix = module_instance_id_to_byte_prefix(module_instance_id);
-        <span class="self">self</span>.with_prefix(prefix)
     }
 
     <span class="doccomment">/// Get [`DatabaseTransaction`] to `self`
@@ -5096,19 +5220,43 @@
     }
 
     <span class="doccomment">/// Get [`DatabaseTransaction`] isolated to a `prefix` of `self`
-    </span><span class="kw">pub fn </span>to_ref_with_prefix&lt;<span class="lifetime">'a</span>&gt;(
+    </span><span class="kw">pub fn </span>to_ref_with_prefix&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span><span class="self">self</span>, prefix: Vec&lt;u8&gt;) -&gt; DatabaseTransaction&lt;<span class="lifetime">'a</span>, Cap&gt;
+    <span class="kw">where
+        </span><span class="lifetime">'tx</span>: <span class="lifetime">'a</span>,
+    {
+        DatabaseTransaction {
+            tx: Box::new(PrefixDatabaseTransaction {
+                inner: <span class="kw-2">&amp;mut </span><span class="self">self</span>.tx,
+                global_dbtx_access_token: <span class="prelude-val">None</span>,
+                prefix,
+            }),
+            decoders: <span class="self">self</span>.decoders.clone(),
+            commit_tracker: <span class="kw">match </span><span class="self">self</span>.commit_tracker {
+                MaybeRef::Owned(<span class="kw-2">ref mut </span>o) =&gt; MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(<span class="kw-2">ref mut </span>b) =&gt; MaybeRef::Borrowed(b),
+            },
+            on_commit_hooks: <span class="kw">match </span><span class="self">self</span>.on_commit_hooks {
+                MaybeRef::Owned(<span class="kw-2">ref mut </span>o) =&gt; MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(<span class="kw-2">ref mut </span>b) =&gt; MaybeRef::Borrowed(b),
+            },
+            capability: <span class="self">self</span>.capability,
+        }
+    }
+
+    <span class="kw">pub fn </span>to_ref_with_prefix_module_id&lt;<span class="lifetime">'a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span><span class="self">self</span>,
-        prefix: Vec&lt;u8&gt;,
+        module_instance_id: ModuleInstanceId,
     ) -&gt; (DatabaseTransaction&lt;<span class="lifetime">'a</span>, Cap&gt;, GlobalDBTxAccessToken)
     <span class="kw">where
         </span><span class="lifetime">'tx</span>: <span class="lifetime">'a</span>,
     {
+        <span class="kw">let </span>prefix = module_instance_id_to_byte_prefix(module_instance_id);
         <span class="kw">let </span>global_dbtx_access_token = GlobalDBTxAccessToken::from_prefix(<span class="kw-2">&amp;</span>prefix);
         (
             DatabaseTransaction {
                 tx: Box::new(PrefixDatabaseTransaction {
                     inner: <span class="kw-2">&amp;mut </span><span class="self">self</span>.tx,
-                    global_dbtx_access_token,
+                    global_dbtx_access_token: <span class="prelude-val">Some</span>(global_dbtx_access_token),
                     prefix,
                 }),
                 decoders: <span class="self">self</span>.decoders.clone(),
@@ -5124,17 +5272,6 @@
             },
             global_dbtx_access_token,
         )
-    }
-
-    <span class="kw">pub fn </span>to_ref_with_prefix_module_id&lt;<span class="lifetime">'a</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span><span class="self">self</span>,
-        module_instance_id: ModuleInstanceId,
-    ) -&gt; (DatabaseTransaction&lt;<span class="lifetime">'a</span>, Cap&gt;, GlobalDBTxAccessToken)
-    <span class="kw">where
-        </span><span class="lifetime">'tx</span>: <span class="lifetime">'a</span>,
-    {
-        <span class="kw">let </span>prefix = module_instance_id_to_byte_prefix(module_instance_id);
-        <span class="self">self</span>.to_ref_with_prefix(prefix)
     }
 
     <span class="doccomment">/// Is this `Database` a global, unpartitioned `Database`
@@ -6860,6 +6997,77 @@
             <span class="prelude-val">None</span>,
             <span class="string">"should not notify"
         </span>);
+    }
+
+    <span class="attr">#[tokio::test]
+    </span><span class="kw">async fn </span>test_prefix_global_dbtx() {
+        <span class="kw">let </span>module_instance_id = <span class="number">10</span>;
+        <span class="kw">let </span>db = MemDatabase::new().into_database();
+
+        {
+            <span class="comment">// Plain module id prefix, can use `global_dbtx` to access global_dbtx
+            </span><span class="kw">let </span>(db, access_token) = db.with_prefix_module_id(module_instance_id);
+
+            <span class="kw">let </span><span class="kw-2">mut </span>tx = db.begin_transaction().<span class="kw">await</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>tx = tx.global_dbtx(access_token);
+            tx.insert_new_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">1</span>)).<span class="kw">await</span>;
+            tx.commit_tx().<span class="kw">await</span>;
+        }
+
+        <span class="macro">assert_eq!</span>(
+            db.begin_transaction_nc().<span class="kw">await</span>.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).<span class="kw">await</span>,
+            <span class="prelude-val">Some</span>(TestVal(<span class="number">1</span>))
+        );
+
+        {
+            <span class="comment">// Additional non-module inner prefix, does not interfere with `global_dbtx`
+            </span><span class="kw">let </span>(db, access_token) = db.with_prefix_module_id(module_instance_id);
+
+            <span class="kw">let </span>db = db.with_prefix(<span class="macro">vec!</span>[<span class="number">3</span>, <span class="number">4</span>]);
+
+            <span class="kw">let </span><span class="kw-2">mut </span>tx = db.begin_transaction().<span class="kw">await</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>tx = tx.global_dbtx(access_token);
+            tx.insert_new_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">2</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">2</span>)).<span class="kw">await</span>;
+            tx.commit_tx().<span class="kw">await</span>;
+        }
+
+        <span class="macro">assert_eq!</span>(
+            db.begin_transaction_nc().<span class="kw">await</span>.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">2</span>)).<span class="kw">await</span>,
+            <span class="prelude-val">Some</span>(TestVal(<span class="number">2</span>))
+        );
+    }
+
+    <span class="attr">#[tokio::test]
+    #[should_panic(expected = <span class="string">"Illegal to call global_dbtx on BaseDatabaseTransaction"</span>)]
+    </span><span class="kw">async fn </span>test_prefix_global_dbtx_panics_on_global_db() {
+        <span class="kw">let </span>db = MemDatabase::new().into_database();
+
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span>_tx = tx.global_dbtx(GlobalDBTxAccessToken::from_prefix(<span class="kw-2">&amp;</span>[<span class="number">1</span>]));
+    }
+
+    <span class="attr">#[tokio::test]
+    #[should_panic(expected = <span class="string">"Illegal to call global_dbtx on BaseDatabaseTransaction"</span>)]
+    </span><span class="kw">async fn </span>test_prefix_global_dbtx_panics_on_non_module_prefix() {
+        <span class="kw">let </span>db = MemDatabase::new().into_database();
+
+        <span class="kw">let </span>prefix = <span class="macro">vec!</span>[<span class="number">3</span>, <span class="number">4</span>];
+        <span class="kw">let </span>db = db.with_prefix(prefix.clone());
+
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span>_tx = tx.global_dbtx(GlobalDBTxAccessToken::from_prefix(<span class="kw-2">&amp;</span>prefix));
+    }
+
+    <span class="attr">#[tokio::test]
+    #[should_panic(expected = <span class="string">"Illegal to call global_dbtx on BaseDatabaseTransaction"</span>)]
+    </span><span class="kw">async fn </span>test_prefix_global_dbtx_panics_on_wrong_access_token() {
+        <span class="kw">let </span>db = MemDatabase::new().into_database();
+
+        <span class="kw">let </span>prefix = <span class="macro">vec!</span>[<span class="number">3</span>, <span class="number">4</span>];
+        <span class="kw">let </span>db = db.with_prefix(prefix.clone());
+
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span>_tx = tx.global_dbtx(GlobalDBTxAccessToken::from_prefix(<span class="kw-2">&amp;</span>[<span class="number">1</span>]));
     }
 }
 </code></pre></div></section></main></body></html>
