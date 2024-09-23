@@ -2743,7 +2743,7 @@ version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
  "console-subscriber",
- "opentelemetry 0.24.0",
+ "opentelemetry 0.25.0",
  "opentelemetry-jaeger",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -5091,9 +5091,9 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry"
-version = "0.24.0"
+version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c365a63eec4f55b7efeceb724f1336f26a9cf3427b70e59e2cd2a5b947fba96"
+checksum = "803801d3d3b71cd026851a53f974ea03df3d179cb758b260136a6c9e22e196af"
 dependencies = [
  "futures-core",
  "futures-sink",
