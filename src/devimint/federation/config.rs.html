@@ -85,7 +85,10 @@
 <a href="#84" id="84">84</a>
 <a href="#85" id="85">85</a>
 <a href="#86" id="86">86</a>
-<a href="#87" id="87">87</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoincore_rpc::bitcoin::Network;
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoincore_rpc::bitcoin::Network;
 <span class="kw">use </span>fedimint_core::config::{EmptyGenParams, ServerModuleConfigGenParamsRegistry};
 <span class="kw">use </span>fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig, FM_USE_UNKNOWN_MODULE_ENV};
 <span class="kw">use </span>fedimint_core::module::ServerModuleInit <span class="kw">as _</span>;
@@ -158,7 +161,10 @@
                 local: fedimint_lnv2_common::config::LightningGenParamsLocal {
                     bitcoin_rpc: bitcoin_rpc.clone(),
                 },
-                consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus { network },
+                consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
+                    fee_consensus: fedimint_lnv2_common::config::FeeConsensus::default(),
+                    network,
+                },
             },
         );
     }

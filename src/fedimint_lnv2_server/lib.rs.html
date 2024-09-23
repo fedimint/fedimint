@@ -825,8 +825,8 @@
     apply, async_trait_maybe_send, push_db_pair_items, NumPeersExt, OutPoint, PeerId, ServerModule,
 };
 <span class="kw">use </span>fedimint_lnv2_common::config::{
-    FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
-    LightningConfigLocal, LightningConfigPrivate, LightningGenParams,
+    LightningClientConfig, LightningConfig, LightningConfigConsensus, LightningConfigLocal,
+    LightningConfigPrivate, LightningGenParams,
 };
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 <span class="kw">use </span>fedimint_lnv2_common::endpoint_constants::{
@@ -1000,7 +1000,7 @@
                         consensus: LightningConfigConsensus {
                             tpe_agg_pk,
                             tpe_pks: tpe_pks.clone(),
-                            fee_consensus: FeeConsensus::default(),
+                            fee_consensus: params.consensus.fee_consensus.clone(),
                             network: params.consensus.network,
                         },
                         private: LightningConfigPrivate {
@@ -1042,7 +1042,7 @@
                         (<span class="kw-2">*</span>peer, PublicKeyShare(pk))
                     })
                     .collect(),
-                fee_consensus: FeeConsensus::default(),
+                fee_consensus: params.consensus.fee_consensus.clone(),
                 network: params.consensus.network,
             },
             private: LightningConfigPrivate {

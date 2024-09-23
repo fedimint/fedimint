@@ -194,7 +194,24 @@
 <a href="#193" id="193">193</a>
 <a href="#194" id="194">194</a>
 <a href="#195" id="195">195</a>
-<a href="#196" id="196">196</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">pub use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
@@ -218,6 +235,7 @@
         <span class="self">Self </span>{
             local: LightningGenParamsLocal { bitcoin_rpc },
             consensus: LightningGenParamsConsensus {
+                fee_consensus: FeeConsensus::default(),
                 network: Network::Regtest,
             },
         }
@@ -226,6 +244,7 @@
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>LightningGenParamsConsensus {
+    <span class="kw">pub </span>fee_consensus: FeeConsensus,
     <span class="kw">pub </span>network: Network,
 }
 
@@ -261,11 +280,33 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>FeeConsensus {
-    <span class="kw">pub </span>base: Amount,
-    <span class="kw">pub </span>parts_per_million: u64,
+    base: Amount,
+    parts_per_million: u64,
 }
 
 <span class="kw">impl </span>FeeConsensus {
+    <span class="doccomment">/// The lightning module will charge a non-configurable base fee of one
+    /// satoshi per transaction input and output too account for the costs
+    /// incurred by the federation for processing the transaction. On top of
+    /// that the federation may charge a additional relative fee per input and
+    /// output of up to one thousand parts per million which is equal to one
+    /// tenth of one percent.
+    ///
+    /// # Errors
+    /// - This constructor returns an error if the relative fee is in excess of
+    ///   one thousand parts per million.
+    </span><span class="kw">pub fn </span>new(parts_per_million: u64) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+        <span class="macro">anyhow::ensure!</span>(
+            parts_per_million &lt;= <span class="number">1_000</span>,
+            <span class="string">"Relative fee over one thousand parts per million is excessive"
+        </span>);
+
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+            base: Amount::from_sats(<span class="number">1</span>),
+            parts_per_million,
+        })
+    }
+
     <span class="kw">pub fn </span>fee(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; Amount {
         Amount::from_msats(<span class="self">self</span>.fee_msats(amount.msats))
     }
@@ -280,10 +321,7 @@
 
 <span class="kw">impl </span>Default <span class="kw">for </span>FeeConsensus {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            base: Amount::from_sats(<span class="number">1</span>),
-            parts_per_million: <span class="number">1_000</span>,
-        }
+        <span class="self">Self</span>::new(<span class="number">1_000</span>).expect(<span class="string">"Relative fee is within the limit"</span>)
     }
 }
 
@@ -297,11 +335,7 @@
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>LightningClientConfig {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
-        <span class="macro">write!</span>(
-            f,
-            <span class="string">"LightningClientConfig {}"</span>,
-            serde_json::to_string(<span class="self">self</span>).map_err(|_e| std::fmt::Error)<span class="question-mark">?
-        </span>)
+        <span class="macro">write!</span>(f, <span class="string">"LightningClientConfig {self:?}"</span>)
     }
 }
 

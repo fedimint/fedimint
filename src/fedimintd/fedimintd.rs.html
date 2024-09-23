@@ -576,7 +576,11 @@
 <a href="#575" id="575">575</a>
 <a href="#576" id="576">576</a>
 <a href="#577" id="577">577</a>
-<a href="#578" id="578">578</a></pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a></pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -879,7 +883,7 @@
     </span>}
 
     <span class="doccomment">/// Attach default server modules to Fedimintd instance
-    </span><span class="kw">pub fn </span>with_default_modules(<span class="self">self</span>) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>with_default_modules(<span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>network = <span class="self">self</span>.opts.network;
 
         <span class="kw">let </span>bitcoind_rpc = <span class="self">self</span>.bitcoind_rpc.clone();
@@ -934,6 +938,8 @@
                             bitcoin_rpc: bitcoind_rpc.clone(),
                         },
                         consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
+                            <span class="comment">// TODO: actually make the relative fee configurable
+                            </span>fee_consensus: fedimint_lnv2_common::config::FeeConsensus::new(<span class="number">1_000</span>)<span class="question-mark">?</span>,
                             network,
                         },
                     },
@@ -949,12 +955,14 @@
                 .with_module_instance(MetaInit::kind(), MetaGenParams::default())
         };
 
-        <span class="kw">if </span>is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
+        <span class="kw">let </span>s = <span class="kw">if </span>is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
             s.with_module_kind(UnknownInit)
                 .with_module_instance(UnknownInit::kind(), UnknownGenParams::default())
         } <span class="kw">else </span>{
             s
-        }
+        };
+
+        <span class="prelude-val">Ok</span>(s)
     }
 
     <span class="doccomment">/// Block thread and run a Fedimintd server
