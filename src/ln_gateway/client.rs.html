@@ -210,7 +210,15 @@
 <a href="#209" id="209">209</a>
 <a href="#210" id="210">210</a>
 <a href="#211" id="211">211</a>
-<a href="#212" id="212">212</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
@@ -228,9 +236,10 @@
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 
 <span class="kw">use </span><span class="kw">crate</span>::db::FederationConfig;
+<span class="kw">use </span><span class="kw">crate</span>::error::AdminGatewayError;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::GatewayClientInitV2;
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayClientInit;
-<span class="kw">use crate</span>::{Gateway, GatewayError, <span class="prelude-ty">Result</span>};
+<span class="kw">use crate</span>::{AdminResult, Gateway};
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>GatewayClientBuilder {
@@ -254,8 +263,10 @@
 
     <span class="doccomment">/// Reads a plain root secret from a database to construct a database.
     /// Only used for "legacy" federations before v0.5.0
-    </span><span class="kw">async fn </span>client_plainrootsecret(<span class="kw-2">&amp;</span><span class="self">self</span>, db: <span class="kw-2">&amp;</span>Database) -&gt; <span class="prelude-ty">Result</span>&lt;DerivableSecret&gt; {
-        <span class="kw">let </span>client_secret = Client::load_decodable_client_secret::&lt;[u8; <span class="number">64</span>]&gt;(db).<span class="kw">await</span><span class="question-mark">?</span>;
+    </span><span class="kw">async fn </span>client_plainrootsecret(<span class="kw-2">&amp;</span><span class="self">self</span>, db: <span class="kw-2">&amp;</span>Database) -&gt; AdminResult&lt;DerivableSecret&gt; {
+        <span class="kw">let </span>client_secret = Client::load_decodable_client_secret::&lt;[u8; <span class="number">64</span>]&gt;(db)
+            .<span class="kw">await
+            </span>.map_err(AdminGatewayError::ClientCreationError)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(PlainRootSecretStrategy::to_root_secret(<span class="kw-2">&amp;</span>client_secret))
     }
 
@@ -266,7 +277,7 @@
         db: Database,
         federation_config: <span class="kw-2">&amp;</span>FederationConfig,
         gateway: Arc&lt;Gateway&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;ClientBuilder&gt; {
+    ) -&gt; AdminResult&lt;ClientBuilder&gt; {
         <span class="kw">let </span>FederationConfig {
             federation_index,
             timelock_delta,
@@ -287,7 +298,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(db)
             .<span class="kw">await
-            </span>.map_err(GatewayError::DatabaseError)<span class="question-mark">?</span>;
+            </span>.map_err(AdminGatewayError::ClientCreationError)<span class="question-mark">?</span>;
         client_builder.with_module_inits(registry);
         client_builder.with_primary_module(<span class="self">self</span>.primary_module);
         client_builder.with_connector(connector);
@@ -303,11 +314,12 @@
         config: FederationConfig,
         gateway: Arc&lt;Gateway&gt;,
         mnemonic: <span class="kw-2">&amp;</span>Mnemonic,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    ) -&gt; AdminResult&lt;()&gt; {
         <span class="kw">let </span>client_config = config
             .connector
             .download_from_invite_code(<span class="kw-2">&amp;</span>config.invite_code)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+            .<span class="kw">await
+            </span>.map_err(AdminGatewayError::ClientCreationError)<span class="question-mark">?</span>;
         <span class="kw">let </span>federation_id = config.invite_code.federation_id();
         <span class="kw">let </span>db = gateway
             .gateway_db
@@ -322,7 +334,8 @@
                 <span class="kw-2">&amp;</span>client_config,
                 config.invite_code.api_secret(),
             )
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+            .<span class="kw">await
+            </span>.map_err(AdminGatewayError::ClientCreationError)<span class="question-mark">?</span>;
         <span class="kw">let </span>client = client_builder
             .recover(
                 secret.clone(),
@@ -332,8 +345,11 @@
             )
             .<span class="kw">await
             </span>.map(Arc::new)
-            .map_err(GatewayError::ClientStateMachineError)<span class="question-mark">?</span>;
-        client.wait_for_all_recoveries().<span class="kw">await</span><span class="question-mark">?</span>;
+            .map_err(AdminGatewayError::ClientCreationError)<span class="question-mark">?</span>;
+        client
+            .wait_for_all_recoveries()
+            .<span class="kw">await
+            </span>.map_err(AdminGatewayError::ClientCreationError)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -344,15 +360,14 @@
         config: FederationConfig,
         gateway: Arc&lt;Gateway&gt;,
         mnemonic: <span class="kw-2">&amp;</span>Mnemonic,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::ClientHandleArc&gt; {
+    ) -&gt; AdminResult&lt;fedimint_client::ClientHandleArc&gt; {
         <span class="kw">let </span>invite_code = config.invite_code.clone();
         <span class="kw">let </span>federation_id = invite_code.federation_id();
         <span class="kw">let </span>db_path = <span class="self">self</span>.work_dir.join(<span class="macro">format!</span>(<span class="string">"{federation_id}.db"</span>));
 
         <span class="kw">let </span>(db, root_secret) = <span class="kw">if </span>db_path.exists() {
-            <span class="kw">let </span>rocksdb = fedimint_rocksdb::RocksDb::open(db_path.clone()).map_err(|e| {
-                GatewayError::DatabaseError(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Error opening rocksdb: {e:?}"</span>))
-            })<span class="question-mark">?</span>;
+            <span class="kw">let </span>rocksdb = fedimint_rocksdb::RocksDb::open(db_path.clone())
+                .map_err(AdminGatewayError::ClientCreationError)<span class="question-mark">?</span>;
             <span class="kw">let </span>db = Database::new(rocksdb, ModuleDecoderRegistry::default());
             <span class="kw">let </span>root_secret = <span class="self">self</span>.client_plainrootsecret(<span class="kw-2">&amp;</span>db).<span class="kw">await</span><span class="question-mark">?</span>;
             (db, root_secret)
@@ -374,24 +389,25 @@
             <span class="kw">let </span>client_config = config
                 .connector
                 .download_from_invite_code(<span class="kw-2">&amp;</span>invite_code)
-                .<span class="kw">await</span><span class="question-mark">?</span>;
+                .<span class="kw">await
+                </span>.map_err(AdminGatewayError::ClientCreationError)<span class="question-mark">?</span>;
             client_builder
                 .join(root_secret, client_config.clone(), invite_code.api_secret())
                 .<span class="kw">await
         </span>}
         .map(Arc::new)
-        .map_err(GatewayError::ClientStateMachineError)
+        .map_err(AdminGatewayError::ClientCreationError)
     }
 
     <span class="doccomment">/// Verifies that the saved `ClientConfig` contains the expected
     /// federation's config.
-    </span><span class="kw">async fn </span>verify_client_config(db: <span class="kw-2">&amp;</span>Database, federation_id: FederationId) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    </span><span class="kw">async fn </span>verify_client_config(db: <span class="kw-2">&amp;</span>Database, federation_id: FederationId) -&gt; AdminResult&lt;()&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = dbtx.get_value(<span class="kw-2">&amp;</span>ClientConfigKey).<span class="kw">await </span>{
             <span class="kw">if </span>config.calculate_federation_id() != federation_id {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::ClientCreationError(
-                    <span class="string">"Federation Id did not match saved federation ID"</span>.to_string(),
-                ));
+                <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::ClientCreationError(<span class="macro">anyhow::anyhow!</span>(
+                    <span class="string">"Federation Id did not match saved federation ID"</span>.to_string()
+                )));
             }
         }
         <span class="prelude-val">Ok</span>(())

@@ -314,7 +314,8 @@
 <a href="#313" id="313">313</a>
 <a href="#314" id="314">314</a>
 <a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
 <span class="kw">use </span>std::sync::Arc;
 
@@ -326,10 +327,11 @@
 <span class="kw">use </span>tracing::info;
 
 <span class="kw">use </span><span class="kw">crate</span>::db::GatewayDbtxNcExt;
+<span class="kw">use </span><span class="kw">crate</span>::error::{AdminGatewayError, FederationNotConnected};
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::GatewayClientModuleV2;
 <span class="kw">use </span><span class="kw">crate</span>::rpc::FederationInfo;
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayClientModule;
-<span class="kw">use crate</span>::{GatewayError, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span><span class="kw">crate</span>::AdminResult;
 
 <span class="doccomment">/// The first index that the gateway will assign to a federation.
 /// Note: This starts at 1 because LNv1 uses the `federation_index` as an SCID.
@@ -377,7 +379,7 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         federation_id: FederationId,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>, NonCommittable&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;FederationInfo&gt; {
+    ) -&gt; AdminResult&lt;FederationInfo&gt; {
         <span class="kw">let </span>federation_info = <span class="self">self</span>.federation_info(federation_id, dbtx).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>gateway_keypair = dbtx.load_gateway_keypair_assert_exists().<span class="kw">await</span>;
@@ -390,13 +392,13 @@
         <span class="prelude-val">Ok</span>(federation_info)
     }
 
-    <span class="kw">async fn </span>remove_client(<span class="kw-2">&amp;mut </span><span class="self">self</span>, federation_id: FederationId) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">async fn </span>remove_client(<span class="kw-2">&amp;mut </span><span class="self">self</span>, federation_id: FederationId) -&gt; AdminResult&lt;()&gt; {
         <span class="kw">let </span>client = <span class="self">self
             </span>.clients
             .remove(<span class="kw-2">&amp;</span>federation_id)
-            .ok_or(GatewayError::InvalidMetadata(<span class="macro">format!</span>(
-                <span class="string">"No federation with id {federation_id}"
-            </span>)))<span class="question-mark">?
+            .ok_or(FederationNotConnected {
+                federation_id_prefix: federation_id.to_prefix(),
+            })<span class="question-mark">?
             </span>.into_value();
 
         <span class="self">self</span>.index_to_federation
@@ -406,15 +408,15 @@
             client.shutdown().<span class="kw">await</span>;
             <span class="prelude-val">Ok</span>(())
         } <span class="kw">else </span>{
-            <span class="prelude-val">Err</span>(GatewayError::UnexpectedState(
-                <span class="string">"Federation client is not unique, failed to shutdown client"</span>.to_string(),
-            ))
+            <span class="prelude-val">Err</span>(AdminGatewayError::ClientRemovalError(<span class="macro">format!</span>(
+                <span class="string">"Federation client {federation_id} is not unique, failed to shutdown client"
+            </span>)))
         }
     }
 
     <span class="doccomment">/// Waits for ongoing incoming LNv1 and LNv2 payments to complete before
     /// returning.
-    </span><span class="kw">pub async fn </span>wait_for_incoming_payments(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    </span><span class="kw">pub async fn </span>wait_for_incoming_payments(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AdminResult&lt;()&gt; {
         <span class="kw">for </span>client <span class="kw">in </span><span class="self">self</span>.clients.values() {
             <span class="kw">let </span>active_operations = client.value().get_active_operations().<span class="kw">await</span>;
             <span class="kw">let </span>operation_log = client.value().operation_log();
@@ -445,13 +447,13 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         federation_id: FederationId,
         gateway_keypair: KeyPair,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    ) -&gt; AdminResult&lt;()&gt; {
         <span class="kw">let </span>client = <span class="self">self
             </span>.clients
             .get(<span class="kw-2">&amp;</span>federation_id)
-            .ok_or(GatewayError::InvalidMetadata(<span class="macro">format!</span>(
-                <span class="string">"No federation with id {federation_id}"
-            </span>)))<span class="question-mark">?</span>;
+            .ok_or(FederationNotConnected {
+                federation_id_prefix: federation_id.to_prefix(),
+            })<span class="question-mark">?</span>;
 
         client
             .value()
@@ -528,11 +530,11 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         federation_id: FederationId,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>, NonCommittable&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;FederationInfo&gt; {
+    ) -&gt; std::result::Result&lt;FederationInfo, FederationNotConnected&gt; {
         <span class="kw">let </span><span class="prelude-val">Some</span>(federation_index) = <span class="self">self</span>.get_index_for_federation(federation_id) <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::InvalidMetadata(<span class="macro">format!</span>(
-                <span class="string">"No federation with id {federation_id}"
-            </span>)));
+            <span class="kw">return </span><span class="prelude-val">Err</span>(FederationNotConnected {
+                federation_id_prefix: federation_id.to_prefix(),
+            });
         };
 
         <span class="self">self</span>.clients
@@ -585,13 +587,13 @@
     <span class="kw">pub async fn </span>get_federation_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         federation_id: FederationId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;JsonClientConfig&gt; {
+    ) -&gt; AdminResult&lt;JsonClientConfig&gt; {
         <span class="kw">let </span>client = <span class="self">self
             </span>.clients
             .get(<span class="kw-2">&amp;</span>federation_id)
-            .ok_or(GatewayError::InvalidMetadata(<span class="macro">format!</span>(
-                <span class="string">"No federation with id {federation_id}"
-            </span>)))<span class="question-mark">?</span>;
+            .ok_or(FederationNotConnected {
+                federation_id_prefix: federation_id.to_prefix(),
+            })<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(client
             .borrow()
             .with(|client| client.get_config_json())
@@ -617,12 +619,12 @@
         <span class="self">self</span>.next_index.store(next_index, Ordering::SeqCst);
     }
 
-    <span class="kw">pub fn </span>pop_next_index(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
+    <span class="kw">pub fn </span>pop_next_index(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AdminResult&lt;u64&gt; {
         <span class="kw">let </span>next_index = <span class="self">self</span>.next_index.fetch_add(<span class="number">1</span>, Ordering::Relaxed);
 
         <span class="comment">// Check for overflow.
         </span><span class="kw">if </span>next_index == INITIAL_INDEX.wrapping_sub(<span class="number">1</span>) {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::GatewayConfigurationError(
+            <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::GatewayConfigurationError(
                 <span class="string">"Federation Index overflow"</span>.to_string(),
             ));
         }

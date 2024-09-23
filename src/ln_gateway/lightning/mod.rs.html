@@ -335,7 +335,13 @@
 <a href="#334" id="334">334</a>
 <a href="#335" id="335">335</a>
 <a href="#336" id="336">336</a>
-<a href="#337" id="337">337</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>cln;
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>ldk;
 <span class="kw">pub mod </span>lnd;
 
@@ -372,7 +378,6 @@
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
 };
-<span class="kw">use </span><span class="kw">crate</span>::GatewayError;
 
 <span class="kw">pub const </span>MAX_LIGHTNING_RETRIES: u32 = <span class="number">10</span>;
 
@@ -413,6 +418,8 @@
     </span>FailedToSubscribeToInvoiceUpdates { failure_reason: String },
     <span class="attr">#[error(<span class="string">"Failed to sync to chain: {failure_reason}"</span>)]
     </span>FailedToSyncToChain { failure_reason: String },
+    <span class="attr">#[error(<span class="string">"Invalid metadata: {failure_reason}"</span>)]
+    </span>InvalidMetadata { failure_reason: String },
 }
 
 <span class="doccomment">/// Represents an active connection to the lightning node.
@@ -554,7 +561,9 @@
 
     <span class="doccomment">/// Retrieves the basic information about the Gateway's connected Lightning
     /// node.
-    </span><span class="kw">pub async fn </span>parsed_node_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">super</span>::Result&lt;(PublicKey, String, Network, u32, bool)&gt; {
+    </span><span class="kw">pub async fn </span>parsed_node_info(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+    ) -&gt; std::result::Result&lt;(PublicKey, String, Network, u32, bool), LightningRpcError&gt; {
         <span class="kw">let </span>GetNodeInfoResponse {
             pub_key,
             alias,
@@ -562,11 +571,14 @@
             block_height,
             synced_to_chain,
         } = <span class="self">self</span>.info().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>node_pub_key = PublicKey::from_slice(<span class="kw-2">&amp;</span>pub_key)
-            .map_err(|e| GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">"Invalid node pubkey {e}"</span>)))<span class="question-mark">?</span>;
-        <span class="kw">let </span>network = Network::from_str(<span class="kw-2">&amp;</span>network).map_err(|e| {
-            GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">"Invalid network {network}: {e}"</span>))
-        })<span class="question-mark">?</span>;
+        <span class="kw">let </span>node_pub_key =
+            PublicKey::from_slice(<span class="kw-2">&amp;</span>pub_key).map_err(|e| LightningRpcError::InvalidMetadata {
+                failure_reason: <span class="macro">format!</span>(<span class="string">"Invalid node pubkey {e}"</span>),
+            })<span class="question-mark">?</span>;
+        <span class="kw">let </span>network =
+            Network::from_str(<span class="kw-2">&amp;</span>network).map_err(|e| LightningRpcError::InvalidMetadata {
+                failure_reason: <span class="macro">format!</span>(<span class="string">"Invalid network {network}: {e}"</span>),
+            })<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>((node_pub_key, alias, network, block_height, synced_to_chain))
     }
 }

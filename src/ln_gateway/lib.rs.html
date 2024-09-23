@@ -2057,21 +2057,7 @@
 <a href="#2056" id="2056">2056</a>
 <a href="#2057" id="2057">2057</a>
 <a href="#2058" id="2058">2058</a>
-<a href="#2059" id="2059">2059</a>
-<a href="#2060" id="2060">2060</a>
-<a href="#2061" id="2061">2061</a>
-<a href="#2062" id="2062">2062</a>
-<a href="#2063" id="2063">2063</a>
-<a href="#2064" id="2064">2064</a>
-<a href="#2065" id="2065">2065</a>
-<a href="#2066" id="2066">2066</a>
-<a href="#2067" id="2067">2067</a>
-<a href="#2068" id="2068">2068</a>
-<a href="#2069" id="2069">2069</a>
-<a href="#2070" id="2070">2070</a>
-<a href="#2071" id="2071">2071</a>
-<a href="#2072" id="2072">2072</a>
-<a href="#2073" id="2073">2073</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2059" id="2059">2059</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2090,6 +2076,7 @@
 <span class="kw">mod </span>config;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
+<span class="kw">mod </span>error;
 <span class="kw">mod </span>federation_manager;
 <span class="kw">pub mod </span>gateway_module_v2;
 <span class="kw">pub mod </span>lightning;
@@ -2101,7 +2088,6 @@
     <span class="macro">tonic::include_proto!</span>(<span class="string">"gateway_lnrpc"</span>);
 }
 
-<span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::fmt::Display;
@@ -2111,8 +2097,6 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::anyhow;
-<span class="kw">use </span>axum::http::StatusCode;
-<span class="kw">use </span>axum::response::{IntoResponse, Response};
 <span class="kw">use </span>bip39::Mnemonic;
 <span class="kw">use </span>bitcoin::{Address, Network, Txid};
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
@@ -2123,9 +2107,9 @@
 <span class="kw">use </span>db::{
     GatewayConfiguration, GatewayConfigurationKey, GatewayDbtxNcExt, GATEWAYD_DATABASE_VERSION,
 };
+<span class="kw">use </span>error::FederationNotConnected;
 <span class="kw">use </span>federation_manager::FederationManager;
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
-<span class="kw">use </span>fedimint_api_client::api::FederationError;
 <span class="kw">use </span>fedimint_bip39::Bip39RootSecretStrategy;
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::secret::RootSecretStrategy;
@@ -2136,8 +2120,6 @@
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 <span class="kw">use </span>fedimint_core::db::{apply_migrations_server, Database, DatabaseTransaction, DatabaseValue};
-<span class="kw">use </span>fedimint_core::endpoint_constants::REGISTER_GATEWAY_ENDPOINT;
-<span class="kw">use </span>fedimint_core::fmt_utils::OptStacktrace;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
 <span class="kw">use </span>fedimint_core::secp256k1::schnorr::Signature;
@@ -2173,14 +2155,13 @@
     ReceiveEcashPayload, ReceiveEcashResponse, SetConfigurationPayload, SpendEcashPayload,
     SpendEcashResponse, SyncToChainPayload, V1_API_ENDPOINT,
 };
-<span class="kw">use </span>state_machine::pay::OutgoingPaymentError;
 <span class="kw">use </span>state_machine::{GatewayClientModule, GatewayExtPayStates};
-<span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio::sync::RwLock;
 <span class="kw">use </span>tracing::{debug, error, info, info_span, warn, Instrument};
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{get_gatewayd_database_migrations, FederationConfig};
 <span class="kw">use </span><span class="kw">crate</span>::envs::FM_GATEWAY_MNEMONIC_ENV;
+<span class="kw">use </span><span class="kw">crate</span>::error::{AdminGatewayError, LNv1Error, LNv2Error, PublicGatewayError};
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::create_invoice_request::Description;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::intercept_htlc_response::Forward;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::CreateInvoiceRequest;
@@ -2216,7 +2197,8 @@
 <span class="doccomment">/// LNv2 CLTV Delta in blocks
 </span><span class="kw">const </span>EXPIRATION_DELTA_MINIMUM_V2: u64 = <span class="number">144</span>;
 
-<span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, GatewayError&gt;;
+<span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, PublicGatewayError&gt;;
+<span class="kw">pub type </span>AdminResult&lt;T&gt; = std::result::Result&lt;T, AdminGatewayError&gt;;
 
 <span class="doccomment">/// Name of the gateway's database that is used for metadata and configuration
 /// storage.
@@ -2735,9 +2717,9 @@
     </span><span class="kw">async fn </span>try_handle_htlc_ln_legacy(<span class="kw-2">&amp;</span><span class="self">self</span>, htlc_request: <span class="kw-2">&amp;</span>InterceptHtlcRequest) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="comment">// Check if the HTLC corresponds to a federation supporting legacy Lightning.
         </span><span class="kw">let </span><span class="prelude-val">Some</span>(federation_index) = htlc_request.short_channel_id <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::IncomingLNv1PaymentError(<span class="macro">anyhow::anyhow!</span>(
-                <span class="string">"Incoming payment has no last hop short channel id"
-            </span>)));
+            <span class="kw">return </span><span class="prelude-val">Err</span>(PublicGatewayError::LNv1(LNv1Error::IncomingPayment(
+                <span class="string">"Incoming payment has not last hop short channel id"</span>.to_string(),
+            )));
         };
 
         <span class="comment">// Just forward the HTLC if we do not have a federation that
@@ -2748,9 +2730,7 @@
             .<span class="kw">await
             </span>.get_client_for_index(federation_index)
         <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::IncomingLNv1PaymentError(<span class="macro">anyhow::anyhow!</span>(
-                <span class="string">"Incoming payment has a last hop short channel id that does not map to a known federation"
-            </span>)));
+            <span class="kw">return </span><span class="prelude-val">Err</span>(PublicGatewayError::LNv1(LNv1Error::IncomingPayment(<span class="string">"Incoming payment has a last hop short channel id that does not map to a known federation"</span>.to_string())));
         };
 
         client
@@ -2764,17 +2744,16 @@
                         .gateway_handle_intercepted_htlc(htlc)
                         .<span class="kw">await
                     </span>{
-                        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(()),
-                        <span class="prelude-val">Err</span>(e) =&gt; {
-                            <span class="macro">error!</span>(<span class="string">"Got error intercepting HTLC: {e:?}, will retry..."</span>);
-                        }
+                        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(()),
+                        <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(PublicGatewayError::LNv1(LNv1Error::IncomingPayment(
+                            <span class="macro">format!</span>(<span class="string">"Error intercepting HTLC {e:?}"</span>),
+                        ))),
                     }
                 } <span class="kw">else </span>{
-                    <span class="macro">error!</span>(<span class="string">"Got no HTLC result"</span>);
+                    <span class="prelude-val">Err</span>(PublicGatewayError::LNv1(LNv1Error::IncomingPayment(
+                        <span class="string">"Could not convert InterceptHtlcResult into an HTLC"</span>.to_string(),
+                    )))
                 }
-                <span class="prelude-val">Err</span>(GatewayError::IncomingLNv1PaymentError(<span class="macro">anyhow::anyhow!</span>(
-                    <span class="string">"Incoming payment could not be handled"
-                </span>)))
             })
             .<span class="kw">await
     </span>}
@@ -2804,7 +2783,7 @@
 
     <span class="doccomment">/// Returns information about the Gateway back to the client when requested
     /// via the webserver.
-    </span><span class="kw">pub async fn </span>handle_get_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayInfo&gt; {
+    </span><span class="kw">pub async fn </span>handle_get_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AdminResult&lt;GatewayInfo&gt; {
         <span class="kw">let </span>GatewayState::Running { lightning_context } = <span class="self">self</span>.get_state().<span class="kw">await else </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(GatewayInfo {
                 federations: <span class="macro">vec!</span>[],
@@ -2870,7 +2849,7 @@
     </span><span class="kw">pub async fn </span>handle_get_federation_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         federation_id_or: <span class="prelude-ty">Option</span>&lt;FederationId&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayFedConfig&gt; {
+    ) -&gt; AdminResult&lt;GatewayFedConfig&gt; {
         <span class="kw">if </span>!<span class="macro">matches!</span>(<span class="self">self</span>.get_state().<span class="kw">await</span>, GatewayState::Running { .. }) {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(GatewayFedConfig {
                 federations: BTreeMap::new(),
@@ -2901,7 +2880,7 @@
 
     <span class="doccomment">/// Returns the balance of the requested federation that the Gateway is
     /// connected to.
-    </span><span class="kw">pub async fn </span>handle_balance_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: BalancePayload) -&gt; <span class="prelude-ty">Result</span>&lt;Amount&gt; {
+    </span><span class="kw">pub async fn </span>handle_balance_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: BalancePayload) -&gt; AdminResult&lt;Amount&gt; {
         <span class="comment">// no need for instrument, it is done on api layer
         </span><span class="prelude-val">Ok</span>(<span class="self">self
             </span>.select_client(payload.federation_id)
@@ -2913,7 +2892,7 @@
 
     <span class="doccomment">/// Returns a Bitcoin deposit on-chain address for pegging in Bitcoin for a
     /// specific connected federation.
-    </span><span class="kw">pub async fn </span>handle_address_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: DepositAddressPayload) -&gt; <span class="prelude-ty">Result</span>&lt;Address&gt; {
+    </span><span class="kw">pub async fn </span>handle_address_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: DepositAddressPayload) -&gt; AdminResult&lt;Address&gt; {
         <span class="kw">let </span>(<span class="kw">_</span>, address, <span class="kw">_</span>) = <span class="self">self
             </span>.select_client(payload.federation_id)
             .<span class="kw">await</span><span class="question-mark">?
@@ -2927,7 +2906,7 @@
 
     <span class="doccomment">/// Returns a Bitcoin TXID from a peg-out transaction for a specific
     /// connected federation.
-    </span><span class="kw">pub async fn </span>handle_withdraw_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: WithdrawPayload) -&gt; <span class="prelude-ty">Result</span>&lt;Txid&gt; {
+    </span><span class="kw">pub async fn </span>handle_withdraw_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: WithdrawPayload) -&gt; AdminResult&lt;Txid&gt; {
         <span class="kw">let </span>WithdrawPayload {
             amount,
             address,
@@ -2948,7 +2927,11 @@
                     .<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">let </span>withdraw_amount = balance.checked_sub(fees.amount());
                 <span class="kw">if </span>withdraw_amount.is_none() {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::InsufficientFunds);
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::WithdrawError {
+                        failure_reason: <span class="macro">format!</span>(
+                            <span class="string">"Insufficient funds. Balance: {balance} Fees: {fees:?}"
+                        </span>),
+                    });
                 }
                 (withdraw_amount.unwrap(), fees)
             }
@@ -2978,15 +2961,15 @@
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(txid);
                 }
                 WithdrawState::Failed(e) =&gt; {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::UnexpectedState(e));
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::WithdrawError { failure_reason: e });
                 }
                 WithdrawState::Created =&gt; {}
             }
         }
 
-        <span class="prelude-val">Err</span>(GatewayError::UnexpectedState(
-            <span class="string">"Ran out of state updates while withdrawing"</span>.to_string(),
-        ))
+        <span class="prelude-val">Err</span>(AdminGatewayError::WithdrawError {
+            failure_reason: <span class="string">"Ran out of state updates while withdrawing"</span>.to_string(),
+        })
     }
 
     <span class="doccomment">/// Creates an invoice that is directly payable to the gateway's lightning
@@ -2996,7 +2979,9 @@
         payload: CreateInvoiceForSelfPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Bolt11Invoice&gt; {
         <span class="kw">let </span>GatewayState::Running { lightning_context } = <span class="self">self</span>.get_state().<span class="kw">await else </span>{
-            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::Disconnected);
+            <span class="kw">return </span><span class="prelude-val">Err</span>(PublicGatewayError::Lightning(
+                LightningRpcError::FailedToConnect,
+            ));
         };
 
         Bolt11Invoice::from_str(
@@ -3012,24 +2997,32 @@
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.invoice,
         )
-        .map_err(|e| GatewayError::UnexpectedState(e.to_string()))
+        .map_err(|e| {
+            PublicGatewayError::Lightning(LightningRpcError::InvalidMetadata {
+                failure_reason: e.to_string(),
+            })
+        })
     }
 
     <span class="doccomment">/// Requests the gateway to pay an outgoing LN invoice using its own funds.
     /// Returns the payment hash's preimage on success.
-    </span><span class="kw">async fn </span>handle_pay_invoice_self_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: PayInvoicePayload) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
-        <span class="kw">if let </span>GatewayState::Running { lightning_context } = <span class="self">self</span>.get_state().<span class="kw">await </span>{
-            <span class="kw">let </span>res = lightning_context
-                .lnrpc
-                .pay(payload.invoice, payload.max_delay, payload.max_fee)
-                .<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="prelude-val">Ok</span>(Preimage(
-                res.preimage.try_into().expect(<span class="string">"preimage is 32 bytes"</span>),
-            ))
-        } <span class="kw">else </span>{
-            <span class="macro">warn!</span>(<span class="string">"Gateway is not connected to lightning node, cannot pay invoice"</span>);
-            <span class="prelude-val">Err</span>(GatewayError::Disconnected)
-        }
+    </span><span class="kw">async fn </span>handle_pay_invoice_self_msg(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        payload: PayInvoicePayload,
+    ) -&gt; AdminResult&lt;Preimage&gt; {
+        <span class="kw">let </span>GatewayState::Running { lightning_context } = <span class="self">self</span>.get_state().<span class="kw">await else </span>{
+            <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::Lightning(
+                LightningRpcError::FailedToConnect,
+            ));
+        };
+
+        <span class="kw">let </span>res = lightning_context
+            .lnrpc
+            .pay(payload.invoice, payload.max_delay, payload.max_fee)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(Preimage(
+            res.preimage.try_into().expect(<span class="string">"preimage is 32 bytes"</span>),
+        ))
     }
 
     <span class="doccomment">/// Requests the gateway to pay an outgoing LN invoice on behalf of a
@@ -3038,49 +3031,63 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payload: fedimint_ln_client::pay::PayInvoicePayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
-        <span class="kw">if let </span>GatewayState::Running { .. } = <span class="self">self</span>.get_state().<span class="kw">await </span>{
-            <span class="macro">debug!</span>(<span class="string">"Handling pay invoice message: {payload:?}"</span>);
-            <span class="kw">let </span>client = <span class="self">self</span>.select_client(payload.federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>contract_id = payload.contract_id;
-            <span class="kw">let </span>gateway_module = <span class="kw-2">&amp;</span>client.value().get_first_module::&lt;GatewayClientModule&gt;()<span class="question-mark">?</span>;
-            <span class="kw">let </span>operation_id = gateway_module.gateway_pay_bolt11_invoice(payload).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span><span class="kw-2">mut </span>updates = gateway_module
-                .gateway_subscribe_ln_pay(operation_id)
-                .<span class="kw">await</span><span class="question-mark">?
-                </span>.into_stream();
-            <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
-                <span class="kw">match </span>update {
-                    GatewayExtPayStates::Success { preimage, .. } =&gt; {
-                        <span class="macro">debug!</span>(<span class="string">"Successfully paid invoice: {contract_id}"</span>);
-                        <span class="kw">return </span><span class="prelude-val">Ok</span>(preimage);
-                    }
-                    GatewayExtPayStates::Fail {
-                        error,
-                        error_message,
-                    } =&gt; {
-                        <span class="macro">error!</span>(<span class="string">"{error_message} while paying invoice: {contract_id}"</span>);
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::OutgoingPaymentError(Box::new(error)));
-                    }
-                    GatewayExtPayStates::Canceled { error } =&gt; {
-                        <span class="macro">error!</span>(<span class="string">"Cancelled with {error} while paying invoice: {contract_id}"</span>);
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::OutgoingPaymentError(Box::new(error)));
-                    }
-                    GatewayExtPayStates::Created =&gt; {
-                        <span class="macro">debug!</span>(<span class="string">"Got initial state Created while paying invoice: {contract_id}"</span>);
-                    }
-                    other =&gt; {
-                        <span class="macro">info!</span>(<span class="string">"Got state {other:?} while paying invoice: {contract_id}"</span>);
-                    }
-                };
-            }
-
-            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::UnexpectedState(
-                <span class="string">"Ran out of state updates while paying invoice"</span>.to_string(),
+        <span class="kw">let </span>GatewayState::Running { .. } = <span class="self">self</span>.get_state().<span class="kw">await else </span>{
+            <span class="kw">return </span><span class="prelude-val">Err</span>(PublicGatewayError::Lightning(
+                LightningRpcError::FailedToConnect,
             ));
+        };
+
+        <span class="macro">debug!</span>(<span class="string">"Handling pay invoice message: {payload:?}"</span>);
+        <span class="kw">let </span>client = <span class="self">self</span>.select_client(payload.federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>contract_id = payload.contract_id;
+        <span class="kw">let </span>gateway_module = <span class="kw-2">&amp;</span>client
+            .value()
+            .get_first_module::&lt;GatewayClientModule&gt;()
+            .map_err(LNv1Error::OutgoingPayment)
+            .map_err(PublicGatewayError::LNv1)<span class="question-mark">?</span>;
+        <span class="kw">let </span>operation_id = gateway_module
+            .gateway_pay_bolt11_invoice(payload)
+            .<span class="kw">await
+            </span>.map_err(LNv1Error::OutgoingPayment)
+            .map_err(PublicGatewayError::LNv1)<span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>updates = gateway_module
+            .gateway_subscribe_ln_pay(operation_id)
+            .<span class="kw">await
+            </span>.map_err(LNv1Error::OutgoingPayment)
+            .map_err(PublicGatewayError::LNv1)<span class="question-mark">?
+            </span>.into_stream();
+        <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
+            <span class="kw">match </span>update {
+                GatewayExtPayStates::Success { preimage, .. } =&gt; {
+                    <span class="macro">debug!</span>(<span class="string">"Successfully paid invoice: {contract_id}"</span>);
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(preimage);
+                }
+                GatewayExtPayStates::Fail {
+                    error,
+                    error_message,
+                } =&gt; {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(PublicGatewayError::LNv1(LNv1Error::OutgoingContract {
+                        error: Box::new(error),
+                        message: <span class="macro">format!</span>(
+                            <span class="string">"{error_message} while paying invoice with contract id {contract_id}"
+                        </span>),
+                    }));
+                }
+                GatewayExtPayStates::Canceled { error } =&gt; {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(PublicGatewayError::LNv1(LNv1Error::OutgoingContract { error: Box::new(error.clone()), message: <span class="macro">format!</span>(<span class="string">"Cancelled with {error} while paying invoice with contract id {contract_id}"</span>) }));
+                }
+                GatewayExtPayStates::Created =&gt; {
+                    <span class="macro">debug!</span>(<span class="string">"Got initial state Created while paying invoice: {contract_id}"</span>);
+                }
+                other =&gt; {
+                    <span class="macro">info!</span>(<span class="string">"Got state {other:?} while paying invoice: {contract_id}"</span>);
+                }
+            };
         }
 
-        <span class="macro">warn!</span>(<span class="string">"Gateway is not connected, cannot handle {payload:?}"</span>);
-        <span class="prelude-val">Err</span>(GatewayError::Disconnected)
+        <span class="prelude-val">Err</span>(PublicGatewayError::LNv1(LNv1Error::OutgoingPayment(
+            <span class="macro">anyhow!</span>(<span class="string">"Ran out of state updates while paying invoice"</span>),
+        )))
     }
 
     <span class="doccomment">/// Handles a connection request to join a new federation. The gateway will
@@ -3090,13 +3097,17 @@
     </span><span class="kw">pub async fn </span>handle_connect_federation(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payload: ConnectFedPayload,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;FederationInfo&gt; {
+    ) -&gt; AdminResult&lt;FederationInfo&gt; {
         <span class="kw">let </span>GatewayState::Running { lightning_context } = <span class="self">self</span>.get_state().<span class="kw">await else </span>{
-            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::Disconnected);
+            <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::Lightning(
+                LightningRpcError::FailedToConnect,
+            ));
         };
 
         <span class="kw">let </span>invite_code = InviteCode::from_str(<span class="kw-2">&amp;</span>payload.invite_code).map_err(|e| {
-            GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">"Invalid federation member string {e:?}"</span>))
+            AdminGatewayError::ClientCreationError(<span class="macro">anyhow!</span>(<span class="macro">format!</span>(
+                <span class="string">"Invalid federation member string {e:?}"
+            </span>)))
         })<span class="question-mark">?</span>;
 
         <span class="attr">#[cfg(feature = <span class="string">"tor"</span>)]
@@ -3120,7 +3131,9 @@
 
         <span class="comment">// Check if this federation has already been registered
         </span><span class="kw">if </span>federation_manager.has_federation(federation_id) {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::FederationAlreadyConnected);
+            <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::ClientCreationError(<span class="macro">anyhow!</span>(
+                <span class="string">"Federation has already been registered"
+            </span>)));
         }
 
         <span class="comment">// `GatewayConfiguration` should always exist in the database when we are in the
@@ -3193,9 +3206,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
         dbtx.save_federation_config(<span class="kw-2">&amp;</span>federation_config).<span class="kw">await</span>;
-        dbtx.commit_tx_result()
-            .<span class="kw">await
-            </span>.map_err(GatewayError::DatabaseError)<span class="question-mark">?</span>;
+        dbtx.commit_tx().<span class="kw">await</span>;
         <span class="macro">debug!</span>(<span class="string">"Federation with ID: {federation_id} connected and assigned federation index: {federation_index}"</span>);
 
         <span class="prelude-val">Ok</span>(federation_info)
@@ -3208,7 +3219,7 @@
     </span><span class="kw">pub async fn </span>handle_leave_federation(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payload: LeaveFedPayload,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;FederationInfo&gt; {
+    ) -&gt; AdminResult&lt;FederationInfo&gt; {
         <span class="comment">// Lock the federation manager before starting the db transaction to reduce the
         // chance of db write conflicts.
         </span><span class="kw">let </span><span class="kw-2">mut </span>federation_manager = <span class="self">self</span>.federation_manager.write().<span class="kw">await</span>;
@@ -3219,9 +3230,7 @@
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         dbtx.remove_federation_config(payload.federation_id).<span class="kw">await</span>;
-        dbtx.commit_tx_result()
-            .<span class="kw">await
-            </span>.map_err(GatewayError::DatabaseError)<span class="question-mark">?</span>;
+        dbtx.commit_tx().<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(federation_info)
     }
 
@@ -3230,13 +3239,13 @@
     </span><span class="kw">pub async fn </span>handle_backup_msg(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         BackupPayload { federation_id }: BackupPayload,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    ) -&gt; AdminResult&lt;()&gt; {
         <span class="kw">let </span>federation_manager = <span class="self">self</span>.federation_manager.read().<span class="kw">await</span>;
         <span class="kw">let </span>client = federation_manager
             .client(<span class="kw-2">&amp;</span>federation_id)
-            .ok_or(GatewayError::ClientCreationError(<span class="macro">format!</span>(
-                <span class="string">"Gateway does has not connected to {federation_id}"
-            </span>)))<span class="question-mark">?
+            .ok_or(AdminGatewayError::ClientCreationError(<span class="macro">anyhow::anyhow!</span>(
+                <span class="macro">format!</span>(<span class="string">"Gateway has not connected to {federation_id}"</span>)
+            )))<span class="question-mark">?
             </span>.value();
         <span class="kw">let </span>metadata: BTreeMap&lt;String, String&gt; = BTreeMap::new();
         client
@@ -3250,7 +3259,7 @@
     <span class="doccomment">/// Handles an authenticated request for the gateway's mnemonic. This also
     /// returns a vector of federations that are not using the mnemonic
     /// backup strategy.
-    </span><span class="kw">pub async fn </span>handle_mnemonic_msg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;MnemonicResponse&gt; {
+    </span><span class="kw">pub async fn </span>handle_mnemonic_msg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AdminResult&lt;MnemonicResponse&gt; {
         <span class="kw">let </span>mnemonic = <span class="self">Self</span>::load_or_generate_mnemonic(<span class="kw-2">&amp;</span><span class="self">self</span>.gateway_db).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>words = mnemonic
             .word_iter()
@@ -3287,12 +3296,12 @@
             routing_fees,
             per_federation_routing_fees,
         }: SetConfigurationPayload,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    ) -&gt; AdminResult&lt;()&gt; {
         <span class="kw">let </span>gw_state = <span class="self">self</span>.get_state().<span class="kw">await</span>;
         <span class="kw">let </span>lightning_network = <span class="kw">match </span>gw_state {
             GatewayState::Running { lightning_context } =&gt; {
                 <span class="kw">if </span>network.is_some() &amp;&amp; network != <span class="prelude-val">Some</span>(lightning_context.lightning_network) {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::GatewayConfigurationError(
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::GatewayConfigurationError(
                         <span class="string">"Cannot change network while connected to a lightning node"</span>.to_string(),
                     ));
                 }
@@ -3316,7 +3325,7 @@
 
             <span class="kw">if let </span><span class="prelude-val">Some</span>(network) = network {
                 <span class="kw">if </span>!<span class="self">self</span>.federation_manager.read().<span class="kw">await</span>.is_empty() {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::GatewayConfigurationError(
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::GatewayConfigurationError(
                         <span class="string">"Cannot change network while connected to a federation"</span>.to_string(),
                     ));
                 }
@@ -3336,7 +3345,7 @@
 
             prev_config
         } <span class="kw">else </span>{
-            <span class="kw">let </span>password = password.ok_or(GatewayError::GatewayConfigurationError(
+            <span class="kw">let </span>password = password.ok_or(AdminGatewayError::GatewayConfigurationError(
                 <span class="string">"The password field is required when initially configuring the gateway"</span>.to_string(),
             ))<span class="question-mark">?</span>;
             <span class="kw">let </span>password_salt: [u8; <span class="number">16</span>] = rand::thread_rng().gen();
@@ -3390,12 +3399,16 @@
     }
 
     <span class="doccomment">/// Generates an onchain address to fund the gateway's lightning node.
-    </span><span class="kw">pub async fn </span>handle_get_ln_onchain_address_msg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Address&gt; {
+    </span><span class="kw">pub async fn </span>handle_get_ln_onchain_address_msg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AdminResult&lt;Address&gt; {
         <span class="kw">let </span>context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>response = context.lnrpc.get_ln_onchain_address().<span class="kw">await</span><span class="question-mark">?</span>;
         Address::from_str(<span class="kw-2">&amp;</span>response.address)
             .map(Address::assume_checked)
-            .map_err(|e| GatewayError::LightningResponseParseError(e.into()))
+            .map_err(|e| {
+                AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
+                    failure_reason: e.to_string(),
+                })
+            })
     }
 
     <span class="doccomment">/// Instructs the Gateway's Lightning node to open a channel to a peer
@@ -3408,16 +3421,16 @@
             channel_size_sats,
             push_amount_sats,
         }: OpenChannelPayload,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Txid&gt; {
+    ) -&gt; AdminResult&lt;Txid&gt; {
         <span class="kw">let </span>context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>res = context
             .lnrpc
             .open_channel(pubkey, host, channel_size_sats, push_amount_sats)
             .<span class="kw">await</span><span class="question-mark">?</span>;
         Txid::from_str(<span class="kw-2">&amp;</span>res.funding_txid).map_err(|e| {
-            GatewayError::InvalidMetadata(<span class="macro">format!</span>(
-                <span class="string">"Received invalid channel funding txid string: {e}"
-            </span>))
+            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
+                failure_reason: <span class="macro">format!</span>(<span class="string">"Received invalid channel funding txid string {e}"</span>),
+            })
         })
     }
 
@@ -3426,7 +3439,7 @@
     </span><span class="kw">pub async fn </span>handle_close_channels_with_peer_msg(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         CloseChannelsWithPeerPayload { pubkey }: CloseChannelsWithPeerPayload,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;CloseChannelsWithPeerResponse&gt; {
+    ) -&gt; AdminResult&lt;CloseChannelsWithPeerResponse&gt; {
         <span class="kw">let </span>context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>response = context.lnrpc.close_channels_with_peer(pubkey).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(response)
@@ -3434,7 +3447,9 @@
 
     <span class="doccomment">/// Returns a list of Lightning network channels from the Gateway's
     /// Lightning node.
-    </span><span class="kw">pub async fn </span>handle_list_active_channels_msg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;lightning::ChannelInfo&gt;&gt; {
+    </span><span class="kw">pub async fn </span>handle_list_active_channels_msg(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+    ) -&gt; AdminResult&lt;Vec&lt;lightning::ChannelInfo&gt;&gt; {
         <span class="kw">let </span>context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>channels = context.lnrpc.list_active_channels().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(channels)
@@ -3442,7 +3457,7 @@
 
     <span class="doccomment">/// Returns the ecash, lightning, and onchain balances for the gateway and
     /// the gateway's lightning node.
-    </span><span class="kw">pub async fn </span>handle_get_balances_msg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayBalances&gt; {
+    </span><span class="kw">pub async fn </span>handle_get_balances_msg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AdminResult&lt;GatewayBalances&gt; {
         <span class="kw">let </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
         <span class="kw">let </span>federation_infos = <span class="self">self
             </span>.federation_manager
@@ -3473,7 +3488,7 @@
         })
     }
 
-    <span class="kw">pub async fn </span>handle_sync_to_chain_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: SyncToChainPayload) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">pub async fn </span>handle_sync_to_chain_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: SyncToChainPayload) -&gt; AdminResult&lt;()&gt; {
         <span class="self">self</span>.get_lightning_context()
             .<span class="kw">await</span><span class="question-mark">?
             </span>.lnrpc
@@ -3487,7 +3502,7 @@
     </span><span class="kw">pub async fn </span>handle_spend_ecash_msg(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payload: SpendEcashPayload,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;SpendEcashResponse&gt; {
+    ) -&gt; AdminResult&lt;SpendEcashResponse&gt; {
         <span class="kw">let </span>client = <span class="self">self
             </span>.select_client(payload.federation_id)
             .<span class="kw">await</span><span class="question-mark">?
@@ -3546,10 +3561,22 @@
             .read()
             .<span class="kw">await
             </span>.get_client_for_federation_id_prefix(payload.notes.federation_id_prefix())
-            .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Client not found"</span>))<span class="question-mark">?</span>;
-        <span class="kw">let </span>mint = client.value().get_first_module::&lt;MintClientModule&gt;()<span class="question-mark">?</span>;
+            .ok_or(FederationNotConnected {
+                federation_id_prefix: payload.notes.federation_id_prefix(),
+            })<span class="question-mark">?</span>;
+        <span class="kw">let </span>mint = client
+            .value()
+            .get_first_module::&lt;MintClientModule&gt;()
+            .map_err(|e| PublicGatewayError::ReceiveEcashError {
+                failure_reason: <span class="macro">format!</span>(<span class="string">"Mint module does not exist: {e:?}"</span>),
+            })<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>operation_id = mint.reissue_external_notes(payload.notes, ()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>operation_id = mint
+            .reissue_external_notes(payload.notes, ())
+            .<span class="kw">await
+            </span>.map_err(|e| PublicGatewayError::ReceiveEcashError {
+                failure_reason: e.to_string(),
+            })<span class="question-mark">?</span>;
         <span class="kw">if </span>payload.wait {
             <span class="kw">let </span><span class="kw-2">mut </span>updates = mint
                 .subscribe_reissue_external_notes(operation_id)
@@ -3559,7 +3586,9 @@
 
             <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
                 <span class="kw">if let </span>fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::UnexpectedState(e));
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(PublicGatewayError::ReceiveEcashError {
+                        failure_reason: e.to_string(),
+                    });
                 }
             }
         }
@@ -3567,7 +3596,7 @@
         <span class="prelude-val">Ok</span>(ReceiveEcashResponse { amount })
     }
 
-    <span class="kw">pub async fn </span>handle_shutdown_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, task_group: TaskGroup) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">pub async fn </span>handle_shutdown_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, task_group: TaskGroup) -&gt; AdminResult&lt;()&gt; {
         <span class="kw">if let </span>GatewayState::Running { lightning_context } = <span class="self">self</span>.get_state().<span class="kw">await </span>{
             <span class="self">self</span>.set_gateway_state(GatewayState::ShuttingDown { lightning_context })
                 .<span class="kw">await</span>;
@@ -3592,7 +3621,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         gateway_config: <span class="kw-2">&amp;</span>GatewayConfiguration,
         federations: <span class="kw-2">&amp;</span>[(FederationId, FederationConfig)],
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    ) -&gt; AdminResult&lt;()&gt; {
         <span class="kw">if let </span><span class="prelude-val">Ok</span>(lightning_context) = <span class="self">self</span>.get_lightning_context().<span class="kw">await </span>{
             <span class="kw">let </span>route_hints = lightning_context
                 .lnrpc
@@ -3604,7 +3633,7 @@
 
             <span class="kw">for </span>(federation_id, federation_config) <span class="kw">in </span>federations {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(client) = <span class="self">self</span>.federation_manager.read().<span class="kw">await</span>.client(federation_id) {
-                    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="kw">async </span>{
+                    <span class="kw">if async </span>{
                         client
                             .value()
                             .get_first_module::&lt;GatewayClientModule&gt;()<span class="question-mark">?
@@ -3618,12 +3647,11 @@
                     </span>}
                     .instrument(client.span())
                     .<span class="kw">await
-                    </span>{
-                        <span class="prelude-val">Err</span>(GatewayError::FederationError(FederationError::general(
-                            REGISTER_GATEWAY_ENDPOINT,
-                            serde_json::Value::Null,
-                            <span class="macro">anyhow::anyhow!</span>(<span class="string">"Error registering federation {federation_id}: {e:?}"</span>),
-                        )))<span class="question-mark">?</span>;
+                    </span>.is_err()
+                    {
+                        <span class="prelude-val">Err</span>(AdminGatewayError::RegistrationError {
+                            federation_id: <span class="kw-2">*</span>federation_id,
+                        })<span class="question-mark">?</span>;
                     }
                 }
             }
@@ -3678,34 +3706,35 @@
     </span><span class="kw">pub async fn </span>select_client(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         federation_id: FederationId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Spanned&lt;fedimint_client::ClientHandleArc&gt;&gt; {
+    ) -&gt; std::result::Result&lt;Spanned&lt;fedimint_client::ClientHandleArc&gt;, FederationNotConnected&gt;
+    {
         <span class="self">self</span>.federation_manager
             .read()
             .<span class="kw">await
             </span>.client(<span class="kw-2">&amp;</span>federation_id)
             .cloned()
-            .ok_or(GatewayError::InvalidMetadata(<span class="macro">format!</span>(
-                <span class="string">"No federation with id {federation_id}"
-            </span>)))
+            .ok_or(FederationNotConnected {
+                federation_id_prefix: federation_id.to_prefix(),
+            })
     }
 
     <span class="doccomment">/// Loads a mnemonic from the database or generates a new one if the
     /// mnemonic does not exist. Before generating a new mnemonic, this
     /// function will check if a mnemonic has been provided in the environment
     /// variable and use that if provided.
-    </span><span class="kw">async fn </span>load_or_generate_mnemonic(gateway_db: <span class="kw-2">&amp;</span>Database) -&gt; <span class="prelude-ty">Result</span>&lt;Mnemonic&gt; {
+    </span><span class="kw">async fn </span>load_or_generate_mnemonic(gateway_db: <span class="kw-2">&amp;</span>Database) -&gt; AdminResult&lt;Mnemonic&gt; {
         <span class="prelude-val">Ok</span>(
             <span class="kw">if let </span><span class="prelude-val">Ok</span>(entropy) = Client::load_decodable_client_secret::&lt;Vec&lt;u8&gt;&gt;(gateway_db).<span class="kw">await </span>{
                 Mnemonic::from_entropy(<span class="kw-2">&amp;</span>entropy)
-                    .map_err(|e| GatewayError::ClientCreationError(e.to_string()))<span class="question-mark">?
+                    .map_err(|e| AdminGatewayError::MnemonicError(<span class="macro">anyhow!</span>(e.to_string())))<span class="question-mark">?
             </span>} <span class="kw">else </span>{
                 <span class="kw">let </span>mnemonic = <span class="kw">if let </span><span class="prelude-val">Ok</span>(words) = std::env::var(FM_GATEWAY_MNEMONIC_ENV) {
                     <span class="macro">info!</span>(<span class="string">"Using provided mnemonic from environment variable"</span>);
                     Mnemonic::parse_in_normalized(bip39::Language::English, words.as_str())
                         .map_err(|e| {
-                            GatewayError::InvalidMetadata(<span class="macro">format!</span>(
-                                <span class="string">"Seed phrase provided in environment variable was invalid: {e:?}"
-                            </span>))
+                            AdminGatewayError::MnemonicError(<span class="macro">anyhow!</span>(<span class="macro">format!</span>(
+                                <span class="string">"Seed phrase provided in environment was invalid {e:?}"
+                            </span>)))
                         })<span class="question-mark">?
                 </span>} <span class="kw">else </span>{
                     <span class="macro">info!</span>(<span class="string">"Generating mnemonic and writing entropy to client storage"</span>);
@@ -3714,7 +3743,7 @@
 
                 Client::store_encodable_client_secret(gateway_db, mnemonic.to_entropy())
                     .<span class="kw">await
-                    </span>.map_err(|e| GatewayError::ClientCreationError(e.to_string()))<span class="question-mark">?</span>;
+                    </span>.map_err(AdminGatewayError::MnemonicError)<span class="question-mark">?</span>;
                 mnemonic
             },
         )
@@ -3723,7 +3752,7 @@
     <span class="doccomment">/// Reads the connected federation client configs from the Gateway's
     /// database and reconstructs the clients necessary for interacting with
     /// connection federations.
-    </span><span class="kw">async fn </span>load_clients(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    </span><span class="kw">async fn </span>load_clients(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AdminResult&lt;()&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>federation_manager = <span class="self">self</span>.federation_manager.write().<span class="kw">await</span>;
 
         <span class="kw">let </span>configs = {
@@ -3764,7 +3793,7 @@
         <span class="kw">let </span>gateway = <span class="self">self</span>.clone();
         task_group.spawn_cancellable(<span class="string">"register clients"</span>, <span class="kw">async move </span>{
             <span class="kw">loop </span>{
-                <span class="kw">let </span><span class="kw-2">mut </span>registration_result: <span class="prelude-ty">Option</span>&lt;<span class="prelude-ty">Result</span>&lt;()&gt;&gt; = <span class="prelude-val">None</span>;
+                <span class="kw">let </span><span class="kw-2">mut </span>registration_result: <span class="prelude-ty">Option</span>&lt;AdminResult&lt;()&gt;&gt; = <span class="prelude-val">None</span>;
                 <span class="kw">let </span>gateway_config = gateway.clone_gateway_config().<span class="kw">await</span>;
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_config) = gateway_config {
                     <span class="kw">let </span>gateway_state = gateway.get_state().<span class="kw">await</span>;
@@ -3784,7 +3813,7 @@
                     <span class="macro">warn!</span>(<span class="string">"Cannot register clients because gateway configuration is not set."</span>);
                 }
 
-                <span class="kw">let </span>registration_delay: Duration = <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(GatewayError::FederationError(<span class="kw">_</span>))) = registration_result {
+                <span class="kw">let </span>registration_delay: Duration = <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(AdminGatewayError::RegistrationError { .. })) = registration_result {
                     <span class="comment">// Retry to register gateway with federations in 10 seconds since it failed
                     </span>Duration::from_secs(<span class="number">10</span>)
                 } <span class="kw">else </span>{
@@ -3800,18 +3829,19 @@
 
     <span class="doccomment">/// Verifies that the supplied `network` matches the Bitcoin network in the
     /// connected client's configuration.
-    </span><span class="kw">async fn </span>check_federation_network(client: <span class="kw-2">&amp;</span>ClientHandleArc, network: Network) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    </span><span class="kw">async fn </span>check_federation_network(
+        client: <span class="kw-2">&amp;</span>ClientHandleArc,
+        network: Network,
+    ) -&gt; AdminResult&lt;()&gt; {
         <span class="kw">let </span>federation_id = client.federation_id();
         <span class="kw">let </span>config = client.config().<span class="kw">await</span>;
         <span class="kw">let </span>cfg = config
             .modules
             .values()
             .find(|m| LightningCommonInit::KIND == m.kind)
-            .ok_or_else(|| {
-                GatewayError::InvalidMetadata(<span class="macro">format!</span>(
-                    <span class="string">"Federation {federation_id} does not have a lightning module"</span>,
-                ))
-            })<span class="question-mark">?</span>;
+            .ok_or(AdminGatewayError::ClientCreationError(<span class="macro">anyhow!</span>(<span class="macro">format!</span>(
+                <span class="string">"Federation {federation_id} does not have a lightning module"
+            </span>))))<span class="question-mark">?</span>;
         <span class="kw">let </span>ln_cfg: <span class="kw-2">&amp;</span>LightningClientConfig = cfg.cast()<span class="question-mark">?</span>;
 
         <span class="kw">if </span>ln_cfg.network != network {
@@ -3819,7 +3849,10 @@
                 <span class="string">"Federation {federation_id} runs on {} but this gateway supports {network}"</span>,
                 ln_cfg.network,
             );
-            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::UnsupportedNetwork(ln_cfg.network));
+            <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::ClientCreationError(<span class="macro">anyhow!</span>(<span class="macro">format!</span>(
+                <span class="string">"Unsupported network {}"</span>,
+                ln_cfg.network
+            ))));
         }
 
         <span class="prelude-val">Ok</span>(())
@@ -3828,13 +3861,13 @@
     <span class="doccomment">/// Checks the Gateway's current state and returns the proper
     /// `LightningContext` if it is available. Sometimes the lightning node
     /// will not be connected and this will return an error.
-    </span><span class="kw">pub async fn </span>get_lightning_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;LightningContext&gt; {
+    </span><span class="kw">pub async fn </span>get_lightning_context(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+    ) -&gt; std::result::Result&lt;LightningContext, LightningRpcError&gt; {
         <span class="kw">match </span><span class="self">self</span>.get_state().<span class="kw">await </span>{
             GatewayState::Running { lightning_context }
             | GatewayState::ShuttingDown { lightning_context } =&gt; <span class="prelude-val">Ok</span>(lightning_context),
-            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(GatewayError::LightningRpcError(
-                LightningRpcError::FailedToConnect,
-            )),
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(LightningRpcError::FailedToConnect),
         }
     }
 
@@ -3915,7 +3948,8 @@
             .expect(<span class="string">"Must have client module"</span>)
             .send_payment(payload)
             .<span class="kw">await
-            </span>.map_err(GatewayError::LNv2OutgoingError)
+            </span>.map_err(LNv2Error::OutgoingPayment)
+            .map_err(PublicGatewayError::LNv2)
     }
 
     <span class="doccomment">/// For the LNv2 protocol, this will create an invoice by fetching it from
@@ -3927,48 +3961,50 @@
         payload: CreateBolt11InvoicePayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Bolt11Invoice&gt; {
         <span class="kw">if </span>!payload.contract.verify() {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::IncomingContractError(
+            <span class="kw">return </span><span class="prelude-val">Err</span>(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
                 <span class="string">"The contract is invalid"</span>.to_string(),
-            ));
+            )));
         }
 
-        <span class="kw">let </span>payment_info = <span class="self">self
-            </span>.routing_info_v2(<span class="kw-2">&amp;</span>payload.federation_id)
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"Unknown federation"</span>))<span class="question-mark">?</span>;
+        <span class="kw">let </span>payment_info = <span class="self">self</span>.routing_info_v2(<span class="kw-2">&amp;</span>payload.federation_id).<span class="kw">await</span><span class="question-mark">?</span>.ok_or(
+            LNv2Error::IncomingPayment(<span class="macro">format!</span>(
+                <span class="string">"Federation {} does not exist"</span>,
+                payload.federation_id
+            )),
+        )<span class="question-mark">?</span>;
 
         <span class="kw">if </span>payload.contract.commitment.refund_pk != payment_info.module_public_key {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::IncomingContractError(
+            <span class="kw">return </span><span class="prelude-val">Err</span>(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
                 <span class="string">"The incoming contract is keyed to another gateway"</span>.to_string(),
-            ));
+            )));
         }
 
         <span class="kw">let </span>contract_amount = payment_info.receive_fee.subtract_from(payload.amount.msats);
 
         <span class="kw">if </span>contract_amount == Amount::ZERO {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::IncomingContractError(
+            <span class="kw">return </span><span class="prelude-val">Err</span>(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
                 <span class="string">"Zero amount incoming contracts are not supported"</span>.to_string(),
-            ));
+            )));
         }
 
         <span class="kw">if </span>contract_amount != payload.contract.commitment.amount {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::IncomingContractError(
+            <span class="kw">return </span><span class="prelude-val">Err</span>(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
                 <span class="string">"The contract amount does not pay the correct amount of fees"</span>.to_string(),
-            ));
+            )));
         }
 
         <span class="kw">if </span>payload.contract.commitment.expiration &lt;= duration_since_epoch().as_secs() {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::IncomingContractError(
+            <span class="kw">return </span><span class="prelude-val">Err</span>(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
                 <span class="string">"The contract has already expired"</span>.to_string(),
-            ));
+            )));
         }
 
         <span class="kw">let </span>payment_hash = <span class="kw">match </span>payload.contract.commitment.payment_image {
             PaymentImage::Hash(payment_hash) =&gt; payment_hash,
             PaymentImage::Point(..) =&gt; {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::IncomingContractError(
+                <span class="kw">return </span><span class="prelude-val">Err</span>(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
                     <span class="string">"PaymentImage is not a payment hash"</span>.to_string(),
-                ))
+                )));
             }
         };
 
@@ -3979,8 +4015,7 @@
                 payload.description.clone(),
                 payload.expiry_secs,
             )
-            .<span class="kw">await
-            </span>.map_err(|e| <span class="macro">anyhow!</span>(e))<span class="question-mark">?</span>;
+            .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
 
@@ -3993,14 +4028,16 @@
             .<span class="kw">await
             </span>.is_some()
         {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::IncomingContractError(
-                <span class="string">"Payment hash is already registered"</span>.to_string(),
-            ));
+            <span class="kw">return </span><span class="prelude-val">Err</span>(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
+                <span class="string">"PaymentHash is already registered"</span>.to_string(),
+            )));
         }
 
-        dbtx.commit_tx_result()
-            .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| <span class="macro">anyhow!</span>(<span class="string">"Payment hash is already registered"</span>))<span class="question-mark">?</span>;
+        dbtx.commit_tx_result().<span class="kw">await</span>.map_err(|<span class="kw">_</span>| {
+            PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
+                <span class="string">"Payment hash is already registered"</span>.to_string(),
+            ))
+        })<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(invoice)
     }
@@ -4013,7 +4050,7 @@
         amount: Amount,
         description: Bolt11InvoiceDescription,
         expiry_time: u32,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Bolt11Invoice&gt; {
+    ) -&gt; std::result::Result&lt;Bolt11Invoice, LightningRpcError&gt; {
         <span class="kw">let </span>lnrpc = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>.lnrpc;
 
         <span class="kw">let </span>response = <span class="kw">match </span>description {
@@ -4040,9 +4077,9 @@
         };
 
         Bolt11Invoice::from_str(<span class="kw-2">&amp;</span>response.invoice).map_err(|e| {
-            GatewayError::LightningRpcError(LightningRpcError::FailedToGetInvoice {
+            LightningRpcError::FailedToGetInvoice {
                 failure_reason: e.to_string(),
-            })
+            }
         })
     }
 
@@ -4060,13 +4097,15 @@
             .<span class="kw">await
             </span>.load_registered_incoming_contract(payment_image)
             .<span class="kw">await
-            </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"No corresponding decryption contract available"</span>))<span class="question-mark">?</span>;
+            </span>.ok_or(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
+                <span class="string">"No corresponding decryption contract available"</span>.to_string(),
+            )))<span class="question-mark">?</span>;
 
         <span class="kw">if </span>registered_incoming_contract.incoming_amount != amount_msats {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::IncomingContractError(
+            <span class="kw">return </span><span class="prelude-val">Err</span>(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
                 <span class="string">"The available decryption contract's amount is not equal to the requested amount"
                     </span>.to_string(),
-            ));
+            )));
         }
 
         <span class="kw">let </span>client = <span class="self">self
@@ -4075,73 +4114,6 @@
             </span>.into_value();
 
         <span class="prelude-val">Ok</span>((registered_incoming_contract.contract, client))
-    }
-}
-
-<span class="doccomment">/// Errors that can occur while processing incoming HTLC's, making outgoing
-/// payments, registering with connected federations, or responding to webserver
-/// requests.
-</span><span class="attr">#[derive(Debug, Error)]
-</span><span class="kw">pub enum </span>GatewayError {
-    <span class="attr">#[error(<span class="string">"Federation error: {}"</span>, OptStacktrace(.<span class="number">0</span>))]
-    </span>FederationError(<span class="attr">#[from] </span>FederationError),
-    <span class="attr">#[error(<span class="string">"Other: {}"</span>, OptStacktrace(.<span class="number">0</span>))]
-    </span>ClientStateMachineError(<span class="attr">#[from] </span>anyhow::Error),
-    <span class="attr">#[error(<span class="string">"Failed to open the database: {}"</span>, OptStacktrace(.<span class="number">0</span>))]
-    </span>DatabaseError(anyhow::Error),
-    <span class="attr">#[error(<span class="string">"Lightning rpc error: {}"</span>, .<span class="number">0</span>)]
-    </span>LightningRpcError(<span class="attr">#[from] </span>LightningRpcError),
-    <span class="attr">#[error(<span class="string">"Outgoing Payment Error {}"</span>, OptStacktrace(.<span class="number">0</span>))]
-    </span>OutgoingPaymentError(<span class="attr">#[from] </span>Box&lt;OutgoingPaymentError&gt;),
-    <span class="attr">#[error(<span class="string">"Invalid Metadata: {}"</span>, OptStacktrace(.<span class="number">0</span>))]
-    </span>InvalidMetadata(String),
-    <span class="attr">#[error(<span class="string">"Unexpected state: {}"</span>, OptStacktrace(.<span class="number">0</span>))]
-    </span>UnexpectedState(String),
-    <span class="attr">#[error(<span class="string">"The gateway is disconnected"</span>)]
-    </span>Disconnected,
-    <span class="attr">#[error(<span class="string">"Error configuring the gateway: {}"</span>, OptStacktrace(.<span class="number">0</span>))]
-    </span>GatewayConfigurationError(String),
-    <span class="attr">#[error(<span class="string">"Unsupported Network: {0}"</span>)]
-    </span>UnsupportedNetwork(Network),
-    <span class="attr">#[error(<span class="string">"Insufficient funds"</span>)]
-    </span>InsufficientFunds,
-    <span class="attr">#[error(<span class="string">"Federation already connected"</span>)]
-    </span>FederationAlreadyConnected,
-    <span class="attr">#[error(<span class="string">"Error parsing response: {}"</span>, OptStacktrace(.<span class="number">0</span>))]
-    </span>LightningResponseParseError(anyhow::Error),
-    <span class="attr">#[error(<span class="string">"An incoming payment was unable to be handled by the LNv1 module"</span>)]
-    </span>IncomingLNv1PaymentError(anyhow::Error),
-    <span class="attr">#[error(<span class="string">"Failed to create client: {}"</span>, .<span class="number">0</span>)]
-    </span>ClientCreationError(String),
-    <span class="attr">#[error(<span class="string">"Incoming contract error: {}"</span>, OptStacktrace(.<span class="number">0</span>))]
-    </span>IncomingContractError(String),
-    <span class="attr">#[error(<span class="string">"Error while sending LNv2 payment: {}"</span>, OptStacktrace(.<span class="number">0</span>))]
-    </span>LNv2OutgoingError(anyhow::Error),
-}
-
-<span class="kw">impl </span>IntoResponse <span class="kw">for </span>GatewayError {
-    <span class="kw">fn </span>into_response(<span class="self">self</span>) -&gt; Response {
-        <span class="comment">// For privacy reasons, we do not return too many details about the failure of
-        // the request back to the client to prevent malicious clients from
-        // deducing state about the gateway/lightning node.
-        </span><span class="kw">let </span>(error_message, status_code) = <span class="kw">match </span><span class="self">self </span>{
-            GatewayError::OutgoingPaymentError(<span class="kw">_</span>) =&gt; (
-                <span class="string">"Error while paying lightning invoice. Outgoing contract will be refunded."
-                    </span>.to_string(),
-                StatusCode::BAD_REQUEST,
-            ),
-            GatewayError::Disconnected =&gt; (
-                <span class="string">"The gateway is disconnected from the Lightning Node"</span>.to_string(),
-                StatusCode::NOT_FOUND,
-            ),
-            <span class="kw">_ </span>=&gt; (
-                <span class="string">"An internal gateway error occurred"</span>.to_string(),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            ),
-        };
-        <span class="kw">let </span><span class="kw-2">mut </span>err = Cow::&lt;<span class="lifetime">'static</span>, str&gt;::Owned(error_message).into_response();
-        <span class="kw-2">*</span>err.status_mut() = status_code;
-        err
     }
 }
 </code></pre></div></section></main></body></html>
