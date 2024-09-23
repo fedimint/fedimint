@@ -35,7 +35,6 @@ use crate::gateway_lnrpc::{
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
 };
-use crate::GatewayError;
 
 pub const MAX_LIGHTNING_RETRIES: u32 = 10;
 
@@ -76,6 +75,8 @@ pub enum LightningRpcError {
     FailedToSubscribeToInvoiceUpdates { failure_reason: String },
     #[error("Failed to sync to chain: {failure_reason}")]
     FailedToSyncToChain { failure_reason: String },
+    #[error("Invalid metadata: {failure_reason}")]
+    InvalidMetadata { failure_reason: String },
 }
 
 /// Represents an active connection to the lightning node.
@@ -217,7 +218,9 @@ impl dyn ILnRpcClient {
 
     /// Retrieves the basic information about the Gateway's connected Lightning
     /// node.
-    pub async fn parsed_node_info(&self) -> super::Result<(PublicKey, String, Network, u32, bool)> {
+    pub async fn parsed_node_info(
+        &self,
+    ) -> std::result::Result<(PublicKey, String, Network, u32, bool), LightningRpcError> {
         let GetNodeInfoResponse {
             pub_key,
             alias,
@@ -225,11 +228,14 @@ impl dyn ILnRpcClient {
             block_height,
             synced_to_chain,
         } = self.info().await?;
-        let node_pub_key = PublicKey::from_slice(&pub_key)
-            .map_err(|e| GatewayError::InvalidMetadata(format!("Invalid node pubkey {e}")))?;
-        let network = Network::from_str(&network).map_err(|e| {
-            GatewayError::InvalidMetadata(format!("Invalid network {network}: {e}"))
-        })?;
+        let node_pub_key =
+            PublicKey::from_slice(&pub_key).map_err(|e| LightningRpcError::InvalidMetadata {
+                failure_reason: format!("Invalid node pubkey {e}"),
+            })?;
+        let network =
+            Network::from_str(&network).map_err(|e| LightningRpcError::InvalidMetadata {
+                failure_reason: format!("Invalid network {network}: {e}"),
+            })?;
         Ok((node_pub_key, alias, network, block_height, synced_to_chain))
     }
 }

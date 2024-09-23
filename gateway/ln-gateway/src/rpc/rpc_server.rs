@@ -37,8 +37,9 @@ use super::{
     SetConfigurationPayload, SpendEcashPayload, SyncToChainPayload, WithdrawPayload,
     V1_API_ENDPOINT,
 };
+use crate::error::{AdminGatewayError, PublicGatewayError};
 use crate::rpc::ConfigPayload;
-use crate::{Gateway, GatewayError};
+use crate::Gateway;
 
 /// Creates the webserver's routes and spawns the webserver in a separate task.
 pub async fn run_webserver(gateway: Arc<Gateway>, task_group: TaskGroup) -> anyhow::Result<()> {
@@ -231,7 +232,7 @@ pub fn hash_password(plaintext_password: &str, salt: [u8; 16]) -> sha256::Hash {
 async fn handle_post_info(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(_payload): Json<InfoPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let info = gateway.handle_get_info().await?;
     Ok(Json(json!(info)))
 }
@@ -240,7 +241,7 @@ async fn handle_post_info(
 #[instrument(skip_all, err)]
 async fn info(
     Extension(gateway): Extension<Arc<Gateway>>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let info = gateway.handle_get_info().await?;
     Ok(Json(json!(info)))
 }
@@ -250,7 +251,7 @@ async fn info(
 async fn configuration(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<ConfigPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let gateway_fed_config = gateway
         .handle_get_federation_config(payload.federation_id)
         .await?;
@@ -262,7 +263,7 @@ async fn configuration(
 async fn balance(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<BalancePayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let amount = gateway.handle_balance_msg(payload).await?;
     Ok(Json(json!(amount)))
 }
@@ -272,7 +273,7 @@ async fn balance(
 async fn address(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<DepositAddressPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let address = gateway.handle_address_msg(payload).await?;
     Ok(Json(json!(address)))
 }
@@ -282,7 +283,7 @@ async fn address(
 async fn withdraw(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<WithdrawPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let txid = gateway.handle_withdraw_msg(payload).await?;
     Ok(Json(json!(txid)))
 }
@@ -291,7 +292,7 @@ async fn withdraw(
 async fn create_invoice_for_self(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<CreateInvoiceForSelfPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, PublicGatewayError> {
     let invoice = gateway.handle_create_invoice_for_self_msg(payload).await?;
     Ok(Json(json!(invoice)))
 }
@@ -300,7 +301,7 @@ async fn create_invoice_for_self(
 async fn pay_invoice_self(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<PayInvoicePayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let preimage = gateway.handle_pay_invoice_self_msg(payload).await?;
     Ok(Json(json!(preimage.0.encode_hex::<String>())))
 }
@@ -309,7 +310,7 @@ async fn pay_invoice_self(
 async fn pay_invoice(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<fedimint_ln_client::pay::PayInvoicePayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, PublicGatewayError> {
     let preimage = gateway.handle_pay_invoice_msg(payload).await?;
     Ok(Json(json!(preimage.0.encode_hex::<String>())))
 }
@@ -319,7 +320,7 @@ async fn pay_invoice(
 async fn connect_fed(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<ConnectFedPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let fed = gateway.handle_connect_federation(payload).await?;
     Ok(Json(json!(fed)))
 }
@@ -329,7 +330,7 @@ async fn connect_fed(
 async fn leave_fed(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<LeaveFedPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let fed = gateway.handle_leave_federation(payload).await?;
     Ok(Json(json!(fed)))
 }
@@ -339,7 +340,7 @@ async fn leave_fed(
 async fn backup(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<BackupPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     gateway.handle_backup_msg(payload).await?;
     Ok(Json(json!(())))
 }
@@ -348,7 +349,7 @@ async fn backup(
 async fn set_configuration(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<SetConfigurationPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     gateway.handle_set_configuration_msg(payload).await?;
     Ok(Json(json!(())))
 }
@@ -357,7 +358,7 @@ async fn set_configuration(
 async fn get_ln_onchain_address(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(_payload): Json<GetLnOnchainAddressPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let address = gateway.handle_get_ln_onchain_address_msg().await?;
     Ok(Json(json!(address.to_string())))
 }
@@ -366,7 +367,7 @@ async fn get_ln_onchain_address(
 async fn open_channel(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<OpenChannelPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let funding_txid = gateway.handle_open_channel_msg(payload).await?;
     Ok(Json(json!(funding_txid)))
 }
@@ -375,7 +376,7 @@ async fn open_channel(
 async fn close_channels_with_peer(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<CloseChannelsWithPeerPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let response = gateway.handle_close_channels_with_peer_msg(payload).await?;
     Ok(Json(json!(response)))
 }
@@ -383,7 +384,7 @@ async fn close_channels_with_peer(
 #[instrument(skip_all, err)]
 async fn list_active_channels(
     Extension(gateway): Extension<Arc<Gateway>>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let channels = gateway.handle_list_active_channels_msg().await?;
     Ok(Json(json!(channels)))
 }
@@ -391,7 +392,7 @@ async fn list_active_channels(
 #[instrument(skip_all, err)]
 async fn get_balances(
     Extension(gateway): Extension<Arc<Gateway>>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let balances = gateway.handle_get_balances_msg().await?;
     Ok(Json(json!(balances)))
 }
@@ -400,7 +401,7 @@ async fn get_balances(
 async fn sync_to_chain(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<SyncToChainPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     gateway.handle_sync_to_chain_msg(payload).await?;
     Ok(Json(json!(())))
 }
@@ -408,7 +409,7 @@ async fn sync_to_chain(
 #[instrument(skip_all, err)]
 async fn get_gateway_id(
     Extension(gateway): Extension<Arc<Gateway>>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, PublicGatewayError> {
     Ok(Json(json!(gateway.gateway_id)))
 }
 
@@ -416,7 +417,7 @@ async fn get_gateway_id(
 async fn routing_info_v2(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(federation_id): Json<FederationId>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, PublicGatewayError> {
     let routing_info = gateway.routing_info_v2(&federation_id).await?;
     Ok(Json(json!(routing_info)))
 }
@@ -425,7 +426,7 @@ async fn routing_info_v2(
 async fn pay_bolt11_invoice_v2(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<SendPaymentPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, PublicGatewayError> {
     let payment_result = gateway.send_payment_v2(payload).await?;
     Ok(Json(json!(payment_result)))
 }
@@ -434,7 +435,7 @@ async fn pay_bolt11_invoice_v2(
 async fn create_bolt11_invoice_v2(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<CreateBolt11InvoicePayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, PublicGatewayError> {
     let invoice = gateway.create_bolt11_invoice_v2(payload).await?;
     Ok(Json(json!(invoice)))
 }
@@ -443,7 +444,7 @@ async fn create_bolt11_invoice_v2(
 async fn spend_ecash(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<SpendEcashPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     Ok(Json(json!(gateway.handle_spend_ecash_msg(payload).await?)))
 }
 
@@ -451,7 +452,7 @@ async fn spend_ecash(
 async fn receive_ecash(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<ReceiveEcashPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, PublicGatewayError> {
     Ok(Json(json!(
         gateway.handle_receive_ecash_msg(payload).await?
     )))
@@ -460,7 +461,7 @@ async fn receive_ecash(
 #[instrument(skip_all, err)]
 async fn mnemonic(
     Extension(gateway): Extension<Arc<Gateway>>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let words = gateway.handle_mnemonic_msg().await?;
     Ok(Json(json!(words)))
 }
@@ -469,7 +470,7 @@ async fn mnemonic(
 async fn stop(
     Extension(task_group): Extension<TaskGroup>,
     Extension(gateway): Extension<Arc<Gateway>>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     gateway.handle_shutdown_msg(task_group).await?;
     Ok(Json(json!(())))
 }
