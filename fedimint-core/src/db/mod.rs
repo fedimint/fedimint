@@ -201,6 +201,7 @@ pub type PhantomBound<'big, 'small> = PhantomData<&'small &'big ()>;
 #[derive(Debug, Error)]
 pub enum AutocommitError<E> {
     /// Committing the transaction failed too many times, giving up
+    #[error("Commit Failed: {last_error}")]
     CommitFailed {
         /// Number of attempts
         attempts: usize,
@@ -209,6 +210,7 @@ pub enum AutocommitError<E> {
     },
     /// Error returned by the closure provided to `autocommit`. If returned no
     /// commit was attempted in that round
+    #[error("Closure error: {error}")]
     ClosureError {
         /// The attempt on which the closure returned an error
         ///

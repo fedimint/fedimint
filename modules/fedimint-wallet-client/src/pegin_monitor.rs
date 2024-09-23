@@ -5,10 +5,12 @@ use std::time::{Duration, SystemTime};
 use bitcoin::ScriptBuf;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_bitcoind::DynBitcoindRpc;
-use fedimint_client::module::{ClientContext, ClientDbTxContext};
+use fedimint_client::module::ClientContext;
 use fedimint_client::transaction::ClientInput;
 use fedimint_core::core::OperationId;
-use fedimint_core::db::{AutocommitError, Database, IDatabaseTransactionOpsCoreTyped as _};
+use fedimint_core::db::{
+    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
+};
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
@@ -181,14 +183,14 @@ async fn check_and_claim_idx_pegins(
         Ok(outcomes) => {
             let next_check_time = CheckOutcome::retry_delay_vec(&outcomes, due_val.creation_time)
                 .map(|duration| now + duration);
-            client_ctx
-                .module_autocommit_2(
+            db
+                .autocommit(
                     |dbtx, _| {
                         Box::pin(async {
                             let claimed_now = CheckOutcome::get_claimed_now_outpoints(&outcomes);
 
                             let claimed_sender = pengin_claimed_sender.clone();
-                            dbtx.module_dbtx().on_commit(move || {
+                            dbtx.on_commit(move || {
                                 let _ = claimed_sender.send(());
                             });
 
@@ -205,11 +207,11 @@ async fn check_and_claim_idx_pegins(
                                 data=?peg_in_tweak_index_data,
                                 "Updating"
                             );
-                            dbtx.module_dbtx()
+                            dbtx
                                 .insert_entry(&due_key, &peg_in_tweak_index_data)
                                 .await;
 
-                            Ok(())
+                            Ok::<_, anyhow::Error>(())
                         })
                     },
                     None,
@@ -402,7 +404,8 @@ async fn claim_peg_in(
     tx_out_proof: TxOutProof,
 ) -> anyhow::Result<()> {
     async fn claim_peg_in_inner(
-        dbtx_context: &mut ClientDbTxContext<'_, '_, WalletClientModule>,
+        client_ctx: &ClientContext<WalletClientModule>,
+        dbtx: &mut DatabaseTransaction<'_>,
         btc_transaction: &bitcoin::Transaction,
         out_idx: u32,
         tweak_key: KeyPair,
@@ -428,8 +431,8 @@ async fn claim_peg_in(
             state_machines: Arc::new(|_, _| vec![]),
         };
 
-        dbtx_context
-            .claim_input(client_input, operation_id)
+        client_ctx
+            .claim_input(dbtx, client_input, operation_id)
             .await
             .expect("Cannot claim input, additional funding needed")
     }
@@ -439,10 +442,12 @@ async fn claim_peg_in(
     debug!(target: LOG_CLIENT_MODULE_WALLET, %out_point, "Claiming a peg-in");
 
     client_ctx
-        .module_autocommit(
+        .module_db()
+        .autocommit(
             |dbtx, _| {
                 Box::pin(async {
                     let (claim_txid, change) = claim_peg_in_inner(
+                        client_ctx,
                         dbtx,
                         transaction,
                         out_point.vout,
@@ -452,15 +457,14 @@ async fn claim_peg_in(
                     )
                     .await;
 
-                    dbtx.module_dbtx()
-                        .insert_entry(
-                            &ClaimedPegInKey {
-                                peg_in_index: tweak_idx,
-                                btc_out_point: out_point,
-                            },
-                            &ClaimedPegInData { claim_txid, change },
-                        )
-                        .await;
+                    dbtx.insert_entry(
+                        &ClaimedPegInKey {
+                            peg_in_index: tweak_idx,
+                            btc_out_point: out_point,
+                        },
+                        &ClaimedPegInData { claim_txid, change },
+                    )
+                    .await;
 
                     Ok(())
                 })

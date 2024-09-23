@@ -19,7 +19,7 @@ use tracing::{debug, info, trace, warn};
 
 use super::{ClientModuleInit, ClientModuleRecoverArgs};
 use crate::module::recovery::RecoveryProgress;
-use crate::module::{ClientContext, ClientDbTxContext, ClientModule};
+use crate::module::{ClientContext, ClientModule};
 
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 /// Common state tracked during recovery from history
@@ -211,15 +211,11 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
     /// changes in the database.
     ///
     /// This is the only place during recovery where module gets a chance to
-    /// create state machines, etc. and that's why `dbtx` is of
-    /// [`ClientDbTxContext`] type.
+    /// create state machines, etc.
     ///
     /// Notably this function is running in a database-autocommit wrapper, so
     /// might be called again on database commit failure.
-    async fn finalize_dbtx(
-        &self,
-        dbtx: &mut ClientDbTxContext<'_, '_, <Self::Init as ClientModuleInit>::Module>,
-    ) -> anyhow::Result<()>;
+    async fn finalize_dbtx(&self, dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()>;
 }
 
 impl<Init> ClientModuleRecoverArgs<Init>
@@ -464,24 +460,22 @@ where
             "Finalizing restore"
         );
 
-        client_ctx
-            .clone()
-            .module_autocommit_2(
-                |dbtx, _| {
-                    let state = state.clone();
-                    {
-                        Box::pin(async move {
-                            state.delete_dbtx(&mut dbtx.module_dbtx()).await;
-                            state.finalize_dbtx(dbtx).await?;
-                            Recovery::store_finalized(&mut dbtx.module_dbtx(), true).await;
+        db.autocommit(
+            |dbtx, _| {
+                let state = state.clone();
+                {
+                    Box::pin(async move {
+                        state.delete_dbtx(dbtx).await;
+                        state.finalize_dbtx(dbtx).await?;
+                        Recovery::store_finalized(dbtx, true).await;
 
-                            Ok(())
-                        })
-                    }
-                },
-                None,
-            )
-            .await?;
+                        Ok::<_, anyhow::Error>(())
+                    })
+                }
+            },
+            None,
+        )
+        .await?;
 
         Ok(())
     }

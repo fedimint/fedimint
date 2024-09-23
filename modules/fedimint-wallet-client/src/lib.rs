@@ -639,13 +639,13 @@ impl WalletClientModule {
         let extra_meta_value =
             serde_json::to_value(extra_meta).expect("Failed to serialize extra meta");
         let (operation_id, address, tweak_idx) = self
-            .client_ctx
-            .module_autocommit(
+            .db
+            .autocommit(
                 move |dbtx, _| {
                     let extra_meta_value_inner = extra_meta_value.clone();
                     Box::pin(async move {
                         let (operation_id, address, tweak_idx) = self
-                            .allocate_deposit_address_inner( &mut dbtx.module_dbtx())
+                            .allocate_deposit_address_inner( dbtx)
                             .await;
 
                         self.client_ctx.manual_operation_start_dbtx(
@@ -672,7 +672,7 @@ impl WalletClientModule {
                             .await?;
 
                         let sender = self.pegin_monitor_wakeup_sender.clone();
-                        dbtx.module_dbtx().on_commit(move || {
+                        dbtx.on_commit(move || {
                             let _ = sender.send(());
                         });
 
@@ -890,33 +890,31 @@ impl WalletClientModule {
 
     /// Schedule given address for immediate re-check for deposits
     pub async fn recheck_pegin_address(&self, tweak_idx: TweakIdx) -> anyhow::Result<()> {
-        self.client_ctx
-            .module_autocommit_2(
+        self.db
+            .autocommit(
                 |dbtx, _| {
                     Box::pin(async {
                         let db_key = PegInTweakIndexKey(tweak_idx);
                         let db_val = dbtx
-                            .module_dbtx()
                             .get_value(&db_key)
                             .await
                             .ok_or_else(|| anyhow::format_err!("DBKey not found"))?;
 
-                        dbtx.module_dbtx()
-                            .insert_entry(
-                                &db_key,
-                                &PegInTweakIndexData {
-                                    next_check_time: Some(fedimint_core::time::now()),
-                                    ..db_val
-                                },
-                            )
-                            .await;
+                        dbtx.insert_entry(
+                            &db_key,
+                            &PegInTweakIndexData {
+                                next_check_time: Some(fedimint_core::time::now()),
+                                ..db_val
+                            },
+                        )
+                        .await;
 
                         let sender = self.pegin_monitor_wakeup_sender.clone();
-                        dbtx.module_dbtx().on_commit(move || {
+                        dbtx.on_commit(move || {
                             let _ = sender.send(());
                         });
 
-                        Ok(())
+                        Ok::<_, anyhow::Error>(())
                     })
                 },
                 Some(100),

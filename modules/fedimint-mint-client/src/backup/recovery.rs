@@ -4,7 +4,7 @@ use std::fmt;
 
 use fedimint_client::module::init::recovery::{RecoveryFromHistory, RecoveryFromHistoryCommon};
 use fedimint_client::module::init::ClientModuleRecoverArgs;
-use fedimint_client::module::{ClientContext, ClientDbTxContext};
+use fedimint_client::module::ClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -31,6 +31,7 @@ use crate::{MintClientInit, MintClientModule, MintClientStateMachines, NoteIndex
 pub struct MintRecovery {
     state: MintRecoveryState,
     secret: DerivableSecret,
+    client_ctx: ClientContext<MintClientModule>,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -70,6 +71,7 @@ impl RecoveryFromHistory for MintRecovery {
                     &secret,
                 ),
                 secret,
+                client_ctx: args.context(),
             },
             starting_session,
         ))
@@ -88,6 +90,7 @@ impl RecoveryFromHistory for MintRecovery {
                     MintRecovery {
                         state,
                         secret: args.module_root_secret().clone(),
+                        client_ctx: args.context(),
                     },
                     common,
                 )
@@ -138,10 +141,7 @@ impl RecoveryFromHistory for MintRecovery {
     }
 
     /// Handle session outcome, adjusting the current state
-    async fn finalize_dbtx(
-        &self,
-        dbtx: &mut ClientDbTxContext<'_, '_, MintClientModule>,
-    ) -> anyhow::Result<()> {
+    async fn finalize_dbtx(&self, dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {
         let finalized = self.state.clone().finalize();
 
         let restored_amount = finalized
@@ -164,9 +164,7 @@ impl RecoveryFromHistory for MintRecovery {
                 nonce: note.nonce(),
             };
             debug!(target: LOG_CLIENT_MODULE_MINT, %amount, %note, "Restoring note");
-            dbtx.module_dbtx()
-                .insert_new_entry(&key, &note.to_undecoded())
-                .await;
+            dbtx.insert_new_entry(&key, &note.to_undecoded()).await;
         }
 
         for (amount, note_idx) in finalized.next_note_idx.iter() {
@@ -176,8 +174,7 @@ impl RecoveryFromHistory for MintRecovery {
                 %note_idx,
                 "Restoring NextECashNodeIndex"
             );
-            dbtx.module_dbtx()
-                .insert_entry(&NextECashNoteIndexKey(amount), &note_idx.as_u64())
+            dbtx.insert_entry(&NextECashNoteIndexKey(amount), &note_idx.as_u64())
                 .await;
         }
 
@@ -188,26 +185,27 @@ impl RecoveryFromHistory for MintRecovery {
         );
 
         for (out_point, amount, issuance_request) in finalized.unconfirmed_notes {
-            let client_ctx = dbtx.client_ctx();
-            dbtx.add_state_machines(
-                client_ctx
-                    .map_dyn(vec![MintClientStateMachines::Output(
-                        MintOutputStateMachine {
-                            common: MintOutputCommon {
-                                operation_id: OperationId::new_random(),
-                                out_point,
-                            },
-                            state: crate::output::MintOutputStates::Created(
-                                MintOutputStatesCreated {
-                                    amount,
-                                    issuance_request,
+            self.client_ctx
+                .add_state_machines_dbtx(
+                    dbtx,
+                    self.client_ctx
+                        .map_dyn(vec![MintClientStateMachines::Output(
+                            MintOutputStateMachine {
+                                common: MintOutputCommon {
+                                    operation_id: OperationId::new_random(),
+                                    out_point,
                                 },
-                            ),
-                        },
-                    )])
-                    .collect(),
-            )
-            .await?;
+                                state: crate::output::MintOutputStates::Created(
+                                    MintOutputStatesCreated {
+                                        amount,
+                                        issuance_request,
+                                    },
+                                ),
+                            },
+                        )])
+                        .collect(),
+                )
+                .await?;
         }
 
         debug!(
