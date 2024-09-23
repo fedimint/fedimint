@@ -1209,7 +1209,7 @@ impl LightningClientModule {
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
 
-        Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, || {
             stream! {
                 yield InternalPayState::Funding;
 
@@ -1274,7 +1274,7 @@ impl LightningClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, || {
             stream! {
                 let self_ref = client_ctx.self_ref();
 
@@ -1593,7 +1593,7 @@ impl LightningClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, || {
             stream! {
                 yield LnReceiveState::AwaitingFunds;
 
@@ -1626,7 +1626,7 @@ impl LightningClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, || {
             stream! {
 
                 let self_ref = client_ctx.self_ref();

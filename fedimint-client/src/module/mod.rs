@@ -25,9 +25,13 @@ use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
     TransactionId,
 };
+use futures::Stream;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 use self::init::ClientModuleInit;
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
+use crate::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use crate::sm::{self, ActiveStateMeta, Context, DynContext, DynState, State};
 use crate::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use crate::{
@@ -454,7 +458,10 @@ where
         Ok(operation)
     }
 
-    pub fn global_db(&self) -> fedimint_core::db::Database {
+    /// Get global db.
+    ///
+    /// Only intended for internal use (private).
+    fn global_db(&self) -> fedimint_core::db::Database {
         self.client.get().db().clone()
     }
 
@@ -594,6 +601,19 @@ where
             .expect("State machine is valid");
 
         Ok(())
+    }
+
+    pub fn outcome_or_updates<U, S>(
+        &self,
+        operation: &OperationLogEntry,
+        operation_id: OperationId,
+        stream_gen: impl FnOnce() -> S,
+    ) -> UpdateStreamOrOutcome<U>
+    where
+        U: Clone + Serialize + DeserializeOwned + Debug + MaybeSend + MaybeSync + 'static,
+        S: Stream<Item = U> + MaybeSend + 'static,
+    {
+        operation.outcome_or_updates(&self.global_db(), operation_id, stream_gen)
     }
 }
 

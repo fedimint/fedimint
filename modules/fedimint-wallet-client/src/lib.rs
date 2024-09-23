@@ -747,7 +747,7 @@ impl WalletClientModule {
             return Ok(UpdateStreamOrOutcome::Outcome(outcome_v2));
         };
 
-        Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, || {
             let stream_rpc = self.rpc.clone();
             let stream_cient_ctx = self.client_ctx.clone();
             let stream_script_pub_key = address.assume_checked().script_pubkey();
@@ -1089,8 +1089,9 @@ impl WalletClientModule {
         let mut operation_stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
 
-        Ok(
-            operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, || {
+        Ok(self
+            .client_ctx
+            .outcome_or_updates(&operation, operation_id, || {
                 stream! {
                     match next_withdraw_state(&mut operation_stream).await {
                         Some(WithdrawStates::Created(_)) => {
@@ -1124,8 +1125,7 @@ impl WalletClientModule {
                         None => {},
                     }
                 }
-            }),
-        )
+            }))
     }
 }
 
