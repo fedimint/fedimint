@@ -538,17 +538,27 @@ impl Gateway {
         if handle
             .cancel_on_shutdown(async move {
                 loop {
-                    let state = self.get_state().await;
-                    let GatewayState::Running { lightning_context } = state else {
+                    let payment_request = tokio::select! {
+                        payment_request = stream.next() => {
+                            payment_request
+                        }
+                        () = self.is_shutting_down_safely() => {
+                            break;
+                        }
+                    };
+
+                    // Hold the Gateway state's lock so that it doesn't change before `handle_htlc`.
+                    let state_guard = self.state.read().await;
+                    let GatewayState::Running { ref lightning_context } = *state_guard else {
                         warn!(
-                            ?state,
+                            ?state_guard,
                             "Gateway isn't in a running state, cannot handle incoming payments."
                         );
                         break;
                     };
 
-                    let htlc_request = match stream.next().await {
-                        Some(Ok(htlc_request)) => htlc_request,
+                    let payment_request = match payment_request {
+                        Some(Ok(payment_request)) => payment_request,
                         other => {
                             warn!(
                                 ?other,
@@ -558,7 +568,7 @@ impl Gateway {
                         }
                     };
 
-                    self.handle_htlc(htlc_request, &lightning_context).await;
+                    self.handle_htlc(payment_request, &lightning_context).await;
                 }
             })
             .await
@@ -569,6 +579,18 @@ impl Gateway {
         } else {
             info!("Received shutdown signal");
             ReceivePaymentStreamAction::NoRetry
+        }
+    }
+
+    /// Polls the Gateway's state waiting for it to shutdown so the thread
+    /// processing payment requests can exit.
+    async fn is_shutting_down_safely(&self) {
+        loop {
+            if let GatewayState::ShuttingDown { .. } = self.get_state().await {
+                return;
+            }
+
+            fedimint_core::task::sleep(Duration::from_secs(1)).await;
         }
     }
 
@@ -1538,9 +1560,11 @@ impl Gateway {
     }
 
     pub async fn handle_shutdown_msg(&self, task_group: TaskGroup) -> AdminResult<()> {
-        if let GatewayState::Running { lightning_context } = self.get_state().await {
-            self.set_gateway_state(GatewayState::ShuttingDown { lightning_context })
-                .await;
+        // Take the write lock on the state so that no additional payments are processed
+        let mut state_guard = self.state.write().await;
+        if let GatewayState::Running { lightning_context } = state_guard.clone() {
+            *state_guard = GatewayState::ShuttingDown { lightning_context };
+
             self.federation_manager
                 .read()
                 .await
