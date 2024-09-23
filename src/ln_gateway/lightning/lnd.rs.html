@@ -1431,7 +1431,11 @@
 <a href="#1430" id="1430">1430</a>
 <a href="#1431" id="1431">1431</a>
 <a href="#1432" id="1432">1432</a>
-<a href="#1433" id="1433">1433</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
+<a href="#1433" id="1433">1433</a>
+<a href="#1434" id="1434">1434</a>
+<a href="#1435" id="1435">1435</a>
+<a href="#1436" id="1436">1436</a>
+<a href="#1437" id="1437">1437</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -2762,6 +2766,10 @@
             onchain_balance_sats: wallet_balance_response.total_balance <span class="kw">as </span>u64,
             lightning_balance_msats: channel_balance_response
                 .local_balance
+                .unwrap_or_default()
+                .msat,
+            inbound_lightning_liquidity_msats: channel_balance_response
+                .remote_balance
                 .unwrap_or_default()
                 .msat,
         })

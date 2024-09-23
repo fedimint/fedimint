@@ -1335,7 +1335,37 @@
 <a href="#1334" id="1334">1334</a>
 <a href="#1335" id="1335">1335</a>
 <a href="#1336" id="1336">1336</a>
-<a href="#1337" id="1337">1337</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
+<a href="#1337" id="1337">1337</a>
+<a href="#1338" id="1338">1338</a>
+<a href="#1339" id="1339">1339</a>
+<a href="#1340" id="1340">1340</a>
+<a href="#1341" id="1341">1341</a>
+<a href="#1342" id="1342">1342</a>
+<a href="#1343" id="1343">1343</a>
+<a href="#1344" id="1344">1344</a>
+<a href="#1345" id="1345">1345</a>
+<a href="#1346" id="1346">1346</a>
+<a href="#1347" id="1347">1347</a>
+<a href="#1348" id="1348">1348</a>
+<a href="#1349" id="1349">1349</a>
+<a href="#1350" id="1350">1350</a>
+<a href="#1351" id="1351">1351</a>
+<a href="#1352" id="1352">1352</a>
+<a href="#1353" id="1353">1353</a>
+<a href="#1354" id="1354">1354</a>
+<a href="#1355" id="1355">1355</a>
+<a href="#1356" id="1356">1356</a>
+<a href="#1357" id="1357">1357</a>
+<a href="#1358" id="1358">1358</a>
+<a href="#1359" id="1359">1359</a>
+<a href="#1360" id="1360">1360</a>
+<a href="#1361" id="1361">1361</a>
+<a href="#1362" id="1362">1362</a>
+<a href="#1363" id="1363">1363</a>
+<a href="#1364" id="1364">1364</a>
+<a href="#1365" id="1365">1365</a>
+<a href="#1366" id="1366">1366</a>
+<a href="#1367" id="1367">1367</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -2513,6 +2543,35 @@
             })<span class="question-mark">?
             </span>.map_err(|e| tonic::Status::internal(e.to_string()))<span class="question-mark">?</span>;
 
+        <span class="kw">let </span>total_receivable_msat = <span class="self">self
+            </span>.rpc_client()
+            .<span class="kw">await
+            </span>.map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?
+            </span>.call(cln_rpc::Request::ListPeerChannels(
+                model::requests::ListpeerchannelsRequest { id: <span class="prelude-val">None </span>},
+            ))
+            .<span class="kw">await
+            </span>.map(|response| <span class="kw">match </span>response {
+                cln_rpc::Response::ListPeerChannels(
+                    model::responses::ListpeerchannelsResponse { channels },
+                ) =&gt; <span class="prelude-val">Ok</span>(channels
+                    .into_iter()
+                    .filter(|channel| {
+                        <span class="macro">matches!</span>(
+                            channel.state,
+                            model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
+                        )
+                    })
+                    .filter_map(|channel| channel.receivable_msat.map(|value| value.msat()))
+                    .sum::&lt;u64&gt;()), <span class="comment">// Sum the receivable_msat values directly
+                </span><span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(ClnExtensionError::RpcWrongResponse),
+            })
+            .map_err(|e| {
+                <span class="macro">error!</span>(<span class="string">"cln listchannels rpc returned error {:?}"</span>, e);
+                tonic::Status::internal(e.to_string())
+            })<span class="question-mark">?
+            </span>.map_err(|e| tonic::Status::internal(e.to_string()))<span class="question-mark">?</span>;
+
         <span class="kw">let </span>lightning_balance_msats = channels
             .into_iter()
             .fold(<span class="number">0</span>, |acc, channel| acc + channel.our_amount_msat.msat());
@@ -2523,6 +2582,7 @@
         <span class="prelude-val">Ok</span>(tonic::Response::new(GetBalancesResponse {
             onchain_balance_sats,
             lightning_balance_msats,
+            inbound_lightning_liquidity_msats: total_receivable_msat,
         }))
     }
 }

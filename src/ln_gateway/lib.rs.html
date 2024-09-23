@@ -2069,7 +2069,9 @@
 <a href="#2068" id="2068">2068</a>
 <a href="#2069" id="2069">2069</a>
 <a href="#2070" id="2070">2070</a>
-<a href="#2071" id="2071">2071</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2071" id="2071">2071</a>
+<a href="#2072" id="2072">2072</a>
+<a href="#2073" id="2073">2073</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -3466,6 +3468,8 @@
             onchain_balance_sats: lightning_node_balances.onchain_balance_sats,
             lightning_balance_msats: lightning_node_balances.lightning_balance_msats,
             ecash_balances,
+            inbound_lightning_liquidity_msats: lightning_node_balances
+                .inbound_lightning_liquidity_msats,
         })
     }
 
