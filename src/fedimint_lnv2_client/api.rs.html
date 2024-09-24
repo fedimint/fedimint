@@ -287,7 +287,12 @@
 <a href="#286" id="286">286</a>
 <a href="#287" id="287">287</a>
 <a href="#288" id="288">288</a>
-<a href="#289" id="289">289</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::secp256k1;
@@ -310,6 +315,7 @@
 <span class="kw">use </span>fedimint_lnv2_common::ContractId;
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
+<span class="kw">use </span>rand::seq::SliceRandom;
 <span class="kw">use </span>secp256k1::schnorr::Signature;
 
 <span class="kw">use crate</span>::{
@@ -417,6 +423,10 @@
             .dedup()
             .cloned()
             .collect::&lt;Vec&lt;SafeUrl&gt;&gt;();
+
+        <span class="comment">// Shuffling the gateways ensures that payments are distributed over the
+        // gateways evenly.
+        </span>union.shuffle(<span class="kw-2">&amp;mut </span>rand::thread_rng());
 
         union.sort_by_cached_key(|r| {
             gateways

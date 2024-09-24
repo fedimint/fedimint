@@ -1106,7 +1106,56 @@
 <a href="#1105" id="1105">1105</a>
 <a href="#1106" id="1106">1106</a>
 <a href="#1107" id="1107">1107</a>
-<a href="#1108" id="1108">1108</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1108" id="1108">1108</a>
+<a href="#1109" id="1109">1109</a>
+<a href="#1110" id="1110">1110</a>
+<a href="#1111" id="1111">1111</a>
+<a href="#1112" id="1112">1112</a>
+<a href="#1113" id="1113">1113</a>
+<a href="#1114" id="1114">1114</a>
+<a href="#1115" id="1115">1115</a>
+<a href="#1116" id="1116">1116</a>
+<a href="#1117" id="1117">1117</a>
+<a href="#1118" id="1118">1118</a>
+<a href="#1119" id="1119">1119</a>
+<a href="#1120" id="1120">1120</a>
+<a href="#1121" id="1121">1121</a>
+<a href="#1122" id="1122">1122</a>
+<a href="#1123" id="1123">1123</a>
+<a href="#1124" id="1124">1124</a>
+<a href="#1125" id="1125">1125</a>
+<a href="#1126" id="1126">1126</a>
+<a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
+<a href="#1131" id="1131">1131</a>
+<a href="#1132" id="1132">1132</a>
+<a href="#1133" id="1133">1133</a>
+<a href="#1134" id="1134">1134</a>
+<a href="#1135" id="1135">1135</a>
+<a href="#1136" id="1136">1136</a>
+<a href="#1137" id="1137">1137</a>
+<a href="#1138" id="1138">1138</a>
+<a href="#1139" id="1139">1139</a>
+<a href="#1140" id="1140">1140</a>
+<a href="#1141" id="1141">1141</a>
+<a href="#1142" id="1142">1142</a>
+<a href="#1143" id="1143">1143</a>
+<a href="#1144" id="1144">1144</a>
+<a href="#1145" id="1145">1145</a>
+<a href="#1146" id="1146">1146</a>
+<a href="#1147" id="1147">1147</a>
+<a href="#1148" id="1148">1148</a>
+<a href="#1149" id="1149">1149</a>
+<a href="#1150" id="1150">1150</a>
+<a href="#1151" id="1151">1151</a>
+<a href="#1152" id="1152">1152</a>
+<a href="#1153" id="1153">1153</a>
+<a href="#1154" id="1154">1154</a>
+<a href="#1155" id="1155">1155</a>
+<a href="#1156" id="1156">1156</a>
+<a href="#1157" id="1157">1157</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -1115,16 +1164,19 @@
 </span><span class="kw">pub mod </span>api;
 <span class="attr">#[cfg(feature = <span class="string">"cli"</span>)]
 </span><span class="kw">mod </span>cli;
+<span class="kw">mod </span>db;
 <span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>api::{GatewayConnection, RealGatewayConnection};
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
 <span class="kw">use </span>bitcoin::secp256k1;
+<span class="kw">use </span>db::GatewayKey;
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
@@ -1136,11 +1188,12 @@
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-<span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
+<span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{
     ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
+<span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::time::duration_since_epoch;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId, TransactionId};
@@ -1541,7 +1594,36 @@
 }
 
 <span class="kw">impl </span>LightningClientModule {
-    <span class="kw">async fn </span>select_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(SafeUrl, RoutingInfo), SelectGatewayError&gt; {
+    <span class="doccomment">/// This method updates the mapping from lightning node public keys to
+    /// gateway api endpoints maintained in the module database once a day. When
+    /// paying an invoice this enables the client to select the gateway that has
+    /// created the invoice, if possible, such that the payment does not go
+    /// over lightning, reducing fees and latency.
+    ///
+    /// Client integrators are expected to call this function in a spawned task.
+    </span><span class="kw">pub async fn </span>update_gateway_map(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ! {
+        <span class="kw">loop </span>{
+            <span class="kw">if let </span><span class="prelude-val">Ok</span>(gateways) = <span class="self">self</span>.module_api.gateways().<span class="kw">await </span>{
+                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.client_ctx.module_db().begin_transaction().<span class="kw">await</span>;
+
+                <span class="kw">for </span>gateway <span class="kw">in </span>gateways {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(routing_info)) = <span class="self">self</span>.routing_info(<span class="kw-2">&amp;</span>gateway).<span class="kw">await </span>{
+                        dbtx.insert_entry(<span class="kw-2">&amp;</span>GatewayKey(routing_info.lightning_public_key), <span class="kw-2">&amp;</span>gateway)
+                            .<span class="kw">await</span>;
+                    }
+                }
+
+                dbtx.commit_tx().<span class="kw">await</span>;
+            }
+
+            sleep(Duration::from_secs(<span class="number">24 </span>* <span class="number">60 </span>* <span class="number">60</span>)).<span class="kw">await</span>;
+        }
+    }
+
+    <span class="kw">async fn </span>select_gateway(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        invoice: <span class="prelude-ty">Option</span>&lt;Bolt11Invoice&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(SafeUrl, RoutingInfo), SelectGatewayError&gt; {
         <span class="kw">let </span>gateways = <span class="self">self
             </span>.module_api
             .gateways()
@@ -1550,6 +1632,22 @@
 
         <span class="kw">if </span>gateways.is_empty() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(SelectGatewayError::NoVettedGateways);
+        }
+
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(invoice) = invoice {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway) = <span class="self">self
+                </span>.client_ctx
+                .module_db()
+                .begin_transaction_nc()
+                .<span class="kw">await
+                </span>.get_value(<span class="kw-2">&amp;</span>GatewayKey(invoice.recover_payee_pub_key()))
+                .<span class="kw">await
+                </span>.filter(|gateway| gateways.contains(gateway))
+            {
+                <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(routing_info)) = <span class="self">self</span>.routing_info(<span class="kw-2">&amp;</span>gateway).<span class="kw">await </span>{
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>((gateway, routing_info));
+                }
+            }
         }
 
         <span class="kw">for </span>gateway <span class="kw">in </span>gateways {
@@ -1629,7 +1727,7 @@
                     </span>.ok_or(SendPaymentError::UnknownFederation)<span class="question-mark">?</span>,
             ),
             <span class="prelude-val">None </span>=&gt; <span class="self">self
-                </span>.select_gateway()
+                </span>.select_gateway(<span class="prelude-val">Some</span>(invoice.clone()))
                 .<span class="kw">await
                 </span>.map_err(SendPaymentError::FailedToSelectGateway)<span class="question-mark">?</span>,
         };
@@ -1898,7 +1996,7 @@
                     </span>.ok_or(ReceiveError::UnknownFederation)<span class="question-mark">?</span>,
             ),
             <span class="prelude-val">None </span>=&gt; <span class="self">self
-                </span>.select_gateway()
+                </span>.select_gateway(<span class="prelude-val">None</span>)
                 .<span class="kw">await
                 </span>.map_err(ReceiveError::FailedToSelectGateway)<span class="question-mark">?</span>,
         };
