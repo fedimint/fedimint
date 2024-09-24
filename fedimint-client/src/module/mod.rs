@@ -297,10 +297,18 @@ where
     ///
     /// Only intended for internal use (private).
     fn global_db(&self) -> fedimint_core::db::Database {
-        self.client.get().db().clone()
+        let db = self.client.get().db().clone();
+
+        db.ensure_global()
+            .expect("global_db must always return a global db");
+
+        db
     }
 
     pub fn module_db(&self) -> &Database {
+        self.module_db
+            .ensure_isolated()
+            .expect("module_db must always return isolated db");
         &self.module_db
     }
 

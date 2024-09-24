@@ -591,7 +591,7 @@ impl GatewayClientModule {
                             .map(|s| self.client_ctx.make_dyn(s))
                             .collect();
 
-                            match self.client_ctx.add_state_machines_dbtx( dbtx, dyn_states).await {
+                            match self.client_ctx.add_state_machines_dbtx(dbtx, dyn_states).await {
                                 Ok(()) => {
                                     self.client_ctx
                                         .add_operation_log_entry_dbtx(

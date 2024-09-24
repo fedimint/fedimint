@@ -513,6 +513,8 @@ impl WalletClientModule {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> (OperationId, Address, TweakIdx) {
+        dbtx.ensure_isolated().expect("Must be isolated db");
+
         let tweak_idx = get_next_peg_in_tweak_child_id(dbtx).await;
         let (_secret_tweak_key, _, address, operation_id) =
             self.data.derive_deposit_address(tweak_idx);
@@ -645,7 +647,7 @@ impl WalletClientModule {
                     let extra_meta_value_inner = extra_meta_value.clone();
                     Box::pin(async move {
                         let (operation_id, address, tweak_idx) = self
-                            .allocate_deposit_address_inner( dbtx)
+                            .allocate_deposit_address_inner(dbtx)
                             .await;
 
                         self.client_ctx.manual_operation_start_dbtx(
