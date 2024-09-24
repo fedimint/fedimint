@@ -201,6 +201,7 @@ pub type PhantomBound<'big, 'small> = PhantomData<&'small &'big ()>;
 #[derive(Debug, Error)]
 pub enum AutocommitError<E> {
     /// Committing the transaction failed too many times, giving up
+    #[error("Commit Failed: {last_error}")]
     CommitFailed {
         /// Number of attempts
         attempts: usize,
@@ -209,6 +210,7 @@ pub enum AutocommitError<E> {
     },
     /// Error returned by the closure provided to `autocommit`. If returned no
     /// commit was attempted in that round
+    #[error("Closure error: {error}")]
     ClosureError {
         /// The attempt on which the closure returned an error
         ///
@@ -289,8 +291,9 @@ pub trait IDatabase: Debug + MaybeSend + MaybeSync + 'static {
     /// Notify about `key` update (creation, modification, deletion)
     async fn notify(&self, key: &[u8]);
 
-    /// The prefix len of this database instance
-    fn prefix_len(&self) -> usize;
+    /// The prefix len of this database refers to the global (as opposed to
+    /// module-isolated) key space
+    fn is_global(&self) -> bool;
 
     /// Checkpoints the database to a backup directory
     fn checkpoint(&self, backup_path: &Path) -> Result<()>;
@@ -311,8 +314,8 @@ where
         (**self).notify(key).await;
     }
 
-    fn prefix_len(&self) -> usize {
-        (**self).prefix_len()
+    fn is_global(&self) -> bool {
+        (**self).is_global()
     }
 
     fn checkpoint(&self, backup_path: &Path) -> Result<()> {
@@ -349,8 +352,8 @@ impl<RawDatabase: IRawDatabase + MaybeSend + 'static> IDatabase for BaseDatabase
         self.notifications.notify(key);
     }
 
-    fn prefix_len(&self) -> usize {
-        0
+    fn is_global(&self) -> bool {
+        true
     }
 
     fn checkpoint(&self, backup_path: &Path) -> Result<()> {
@@ -449,7 +452,7 @@ impl Database {
 
     /// Is this `Database` a global, unpartitioned `Database`
     pub fn is_global(&self) -> bool {
-        self.inner.prefix_len() == 0
+        self.inner.is_global()
     }
 
     /// `Err` if [`Self::is_global`] is not true
@@ -696,8 +699,12 @@ where
         self.inner.notify(&self.get_full_key(key)).await;
     }
 
-    fn prefix_len(&self) -> usize {
-        self.inner.prefix_len() + self.prefix.len()
+    fn is_global(&self) -> bool {
+        if self.global_dbtx_access_token.is_some() {
+            false
+        } else {
+            self.inner.is_global()
+        }
     }
 
     fn checkpoint(&self, backup_path: &Path) -> Result<()> {
@@ -747,8 +754,12 @@ where
         self.inner.commit_tx().await
     }
 
-    fn prefix_len(&self) -> usize {
-        self.inner.prefix_len() + self.prefix.len()
+    fn is_global(&self) -> bool {
+        if self.global_dbtx_access_token.is_some() {
+            false
+        } else {
+            self.inner.is_global()
+        }
     }
 
     fn global_dbtx(
@@ -1253,8 +1264,8 @@ pub trait IDatabaseTransaction: MaybeSend + IDatabaseTransactionOps + fmt::Debug
     /// Commit the transaction
     async fn commit_tx(&mut self) -> Result<()>;
 
-    /// The prefix len of this database instance
-    fn prefix_len(&self) -> usize;
+    /// Is global database
+    fn is_global(&self) -> bool;
 
     /// Get the global database tx from a module-prefixed database transaction
     ///
@@ -1274,8 +1285,8 @@ where
         (**self).commit_tx().await
     }
 
-    fn prefix_len(&self) -> usize {
-        (**self).prefix_len()
+    fn is_global(&self) -> bool {
+        (**self).is_global()
     }
 
     fn global_dbtx(
@@ -1294,8 +1305,9 @@ where
     async fn commit_tx(&mut self) -> Result<()> {
         (**self).commit_tx().await
     }
-    fn prefix_len(&self) -> usize {
-        (**self).prefix_len()
+
+    fn is_global(&self) -> bool {
+        (**self).is_global()
     }
 
     fn global_dbtx(&mut self, access_key: GlobalDBTxAccessToken) -> &mut dyn IDatabaseTransaction {
@@ -1448,8 +1460,8 @@ impl<Tx: IRawDatabaseTransaction + fmt::Debug> IDatabaseTransaction
         Ok(())
     }
 
-    fn prefix_len(&self) -> usize {
-        0
+    fn is_global(&self) -> bool {
+        true
     }
 
     fn global_dbtx(
@@ -1740,7 +1752,7 @@ impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
 
     /// Is this `Database` a global, unpartitioned `Database`
     pub fn is_global(&self) -> bool {
-        self.tx.prefix_len() == 0
+        self.tx.is_global()
     }
 
     /// `Err` if [`Self::is_global`] is not true

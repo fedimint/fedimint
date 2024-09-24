@@ -513,6 +513,8 @@ impl WalletClientModule {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> (OperationId, Address, TweakIdx) {
+        dbtx.ensure_isolated().expect("Must be isolated db");
+
         let tweak_idx = get_next_peg_in_tweak_child_id(dbtx).await;
         let (_secret_tweak_key, _, address, operation_id) =
             self.data.derive_deposit_address(tweak_idx);
@@ -639,13 +641,13 @@ impl WalletClientModule {
         let extra_meta_value =
             serde_json::to_value(extra_meta).expect("Failed to serialize extra meta");
         let (operation_id, address, tweak_idx) = self
-            .client_ctx
-            .module_autocommit(
+            .db
+            .autocommit(
                 move |dbtx, _| {
                     let extra_meta_value_inner = extra_meta_value.clone();
                     Box::pin(async move {
                         let (operation_id, address, tweak_idx) = self
-                            .allocate_deposit_address_inner( &mut dbtx.module_dbtx())
+                            .allocate_deposit_address_inner(dbtx)
                             .await;
 
                         self.client_ctx.manual_operation_start_dbtx(
@@ -672,7 +674,7 @@ impl WalletClientModule {
                             .await?;
 
                         let sender = self.pegin_monitor_wakeup_sender.clone();
-                        dbtx.module_dbtx().on_commit(move || {
+                        dbtx.on_commit(move || {
                             let _ = sender.send(());
                         });
 
@@ -747,7 +749,7 @@ impl WalletClientModule {
             return Ok(UpdateStreamOrOutcome::Outcome(outcome_v2));
         };
 
-        Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, || {
             let stream_rpc = self.rpc.clone();
             let stream_cient_ctx = self.client_ctx.clone();
             let stream_script_pub_key = address.assume_checked().script_pubkey();
@@ -890,33 +892,31 @@ impl WalletClientModule {
 
     /// Schedule given address for immediate re-check for deposits
     pub async fn recheck_pegin_address(&self, tweak_idx: TweakIdx) -> anyhow::Result<()> {
-        self.client_ctx
-            .module_autocommit_2(
+        self.db
+            .autocommit(
                 |dbtx, _| {
                     Box::pin(async {
                         let db_key = PegInTweakIndexKey(tweak_idx);
                         let db_val = dbtx
-                            .module_dbtx()
                             .get_value(&db_key)
                             .await
                             .ok_or_else(|| anyhow::format_err!("DBKey not found"))?;
 
-                        dbtx.module_dbtx()
-                            .insert_entry(
-                                &db_key,
-                                &PegInTweakIndexData {
-                                    next_check_time: Some(fedimint_core::time::now()),
-                                    ..db_val
-                                },
-                            )
-                            .await;
+                        dbtx.insert_entry(
+                            &db_key,
+                            &PegInTweakIndexData {
+                                next_check_time: Some(fedimint_core::time::now()),
+                                ..db_val
+                            },
+                        )
+                        .await;
 
                         let sender = self.pegin_monitor_wakeup_sender.clone();
-                        dbtx.module_dbtx().on_commit(move || {
+                        dbtx.on_commit(move || {
                             let _ = sender.send(());
                         });
 
-                        Ok(())
+                        Ok::<_, anyhow::Error>(())
                     })
                 },
                 Some(100),
@@ -1089,8 +1089,9 @@ impl WalletClientModule {
         let mut operation_stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
 
-        Ok(
-            operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, || {
+        Ok(self
+            .client_ctx
+            .outcome_or_updates(&operation, operation_id, || {
                 stream! {
                     match next_withdraw_state(&mut operation_stream).await {
                         Some(WithdrawStates::Created(_)) => {
@@ -1124,8 +1125,7 @@ impl WalletClientModule {
                         None => {},
                     }
                 }
-            }),
-        )
+            }))
     }
 }
 
