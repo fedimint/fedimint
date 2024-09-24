@@ -1872,6 +1872,8 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
     ) -&gt; (OperationId, Address, TweakIdx) {
+        dbtx.ensure_isolated().expect(<span class="string">"Must be isolated db"</span>);
+
         <span class="kw">let </span>tweak_idx = get_next_peg_in_tweak_child_id(dbtx).<span class="kw">await</span>;
         <span class="kw">let </span>(_secret_tweak_key, <span class="kw">_</span>, address, operation_id) =
             <span class="self">self</span>.data.derive_deposit_address(tweak_idx);
@@ -1998,13 +2000,13 @@
         <span class="kw">let </span>extra_meta_value =
             serde_json::to_value(extra_meta).expect(<span class="string">"Failed to serialize extra meta"</span>);
         <span class="kw">let </span>(operation_id, address, tweak_idx) = <span class="self">self
-            </span>.client_ctx
-            .module_autocommit(
+            </span>.db
+            .autocommit(
                 <span class="kw">move </span>|dbtx, <span class="kw">_</span>| {
                     <span class="kw">let </span>extra_meta_value_inner = extra_meta_value.clone();
                     Box::pin(<span class="kw">async move </span>{
                         <span class="kw">let </span>(operation_id, address, tweak_idx) = <span class="self">self
-                            </span>.allocate_deposit_address_inner( <span class="kw-2">&amp;mut </span>dbtx.module_dbtx())
+                            </span>.allocate_deposit_address_inner(dbtx)
                             .<span class="kw">await</span>;
 
                         <span class="self">self</span>.client_ctx.manual_operation_start_dbtx(
@@ -2031,7 +2033,7 @@
                             .<span class="kw">await</span><span class="question-mark">?</span>;
 
                         <span class="kw">let </span>sender = <span class="self">self</span>.pegin_monitor_wakeup_sender.clone();
-                        dbtx.module_dbtx().on_commit(<span class="kw">move </span>|| {
+                        dbtx.on_commit(<span class="kw">move </span>|| {
                             <span class="kw">let _ </span>= sender.send(());
                         });
 
@@ -2106,7 +2108,7 @@
             <span class="kw">return </span><span class="prelude-val">Ok</span>(UpdateStreamOrOutcome::Outcome(outcome_v2));
         };
 
-        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, || {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_ctx.outcome_or_updates(<span class="kw-2">&amp;</span>operation, operation_id, || {
             <span class="kw">let </span>stream_rpc = <span class="self">self</span>.rpc.clone();
             <span class="kw">let </span>stream_cient_ctx = <span class="self">self</span>.client_ctx.clone();
             <span class="kw">let </span>stream_script_pub_key = address.assume_checked().script_pubkey();
@@ -2249,33 +2251,31 @@
 
     <span class="doccomment">/// Schedule given address for immediate re-check for deposits
     </span><span class="kw">pub async fn </span>recheck_pegin_address(<span class="kw-2">&amp;</span><span class="self">self</span>, tweak_idx: TweakIdx) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="self">self</span>.client_ctx
-            .module_autocommit_2(
+        <span class="self">self</span>.db
+            .autocommit(
                 |dbtx, <span class="kw">_</span>| {
                     Box::pin(<span class="kw">async </span>{
                         <span class="kw">let </span>db_key = PegInTweakIndexKey(tweak_idx);
                         <span class="kw">let </span>db_val = dbtx
-                            .module_dbtx()
                             .get_value(<span class="kw-2">&amp;</span>db_key)
                             .<span class="kw">await
                             </span>.ok_or_else(|| <span class="macro">anyhow::format_err!</span>(<span class="string">"DBKey not found"</span>))<span class="question-mark">?</span>;
 
-                        dbtx.module_dbtx()
-                            .insert_entry(
-                                <span class="kw-2">&amp;</span>db_key,
-                                <span class="kw-2">&amp;</span>PegInTweakIndexData {
-                                    next_check_time: <span class="prelude-val">Some</span>(fedimint_core::time::now()),
-                                    ..db_val
-                                },
-                            )
-                            .<span class="kw">await</span>;
+                        dbtx.insert_entry(
+                            <span class="kw-2">&amp;</span>db_key,
+                            <span class="kw-2">&amp;</span>PegInTweakIndexData {
+                                next_check_time: <span class="prelude-val">Some</span>(fedimint_core::time::now()),
+                                ..db_val
+                            },
+                        )
+                        .<span class="kw">await</span>;
 
                         <span class="kw">let </span>sender = <span class="self">self</span>.pegin_monitor_wakeup_sender.clone();
-                        dbtx.module_dbtx().on_commit(<span class="kw">move </span>|| {
+                        dbtx.on_commit(<span class="kw">move </span>|| {
                             <span class="kw">let _ </span>= sender.send(());
                         });
 
-                        <span class="prelude-val">Ok</span>(())
+                        <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;(())
                     })
                 },
                 <span class="prelude-val">Some</span>(<span class="number">100</span>),
@@ -2448,8 +2448,9 @@
         <span class="kw">let </span><span class="kw-2">mut </span>operation_stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
 
-        <span class="prelude-val">Ok</span>(
-            operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, || {
+        <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.client_ctx
+            .outcome_or_updates(<span class="kw-2">&amp;</span>operation, operation_id, || {
                 <span class="macro">stream!</span> {
                     <span class="kw">match </span>next_withdraw_state(<span class="kw-2">&amp;mut </span>operation_stream).<span class="kw">await </span>{
                         <span class="prelude-val">Some</span>(WithdrawStates::Created(<span class="kw">_</span>)) =&gt; {
@@ -2483,8 +2484,7 @@
                         <span class="prelude-val">None </span>=&gt; {},
                     }
                 }
-            }),
-        )
+            }))
     }
 }
 

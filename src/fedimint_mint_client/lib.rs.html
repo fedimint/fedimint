@@ -2547,7 +2547,16 @@
 <a href="#2546" id="2546">2546</a>
 <a href="#2547" id="2547">2547</a>
 <a href="#2548" id="2548">2548</a>
-<a href="#2549" id="2549">2549</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2549" id="2549">2549</a>
+<a href="#2550" id="2550">2550</a>
+<a href="#2551" id="2551">2551</a>
+<a href="#2552" id="2552">2552</a>
+<a href="#2553" id="2553">2553</a>
+<a href="#2554" id="2554">2554</a>
+<a href="#2555" id="2555">2555</a>
+<a href="#2556" id="2556">2556</a>
+<a href="#2557" id="2557">2557</a>
+<a href="#2558" id="2558">2558</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -3252,7 +3261,8 @@
 
     <span class="kw">async fn </span>backup(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;EcashBackup&gt; {
         <span class="self">self</span>.client_ctx
-            .module_autocommit(
+            .module_db()
+            .autocommit(
                 |dbtx_ctx, <span class="kw">_</span>| {
                     Box::pin(<span class="kw">async </span>{ <span class="self">self</span>.prepare_plaintext_ecash_backup(dbtx_ctx).<span class="kw">await </span>})
                 },
@@ -4025,7 +4035,7 @@
 
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
 
-        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, || {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_ctx.outcome_or_updates(<span class="kw-2">&amp;</span>operation, operation_id, || {
             <span class="macro">stream!</span> {
                 <span class="kw">yield </span>ReissueExternalNotesState::Created;
 
@@ -4097,13 +4107,14 @@
             .expect(<span class="string">"MintClientModule::spend_notes extra_meta is serializable"</span>);
 
         <span class="self">self</span>.client_ctx
-            .module_autocommit(
+            .module_db()
+            .autocommit(
                 |dbtx, <span class="kw">_</span>| {
                     <span class="kw">let </span>extra_meta = extra_meta.clone();
                     Box::pin(<span class="kw">async </span>{
                         <span class="kw">let </span>(operation_id, states, notes) = <span class="self">self
                             </span>.spend_notes_oob(
-                                <span class="kw-2">&amp;mut </span>dbtx.module_dbtx(),
+                                dbtx,
                                 notes_selector,
                                 requested_amount,
                                 try_cancel_after,
@@ -4119,21 +4130,27 @@
                             OOBNotes::new(federation_id_prefix, notes)
                         };
 
-                        dbtx.add_state_machines(<span class="self">self</span>.client_ctx.map_dyn(states).collect())
+                        <span class="self">self</span>.client_ctx
+                            .add_state_machines_dbtx(
+                                dbtx,
+                                <span class="self">self</span>.client_ctx.map_dyn(states).collect(),
+                            )
                             .<span class="kw">await</span><span class="question-mark">?</span>;
-                        dbtx.add_operation_log_entry(
-                            operation_id,
-                            MintCommonInit::KIND.as_str(),
-                            MintOperationMeta {
-                                variant: MintOperationMetaVariant::SpendOOB {
-                                    requested_amount,
-                                    oob_notes: oob_notes.clone(),
+                        <span class="self">self</span>.client_ctx
+                            .add_operation_log_entry_dbtx(
+                                dbtx,
+                                operation_id,
+                                MintCommonInit::KIND.as_str(),
+                                MintOperationMeta {
+                                    variant: MintOperationMetaVariant::SpendOOB {
+                                        requested_amount,
+                                        oob_notes: oob_notes.clone(),
+                                    },
+                                    amount: oob_notes.total_amount(),
+                                    extra_meta,
                                 },
-                                amount: oob_notes.total_amount(),
-                                extra_meta,
-                            },
-                        )
-                        .<span class="kw">await</span>;
+                            )
+                            .<span class="kw">await</span>;
 
                         <span class="prelude-val">Ok</span>((operation_id, oob_notes))
                     })
@@ -4212,50 +4229,51 @@
 
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
 
-        <span class="kw">let </span>global_db = <span class="self">self</span>.client_ctx.global_db();
-        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="kw-2">&amp;</span>global_db, operation_id, || {
-            <span class="macro">stream!</span> {
-                <span class="kw">yield </span>SpendOOBState::Created;
+        <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.client_ctx
+            .outcome_or_updates(<span class="kw-2">&amp;</span>operation, operation_id, || {
+                <span class="macro">stream!</span> {
+                    <span class="kw">yield </span>SpendOOBState::Created;
 
-                <span class="kw">let </span>self_ref = client_ctx.self_ref();
+                    <span class="kw">let </span>self_ref = client_ctx.self_ref();
 
-                <span class="kw">let </span>refund = self_ref
-                    .await_spend_oob_refund(operation_id)
-                    .<span class="kw">await</span>;
+                    <span class="kw">let </span>refund = self_ref
+                        .await_spend_oob_refund(operation_id)
+                        .<span class="kw">await</span>;
 
-                <span class="kw">if </span>refund.user_triggered {
-                    <span class="kw">yield </span>SpendOOBState::UserCanceledProcessing;
+                    <span class="kw">if </span>refund.user_triggered {
+                        <span class="kw">yield </span>SpendOOBState::UserCanceledProcessing;
 
-                    <span class="kw">match </span>client_ctx
-                        .transaction_updates(operation_id)
-                        .<span class="kw">await
-                        </span>.await_tx_accepted(refund.transaction_id)
-                        .<span class="kw">await
-                    </span>{
-                        <span class="prelude-val">Ok</span>(()) =&gt; {
-                            <span class="kw">yield </span>SpendOOBState::UserCanceledSuccess;
-                        },
-                        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                            <span class="kw">yield </span>SpendOOBState::UserCanceledFailure;
+                        <span class="kw">match </span>client_ctx
+                            .transaction_updates(operation_id)
+                            .<span class="kw">await
+                            </span>.await_tx_accepted(refund.transaction_id)
+                            .<span class="kw">await
+                        </span>{
+                            <span class="prelude-val">Ok</span>(()) =&gt; {
+                                <span class="kw">yield </span>SpendOOBState::UserCanceledSuccess;
+                            },
+                            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                                <span class="kw">yield </span>SpendOOBState::UserCanceledFailure;
+                            }
                         }
-                    }
-                } <span class="kw">else </span>{
-                    <span class="kw">match </span>client_ctx
-                        .transaction_updates(operation_id)
-                        .<span class="kw">await
-                        </span>.await_tx_accepted(refund.transaction_id)
-                        .<span class="kw">await
-                    </span>{
-                        <span class="prelude-val">Ok</span>(()) =&gt; {
-                            <span class="kw">yield </span>SpendOOBState::Refunded;
-                        },
-                        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                            <span class="kw">yield </span>SpendOOBState::Success;
+                    } <span class="kw">else </span>{
+                        <span class="kw">match </span>client_ctx
+                            .transaction_updates(operation_id)
+                            .<span class="kw">await
+                            </span>.await_tx_accepted(refund.transaction_id)
+                            .<span class="kw">await
+                        </span>{
+                            <span class="prelude-val">Ok</span>(()) =&gt; {
+                                <span class="kw">yield </span>SpendOOBState::Refunded;
+                            },
+                            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                                <span class="kw">yield </span>SpendOOBState::Success;
+                            }
                         }
                     }
                 }
-            }
-        }))
+            }))
     }
 
     <span class="kw">async fn </span>mint_operation(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; anyhow::Result&lt;OperationLogEntry&gt; {

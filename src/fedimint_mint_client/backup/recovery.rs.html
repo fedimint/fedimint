@@ -497,15 +497,13 @@
 <a href="#496" id="496">496</a>
 <a href="#497" id="497">497</a>
 <a href="#498" id="498">498</a>
-<a href="#499" id="499">499</a>
-<a href="#500" id="500">500</a>
-<a href="#501" id="501">501</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::max;
+<a href="#499" id="499">499</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::max;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>fedimint_client::module::init::recovery::{RecoveryFromHistory, RecoveryFromHistoryCommon};
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleRecoverArgs;
-<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientDbTxContext};
+<span class="kw">use </span>fedimint_client::module::ClientContext;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped <span class="kw">as _</span>};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -532,6 +530,7 @@
 </span><span class="kw">pub struct </span>MintRecovery {
     state: MintRecoveryState,
     secret: DerivableSecret,
+    client_ctx: ClientContext&lt;MintClientModule&gt;,
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -571,6 +570,7 @@
                     <span class="kw-2">&amp;</span>secret,
                 ),
                 secret,
+                client_ctx: args.context(),
             },
             starting_session,
         ))
@@ -589,6 +589,7 @@
                     MintRecovery {
                         state,
                         secret: args.module_root_secret().clone(),
+                        client_ctx: args.context(),
                     },
                     common,
                 )
@@ -639,10 +640,7 @@
     }
 
     <span class="doccomment">/// Handle session outcome, adjusting the current state
-    </span><span class="kw">async fn </span>finalize_dbtx(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ClientDbTxContext&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>, MintClientModule&gt;,
-    ) -&gt; anyhow::Result&lt;()&gt; {
+    </span><span class="kw">async fn </span>finalize_dbtx(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>finalized = <span class="self">self</span>.state.clone().finalize();
 
         <span class="kw">let </span>restored_amount = finalized
@@ -665,9 +663,7 @@
                 nonce: note.nonce(),
             };
             <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_MINT, %amount, %note, <span class="string">"Restoring note"</span>);
-            dbtx.module_dbtx()
-                .insert_new_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>note.to_undecoded())
-                .<span class="kw">await</span>;
+            dbtx.insert_new_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>note.to_undecoded()).<span class="kw">await</span>;
         }
 
         <span class="kw">for </span>(amount, note_idx) <span class="kw">in </span>finalized.next_note_idx.iter() {
@@ -677,8 +673,7 @@
                 %note_idx,
                 <span class="string">"Restoring NextECashNodeIndex"
             </span>);
-            dbtx.module_dbtx()
-                .insert_entry(<span class="kw-2">&amp;</span>NextECashNoteIndexKey(amount), <span class="kw-2">&amp;</span>note_idx.as_u64())
+            dbtx.insert_entry(<span class="kw-2">&amp;</span>NextECashNoteIndexKey(amount), <span class="kw-2">&amp;</span>note_idx.as_u64())
                 .<span class="kw">await</span>;
         }
 
@@ -689,26 +684,27 @@
         </span>);
 
         <span class="kw">for </span>(out_point, amount, issuance_request) <span class="kw">in </span>finalized.unconfirmed_notes {
-            <span class="kw">let </span>client_ctx = dbtx.client_ctx();
-            dbtx.add_state_machines(
-                client_ctx
-                    .map_dyn(<span class="macro">vec!</span>[MintClientStateMachines::Output(
-                        MintOutputStateMachine {
-                            common: MintOutputCommon {
-                                operation_id: OperationId::new_random(),
-                                out_point,
-                            },
-                            state: <span class="kw">crate</span>::output::MintOutputStates::Created(
-                                MintOutputStatesCreated {
-                                    amount,
-                                    issuance_request,
+            <span class="self">self</span>.client_ctx
+                .add_state_machines_dbtx(
+                    dbtx,
+                    <span class="self">self</span>.client_ctx
+                        .map_dyn(<span class="macro">vec!</span>[MintClientStateMachines::Output(
+                            MintOutputStateMachine {
+                                common: MintOutputCommon {
+                                    operation_id: OperationId::new_random(),
+                                    out_point,
                                 },
-                            ),
-                        },
-                    )])
-                    .collect(),
-            )
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+                                state: <span class="kw">crate</span>::output::MintOutputStates::Created(
+                                    MintOutputStatesCreated {
+                                        amount,
+                                        issuance_request,
+                                    },
+                                ),
+                            },
+                        )])
+                        .collect(),
+                )
+                .<span class="kw">await</span><span class="question-mark">?</span>;
         }
 
         <span class="macro">debug!</span>(

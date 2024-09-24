@@ -497,17 +497,23 @@
 <a href="#496" id="496">496</a>
 <a href="#497" id="497">497</a>
 <a href="#498" id="498">498</a>
-<a href="#499" id="499">499</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
+<a href="#501" id="501">501</a>
+<a href="#502" id="502">502</a>
+<a href="#503" id="503">503</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>bitcoin::ScriptBuf;
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_bitcoind::DynBitcoindRpc;
-<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientDbTxContext};
+<span class="kw">use </span>fedimint_client::module::ClientContext;
 <span class="kw">use </span>fedimint_client::transaction::ClientInput;
 <span class="kw">use </span>fedimint_core::core::OperationId;
-<span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, IDatabaseTransactionOpsCoreTyped <span class="kw">as _</span>};
+<span class="kw">use </span>fedimint_core::db::{
+    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped <span class="kw">as _</span>,
+};
 <span class="kw">use </span>fedimint_core::envs::is_running_in_test_env;
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
@@ -680,14 +686,14 @@
         <span class="prelude-val">Ok</span>(outcomes) =&gt; {
             <span class="kw">let </span>next_check_time = CheckOutcome::retry_delay_vec(<span class="kw-2">&amp;</span>outcomes, due_val.creation_time)
                 .map(|duration| now + duration);
-            client_ctx
-                .module_autocommit_2(
+            db
+                .autocommit(
                     |dbtx, <span class="kw">_</span>| {
                         Box::pin(<span class="kw">async </span>{
                             <span class="kw">let </span>claimed_now = CheckOutcome::get_claimed_now_outpoints(<span class="kw-2">&amp;</span>outcomes);
 
                             <span class="kw">let </span>claimed_sender = pengin_claimed_sender.clone();
-                            dbtx.module_dbtx().on_commit(<span class="kw">move </span>|| {
+                            dbtx.on_commit(<span class="kw">move </span>|| {
                                 <span class="kw">let _ </span>= claimed_sender.send(());
                             });
 
@@ -704,11 +710,11 @@
                                 data=<span class="question-mark">?</span>peg_in_tweak_index_data,
                                 <span class="string">"Updating"
                             </span>);
-                            dbtx.module_dbtx()
+                            dbtx
                                 .insert_entry(<span class="kw-2">&amp;</span>due_key, <span class="kw-2">&amp;</span>peg_in_tweak_index_data)
                                 .<span class="kw">await</span>;
 
-                            <span class="prelude-val">Ok</span>(())
+                            <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;(())
                         })
                     },
                     <span class="prelude-val">None</span>,
@@ -901,7 +907,8 @@
     tx_out_proof: TxOutProof,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">async fn </span>claim_peg_in_inner(
-        dbtx_context: <span class="kw-2">&amp;mut </span>ClientDbTxContext&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>, WalletClientModule&gt;,
+        client_ctx: <span class="kw-2">&amp;</span>ClientContext&lt;WalletClientModule&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         btc_transaction: <span class="kw-2">&amp;</span>bitcoin::Transaction,
         out_idx: u32,
         tweak_key: KeyPair,
@@ -927,8 +934,8 @@
             state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
         };
 
-        dbtx_context
-            .claim_input(client_input, operation_id)
+        client_ctx
+            .claim_input(dbtx, client_input, operation_id)
             .<span class="kw">await
             </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>)
     }
@@ -938,10 +945,12 @@
     <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_WALLET, %out_point, <span class="string">"Claiming a peg-in"</span>);
 
     client_ctx
-        .module_autocommit(
+        .module_db()
+        .autocommit(
             |dbtx, <span class="kw">_</span>| {
                 Box::pin(<span class="kw">async </span>{
                     <span class="kw">let </span>(claim_txid, change) = claim_peg_in_inner(
+                        client_ctx,
                         dbtx,
                         transaction,
                         out_point.vout,
@@ -951,15 +960,14 @@
                     )
                     .<span class="kw">await</span>;
 
-                    dbtx.module_dbtx()
-                        .insert_entry(
-                            <span class="kw-2">&amp;</span>ClaimedPegInKey {
-                                peg_in_index: tweak_idx,
-                                btc_out_point: out_point,
-                            },
-                            <span class="kw-2">&amp;</span>ClaimedPegInData { claim_txid, change },
-                        )
-                        .<span class="kw">await</span>;
+                    dbtx.insert_entry(
+                        <span class="kw-2">&amp;</span>ClaimedPegInKey {
+                            peg_in_index: tweak_idx,
+                            btc_out_point: out_point,
+                        },
+                        <span class="kw-2">&amp;</span>ClaimedPegInData { claim_txid, change },
+                    )
+                    .<span class="kw">await</span>;
 
                     <span class="prelude-val">Ok</span>(())
                 })

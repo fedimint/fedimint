@@ -3534,7 +3534,19 @@
 <a href="#3533" id="3533">3533</a>
 <a href="#3534" id="3534">3534</a>
 <a href="#3535" id="3535">3535</a>
-<a href="#3536" id="3536">3536</a></pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
+<a href="#3536" id="3536">3536</a>
+<a href="#3537" id="3537">3537</a>
+<a href="#3538" id="3538">3538</a>
+<a href="#3539" id="3539">3539</a>
+<a href="#3540" id="3540">3540</a>
+<a href="#3541" id="3541">3541</a>
+<a href="#3542" id="3542">3542</a>
+<a href="#3543" id="3543">3543</a>
+<a href="#3544" id="3544">3544</a>
+<a href="#3545" id="3545">3545</a>
+<a href="#3546" id="3546">3546</a>
+<a href="#3547" id="3547">3547</a>
+<a href="#3548" id="3548">3548</a></pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! This module provides the core key-value database for Fedimint.
 //!
@@ -3737,6 +3749,7 @@
 </span><span class="attr">#[derive(Debug, Error)]
 </span><span class="kw">pub enum </span>AutocommitError&lt;E&gt; {
     <span class="doccomment">/// Committing the transaction failed too many times, giving up
+    </span><span class="attr">#[error(<span class="string">"Commit Failed: {last_error}"</span>)]
     </span>CommitFailed {
         <span class="doccomment">/// Number of attempts
         </span>attempts: usize,
@@ -3745,6 +3758,7 @@
     },
     <span class="doccomment">/// Error returned by the closure provided to `autocommit`. If returned no
     /// commit was attempted in that round
+    </span><span class="attr">#[error(<span class="string">"Closure error: {error}"</span>)]
     </span>ClosureError {
         <span class="doccomment">/// The attempt on which the closure returned an error
         ///
@@ -3825,8 +3839,9 @@
     <span class="doccomment">/// Notify about `key` update (creation, modification, deletion)
     </span><span class="kw">async fn </span>notify(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]);
 
-    <span class="doccomment">/// The prefix len of this database instance
-    </span><span class="kw">fn </span>prefix_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize;
+    <span class="doccomment">/// The prefix len of this database refers to the global (as opposed to
+    /// module-isolated) key space
+    </span><span class="kw">fn </span>is_global(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
 
     <span class="doccomment">/// Checkpoints the database to a backup directory
     </span><span class="kw">fn </span>checkpoint(<span class="kw-2">&amp;</span><span class="self">self</span>, backup_path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
@@ -3847,8 +3862,8 @@
         (<span class="kw-2">**</span><span class="self">self</span>).notify(key).<span class="kw">await</span>;
     }
 
-    <span class="kw">fn </span>prefix_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-        (<span class="kw-2">**</span><span class="self">self</span>).prefix_len()
+    <span class="kw">fn </span>is_global(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        (<span class="kw-2">**</span><span class="self">self</span>).is_global()
     }
 
     <span class="kw">fn </span>checkpoint(<span class="kw-2">&amp;</span><span class="self">self</span>, backup_path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -3885,8 +3900,8 @@
         <span class="self">self</span>.notifications.notify(key);
     }
 
-    <span class="kw">fn </span>prefix_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-        <span class="number">0
+    <span class="kw">fn </span>is_global(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="bool-val">true
     </span>}
 
     <span class="kw">fn </span>checkpoint(<span class="kw-2">&amp;</span><span class="self">self</span>, backup_path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -3985,8 +4000,8 @@
 
     <span class="doccomment">/// Is this `Database` a global, unpartitioned `Database`
     </span><span class="kw">pub fn </span>is_global(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-        <span class="self">self</span>.inner.prefix_len() == <span class="number">0
-    </span>}
+        <span class="self">self</span>.inner.is_global()
+    }
 
     <span class="doccomment">/// `Err` if [`Self::is_global`] is not true
     </span><span class="kw">pub fn </span>ensure_global(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -4232,8 +4247,12 @@
         <span class="self">self</span>.inner.notify(<span class="kw-2">&amp;</span><span class="self">self</span>.get_full_key(key)).<span class="kw">await</span>;
     }
 
-    <span class="kw">fn </span>prefix_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-        <span class="self">self</span>.inner.prefix_len() + <span class="self">self</span>.prefix.len()
+    <span class="kw">fn </span>is_global(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="kw">if </span><span class="self">self</span>.global_dbtx_access_token.is_some() {
+            <span class="bool-val">false
+        </span>} <span class="kw">else </span>{
+            <span class="self">self</span>.inner.is_global()
+        }
     }
 
     <span class="kw">fn </span>checkpoint(<span class="kw-2">&amp;</span><span class="self">self</span>, backup_path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -4283,8 +4302,12 @@
         <span class="self">self</span>.inner.commit_tx().<span class="kw">await
     </span>}
 
-    <span class="kw">fn </span>prefix_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-        <span class="self">self</span>.inner.prefix_len() + <span class="self">self</span>.prefix.len()
+    <span class="kw">fn </span>is_global(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="kw">if </span><span class="self">self</span>.global_dbtx_access_token.is_some() {
+            <span class="bool-val">false
+        </span>} <span class="kw">else </span>{
+            <span class="self">self</span>.inner.is_global()
+        }
     }
 
     <span class="kw">fn </span>global_dbtx(
@@ -4789,8 +4812,8 @@
     <span class="doccomment">/// Commit the transaction
     </span><span class="kw">async fn </span>commit_tx(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
 
-    <span class="doccomment">/// The prefix len of this database instance
-    </span><span class="kw">fn </span>prefix_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize;
+    <span class="doccomment">/// Is global database
+    </span><span class="kw">fn </span>is_global(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
 
     <span class="doccomment">/// Get the global database tx from a module-prefixed database transaction
     ///
@@ -4810,8 +4833,8 @@
         (<span class="kw-2">**</span><span class="self">self</span>).commit_tx().<span class="kw">await
     </span>}
 
-    <span class="kw">fn </span>prefix_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-        (<span class="kw-2">**</span><span class="self">self</span>).prefix_len()
+    <span class="kw">fn </span>is_global(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        (<span class="kw-2">**</span><span class="self">self</span>).is_global()
     }
 
     <span class="kw">fn </span>global_dbtx(
@@ -4830,8 +4853,9 @@
     <span class="kw">async fn </span>commit_tx(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         (<span class="kw-2">**</span><span class="self">self</span>).commit_tx().<span class="kw">await
     </span>}
-    <span class="kw">fn </span>prefix_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-        (<span class="kw-2">**</span><span class="self">self</span>).prefix_len()
+
+    <span class="kw">fn </span>is_global(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        (<span class="kw-2">**</span><span class="self">self</span>).is_global()
     }
 
     <span class="kw">fn </span>global_dbtx(<span class="kw-2">&amp;mut </span><span class="self">self</span>, access_key: GlobalDBTxAccessToken) -&gt; <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>IDatabaseTransaction {
@@ -4984,8 +5008,8 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">fn </span>prefix_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-        <span class="number">0
+    <span class="kw">fn </span>is_global(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="bool-val">true
     </span>}
 
     <span class="kw">fn </span>global_dbtx(
@@ -5276,8 +5300,8 @@
 
     <span class="doccomment">/// Is this `Database` a global, unpartitioned `Database`
     </span><span class="kw">pub fn </span>is_global(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-        <span class="self">self</span>.tx.prefix_len() == <span class="number">0
-    </span>}
+        <span class="self">self</span>.tx.is_global()
+    }
 
     <span class="doccomment">/// `Err` if [`Self::is_global`] is not true
     </span><span class="kw">pub fn </span>ensure_global(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {

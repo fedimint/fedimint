@@ -497,12 +497,7 @@
 <a href="#496" id="496">496</a>
 <a href="#497" id="497">497</a>
 <a href="#498" id="498">498</a>
-<a href="#499" id="499">499</a>
-<a href="#500" id="500">500</a>
-<a href="#501" id="501">501</a>
-<a href="#502" id="502">502</a>
-<a href="#503" id="503">503</a>
-<a href="#504" id="504">504</a></pre></div><pre class="rust"><code><span class="kw">mod </span>recovery_history_tracker;
+<a href="#499" id="499">499</a></pre></div><pre class="rust"><code><span class="kw">mod </span>recovery_history_tracker;
 
 <span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::sync::{Arc, Mutex};
@@ -511,7 +506,7 @@
 <span class="kw">use </span>fedimint_client::module::init::recovery::{RecoveryFromHistory, RecoveryFromHistoryCommon};
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleRecoverArgs;
 <span class="kw">use </span>fedimint_client::module::recovery::{DynModuleBackup, ModuleBackup};
-<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientDbTxContext};
+<span class="kw">use </span>fedimint_client::module::ClientContext;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped <span class="kw">as _</span>};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -866,10 +861,7 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">async fn </span>finalize_dbtx(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ClientDbTxContext&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>, WalletClientModule&gt;,
-    ) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">async fn </span>finalize_dbtx(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>now = fedimint_core::time::now();
 
         <span class="kw">let </span><span class="kw-2">mut </span>tweak_idx = TweakIdx(<span class="number">0</span>);
@@ -890,31 +882,29 @@
         <span class="kw">while </span>tweak_idx &lt; new_start_idx {
             <span class="kw">let </span>(_script, _address, _tweak_key, operation_id) =
                 <span class="self">self</span>.data.derive_peg_in_script(tweak_idx);
-            dbtx.module_dbtx()
-                .insert_new_entry(
-                    <span class="kw-2">&amp;</span>PegInTweakIndexKey(tweak_idx),
-                    <span class="kw-2">&amp;</span>PegInTweakIndexData {
-                        creation_time: now,
-                        next_check_time: <span class="kw">if </span>tweak_idxes_with_pegins.contains(<span class="kw-2">&amp;</span>tweak_idx) {
-                            <span class="comment">// The addresses that were already used before, or didn't seem to
-                            // contain anything don't need automatic
-                            // peg-in attempt, and can be re-attempted
-                            // manually if needed.
-                            </span><span class="prelude-val">Some</span>(now)
-                        } <span class="kw">else </span>{
-                            <span class="prelude-val">None
-                        </span>},
-                        last_check_time: <span class="prelude-val">None</span>,
-                        operation_id,
-                        claimed: <span class="macro">vec!</span>[],
-                    },
-                )
-                .<span class="kw">await</span>;
+            dbtx.insert_new_entry(
+                <span class="kw-2">&amp;</span>PegInTweakIndexKey(tweak_idx),
+                <span class="kw-2">&amp;</span>PegInTweakIndexData {
+                    creation_time: now,
+                    next_check_time: <span class="kw">if </span>tweak_idxes_with_pegins.contains(<span class="kw-2">&amp;</span>tweak_idx) {
+                        <span class="comment">// The addresses that were already used before, or didn't seem to
+                        // contain anything don't need automatic
+                        // peg-in attempt, and can be re-attempted
+                        // manually if needed.
+                        </span><span class="prelude-val">Some</span>(now)
+                    } <span class="kw">else </span>{
+                        <span class="prelude-val">None
+                    </span>},
+                    last_check_time: <span class="prelude-val">None</span>,
+                    operation_id,
+                    claimed: <span class="macro">vec!</span>[],
+                },
+            )
+            .<span class="kw">await</span>;
             tweak_idx = tweak_idx.next();
         }
 
-        dbtx.module_dbtx()
-            .insert_new_entry(<span class="kw-2">&amp;</span>NextPegInTweakIndexKey, <span class="kw-2">&amp;</span>new_start_idx)
+        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>NextPegInTweakIndexKey, <span class="kw-2">&amp;</span>new_start_idx)
             .<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(())
     }

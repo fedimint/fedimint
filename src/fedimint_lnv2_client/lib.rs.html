@@ -1849,7 +1849,7 @@
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
         <span class="kw">let </span>module_api = <span class="self">self</span>.module_api.clone();
 
-        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, || {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_ctx.outcome_or_updates(<span class="kw-2">&amp;</span>operation, operation_id, || {
             <span class="macro">stream!</span> {
                 <span class="kw">loop </span>{
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(LightningClientStateMachines::Send(state)) = stream.next().<span class="kw">await </span>{
@@ -2148,7 +2148,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
 
-        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, || {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_ctx.outcome_or_updates(<span class="kw-2">&amp;</span>operation, operation_id, || {
             <span class="macro">stream!</span> {
                 <span class="kw">loop </span>{
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(LightningClientStateMachines::Receive(state)) = stream.next().<span class="kw">await </span>{

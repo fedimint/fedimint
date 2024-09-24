@@ -480,13 +480,7 @@
 <a href="#479" id="479">479</a>
 <a href="#480" id="480">480</a>
 <a href="#481" id="481">481</a>
-<a href="#482" id="482">482</a>
-<a href="#483" id="483">483</a>
-<a href="#484" id="484">484</a>
-<a href="#485" id="485">485</a>
-<a href="#486" id="486">486</a>
-<a href="#487" id="487">487</a>
-<a href="#488" id="488">488</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
+<a href="#482" id="482">482</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::{cmp, ops};
 
 <span class="kw">use </span>fedimint_api_client::api::DynGlobalApi;
@@ -507,7 +501,7 @@
 
 <span class="kw">use super</span>::{ClientModuleInit, ClientModuleRecoverArgs};
 <span class="kw">use </span><span class="kw">crate</span>::module::recovery::RecoveryProgress;
-<span class="kw">use </span><span class="kw">crate</span>::module::{ClientContext, ClientDbTxContext, ClientModule};
+<span class="kw">use </span><span class="kw">crate</span>::module::{ClientContext, ClientModule};
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 </span><span class="doccomment">/// Common state tracked during recovery from history
@@ -699,15 +693,11 @@
     /// changes in the database.
     ///
     /// This is the only place during recovery where module gets a chance to
-    /// create state machines, etc. and that's why `dbtx` is of
-    /// [`ClientDbTxContext`] type.
+    /// create state machines, etc.
     ///
     /// Notably this function is running in a database-autocommit wrapper, so
     /// might be called again on database commit failure.
-    </span><span class="kw">async fn </span>finalize_dbtx(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ClientDbTxContext&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>, &lt;<span class="self">Self</span>::Init <span class="kw">as </span>ClientModuleInit&gt;::Module&gt;,
-    ) -&gt; anyhow::Result&lt;()&gt;;
+    </span><span class="kw">async fn </span>finalize_dbtx(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; anyhow::Result&lt;()&gt;;
 }
 
 <span class="kw">impl</span>&lt;Init&gt; ClientModuleRecoverArgs&lt;Init&gt;
@@ -952,24 +942,22 @@
             <span class="string">"Finalizing restore"
         </span>);
 
-        client_ctx
-            .clone()
-            .module_autocommit_2(
-                |dbtx, <span class="kw">_</span>| {
-                    <span class="kw">let </span>state = state.clone();
-                    {
-                        Box::pin(<span class="kw">async move </span>{
-                            state.delete_dbtx(<span class="kw-2">&amp;mut </span>dbtx.module_dbtx()).<span class="kw">await</span>;
-                            state.finalize_dbtx(dbtx).<span class="kw">await</span><span class="question-mark">?</span>;
-                            Recovery::store_finalized(<span class="kw-2">&amp;mut </span>dbtx.module_dbtx(), <span class="bool-val">true</span>).<span class="kw">await</span>;
+        db.autocommit(
+            |dbtx, <span class="kw">_</span>| {
+                <span class="kw">let </span>state = state.clone();
+                {
+                    Box::pin(<span class="kw">async move </span>{
+                        state.delete_dbtx(dbtx).<span class="kw">await</span>;
+                        state.finalize_dbtx(dbtx).<span class="kw">await</span><span class="question-mark">?</span>;
+                        Recovery::store_finalized(dbtx, <span class="bool-val">true</span>).<span class="kw">await</span>;
 
-                            <span class="prelude-val">Ok</span>(())
-                        })
-                    }
-                },
-                <span class="prelude-val">None</span>,
-            )
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+                        <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;(())
+                    })
+                }
+            },
+            <span class="prelude-val">None</span>,
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(())
     }

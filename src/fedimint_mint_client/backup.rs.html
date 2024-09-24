@@ -119,13 +119,9 @@
 <a href="#118" id="118">118</a>
 <a href="#119" id="119">119</a>
 <a href="#120" id="120">120</a>
-<a href="#121" id="121">121</a>
-<a href="#122" id="122">122</a>
-<a href="#123" id="123">123</a>
-<a href="#124" id="124">124</a>
-<a href="#125" id="125">125</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::module::recovery::{DynModuleBackup, ModuleBackup};
-<span class="kw">use </span>fedimint_client::module::ClientDbTxContext;
+<a href="#121" id="121">121</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::module::recovery::{DynModuleBackup, ModuleBackup};
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
+<span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, Tiered, TieredMulti};
 <span class="kw">use </span>fedimint_mint_common::KIND;
@@ -202,12 +198,12 @@
 <span class="kw">impl </span>MintClientModule {
     <span class="kw">pub async fn </span>prepare_plaintext_ecash_backup(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx_ctx: <span class="kw-2">&amp;</span><span class="lifetime">'_ </span><span class="kw-2">mut </span>ClientDbTxContext&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>, <span class="self">Self</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
     ) -&gt; anyhow::Result&lt;EcashBackup&gt; {
         <span class="comment">// fetch consensus height first - so we dont miss anything when scanning
         </span><span class="kw">let </span>session_count = <span class="self">self</span>.client_ctx.global_api().session_count().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>notes = <span class="self">Self</span>::get_all_spendable_notes(<span class="kw-2">&amp;mut </span>dbtx_ctx.module_dbtx()).<span class="kw">await</span>;
+        <span class="kw">let </span>notes = <span class="self">Self</span>::get_all_spendable_notes(dbtx).<span class="kw">await</span>;
 
         <span class="kw">let </span>pending_notes: Vec&lt;(OutPoint, Amount, NoteIssuanceRequest)&gt; = <span class="self">self
             </span>.client_ctx
@@ -229,11 +225,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>idxes = <span class="macro">vec!</span>[];
         <span class="kw">for </span><span class="kw-2">&amp;</span>amount <span class="kw">in </span><span class="self">self</span>.cfg.tbs_pks.tiers() {
-            idxes.push((
-                amount,
-                <span class="self">self</span>.get_next_note_index(<span class="kw-2">&amp;mut </span>dbtx_ctx.module_dbtx(), amount)
-                    .<span class="kw">await</span>,
-            ));
+            idxes.push((amount, <span class="self">self</span>.get_next_note_index(dbtx, amount).<span class="kw">await</span>));
         }
         <span class="kw">let </span>next_note_idx = Tiered::from_iter(idxes);
 
