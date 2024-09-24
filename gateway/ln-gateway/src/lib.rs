@@ -14,7 +14,7 @@
 #![allow(clippy::wildcard_imports)]
 
 pub mod client;
-mod config;
+pub mod config;
 mod db;
 pub mod envs;
 mod error;
@@ -263,6 +263,7 @@ impl Gateway {
         num_route_hints: u32,
         gateway_db: Database,
         gateway_state: GatewayState,
+        lightning_module_mode: LightningModuleMode,
     ) -> anyhow::Result<Gateway> {
         let versioned_api = api_addr
             .join(V1_API_ENDPOINT)
@@ -276,7 +277,7 @@ impl Gateway {
                 num_route_hints,
                 fees: Some(GatewayFee(fees)),
                 network,
-                lightning_module_mode: LightningModuleMode::All,
+                lightning_module_mode,
             },
             gateway_db,
             client_builder,

@@ -13,4 +13,5 @@ pub mod fixtures;
 pub mod gateway;
 pub mod ln;
 pub use fedimint_testing_core::{db, envs};
+pub use ln_gateway::config::LightningModuleMode;
 pub use ln_gateway::Gateway;
