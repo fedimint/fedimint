@@ -616,7 +616,6 @@ rec {
           fedimint-pkgs
           pkgs.bash
           pkgs.coreutils
-          pkgs.sqlite
           pkgs.fakeNss
           pkgs.busybox
           pkgs.curl
