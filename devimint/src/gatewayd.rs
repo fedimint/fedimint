@@ -298,30 +298,42 @@ impl Gatewayd {
         Ok(())
     }
 
+    /// Open a channel with the gateway's lightning node.
+    /// Returns the txid of the funding transaction if the gateway is a new
+    /// enough version to return it. Otherwise, returns `None`.
+    ///
+    /// TODO(support:v0.5): Remove the `Option<Txid>` return type and just
+    /// return `Txid`.
     pub async fn open_channel(
         &self,
         gw: &Gatewayd,
         channel_size_sats: u64,
         push_amount_sats: Option<u64>,
-    ) -> Result<Txid> {
+    ) -> Result<Option<Txid>> {
         let pubkey = gw.lightning_pubkey().await?;
-        Ok(Txid::from_str(
-            &cmd!(
-                self,
-                "lightning",
-                "open-channel",
-                "--pubkey",
-                pubkey,
-                "--host",
-                gw.lightning_node_addr,
-                "--channel-size-sats",
-                channel_size_sats,
-                "--push-amount-sats",
-                push_amount_sats.unwrap_or(0)
-            )
-            .out_string()
-            .await?,
-        )?)
+
+        let mut command = cmd!(
+            self,
+            "lightning",
+            "open-channel",
+            "--pubkey",
+            pubkey,
+            "--host",
+            gw.lightning_node_addr,
+            "--channel-size-sats",
+            channel_size_sats,
+            "--push-amount-sats",
+            push_amount_sats.unwrap_or(0)
+        );
+
+        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+        if gatewayd_version < *VERSION_0_5_0_ALPHA {
+            command.run().await?;
+
+            Ok(None)
+        } else {
+            Ok(Some(Txid::from_str(&command.out_string().await?)?))
+        }
     }
 
     pub async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>> {
