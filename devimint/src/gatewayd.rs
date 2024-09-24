@@ -8,6 +8,8 @@ use esplora_client::Txid;
 use fedimint_core::config::FederationId;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
+use fedimint_core::Amount;
+use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_testing::gateway::LightningNodeType;
 use ln_gateway::lightning::ChannelInfo;
 use ln_gateway::rpc::{MnemonicResponse, V1_API_ENDPOINT};
@@ -285,6 +287,35 @@ impl Gatewayd {
         cmd!(self, "leave-fed", "--federation-id", federation_id)
             .run()
             .await?;
+        Ok(())
+    }
+
+    pub async fn create_invoice(&self, amount: Amount) -> Result<Bolt11Invoice> {
+        Ok(Bolt11Invoice::from_str(
+            &cmd!(
+                self,
+                "lightning",
+                "create-invoice",
+                "--amount-msats",
+                amount.msats
+            )
+            .out_string()
+            .await?,
+        )?)
+    }
+
+    pub async fn pay_invoice(&self, invoice: Bolt11Invoice, max_fee: Amount) -> Result<()> {
+        cmd!(
+            self,
+            "lightning",
+            "pay-invoice",
+            "--invoice",
+            invoice.to_string(),
+            "--max-fee-msats",
+            max_fee.msats
+        )
+        .run()
+        .await?;
         Ok(())
     }
 

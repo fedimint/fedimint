@@ -33,6 +33,7 @@ pub enum LightningCommands {
     },
     /// Pay a lightning invoice as the gateway (i.e. no e-cash exchange).
     PayInvoice {
+        #[clap(long)]
         invoice: Bolt11Invoice,
 
         #[clap(long, default_value_t = 144)]

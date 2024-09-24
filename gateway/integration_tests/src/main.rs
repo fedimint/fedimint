@@ -46,6 +46,10 @@ enum GatewayTest {
         new_gateway_cln_extension_path: PathBuf,
     },
     BackupRestoreTest,
+    LightningLiquidityTest {
+        #[arg(long = "gw-type")]
+        gateway_type: LightningNodeType,
+    },
 }
 
 #[tokio::main]
@@ -74,6 +78,9 @@ async fn main() -> anyhow::Result<()> {
             .await
         }
         GatewayTest::BackupRestoreTest => Box::pin(backup_restore_test()).await,
+        GatewayTest::LightningLiquidityTest { gateway_type } => {
+            Box::pin(lightning_liquidity_test(gateway_type)).await
+        }
     }
 }
 
@@ -516,6 +523,46 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
             }
 
             info!("Gateway configuration test successful");
+            Ok(())
+        },
+    ))
+    .await
+}
+
+/// Test that sets and verifies configurations within the gateway
+#[allow(clippy::too_many_lines)]
+async fn lightning_liquidity_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
+    Box::pin(devimint::run_devfed_test(
+        |dev_fed, process_mgr| async move {
+            let gatewayd_version = util::Gatewayd::version_or_default().await;
+            if gatewayd_version < *VERSION_0_5_0_ALPHA {
+                warn!("Gateway liquidity is not fully supported below v0.5.0");
+                return Ok(());
+            }
+
+            let gw = match gw_type {
+                LightningNodeType::Lnd => dev_fed.gw_lnd_registered().await?,
+                LightningNodeType::Cln => dev_fed.gw_cln_registered().await?,
+                LightningNodeType::Ldk => dev_fed
+                    .gw_ldk_registered()
+                    .await?
+                    .as_ref()
+                    .expect("LDK Gateway should be available"),
+            };
+
+            let other_gw = match gw_type {
+                LightningNodeType::Lnd => dev_fed.gw_cln_registered().await?,
+                LightningNodeType::Cln => dev_fed.gw_lnd_registered().await?,
+                LightningNodeType::Ldk => dev_fed.gw_lnd_registered().await?,
+            };
+
+            dev_fed.gw_channel_opened().await?;
+
+            let invoice = gw.create_invoice(Amount::from_sats(10_000)).await?;
+
+            other_gw.pay_invoice(invoice, Amount::from_sats(10)).await?;
+
+            info!("lightning_liquidity_test successful");
             Ok(())
         },
     ))
