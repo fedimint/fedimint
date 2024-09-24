@@ -21,11 +21,11 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitcoin_hashes = { workspace = true }
 erased-serde = { workspace = true }
-fedimint-bitcoind = { version = "=0.4.3-rc.1", path = "../../fedimint-bitcoind" }
+fedimint-bitcoind = { version = "=0.4.3-rc.2", path = "../../fedimint-bitcoind" }
 fedimint-core = { workspace = true }
-fedimint-ln-common = { version = "=0.4.3-rc.1", path = "../fedimint-ln-common" }
-fedimint-metrics = { version = "=0.4.3-rc.1", path = "../../fedimint-metrics" }
-fedimint-server = { version = "=0.4.3-rc.1", path = "../../fedimint-server" }
+fedimint-ln-common = { version = "=0.4.3-rc.2", path = "../fedimint-ln-common" }
+fedimint-metrics = { version = "=0.4.3-rc.2", path = "../../fedimint-metrics" }
+fedimint-server = { version = "=0.4.3-rc.2", path = "../../fedimint-server" }
 futures = { workspace = true }
 once_cell = { workspace = true }
 rand = { workspace = true }
