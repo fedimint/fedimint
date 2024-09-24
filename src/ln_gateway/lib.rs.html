@@ -2057,7 +2057,31 @@
 <a href="#2056" id="2056">2056</a>
 <a href="#2057" id="2057">2057</a>
 <a href="#2058" id="2058">2058</a>
-<a href="#2059" id="2059">2059</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2059" id="2059">2059</a>
+<a href="#2060" id="2060">2060</a>
+<a href="#2061" id="2061">2061</a>
+<a href="#2062" id="2062">2062</a>
+<a href="#2063" id="2063">2063</a>
+<a href="#2064" id="2064">2064</a>
+<a href="#2065" id="2065">2065</a>
+<a href="#2066" id="2066">2066</a>
+<a href="#2067" id="2067">2067</a>
+<a href="#2068" id="2068">2068</a>
+<a href="#2069" id="2069">2069</a>
+<a href="#2070" id="2070">2070</a>
+<a href="#2071" id="2071">2071</a>
+<a href="#2072" id="2072">2072</a>
+<a href="#2073" id="2073">2073</a>
+<a href="#2074" id="2074">2074</a>
+<a href="#2075" id="2075">2075</a>
+<a href="#2076" id="2076">2076</a>
+<a href="#2077" id="2077">2077</a>
+<a href="#2078" id="2078">2078</a>
+<a href="#2079" id="2079">2079</a>
+<a href="#2080" id="2080">2080</a>
+<a href="#2081" id="2081">2081</a>
+<a href="#2082" id="2082">2082</a>
+<a href="#2083" id="2083">2083</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2597,17 +2621,27 @@
         </span><span class="kw">if </span>handle
             .cancel_on_shutdown(<span class="kw">async move </span>{
                 <span class="kw">loop </span>{
-                    <span class="kw">let </span>state = <span class="self">self</span>.get_state().<span class="kw">await</span>;
-                    <span class="kw">let </span>GatewayState::Running { lightning_context } = state <span class="kw">else </span>{
+                    <span class="kw">let </span>payment_request = <span class="macro">tokio::select!</span> {
+                        payment_request = stream.next() =&gt; {
+                            payment_request
+                        }
+                        () = <span class="self">self</span>.is_shutting_down_safely() =&gt; {
+                            <span class="kw">break</span>;
+                        }
+                    };
+
+                    <span class="comment">// Hold the Gateway state's lock so that it doesn't change before `handle_htlc`.
+                    </span><span class="kw">let </span>state_guard = <span class="self">self</span>.state.read().<span class="kw">await</span>;
+                    <span class="kw">let </span>GatewayState::Running { <span class="kw-2">ref </span>lightning_context } = <span class="kw-2">*</span>state_guard <span class="kw">else </span>{
                         <span class="macro">warn!</span>(
-                            <span class="question-mark">?</span>state,
+                            <span class="question-mark">?</span>state_guard,
                             <span class="string">"Gateway isn't in a running state, cannot handle incoming payments."
                         </span>);
                         <span class="kw">break</span>;
                     };
 
-                    <span class="kw">let </span>htlc_request = <span class="kw">match </span>stream.next().<span class="kw">await </span>{
-                        <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(htlc_request)) =&gt; htlc_request,
+                    <span class="kw">let </span>payment_request = <span class="kw">match </span>payment_request {
+                        <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(payment_request)) =&gt; payment_request,
                         other =&gt; {
                             <span class="macro">warn!</span>(
                                 <span class="question-mark">?</span>other,
@@ -2617,7 +2651,7 @@
                         }
                     };
 
-                    <span class="self">self</span>.handle_htlc(htlc_request, <span class="kw-2">&amp;</span>lightning_context).<span class="kw">await</span>;
+                    <span class="self">self</span>.handle_htlc(payment_request, <span class="kw-2">&amp;</span>lightning_context).<span class="kw">await</span>;
                 }
             })
             .<span class="kw">await
@@ -2628,6 +2662,18 @@
         } <span class="kw">else </span>{
             <span class="macro">info!</span>(<span class="string">"Received shutdown signal"</span>);
             ReceivePaymentStreamAction::NoRetry
+        }
+    }
+
+    <span class="doccomment">/// Polls the Gateway's state waiting for it to shutdown so the thread
+    /// processing payment requests can exit.
+    </span><span class="kw">async fn </span>is_shutting_down_safely(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="kw">loop </span>{
+            <span class="kw">if let </span>GatewayState::ShuttingDown { .. } = <span class="self">self</span>.get_state().<span class="kw">await </span>{
+                <span class="kw">return</span>;
+            }
+
+            fedimint_core::task::sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
         }
     }
 
@@ -3597,9 +3643,11 @@
     }
 
     <span class="kw">pub async fn </span>handle_shutdown_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, task_group: TaskGroup) -&gt; AdminResult&lt;()&gt; {
-        <span class="kw">if let </span>GatewayState::Running { lightning_context } = <span class="self">self</span>.get_state().<span class="kw">await </span>{
-            <span class="self">self</span>.set_gateway_state(GatewayState::ShuttingDown { lightning_context })
-                .<span class="kw">await</span>;
+        <span class="comment">// Take the write lock on the state so that no additional payments are processed
+        </span><span class="kw">let </span><span class="kw-2">mut </span>state_guard = <span class="self">self</span>.state.write().<span class="kw">await</span>;
+        <span class="kw">if let </span>GatewayState::Running { lightning_context } = state_guard.clone() {
+            <span class="kw-2">*</span>state_guard = GatewayState::ShuttingDown { lightning_context };
+
             <span class="self">self</span>.federation_manager
                 .read()
                 .<span class="kw">await
