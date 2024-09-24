@@ -21,6 +21,7 @@ use fedimint_lnv2_common::endpoint_constants::{
 use fedimint_lnv2_common::ContractId;
 use itertools::Itertools;
 use lightning_invoice::Bolt11Invoice;
+use rand::seq::SliceRandom;
 use secp256k1::schnorr::Signature;
 
 use crate::{
@@ -128,6 +129,10 @@ where
             .dedup()
             .cloned()
             .collect::<Vec<SafeUrl>>();
+
+        // Shuffling the gateways ensures that payments are distributed over the
+        // gateways evenly.
+        union.shuffle(&mut rand::thread_rng());
 
         union.sort_by_cached_key(|r| {
             gateways
