@@ -181,7 +181,7 @@ impl RecoveryFromHistory for MintRecovery {
         debug!(
             target: LOG_CLIENT_RECOVERY_MINT,
             len = finalized.unconfirmed_notes.len(),
-            "Restoring unconfigured notes state machines"
+            "Restoring unconfirmed notes state machines"
         );
 
         for (out_point, amount, issuance_request) in finalized.unconfirmed_notes {

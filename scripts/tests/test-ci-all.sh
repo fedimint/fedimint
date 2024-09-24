@@ -124,6 +124,11 @@ function mint_client_sanity() {
 }
 export -f mint_client_sanity
 
+function mint_client_restore() {
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/mint-client-restore.sh
+}
+export -f mint_client_restore
+
 function guardian_backup() {
   # guardian-backup-test runs a degraded federation, so we need to override FM_OFFLINE_NODES
   fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/guardian-backup.sh
@@ -316,6 +321,7 @@ tests_to_run_in_parallel+=(
   "guardian_backup"
   "meta_module"
   "mint_client_sanity"
+  "mint_client_restore"
   "cannot_replay_tx"
   "circular_deposit"
   "wallet_recovery"
