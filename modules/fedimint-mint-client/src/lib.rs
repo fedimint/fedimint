@@ -90,8 +90,6 @@ use crate::output::{
 
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
 
-pub const LOG_TARGET: &str = "client::module::mint";
-
 /// An encapsulation of [`FederationId`] and e-cash notes in the form of
 /// [`TieredMulti<SpendableNote>`] for the purpose of spending e-cash
 /// out-of-band. Also used for validating and reissuing such out-of-band notes.

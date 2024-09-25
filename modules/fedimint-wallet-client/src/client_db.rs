@@ -53,8 +53,6 @@ impl fmt::Display for TweakIdx {
 }
 
 impl TweakIdx {
-    pub const ZERO: Self = TweakIdx(0);
-
     #[must_use]
     pub fn next(self) -> Self {
         Self(self.0 + 1)

@@ -17,7 +17,6 @@ pub const CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT: &str = "consensus_config_gen_par
 pub const DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT: &str = "default_config_gen_params";
 pub const VERIFY_CONFIG_HASH_ENDPOINT: &str = "verify_config_hash";
 pub const RECOVER_ENDPOINT: &str = "recover";
-pub const REGISTER_GATEWAY_ENDPOINT: &str = "register_gateway";
 pub const RUN_DKG_ENDPOINT: &str = "run_dkg";
 pub const SET_CONFIG_GEN_CONNECTIONS_ENDPOINT: &str = "set_config_gen_connections";
 pub const SET_CONFIG_GEN_PARAMS_ENDPOINT: &str = "set_config_gen_params";
