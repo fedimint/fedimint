@@ -64,7 +64,7 @@ pub enum LightningOperationMeta {
 pub struct SendOperationMeta {
     pub funding_txid: TransactionId,
     pub funding_change_outpoints: Vec<OutPoint>,
-    pub gateway_api: SafeUrl,
+    pub gateway: SafeUrl,
     pub contract: OutgoingContract,
     pub invoice: Bolt11Invoice,
     pub custom_meta: Value,
@@ -84,6 +84,7 @@ impl SendOperationMeta {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReceiveOperationMeta {
+    pub gateway: SafeUrl,
     pub contract: IncomingContract,
     pub invoice: Bolt11Invoice,
     pub custom_meta: Value,
@@ -586,7 +587,7 @@ impl LightningClientModule {
                     LightningOperationMeta::Send(SendOperationMeta {
                         funding_txid,
                         funding_change_outpoints,
-                        gateway_api: gateway_api.clone(),
+                        gateway: gateway_api.clone(),
                         contract: contract.clone(),
                         invoice: invoice.clone(),
                         custom_meta: custom_meta.clone(),
@@ -740,7 +741,7 @@ impl LightningClientModule {
         gateway_api: Option<SafeUrl>,
         custom_meta: Value,
     ) -> Result<(Bolt11Invoice, OperationId), ReceiveError> {
-        let (contract, invoice) = self
+        let (gateway_api, contract, invoice) = self
             .create_contract_and_fetch_invoice(
                 self.keypair.public_key(),
                 amount,
@@ -752,7 +753,7 @@ impl LightningClientModule {
             .await?;
 
         let operation_id = self
-            .receive_incoming_contract(contract, invoice.clone(), custom_meta)
+            .receive_incoming_contract(gateway_api, contract, invoice.clone(), custom_meta)
             .await
             .expect("The contract has been generated with our public key");
 
@@ -770,7 +771,7 @@ impl LightningClientModule {
         description: Bolt11InvoiceDescription,
         payment_fee_limit: PaymentFee,
         gateway_api: Option<SafeUrl>,
-    ) -> Result<(IncomingContract, Bolt11Invoice), ReceiveError> {
+    ) -> Result<(SafeUrl, IncomingContract, Bolt11Invoice), ReceiveError> {
         let (ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(recipient_static_pk);
 
         let encryption_seed = ephemeral_tweak
@@ -835,7 +836,7 @@ impl LightningClientModule {
         let invoice = self
             .gateway_conn
             .bolt11_invoice(
-                gateway_api,
+                gateway_api.clone(),
                 self.federation_id,
                 contract.clone(),
                 amount,
@@ -853,13 +854,14 @@ impl LightningClientModule {
             return Err(ReceiveError::InvalidInvoiceAmount);
         }
 
-        Ok((contract, invoice))
+        Ok((gateway_api, contract, invoice))
     }
 
     // Receive an incoming contract locked to a public key derived from our
     // static module public key.
     async fn receive_incoming_contract(
         &self,
+        gateway: SafeUrl,
         contract: IncomingContract,
         invoice: Bolt11Invoice,
         custom_meta: Value,
@@ -885,6 +887,7 @@ impl LightningClientModule {
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
                 LightningOperationMeta::Receive(ReceiveOperationMeta {
+                    gateway,
                     contract,
                     invoice,
                     custom_meta,
