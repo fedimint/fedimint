@@ -535,9 +535,10 @@ fn check_bitcoind_status(
         .map_err(|e| ApiError::server_error(format!("Failed to connect to bitcoin rpc: {e}")))?;
     let blockchain_info = block_in_place(|| client.get_blockchain_info())
         .map_err(|e| ApiError::server_error(format!("Failed to get blockchain info: {e}")))?;
-    if blockchain_info.initial_block_download {
+
+    if blockchain_info.verification_progress < 1.0 {
         return Ok(BitcoinRpcConnectionStatus::Syncing(
-            blockchain_info.verification_progress * 100.0,
+            blockchain_info.verification_progress,
         ));
     }
     Ok(BitcoinRpcConnectionStatus::Synced)
