@@ -25,10 +25,12 @@ base64 = { workspace = true }
 bincode = { workspace = true }
 bitcoin = { workspace = true }
 bitcoin_hashes = { workspace = true }
+bitcoincore-rpc = { workspace = true }
 bls12_381 = { workspace = true }
 bytes = { workspace = true }
 fedimint-aead = { workspace = true }
 fedimint-api-client = { workspace = true }
+fedimint-bitcoind = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-metrics = { workspace = true }
