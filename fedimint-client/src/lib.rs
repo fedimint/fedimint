@@ -150,6 +150,7 @@ use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
 use tokio::sync::{watch, RwLock};
 use tokio_stream::wrappers::WatchStream;
 use tracing::{debug, error, info, warn};
+use transaction::TxSubmissionStatesSM;
 
 use crate::api_announcements::{get_api_urls, run_api_announcement_sync, ApiAnnouncementPrefix};
 use crate::api_version_discovery::discover_common_api_versions_set;
@@ -163,9 +164,7 @@ use crate::oplog::OperationLog;
 use crate::sm::executor::{
     ActiveOperationStateKeyPrefix, ContextGen, InactiveOperationStateKeyPrefix,
 };
-use crate::sm::{
-    ClientSMDatabaseTransaction, DynState, Executor, IState, Notifier, OperationState, State,
-};
+use crate::sm::{ClientSMDatabaseTransaction, DynState, Executor, IState, Notifier, State};
 use crate::transaction::{
     tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder, TxSubmissionContext,
     TxSubmissionStates, TRANSACTION_SUBMISSION_MODULE_INSTANCE,
@@ -209,8 +208,7 @@ impl Event for TxCreatedEvent {
 #[derive(Serialize, Deserialize)]
 pub struct TxAcceptedEvent {
     txid: TransactionId,
-    // TODO: Can we somehow?
-    // operation_id: OperationId,
+    operation_id: OperationId,
 }
 
 impl Event for TxAcceptedEvent {
@@ -223,8 +221,7 @@ impl Event for TxAcceptedEvent {
 pub struct TxRejectedEvent {
     txid: TransactionId,
     error: String,
-    // TODO: Can we somehow?
-    // operation_id: OperationId,
+    operation_id: OperationId,
 }
 impl Event for TxRejectedEvent {
     const MODULE: Option<ModuleKind> = None;
@@ -326,7 +323,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
         payload: serde_json::Value,
     );
 
-    async fn transaction_update_stream(&self) -> BoxStream<OperationState<TxSubmissionStates>>;
+    async fn transaction_update_stream(&self) -> BoxStream<TxSubmissionStatesSM>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -381,7 +378,7 @@ impl IGlobalClientContext for () {
         unimplemented!("fake implementation, only for tests");
     }
 
-    async fn transaction_update_stream(&self) -> BoxStream<OperationState<TxSubmissionStates>> {
+    async fn transaction_update_stream(&self) -> BoxStream<TxSubmissionStatesSM> {
         unimplemented!("fake implementation, only for tests");
     }
 }
@@ -615,7 +612,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
             .await
     }
 
-    async fn transaction_update_stream(&self) -> BoxStream<OperationState<TxSubmissionStates>> {
+    async fn transaction_update_stream(&self) -> BoxStream<TxSubmissionStatesSM> {
         self.client.transaction_update_stream(self.operation).await
     }
 
@@ -1299,7 +1296,7 @@ impl Client {
 
         let tx_submission_sm = DynState::from_typed(
             TRANSACTION_SUBMISSION_MODULE_INSTANCE,
-            OperationState {
+            TxSubmissionStatesSM {
                 operation_id,
                 state: TxSubmissionStates::Created(transaction),
             },
@@ -1317,12 +1314,10 @@ impl Client {
     async fn transaction_update_stream(
         &self,
         operation_id: OperationId,
-    ) -> BoxStream<'static, OperationState<TxSubmissionStates>> {
+    ) -> BoxStream<'static, TxSubmissionStatesSM> {
         self.executor
             .notifier()
-            .module_notifier::<OperationState<TxSubmissionStates>>(
-                TRANSACTION_SUBMISSION_MODULE_INSTANCE,
-            )
+            .module_notifier::<TxSubmissionStatesSM>(TRANSACTION_SUBMISSION_MODULE_INSTANCE)
             .subscribe(operation_id)
             .await
     }
@@ -2234,7 +2229,7 @@ struct GetInviteCodeRequest {
 
 /// See [`Client::transaction_updates`]
 pub struct TransactionUpdates {
-    update_stream: BoxStream<'static, OperationState<TxSubmissionStates>>,
+    update_stream: BoxStream<'static, TxSubmissionStatesSM>,
 }
 
 impl TransactionUpdates {

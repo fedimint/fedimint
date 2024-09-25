@@ -10,7 +10,7 @@ use fedimint_core::TransactionId;
 use fedimint_logging::LOG_CLIENT_NET_API;
 use tracing::warn;
 
-use crate::sm::{Context, DynContext, OperationState, State, StateTransition};
+use crate::sm::{Context, DynContext, State, StateTransition};
 use crate::{DynGlobalClientContext, DynState, TxAcceptedEvent, TxRejectedEvent};
 
 // TODO: how to prevent collisions? Generally reserve some range for custom IDs?
@@ -43,6 +43,14 @@ impl IntoDynInstance for TxSubmissionContext {
 ///     Created -- tx is accepted by consensus --> Accepted
 ///     Created -- tx is rejected on submission --> Rejected
 /// ```
+// NOTE: This struct needs to retain the same encoding as [`crate::sm::OperationState`],
+// because it was used to replace it, and clients already have it persisted.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct TxSubmissionStatesSM {
+    pub operation_id: OperationId,
+    pub state: TxSubmissionStates,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum TxSubmissionStates {
     /// The transaction has been created and potentially already been submitted,
@@ -63,7 +71,7 @@ pub enum TxSubmissionStates {
     NonRetryableError(String),
 }
 
-impl State for TxSubmissionStates {
+impl State for TxSubmissionStatesSM {
     type ModuleContext = TxSubmissionContext;
 
     fn transitions(
@@ -71,12 +79,16 @@ impl State for TxSubmissionStates {
         _context: &Self::ModuleContext,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
-        match self {
+        let operation_id = self.operation_id;
+        match self.state.clone() {
             TxSubmissionStates::Created(transaction) => {
                 let txid = transaction.tx_hash();
                 vec![
                     StateTransition::new(
-                        Self::trigger_created_rejected(transaction.clone(), global_context.clone()),
+                        TxSubmissionStates::trigger_created_rejected(
+                            transaction.clone(),
+                            global_context.clone(),
+                        ),
                         {
                             let global_context = global_context.clone();
                             move |sm_dbtx, error, _| {
@@ -87,26 +99,33 @@ impl State for TxSubmissionStates {
                                             sm_dbtx,
                                             TxRejectedEvent {
                                                 txid,
+                                                operation_id,
                                                 error: error.clone(),
                                             },
                                         )
                                         .await;
-                                    TxSubmissionStates::Rejected(txid, error)
+                                    TxSubmissionStatesSM {
+                                        state: TxSubmissionStates::Rejected(txid, error),
+                                        operation_id,
+                                    }
                                 })
                             }
                         },
                     ),
                     StateTransition::new(
-                        Self::trigger_created_accepted(txid, global_context.clone()),
+                        TxSubmissionStates::trigger_created_accepted(txid, global_context.clone()),
                         {
                             let global_context = global_context.clone();
                             move |sm_dbtx, (), _| {
                                 let global_context = global_context.clone();
                                 Box::pin(async move {
                                     global_context
-                                        .log_event(sm_dbtx, TxAcceptedEvent { txid })
+                                        .log_event(sm_dbtx, TxAcceptedEvent { txid, operation_id })
                                         .await;
-                                    TxSubmissionStates::Accepted(txid)
+                                    TxSubmissionStatesSM {
+                                        state: TxSubmissionStates::Accepted(txid),
+                                        operation_id,
+                                    }
                                 })
                             }
                         },
@@ -122,7 +141,7 @@ impl State for TxSubmissionStates {
     }
 
     fn operation_id(&self) -> OperationId {
-        unimplemented!("TxSubmissionStates has to be wrapped in OperationState")
+        self.operation_id
     }
 }
 
@@ -161,7 +180,7 @@ impl TxSubmissionStates {
     }
 }
 
-impl IntoDynInstance for TxSubmissionStates {
+impl IntoDynInstance for TxSubmissionStatesSM {
     type DynType = DynState;
 
     fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
@@ -171,6 +190,6 @@ impl IntoDynInstance for TxSubmissionStates {
 
 pub fn tx_submission_sm_decoder() -> Decoder {
     let mut decoder_builder = Decoder::builder_system();
-    decoder_builder.with_decodable_type::<OperationState<TxSubmissionStates>>();
+    decoder_builder.with_decodable_type::<TxSubmissionStatesSM>();
     decoder_builder.build()
 }
