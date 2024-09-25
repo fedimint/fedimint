@@ -660,7 +660,11 @@ impl ConsensusEngine {
         }
 
         assert!(
-            audit.net_assets().milli_sat >= 0,
+            audit
+                .net_assets()
+                .expect("Overflow while checking balance sheet")
+                .milli_sat
+                >= 0,
             "Balance sheet of the fed has gone negative, this should never happen! {audit}"
         );
 
