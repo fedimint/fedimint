@@ -232,6 +232,28 @@ impl Event for TxRejectedEvent {
     const KIND: EventKind = EventKind::from_static("tx-rejected");
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct ModuleRecoveryStarted {
+    module_id: ModuleInstanceId,
+}
+
+impl Event for ModuleRecoveryStarted {
+    const MODULE: Option<ModuleKind> = None;
+
+    const KIND: EventKind = EventKind::from_static("module-recovery-started");
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ModuleRecoveryCompleted {
+    module_id: ModuleInstanceId,
+}
+
+impl Event for ModuleRecoveryCompleted {
+    const MODULE: Option<ModuleKind> = None;
+
+    const KIND: EventKind = EventKind::from_static("module-recovery-completed");
+}
+
 pub type InstancelessDynClientInput = ClientInput<
     Box<maybe_add_send_sync!(dyn IInput + 'static)>,
     Box<maybe_add_send_sync!(dyn IState + 'static)>,
@@ -1837,10 +1859,12 @@ impl Client {
         >,
     ) {
         let db = self.db.clone();
+        let log_ordering_wakeup_tx = self.log_ordering_wakeup_tx.clone();
         self.task_group
             .spawn("module recoveries", |_task_handle| async {
                 Self::run_module_recoveries_task(
                     db,
+                    log_ordering_wakeup_tx,
                     recovery_sender,
                     module_recoveries,
                     module_recovery_progress_receivers,
@@ -1851,6 +1875,7 @@ impl Client {
 
     async fn run_module_recoveries_task(
         db: Database,
+        log_ordering_wakeup_tx: watch::Sender<()>,
         recovery_sender: watch::Sender<BTreeMap<ModuleInstanceId, RecoveryProgress>>,
         module_recoveries: BTreeMap<
             ModuleInstanceId,
@@ -1911,11 +1936,29 @@ impl Client {
                 prev_progress.to_complete()
             };
 
-            info!(
-                module_instance_id,
-                progress = format!("{}/{}", progress.complete, progress.total),
-                "Recovery progress"
-            );
+            if !prev_progress.is_done() && progress.is_done() {
+                info!(
+                    module_instance_id,
+                    prev_progress = format!("{}/{}", prev_progress.complete, prev_progress.total),
+                    progress = format!("{}/{}", progress.complete, progress.total),
+                    "Recovery complete"
+                );
+                dbtx.log_event(
+                    log_ordering_wakeup_tx.clone(),
+                    None,
+                    ModuleRecoveryCompleted {
+                        module_id: module_instance_id,
+                    },
+                )
+                .await;
+            } else {
+                info!(
+                    module_instance_id,
+                    prev_progress = format!("{}/{}", prev_progress.complete, prev_progress.total),
+                    progress = format!("{}/{}", progress.complete, progress.total),
+                    "Recovery progress"
+                );
+            }
 
             dbtx.insert_entry(
                 &ClientModuleRecovery { module_instance_id },
@@ -2650,6 +2693,9 @@ impl ClientBuilder {
 
         debug!(?common_api_versions, "Completed api version negotiation");
 
+        let (log_event_added_tx, log_event_added_rx) = watch::channel(());
+        let (log_ordering_wakeup_tx, log_ordering_wakeup_rx) = watch::channel(());
+
         let mut module_recoveries: BTreeMap<
             ModuleInstanceId,
             Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<()>>)>>,
@@ -2752,11 +2798,29 @@ impl ClientBuilder {
                             ))
                         }
                     } else {
+                        let progress = RecoveryProgress::none();
+                        let mut dbtx = db.begin_transaction().await;
+                        dbtx.log_event(
+                            log_ordering_wakeup_tx.clone(),
+                            None,
+                            ModuleRecoveryStarted {
+                                module_id: module_instance_id,
+                            },
+                        )
+                        .await;
+                        dbtx.insert_entry(
+                            &ClientModuleRecovery { module_instance_id },
+                            &ClientModuleRecoveryState { progress },
+                        )
+                        .await;
+
+                        dbtx.commit_tx().await;
+
                         debug!(
                             id = %module_instance_id,
                             %kind, "Starting new module recovery"
                         );
-                        Some(start_module_recover_fn(snapshot, RecoveryProgress::none()))
+                        Some(start_module_recover_fn(snapshot, progress))
                     }
                 } else {
                     None
@@ -2807,8 +2871,6 @@ impl ClientBuilder {
                 .await;
             dbtx.commit_tx().await;
         }
-        let (log_event_added_tx, log_event_added_rx) = watch::channel(());
-        let (log_ordering_wakeup_tx, log_ordering_wakeup_rx) = watch::channel(());
 
         let executor = {
             let mut executor_builder = Executor::builder();
