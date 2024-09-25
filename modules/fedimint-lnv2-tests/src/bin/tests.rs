@@ -118,10 +118,10 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         .as_ref()
         .expect("Gateways of version 0.5.0 or higher support LDK");
 
-    let gateway_api = SafeUrl::parse(&gw_ldk.addr).expect("LDK gateway address is invalid url");
+    let gateway = SafeUrl::parse(&gw_ldk.addr).expect("LDK gateway address is invalid url");
 
     for peer in 0..dev_fed.fed().await?.members.len() {
-        assert!(add_gateway(&client, peer, &gateway_api.to_string()).await?);
+        assert!(add_gateway(&client, peer, &gateway.to_string()).await?);
     }
 
     assert_eq!(
@@ -150,11 +150,11 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
             .await?
             .as_str()
             .expect("JSON Value is not a string"),
-        gateway_api.to_string().as_str()
+        gateway.to_string().as_str()
     );
 
     for peer in 0..dev_fed.fed().await?.members.len() {
-        assert!(remove_gateway(&client, peer, &gateway_api).await?);
+        assert!(remove_gateway(&client, peer, &gateway).await?);
     }
 
     assert!(cmd!(client, "module", "lnv2", "gateway", "list")
@@ -383,7 +383,7 @@ async fn test_inter_federation_payments(
     Ok(())
 }
 
-async fn add_gateway(client: &Client, peer: usize, gateway_api: &String) -> anyhow::Result<bool> {
+async fn add_gateway(client: &Client, peer: usize, gateway: &String) -> anyhow::Result<bool> {
     cmd!(
         client,
         "--our-id",
@@ -394,7 +394,7 @@ async fn add_gateway(client: &Client, peer: usize, gateway_api: &String) -> anyh
         "lnv2",
         "gateway",
         "add",
-        gateway_api
+        gateway
     )
     .out_json()
     .await?
@@ -402,11 +402,7 @@ async fn add_gateway(client: &Client, peer: usize, gateway_api: &String) -> anyh
     .ok_or(anyhow::anyhow!("JSON Value is not a boolean"))
 }
 
-async fn remove_gateway(
-    client: &Client,
-    peer: usize,
-    gateway_api: &SafeUrl,
-) -> anyhow::Result<bool> {
+async fn remove_gateway(client: &Client, peer: usize, gateway: &SafeUrl) -> anyhow::Result<bool> {
     cmd!(
         client,
         "--our-id",
@@ -417,7 +413,7 @@ async fn remove_gateway(
         "lnv2",
         "gateway",
         "remove",
-        gateway_api.to_string()
+        gateway.to_string()
     )
     .out_json()
     .await?
@@ -427,7 +423,7 @@ async fn remove_gateway(
 
 async fn receive(
     client: &Client,
-    gateway_api: &str,
+    gateway: &str,
     amount: u64,
 ) -> anyhow::Result<(Bolt11Invoice, OperationId)> {
     Ok(serde_json::from_value::<(Bolt11Invoice, OperationId)>(
@@ -438,7 +434,7 @@ async fn receive(
             "receive",
             amount,
             "--gateway",
-            gateway_api
+            gateway
         )
         .out_json()
         .await?,
@@ -447,7 +443,7 @@ async fn receive(
 
 async fn test_send(
     client: &Client,
-    gateway_api: &String,
+    gateway: &String,
     invoice: &Bolt11Invoice,
     final_state: FinalSendState,
 ) -> anyhow::Result<()> {
@@ -459,7 +455,7 @@ async fn test_send(
             "send",
             invoice.to_string(),
             "--gateway",
-            gateway_api
+            gateway
         )
         .out_json()
         .await?,

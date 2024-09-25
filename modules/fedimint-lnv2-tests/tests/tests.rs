@@ -50,7 +50,7 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
 
     client.await_primary_module_output(op, outpoint).await?;
 
-    let gateway_api = mock::gateway_api();
+    let gateway_api = mock::gateway();
     let invoice = mock::payable_invoice();
 
     let operation_id = client
@@ -103,7 +103,7 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
 
     let op = client
         .get_first_module::<LightningClientModule>()?
-        .send(mock::unpayable_invoice(), Some(mock::gateway_api()))
+        .send(mock::unpayable_invoice(), Some(mock::gateway()))
         .await?;
 
     let mut sub = client
@@ -136,7 +136,7 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
 
     let op = client
         .get_first_module::<LightningClientModule>()?
-        .send(mock::crash_invoice(), Some(mock::gateway_api()))
+        .send(mock::crash_invoice(), Some(mock::gateway()))
         .await?;
 
     let mut sub = client
@@ -175,7 +175,7 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
 
     let op = client
         .get_first_module::<LightningClientModule>()?
-        .send(mock::crash_invoice(), Some(mock::gateway_api()))
+        .send(mock::crash_invoice(), Some(mock::gateway()))
         .await?;
 
     let mut sub = client
@@ -241,7 +241,7 @@ async fn receive_operation_expires() -> anyhow::Result<()> {
             5, // receive operation expires in 5 seconds
             Bolt11InvoiceDescription::Direct(String::new()),
             PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
-            Some(mock::gateway_api()),
+            Some(mock::gateway()),
             Value::Null,
         )
         .await?
@@ -268,7 +268,7 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     assert_eq!(
         client
             .get_first_module::<LightningClientModule>()?
-            .send(mock::signet_bolt_11_invoice(), Some(mock::gateway_api()))
+            .send(mock::signet_bolt_11_invoice(), Some(mock::gateway()))
             .await
             .expect_err("send did not fail due to incorrect Currency"),
         SendPaymentError::WrongCurrency {

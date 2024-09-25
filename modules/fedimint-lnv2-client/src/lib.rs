@@ -456,10 +456,10 @@ impl LightningClientModule {
 
     async fn routing_info(
         &self,
-        gateway_api: &SafeUrl,
+        gateway: &SafeUrl,
     ) -> Result<Option<RoutingInfo>, GatewayConnectionError> {
         self.gateway_conn
-            .routing_info(gateway_api.clone(), &self.federation_id)
+            .routing_info(gateway.clone(), &self.federation_id)
             .await
     }
 
@@ -468,13 +468,13 @@ impl LightningClientModule {
     pub async fn send(
         &self,
         invoice: Bolt11Invoice,
-        gateway_api: Option<SafeUrl>,
+        gateway: Option<SafeUrl>,
     ) -> Result<OperationId, SendPaymentError> {
         self.send_custom(
             invoice,
             PaymentFee::SEND_FEE_LIMIT_DEFAULT,
             EXPIRATION_DELTA_LIMIT_DEFAULT,
-            gateway_api,
+            gateway,
             Value::Null,
         )
         .await
@@ -487,7 +487,7 @@ impl LightningClientModule {
         invoice: Bolt11Invoice,
         payment_fee_limit: PaymentFee,
         expiration_delta_limit: u64,
-        gateway_api: Option<SafeUrl>,
+        gateway: Option<SafeUrl>,
         custom_meta: Value,
     ) -> Result<OperationId, SendPaymentError> {
         let amount = invoice
@@ -513,7 +513,7 @@ impl LightningClientModule {
             .expect("32 bytes, within curve order")
             .keypair(secp256k1::SECP256K1);
 
-        let (gateway_api, routing_info) = match gateway_api {
+        let (gateway_api, routing_info) = match gateway {
             Some(gateway_api) => (
                 gateway_api.clone(),
                 self.routing_info(&gateway_api)
@@ -717,13 +717,13 @@ impl LightningClientModule {
     /// Request an invoice. For testing you can optionally specify a gateway to
     /// generate the invoice, otherwise a gateway will be selected
     /// automatically.
-    pub async fn receive(&self, amount: Amount, gateway_api: Option<SafeUrl>) -> ReceiveResult {
+    pub async fn receive(&self, amount: Amount, gateway: Option<SafeUrl>) -> ReceiveResult {
         self.receive_custom(
             amount,
             INVOICE_EXPIRATION_SECONDS_DEFAULT,
             Bolt11InvoiceDescription::Direct(String::new()),
             PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
-            gateway_api,
+            gateway,
             Value::Null,
         )
         .await
@@ -738,22 +738,22 @@ impl LightningClientModule {
         expiry_secs: u32,
         description: Bolt11InvoiceDescription,
         payment_fee_limit: PaymentFee,
-        gateway_api: Option<SafeUrl>,
+        gateway: Option<SafeUrl>,
         custom_meta: Value,
     ) -> Result<(Bolt11Invoice, OperationId), ReceiveError> {
-        let (gateway_api, contract, invoice) = self
+        let (gateway, contract, invoice) = self
             .create_contract_and_fetch_invoice(
                 self.keypair.public_key(),
                 amount,
                 expiry_secs,
                 description,
                 payment_fee_limit,
-                gateway_api,
+                gateway,
             )
             .await?;
 
         let operation_id = self
-            .receive_incoming_contract(gateway_api, contract, invoice.clone(), custom_meta)
+            .receive_incoming_contract(gateway, contract, invoice.clone(), custom_meta)
             .await
             .expect("The contract has been generated with our public key");
 
@@ -770,7 +770,7 @@ impl LightningClientModule {
         expiry_secs: u32,
         description: Bolt11InvoiceDescription,
         payment_fee_limit: PaymentFee,
-        gateway_api: Option<SafeUrl>,
+        gateway: Option<SafeUrl>,
     ) -> Result<(SafeUrl, IncomingContract, Bolt11Invoice), ReceiveError> {
         let (ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(recipient_static_pk);
 
@@ -782,10 +782,10 @@ impl LightningClientModule {
             .consensus_hash::<sha256::Hash>()
             .to_byte_array();
 
-        let (gateway_api, routing_info) = match gateway_api {
-            Some(gateway_api) => (
-                gateway_api.clone(),
-                self.routing_info(&gateway_api)
+        let (gateway, routing_info) = match gateway {
+            Some(gateway) => (
+                gateway.clone(),
+                self.routing_info(&gateway)
                     .await
                     .map_err(ReceiveError::GatewayConnectionError)?
                     .ok_or(ReceiveError::UnknownFederation)?,
@@ -836,7 +836,7 @@ impl LightningClientModule {
         let invoice = self
             .gateway_conn
             .bolt11_invoice(
-                gateway_api.clone(),
+                gateway.clone(),
                 self.federation_id,
                 contract.clone(),
                 amount,
@@ -854,7 +854,7 @@ impl LightningClientModule {
             return Err(ReceiveError::InvalidInvoiceAmount);
         }
 
-        Ok((gateway_api, contract, invoice))
+        Ok((gateway, contract, invoice))
     }
 
     // Receive an incoming contract locked to a public key derived from our
