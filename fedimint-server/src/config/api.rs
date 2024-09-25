@@ -493,34 +493,13 @@ impl ConfigGenApi {
             ApiError::server_error(format!("Failed to get bitcoin rpc env vars: {e}"))
         })?;
         match bitcoin_rpc_config.kind.as_str() {
-            "bitcoind" => self.check_bitcoind_status(&bitcoin_rpc_config),
+            "bitcoind" => check_bitcoind_status(&bitcoin_rpc_config),
             "esplora" => self.check_esplora_status(&bitcoin_rpc_config).await,
             _ => Err(ApiError::bad_request(format!(
                 "Unsupported bitcoin rpc kind: {}",
                 bitcoin_rpc_config.kind
             ))),
         }
-    }
-
-    fn check_bitcoind_status(
-        &self,
-        bitcoin_rpc_config: &BitcoinRpcConfig,
-    ) -> ApiResult<BitcoinRpcConnectionStatus> {
-        let (url, auth) = fedimint_bitcoind::bitcoincore::from_url_to_url_auth(
-            &bitcoin_rpc_config.url,
-        )
-        .map_err(|e| ApiError::server_error(format!("Failed to parse bitcoin rpc url: {e}")))?;
-        let client = bitcoincore_rpc::Client::new(&url, auth).map_err(|e| {
-            ApiError::server_error(format!("Failed to connect to bitcoin rpc: {e}"))
-        })?;
-        let blockchain_info = block_in_place(|| client.get_blockchain_info())
-            .map_err(|e| ApiError::server_error(format!("Failed to get blockchain info: {e}")))?;
-        if blockchain_info.initial_block_download {
-            return Ok(BitcoinRpcConnectionStatus::Syncing(
-                blockchain_info.verification_progress * 100.0,
-            ));
-        }
-        Ok(BitcoinRpcConnectionStatus::Synced)
     }
 
     async fn check_esplora_status(
@@ -545,6 +524,23 @@ impl ConfigGenApi {
 pub enum BitcoinRpcConnectionStatus {
     Synced,
     Syncing(f64),
+}
+
+fn check_bitcoind_status(
+    bitcoin_rpc_config: &BitcoinRpcConfig,
+) -> ApiResult<BitcoinRpcConnectionStatus> {
+    let (url, auth) = fedimint_bitcoind::bitcoincore::from_url_to_url_auth(&bitcoin_rpc_config.url)
+        .map_err(|e| ApiError::server_error(format!("Failed to parse bitcoin rpc url: {e}")))?;
+    let client = bitcoincore_rpc::Client::new(&url, auth)
+        .map_err(|e| ApiError::server_error(format!("Failed to connect to bitcoin rpc: {e}")))?;
+    let blockchain_info = block_in_place(|| client.get_blockchain_info())
+        .map_err(|e| ApiError::server_error(format!("Failed to get blockchain info: {e}")))?;
+    if blockchain_info.initial_block_download {
+        return Ok(BitcoinRpcConnectionStatus::Syncing(
+            blockchain_info.verification_progress * 100.0,
+        ));
+    }
+    Ok(BitcoinRpcConnectionStatus::Synced)
 }
 
 /// Config gen params that are only used locally, shouldn't be shared
