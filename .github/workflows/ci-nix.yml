@@ -414,6 +414,14 @@ jobs:
             nix build -L .#container.gatewayd
           fi
           echo "gatewayd_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
+      - name: Build cln-light-gateway container
+        run: |
+          if [ "$GITHUB_EVENT_NAME" == "pull_request" ] || [ "$GITHUB_EVENT_NAME" == "merge_group" ]; then
+            nix build -L .#ci.container.cln-light-gateway
+          else
+            nix build -L .#container.cln-light-gateway
+          fi
+          echo "cln_light_gateway_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
       - name: Build gateway-cli container
         run: |
@@ -446,6 +454,7 @@ jobs:
           nix_tag=${{ env.fedimintd_container_tag }} && hub_tag="fedimint/fedimintd:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.fedimint_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.gatewayd_container_tag }} && hub_tag="fedimint/gatewayd:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.cln_light_gateway_container_tag }} && hub_tag="fedimint/cln-light-gateway:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.gateway-cli_container_tag }} && hub_tag="fedimint/gateway-cli:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.devtools_container_tag }} && hub_tag="fedimint/devtools:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
@@ -455,6 +464,7 @@ jobs:
           nix_tag=${{ env.fedimintd_container_tag }} && hub_tag="fedimint/fedimintd:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.fedimint_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.gatewayd_container_tag }} && hub_tag="fedimint/gatewayd:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.cln_light_gateway_container_tag }} && hub_tag="fedimint/cln-light-gateway:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.gateway-cli_container_tag }} && hub_tag="fedimint/gateway-cli:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.devtools_container_tag }} && hub_tag="fedimint/devtools:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
@@ -464,6 +474,7 @@ jobs:
           nix_tag=${{ env.fedimintd_container_tag }} && hub_tag="fedimint/fedimintd:${GITHUB_REF_NAME}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.fedimint_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:${GITHUB_REF_NAME}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.gatewayd_container_tag }} && hub_tag="fedimint/gatewayd:${GITHUB_REF_NAME}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.cln_light_gateway_container_tag }} && hub_tag="fedimint/cln-light-gateway:${GITHUB_REF_NAME}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.gateway-cli_container_tag }} && hub_tag="fedimint/gateway-cli:${GITHUB_REF_NAME}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.devtools_container_tag }} && hub_tag="fedimint/devtools:${GITHUB_REF_NAME}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
