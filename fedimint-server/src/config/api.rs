@@ -36,7 +36,8 @@ use fedimint_core::PeerId;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
-use tokio::sync::{Mutex, MutexGuard};
+use tokio::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use tokio::time::Instant;
 use tokio_rustls::rustls;
 use tracing::{error, info};
 
@@ -60,8 +61,9 @@ pub struct ConfigGenApi {
     code_version_str: String,
     /// Api secret to use
     api_secret: Option<String>,
-
     p2p_bind_addr: SocketAddr,
+    bitcoin_status_cache: Arc<RwLock<Option<(Instant, BitcoinRpcConnectionStatus)>>>,
+    bitcoin_status_cache_duration: Duration,
 }
 
 impl ConfigGenApi {
@@ -82,6 +84,8 @@ impl ConfigGenApi {
             code_version_str,
             api_secret,
             p2p_bind_addr,
+            bitcoin_status_cache: Arc::new(RwLock::new(None)),
+            bitcoin_status_cache_duration: Duration::from_secs(60),
         };
         info!(target: fedimint_logging::LOG_NET_PEER_DKG, "Created new config gen Api");
         config_gen_api
@@ -489,17 +493,36 @@ impl ConfigGenApi {
 
     // Check the status of the bitcoin rpc connection
     pub async fn check_bitcoin_status(&self) -> ApiResult<BitcoinRpcConnectionStatus> {
+        // Check the cache first
+        {
+            let cached_status: RwLockReadGuard<'_, Option<(Instant, BitcoinRpcConnectionStatus)>> =
+                self.bitcoin_status_cache.read().await;
+            if let Some((timestamp, status)) = cached_status.as_ref() {
+                if timestamp.elapsed() < self.bitcoin_status_cache_duration {
+                    return Ok(status.clone());
+                }
+            }
+        }
+
+        // If cache is invalid or expired, fetch new status
         let bitcoin_rpc_config = BitcoinRpcConfig::get_defaults_from_env_vars().map_err(|e| {
             ApiError::server_error(format!("Failed to get bitcoin rpc env vars: {e}"))
         })?;
-        match bitcoin_rpc_config.kind.as_str() {
+        let status = match bitcoin_rpc_config.kind.as_str() {
             "bitcoind" => check_bitcoind_status(&bitcoin_rpc_config),
             "esplora" => self.check_esplora_status(&bitcoin_rpc_config).await,
             _ => Err(ApiError::bad_request(format!(
                 "Unsupported bitcoin rpc kind: {}",
                 bitcoin_rpc_config.kind
             ))),
-        }
+        }?;
+
+        // Update the bitcoin status cache
+        let mut cached_status: RwLockWriteGuard<'_, Option<(Instant, BitcoinRpcConnectionStatus)>> =
+            self.bitcoin_status_cache.write().await;
+        *cached_status = Some((Instant::now(), status.clone()));
+
+        Ok(status)
     }
 
     async fn check_esplora_status(
@@ -520,12 +543,6 @@ impl ConfigGenApi {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
-pub enum BitcoinRpcConnectionStatus {
-    Synced,
-    Syncing(f64),
-}
-
 fn check_bitcoind_status(
     bitcoin_rpc_config: &BitcoinRpcConfig,
 ) -> ApiResult<BitcoinRpcConnectionStatus> {
@@ -542,6 +559,12 @@ fn check_bitcoind_status(
         ));
     }
     Ok(BitcoinRpcConnectionStatus::Synced)
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+pub enum BitcoinRpcConnectionStatus {
+    Synced,
+    Syncing(f64),
 }
 
 /// Config gen params that are only used locally, shouldn't be shared
