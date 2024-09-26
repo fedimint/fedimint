@@ -5,7 +5,7 @@ use devimint::util::FedimintCli;
 use devimint::version_constants::VERSION_0_5_0_ALPHA;
 use fedimint_logging::LOG_DEVIMINT;
 use rand::Rng;
-use tracing::{debug, info};
+use tracing::info;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -30,6 +30,23 @@ pub async fn test_restore_gap_test(fed: &Federation) -> Result<()> {
     fed.pegin_client(PEGIN_SATS, &client).await?;
 
     for i in 0..20 {
+        let gap = rand::thread_rng().gen_range(0..20);
+        info!(target: LOG_DEVIMINT, gap, "Gap");
+        cmd!(
+            client,
+            "dev",
+            "advance-note-idx",
+            "--amount",
+            "1024msat",
+            "--count",
+            // we are not guarantted to use a 1024 note on every payment,
+            // so create some random small gaps, so it's very unlikely we
+            // would cross the default gap limit accidentally
+            &gap.to_string()
+        )
+        .run()
+        .await?;
+
         let reissure_amount_sats = if i % 2 == 0 {
             // half of the time, reissue everything
             PEGIN_SATS
@@ -37,7 +54,7 @@ pub async fn test_restore_gap_test(fed: &Federation) -> Result<()> {
             // other half, random amount
             rand::thread_rng().gen_range(10..PEGIN_SATS)
         };
-        debug!(target: LOG_DEVIMINT, i, reissure_amount_sats, "Reissue");
+        info!(target: LOG_DEVIMINT, i, reissure_amount_sats, "Reissue");
 
         let notes = cmd!(client, "spend", reissure_amount_sats * 1000)
             .out_json()
