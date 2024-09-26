@@ -274,7 +274,13 @@
 <a href="#273" id="273">273</a>
 <a href="#274" id="274">274</a>
 <a href="#275" id="275">275</a>
-<a href="#276" id="276">276</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::module_name_repetitions)]
 
@@ -478,12 +484,18 @@
 <span class="doccomment">/// Meta source fetching meta values from the meta module if available or the
 /// legacy meta source otherwise.
 </span><span class="attr">#[derive(Clone, Debug, Default)]
-</span><span class="kw">pub struct </span>MetaModuleOrLegacyMetaSource {
-    legacy: LegacyMetaSource,
+</span><span class="kw">pub struct </span>MetaModuleMetaSourceWithFallback&lt;S = LegacyMetaSource&gt; {
+    legacy: S,
+}
+
+<span class="kw">impl</span>&lt;S&gt; MetaModuleMetaSourceWithFallback&lt;S&gt; {
+    <span class="kw">pub fn </span>new(legacy: S) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ legacy }
+    }
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl </span>MetaSource <span class="kw">for </span>MetaModuleOrLegacyMetaSource {
+</span><span class="kw">impl</span>&lt;S: MetaSource&gt; MetaSource <span class="kw">for </span>MetaModuleMetaSourceWithFallback&lt;S&gt; {
     <span class="kw">async fn </span>wait_for_update(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         fedimint_core::runtime::sleep(Duration::from_secs(<span class="number">10 </span>* <span class="number">60</span>)).<span class="kw">await</span>;
     }

@@ -1300,7 +1300,7 @@
     DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, WsFederationApi,
 };
 <span class="kw">use </span>fedimint_bip39::Bip39RootSecretStrategy;
-<span class="kw">use </span>fedimint_client::meta::{FetchKind, MetaSource};
+<span class="kw">use </span>fedimint_client::meta::{FetchKind, LegacyMetaSource, MetaSource};
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 <span class="kw">use </span>fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
 <span class="kw">use </span>fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandleArc};
@@ -1316,7 +1316,7 @@
 <span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, runtime, PeerId, TieredMulti};
 <span class="kw">use </span>fedimint_ln_client::LightningClientInit;
 <span class="kw">use </span>fedimint_logging::{TracingSetup, LOG_CLIENT};
-<span class="kw">use </span>fedimint_meta_client::{MetaClientInit, MetaModuleOrLegacyMetaSource};
+<span class="kw">use </span>fedimint_meta_client::{MetaClientInit, MetaModuleMetaSourceWithFallback};
 <span class="kw">use </span>fedimint_mint_client::{MintClientInit, OOBNotes, SpendableNote};
 <span class="kw">use </span>fedimint_wallet_client::api::WalletFederationApi;
 <span class="kw">use </span>fedimint_wallet_client::{WalletClientInit, WalletClientModule};
@@ -2376,7 +2376,7 @@ Examples:
             }
             Command::Dev(DevCmd::MetaFields) =&gt; {
                 <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span>source = MetaModuleOrLegacyMetaSource::default();
+                <span class="kw">let </span>source = MetaModuleMetaSourceWithFallback::&lt;LegacyMetaSource&gt;::default();
 
                 <span class="kw">let </span>meta_fields = source
                     .fetch(<span class="kw-2">&amp;</span>client, FetchKind::Initial, <span class="prelude-val">None</span>)
