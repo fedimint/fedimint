@@ -36,7 +36,7 @@ use fedimint_api_client::api::{
     DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, WsFederationApi,
 };
 use fedimint_bip39::Bip39RootSecretStrategy;
-use fedimint_client::meta::{FetchKind, MetaSource};
+use fedimint_client::meta::{FetchKind, LegacyMetaSource, MetaSource};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
 use fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandleArc};
@@ -52,7 +52,7 @@ use fedimint_core::util::{backoff_util, handle_version_hash_command, retry, Safe
 use fedimint_core::{fedimint_build_code_version_env, runtime, PeerId, TieredMulti};
 use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::{TracingSetup, LOG_CLIENT};
-use fedimint_meta_client::{MetaClientInit, MetaModuleOrLegacyMetaSource};
+use fedimint_meta_client::{MetaClientInit, MetaModuleMetaSourceWithFallback};
 use fedimint_mint_client::{MintClientInit, OOBNotes, SpendableNote};
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
@@ -1112,7 +1112,7 @@ impl FedimintCli {
             }
             Command::Dev(DevCmd::MetaFields) => {
                 let client = self.client_open(&cli).await?;
-                let source = MetaModuleOrLegacyMetaSource::default();
+                let source = MetaModuleMetaSourceWithFallback::<LegacyMetaSource>::default();
 
                 let meta_fields = source
                     .fetch(&client, FetchKind::Initial, None)
