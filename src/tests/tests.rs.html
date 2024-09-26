@@ -493,11 +493,7 @@
 <a href="#492" id="492">492</a>
 <a href="#493" id="493">493</a>
 <a href="#494" id="494">494</a>
-<a href="#495" id="495">495</a>
-<a href="#496" id="496">496</a>
-<a href="#497" id="497">497</a>
-<a href="#498" id="498">498</a>
-<a href="#499" id="499">499</a></pre></div><pre class="rust"><code><span class="kw">use </span>clap::Parser;
+<a href="#495" id="495">495</a></pre></div><pre class="rust"><code><span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>devimint::devfed::DevJitFed;
 <span class="kw">use </span>devimint::federation::{Client, Federation};
 <span class="kw">use </span>devimint::util::ProcessManager;
@@ -617,10 +613,10 @@
         </span>.as_ref()
         .expect(<span class="string">"Gateways of version 0.5.0 or higher support LDK"</span>);
 
-    <span class="kw">let </span>gateway_api = SafeUrl::parse(<span class="kw-2">&amp;</span>gw_ldk.addr).expect(<span class="string">"LDK gateway address is invalid url"</span>);
+    <span class="kw">let </span>gateway = SafeUrl::parse(<span class="kw-2">&amp;</span>gw_ldk.addr).expect(<span class="string">"LDK gateway address is invalid url"</span>);
 
     <span class="kw">for </span>peer <span class="kw">in </span><span class="number">0</span>..dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.members.len() {
-        <span class="macro">assert!</span>(add_gateway(<span class="kw-2">&amp;</span>client, peer, <span class="kw-2">&amp;</span>gateway_api.to_string()).<span class="kw">await</span><span class="question-mark">?</span>);
+        <span class="macro">assert!</span>(add_gateway(<span class="kw-2">&amp;</span>client, peer, <span class="kw-2">&amp;</span>gateway.to_string()).<span class="kw">await</span><span class="question-mark">?</span>);
     }
 
     <span class="macro">assert_eq!</span>(
@@ -649,11 +645,11 @@
             .<span class="kw">await</span><span class="question-mark">?
             </span>.as_str()
             .expect(<span class="string">"JSON Value is not a string"</span>),
-        gateway_api.to_string().as_str()
+        gateway.to_string().as_str()
     );
 
     <span class="kw">for </span>peer <span class="kw">in </span><span class="number">0</span>..dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.members.len() {
-        <span class="macro">assert!</span>(remove_gateway(<span class="kw-2">&amp;</span>client, peer, <span class="kw-2">&amp;</span>gateway_api).<span class="kw">await</span><span class="question-mark">?</span>);
+        <span class="macro">assert!</span>(remove_gateway(<span class="kw-2">&amp;</span>client, peer, <span class="kw-2">&amp;</span>gateway).<span class="kw">await</span><span class="question-mark">?</span>);
     }
 
     <span class="macro">assert!</span>(<span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateway"</span>, <span class="string">"list"</span>)
@@ -882,7 +878,7 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">async fn </span>add_gateway(client: <span class="kw-2">&amp;</span>Client, peer: usize, gateway_api: <span class="kw-2">&amp;</span>String) -&gt; anyhow::Result&lt;bool&gt; {
+<span class="kw">async fn </span>add_gateway(client: <span class="kw-2">&amp;</span>Client, peer: usize, gateway: <span class="kw-2">&amp;</span>String) -&gt; anyhow::Result&lt;bool&gt; {
     <span class="macro">cmd!</span>(
         client,
         <span class="string">"--our-id"</span>,
@@ -893,7 +889,7 @@
         <span class="string">"lnv2"</span>,
         <span class="string">"gateway"</span>,
         <span class="string">"add"</span>,
-        gateway_api
+        gateway
     )
     .out_json()
     .<span class="kw">await</span><span class="question-mark">?
@@ -901,11 +897,7 @@
     .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"JSON Value is not a boolean"</span>))
 }
 
-<span class="kw">async fn </span>remove_gateway(
-    client: <span class="kw-2">&amp;</span>Client,
-    peer: usize,
-    gateway_api: <span class="kw-2">&amp;</span>SafeUrl,
-) -&gt; anyhow::Result&lt;bool&gt; {
+<span class="kw">async fn </span>remove_gateway(client: <span class="kw-2">&amp;</span>Client, peer: usize, gateway: <span class="kw-2">&amp;</span>SafeUrl) -&gt; anyhow::Result&lt;bool&gt; {
     <span class="macro">cmd!</span>(
         client,
         <span class="string">"--our-id"</span>,
@@ -916,7 +908,7 @@
         <span class="string">"lnv2"</span>,
         <span class="string">"gateway"</span>,
         <span class="string">"remove"</span>,
-        gateway_api.to_string()
+        gateway.to_string()
     )
     .out_json()
     .<span class="kw">await</span><span class="question-mark">?
@@ -926,7 +918,7 @@
 
 <span class="kw">async fn </span>receive(
     client: <span class="kw-2">&amp;</span>Client,
-    gateway_api: <span class="kw-2">&amp;</span>str,
+    gateway: <span class="kw-2">&amp;</span>str,
     amount: u64,
 ) -&gt; anyhow::Result&lt;(Bolt11Invoice, OperationId)&gt; {
     <span class="prelude-val">Ok</span>(serde_json::from_value::&lt;(Bolt11Invoice, OperationId)&gt;(
@@ -937,7 +929,7 @@
             <span class="string">"receive"</span>,
             amount,
             <span class="string">"--gateway"</span>,
-            gateway_api
+            gateway
         )
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?</span>,
@@ -946,7 +938,7 @@
 
 <span class="kw">async fn </span>test_send(
     client: <span class="kw-2">&amp;</span>Client,
-    gateway_api: <span class="kw-2">&amp;</span>String,
+    gateway: <span class="kw-2">&amp;</span>String,
     invoice: <span class="kw-2">&amp;</span>Bolt11Invoice,
     final_state: FinalSendState,
 ) -&gt; anyhow::Result&lt;()&gt; {
@@ -958,7 +950,7 @@
             <span class="string">"send"</span>,
             invoice.to_string(),
             <span class="string">"--gateway"</span>,
-            gateway_api
+            gateway
         )
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?</span>,

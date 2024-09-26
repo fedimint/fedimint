@@ -1155,7 +1155,10 @@
 <a href="#1154" id="1154">1154</a>
 <a href="#1155" id="1155">1155</a>
 <a href="#1156" id="1156">1156</a>
-<a href="#1157" id="1157">1157</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1157" id="1157">1157</a>
+<a href="#1158" id="1158">1158</a>
+<a href="#1159" id="1159">1159</a>
+<a href="#1160" id="1160">1160</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -1225,7 +1228,7 @@
 </span><span class="kw">pub struct </span>SendOperationMeta {
     <span class="kw">pub </span>funding_txid: TransactionId,
     <span class="kw">pub </span>funding_change_outpoints: Vec&lt;OutPoint&gt;,
-    <span class="kw">pub </span>gateway_api: SafeUrl,
+    <span class="kw">pub </span>gateway: SafeUrl,
     <span class="kw">pub </span>contract: OutgoingContract,
     <span class="kw">pub </span>invoice: Bolt11Invoice,
     <span class="kw">pub </span>custom_meta: Value,
@@ -1245,6 +1248,7 @@
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ReceiveOperationMeta {
+    <span class="kw">pub </span>gateway: SafeUrl,
     <span class="kw">pub </span>contract: IncomingContract,
     <span class="kw">pub </span>invoice: Bolt11Invoice,
     <span class="kw">pub </span>custom_meta: Value,
@@ -1661,10 +1665,10 @@
 
     <span class="kw">async fn </span>routing_info(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        gateway_api: <span class="kw-2">&amp;</span>SafeUrl,
+        gateway: <span class="kw-2">&amp;</span>SafeUrl,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;RoutingInfo&gt;, GatewayConnectionError&gt; {
         <span class="self">self</span>.gateway_conn
-            .routing_info(gateway_api.clone(), <span class="kw-2">&amp;</span><span class="self">self</span>.federation_id)
+            .routing_info(gateway.clone(), <span class="kw-2">&amp;</span><span class="self">self</span>.federation_id)
             .<span class="kw">await
     </span>}
 
@@ -1673,13 +1677,13 @@
     </span><span class="kw">pub async fn </span>send(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         invoice: Bolt11Invoice,
-        gateway_api: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
+        gateway: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OperationId, SendPaymentError&gt; {
         <span class="self">self</span>.send_custom(
             invoice,
             PaymentFee::SEND_FEE_LIMIT_DEFAULT,
             EXPIRATION_DELTA_LIMIT_DEFAULT,
-            gateway_api,
+            gateway,
             Value::Null,
         )
         .<span class="kw">await
@@ -1692,7 +1696,7 @@
         invoice: Bolt11Invoice,
         payment_fee_limit: PaymentFee,
         expiration_delta_limit: u64,
-        gateway_api: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
+        gateway: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
         custom_meta: Value,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OperationId, SendPaymentError&gt; {
         <span class="kw">let </span>amount = invoice
@@ -1718,7 +1722,7 @@
             .expect(<span class="string">"32 bytes, within curve order"</span>)
             .keypair(secp256k1::SECP256K1);
 
-        <span class="kw">let </span>(gateway_api, routing_info) = <span class="kw">match </span>gateway_api {
+        <span class="kw">let </span>(gateway_api, routing_info) = <span class="kw">match </span>gateway {
             <span class="prelude-val">Some</span>(gateway_api) =&gt; (
                 gateway_api.clone(),
                 <span class="self">self</span>.routing_info(<span class="kw-2">&amp;</span>gateway_api)
@@ -1792,7 +1796,7 @@
                     LightningOperationMeta::Send(SendOperationMeta {
                         funding_txid,
                         funding_change_outpoints,
-                        gateway_api: gateway_api.clone(),
+                        gateway: gateway_api.clone(),
                         contract: contract.clone(),
                         invoice: invoice.clone(),
                         custom_meta: custom_meta.clone(),
@@ -1922,13 +1926,13 @@
     <span class="doccomment">/// Request an invoice. For testing you can optionally specify a gateway to
     /// generate the invoice, otherwise a gateway will be selected
     /// automatically.
-    </span><span class="kw">pub async fn </span>receive(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount, gateway_api: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;) -&gt; ReceiveResult {
+    </span><span class="kw">pub async fn </span>receive(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount, gateway: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;) -&gt; ReceiveResult {
         <span class="self">self</span>.receive_custom(
             amount,
             INVOICE_EXPIRATION_SECONDS_DEFAULT,
             Bolt11InvoiceDescription::Direct(String::new()),
             PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
-            gateway_api,
+            gateway,
             Value::Null,
         )
         .<span class="kw">await
@@ -1943,22 +1947,22 @@
         expiry_secs: u32,
         description: Bolt11InvoiceDescription,
         payment_fee_limit: PaymentFee,
-        gateway_api: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
+        gateway: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
         custom_meta: Value,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(Bolt11Invoice, OperationId), ReceiveError&gt; {
-        <span class="kw">let </span>(contract, invoice) = <span class="self">self
+        <span class="kw">let </span>(gateway, contract, invoice) = <span class="self">self
             </span>.create_contract_and_fetch_invoice(
                 <span class="self">self</span>.keypair.public_key(),
                 amount,
                 expiry_secs,
                 description,
                 payment_fee_limit,
-                gateway_api,
+                gateway,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>operation_id = <span class="self">self
-            </span>.receive_incoming_contract(contract, invoice.clone(), custom_meta)
+            </span>.receive_incoming_contract(gateway, contract, invoice.clone(), custom_meta)
             .<span class="kw">await
             </span>.expect(<span class="string">"The contract has been generated with our public key"</span>);
 
@@ -1975,8 +1979,8 @@
         expiry_secs: u32,
         description: Bolt11InvoiceDescription,
         payment_fee_limit: PaymentFee,
-        gateway_api: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(IncomingContract, Bolt11Invoice), ReceiveError&gt; {
+        gateway: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(SafeUrl, IncomingContract, Bolt11Invoice), ReceiveError&gt; {
         <span class="kw">let </span>(ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(recipient_static_pk);
 
         <span class="kw">let </span>encryption_seed = ephemeral_tweak
@@ -1987,10 +1991,10 @@
             .consensus_hash::&lt;sha256::Hash&gt;()
             .to_byte_array();
 
-        <span class="kw">let </span>(gateway_api, routing_info) = <span class="kw">match </span>gateway_api {
-            <span class="prelude-val">Some</span>(gateway_api) =&gt; (
-                gateway_api.clone(),
-                <span class="self">self</span>.routing_info(<span class="kw-2">&amp;</span>gateway_api)
+        <span class="kw">let </span>(gateway, routing_info) = <span class="kw">match </span>gateway {
+            <span class="prelude-val">Some</span>(gateway) =&gt; (
+                gateway.clone(),
+                <span class="self">self</span>.routing_info(<span class="kw-2">&amp;</span>gateway)
                     .<span class="kw">await
                     </span>.map_err(ReceiveError::GatewayConnectionError)<span class="question-mark">?
                     </span>.ok_or(ReceiveError::UnknownFederation)<span class="question-mark">?</span>,
@@ -2041,7 +2045,7 @@
         <span class="kw">let </span>invoice = <span class="self">self
             </span>.gateway_conn
             .bolt11_invoice(
-                gateway_api,
+                gateway.clone(),
                 <span class="self">self</span>.federation_id,
                 contract.clone(),
                 amount,
@@ -2059,13 +2063,14 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveError::InvalidInvoiceAmount);
         }
 
-        <span class="prelude-val">Ok</span>((contract, invoice))
+        <span class="prelude-val">Ok</span>((gateway, contract, invoice))
     }
 
     <span class="comment">// Receive an incoming contract locked to a public key derived from our
     // static module public key.
     </span><span class="kw">async fn </span>receive_incoming_contract(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
+        gateway: SafeUrl,
         contract: IncomingContract,
         invoice: Bolt11Invoice,
         custom_meta: Value,
@@ -2091,6 +2096,7 @@
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
                 LightningOperationMeta::Receive(ReceiveOperationMeta {
+                    gateway,
                     contract,
                     invoice,
                     custom_meta,
