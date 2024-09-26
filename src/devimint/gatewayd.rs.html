@@ -372,7 +372,17 @@
 <a href="#371" id="371">371</a>
 <a href="#372" id="372">372</a>
 <a href="#373" id="373">373</a>
-<a href="#374" id="374">374</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -383,6 +393,7 @@
 <span class="kw">use </span>fedimint_core::secp256k1::PublicKey;
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
 <span class="kw">use </span>fedimint_testing::gateway::LightningNodeType;
+<span class="kw">use </span>ln_gateway::envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV;
 <span class="kw">use </span>ln_gateway::lightning::ChannelInfo;
 <span class="kw">use </span>ln_gateway::rpc::{MnemonicResponse, V1_API_ENDPOINT};
 <span class="kw">use </span>tracing::info;
@@ -392,7 +403,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::federation::Federation;
 <span class="kw">use </span><span class="kw">crate</span>::util::{poll, Command, ProcessHandle, ProcessManager};
 <span class="kw">use </span><span class="kw">crate</span>::vars::utf8;
-<span class="kw">use </span><span class="kw">crate</span>::version_constants::VERSION_0_5_0_ALPHA;
+<span class="kw">use </span><span class="kw">crate</span>::version_constants::{VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA};
 <span class="kw">use crate</span>::{cmd, Lightningd};
 
 <span class="attr">#[derive(Clone)]
@@ -422,7 +433,7 @@
         };
         <span class="kw">let </span>lightning_node_addr = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{lightning_node_port}"</span>);
 
-        <span class="kw">let </span>gateway_env: HashMap&lt;String, String&gt; = HashMap::from_iter([
+        <span class="kw">let </span><span class="kw-2">mut </span>gateway_env: HashMap&lt;String, String&gt; = HashMap::from_iter([
             (
                 FM_GATEWAY_DATA_DIR_ENV.to_owned(),
                 <span class="macro">format!</span>(<span class="string">"{}/{ln_name}"</span>, utf8(test_dir)),
@@ -433,6 +444,15 @@
             ),
             (FM_GATEWAY_API_ADDR_ENV.to_owned(), addr.clone()),
         ]);
+        <span class="comment">// TODO(support:v0.4.0): Run the gateway in LNv1 mode only before v0.4.0 because
+        // that is the only module it supported.
+        </span><span class="kw">let </span>fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
+        <span class="kw">if </span>fedimintd_version &lt; <span class="kw-2">*</span>VERSION_0_4_0_ALPHA {
+            gateway_env.insert(
+                FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV.to_owned(),
+                <span class="string">"LNv1"</span>.to_string(),
+            );
+        }
         <span class="kw">let </span>process = process_mgr
             .spawn_daemon(
                 <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"gatewayd-{ln_name}"</span>),

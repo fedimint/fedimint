@@ -584,7 +584,7 @@
     <span class="kw">let </span>gw_lnd = dev_fed.gw_lnd_registered().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>gw_cln = dev_fed.gw_cln_registered().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>gw_ldk = dev_fed
-        .gw_ldk_registered()
+        .gw_ldk_connected()
         .<span class="kw">await</span><span class="question-mark">?
         </span>.as_ref()
         .expect(<span class="string">"Gateways of version 0.5.0 or higher support LDK"</span>);
@@ -608,7 +608,7 @@
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>gw_ldk = dev_fed
-        .gw_ldk_registered()
+        .gw_ldk_connected()
         .<span class="kw">await</span><span class="question-mark">?
         </span>.as_ref()
         .expect(<span class="string">"Gateways of version 0.5.0 or higher support LDK"</span>);
@@ -687,7 +687,7 @@
     <span class="kw">let </span>gw_lnd = dev_fed.gw_lnd_registered().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>gw_cln = dev_fed.gw_cln_registered().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>gw_ldk = dev_fed
-        .gw_ldk_registered()
+        .gw_ldk_connected()
         .<span class="kw">await</span><span class="question-mark">?
         </span>.as_ref()
         .expect(<span class="string">"Gateways of version 0.5.0 or higher support LDK"</span>);
@@ -827,7 +827,7 @@
     <span class="kw">let </span>gw_lnd = dev_fed.gw_lnd_registered().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>gw_cln = dev_fed.gw_cln_registered().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>gw_ldk = dev_fed
-        .gw_ldk_registered()
+        .gw_ldk_connected()
         .<span class="kw">await</span><span class="question-mark">?
         </span>.as_ref()
         .expect(<span class="string">"LDK Gateway should be available"</span>);

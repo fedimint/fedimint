@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["btc","db","envs","federation","fixtures","gateway","ln"],"struct":["Gateway"]};
+window.SIDEBAR_ITEMS = {"enum":["LightningModuleMode"],"mod":["btc","db","envs","federation","fixtures","gateway","ln"],"struct":["Gateway"]};

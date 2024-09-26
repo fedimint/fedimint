@@ -252,7 +252,9 @@
 <a href="#251" id="251">251</a>
 <a href="#252" id="252">252</a>
 <a href="#253" id="253">253</a>
-<a href="#254" id="254">254</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -276,6 +278,7 @@
 <span class="kw">use </span>fedimint_testing_core::test_dir;
 <span class="kw">use </span>lightning_invoice::RoutingFees;
 <span class="kw">use </span>ln_gateway::client::GatewayClientBuilder;
+<span class="kw">use </span>ln_gateway::config::LightningModuleMode;
 <span class="kw">use </span>ln_gateway::lightning::{ILnRpcClient, LightningBuilder, LightningContext};
 <span class="kw">use </span>ln_gateway::Gateway;
 
@@ -409,7 +412,7 @@
     }
 
     <span class="doccomment">/// Creates a new Gateway that can be used for module tests.
-    </span><span class="kw">pub async fn </span>new_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Gateway {
+    </span><span class="kw">pub async fn </span>new_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, lightning_module_mode: LightningModuleMode) -&gt; Gateway {
         <span class="kw">let </span>server_gens = ServerModuleInitRegistry::from(<span class="self">self</span>.servers.clone());
         <span class="kw">let </span>module_kinds = <span class="self">self</span>.params.iter_modules().map(|(id, kind, <span class="kw">_</span>)| (id, kind));
         <span class="kw">let </span>decoders = server_gens.available_decoders(module_kinds).unwrap();
@@ -444,7 +447,7 @@
         <span class="kw">let </span>(lightning_public_key, lightning_alias, lightning_network, <span class="kw">_</span>, <span class="kw">_</span>) = ln_client
             .parsed_node_info()
             .<span class="kw">await
-            </span>.expect(<span class="string">"Could not get Lighytning info"</span>);
+            </span>.expect(<span class="string">"Could not get Lightning info"</span>);
         <span class="kw">let </span>lightning_context = LightningContext {
             lnrpc: ln_client.clone(),
             lightning_public_key,
@@ -469,6 +472,7 @@
             // webserver or intercept HTLCs, so this is necessary for instructing the
             // gateway that it is connected to the mock Lightning node.
             </span>ln_gateway::GatewayState::Running { lightning_context },
+            lightning_module_mode,
         )
         .<span class="kw">await
         </span>.expect(<span class="string">"Failed to create gateway"</span>)

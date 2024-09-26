@@ -474,7 +474,24 @@
 <a href="#473" id="473">473</a>
 <a href="#474" id="474">474</a>
 <a href="#475" id="475">475</a>
-<a href="#476" id="476">476</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>axum::extract::Request;
 <span class="kw">use </span>axum::http::{header, StatusCode};
@@ -618,6 +635,24 @@
     <span class="prelude-val">Err</span>(StatusCode::UNAUTHORIZED)
 }
 
+<span class="doccomment">/// Public routes that are used in the LNv1 protocol
+</span><span class="kw">fn </span>lnv1_routes() -&gt; Router {
+    Router::new()
+        .route(PAY_INVOICE_ENDPOINT, post(pay_invoice))
+        .route(GET_GATEWAY_ID_ENDPOINT, get(get_gateway_id))
+}
+
+<span class="doccomment">/// Public routes that are used in the LNv2 protocol
+</span><span class="kw">fn </span>lnv2_routes() -&gt; Router {
+    Router::new()
+        .route(ROUTING_INFO_ENDPOINT, post(routing_info_v2))
+        .route(SEND_PAYMENT_ENDPOINT, post(pay_bolt11_invoice_v2))
+        .route(
+            CREATE_BOLT11_INVOICE_ENDPOINT,
+            post(create_bolt11_invoice_v2),
+        )
+}
+
 <span class="doccomment">/// Gateway Webserver Routes. The gateway supports three types of routes
 /// - Always Authenticated: these routes always require a Bearer token. Used by
 ///   gateway administrators.
@@ -628,21 +663,20 @@
 ///   clients.
 </span><span class="kw">fn </span>v1_routes(gateway: Arc&lt;Gateway&gt;, task_group: TaskGroup) -&gt; Router {
     <span class="comment">// Public routes on gateway webserver
-    </span><span class="kw">let </span>public_routes = Router::new()
+    </span><span class="kw">let </span><span class="kw-2">mut </span>public_routes = Router::new()
         .route(
             CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT,
             post(create_invoice_for_self),
         )
-        .route(PAY_INVOICE_ENDPOINT, post(pay_invoice))
-        .route(GET_GATEWAY_ID_ENDPOINT, get(get_gateway_id))
-        <span class="comment">// These routes are for next generation lightning
-        </span>.route(ROUTING_INFO_ENDPOINT, post(routing_info_v2))
-        .route(SEND_PAYMENT_ENDPOINT, post(pay_bolt11_invoice_v2))
-        .route(
-            CREATE_BOLT11_INVOICE_ENDPOINT,
-            post(create_bolt11_invoice_v2),
-        )
         .route(RECEIVE_ECASH_ENDPOINT, post(receive_ecash));
+
+    <span class="kw">if </span>gateway.is_running_lnv1() {
+        public_routes = public_routes.merge(lnv1_routes());
+    }
+
+    <span class="kw">if </span>gateway.is_running_lnv2() {
+        public_routes = public_routes.merge(lnv2_routes());
+    }
 
     <span class="comment">// Authenticated, public routes used for gateway administration
     </span><span class="kw">let </span>always_authenticated_routes = Router::new()

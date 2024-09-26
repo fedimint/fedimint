@@ -437,7 +437,17 @@
 <a href="#436" id="436">436</a>
 <a href="#437" id="437">437</a>
 <a href="#438" id="438">438</a>
-<a href="#439" id="439">439</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::Deref <span class="kw">as _</span>;
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::Deref <span class="kw">as _</span>;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::Result;
@@ -530,7 +540,7 @@
     start_time: std::time::SystemTime,
     gw_cln_registered: JitArc&lt;()&gt;,
     gw_lnd_registered: JitArc&lt;()&gt;,
-    gw_ldk_registered: JitArc&lt;()&gt;,
+    gw_ldk_connected: JitArc&lt;()&gt;,
     fed_epoch_generated: JitArc&lt;()&gt;,
     channel_opened: JitArc&lt;()&gt;,
 }
@@ -657,8 +667,12 @@
             <span class="kw">let </span>esplora = esplora.clone();
             <span class="kw">let </span>process_mgr = process_mgr.to_owned();
             <span class="kw">move </span>|| <span class="kw">async move </span>{
+                <span class="comment">// TODO(support:v0.4.0): Only run LDK gateway when the federation supports LNv2
+                </span><span class="kw">let </span>fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
                 <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
-                <span class="kw">if </span>gatewayd_version &gt;= <span class="kw-2">*</span>VERSION_0_5_0_ALPHA {
+                <span class="kw">if </span>gatewayd_version &gt;= <span class="kw-2">*</span>VERSION_0_5_0_ALPHA
+                    &amp;&amp; fedimintd_version &gt;= <span class="kw-2">*</span>VERSION_0_4_0_ALPHA
+                {
                     esplora.get_try().<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="prelude-val">Ok</span>(Arc::new(<span class="prelude-val">Some</span>(
                         Gatewayd::new(<span class="kw-2">&amp;</span>process_mgr, LightningNode::Ldk).<span class="kw">await</span><span class="question-mark">?</span>,
@@ -668,15 +682,19 @@
                 }
             }
         });
-        <span class="kw">let </span>gw_ldk_registered = JitTryAnyhow::new_try({
+        <span class="kw">let </span>gw_ldk_connected = JitTryAnyhow::new_try({
             <span class="kw">let </span>gw_ldk = gw_ldk.clone();
             <span class="kw">let </span>fed = fed.clone();
             <span class="kw">move </span>|| <span class="kw">async move </span>{
-                <span class="kw">let </span>gw_ldk = gw_ldk.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref();
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(gw_ldk) = gw_ldk {
-                    <span class="kw">let </span>fed = fed.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref();
-                    <span class="kw">if </span>!skip_setup {
-                        gw_ldk.connect_fed(fed).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="comment">// TODO(support:v0.4.0): Only run LDK gateway when the federation supports LNv2
+                </span><span class="kw">let </span>fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
+                <span class="kw">if </span>fedimintd_version &gt;= <span class="kw-2">*</span>VERSION_0_4_0_ALPHA {
+                    <span class="kw">let </span>gw_ldk = gw_ldk.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref();
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(gw_ldk) = gw_ldk {
+                        <span class="kw">let </span>fed = fed.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref();
+                        <span class="kw">if </span>!skip_setup {
+                            gw_ldk.connect_fed(fed).<span class="kw">await</span><span class="question-mark">?</span>;
+                        }
                     }
                 }
                 <span class="prelude-val">Ok</span>(Arc::new(()))
@@ -698,11 +716,13 @@
 
                 </span><span class="kw">let </span>gateway_cli_version = <span class="kw">crate</span>::util::GatewayCli::version_or_default().<span class="kw">await</span>;
                 <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
+                <span class="kw">let </span>fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
 
                 <span class="kw">let </span>bitcoind = bitcoind.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
 
                 <span class="kw">if </span>gateway_cli_version &lt; <span class="kw-2">*</span>VERSION_0_4_0_ALPHA
                     || gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_4_0_ALPHA
+                    || fedimintd_version &lt; <span class="kw-2">*</span>VERSION_0_4_0_ALPHA
                 {
                     <span class="kw">let </span>lnd = lnd.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
                     <span class="kw">let </span>cln = cln.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
@@ -750,7 +770,7 @@
             start_time,
             gw_cln_registered,
             gw_lnd_registered,
-            gw_ldk_registered,
+            gw_ldk_connected,
             fed_epoch_generated,
             channel_opened,
         })
@@ -785,8 +805,8 @@
     <span class="kw">pub async fn </span>gw_ldk(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;Gatewayd&gt;&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.gw_ldk.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref())
     }
-    <span class="kw">pub async fn </span>gw_ldk_registered(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;Gatewayd&gt;&gt; {
-        <span class="self">self</span>.gw_ldk_registered.get_try().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">pub async fn </span>gw_ldk_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;Gatewayd&gt;&gt; {
+        <span class="self">self</span>.gw_ldk_connected.get_try().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.gw_ldk.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref())
     }
     <span class="kw">pub async fn </span>fed(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="kw-2">&amp;</span>Federation&gt; {
@@ -819,7 +839,7 @@
         <span class="kw">let _ </span>= <span class="self">self</span>.channel_opened.get_try().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let _ </span>= <span class="self">self</span>.gw_cln_registered().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let _ </span>= <span class="self">self</span>.gw_lnd_registered().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let _ </span>= <span class="self">self</span>.gw_ldk_registered().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let _ </span>= <span class="self">self</span>.gw_ldk_connected().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let _ </span>= <span class="self">self</span>.cln().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let _ </span>= <span class="self">self</span>.lnd().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let _ </span>= <span class="self">self</span>.electrs().<span class="kw">await</span><span class="question-mark">?</span>;
