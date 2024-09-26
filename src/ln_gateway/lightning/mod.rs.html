@@ -341,7 +341,17 @@
 <a href="#340" id="340">340</a>
 <a href="#341" id="341">341</a>
 <a href="#342" id="342">342</a>
-<a href="#343" id="343">343</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>cln;
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>ldk;
 <span class="kw">pub mod </span>lnd;
 
@@ -352,14 +362,14 @@
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bip39::Mnemonic;
-<span class="kw">use </span>bitcoin::Network;
+<span class="kw">use </span>bitcoin::{Address, Network};
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::secp256k1::PublicKey;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
-<span class="kw">use </span>fedimint_core::{secp256k1, Amount};
+<span class="kw">use </span>fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
 <span class="kw">use </span>fedimint_ln_common::PrunedInvoice;
 <span class="kw">use </span>futures::stream::BoxStream;
@@ -377,6 +387,7 @@
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
+    WithdrawOnchainResponse,
 };
 
 <span class="kw">pub const </span>MAX_LIGHTNING_RETRIES: u32 = <span class="number">10</span>;
@@ -408,6 +419,8 @@
     </span>FailedToGetInvoice { failure_reason: String },
     <span class="attr">#[error(<span class="string">"Failed to get funding address: {failure_reason}"</span>)]
     </span>FailedToGetLnOnchainAddress { failure_reason: String },
+    <span class="attr">#[error(<span class="string">"Failed to withdraw funds on-chain: {failure_reason}"</span>)]
+    </span>FailedToWithdrawOnchain { failure_reason: String },
     <span class="attr">#[error(<span class="string">"Failed to connect to peer: {failure_reason}"</span>)]
     </span>FailedToConnectToPeer { failure_reason: String },
     <span class="attr">#[error(<span class="string">"Failed to list active channels: {failure_reason}"</span>)]
@@ -516,6 +529,13 @@
     </span><span class="kw">async fn </span>get_ln_onchain_address(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;GetLnOnchainAddressResponse, LightningRpcError&gt;;
+
+    <span class="kw">async fn </span>withdraw_onchain(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        address: Address,
+        amount: BitcoinAmountOrAll,
+        fee_rate_sats_per_vbyte: u64,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;WithdrawOnchainResponse, LightningRpcError&gt;;
 
     <span class="doccomment">/// Open a channel with a peer lightning node from the gateway's lightning
     /// node.

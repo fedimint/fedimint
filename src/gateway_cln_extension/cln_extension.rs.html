@@ -1365,7 +1365,51 @@
 <a href="#1364" id="1364">1364</a>
 <a href="#1365" id="1365">1365</a>
 <a href="#1366" id="1366">1366</a>
-<a href="#1367" id="1367">1367</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
+<a href="#1367" id="1367">1367</a>
+<a href="#1368" id="1368">1368</a>
+<a href="#1369" id="1369">1369</a>
+<a href="#1370" id="1370">1370</a>
+<a href="#1371" id="1371">1371</a>
+<a href="#1372" id="1372">1372</a>
+<a href="#1373" id="1373">1373</a>
+<a href="#1374" id="1374">1374</a>
+<a href="#1375" id="1375">1375</a>
+<a href="#1376" id="1376">1376</a>
+<a href="#1377" id="1377">1377</a>
+<a href="#1378" id="1378">1378</a>
+<a href="#1379" id="1379">1379</a>
+<a href="#1380" id="1380">1380</a>
+<a href="#1381" id="1381">1381</a>
+<a href="#1382" id="1382">1382</a>
+<a href="#1383" id="1383">1383</a>
+<a href="#1384" id="1384">1384</a>
+<a href="#1385" id="1385">1385</a>
+<a href="#1386" id="1386">1386</a>
+<a href="#1387" id="1387">1387</a>
+<a href="#1388" id="1388">1388</a>
+<a href="#1389" id="1389">1389</a>
+<a href="#1390" id="1390">1390</a>
+<a href="#1391" id="1391">1391</a>
+<a href="#1392" id="1392">1392</a>
+<a href="#1393" id="1393">1393</a>
+<a href="#1394" id="1394">1394</a>
+<a href="#1395" id="1395">1395</a>
+<a href="#1396" id="1396">1396</a>
+<a href="#1397" id="1397">1397</a>
+<a href="#1398" id="1398">1398</a>
+<a href="#1399" id="1399">1399</a>
+<a href="#1400" id="1400">1400</a>
+<a href="#1401" id="1401">1401</a>
+<a href="#1402" id="1402">1402</a>
+<a href="#1403" id="1403">1403</a>
+<a href="#1404" id="1404">1404</a>
+<a href="#1405" id="1405">1405</a>
+<a href="#1406" id="1406">1406</a>
+<a href="#1407" id="1407">1407</a>
+<a href="#1408" id="1408">1408</a>
+<a href="#1409" id="1409">1409</a>
+<a href="#1410" id="1410">1410</a>
+<a href="#1411" id="1411">1411</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -1401,7 +1445,7 @@
     GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, ListActiveChannelsResponse, OpenChannelRequest,
     OpenChannelResponse, PayInvoiceRequest, PayInvoiceResponse, PayPrunedInvoiceRequest,
-    PrunedInvoice,
+    PrunedInvoice, WithdrawOnchainRequest, WithdrawOnchainResponse,
 };
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::Rng;
@@ -2325,6 +2369,50 @@
             })),
             <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Err</span>(Status::internal(<span class="string">"cln newaddr rpc returned no address"</span>)),
         }
+    }
+
+    <span class="kw">async fn </span>withdraw_onchain(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        request: tonic::Request&lt;WithdrawOnchainRequest&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;WithdrawOnchainResponse&gt;, Status&gt; {
+        <span class="kw">let </span>request_inner = request.into_inner();
+
+        <span class="kw">let </span>txid = <span class="self">self
+            </span>.rpc_client()
+            .<span class="kw">await
+            </span>.map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?
+            </span>.call(cln_rpc::Request::Withdraw(
+                model::requests::WithdrawRequest {
+                    feerate: <span class="prelude-val">Some</span>(cln_rpc::primitives::Feerate::PerKw(
+                        <span class="comment">// 1 vbyte = 4 weight units, so 250 vbytes = 1,000 weight units.
+                        </span>request_inner.fee_rate_sats_per_vbyte <span class="kw">as </span>u32 * <span class="number">250</span>,
+                    )),
+                    minconf: <span class="prelude-val">Some</span>(<span class="number">0</span>),
+                    utxos: <span class="prelude-val">None</span>,
+                    destination: request_inner.address,
+                    satoshi: <span class="kw">if let </span><span class="prelude-val">Some</span>(amount_sats) = request_inner.amount_sats {
+                        cln_rpc::primitives::AmountOrAll::Amount(
+                            cln_rpc::primitives::Amount::from_sat(amount_sats),
+                        )
+                    } <span class="kw">else </span>{
+                        cln_rpc::primitives::AmountOrAll::All
+                    },
+                },
+            ))
+            .<span class="kw">await
+            </span>.map(|response| <span class="kw">match </span>response {
+                cln_rpc::Response::Withdraw(model::responses::WithdrawResponse {
+                    txid, ..
+                }) =&gt; <span class="prelude-val">Ok</span>(txid),
+                <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(ClnExtensionError::RpcWrongResponse),
+            })
+            .map_err(|e| {
+                <span class="macro">error!</span>(<span class="string">"cln connect rpc returned error {:?}"</span>, e);
+                tonic::Status::internal(e.to_string())
+            })<span class="question-mark">?
+            </span>.map_err(|e| tonic::Status::internal(e.to_string()))<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(tonic::Response::new(WithdrawOnchainResponse { txid }))
     }
 
     <span class="kw">async fn </span>open_channel(

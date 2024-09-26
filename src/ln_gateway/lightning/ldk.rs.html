@@ -554,17 +554,44 @@
 <a href="#553" id="553">553</a>
 <a href="#554" id="554">554</a>
 <a href="#555" id="555">555</a>
-<a href="#556" id="556">556</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
+<a href="#556" id="556">556</a>
+<a href="#557" id="557">557</a>
+<a href="#558" id="558">558</a>
+<a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
+<a href="#570" id="570">570</a>
+<a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bip39::Mnemonic;
-<span class="kw">use </span>bitcoin::{secp256k1, Network, OutPoint};
+<span class="kw">use </span>bitcoin::{secp256k1, Address, Network, OutPoint};
 <span class="kw">use </span>fedimint_core::runtime::spawn;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
-<span class="kw">use </span>fedimint_core::Amount;
+<span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll};
 <span class="kw">use </span>ldk_node::lightning::ln::msgs::SocketAddress;
 <span class="kw">use </span>ldk_node::lightning::ln::PaymentHash;
 <span class="kw">use </span>ldk_node::lightning_invoice::Bolt11Invoice;
@@ -583,6 +610,7 @@
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
+    WithdrawOnchainResponse,
 };
 
 <span class="kw">pub struct </span>GatewayLdkClient {
@@ -969,6 +997,32 @@
             .map_err(|e| LightningRpcError::FailedToGetLnOnchainAddress {
                 failure_reason: e.to_string(),
             })
+    }
+
+    <span class="kw">async fn </span>withdraw_onchain(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        address: Address,
+        amount: BitcoinAmountOrAll,
+        <span class="comment">// TODO: Respect this fee rate once `ldk-node` supports setting a custom fee rate.
+        // This work is planned to be in `ldk-node` v0.4 and is tracked here:
+        // https://github.com/lightningdevkit/ldk-node/issues/176
+        </span>_fee_rate_sats_per_vbyte: u64,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;WithdrawOnchainResponse, LightningRpcError&gt; {
+        <span class="kw">let </span>onchain = <span class="self">self</span>.node.onchain_payment();
+
+        <span class="kw">let </span>txid = <span class="kw">match </span>amount {
+            BitcoinAmountOrAll::All =&gt; onchain.send_all_to_address(<span class="kw-2">&amp;</span>address),
+            BitcoinAmountOrAll::Amount(amount_sats) =&gt; {
+                onchain.send_to_address(<span class="kw-2">&amp;</span>address, amount_sats.to_sat())
+            }
+        }
+        .map_err(|e| LightningRpcError::FailedToWithdrawOnchain {
+            failure_reason: e.to_string(),
+        })<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(WithdrawOnchainResponse {
+            txid: txid.to_string(),
+        })
     }
 
     <span class="kw">async fn </span>open_channel(

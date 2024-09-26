@@ -2145,7 +2145,30 @@
 <a href="#2144" id="2144">2144</a>
 <a href="#2145" id="2145">2145</a>
 <a href="#2146" id="2146">2146</a>
-<a href="#2147" id="2147">2147</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2147" id="2147">2147</a>
+<a href="#2148" id="2148">2148</a>
+<a href="#2149" id="2149">2149</a>
+<a href="#2150" id="2150">2150</a>
+<a href="#2151" id="2151">2151</a>
+<a href="#2152" id="2152">2152</a>
+<a href="#2153" id="2153">2153</a>
+<a href="#2154" id="2154">2154</a>
+<a href="#2155" id="2155">2155</a>
+<a href="#2156" id="2156">2156</a>
+<a href="#2157" id="2157">2157</a>
+<a href="#2158" id="2158">2158</a>
+<a href="#2159" id="2159">2159</a>
+<a href="#2160" id="2160">2160</a>
+<a href="#2161" id="2161">2161</a>
+<a href="#2162" id="2162">2162</a>
+<a href="#2163" id="2163">2163</a>
+<a href="#2164" id="2164">2164</a>
+<a href="#2165" id="2165">2165</a>
+<a href="#2166" id="2166">2166</a>
+<a href="#2167" id="2167">2167</a>
+<a href="#2168" id="2168">2168</a>
+<a href="#2169" id="2169">2169</a>
+<a href="#2170" id="2170">2170</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2241,7 +2264,7 @@
     CloseChannelsWithPeerPayload, CreateInvoiceForSelfPayload, FederationInfo, GatewayFedConfig,
     GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelPayload, PayInvoicePayload,
     ReceiveEcashPayload, ReceiveEcashResponse, SetConfigurationPayload, SpendEcashPayload,
-    SpendEcashResponse, SyncToChainPayload, V1_API_ENDPOINT,
+    SpendEcashResponse, SyncToChainPayload, WithdrawOnchainPayload, V1_API_ENDPOINT,
 };
 <span class="kw">use </span>state_machine::{GatewayClientModule, GatewayExtPayStates};
 <span class="kw">use </span>tokio::sync::RwLock;
@@ -3581,6 +3604,29 @@
         <span class="kw">let </span>context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>channels = context.lnrpc.list_active_channels().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(channels)
+    }
+
+    <span class="doccomment">/// Withdraws funds from the gateway's lightning node on-chain wallet.
+    </span><span class="kw">pub async fn </span>handle_withdraw_onchain_msg(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        WithdrawOnchainPayload {
+            address,
+            amount: amount_sats,
+            fee_rate_sats_per_vbyte,
+        }: WithdrawOnchainPayload,
+    ) -&gt; AdminResult&lt;Txid&gt; {
+        <span class="kw">let </span>context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>response = context
+            .lnrpc
+            .withdraw_onchain(
+                address.assume_checked(),
+                amount_sats,
+                fee_rate_sats_per_vbyte,
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        Txid::from_str(<span class="kw-2">&amp;</span>response.txid).map_err(|e| AdminGatewayError::WithdrawError {
+            failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to parse withdrawal TXID: {e}"</span>),
+        })
     }
 
     <span class="doccomment">/// Returns the ecash, lightning, and onchain balances for the gateway and

@@ -300,7 +300,18 @@
 <a href="#299" id="299">299</a>
 <a href="#300" id="300">300</a>
 <a href="#301" id="301">301</a>
-<a href="#302" id="302">302</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::{Address, Txid};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
@@ -313,7 +324,7 @@
     SYNC_TO_CHAIN_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_lnv2_common::endpoint_constants::{
-    CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT, PAY_INVOICE_SELF_ENDPOINT,
+    CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT, PAY_INVOICE_SELF_ENDPOINT, WITHDRAW_ONCHAIN_ENDPOINT,
 };
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>reqwest::{Method, StatusCode};
@@ -327,7 +338,7 @@
     GatewayFedConfig, GatewayInfo, GetLnOnchainAddressPayload, LeaveFedPayload, MnemonicResponse,
     OpenChannelPayload, PayInvoicePayload, ReceiveEcashPayload, ReceiveEcashResponse,
     SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, SyncToChainPayload,
-    WithdrawPayload,
+    WithdrawOnchainPayload, WithdrawPayload,
 };
 <span class="kw">use </span><span class="kw">crate</span>::lightning::ChannelInfo;
 <span class="kw">use </span><span class="kw">crate</span>::CloseChannelsWithPeerResponse;
@@ -503,6 +514,17 @@
             .join(LIST_ACTIVE_CHANNELS_ENDPOINT)
             .expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_get(url).<span class="kw">await
+    </span>}
+
+    <span class="kw">pub async fn </span>withdraw_onchain(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        payload: WithdrawOnchainPayload,
+    ) -&gt; GatewayRpcResult&lt;Txid&gt; {
+        <span class="kw">let </span>url = <span class="self">self
+            </span>.base_url
+            .join(WITHDRAW_ONCHAIN_ENDPOINT)
+            .expect(<span class="string">"invalid base url"</span>);
+        <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>spend_ecash(

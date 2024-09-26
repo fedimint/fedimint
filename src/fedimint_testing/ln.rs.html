@@ -306,7 +306,21 @@
 <a href="#305" id="305">305</a>
 <a href="#306" id="306">306</a>
 <a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -315,9 +329,10 @@
 <span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
 <span class="kw">use </span>bitcoin::key::KeyPair;
 <span class="kw">use </span>bitcoin::secp256k1::{PublicKey, SecretKey};
+<span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::BoxStream;
-<span class="kw">use </span>fedimint_core::{secp256k1, Amount};
+<span class="kw">use </span>fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 <span class="kw">use </span>fedimint_ln_common::PrunedInvoice;
 <span class="kw">use </span>fedimint_logging::LOG_TEST;
 <span class="kw">use </span>lightning_invoice::{
@@ -327,6 +342,7 @@
     <span class="self">self</span>, CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
     EmptyResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
     GetRouteHintsResponse, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
+    WithdrawOnchainResponse,
 };
 <span class="kw">use </span>ln_gateway::lightning::{
     ChannelInfo, HtlcResult, ILnRpcClient, LightningRpcError, RouteHtlcStream,
@@ -569,6 +585,18 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;GetLnOnchainAddressResponse, LightningRpcError&gt; {
         <span class="prelude-val">Err</span>(LightningRpcError::FailedToGetLnOnchainAddress {
             failure_reason: <span class="string">"FakeLightningTest does not support getting a funding address"
+                </span>.to_string(),
+        })
+    }
+
+    <span class="kw">async fn </span>withdraw_onchain(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _address: Address,
+        _amount: BitcoinAmountOrAll,
+        _fee_rate_sats_per_vbyte: u64,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;WithdrawOnchainResponse, LightningRpcError&gt; {
+        <span class="prelude-val">Err</span>(LightningRpcError::FailedToWithdrawOnchain {
+            failure_reason: <span class="string">"FakeLightningTest does not support withdrawing funds on-chain"
                 </span>.to_string(),
         })
     }
