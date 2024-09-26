@@ -44,6 +44,7 @@ use fedimint_unknown_common::config::UnknownGenParams;
 use fedimint_unknown_server::UnknownInit;
 use futures::Future;
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
+use ln_gateway::config::LightningModuleMode;
 use ln_gateway::gateway_module_v2::{FinalReceiveState, GatewayClientModuleV2};
 use ln_gateway::rpc::{BalancePayload, FederationRoutingFees, SetConfigurationPayload};
 use ln_gateway::state_machine::pay::{
@@ -105,7 +106,7 @@ where
     let other_ln = FakeLightningTest::new();
 
     let fed = fixtures.new_default_fed().await;
-    let gateway = fixtures.new_gateway().await;
+    let gateway = fixtures.new_gateway(LightningModuleMode::LNv1).await;
     fed.connect_gateway(&gateway).await;
     let user_client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
@@ -123,7 +124,7 @@ where
     let fixtures = fixtures();
     let fed1 = fixtures.new_default_fed().await;
     let fed2 = fixtures.new_default_fed().await;
-    let gateway = fixtures.new_gateway().await;
+    let gateway = fixtures.new_gateway(LightningModuleMode::LNv1).await;
 
     f(gateway, fed1, fed2, fixtures.bitcoin()).await?;
     Ok(())
@@ -947,7 +948,7 @@ async fn lnv2_incoming_contract_with_invalid_preimage_is_refunded() -> anyhow::R
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
 
-    let gateway = fixtures.new_gateway().await;
+    let gateway = fixtures.new_gateway(LightningModuleMode::LNv2).await;
 
     fed.connect_gateway(&gateway).await;
 
@@ -991,7 +992,7 @@ async fn lnv2_expired_incoming_contract_is_rejected() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
 
-    let gateway = fixtures.new_gateway().await;
+    let gateway = fixtures.new_gateway(LightningModuleMode::LNv2).await;
 
     fed.connect_gateway(&gateway).await;
 
@@ -1035,7 +1036,7 @@ async fn lnv2_malleated_incoming_contract_is_rejected() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
 
-    let gateway = fixtures.new_gateway().await;
+    let gateway = fixtures.new_gateway(LightningModuleMode::LNv2).await;
 
     fed.connect_gateway(&gateway).await;
 

@@ -91,7 +91,7 @@ pub struct DevJitFed {
     start_time: std::time::SystemTime,
     gw_cln_registered: JitArc<()>,
     gw_lnd_registered: JitArc<()>,
-    gw_ldk_registered: JitArc<()>,
+    gw_ldk_connected: JitArc<()>,
     fed_epoch_generated: JitArc<()>,
     channel_opened: JitArc<()>,
 }
@@ -218,8 +218,12 @@ impl DevJitFed {
             let esplora = esplora.clone();
             let process_mgr = process_mgr.to_owned();
             move || async move {
+                // TODO(support:v0.4.0): Only run LDK gateway when the federation supports LNv2
+                let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
                 let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-                if gatewayd_version >= *VERSION_0_5_0_ALPHA {
+                if gatewayd_version >= *VERSION_0_5_0_ALPHA
+                    && fedimintd_version >= *VERSION_0_4_0_ALPHA
+                {
                     esplora.get_try().await?;
                     Ok(Arc::new(Some(
                         Gatewayd::new(&process_mgr, LightningNode::Ldk).await?,
@@ -229,15 +233,19 @@ impl DevJitFed {
                 }
             }
         });
-        let gw_ldk_registered = JitTryAnyhow::new_try({
+        let gw_ldk_connected = JitTryAnyhow::new_try({
             let gw_ldk = gw_ldk.clone();
             let fed = fed.clone();
             move || async move {
-                let gw_ldk = gw_ldk.get_try().await?.deref();
-                if let Some(gw_ldk) = gw_ldk {
-                    let fed = fed.get_try().await?.deref();
-                    if !skip_setup {
-                        gw_ldk.connect_fed(fed).await?;
+                // TODO(support:v0.4.0): Only run LDK gateway when the federation supports LNv2
+                let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+                if fedimintd_version >= *VERSION_0_4_0_ALPHA {
+                    let gw_ldk = gw_ldk.get_try().await?.deref();
+                    if let Some(gw_ldk) = gw_ldk {
+                        let fed = fed.get_try().await?.deref();
+                        if !skip_setup {
+                            gw_ldk.connect_fed(fed).await?;
+                        }
                     }
                 }
                 Ok(Arc::new(()))
@@ -259,11 +267,13 @@ impl DevJitFed {
 
                 let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
                 let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+                let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
 
                 let bitcoind = bitcoind.get_try().await?.deref().clone();
 
                 if gateway_cli_version < *VERSION_0_4_0_ALPHA
                     || gatewayd_version < *VERSION_0_4_0_ALPHA
+                    || fedimintd_version < *VERSION_0_4_0_ALPHA
                 {
                     let lnd = lnd.get_try().await?.deref().clone();
                     let cln = cln.get_try().await?.deref().clone();
@@ -311,7 +321,7 @@ impl DevJitFed {
             start_time,
             gw_cln_registered,
             gw_lnd_registered,
-            gw_ldk_registered,
+            gw_ldk_connected,
             fed_epoch_generated,
             channel_opened,
         })
@@ -346,8 +356,8 @@ impl DevJitFed {
     pub async fn gw_ldk(&self) -> anyhow::Result<&Option<Gatewayd>> {
         Ok(self.gw_ldk.get_try().await?.deref())
     }
-    pub async fn gw_ldk_registered(&self) -> anyhow::Result<&Option<Gatewayd>> {
-        self.gw_ldk_registered.get_try().await?;
+    pub async fn gw_ldk_connected(&self) -> anyhow::Result<&Option<Gatewayd>> {
+        self.gw_ldk_connected.get_try().await?;
         Ok(self.gw_ldk.get_try().await?.deref())
     }
     pub async fn fed(&self) -> anyhow::Result<&Federation> {
@@ -380,7 +390,7 @@ impl DevJitFed {
         let _ = self.channel_opened.get_try().await?;
         let _ = self.gw_cln_registered().await?;
         let _ = self.gw_lnd_registered().await?;
-        let _ = self.gw_ldk_registered().await?;
+        let _ = self.gw_ldk_connected().await?;
         let _ = self.cln().await?;
         let _ = self.lnd().await?;
         let _ = self.electrs().await?;

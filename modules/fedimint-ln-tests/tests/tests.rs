@@ -18,7 +18,7 @@ use fedimint_ln_server::LightningInit;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::ln::FakeLightningTest;
-use fedimint_testing::Gateway;
+use fedimint_testing::{Gateway, LightningModuleMode};
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use rand::rngs::OsRng;
 use secp256k1::KeyPair;
@@ -37,7 +37,7 @@ fn fixtures() -> Fixtures {
 
 /// Setup a gateway connected to the fed and client
 async fn gateway(fixtures: &Fixtures, fed: &FederationTest) -> Gateway {
-    let gateway = fixtures.new_gateway().await;
+    let gateway = fixtures.new_gateway(LightningModuleMode::LNv1).await;
     fed.connect_gateway(&gateway).await;
     gateway
 }

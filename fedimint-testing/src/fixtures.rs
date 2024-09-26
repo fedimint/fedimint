@@ -22,6 +22,7 @@ use fedimint_logging::TracingSetup;
 use fedimint_testing_core::test_dir;
 use lightning_invoice::RoutingFees;
 use ln_gateway::client::GatewayClientBuilder;
+use ln_gateway::config::LightningModuleMode;
 use ln_gateway::lightning::{ILnRpcClient, LightningBuilder, LightningContext};
 use ln_gateway::Gateway;
 
@@ -155,7 +156,7 @@ impl Fixtures {
     }
 
     /// Creates a new Gateway that can be used for module tests.
-    pub async fn new_gateway(&self) -> Gateway {
+    pub async fn new_gateway(&self, lightning_module_mode: LightningModuleMode) -> Gateway {
         let server_gens = ServerModuleInitRegistry::from(self.servers.clone());
         let module_kinds = self.params.iter_modules().map(|(id, kind, _)| (id, kind));
         let decoders = server_gens.available_decoders(module_kinds).unwrap();
@@ -190,7 +191,7 @@ impl Fixtures {
         let (lightning_public_key, lightning_alias, lightning_network, _, _) = ln_client
             .parsed_node_info()
             .await
-            .expect("Could not get Lighytning info");
+            .expect("Could not get Lightning info");
         let lightning_context = LightningContext {
             lnrpc: ln_client.clone(),
             lightning_public_key,
@@ -215,6 +216,7 @@ impl Fixtures {
             // webserver or intercept HTLCs, so this is necessary for instructing the
             // gateway that it is connected to the mock Lightning node.
             ln_gateway::GatewayState::Running { lightning_context },
+            lightning_module_mode,
         )
         .await
         .expect("Failed to create gateway")
