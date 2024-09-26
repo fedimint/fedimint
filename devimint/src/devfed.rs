@@ -360,6 +360,9 @@ impl DevJitFed {
         self.gw_ldk_connected.get_try().await?;
         Ok(self.gw_ldk.get_try().await?.deref())
     }
+    pub async fn gw_channel_opened(&self) -> anyhow::Result<()> {
+        Ok(*self.channel_opened.get_try().await?.deref())
+    }
     pub async fn fed(&self) -> anyhow::Result<&Federation> {
         Ok(self.fed.get_try().await?.deref())
     }

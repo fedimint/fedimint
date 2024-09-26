@@ -74,6 +74,21 @@ function gateway_config_test_cln() {
 }
 export -f gateway_config_test_cln
 
+function gateway_lightning_liquidity_test_lnd() {
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/gateway-lightning-liquidity-test.sh lnd
+}
+export -f gateway_lightning_liquidity_test_lnd
+
+function gateway_lightning_liquidity_test_ldk() {
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/gateway-lightning-liquidity-test.sh ldk
+}
+export -f gateway_lightning_liquidity_test_ldk
+
+function gateway_lightning_liquidity_test_cln() {
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/gateway-lightning-liquidity-test.sh cln
+}
+export -f gateway_lightning_liquidity_test_cln
+
 function gateway_restore_test() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/gateway-restore-test.sh
 }
@@ -279,46 +294,49 @@ for _ in $(seq "${FM_TEST_CI_ALL_TIMES:-1}"); do
 # NOTE: try to keep the slowest tests first, except 'always_success_test',
 # as it's used for failure test
 tests_to_run_in_parallel+=(
-  "always_success_test"
-  "rust_unit_tests"
-  # TODO: unfortunately it seems like something about headless firefox is broken when
-  # running in xarg -P or gnu parallel. Try re-enabling in the future and see if it works.
-  # Other than this problem, everything about it is working.
-  # "wasm_test"
-  "bckn_bitcoind_dummy"
-  "bckn_bitcoind_mint"
-  "bckn_bitcoind_wallet"
-  "bckn_bitcoind_ln"
-  "bckn_bitcoind_lnv2"
-  "bckn_gw_client"
-  "bckn_gw_not_client"
-  # TODO: https://github.com/fedimint/fedimint/issues/5917
-  # disabling while we investigate 60s timeouts causing CI flakiness
-  # "bckn_electrs"
-  "bckn_esplora"
-  "latency_test_reissue"
-  "latency_test_ln_send"
-  "latency_test_ln_receive"
-  "latency_test_fm_pay"
-  "latency_test_restore"
-  "reconnect_test"
-  "lightning_reconnect_test"
-  "gateway_reboot_test"
-  "gateway_config_test_cln"
-  "gateway_config_test_lnd"
-  "gateway_restore_test"
-  "lnv2_module"
-  "lnv2_inter_federation"
-  "devimint_cli_test"
-  "devimint_cli_test_single"
-  "load_test_tool_test"
-  "recoverytool_tests"
-  "guardian_backup"
-  "meta_module"
-  "mint_client_sanity"
-  "cannot_replay_tx"
-  "circular_deposit"
-  "wallet_recovery"
+  # "always_success_test"
+  # "rust_unit_tests"
+  # # TODO: unfortunately it seems like something about headless firefox is broken when
+  # # running in xarg -P or gnu parallel. Try re-enabling in the future and see if it works.
+  # # Other than this problem, everything about it is working.
+  # # "wasm_test"
+  # "bckn_bitcoind_dummy"
+  # "bckn_bitcoind_mint"
+  # "bckn_bitcoind_wallet"
+  # "bckn_bitcoind_ln"
+  # "bckn_bitcoind_lnv2"
+  # "bckn_gw_client"
+  # "bckn_gw_not_client"
+  # # TODO: https://github.com/fedimint/fedimint/issues/5917
+  # # disabling while we investigate 60s timeouts causing CI flakiness
+  # # "bckn_electrs"
+  # "bckn_esplora"
+  # "latency_test_reissue"
+  # "latency_test_ln_send"
+  # "latency_test_ln_receive"
+  # "latency_test_fm_pay"
+  # "latency_test_restore"
+  # "reconnect_test"
+  # "lightning_reconnect_test"
+  # "gateway_reboot_test"
+  # "gateway_config_test_cln"
+  # "gateway_config_test_lnd"
+  # "gateway_lightning_liquidity_test_lnd"
+  "gateway_lightning_liquidity_test_ldk"
+  # "gateway_lightning_liquidity_test_cln"
+  # "gateway_restore_test"
+  # "lnv2_module"
+  # "lnv2_inter_federation"
+  # "devimint_cli_test"
+  # "devimint_cli_test_single"
+  # "load_test_tool_test"
+  # "recoverytool_tests"
+  # "guardian_backup"
+  # "meta_module"
+  # "mint_client_sanity"
+  # "cannot_replay_tx"
+  # "circular_deposit"
+  # "wallet_recovery"
 )
 done
 
