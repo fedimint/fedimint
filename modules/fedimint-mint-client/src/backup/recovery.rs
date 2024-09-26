@@ -65,7 +65,7 @@ impl RecoveryFromHistory for MintRecovery {
             MintRecovery {
                 state: MintRecoveryState::from_backup(
                     snapshot,
-                    30,
+                    100,
                     config.tbs_pks.clone(),
                     config.peer_tbs_pks.clone(),
                     &secret,
