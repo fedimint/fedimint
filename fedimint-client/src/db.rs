@@ -421,6 +421,7 @@ pub fn get_core_client_database_migrations() -> BTreeMap<DatabaseVersion, CoreMi
             let global = GlobalClientConfig {
                 api_endpoints: config_v0.global.api_endpoints,
                 broadcast_public_keys: None,
+                api_public_keys: BTreeMap::new(),
                 consensus_version: config_v0.global.consensus_version,
                 meta: config_v0.global.meta,
             };

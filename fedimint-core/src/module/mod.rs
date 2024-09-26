@@ -138,7 +138,21 @@ impl Debug for ApiAuth {
     }
 }
 
-#[derive(Debug, Clone)]
+/// All requests from client to server contain these fields
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IrohApiRequest {
+    pub method: ApiMethod,
+    pub request: ApiRequestErased,
+}
+
+/// All requests from client to server contain these fields
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ApiMethod {
+    Core(String),
+    Module(ModuleInstanceId, String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiError {
     pub code: i32,
     pub message: String,

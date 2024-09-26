@@ -25,19 +25,24 @@ use fedimint_core::fmt_utils::AbbreviateDebug;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::{ApiAuth, ApiRequestErased, ApiVersion, SerdeModuleEncoding};
+use fedimint_core::module::{
+    ApiAuth, ApiError, ApiMethod, ApiRequestErased, ApiVersion, IrohApiRequest, SerdeModuleEncoding,
+};
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::session_outcome::{SessionOutcome, SessionStatus};
-use fedimint_core::task::{MaybeSend, MaybeSync};
+use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup, TaskHandle};
 use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, runtime, NumPeersExt, OutPoint, PeerId,
     TransactionId,
 };
-use fedimint_logging::LOG_CLIENT_NET_API;
+use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_PEER};
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
+use iroh_net::discovery::pkarr::PkarrResolver;
+use iroh_net::endpoint::{Connection, Endpoint};
+use iroh_net::NodeId;
 use itertools::Itertools;
 use jsonrpsee_core::client::{ClientT, Error as JsonRpcClientError};
 use jsonrpsee_core::DeserializeOwned;
@@ -50,11 +55,13 @@ use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 use net::Connector;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio::sync::oneshot;
+use tokio::time::Instant;
 #[cfg(not(target_family = "wasm"))]
 use tokio_rustls::rustls::RootCertStore;
 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
 use tokio_rustls::{rustls::ClientConfig as TlsClientConfig, TlsConnector};
-use tracing::{debug, instrument, trace};
+use tracing::{debug, info, instrument, trace, warn};
 
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 
@@ -107,7 +114,7 @@ pub trait IRawFederationApi: Debug + MaybeSend + MaybeSync {
         &self,
         peer_id: PeerId,
         method: &str,
-        params: &[Value],
+        params: &ApiRequestErased,
     ) -> result::Result<Value, JsonRpcClientError>;
 }
 
@@ -124,10 +131,7 @@ pub trait FederationApiExt: IRawFederationApi {
         params: ApiRequestErased,
         peer_id: PeerId,
     ) -> JsonRpcResult<jsonrpsee_core::JsonValue> {
-        let request = async {
-            self.request_raw(peer_id, &method, &[params.to_json()])
-                .await
-        };
+        let request = async { self.request_raw(peer_id, &method, &params).await };
 
         if let Some(timeout) = timeout {
             match fedimint_core::runtime::timeout(timeout, request).await {
@@ -199,7 +203,7 @@ pub trait FederationApiExt: IRawFederationApi {
         for peer_id in peers {
             futures.push(Box::pin(async {
                 let request = async {
-                    self.request_raw(*peer_id, &method, &[params.to_json()])
+                    self.request_raw(*peer_id, &method, &params)
                         .await
                         .map(AbbreviateDebug)
                 };
@@ -253,11 +257,7 @@ pub trait FederationApiExt: IRawFederationApi {
                                         PeerResponse {
                                             peer: retry_peer,
                                             result: self
-                                                .request_raw(
-                                                    retry_peer,
-                                                    method,
-                                                    &[params.to_json()],
-                                                )
+                                                .request_raw(retry_peer, method, &params)
                                                 .await
                                                 .map(AbbreviateDebug),
                                         }
@@ -381,6 +381,22 @@ impl DynGlobalApi {
         .into()
     }
 
+    pub async fn new_admin_iroh(
+        peer: PeerId,
+        node_id: iroh_net::key::NodeId,
+        task_group: TaskGroup,
+    ) -> anyhow::Result<DynGlobalApi> {
+        Ok(GlobalFederationApiWithCache::new(
+            IrohFederationApi::new(
+                vec![(peer, node_id)].into_iter().collect(),
+                task_group,
+                Some(peer),
+            )
+            .await?,
+        )
+        .into())
+    }
+
     // FIXME: (@leonardo) Should we have the option to do DKG and config related
     // actions through Tor ? Should we add the `Connector` choice to
     // ConfigParams then ?
@@ -415,6 +431,16 @@ impl DynGlobalApi {
         connector: &Connector,
     ) -> Self {
         GlobalFederationApiWithCache::new(WsFederationApi::new(connector, peers, api_secret)).into()
+    }
+
+    pub async fn from_iroh_endpoints(
+        peers: BTreeMap<PeerId, iroh_net::key::PublicKey>,
+        task_group: TaskGroup,
+    ) -> anyhow::Result<Self> {
+        Ok(GlobalFederationApiWithCache::new(
+            IrohFederationApi::new(peers, task_group, None).await?,
+        )
+        .into())
     }
 
     pub fn from_invite_code(connector: &Connector, invite_code: &InviteCode) -> Self {
@@ -663,7 +689,7 @@ impl<C: JsonRpcClient + Debug + 'static> IRawFederationApi for WsFederationApi<C
         &self,
         peer_id: PeerId,
         method: &str,
-        params: &[Value],
+        params: &ApiRequestErased,
     ) -> JsonRpcResult<Value> {
         let peer = self
             .peers
@@ -675,7 +701,7 @@ impl<C: JsonRpcClient + Debug + 'static> IRawFederationApi for WsFederationApi<C
             None => method.to_string(),
             Some(id) => format!("module_{id}_{method}"),
         };
-        peer.request(&method, params).await
+        peer.request(&method, &[params.to_json()]).await
     }
 }
 
@@ -1011,6 +1037,354 @@ where
 }
 
 impl<C: JsonRpcClient> WsFederationApi<C> {}
+
+const FEDIMINT_ALPN: &[u8] = "FEDIMINT_ALPN".as_bytes();
+
+/// Mint API client that will try to run queries against all `peers` expecting
+/// equal results from at least `min_eq_results` of them. Peers that return
+/// differing results are returned as a peer faults list.
+#[derive(Debug, Clone)]
+pub struct IrohFederationApi {
+    peer_ids: BTreeSet<PeerId>,
+    self_peer_id: Option<PeerId>,
+    module_id: Option<ModuleInstanceId>,
+    connections: IrohApiConnections,
+}
+
+impl IrohFederationApi {
+    pub async fn new(
+        peers: BTreeMap<PeerId, iroh_net::key::PublicKey>,
+        task_group: TaskGroup,
+        self_peer_id: Option<PeerId>,
+    ) -> anyhow::Result<Self> {
+        Ok(Self {
+            peer_ids: peers.keys().cloned().collect(),
+            self_peer_id,
+            module_id: None,
+            connections: IrohApiConnections::new(peers, task_group).await?,
+        })
+    }
+}
+
+impl IModuleFederationApi for IrohFederationApi {}
+
+/// Implementation of API calls over WebSockets
+///
+/// Can function as either the global or module API
+#[apply(async_trait_maybe_send!)]
+impl IRawFederationApi for IrohFederationApi {
+    fn all_peers(&self) -> &BTreeSet<PeerId> {
+        &self.peer_ids
+    }
+
+    fn self_peer(&self) -> Option<PeerId> {
+        self.self_peer_id
+    }
+
+    fn with_module(&self, id: ModuleInstanceId) -> DynModuleApi {
+        IrohFederationApi {
+            peer_ids: self.peer_ids.clone(),
+            module_id: Some(id),
+            self_peer_id: self.self_peer_id,
+            connections: self.connections.clone(),
+        }
+        .into()
+    }
+
+    async fn request_raw(
+        &self,
+        peer_id: PeerId,
+        method: &str,
+        params: &ApiRequestErased,
+    ) -> JsonRpcResult<Value> {
+        let method = match self.module_id {
+            Some(module_id) => ApiMethod::Module(module_id, method.to_string()),
+            None => ApiMethod::Core(method.to_string()),
+        };
+
+        let request = IrohApiRequest {
+            method,
+            request: params.clone(),
+        };
+
+        let request = serde_json::to_vec(&request).expect("JSON serialization cannot fail");
+
+        let response = self
+            .connections
+            .request(peer_id, request)
+            .await
+            .ok_or(JsonRpcClientError::Custom("Disconnected".to_string()))?;
+
+        let response = serde_json::from_slice::<Result<Value, ApiError>>(&response)
+            .map_err(|_| {
+                JsonRpcClientError::Custom("Failed to deserialize response as JSON".to_string())
+            })?
+            .map_err(|e| JsonRpcClientError::Custom(e.message))?;
+
+        Ok(response)
+    }
+}
+
+/// Connection manager that automatically reconnects to peers
+#[derive(Debug, Clone)]
+pub struct IrohApiConnections {
+    connections: BTreeMap<PeerId, IrohApiConnection>,
+}
+
+impl IrohApiConnections {
+    #[instrument(skip_all)]
+    pub(crate) async fn new(
+        peers: BTreeMap<PeerId, NodeId>,
+        task_group: TaskGroup,
+    ) -> anyhow::Result<Self> {
+        let endpoint = Endpoint::builder()
+            .discovery(Box::new(PkarrResolver::n0_dns()))
+            .alpns(vec![FEDIMINT_ALPN.to_vec()])
+            .bind()
+            .await?;
+
+        let connections = peers
+            .iter()
+            .map(|(peer, node_id)| {
+                (
+                    *peer,
+                    IrohApiConnection::new(endpoint.clone(), *peer, *node_id, &task_group),
+                )
+            })
+            .collect();
+
+        Ok(IrohApiConnections { connections })
+    }
+
+    async fn request(&self, peer_id: PeerId, message: Vec<u8>) -> Option<Vec<u8>> {
+        self.connections
+            .get(&peer_id)
+            .expect("Cannot find peer api connection for peer id")
+            .request(message)
+            .await
+    }
+}
+
+#[derive(Debug, Clone)]
+struct IrohApiConnection {
+    request_sender: async_channel::Sender<(Vec<u8>, oneshot::Sender<Vec<u8>>)>,
+}
+
+impl IrohApiConnection {
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        endpoint: Endpoint,
+        peer_id: PeerId,
+        peer_node_id: NodeId,
+        task_group: &TaskGroup,
+    ) -> IrohApiConnection {
+        let (request_sender, request_receiver) = async_channel::bounded(1024);
+
+        let tg = task_group.clone();
+
+        task_group.spawn(
+            format!("io-thread-peer-{peer_id}"),
+            move |handle| async move {
+                Self::run_connection_state_machine(
+                    endpoint,
+                    request_receiver,
+                    peer_id,
+                    peer_node_id,
+                    tg,
+                    &handle,
+                )
+                .await;
+            },
+        );
+
+        IrohApiConnection { request_sender }
+    }
+
+    async fn request(&self, request: Vec<u8>) -> Option<Vec<u8>> {
+        let (response_sender, response_receiver) = oneshot::channel();
+
+        if self
+            .request_sender
+            .send((request, response_sender))
+            .await
+            .is_err()
+        {
+            warn!(target: LOG_NET_PEER, "Could not send outgoing message");
+        }
+
+        response_receiver.await.ok()
+    }
+
+    async fn run_connection_state_machine(
+        endpoint: Endpoint,
+        request_receiver: async_channel::Receiver<(Vec<u8>, oneshot::Sender<Vec<u8>>)>,
+        peer: PeerId,
+        node_id: NodeId,
+        task_group: TaskGroup,
+        task_handle: &TaskHandle,
+    ) {
+        info!(target: LOG_NET_PEER, "Starting connection state machine for peer {peer}");
+
+        let mut state_machine = IrohApiConnectionSM {
+            common: IrohApiConnectionSMCommon {
+                endpoint,
+                request_receiver,
+                node_id,
+                peer,
+                task_group,
+            },
+            state: IrohApiConnectionSMState::Disconnected(Instant::now()),
+        };
+
+        loop {
+            tokio::select! {
+                new_state =  state_machine.state_transition() => {
+                    if let Some(new_state) = new_state {
+                        state_machine = new_state;
+                    } else {
+                        break;
+                    }
+                },
+                () = task_handle.make_shutdown_rx() => {
+                    break;
+                },
+            }
+        }
+
+        info!(target: LOG_NET_PEER, "Shutting down connection state machine for peer {peer}");
+    }
+}
+
+struct IrohApiConnectionSM {
+    common: IrohApiConnectionSMCommon,
+    state: IrohApiConnectionSMState,
+}
+
+struct IrohApiConnectionSMCommon {
+    endpoint: Endpoint,
+    request_receiver: async_channel::Receiver<(Vec<u8>, oneshot::Sender<Vec<u8>>)>,
+    peer: PeerId,
+    node_id: NodeId,
+    task_group: TaskGroup,
+}
+
+enum IrohApiConnectionSMState {
+    Disconnected(Instant),
+    Connected(Connection),
+}
+
+impl IrohApiConnectionSM {
+    async fn state_transition(mut self) -> Option<Self> {
+        match self.state {
+            IrohApiConnectionSMState::Disconnected(disconnected) => {
+                let state = self
+                    .common
+                    .state_transition_disconnected(disconnected)
+                    .await?;
+
+                Some(IrohApiConnectionSM {
+                    common: self.common,
+                    state,
+                })
+            }
+            IrohApiConnectionSMState::Connected(connected) => {
+                let state = self.common.state_transition_connected(connected).await?;
+
+                Some(IrohApiConnectionSM {
+                    common: self.common,
+                    state,
+                })
+            }
+        }
+    }
+}
+
+impl IrohApiConnectionSMCommon {
+    async fn state_transition_connected(
+        &mut self,
+        connection: Connection,
+    ) -> Option<IrohApiConnectionSMState> {
+        tokio::select! {
+            message = self.request_receiver.recv() => {
+                match self.handle_request(&connection, message.ok()?).await {
+                    Ok(()) => Some(IrohApiConnectionSMState::Connected(connection)),
+                    Err(e) => Some(self.disconnected(e)),
+                }
+            },
+            error = connection.closed() => {
+                Some(self.disconnected(error.into()))
+            }
+        }
+    }
+
+    fn connected(&mut self, connection: Connection) -> IrohApiConnectionSMState {
+        info!(target: LOG_NET_PEER,"Peer {} is connected", self.peer);
+
+        IrohApiConnectionSMState::Connected(connection)
+    }
+
+    fn disconnected(&self, error: anyhow::Error) -> IrohApiConnectionSMState {
+        info!(target: LOG_NET_PEER, "Peer {} is disconnected: {}", self.peer, error);
+
+        IrohApiConnectionSMState::Disconnected(Instant::now())
+    }
+
+    async fn handle_request(
+        &self,
+        connection: &Connection,
+        request: (Vec<u8>, oneshot::Sender<Vec<u8>>),
+    ) -> anyhow::Result<()> {
+        let (mut send_stream, mut receive_stream) = connection.open_bi().await?;
+
+        send_stream.write_all(&request.0).await?;
+
+        send_stream.finish()?;
+
+        self.task_group.spawn("request task", |handle| async move {
+            tokio::select! {
+                response = receive_stream.read_to_end(100_000) => {
+                    if let Ok(response) = response {
+                        request.1.send(response).ok();
+                    }
+                },
+                () = handle.make_shutdown_rx() => {},
+            }
+        });
+
+        Ok(())
+    }
+
+    async fn state_transition_disconnected(
+        &mut self,
+        reconnect_at: Instant,
+    ) -> Option<IrohApiConnectionSMState> {
+        tokio::select! {
+            _ = self.request_receiver.recv() => {
+                Some(IrohApiConnectionSMState::Disconnected(reconnect_at))
+            },
+            () = tokio::time::sleep_until(reconnect_at) => {
+                Some(self.reconnect().await)
+            },
+        }
+    }
+
+    async fn reconnect(&mut self) -> IrohApiConnectionSMState {
+        match self
+            .endpoint
+            .connect_by_node_id(self.node_id, FEDIMINT_ALPN)
+            .await
+        {
+            Ok(connection) => return self.connected(connection),
+            Err(e) => warn!(
+                target: LOG_NET_PEER,
+                "Failed to connect to peer {} : {}",
+                self.peer, e
+            ),
+        }
+
+        IrohApiConnectionSMState::Disconnected(Instant::now() + Duration::from_secs(10))
+    }
+}
 
 /// The status of a server, including how it views its peers
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]

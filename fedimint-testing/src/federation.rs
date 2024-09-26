@@ -271,6 +271,25 @@ impl FederationTestBuilder {
                 )
                 .await;
             }
+
+            let api = DynGlobalApi::new_admin_iroh(
+                peer_id,
+                config.consensus.api_public_keys[&peer_id].clone(),
+                task_group.clone(),
+            )
+            .await
+            .expect("Failed to create iroh api");
+
+            while let Err(e) = api
+                .request_admin_no_auth::<u64>(SESSION_COUNT_ENDPOINT, ApiRequestErased::default())
+                .await
+            {
+                sleep_in_test(
+                    format!("Waiting for iroh api of peer {peer_id} to come online: {e}"),
+                    Duration::from_millis(500),
+                )
+                .await;
+            }
         }
 
         FederationTest {

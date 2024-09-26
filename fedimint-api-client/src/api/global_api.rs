@@ -147,7 +147,7 @@ where
         &self,
         peer_id: PeerId,
         method: &str,
-        params: &[Value],
+        params: &ApiRequestErased,
     ) -> result::Result<Value, JsonRpcClientError> {
         self.inner.request_raw(peer_id, method, params).await
     }

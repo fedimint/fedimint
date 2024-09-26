@@ -2643,20 +2643,48 @@ impl ClientBuilder {
         let db = self.db_no_decoders.with_decoders(decoders.clone());
         let connector = self.connector;
         let peer_urls = get_api_urls(&db, &config).await;
-        let api = if let Some(admin_creds) = self.admin_creds.as_ref() {
-            DynGlobalApi::new_admin(
-                admin_creds.peer_id,
-                peer_urls
-                    .into_iter()
-                    .find_map(|(peer, api_url)| (admin_creds.peer_id == peer).then_some(api_url))
-                    .context("Admin creds should match a peer")?,
-                &api_secret,
-                &connector,
-            )
-        } else {
-            DynGlobalApi::from_endpoints(peer_urls, &api_secret, &connector)
-        };
         let task_group = TaskGroup::new();
+        let api = if let Some(admin_creds) = self.admin_creds.as_ref() {
+            // If Iroh public keys are not available, default to dns api endpoints
+            if config.global.api_public_keys.is_empty() {
+                DynGlobalApi::new_admin(
+                    admin_creds.peer_id,
+                    peer_urls
+                        .into_iter()
+                        .find_map(|(peer, api_url)| {
+                            (admin_creds.peer_id == peer).then_some(api_url)
+                        })
+                        .context("Admin creds should match a peer")?,
+                    &api_secret,
+                    &connector,
+                )
+            } else {
+                DynGlobalApi::new_admin_iroh(
+                    admin_creds.peer_id,
+                    config
+                        .global
+                        .api_public_keys
+                        .iter()
+                        .find_map(|(peer, node_id)| {
+                            (admin_creds.peer_id == *peer).then_some(node_id.clone())
+                        })
+                        .context("Admin creds should match a peer")?,
+                    task_group.make_subgroup(),
+                )
+                .await?
+            }
+        } else {
+            // If Iroh public keys are not available, default to dns api endpoints
+            if config.global.api_public_keys.is_empty() {
+                DynGlobalApi::from_endpoints(peer_urls, &api_secret, &connector)
+            } else {
+                DynGlobalApi::from_iroh_endpoints(
+                    config.global.api_public_keys.clone(),
+                    task_group.make_subgroup(),
+                )
+                .await?
+            }
+        };
 
         // Migrate the database before interacting with it in case any on-disk data
         // structures have changed.

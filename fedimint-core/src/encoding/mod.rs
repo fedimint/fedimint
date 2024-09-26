@@ -9,6 +9,7 @@
 pub mod as_hex;
 mod bls12_381;
 mod btc;
+mod iroh;
 mod secp256k1;
 mod threshold_crypto;
 

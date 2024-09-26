@@ -23,22 +23,30 @@ use fedimint_core::db::{apply_migrations, apply_migrations_server, Database};
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleRegistry;
+use fedimint_core::module::{ApiEndpoint, ApiError, ApiMethod, IrohApiRequest};
 use fedimint_core::server::DynServerModule;
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{TaskGroup, TaskHandle};
 use fedimint_core::NumPeers;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
+use iroh_net::discovery::pkarr::PkarrPublisher;
+use iroh_net::endpoint::{Incoming, RecvStream, SendStream};
+use iroh_net::Endpoint;
 use jsonrpsee::server::ServerHandle;
+use serde_json::Value;
 use tokio::sync::{watch, RwLock};
 use tracing::info;
 use tracing::log::warn;
 
+use self::api::server_endpoints;
 use crate::config::{ServerConfig, ServerConfigLocal};
 use crate::consensus::api::ConsensusApi;
 use crate::consensus::engine::ConsensusEngine;
 use crate::envs::{FM_DB_CHECKPOINT_RETENTION_DEFAULT, FM_DB_CHECKPOINT_RETENTION_ENV};
 use crate::net;
 use crate::net::api::announcement::get_api_urls;
-use crate::net::api::{ApiSecrets, RpcHandlerCtx};
+use crate::net::api::{ApiSecrets, HasApiContext, RpcHandlerCtx};
+
+const FEDIMINT_ALPN: &[u8] = "FEDIMINT_ALPN".as_bytes();
 
 /// How many txs can be stored in memory before blocking the API
 const TRANSACTION_BUFFER: usize = 1000;
@@ -127,11 +135,18 @@ pub async fn run(
 
     let api_handler = start_consensus_api(
         &cfg.local,
-        consensus_api,
+        consensus_api.clone(),
         force_api_secrets.clone(),
         api_bind_addr,
     )
     .await;
+
+    start_iroh_api(
+        cfg.private.api_secret_key.clone(),
+        consensus_api.clone(),
+        task_group,
+    )
+    .await?;
 
     info!(target: LOG_CONSENSUS, "Starting Submission of Module CI proposals");
 
@@ -270,4 +285,192 @@ fn submit_module_ci_proposals(
             }
         },
     );
+}
+
+async fn start_iroh_api(
+    secret_key: iroh_net::key::SecretKey,
+    consensus_api: ConsensusApi,
+    task_group: &TaskGroup,
+) -> anyhow::Result<()> {
+    let endpoint = Endpoint::builder()
+        .secret_key(secret_key.clone())
+        .discovery(Box::new(PkarrPublisher::n0_dns(secret_key)))
+        .alpns(vec![FEDIMINT_ALPN.to_vec()])
+        .bind()
+        .await?;
+
+    let tg = task_group.clone();
+
+    task_group.spawn("listen task", |handle| {
+        run_listen_task(consensus_api, endpoint, handle, tg)
+    });
+
+    Ok(())
+}
+
+async fn run_listen_task(
+    consensus_api: ConsensusApi,
+    endpoint: Endpoint,
+    task_handle: TaskHandle,
+    task_group: TaskGroup,
+) {
+    let core_api_endpoints = server_endpoints()
+        .into_iter()
+        .map(|endpoint| (endpoint.path.to_string(), endpoint))
+        .collect::<BTreeMap<String, ApiEndpoint<ConsensusApi>>>();
+
+    let module_api_endpoints = consensus_api
+        .modules
+        .iter_modules()
+        .map(|(id, _, module)| {
+            let api_endpoints = module
+                .api_endpoints()
+                .into_iter()
+                .map(|endpoint| (endpoint.path.to_string(), endpoint))
+                .collect::<BTreeMap<String, ApiEndpoint<DynServerModule>>>();
+
+            (id, api_endpoints)
+        })
+        .collect::<BTreeMap<ModuleInstanceId, BTreeMap<String, ApiEndpoint<DynServerModule>>>>();
+
+    let consensus_api = Arc::new(consensus_api);
+    let core_api_endpoints = Arc::new(core_api_endpoints);
+    let module_api_endpoints = Arc::new(module_api_endpoints);
+
+    let mut shutdown_rx = task_handle.make_shutdown_rx();
+
+    while !task_handle.is_shutting_down() {
+        tokio::select! {
+            incoming =  endpoint.accept() => {
+                match incoming {
+                    Some(incoming) => {
+                        let ca = consensus_api.clone();
+                        let cae = core_api_endpoints.clone();
+                        let mae = module_api_endpoints.clone();
+                        let tg = task_group.clone();
+
+                        task_group.spawn("incoming task", |handle| async {
+                            if let Err(e) = handle_incoming(
+                                ca,
+                                cae,
+                                mae,
+                                incoming,
+                                handle,
+                                tg)
+                            .await {
+                                warn!("Failed to handle incoming connection {e}");
+                            }
+                        });
+                    }
+                    None => return,
+                }
+            },
+            () = &mut shutdown_rx => { return },
+        };
+    }
+}
+
+async fn handle_incoming(
+    consensus_api: Arc<ConsensusApi>,
+    core_api_endpoints: Arc<BTreeMap<String, ApiEndpoint<ConsensusApi>>>,
+    module_api_endpoints: Arc<
+        BTreeMap<ModuleInstanceId, BTreeMap<String, ApiEndpoint<DynServerModule>>>,
+    >,
+    incoming: Incoming,
+    task_handle: TaskHandle,
+    task_group: TaskGroup,
+) -> anyhow::Result<()> {
+    let connection = incoming.accept()?.await?;
+    let mut shutdown_rx = task_handle.make_shutdown_rx();
+
+    while !task_handle.is_shutting_down() {
+        tokio::select! {
+            request =  connection.accept_bi() => {
+                    let (send_stream, receive_stream) = request?;
+                    let ca = consensus_api.clone();
+                    let cae = core_api_endpoints.clone();
+                    let mae = module_api_endpoints.clone();
+
+                    task_group.spawn("request task", |_| async {
+                        if let Err(e) = handle_request(
+                            ca,
+                            cae,
+                            mae,
+                            send_stream,
+                            receive_stream
+                        ).await {
+                            warn!("Failed to handle request {e}");
+                        }
+                });
+            },
+            () = &mut shutdown_rx => { return Ok(()) },
+        };
+    }
+
+    Ok(())
+}
+
+async fn handle_request(
+    consensus_api: Arc<ConsensusApi>,
+    core_api_endpoints: Arc<BTreeMap<String, ApiEndpoint<ConsensusApi>>>,
+    module_api_endpoints: Arc<
+        BTreeMap<ModuleInstanceId, BTreeMap<String, ApiEndpoint<DynServerModule>>>,
+    >,
+    mut send_stream: SendStream,
+    mut receive_stream: RecvStream,
+) -> anyhow::Result<()> {
+    let request = receive_stream.read_to_end(100_000).await?;
+
+    let request = serde_json::from_slice::<IrohApiRequest>(&request)?;
+
+    let response = await_response(
+        consensus_api,
+        core_api_endpoints,
+        module_api_endpoints,
+        request,
+    )
+    .await;
+
+    let response = serde_json::to_vec(&response)?;
+
+    send_stream.write_all(&response).await?;
+
+    send_stream.finish()?;
+
+    Ok(())
+}
+
+async fn await_response(
+    consensus_api: Arc<ConsensusApi>,
+    core_api_endpoints: Arc<BTreeMap<String, ApiEndpoint<ConsensusApi>>>,
+    module_api_endpoints: Arc<
+        BTreeMap<ModuleInstanceId, BTreeMap<String, ApiEndpoint<DynServerModule>>>,
+    >,
+    request: IrohApiRequest,
+) -> Result<Value, ApiError> {
+    match request.method {
+        ApiMethod::Core(method) => {
+            let endpoint = core_api_endpoints
+                .get(&method)
+                .ok_or(ApiError::not_found(method))?;
+
+            let (state, context): (&ConsensusApi, _) =
+                consensus_api.context(&request.request, None).await;
+
+            (endpoint.handler)(state, context, request.request).await
+        }
+        ApiMethod::Module(module_id, method) => {
+            let endpoint = module_api_endpoints
+                .get(&module_id)
+                .ok_or(ApiError::not_found(module_id.to_string()))?
+                .get(&method)
+                .ok_or(ApiError::not_found(method))?;
+
+            let (state, context): (&DynServerModule, _) = consensus_api
+                .context(&request.request, Some(module_id))
+                .await;
+
+            (endpoint.handler)(state, context, request.request).await
+        }
+    }
 }
