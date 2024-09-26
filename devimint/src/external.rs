@@ -369,8 +369,6 @@ impl Lightningd {
         let btc_dir = utf8(&process_mgr.globals.FM_BTC_DIR);
         let cmd = cmd!(
             crate::util::Lightningd,
-            "--dev-fast-gossip",
-            "--dev-bitcoind-poll=1",
             format!("--lightning-dir={}", utf8(cln_dir)),
             format!("--bitcoin-datadir={btc_dir}"),
             "--plugin={extension_path}"
