@@ -568,7 +568,7 @@ impl Gateway {
                         }
                     };
 
-                    self.handle_htlc(payment_request, &lightning_context).await;
+                    self.handle_htlc(payment_request, lightning_context).await;
                 }
             })
             .await
