@@ -728,7 +728,7 @@ impl ILnRpcClient for GatewayLndClient {
                 })?
                 .into_inner();
 
-            let Some(policy) = info.node1_policy.clone() else {
+            let Some(policy) = info.node1_policy else {
                 continue;
             };
             let src_node_id = PublicKey::from_str(&chan.remote_pubkey)
