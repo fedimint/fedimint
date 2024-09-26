@@ -18,7 +18,7 @@ path = "src/lib.rs"
 [dependencies]
 bitcoin_hashes = { workspace = true }
 bls12_381 = { workspace = true }
-fedimint-core  = { version = "=0.4.3-rc.2", path = "../../fedimint-core/" }
+fedimint-core  = { version = "=0.4.3", path = "../../fedimint-core/" }
 group = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }

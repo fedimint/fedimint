@@ -37,6 +37,6 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
-fedimint-dummy-client = { path = "../fedimint-dummy-client", version = "=0.4.3-rc.2" }
-fedimint-dummy-common = { path = "../fedimint-dummy-common", version = "=0.4.3-rc.2" }
-fedimint-dummy-server = { path = "../fedimint-dummy-server", version = "=0.4.3-rc.2" }
+fedimint-dummy-client = { path = "../fedimint-dummy-client", version = "=0.4.3" }
+fedimint-dummy-common = { path = "../fedimint-dummy-common", version = "=0.4.3" }
+fedimint-dummy-server = { path = "../fedimint-dummy-server", version = "=0.4.3" }

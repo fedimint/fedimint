@@ -40,7 +40,7 @@ lnurl-rs = { version = "0.6.0", features = ["async"], default-features = false }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
-fedimint-ln-common = { version = "=0.4.3-rc.2", path = "../fedimint-ln-common" }
+fedimint-ln-common = { version = "=0.4.3", path = "../fedimint-ln-common" }
 fedimint-logging = { workspace = true }
 secp256k1 = { version="0.27.0", default-features=false }
 serde = { workspace = true }
