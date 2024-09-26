@@ -28,7 +28,7 @@ const GATEWAY_CRASH_PAYMENT_SECRET: [u8; 32] = [213; 32];
 
 pub const MOCK_INVOICE_PREIMAGE: [u8; 32] = [1; 32];
 
-pub fn gateway_api() -> SafeUrl {
+pub fn gateway() -> SafeUrl {
     SafeUrl::parse("https://gateway.xyz").expect("Valid Url")
 }
 
