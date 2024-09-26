@@ -1,13 +1,14 @@
 use std::time::Duration;
 
+use bitcoin::address::NetworkUnchecked;
 use clap::Subcommand;
 use fedimint_core::util::{backoff_util, retry};
-use fedimint_core::Amount;
+use fedimint_core::{Amount, BitcoinAmountOrAll};
 use lightning_invoice::Bolt11Invoice;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
     CloseChannelsWithPeerPayload, GetLnOnchainAddressPayload, OpenChannelPayload,
-    SyncToChainPayload,
+    SyncToChainPayload, WithdrawOnchainPayload,
 };
 
 use crate::print_response;
@@ -70,6 +71,24 @@ pub enum LightningCommands {
     },
     /// List active channels.
     ListActiveChannels,
+    /// Withdraw funds from the lightning node's on-chain wallet to a specified
+    /// address.
+    WithdrawOnchain {
+        /// The address to withdraw funds to.
+        #[clap(long)]
+        address: bitcoin::Address<NetworkUnchecked>,
+
+        /// The amount to withdraw.
+        /// Can be "all" to withdraw all funds, an amount + unit (e.g. "1000
+        /// sats"), or a raw amount (e.g. "1000") which is denominated in
+        /// millisats.
+        #[clap(long)]
+        amount: BitcoinAmountOrAll,
+
+        /// The fee rate to use in satoshis per vbyte.
+        #[clap(long)]
+        fee_rate_sats_per_vbyte: u64,
+    },
     /// Wait for the lightning node to be synced with the blockchain.
     WaitForChainSync {
         /// The block height to wait for
@@ -87,6 +106,7 @@ pub enum LightningCommands {
 }
 
 impl LightningCommands {
+    #![allow(clippy::too_many_lines)]
     pub async fn handle(
         self,
         create_client: impl Fn() -> GatewayRpcClient + Send + Sync,
@@ -152,6 +172,20 @@ impl LightningCommands {
             Self::ListActiveChannels => {
                 let response = create_client().list_active_channels().await?;
                 print_response(response);
+            }
+            Self::WithdrawOnchain {
+                address,
+                amount,
+                fee_rate_sats_per_vbyte,
+            } => {
+                let response = create_client()
+                    .withdraw_onchain(WithdrawOnchainPayload {
+                        address,
+                        amount,
+                        fee_rate_sats_per_vbyte,
+                    })
+                    .await?;
+                println!("{response}");
             }
             Self::WaitForChainSync {
                 block_height,

@@ -94,7 +94,7 @@ use rpc::{
     CloseChannelsWithPeerPayload, CreateInvoiceForSelfPayload, FederationInfo, GatewayFedConfig,
     GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelPayload, PayInvoicePayload,
     ReceiveEcashPayload, ReceiveEcashResponse, SetConfigurationPayload, SpendEcashPayload,
-    SpendEcashResponse, SyncToChainPayload, V1_API_ENDPOINT,
+    SpendEcashResponse, SyncToChainPayload, WithdrawOnchainPayload, V1_API_ENDPOINT,
 };
 use state_machine::{GatewayClientModule, GatewayExtPayStates};
 use tokio::sync::RwLock;
@@ -1434,6 +1434,29 @@ impl Gateway {
         let context = self.get_lightning_context().await?;
         let channels = context.lnrpc.list_active_channels().await?;
         Ok(channels)
+    }
+
+    /// Withdraws funds from the gateway's lightning node on-chain wallet.
+    pub async fn handle_withdraw_onchain_msg(
+        &self,
+        WithdrawOnchainPayload {
+            address,
+            amount: amount_sats,
+            fee_rate_sats_per_vbyte,
+        }: WithdrawOnchainPayload,
+    ) -> AdminResult<Txid> {
+        let context = self.get_lightning_context().await?;
+        let response = context
+            .lnrpc
+            .withdraw_onchain(
+                address.assume_checked(),
+                amount_sats,
+                fee_rate_sats_per_vbyte,
+            )
+            .await?;
+        Txid::from_str(&response.txid).map_err(|e| AdminGatewayError::WithdrawError {
+            failure_reason: format!("Failed to parse withdrawal TXID: {e}"),
+        })
     }
 
     /// Returns the ecash, lightning, and onchain balances for the gateway and

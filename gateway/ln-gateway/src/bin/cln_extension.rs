@@ -34,7 +34,7 @@ use ln_gateway::gateway_lnrpc::{
     GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, ListActiveChannelsResponse, OpenChannelRequest,
     OpenChannelResponse, PayInvoiceRequest, PayInvoiceResponse, PayPrunedInvoiceRequest,
-    PrunedInvoice,
+    PrunedInvoice, WithdrawOnchainRequest, WithdrawOnchainResponse,
 };
 use rand::rngs::OsRng;
 use rand::Rng;
@@ -958,6 +958,50 @@ impl GatewayLightning for ClnRpcService {
             })),
             None => Err(Status::internal("cln newaddr rpc returned no address")),
         }
+    }
+
+    async fn withdraw_onchain(
+        &self,
+        request: tonic::Request<WithdrawOnchainRequest>,
+    ) -> Result<tonic::Response<WithdrawOnchainResponse>, Status> {
+        let request_inner = request.into_inner();
+
+        let txid = self
+            .rpc_client()
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?
+            .call(cln_rpc::Request::Withdraw(
+                model::requests::WithdrawRequest {
+                    feerate: Some(cln_rpc::primitives::Feerate::PerKw(
+                        // 1 vbyte = 4 weight units, so 250 vbytes = 1,000 weight units.
+                        request_inner.fee_rate_sats_per_vbyte as u32 * 250,
+                    )),
+                    minconf: Some(0),
+                    utxos: None,
+                    destination: request_inner.address,
+                    satoshi: if let Some(amount_sats) = request_inner.amount_sats {
+                        cln_rpc::primitives::AmountOrAll::Amount(
+                            cln_rpc::primitives::Amount::from_sat(amount_sats),
+                        )
+                    } else {
+                        cln_rpc::primitives::AmountOrAll::All
+                    },
+                },
+            ))
+            .await
+            .map(|response| match response {
+                cln_rpc::Response::Withdraw(model::responses::WithdrawResponse {
+                    txid, ..
+                }) => Ok(txid),
+                _ => Err(ClnExtensionError::RpcWrongResponse),
+            })
+            .map_err(|e| {
+                error!("cln connect rpc returned error {:?}", e);
+                tonic::Status::internal(e.to_string())
+            })?
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+
+        Ok(tonic::Response::new(WithdrawOnchainResponse { txid }))
     }
 
     async fn open_channel(

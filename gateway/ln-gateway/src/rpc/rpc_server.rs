@@ -23,6 +23,7 @@ use fedimint_lnv2_client::{CreateBolt11InvoicePayload, SendPaymentPayload};
 use fedimint_lnv2_common::endpoint_constants::{
     CREATE_BOLT11_INVOICE_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT,
     PAY_INVOICE_SELF_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_PAYMENT_ENDPOINT,
+    WITHDRAW_ONCHAIN_ENDPOINT,
 };
 use hex::ToHex;
 use serde_json::json;
@@ -34,8 +35,8 @@ use super::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
     CreateInvoiceForSelfPayload, DepositAddressPayload, GetLnOnchainAddressPayload, InfoPayload,
     LeaveFedPayload, OpenChannelPayload, PayInvoicePayload, ReceiveEcashPayload,
-    SetConfigurationPayload, SpendEcashPayload, SyncToChainPayload, WithdrawPayload,
-    V1_API_ENDPOINT,
+    SetConfigurationPayload, SpendEcashPayload, SyncToChainPayload, WithdrawOnchainPayload,
+    WithdrawPayload, V1_API_ENDPOINT,
 };
 use crate::error::{AdminGatewayError, PublicGatewayError};
 use crate::rpc::ConfigPayload;
@@ -204,6 +205,7 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
             post(close_channels_with_peer),
         )
         .route(LIST_ACTIVE_CHANNELS_ENDPOINT, get(list_active_channels))
+        .route(WITHDRAW_ONCHAIN_ENDPOINT, post(withdraw_onchain))
         .route(GET_BALANCES_ENDPOINT, get(get_balances))
         .route(SPEND_ECASH_ENDPOINT, post(spend_ecash))
         .route(MNEMONIC_ENDPOINT, get(mnemonic))
@@ -404,6 +406,15 @@ async fn list_active_channels(
 ) -> Result<impl IntoResponse, AdminGatewayError> {
     let channels = gateway.handle_list_active_channels_msg().await?;
     Ok(Json(json!(channels)))
+}
+
+#[instrument(skip_all, err)]
+async fn withdraw_onchain(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<WithdrawOnchainPayload>,
+) -> Result<impl IntoResponse, AdminGatewayError> {
+    let txid = gateway.handle_withdraw_onchain_msg(payload).await?;
+    Ok(Json(json!(txid)))
 }
 
 #[instrument(skip_all, err)]
