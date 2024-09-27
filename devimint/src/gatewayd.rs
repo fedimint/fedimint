@@ -9,6 +9,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_testing::gateway::LightningNodeType;
+use ln_gateway::envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV;
 use ln_gateway::lightning::ChannelInfo;
 use ln_gateway::rpc::{MnemonicResponse, V1_API_ENDPOINT};
 use tracing::info;
@@ -18,7 +19,7 @@ use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
 use crate::util::{poll, Command, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
-use crate::version_constants::VERSION_0_5_0_ALPHA;
+use crate::version_constants::{VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA};
 use crate::{cmd, Lightningd};
 
 #[derive(Clone)]
@@ -48,7 +49,7 @@ impl Gatewayd {
         };
         let lightning_node_addr = format!("127.0.0.1:{lightning_node_port}");
 
-        let gateway_env: HashMap<String, String> = HashMap::from_iter([
+        let mut gateway_env: HashMap<String, String> = HashMap::from_iter([
             (
                 FM_GATEWAY_DATA_DIR_ENV.to_owned(),
                 format!("{}/{ln_name}", utf8(test_dir)),
@@ -59,6 +60,15 @@ impl Gatewayd {
             ),
             (FM_GATEWAY_API_ADDR_ENV.to_owned(), addr.clone()),
         ]);
+        // TODO(support:v0.4.0): Run the gateway in LNv1 mode only before v0.4.0 because
+        // that is the only module it supported.
+        let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+        if fedimintd_version < *VERSION_0_4_0_ALPHA {
+            gateway_env.insert(
+                FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV.to_owned(),
+                "LNv1".to_string(),
+            );
+        }
         let process = process_mgr
             .spawn_daemon(
                 &format!("gatewayd-{ln_name}"),

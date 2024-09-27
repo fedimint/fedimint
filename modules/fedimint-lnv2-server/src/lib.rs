@@ -7,7 +7,7 @@ mod db;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use anyhow::{anyhow, ensure};
+use anyhow::{anyhow, ensure, Context};
 use bls12_381::{G1Projective, Scalar};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
@@ -32,8 +32,8 @@ use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, NumPeersExt, OutPoint, PeerId, ServerModule,
 };
 use fedimint_lnv2_common::config::{
-    FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
-    LightningConfigLocal, LightningConfigPrivate, LightningGenParams,
+    LightningClientConfig, LightningConfig, LightningConfigConsensus, LightningConfigLocal,
+    LightningConfigPrivate, LightningGenParams,
 };
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::endpoint_constants::{
@@ -207,11 +207,11 @@ impl ServerModuleInit for LightningInit {
                         consensus: LightningConfigConsensus {
                             tpe_agg_pk,
                             tpe_pks: tpe_pks.clone(),
-                            fee_consensus: FeeConsensus::default(),
+                            fee_consensus: params.consensus.fee_consensus.clone(),
                             network: params.consensus.network,
                         },
                         private: LightningConfigPrivate {
-                            sk: sks[peer.to_usize()],
+                            tpe_sk: sks[peer.to_usize()],
                         },
                     }
                     .to_erased(),
@@ -249,22 +249,30 @@ impl ServerModuleInit for LightningInit {
                         (*peer, PublicKeyShare(pk))
                     })
                     .collect(),
-                fee_consensus: FeeConsensus::default(),
+                fee_consensus: params.consensus.fee_consensus.clone(),
                 network: params.consensus.network,
             },
             private: LightningConfigPrivate {
-                sk: SecretKeyShare(sk),
+                tpe_sk: SecretKeyShare(sk),
             },
         };
 
         Ok(server.to_erased())
     }
 
-    fn validate_config(
-        &self,
-        _identity: &PeerId,
-        _config: ServerModuleConfig,
-    ) -> anyhow::Result<()> {
+    fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
+        let config = config.to_typed::<LightningConfig>()?;
+
+        ensure!(
+            tpe::derive_public_key_share(&config.private.tpe_sk)
+                == *config
+                    .consensus
+                    .tpe_pks
+                    .get(identity)
+                    .context("Public key set has no key for our identity")?,
+            "Preimge encryption secret key share does not match our public key share"
+        );
+
         Ok(())
     }
 
@@ -485,7 +493,7 @@ impl ServerModule for Lightning {
                     return Err(LightningOutputError::ContractAlreadyExists);
                 }
 
-                let dk_share = contract.create_decryption_key_share(&self.cfg.private.sk);
+                let dk_share = contract.create_decryption_key_share(&self.cfg.private.tpe_sk);
 
                 LightningOutputOutcomeV0::Incoming(dk_share)
             }

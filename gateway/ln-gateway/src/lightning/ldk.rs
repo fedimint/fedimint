@@ -5,10 +5,10 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use bip39::Mnemonic;
-use bitcoin::{secp256k1, Network, OutPoint};
+use bitcoin::{secp256k1, Address, Network, OutPoint};
 use fedimint_core::runtime::spawn;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::Amount;
+use fedimint_core::{Amount, BitcoinAmountOrAll};
 use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::ln::PaymentHash;
 use ldk_node::lightning_invoice::Bolt11Invoice;
@@ -27,6 +27,7 @@ use crate::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
+    WithdrawOnchainResponse,
 };
 
 pub struct GatewayLdkClient {
@@ -79,10 +80,9 @@ impl GatewayLdkClient {
             wallet_sync_interval_secs: 10,
             ..Default::default()
         });
-        node_builder.set_entropy_bip39_mnemonic(mnemonic, None);
         node_builder
-            .set_esplora_server(esplora_server_url.to_string())
-            .set_gossip_source_p2p();
+            .set_entropy_bip39_mnemonic(mnemonic, None)
+            .set_esplora_server(esplora_server_url.to_string());
         let Some(data_dir_str) = data_dir.to_str() else {
             return Err(anyhow::anyhow!("Invalid data dir path"));
         };
@@ -416,6 +416,32 @@ impl ILnRpcClient for GatewayLdkClient {
             })
     }
 
+    async fn withdraw_onchain(
+        &self,
+        address: Address,
+        amount: BitcoinAmountOrAll,
+        // TODO: Respect this fee rate once `ldk-node` supports setting a custom fee rate.
+        // This work is planned to be in `ldk-node` v0.4 and is tracked here:
+        // https://github.com/lightningdevkit/ldk-node/issues/176
+        _fee_rate_sats_per_vbyte: u64,
+    ) -> Result<WithdrawOnchainResponse, LightningRpcError> {
+        let onchain = self.node.onchain_payment();
+
+        let txid = match amount {
+            BitcoinAmountOrAll::All => onchain.send_all_to_address(&address),
+            BitcoinAmountOrAll::Amount(amount_sats) => {
+                onchain.send_to_address(&address, amount_sats.to_sat())
+            }
+        }
+        .map_err(|e| LightningRpcError::FailedToWithdrawOnchain {
+            failure_reason: e.to_string(),
+        })?;
+
+        Ok(WithdrawOnchainResponse {
+            txid: txid.to_string(),
+        })
+    }
+
     async fn open_channel(
         &self,
         pubkey: secp256k1::PublicKey,
@@ -523,9 +549,17 @@ impl ILnRpcClient for GatewayLdkClient {
 
     async fn get_balances(&self) -> Result<GetBalancesResponse, LightningRpcError> {
         let balances = self.node.list_balances();
+        let channel_lists = self.node.list_channels();
+        // map and get the total inbound_capacity_msat in the channels
+        let total_inbound_liquidity_balance_msat: u64 = channel_lists
+            .iter()
+            .map(|channel| channel.inbound_capacity_msat)
+            .sum();
+
         Ok(GetBalancesResponse {
             onchain_balance_sats: balances.total_onchain_balance_sats,
             lightning_balance_msats: balances.total_lightning_balance_sats * 1000,
+            inbound_lightning_liquidity_msats: total_inbound_liquidity_balance_msat,
         })
     }
 

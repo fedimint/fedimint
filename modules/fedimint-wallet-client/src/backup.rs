@@ -7,7 +7,7 @@ use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_client::module::init::recovery::{RecoveryFromHistory, RecoveryFromHistoryCommon};
 use fedimint_client::module::init::ClientModuleRecoverArgs;
 use fedimint_client::module::recovery::{DynModuleBackup, ModuleBackup};
-use fedimint_client::module::{ClientContext, ClientDbTxContext};
+use fedimint_client::module::ClientContext;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -362,10 +362,7 @@ impl RecoveryFromHistory for WalletRecovery {
         Ok(())
     }
 
-    async fn finalize_dbtx(
-        &self,
-        dbtx: &mut ClientDbTxContext<'_, '_, WalletClientModule>,
-    ) -> anyhow::Result<()> {
+    async fn finalize_dbtx(&self, dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {
         let now = fedimint_core::time::now();
 
         let mut tweak_idx = TweakIdx(0);
@@ -386,31 +383,29 @@ impl RecoveryFromHistory for WalletRecovery {
         while tweak_idx < new_start_idx {
             let (_script, _address, _tweak_key, operation_id) =
                 self.data.derive_peg_in_script(tweak_idx);
-            dbtx.module_dbtx()
-                .insert_new_entry(
-                    &PegInTweakIndexKey(tweak_idx),
-                    &PegInTweakIndexData {
-                        creation_time: now,
-                        next_check_time: if tweak_idxes_with_pegins.contains(&tweak_idx) {
-                            // The addresses that were already used before, or didn't seem to
-                            // contain anything don't need automatic
-                            // peg-in attempt, and can be re-attempted
-                            // manually if needed.
-                            Some(now)
-                        } else {
-                            None
-                        },
-                        last_check_time: None,
-                        operation_id,
-                        claimed: vec![],
+            dbtx.insert_new_entry(
+                &PegInTweakIndexKey(tweak_idx),
+                &PegInTweakIndexData {
+                    creation_time: now,
+                    next_check_time: if tweak_idxes_with_pegins.contains(&tweak_idx) {
+                        // The addresses that were already used before, or didn't seem to
+                        // contain anything don't need automatic
+                        // peg-in attempt, and can be re-attempted
+                        // manually if needed.
+                        Some(now)
+                    } else {
+                        None
                     },
-                )
-                .await;
+                    last_check_time: None,
+                    operation_id,
+                    claimed: vec![],
+                },
+            )
+            .await;
             tweak_idx = tweak_idx.next();
         }
 
-        dbtx.module_dbtx()
-            .insert_new_entry(&NextPegInTweakIndexKey, &new_start_idx)
+        dbtx.insert_new_entry(&NextPegInTweakIndexKey, &new_start_idx)
             .await;
         Ok(())
     }

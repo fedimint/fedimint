@@ -7,9 +7,10 @@ use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, PeerId};
 use fedimint_wallet_common::endpoint_constants::{
-    BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT, BLOCK_COUNT_ENDPOINT, PEG_OUT_FEES_ENDPOINT,
+    BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT, BLOCK_COUNT_ENDPOINT,
+    PEG_OUT_FEES_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
 };
-use fedimint_wallet_common::PegOutFees;
+use fedimint_wallet_common::{PegOutFees, WalletSummary};
 
 #[apply(async_trait_maybe_send!)]
 pub trait WalletFederationApi {
@@ -24,6 +25,8 @@ pub trait WalletFederationApi {
     async fn fetch_bitcoin_rpc_kind(&self, peer_id: PeerId) -> FederationResult<String>;
 
     async fn fetch_bitcoin_rpc_config(&self, auth: ApiAuth) -> FederationResult<BitcoinRpcConfig>;
+
+    async fn fetch_wallet_summary(&self) -> FederationResult<WalletSummary>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -66,6 +69,14 @@ where
             BITCOIN_RPC_CONFIG_ENDPOINT,
             ApiRequestErased::default(),
             auth,
+        )
+        .await
+    }
+
+    async fn fetch_wallet_summary(&self) -> FederationResult<WalletSummary> {
+        self.request_current_consensus(
+            WALLET_SUMMARY_ENDPOINT.to_string(),
+            ApiRequestErased::default(),
         )
         .await
     }

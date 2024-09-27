@@ -9,13 +9,13 @@ use strum_macros::EnumIter;
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
-    BlockCountVote = 0x45,
-    UnixTimeVote = 0x46,
-    IncomingContract = 0x47,
-    OutgoingContract = 0x48,
-    OutputOutcome = 0x49,
-    Preimage = 0x50,
-    Gateway = 0x51,
+    BlockCountVote = 0x41,
+    UnixTimeVote = 0x42,
+    IncomingContract = 0x43,
+    OutgoingContract = 0x44,
+    OutputOutcome = 0x45,
+    Preimage = 0x46,
+    Gateway = 0x47,
 }
 
 impl std::fmt::Display for DbKeyPrefix {

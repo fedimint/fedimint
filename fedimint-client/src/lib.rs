@@ -1268,9 +1268,10 @@ impl Client {
             .as_any()
             .downcast_ref::<M>()
             .ok_or_else(|| format_err!("Module is not of type {}", std::any::type_name::<M>()))?;
+        let (db, _) = self.db().with_prefix_module_id(id);
         Ok(ClientModuleInstance {
             id,
-            db: self.db().with_prefix_module_id(id),
+            db,
             api: self.api().with_module(id),
             module,
         })

@@ -11,7 +11,7 @@ use fedimint_ln_common::gateway_endpoint_constants::{
     SYNC_TO_CHAIN_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 use fedimint_lnv2_common::endpoint_constants::{
-    CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT, PAY_INVOICE_SELF_ENDPOINT,
+    CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT, PAY_INVOICE_SELF_ENDPOINT, WITHDRAW_ONCHAIN_ENDPOINT,
 };
 use lightning_invoice::Bolt11Invoice;
 use reqwest::{Method, StatusCode};
@@ -25,7 +25,7 @@ use super::{
     GatewayFedConfig, GatewayInfo, GetLnOnchainAddressPayload, LeaveFedPayload, MnemonicResponse,
     OpenChannelPayload, PayInvoicePayload, ReceiveEcashPayload, ReceiveEcashResponse,
     SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, SyncToChainPayload,
-    WithdrawPayload,
+    WithdrawOnchainPayload, WithdrawPayload,
 };
 use crate::lightning::ChannelInfo;
 use crate::CloseChannelsWithPeerResponse;
@@ -201,6 +201,17 @@ impl GatewayRpcClient {
             .join(LIST_ACTIVE_CHANNELS_ENDPOINT)
             .expect("invalid base url");
         self.call_get(url).await
+    }
+
+    pub async fn withdraw_onchain(
+        &self,
+        payload: WithdrawOnchainPayload,
+    ) -> GatewayRpcResult<Txid> {
+        let url = self
+            .base_url
+            .join(WITHDRAW_ONCHAIN_ENDPOINT)
+            .expect("invalid base url");
+        self.call_post(url, payload).await
     }
 
     pub async fn spend_ecash(

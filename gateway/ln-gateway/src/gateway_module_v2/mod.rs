@@ -295,7 +295,7 @@ impl GatewayClientModuleV2 {
             .await?
             .ok_or(anyhow!("Routing Info not available"))?
             .send_fee_minimum
-            .add_fee(amount);
+            .add_to(amount);
 
         let send_sm = GatewayClientStateMachinesV2::Send(SendStateMachine {
             common: SendSMCommon {

@@ -39,6 +39,8 @@ service GatewayLightning {
   /* Get a Bitcoin address that belongs to the underlying lightning node's wallet. */
   rpc GetLnOnchainAddress(EmptyRequest) returns (GetLnOnchainAddressResponse) {}
 
+  rpc WithdrawOnchain(WithdrawOnchainRequest) returns (WithdrawOnchainResponse) {}
+
   /* Open a channel on the underlying lightning node. */
   rpc OpenChannel(OpenChannelRequest) returns (OpenChannelResponse) {}
 
@@ -279,6 +281,23 @@ message GetLnOnchainAddressResponse {
   string address = 1;
 }
 
+message WithdrawOnchainRequest {
+  // The address to withdraw funds to.
+  string address = 1;
+
+  // The amount to withdraw in sats.
+  // If 0/empty, the entire balance will be swept.
+  optional uint64 amount_sats = 2;
+
+  // The fee rate to use for the withdrawal transaction.
+  uint64 fee_rate_sats_per_vbyte = 3;
+}
+
+message WithdrawOnchainResponse {
+  // The transaction id of the withdrawal transaction.
+  string txid = 1;
+}
+
 message OpenChannelRequest {
   // The public key of the node we're opening a channel to.
   bytes pubkey = 1;
@@ -337,4 +356,7 @@ message GetBalancesResponse {
 
     // The total balance of the node's lightning wallet, in millisats.
     uint64 lightning_balance_msats = 2;
+
+    // The total inbound Liquidity balance.
+    uint64 inbound_lightning_liquidity_msats = 3;
 }

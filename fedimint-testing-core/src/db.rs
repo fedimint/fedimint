@@ -68,7 +68,8 @@ fn open_snapshot_db(
                 .with_context(|| format!("Preparing snapshot in {}", snapshot_dir.display()))?,
             decoders,
         )
-        .with_prefix_module_id(TEST_MODULE_INSTANCE_ID))
+        .with_prefix_module_id(TEST_MODULE_INSTANCE_ID)
+        .0)
     } else {
         Ok(Database::new(
             RocksDb::open(snapshot_dir)
@@ -184,7 +185,7 @@ where
 
     let snapshot_fn = |db: Database| {
         async move {
-            let isolated_db = db.with_prefix_module_id(TEST_MODULE_INSTANCE_ID);
+            let isolated_db = db.with_prefix_module_id(TEST_MODULE_INSTANCE_ID).0;
             data_prepare(isolated_db).await;
 
             let (active_states, inactive_states) = state_machine_prepare();
@@ -329,7 +330,7 @@ where
     .await
     .context("Error applying migrations to temp database")?;
 
-    let module_db = db.with_prefix_module_id(TEST_MODULE_INSTANCE_ID);
+    let module_db = db.with_prefix_module_id(TEST_MODULE_INSTANCE_ID).0;
     validate(module_db)
         .await
         .with_context(|| format!("Validating {db_prefix}"))?;
@@ -416,7 +417,7 @@ where
         .collect::<Vec<_>>()
         .await;
 
-    let module_db = db.with_prefix_module_id(TEST_MODULE_INSTANCE_ID);
+    let module_db = db.with_prefix_module_id(TEST_MODULE_INSTANCE_ID).0;
     validate(module_db, active_states, inactive_states)
         .await
         .with_context(|| format!("Validating {db_prefix}"))?;

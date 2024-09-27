@@ -202,12 +202,18 @@ impl ClientModuleInit for MetaClientInit {
 /// Meta source fetching meta values from the meta module if available or the
 /// legacy meta source otherwise.
 #[derive(Clone, Debug, Default)]
-pub struct MetaModuleOrLegacyMetaSource {
-    legacy: LegacyMetaSource,
+pub struct MetaModuleMetaSourceWithFallback<S = LegacyMetaSource> {
+    legacy: S,
+}
+
+impl<S> MetaModuleMetaSourceWithFallback<S> {
+    pub fn new(legacy: S) -> Self {
+        Self { legacy }
+    }
 }
 
 #[apply(async_trait_maybe_send!)]
-impl MetaSource for MetaModuleOrLegacyMetaSource {
+impl<S: MetaSource> MetaSource for MetaModuleMetaSourceWithFallback<S> {
     async fn wait_for_update(&self) {
         fedimint_core::runtime::sleep(Duration::from_secs(10 * 60)).await;
     }

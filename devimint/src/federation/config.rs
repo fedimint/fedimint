@@ -71,7 +71,10 @@ pub fn attach_default_module_init_params(
                 local: fedimint_lnv2_common::config::LightningGenParamsLocal {
                     bitcoin_rpc: bitcoin_rpc.clone(),
                 },
-                consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus { network },
+                consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
+                    fee_consensus: fedimint_lnv2_common::config::FeeConsensus::default(),
+                    network,
+                },
             },
         );
     }

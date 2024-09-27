@@ -9,7 +9,7 @@ use clap::{Parser, Subcommand};
 use devimint::envs::FM_DATA_DIR_ENV;
 use devimint::federation::Federation;
 use devimint::util::ProcessManager;
-use devimint::version_constants::{VERSION_0_3_0, VERSION_0_5_0_ALPHA};
+use devimint::version_constants::{VERSION_0_3_0, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA};
 use devimint::{cmd, util, Gatewayd, LightningNode};
 use fedimint_core::config::FederationId;
 use fedimint_core::Amount;
@@ -86,14 +86,20 @@ async fn backup_restore_test() -> anyhow::Result<()> {
                 return Ok(());
             }
 
-            let gw_ldk = dev_fed
-                .gw_ldk_registered()
-                .await?
-                .as_ref()
-                .expect("LDK Gateway should be available");
+            let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+            let gw = if fedimintd_version >= *VERSION_0_4_0_ALPHA {
+                dev_fed
+                    .gw_ldk_connected()
+                    .await?
+                    .as_ref()
+                    .expect("LDK Gateway should be available")
+            } else {
+                dev_fed.gw_lnd_registered().await?
+            };
+
             let fed = dev_fed.fed().await?;
-            fed.pegin_gateway(10_000_000, gw_ldk).await?;
-            let info = serde_json::from_value::<GatewayInfo>(gw_ldk.get_info().await?)?;
+            fed.pegin_gateway(10_000_000, gw).await?;
+            let info = serde_json::from_value::<GatewayInfo>(gw.get_info().await?)?;
             let federation_info = info
                 .federations
                 .first()
@@ -101,15 +107,19 @@ async fn backup_restore_test() -> anyhow::Result<()> {
             assert_eq!(10_000_000, federation_info.balance_msat.sats_round_down());
             info!("Verified balance after peg-in");
 
-            let mnemonic = gw_ldk.get_mnemonic().await?.mnemonic;
+            let mnemonic = gw.get_mnemonic().await?.mnemonic;
 
             // Recover without a backup
             info!("Wiping gateway and recovering without a backup...");
+            let ln = gw
+                .ln
+                .clone()
+                .expect("Gateway is not connected to Lightning Node");
             let new_gw_ldk = stop_and_recover_gateway(
                 process_mgr.clone(),
                 mnemonic.clone(),
-                gw_ldk.to_owned(),
-                LightningNode::Ldk,
+                gw.to_owned(),
+                ln,
                 fed,
             )
             .await?;
@@ -343,7 +353,7 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                 LightningNodeType::Lnd => dev_fed.gw_lnd_registered().await?,
                 LightningNodeType::Cln => dev_fed.gw_cln_registered().await?,
                 LightningNodeType::Ldk => dev_fed
-                    .gw_ldk_registered()
+                    .gw_ldk_connected()
                     .await?
                     .as_ref()
                     .expect("LDK Gateway should be available"),

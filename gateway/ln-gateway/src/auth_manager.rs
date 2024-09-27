@@ -2,9 +2,9 @@ use std::collections::BTreeSet;
 use std::str::FromStr;
 use std::time::UNIX_EPOCH;
 
+use bitcoin::secp256k1::schnorr::Signature;
+use bitcoin::secp256k1::{Message, PublicKey};
 use jsonwebtoken::{encode, EncodingKey, Header};
-use secp256k1_zkp::schnorr::Signature;
-use secp256k1_zkp::PublicKey;
 use serde::{Deserialize, Serialize};
 
 const CHALLENGE_EXPIRY_SECONDS: u64 = 60; // 1 minute
@@ -38,7 +38,7 @@ impl AuthManager {
     /// Verify the challenge
     pub fn verify_challenge_response(
         &mut self,
-        ctx: &secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
+        ctx: &bitcoin::secp256k1::global::GlobalContext,
         challenge_response: &AuthChallengeResponse,
     ) -> anyhow::Result<Session> {
         let challenge = AuthChallenge::from_str(&challenge_response.challenge)?;
@@ -59,7 +59,7 @@ impl AuthManager {
         }
 
         // Verify the schnorr signature against the gateway's pubkey
-        let message = secp256k1_zkp::Message::from_slice(challenge.to_string().as_bytes())?;
+        let message = Message::from_slice(challenge.to_string().as_bytes())?;
         let signature = challenge_response.response;
         ctx.verify_schnorr(&signature, &message, &self.gateway_id.x_only_public_key().0)
             .map_err(|_| anyhow::anyhow!("Invalid signature"))?;

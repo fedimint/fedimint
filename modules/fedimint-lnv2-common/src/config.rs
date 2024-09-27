@@ -22,6 +22,7 @@ impl LightningGenParams {
         Self {
             local: LightningGenParamsLocal { bitcoin_rpc },
             consensus: LightningGenParamsConsensus {
+                fee_consensus: FeeConsensus::default(),
                 network: Network::Regtest,
             },
         }
@@ -30,6 +31,7 @@ impl LightningGenParams {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningGenParamsConsensus {
+    pub fee_consensus: FeeConsensus,
     pub network: Network,
 }
 
@@ -60,16 +62,38 @@ pub struct LightningConfigConsensus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningConfigPrivate {
-    pub sk: SecretKeyShare,
+    pub tpe_sk: SecretKeyShare,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct FeeConsensus {
-    pub base: Amount,
-    pub parts_per_million: u64,
+    base: Amount,
+    parts_per_million: u64,
 }
 
 impl FeeConsensus {
+    /// The lightning module will charge a non-configurable base fee of one
+    /// satoshi per transaction input and output too account for the costs
+    /// incurred by the federation for processing the transaction. On top of
+    /// that the federation may charge a additional relative fee per input and
+    /// output of up to one thousand parts per million which is equal to one
+    /// tenth of one percent.
+    ///
+    /// # Errors
+    /// - This constructor returns an error if the relative fee is in excess of
+    ///   one thousand parts per million.
+    pub fn new(parts_per_million: u64) -> anyhow::Result<Self> {
+        anyhow::ensure!(
+            parts_per_million <= 1_000,
+            "Relative fee over one thousand parts per million is excessive"
+        );
+
+        Ok(Self {
+            base: Amount::from_sats(1),
+            parts_per_million,
+        })
+    }
+
     pub fn fee(&self, amount: Amount) -> Amount {
         Amount::from_msats(self.fee_msats(amount.msats))
     }
@@ -84,10 +108,7 @@ impl FeeConsensus {
 
 impl Default for FeeConsensus {
     fn default() -> Self {
-        Self {
-            base: Amount::from_sats(1),
-            parts_per_million: 1_000,
-        }
+        Self::new(1_000).expect("Relative fee is within the limit")
     }
 }
 
@@ -101,11 +122,7 @@ pub struct LightningClientConfig {
 
 impl std::fmt::Display for LightningClientConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "LightningClientConfig {}",
-            serde_json::to_string(self).map_err(|_e| std::fmt::Error)?
-        )
+        write!(f, "LightningClientConfig {self:?}")
     }
 }
 
@@ -154,7 +171,7 @@ fn migrate_config_private(
     config: &fedimint_ln_common::config::LightningConfigPrivate,
 ) -> LightningConfigPrivate {
     LightningConfigPrivate {
-        sk: SecretKeyShare(config.threshold_sec_key.0 .0 .0),
+        tpe_sk: SecretKeyShare(config.threshold_sec_key.0 .0 .0),
     }
 }
 
@@ -187,5 +204,10 @@ fn test_fee_consensus() {
     assert_eq!(
         FeeConsensus::default().fee(Amount::from_bitcoins(1)),
         Amount::from_sats(100_001)
+    );
+
+    assert_eq!(
+        FeeConsensus::default().fee(Amount::from_bitcoins(100_000)),
+        Amount::from_bitcoins(100) + Amount::from_sats(1)
     );
 }

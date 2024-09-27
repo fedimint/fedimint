@@ -7,9 +7,10 @@ use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::key::KeyPair;
 use bitcoin::secp256k1::{PublicKey, SecretKey};
+use bitcoin::Address;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::BoxStream;
-use fedimint_core::{secp256k1, Amount};
+use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::PrunedInvoice;
 use fedimint_logging::LOG_TEST;
 use lightning_invoice::{
@@ -19,6 +20,7 @@ use ln_gateway::gateway_lnrpc::{
     self, CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
     EmptyResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
     GetRouteHintsResponse, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
+    WithdrawOnchainResponse,
 };
 use ln_gateway::lightning::{
     ChannelInfo, HtlcResult, ILnRpcClient, LightningRpcError, RouteHtlcStream,
@@ -36,7 +38,6 @@ pub struct FakeLightningTest {
     pub gateway_node_pub_key: secp256k1::PublicKey,
     gateway_node_sec_key: secp256k1::SecretKey,
     amount_sent: AtomicU64,
-    receiver: mpsc::Receiver<HtlcResult>,
 }
 
 impl FakeLightningTest {
@@ -45,13 +46,11 @@ impl FakeLightningTest {
         let ctx = bitcoin::secp256k1::Secp256k1::new();
         let kp = KeyPair::new(&ctx, &mut OsRng);
         let amount_sent = AtomicU64::new(0);
-        let (_, receiver) = mpsc::channel::<HtlcResult>(10);
 
         FakeLightningTest {
             gateway_node_sec_key: SecretKey::from_keypair(&kp),
             gateway_node_pub_key: PublicKey::from_keypair(&kp),
             amount_sent,
-            receiver,
         }
     }
 }
@@ -144,8 +143,12 @@ impl ILnRpcClient for FakeLightningTest {
         _max_delay: u64,
         _max_fee: Amount,
     ) -> Result<PayInvoiceResponse, LightningRpcError> {
-        self.amount_sent
-            .fetch_add(invoice.amount_milli_satoshis().unwrap(), Ordering::Relaxed);
+        self.amount_sent.fetch_add(
+            invoice
+                .amount_milli_satoshis()
+                .expect("Invoice missing amount"),
+            Ordering::Relaxed,
+        );
 
         if *invoice.payment_secret() == PaymentSecret(INVALID_INVOICE_PAYMENT_SECRET) {
             return Err(LightningRpcError::FailedPayment {
@@ -183,7 +186,7 @@ impl ILnRpcClient for FakeLightningTest {
     }
 
     async fn route_htlcs<'a>(
-        mut self: Box<Self>,
+        self: Box<Self>,
         task_group: &TaskGroup,
     ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), LightningRpcError> {
         let handle = task_group.make_handle();
@@ -192,9 +195,11 @@ impl ILnRpcClient for FakeLightningTest {
         // `FakeLightningTest` will never intercept any HTLCs because there is no
         // lightning connection, so instead we just create a stream that blocks
         // until the task group is shutdown.
+        let (_, mut receiver) = mpsc::channel::<HtlcResult>(0);
         let stream: BoxStream<'a, HtlcResult> = Box::pin(stream! {
             shutdown_receiver.await;
-            if let Some(htlc_result) = self.receiver.recv().await {
+            // This block, and `receiver`, exist solely to satisfy the type checker.
+            if let Some(htlc_result) = receiver.recv().await {
                 yield htlc_result;
             }
         });
@@ -242,9 +247,9 @@ impl ILnRpcClient for FakeLightningTest {
                 .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &self.gateway_node_sec_key))
                 .unwrap(),
             None => {
-                unimplemented!(
-                    "FakeLightningTest does not support creating invoices without a payment hash"
-                )
+                return Err(LightningRpcError::FailedToGetInvoice {
+                    failure_reason: "FakeLightningTest does not support creating invoices without a payment hash".to_string(),
+                });
             }
         };
 
@@ -258,6 +263,18 @@ impl ILnRpcClient for FakeLightningTest {
     ) -> Result<GetLnOnchainAddressResponse, LightningRpcError> {
         Err(LightningRpcError::FailedToGetLnOnchainAddress {
             failure_reason: "FakeLightningTest does not support getting a funding address"
+                .to_string(),
+        })
+    }
+
+    async fn withdraw_onchain(
+        &self,
+        _address: Address,
+        _amount: BitcoinAmountOrAll,
+        _fee_rate_sats_per_vbyte: u64,
+    ) -> Result<WithdrawOnchainResponse, LightningRpcError> {
+        Err(LightningRpcError::FailedToWithdrawOnchain {
+            failure_reason: "FakeLightningTest does not support withdrawing funds on-chain"
                 .to_string(),
         })
     }
@@ -299,7 +316,7 @@ impl ILnRpcClient for FakeLightningTest {
 
     async fn sync_to_chain(&self, _block_height: u32) -> Result<EmptyResponse, LightningRpcError> {
         Err(LightningRpcError::FailedToSyncToChain {
-            failure_reason: "FakeLightningTest does not support getting balances".to_string(),
+            failure_reason: "FakeLightningTest does not support syncing to chain".to_string(),
         })
     }
 }

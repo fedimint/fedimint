@@ -1,6 +1,6 @@
 use fedimint_client::module::recovery::{DynModuleBackup, ModuleBackup};
-use fedimint_client::module::ClientDbTxContext;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
+use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti};
 use fedimint_mint_common::KIND;
@@ -77,12 +77,12 @@ impl IntoDynInstance for EcashBackup {
 impl MintClientModule {
     pub async fn prepare_plaintext_ecash_backup(
         &self,
-        dbtx_ctx: &'_ mut ClientDbTxContext<'_, '_, Self>,
+        dbtx: &mut DatabaseTransaction<'_>,
     ) -> anyhow::Result<EcashBackup> {
         // fetch consensus height first - so we dont miss anything when scanning
         let session_count = self.client_ctx.global_api().session_count().await?;
 
-        let notes = Self::get_all_spendable_notes(&mut dbtx_ctx.module_dbtx()).await;
+        let notes = Self::get_all_spendable_notes(dbtx).await;
 
         let pending_notes: Vec<(OutPoint, Amount, NoteIssuanceRequest)> = self
             .client_ctx
@@ -104,11 +104,7 @@ impl MintClientModule {
 
         let mut idxes = vec![];
         for &amount in self.cfg.tbs_pks.tiers() {
-            idxes.push((
-                amount,
-                self.get_next_note_index(&mut dbtx_ctx.module_dbtx(), amount)
-                    .await,
-            ));
+            idxes.push((amount, self.get_next_note_index(dbtx, amount).await));
         }
         let next_note_idx = Tiered::from_iter(idxes);
 

@@ -86,7 +86,7 @@ pub async fn run(
                     .init(
                         NumPeers::from(cfg.consensus.api_endpoints.len()),
                         cfg.get_module_config(*module_id)?,
-                        db.with_prefix_module_id(*module_id),
+                        db.with_prefix_module_id(*module_id).0,
                         task_group,
                         cfg.local.identity,
                     )
@@ -244,7 +244,7 @@ fn submit_module_ci_proposals(
                         &mut db
                             .begin_transaction_nc()
                             .await
-                            .to_ref_with_prefix_module_id(module_id)
+                            .to_ref_with_prefix_module_id(module_id).0
                             .into_nc(),
                         module_id,
                     ),

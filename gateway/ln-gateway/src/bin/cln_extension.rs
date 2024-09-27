@@ -34,7 +34,7 @@ use ln_gateway::gateway_lnrpc::{
     GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, ListActiveChannelsResponse, OpenChannelRequest,
     OpenChannelResponse, PayInvoiceRequest, PayInvoiceResponse, PayPrunedInvoiceRequest,
-    PrunedInvoice,
+    PrunedInvoice, WithdrawOnchainRequest, WithdrawOnchainResponse,
 };
 use rand::rngs::OsRng;
 use rand::Rng;
@@ -960,6 +960,50 @@ impl GatewayLightning for ClnRpcService {
         }
     }
 
+    async fn withdraw_onchain(
+        &self,
+        request: tonic::Request<WithdrawOnchainRequest>,
+    ) -> Result<tonic::Response<WithdrawOnchainResponse>, Status> {
+        let request_inner = request.into_inner();
+
+        let txid = self
+            .rpc_client()
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?
+            .call(cln_rpc::Request::Withdraw(
+                model::requests::WithdrawRequest {
+                    feerate: Some(cln_rpc::primitives::Feerate::PerKw(
+                        // 1 vbyte = 4 weight units, so 250 vbytes = 1,000 weight units.
+                        request_inner.fee_rate_sats_per_vbyte as u32 * 250,
+                    )),
+                    minconf: Some(0),
+                    utxos: None,
+                    destination: request_inner.address,
+                    satoshi: if let Some(amount_sats) = request_inner.amount_sats {
+                        cln_rpc::primitives::AmountOrAll::Amount(
+                            cln_rpc::primitives::Amount::from_sat(amount_sats),
+                        )
+                    } else {
+                        cln_rpc::primitives::AmountOrAll::All
+                    },
+                },
+            ))
+            .await
+            .map(|response| match response {
+                cln_rpc::Response::Withdraw(model::responses::WithdrawResponse {
+                    txid, ..
+                }) => Ok(txid),
+                _ => Err(ClnExtensionError::RpcWrongResponse),
+            })
+            .map_err(|e| {
+                error!("cln connect rpc returned error {:?}", e);
+                tonic::Status::internal(e.to_string())
+            })?
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+
+        Ok(tonic::Response::new(WithdrawOnchainResponse { txid }))
+    }
+
     async fn open_channel(
         &self,
         request: tonic::Request<OpenChannelRequest>,
@@ -1176,6 +1220,35 @@ impl GatewayLightning for ClnRpcService {
             })?
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
+        let total_receivable_msat = self
+            .rpc_client()
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?
+            .call(cln_rpc::Request::ListPeerChannels(
+                model::requests::ListpeerchannelsRequest { id: None },
+            ))
+            .await
+            .map(|response| match response {
+                cln_rpc::Response::ListPeerChannels(
+                    model::responses::ListpeerchannelsResponse { channels },
+                ) => Ok(channels
+                    .into_iter()
+                    .filter(|channel| {
+                        matches!(
+                            channel.state,
+                            model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
+                        )
+                    })
+                    .filter_map(|channel| channel.receivable_msat.map(|value| value.msat()))
+                    .sum::<u64>()), // Sum the receivable_msat values directly
+                _ => Err(ClnExtensionError::RpcWrongResponse),
+            })
+            .map_err(|e| {
+                error!("cln listchannels rpc returned error {:?}", e);
+                tonic::Status::internal(e.to_string())
+            })?
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+
         let lightning_balance_msats = channels
             .into_iter()
             .fold(0, |acc, channel| acc + channel.our_amount_msat.msat());
@@ -1186,6 +1259,7 @@ impl GatewayLightning for ClnRpcService {
         Ok(tonic::Response::new(GetBalancesResponse {
             onchain_balance_sats,
             lightning_balance_msats,
+            inbound_lightning_liquidity_msats: total_receivable_msat,
         }))
     }
 }

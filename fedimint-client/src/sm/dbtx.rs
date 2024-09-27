@@ -23,6 +23,7 @@ impl<'inner, 'parent> ClientSMDatabaseTransaction<'inner, 'parent> {
     pub fn module_tx(&mut self) -> DatabaseTransaction<'_> {
         self.dbtx
             .to_ref_with_prefix_module_id(self.module_instance)
+            .0
             .into_nc()
     }
 

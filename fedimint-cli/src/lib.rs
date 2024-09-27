@@ -36,7 +36,7 @@ use fedimint_api_client::api::{
     DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, WsFederationApi,
 };
 use fedimint_bip39::Bip39RootSecretStrategy;
-use fedimint_client::meta::{FetchKind, MetaSource};
+use fedimint_client::meta::{FetchKind, LegacyMetaSource, MetaSource};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
 use fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandleArc};
@@ -49,11 +49,11 @@ use fedimint_core::db::{Database, DatabaseValue};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::util::{backoff_util, handle_version_hash_command, retry, SafeUrl};
-use fedimint_core::{fedimint_build_code_version_env, runtime, PeerId, TieredMulti};
+use fedimint_core::{fedimint_build_code_version_env, runtime, Amount, PeerId, TieredMulti};
 use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::{TracingSetup, LOG_CLIENT};
-use fedimint_meta_client::{MetaClientInit, MetaModuleOrLegacyMetaSource};
-use fedimint_mint_client::{MintClientInit, OOBNotes, SpendableNote};
+use fedimint_meta_client::{MetaClientInit, MetaModuleMetaSourceWithFallback};
+use fedimint_mint_client::{MintClientInit, MintClientModule, OOBNotes, SpendableNote};
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
 use futures::future::pending;
@@ -484,6 +484,15 @@ Examples:
     },
 
     ApiAnnouncements,
+
+    /// Advance the note_idx
+    AdvanceNoteIdx {
+        #[clap(long, default_value = "1")]
+        count: usize,
+
+        #[clap(long)]
+        amount: Amount,
+    },
 
     /// Wait for the fed to reach a consensus block count
     WaitBlockCount {
@@ -929,6 +938,21 @@ impl FedimintCli {
 
                 Ok(CliOutput::UntypedApiOutput { value: response })
             }
+            Command::Dev(DevCmd::AdvanceNoteIdx { count, amount }) => {
+                let client = self.client_open(&cli).await?;
+
+                let mint = client
+                    .get_first_module::<MintClientModule>()
+                    .map_err_cli_msg("can't get mint module")?;
+
+                for _ in 0..count {
+                    mint.advance_note_idx(amount)
+                        .await
+                        .map_err_cli_msg("failed to advance the note_idx")?;
+                }
+
+                Ok(CliOutput::Raw(serde_json::Value::Null))
+            }
             Command::Dev(DevCmd::ApiAnnouncements) => {
                 let client = self.client_open(&cli).await?;
                 let announcements = client.get_peer_url_announcements().await;
@@ -1112,7 +1136,7 @@ impl FedimintCli {
             }
             Command::Dev(DevCmd::MetaFields) => {
                 let client = self.client_open(&cli).await?;
-                let source = MetaModuleOrLegacyMetaSource::default();
+                let source = MetaModuleMetaSourceWithFallback::<LegacyMetaSource>::default();
 
                 let meta_fields = source
                     .fetch(&client, FetchKind::Initial, None)

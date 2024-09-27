@@ -542,6 +542,14 @@ rec {
     ];
   };
 
+  fedimint-client-wasm = fedimintBuildPackageGroup {
+    pname = "fedimint-client-wasm";
+
+    packages = [
+      "fedimint-client-wasm"
+    ];
+  };
+
   devimint = fedimintBuildPackageGroup {
     pname = "devimint";
     packages = [
@@ -608,7 +616,6 @@ rec {
           fedimint-pkgs
           pkgs.bash
           pkgs.coreutils
-          pkgs.sqlite
           pkgs.fakeNss
           pkgs.busybox
           pkgs.curl

@@ -543,6 +543,7 @@ pub async fn apply_migrations_client(
                 migration(
                     &mut global_dbtx
                         .to_ref_with_prefix_module_id(module_instance_id)
+                        .0
                         .into_nc(),
                     active_states.clone(),
                     inactive_states.clone(),

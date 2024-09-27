@@ -301,7 +301,7 @@ impl Fedimintd {
     }
 
     /// Attach default server modules to Fedimintd instance
-    pub fn with_default_modules(self) -> Self {
+    pub fn with_default_modules(self) -> anyhow::Result<Self> {
         let network = self.opts.network;
 
         let bitcoind_rpc = self.bitcoind_rpc.clone();
@@ -356,6 +356,8 @@ impl Fedimintd {
                             bitcoin_rpc: bitcoind_rpc.clone(),
                         },
                         consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
+                            // TODO: actually make the relative fee configurable
+                            fee_consensus: fedimint_lnv2_common::config::FeeConsensus::new(1_000)?,
                             network,
                         },
                     },
@@ -371,12 +373,14 @@ impl Fedimintd {
                 .with_module_instance(MetaInit::kind(), MetaGenParams::default())
         };
 
-        if is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
+        let s = if is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
             s.with_module_kind(UnknownInit)
                 .with_module_instance(UnknownInit::kind(), UnknownGenParams::default())
         } else {
             s
-        }
+        };
+
+        Ok(s)
     }
 
     /// Block thread and run a Fedimintd server

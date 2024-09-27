@@ -21,6 +21,7 @@ use fedimint_lnv2_common::endpoint_constants::{
 use fedimint_lnv2_common::ContractId;
 use itertools::Itertools;
 use lightning_invoice::Bolt11Invoice;
+use rand::seq::SliceRandom;
 use secp256k1::schnorr::Signature;
 
 use crate::{
@@ -129,6 +130,10 @@ where
             .cloned()
             .collect::<Vec<SafeUrl>>();
 
+        // Shuffling the gateways ensures that payments are distributed over the
+        // gateways evenly.
+        union.shuffle(&mut rand::thread_rng());
+
         union.sort_by_cached_key(|r| {
             gateways
                 .values()
@@ -186,9 +191,9 @@ pub trait GatewayConnection: std::fmt::Debug {
         gateway_api: SafeUrl,
         federation_id: FederationId,
         contract: IncomingContract,
-        invoice_amount: Amount,
+        amount: Amount,
         description: Bolt11InvoiceDescription,
-        expiry_time: u32,
+        expiry_secs: u32,
     ) -> Result<Bolt11Invoice, GatewayConnectionError>;
 
     async fn send_payment(
@@ -232,9 +237,9 @@ impl GatewayConnection for RealGatewayConnection {
         gateway_api: SafeUrl,
         federation_id: FederationId,
         contract: IncomingContract,
-        invoice_amount: Amount,
+        amount: Amount,
         description: Bolt11InvoiceDescription,
-        expiry_time: u32,
+        expiry_secs: u32,
     ) -> Result<Bolt11Invoice, GatewayConnectionError> {
         reqwest::Client::new()
             .post(
@@ -246,9 +251,9 @@ impl GatewayConnection for RealGatewayConnection {
             .json(&CreateBolt11InvoicePayload {
                 federation_id,
                 contract,
-                invoice_amount,
+                amount,
                 description,
-                expiry_time,
+                expiry_secs,
             })
             .send()
             .await

@@ -1339,7 +1339,7 @@ mod tests {
 
         server
             .process_output(
-                &mut dbtx.to_ref_with_prefix_module_id(42).into_nc(),
+                &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
                 &output,
                 out_point,
             )
@@ -1362,7 +1362,7 @@ mod tests {
         assert_matches!(
             server
                 .process_output(
-                    &mut dbtx.to_ref_with_prefix_module_id(42).into_nc(),
+                    &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
                     &output2,
                     out_point2
                 )
@@ -1376,7 +1376,7 @@ mod tests {
         let (server_cfg, client_cfg) = build_configs();
         let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         let mut dbtx = db.begin_transaction_nc().await;
-        let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42);
+        let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
         let tg = TaskGroup::new();
         let server = Lightning::new(server_cfg[0].clone(), &tg, 0.into()).unwrap();
 
@@ -1437,7 +1437,7 @@ mod tests {
         let (server_cfg, _) = build_configs();
         let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         let mut dbtx = db.begin_transaction_nc().await;
-        let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42);
+        let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
         let tg = TaskGroup::new();
         let server = Lightning::new(server_cfg[0].clone(), &tg, 0.into()).unwrap();
 

@@ -8,7 +8,6 @@ use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use bitcoin_hashes::{sha256, Hash};
-use fedimint_client::secret;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::TaskGroup;
@@ -16,19 +15,19 @@ use fedimint_ln_common::gateway_endpoint_constants::{
     ADDRESS_ENDPOINT, AUTH_CHALLENGE_ENDPOINT, AUTH_LOGIN_ENDPOINT, AUTH_SESSION_ENDPOINT,
     BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
     CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
-    GET_FUNDING_ADDRESS_ENDPOINT, GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT,
-    LIST_ACTIVE_CHANNELS_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT,
-    RECEIVE_ECASH_ENDPOINT, RESTORE_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT,
-    WITHDRAW_ENDPOINT,
+    GET_GATEWAY_ID_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT,
+    LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT,
+    RECEIVE_ECASH_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
+    SYNC_TO_CHAIN_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 use fedimint_lnv2_client::{CreateBolt11InvoicePayload, SendPaymentPayload};
 use fedimint_lnv2_common::endpoint_constants::{
     CREATE_BOLT11_INVOICE_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT,
     PAY_INVOICE_SELF_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_PAYMENT_ENDPOINT,
+    WITHDRAW_ONCHAIN_ENDPOINT,
 };
 use hex::ToHex;
 use jsonwebtoken::{decode, DecodingKey, Validation};
-use secp256k1_zkp::SECP256K1;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tokio::net::TcpListener;
@@ -39,12 +38,13 @@ use super::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
     CreateInvoiceForSelfPayload, DepositAddressPayload, GetLnOnchainAddressPayload, InfoPayload,
     LeaveFedPayload, OpenChannelPayload, PayInvoicePayload, ReceiveEcashPayload,
-    SetConfigurationPayload, SpendEcashPayload, SyncToChainPayload, WithdrawPayload,
-    V1_API_ENDPOINT,
+    SetConfigurationPayload, SpendEcashPayload, SyncToChainPayload, WithdrawOnchainPayload,
+    WithdrawPayload, V1_API_ENDPOINT,
 };
 use crate::auth_manager::{AuthChallengeResponse, Session};
+use crate::error::{AdminGatewayError, PublicGatewayError};
 use crate::rpc::ConfigPayload;
-use crate::{Gateway, GatewayError};
+use crate::Gateway;
 
 /// Creates the webserver's routes and spawns the webserver in a separate task.
 pub async fn run_webserver(gateway: Arc<Gateway>, task_group: TaskGroup) -> anyhow::Result<()> {
@@ -220,6 +220,24 @@ async fn authenticate_jwt(
     }
 }
 
+/// Public routes that are used in the LNv1 protocol
+fn lnv1_routes() -> Router {
+    Router::new()
+        .route(PAY_INVOICE_ENDPOINT, post(pay_invoice))
+        .route(GET_GATEWAY_ID_ENDPOINT, get(get_gateway_id))
+}
+
+/// Public routes that are used in the LNv2 protocol
+fn lnv2_routes() -> Router {
+    Router::new()
+        .route(ROUTING_INFO_ENDPOINT, post(routing_info_v2))
+        .route(SEND_PAYMENT_ENDPOINT, post(pay_bolt11_invoice_v2))
+        .route(
+            CREATE_BOLT11_INVOICE_ENDPOINT,
+            post(create_bolt11_invoice_v2),
+        )
+}
+
 /// Gateway Webserver Routes. The gateway supports three types of routes
 /// - Always Authenticated: these routes always require a Bearer token. Used by
 ///   gateway administrators.
@@ -230,21 +248,20 @@ async fn authenticate_jwt(
 ///   clients.
 fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
     // Public routes on gateway webserver
-    let public_routes = Router::new()
+    let mut public_routes = Router::new()
         .route(
             CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT,
             post(create_invoice_for_self),
         )
-        .route(PAY_INVOICE_ENDPOINT, post(pay_invoice))
-        .route(GET_GATEWAY_ID_ENDPOINT, get(get_gateway_id))
-        // These routes are for next generation lightning
-        .route(ROUTING_INFO_ENDPOINT, post(routing_info_v2))
-        .route(SEND_PAYMENT_ENDPOINT, post(pay_bolt11_invoice_v2))
-        .route(
-            CREATE_BOLT11_INVOICE_ENDPOINT,
-            post(create_bolt11_invoice_v2),
-        )
         .route(RECEIVE_ECASH_ENDPOINT, post(receive_ecash));
+
+    if gateway.is_running_lnv1() {
+        public_routes = public_routes.merge(lnv1_routes());
+    }
+
+    if gateway.is_running_lnv2() {
+        public_routes = public_routes.merge(lnv2_routes());
+    }
 
     // Authenticated, public routes used for gateway administration
     let always_authenticated_routes = Router::new()
@@ -265,6 +282,7 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
             post(close_channels_with_peer),
         )
         .route(LIST_ACTIVE_CHANNELS_ENDPOINT, get(list_active_channels))
+        .route(WITHDRAW_ONCHAIN_ENDPOINT, post(withdraw_onchain))
         .route(GET_BALANCES_ENDPOINT, get(get_balances))
         .route(SPEND_ECASH_ENDPOINT, post(spend_ecash))
         .route(MNEMONIC_ENDPOINT, get(mnemonic))
@@ -301,7 +319,7 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
 /// Auth Challenge Endpoint
 async fn auth_challenge(
     Extension(gateway): Extension<Arc<Gateway>>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let mut auth_manager = gateway.auth_manager.lock().await;
     let challenge = auth_manager.create_challenge();
     Ok(Json(json!(challenge)))
@@ -311,11 +329,11 @@ async fn auth_challenge(
 async fn auth_session(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<AuthChallengeResponse>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let mut auth_manager = gateway.auth_manager.lock().await;
     let session = auth_manager
-        .verify_challenge_response(SECP256K1, &payload)
-        .map_err(|_| GatewayError::Unauthorized)?;
+        .verify_challenge_response(bitcoin::secp256k1::SECP256K1, &payload)
+        .map_err(|_| AdminGatewayError::Unauthorized)?;
     let token = session.encode_jwt()?;
     Ok(Json(json!(token)))
 }
@@ -339,7 +357,7 @@ pub fn hash_password(plaintext_password: &str, salt: [u8; 16]) -> sha256::Hash {
 async fn handle_post_info(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(_payload): Json<InfoPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let info = gateway.handle_get_info().await?;
     Ok(Json(json!(info)))
 }
@@ -348,7 +366,7 @@ async fn handle_post_info(
 #[instrument(skip_all, err)]
 async fn info(
     Extension(gateway): Extension<Arc<Gateway>>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let info = gateway.handle_get_info().await?;
     Ok(Json(json!(info)))
 }
@@ -358,7 +376,7 @@ async fn info(
 async fn configuration(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<ConfigPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let gateway_fed_config = gateway
         .handle_get_federation_config(payload.federation_id)
         .await?;
@@ -370,7 +388,7 @@ async fn configuration(
 async fn balance(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<BalancePayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let amount = gateway.handle_balance_msg(payload).await?;
     Ok(Json(json!(amount)))
 }
@@ -380,7 +398,7 @@ async fn balance(
 async fn address(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<DepositAddressPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let address = gateway.handle_address_msg(payload).await?;
     Ok(Json(json!(address)))
 }
@@ -390,7 +408,7 @@ async fn address(
 async fn withdraw(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<WithdrawPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let txid = gateway.handle_withdraw_msg(payload).await?;
     Ok(Json(json!(txid)))
 }
@@ -399,7 +417,7 @@ async fn withdraw(
 async fn create_invoice_for_self(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<CreateInvoiceForSelfPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, PublicGatewayError> {
     let invoice = gateway.handle_create_invoice_for_self_msg(payload).await?;
     Ok(Json(json!(invoice)))
 }
@@ -408,7 +426,7 @@ async fn create_invoice_for_self(
 async fn pay_invoice_self(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<PayInvoicePayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let preimage = gateway.handle_pay_invoice_self_msg(payload).await?;
     Ok(Json(json!(preimage.0.encode_hex::<String>())))
 }
@@ -417,7 +435,7 @@ async fn pay_invoice_self(
 async fn pay_invoice(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<fedimint_ln_client::pay::PayInvoicePayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, PublicGatewayError> {
     let preimage = gateway.handle_pay_invoice_msg(payload).await?;
     Ok(Json(json!(preimage.0.encode_hex::<String>())))
 }
@@ -427,7 +445,7 @@ async fn pay_invoice(
 async fn connect_fed(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<ConnectFedPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let fed = gateway.handle_connect_federation(payload).await?;
     Ok(Json(json!(fed)))
 }
@@ -437,7 +455,7 @@ async fn connect_fed(
 async fn leave_fed(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<LeaveFedPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let fed = gateway.handle_leave_federation(payload).await?;
     Ok(Json(json!(fed)))
 }
@@ -447,7 +465,7 @@ async fn leave_fed(
 async fn backup(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<BackupPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     gateway.handle_backup_msg(payload).await?;
     Ok(Json(json!(())))
 }
@@ -456,7 +474,7 @@ async fn backup(
 async fn set_configuration(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<SetConfigurationPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     gateway.handle_set_configuration_msg(payload).await?;
     Ok(Json(json!(())))
 }
@@ -465,7 +483,7 @@ async fn set_configuration(
 async fn get_ln_onchain_address(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(_payload): Json<GetLnOnchainAddressPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let address = gateway.handle_get_ln_onchain_address_msg().await?;
     Ok(Json(json!(address.to_string())))
 }
@@ -474,7 +492,7 @@ async fn get_ln_onchain_address(
 async fn open_channel(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<OpenChannelPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let funding_txid = gateway.handle_open_channel_msg(payload).await?;
     Ok(Json(json!(funding_txid)))
 }
@@ -483,7 +501,7 @@ async fn open_channel(
 async fn close_channels_with_peer(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<CloseChannelsWithPeerPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let response = gateway.handle_close_channels_with_peer_msg(payload).await?;
     Ok(Json(json!(response)))
 }
@@ -491,15 +509,24 @@ async fn close_channels_with_peer(
 #[instrument(skip_all, err)]
 async fn list_active_channels(
     Extension(gateway): Extension<Arc<Gateway>>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let channels = gateway.handle_list_active_channels_msg().await?;
     Ok(Json(json!(channels)))
 }
 
 #[instrument(skip_all, err)]
+async fn withdraw_onchain(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<WithdrawOnchainPayload>,
+) -> Result<impl IntoResponse, AdminGatewayError> {
+    let txid = gateway.handle_withdraw_onchain_msg(payload).await?;
+    Ok(Json(json!(txid)))
+}
+
+#[instrument(skip_all, err)]
 async fn get_balances(
     Extension(gateway): Extension<Arc<Gateway>>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let balances = gateway.handle_get_balances_msg().await?;
     Ok(Json(json!(balances)))
 }
@@ -508,7 +535,7 @@ async fn get_balances(
 async fn sync_to_chain(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<SyncToChainPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     gateway.handle_sync_to_chain_msg(payload).await?;
     Ok(Json(json!(())))
 }
@@ -516,7 +543,7 @@ async fn sync_to_chain(
 #[instrument(skip_all, err)]
 async fn get_gateway_id(
     Extension(gateway): Extension<Arc<Gateway>>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, PublicGatewayError> {
     Ok(Json(json!(gateway.gateway_id)))
 }
 
@@ -524,7 +551,7 @@ async fn get_gateway_id(
 async fn routing_info_v2(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(federation_id): Json<FederationId>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, PublicGatewayError> {
     let routing_info = gateway.routing_info_v2(&federation_id).await?;
     Ok(Json(json!(routing_info)))
 }
@@ -533,7 +560,7 @@ async fn routing_info_v2(
 async fn pay_bolt11_invoice_v2(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<SendPaymentPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, PublicGatewayError> {
     let payment_result = gateway.send_payment_v2(payload).await?;
     Ok(Json(json!(payment_result)))
 }
@@ -542,7 +569,7 @@ async fn pay_bolt11_invoice_v2(
 async fn create_bolt11_invoice_v2(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<CreateBolt11InvoicePayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, PublicGatewayError> {
     let invoice = gateway.create_bolt11_invoice_v2(payload).await?;
     Ok(Json(json!(invoice)))
 }
@@ -551,7 +578,7 @@ async fn create_bolt11_invoice_v2(
 async fn spend_ecash(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<SpendEcashPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     Ok(Json(json!(gateway.handle_spend_ecash_msg(payload).await?)))
 }
 
@@ -559,7 +586,7 @@ async fn spend_ecash(
 async fn receive_ecash(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<ReceiveEcashPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, PublicGatewayError> {
     Ok(Json(json!(
         gateway.handle_receive_ecash_msg(payload).await?
     )))
@@ -568,7 +595,7 @@ async fn receive_ecash(
 #[instrument(skip_all, err)]
 async fn mnemonic(
     Extension(gateway): Extension<Arc<Gateway>>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     let words = gateway.handle_mnemonic_msg().await?;
     Ok(Json(json!(words)))
 }
@@ -577,7 +604,7 @@ async fn mnemonic(
 async fn stop(
     Extension(task_group): Extension<TaskGroup>,
     Extension(gateway): Extension<Arc<Gateway>>,
-) -> Result<impl IntoResponse, GatewayError> {
+) -> Result<impl IntoResponse, AdminGatewayError> {
     gateway.handle_shutdown_msg(task_group).await?;
     Ok(Json(json!(())))
 }

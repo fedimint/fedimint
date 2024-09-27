@@ -1,7 +1,6 @@
 use core::fmt;
 use std::any::Any;
 use std::fmt::Debug;
-use std::marker::PhantomData;
 use std::sync::Arc;
 use std::{ffi, marker, ops};
 
@@ -13,19 +12,23 @@ use fedimint_core::core::{
     Decoder, DynInput, DynOutput, IInput, IntoDynInstance, ModuleInstanceId, ModuleKind,
     OperationId,
 };
-use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, PhantomBound};
+use fedimint_core::db::{Database, DatabaseTransaction, GlobalDBTxAccessToken};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleInit};
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::util::{BoxFuture, BoxStream};
+use fedimint_core::util::BoxStream;
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
     TransactionId,
 };
+use futures::Stream;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 use self::init::ClientModuleInit;
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
+use crate::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use crate::sm::{self, ActiveStateMeta, Context, DynContext, DynState, State};
 use crate::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use crate::{
@@ -72,6 +75,7 @@ impl FinalClient {
 pub struct ClientContext<M> {
     client: FinalClient,
     module_instance_id: ModuleInstanceId,
+    global_dbtx_access_token: GlobalDBTxAccessToken,
     module_db: Database,
     _marker: marker::PhantomData<M>,
 }
@@ -83,6 +87,7 @@ impl<M> Clone for ClientContext<M> {
             module_db: self.module_db.clone(),
             module_instance_id: self.module_instance_id,
             _marker: marker::PhantomData,
+            global_dbtx_access_token: self.global_dbtx_access_token,
         }
     }
 }
@@ -115,116 +120,6 @@ where
 impl<M> fmt::Debug for ClientContext<M> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ClientContext")
-    }
-}
-
-/// A context of a database transaction started with
-/// `ClientContext::module_autocommit`
-pub struct ClientDbTxContext<'r, 'o, M> {
-    dbtx: &'r mut DatabaseTransaction<'o>,
-    client: &'r ClientContext<M>,
-}
-
-impl<'r, 'o, M> ClientDbTxContext<'r, 'o, M>
-where
-    M: ClientModule,
-{
-    /// Get a reference to [`DatabaseTransaction`] isolated database transaction
-    pub fn module_dbtx(&mut self) -> DatabaseTransaction<'_> {
-        self.dbtx
-            .to_ref_with_prefix_module_id(self.client.module_instance_id)
-    }
-
-    pub fn client_ctx(&self) -> &ClientContext<M> {
-        self.client
-    }
-
-    pub async fn add_state_machines(
-        &mut self,
-        dyn_states: Vec<DynState>,
-    ) -> AddStateMachinesResult {
-        self.client
-            .client
-            .get()
-            .add_state_machines(self.dbtx, dyn_states)
-            .await
-    }
-
-    pub fn decoders(&self) -> ModuleDecoderRegistry {
-        self.client.client.get().decoders().clone()
-    }
-
-    pub async fn add_operation_log_entry(
-        &mut self,
-        operation_id: OperationId,
-        operation_type: &str,
-        operation_meta: impl serde::Serialize,
-    ) {
-        self.client
-            .client
-            .get()
-            .operation_log()
-            .add_operation_log_entry(self.dbtx, operation_id, operation_type, operation_meta)
-            .await;
-    }
-
-    pub async fn claim_input<I, S>(
-        &mut self,
-        input: ClientInput<I, S>,
-        operation_id: OperationId,
-    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
-    where
-        I: IInput + MaybeSend + MaybeSync + 'static,
-        S: sm::IState + MaybeSend + MaybeSync + 'static,
-    {
-        self.claim_input_dyn(
-            InstancelessDynClientInput {
-                input: Box::new(input.input),
-                keys: input.keys,
-                amount: input.amount,
-                state_machines: states_to_instanceless_dyn(input.state_machines),
-            },
-            operation_id,
-        )
-        .await
-    }
-
-    async fn claim_input_dyn(
-        &mut self,
-        input: InstancelessDynClientInput,
-        operation_id: OperationId,
-    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
-        let instance_input = ClientInput {
-            input: DynInput::from_parts(self.client.module_instance_id, input.input),
-            keys: input.keys,
-            amount: input.amount,
-            state_machines: states_add_instance(
-                self.client.module_instance_id,
-                input.state_machines,
-            ),
-        };
-
-        self.client
-            .client
-            .get()
-            .finalize_and_submit_transaction_inner(
-                self.dbtx,
-                operation_id,
-                TransactionBuilder::new().with_input(instance_input),
-            )
-            .await
-    }
-
-    pub async fn add_state_machines_dbtx(
-        &mut self,
-        states: Vec<DynState>,
-    ) -> AddStateMachinesResult {
-        self.client
-            .client
-            .get()
-            .executor
-            .add_state_machines_dbtx(self.dbtx, states)
-            .await
     }
 }
 
@@ -338,57 +233,6 @@ where
         DynState::from_typed(self.module_instance_id, sm)
     }
 
-    /// An [`Database::autocommit`] on module's own database partition
-    pub async fn module_autocommit<'s, 'dbtx, F, T, E>(
-        &'s self,
-        tx_fn: F,
-        max_attempts: Option<usize>,
-    ) -> Result<T, AutocommitError<E>>
-    where
-        's: 'dbtx,
-        for<'r, 'o> F: Fn(
-                &'r mut ClientDbTxContext<'r, 'o, M>,
-                PhantomBound<'dbtx, 'o>,
-            ) -> BoxFuture<'r, Result<T, E>>
-            + MaybeSync,
-    {
-        let tx_fn = &tx_fn;
-        self.global_db()
-            .autocommit(
-                |dbtx, _| {
-                    Box::pin(async {
-                        tx_fn(&mut ClientDbTxContext { dbtx, client: self }, PhantomData).await
-                    })
-                },
-                max_attempts,
-            )
-            .await
-    }
-
-    // TODO: rename `module_autocommit` to something else and make this a default
-    pub async fn module_autocommit_2<'s, 'dbtx, F, T>(
-        &'s self,
-        tx_fn: F,
-        max_attempts: Option<usize>,
-    ) -> anyhow::Result<T>
-    where
-        's: 'dbtx,
-        for<'r, 'o> F: Fn(
-                &'r mut ClientDbTxContext<'r, 'o, M>,
-                PhantomBound<'dbtx, 'o>,
-            ) -> BoxFuture<'r, anyhow::Result<T>>
-            + MaybeSync,
-    {
-        self.module_autocommit(tx_fn, max_attempts)
-            .await
-            .map_err(|e| match e {
-                AutocommitError::ClosureError { error, .. } => error,
-                AutocommitError::CommitFailed { last_error, .. } => {
-                    panic!("Commit to DB failed: {last_error}")
-                }
-            })
-    }
-
     /// See [`crate::Client::finalize_and_submit_transaction`]
     pub async fn finalize_and_submit_transaction<F, Meta>(
         &self,
@@ -449,11 +293,22 @@ where
         Ok(operation)
     }
 
-    pub fn global_db(&self) -> fedimint_core::db::Database {
-        self.client.get().db().clone()
+    /// Get global db.
+    ///
+    /// Only intended for internal use (private).
+    fn global_db(&self) -> fedimint_core::db::Database {
+        let db = self.client.get().db().clone();
+
+        db.ensure_global()
+            .expect("global_db must always return a global db");
+
+        db
     }
 
     pub fn module_db(&self) -> &Database {
+        self.module_db
+            .ensure_isolated()
+            .expect("module_db must always return isolated db");
         &self.module_db
     }
 
@@ -518,17 +373,20 @@ where
         operation_meta: impl serde::Serialize + Debug,
         sms: Vec<DynState>,
     ) -> anyhow::Result<()> {
-        let db = self.client.get().db().clone();
+        let db = self.module_db();
         let mut dbtx = db.begin_transaction().await;
+        {
+            let dbtx = &mut dbtx.global_dbtx(self.global_dbtx_access_token);
 
-        self.manual_operation_start_inner(
-            &mut dbtx.to_ref_nc(),
-            operation_id,
-            op_type,
-            operation_meta,
-            sms,
-        )
-        .await?;
+            self.manual_operation_start_inner(
+                &mut dbtx.to_ref_nc(),
+                operation_id,
+                op_type,
+                operation_meta,
+                sms,
+            )
+            .await?;
+        }
 
         dbtx.commit_tx_result().await.map_err(|_| {
             anyhow!(
@@ -540,16 +398,16 @@ where
         Ok(())
     }
 
-    pub async fn manual_operation_start_dbtx<C: ClientModule>(
+    pub async fn manual_operation_start_dbtx(
         &self,
-        dbtx: &mut ClientDbTxContext<'_, '_, C>,
+        dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         op_type: &str,
         operation_meta: impl serde::Serialize + Debug,
         sms: Vec<DynState>,
     ) -> anyhow::Result<()> {
         self.manual_operation_start_inner(
-            &mut dbtx.dbtx.to_ref_nc(),
+            &mut dbtx.global_dbtx(self.global_dbtx_access_token),
             operation_id,
             op_type,
             operation_meta,
@@ -568,6 +426,9 @@ where
         operation_meta: impl serde::Serialize + Debug,
         sms: Vec<DynState>,
     ) -> anyhow::Result<()> {
+        dbtx.ensure_global()
+            .expect("Must deal with global dbtx here");
+
         if Client::operation_exists_dbtx(&mut dbtx.to_ref_nc(), operation_id).await {
             bail!(
                 "Operation with id {} already exists",
@@ -589,6 +450,96 @@ where
             .expect("State machine is valid");
 
         Ok(())
+    }
+
+    pub fn outcome_or_updates<U, S>(
+        &self,
+        operation: &OperationLogEntry,
+        operation_id: OperationId,
+        stream_gen: impl FnOnce() -> S,
+    ) -> UpdateStreamOrOutcome<U>
+    where
+        U: Clone + Serialize + DeserializeOwned + Debug + MaybeSend + MaybeSync + 'static,
+        S: Stream<Item = U> + MaybeSend + 'static,
+    {
+        operation.outcome_or_updates(&self.global_db(), operation_id, stream_gen)
+    }
+
+    pub async fn claim_input<I, S>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        input: ClientInput<I, S>,
+        operation_id: OperationId,
+    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
+    where
+        I: IInput + MaybeSend + MaybeSync + 'static,
+        S: sm::IState + MaybeSend + MaybeSync + 'static,
+    {
+        self.claim_input_dyn(
+            dbtx,
+            InstancelessDynClientInput {
+                input: Box::new(input.input),
+                keys: input.keys,
+                amount: input.amount,
+                state_machines: states_to_instanceless_dyn(input.state_machines),
+            },
+            operation_id,
+        )
+        .await
+    }
+
+    async fn claim_input_dyn(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        input: InstancelessDynClientInput,
+        operation_id: OperationId,
+    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
+        let instance_input = ClientInput {
+            input: DynInput::from_parts(self.module_instance_id, input.input),
+            keys: input.keys,
+            amount: input.amount,
+            state_machines: states_add_instance(self.module_instance_id, input.state_machines),
+        };
+
+        self.client
+            .get()
+            .finalize_and_submit_transaction_inner(
+                &mut dbtx.global_dbtx(self.global_dbtx_access_token),
+                operation_id,
+                TransactionBuilder::new().with_input(instance_input),
+            )
+            .await
+    }
+
+    pub async fn add_state_machines_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        states: Vec<DynState>,
+    ) -> AddStateMachinesResult {
+        self.client
+            .get()
+            .executor
+            .add_state_machines_dbtx(&mut dbtx.global_dbtx(self.global_dbtx_access_token), states)
+            .await
+    }
+
+    pub async fn add_operation_log_entry_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: impl serde::Serialize,
+    ) {
+        self.client
+            .get()
+            .operation_log()
+            .add_operation_log_entry(
+                &mut dbtx.global_dbtx(self.global_dbtx_access_token),
+                operation_id,
+                operation_type,
+                operation_meta,
+            )
+            .await;
     }
 }
 
@@ -950,7 +901,7 @@ where
     ) -> anyhow::Result<(Vec<ClientInput>, Vec<ClientOutput>)> {
         let (inputs, outputs) = <T as ClientModule>::create_final_inputs_and_outputs(
             self,
-            &mut dbtx.to_ref_with_prefix_module_id(module_instance),
+            &mut dbtx.to_ref_with_prefix_module_id(module_instance).0,
             operation_id,
             input_amount,
             output_amount,
@@ -985,7 +936,7 @@ where
     ) -> Amount {
         <T as ClientModule>::get_balance(
             self,
-            &mut dbtx.to_ref_with_prefix_module_id(module_instance),
+            &mut dbtx.to_ref_with_prefix_module_id(module_instance).0,
         )
         .await
     }

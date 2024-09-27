@@ -9,7 +9,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::net::api_announcement::{override_api_urls, SignedApiAnnouncement};
 use fedimint_core::runtime::sleep;
 use fedimint_core::secp256k1::SECP256K1;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{backoff_util, retry, SafeUrl};
 use fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
 use fedimint_logging::LOG_CLIENT;
 use futures::future::join_all;
@@ -44,11 +44,20 @@ pub async fn run_api_announcement_sync(client_inner: Arc<Client>) {
         let results = join_all(client_inner.api.all_peers().iter()
             .map(|peer_id| async {
                 let peer_id = *peer_id;
-                let announcements = client_inner
-                    .api
-                    .api_announcements(peer_id)
-                    .await
-                    .with_context(move || format!("Fetching API announcements from peer {peer_id} failed"))?;
+                let announcements =
+
+                retry(
+                    "Fetch api announcement (sync)",
+                    backoff_util::aggressive_backoff(),
+                    || async {
+                        client_inner
+                            .api
+                            .api_announcements(peer_id)
+                            .await
+                            .with_context(move || format!("Fetching API announcements from peer {peer_id} failed"))
+                    },
+                )
+                .await?;
 
                 // If any of the announcements is invalid something is fishy with that
                 // guardian and we ignore all its responses

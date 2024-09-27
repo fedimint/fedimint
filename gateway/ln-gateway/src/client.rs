@@ -16,9 +16,10 @@ use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 
 use crate::db::FederationConfig;
+use crate::error::AdminGatewayError;
 use crate::gateway_module_v2::GatewayClientInitV2;
 use crate::state_machine::GatewayClientInit;
-use crate::{Gateway, GatewayError, Result};
+use crate::{AdminResult, Gateway};
 
 #[derive(Debug, Clone)]
 pub struct GatewayClientBuilder {
@@ -42,8 +43,10 @@ impl GatewayClientBuilder {
 
     /// Reads a plain root secret from a database to construct a database.
     /// Only used for "legacy" federations before v0.5.0
-    async fn client_plainrootsecret(&self, db: &Database) -> Result<DerivableSecret> {
-        let client_secret = Client::load_decodable_client_secret::<[u8; 64]>(db).await?;
+    async fn client_plainrootsecret(&self, db: &Database) -> AdminResult<DerivableSecret> {
+        let client_secret = Client::load_decodable_client_secret::<[u8; 64]>(db)
+            .await
+            .map_err(AdminGatewayError::ClientCreationError)?;
         Ok(PlainRootSecretStrategy::to_root_secret(&client_secret))
     }
 
@@ -54,7 +57,7 @@ impl GatewayClientBuilder {
         db: Database,
         federation_config: &FederationConfig,
         gateway: Arc<Gateway>,
-    ) -> Result<ClientBuilder> {
+    ) -> AdminResult<ClientBuilder> {
         let FederationConfig {
             federation_index,
             timelock_delta,
@@ -64,18 +67,23 @@ impl GatewayClientBuilder {
 
         let mut registry = self.registry.clone();
 
-        registry.attach(GatewayClientInit {
-            timelock_delta,
-            federation_index,
-            gateway: gateway.clone(),
-        });
-        registry.attach(GatewayClientInitV2 {
-            gateway: gateway.clone(),
-        });
+        if gateway.is_running_lnv1() {
+            registry.attach(GatewayClientInit {
+                timelock_delta,
+                federation_index,
+                gateway: gateway.clone(),
+            });
+        }
+
+        if gateway.is_running_lnv2() {
+            registry.attach(GatewayClientInitV2 {
+                gateway: gateway.clone(),
+            });
+        }
 
         let mut client_builder = Client::builder(db)
             .await
-            .map_err(GatewayError::DatabaseError)?;
+            .map_err(AdminGatewayError::ClientCreationError)?;
         client_builder.with_module_inits(registry);
         client_builder.with_primary_module(self.primary_module);
         client_builder.with_connector(connector);
@@ -91,11 +99,12 @@ impl GatewayClientBuilder {
         config: FederationConfig,
         gateway: Arc<Gateway>,
         mnemonic: &Mnemonic,
-    ) -> Result<()> {
+    ) -> AdminResult<()> {
         let client_config = config
             .connector
             .download_from_invite_code(&config.invite_code)
-            .await?;
+            .await
+            .map_err(AdminGatewayError::ClientCreationError)?;
         let federation_id = config.invite_code.federation_id();
         let db = gateway
             .gateway_db
@@ -110,7 +119,8 @@ impl GatewayClientBuilder {
                 &client_config,
                 config.invite_code.api_secret(),
             )
-            .await?;
+            .await
+            .map_err(AdminGatewayError::ClientCreationError)?;
         let client = client_builder
             .recover(
                 secret.clone(),
@@ -120,8 +130,11 @@ impl GatewayClientBuilder {
             )
             .await
             .map(Arc::new)
-            .map_err(GatewayError::ClientStateMachineError)?;
-        client.wait_for_all_recoveries().await?;
+            .map_err(AdminGatewayError::ClientCreationError)?;
+        client
+            .wait_for_all_recoveries()
+            .await
+            .map_err(AdminGatewayError::ClientCreationError)?;
         Ok(())
     }
 
@@ -132,15 +145,14 @@ impl GatewayClientBuilder {
         config: FederationConfig,
         gateway: Arc<Gateway>,
         mnemonic: &Mnemonic,
-    ) -> Result<fedimint_client::ClientHandleArc> {
+    ) -> AdminResult<fedimint_client::ClientHandleArc> {
         let invite_code = config.invite_code.clone();
         let federation_id = invite_code.federation_id();
         let db_path = self.work_dir.join(format!("{federation_id}.db"));
 
         let (db, root_secret) = if db_path.exists() {
-            let rocksdb = fedimint_rocksdb::RocksDb::open(db_path.clone()).map_err(|e| {
-                GatewayError::DatabaseError(anyhow::anyhow!("Error opening rocksdb: {e:?}"))
-            })?;
+            let rocksdb = fedimint_rocksdb::RocksDb::open(db_path.clone())
+                .map_err(AdminGatewayError::ClientCreationError)?;
             let db = Database::new(rocksdb, ModuleDecoderRegistry::default());
             let root_secret = self.client_plainrootsecret(&db).await?;
             (db, root_secret)
@@ -162,24 +174,25 @@ impl GatewayClientBuilder {
             let client_config = config
                 .connector
                 .download_from_invite_code(&invite_code)
-                .await?;
+                .await
+                .map_err(AdminGatewayError::ClientCreationError)?;
             client_builder
                 .join(root_secret, client_config.clone(), invite_code.api_secret())
                 .await
         }
         .map(Arc::new)
-        .map_err(GatewayError::ClientStateMachineError)
+        .map_err(AdminGatewayError::ClientCreationError)
     }
 
     /// Verifies that the saved `ClientConfig` contains the expected
     /// federation's config.
-    async fn verify_client_config(db: &Database, federation_id: FederationId) -> Result<()> {
+    async fn verify_client_config(db: &Database, federation_id: FederationId) -> AdminResult<()> {
         let mut dbtx = db.begin_transaction_nc().await;
         if let Some(config) = dbtx.get_value(&ClientConfigKey).await {
             if config.calculate_federation_id() != federation_id {
-                return Err(GatewayError::ClientCreationError(
-                    "Federation Id did not match saved federation ID".to_string(),
-                ));
+                return Err(AdminGatewayError::ClientCreationError(anyhow::anyhow!(
+                    "Federation Id did not match saved federation ID".to_string()
+                )));
             }
         }
         Ok(())

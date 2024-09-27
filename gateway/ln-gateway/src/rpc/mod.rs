@@ -178,6 +178,13 @@ pub struct CloseChannelsWithPeerPayload {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WithdrawOnchainPayload {
+    pub address: Address<NetworkUnchecked>,
+    pub amount: BitcoinAmountOrAll,
+    pub fee_rate_sats_per_vbyte: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SpendEcashPayload {
     /// Federation id of the e-cash to spend
     pub federation_id: FederationId,
@@ -225,6 +232,7 @@ pub struct GatewayBalances {
     pub onchain_balance_sats: u64,
     pub lightning_balance_msats: u64,
     pub ecash_balances: Vec<FederationBalanceInfo>,
+    pub inbound_lightning_liquidity_msats: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]

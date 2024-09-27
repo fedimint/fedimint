@@ -201,6 +201,7 @@ pub type PhantomBound<'big, 'small> = PhantomData<&'small &'big ()>;
 #[derive(Debug, Error)]
 pub enum AutocommitError<E> {
     /// Committing the transaction failed too many times, giving up
+    #[error("Commit Failed: {last_error}")]
     CommitFailed {
         /// Number of attempts
         attempts: usize,
@@ -209,6 +210,7 @@ pub enum AutocommitError<E> {
     },
     /// Error returned by the closure provided to `autocommit`. If returned no
     /// commit was attempted in that round
+    #[error("Closure error: {error}")]
     ClosureError {
         /// The attempt on which the closure returned an error
         ///
@@ -289,8 +291,9 @@ pub trait IDatabase: Debug + MaybeSend + MaybeSync + 'static {
     /// Notify about `key` update (creation, modification, deletion)
     async fn notify(&self, key: &[u8]);
 
-    /// The prefix len of this database instance
-    fn prefix_len(&self) -> usize;
+    /// The prefix len of this database refers to the global (as opposed to
+    /// module-isolated) key space
+    fn is_global(&self) -> bool;
 
     /// Checkpoints the database to a backup directory
     fn checkpoint(&self, backup_path: &Path) -> Result<()>;
@@ -311,8 +314,8 @@ where
         (**self).notify(key).await;
     }
 
-    fn prefix_len(&self) -> usize {
-        (**self).prefix_len()
+    fn is_global(&self) -> bool {
+        (**self).is_global()
     }
 
     fn checkpoint(&self, backup_path: &Path) -> Result<()> {
@@ -349,8 +352,8 @@ impl<RawDatabase: IRawDatabase + MaybeSend + 'static> IDatabase for BaseDatabase
         self.notifications.notify(key);
     }
 
-    fn prefix_len(&self) -> usize {
-        0
+    fn is_global(&self) -> bool {
+        true
     }
 
     fn checkpoint(&self, backup_path: &Path) -> Result<()> {
@@ -411,6 +414,7 @@ impl Database {
         Self {
             inner: Arc::new(PrefixDatabase {
                 inner: self.inner.clone(),
+                global_dbtx_access_token: None,
                 prefix,
             }),
             module_decoders: self.module_decoders.clone(),
@@ -418,10 +422,25 @@ impl Database {
     }
 
     /// Create [`Database`] isolated to a partition with a prefix for a given
-    /// `module_instance_id`
-    pub fn with_prefix_module_id(&self, module_instance_id: ModuleInstanceId) -> Self {
+    /// `module_instance_id`, allowing the module to access `global_dbtx` with
+    /// the right `access_token`
+    pub fn with_prefix_module_id(
+        &self,
+        module_instance_id: ModuleInstanceId,
+    ) -> (Self, GlobalDBTxAccessToken) {
         let prefix = module_instance_id_to_byte_prefix(module_instance_id);
-        self.with_prefix(prefix)
+        let global_dbtx_access_token = GlobalDBTxAccessToken::from_prefix(&prefix);
+        (
+            Self {
+                inner: Arc::new(PrefixDatabase {
+                    inner: self.inner.clone(),
+                    global_dbtx_access_token: Some(global_dbtx_access_token),
+                    prefix,
+                }),
+                module_decoders: self.module_decoders.clone(),
+            },
+            global_dbtx_access_token,
+        )
     }
 
     pub fn with_decoders(&self, module_decoders: ModuleDecoderRegistry) -> Self {
@@ -433,7 +452,7 @@ impl Database {
 
     /// Is this `Database` a global, unpartitioned `Database`
     pub fn is_global(&self) -> bool {
-        self.inner.prefix_len() == 0
+        self.inner.is_global()
     }
 
     /// `Err` if [`Self::is_global`] is not true
@@ -642,6 +661,7 @@ where
     Inner: Debug,
 {
     prefix: Vec<u8>,
+    global_dbtx_access_token: Option<GlobalDBTxAccessToken>,
     inner: Inner,
 }
 
@@ -667,6 +687,7 @@ where
     async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction + 'a> {
         Box::new(PrefixDatabaseTransaction {
             inner: self.inner.begin_transaction().await,
+            global_dbtx_access_token: self.global_dbtx_access_token,
             prefix: self.prefix.clone(),
         })
     }
@@ -678,8 +699,12 @@ where
         self.inner.notify(&self.get_full_key(key)).await;
     }
 
-    fn prefix_len(&self) -> usize {
-        self.inner.prefix_len() + self.prefix.len()
+    fn is_global(&self) -> bool {
+        if self.global_dbtx_access_token.is_some() {
+            false
+        } else {
+            self.inner.is_global()
+        }
     }
 
     fn checkpoint(&self, backup_path: &Path) -> Result<()> {
@@ -694,6 +719,7 @@ where
 #[derive(Debug)]
 struct PrefixDatabaseTransaction<Inner> {
     inner: Inner,
+    global_dbtx_access_token: Option<GlobalDBTxAccessToken>,
     prefix: Vec<u8>,
 }
 
@@ -728,8 +754,27 @@ where
         self.inner.commit_tx().await
     }
 
-    fn prefix_len(&self) -> usize {
-        self.inner.prefix_len() + self.prefix.len()
+    fn is_global(&self) -> bool {
+        if self.global_dbtx_access_token.is_some() {
+            false
+        } else {
+            self.inner.is_global()
+        }
+    }
+
+    fn global_dbtx(
+        &mut self,
+        access_token: GlobalDBTxAccessToken,
+    ) -> &mut dyn IDatabaseTransaction {
+        if let Some(self_global_dbtx_access_token) = self.global_dbtx_access_token {
+            assert_eq!(
+                access_token, self_global_dbtx_access_token,
+                "Invalid access key used to access global_dbtx"
+            );
+            &mut self.inner
+        } else {
+            self.inner.global_dbtx(access_token)
+        }
     }
 }
 
@@ -1219,8 +1264,16 @@ pub trait IDatabaseTransaction: MaybeSend + IDatabaseTransactionOps + fmt::Debug
     /// Commit the transaction
     async fn commit_tx(&mut self) -> Result<()>;
 
-    /// The prefix len of this database instance
-    fn prefix_len(&self) -> usize;
+    /// Is global database
+    fn is_global(&self) -> bool;
+
+    /// Get the global database tx from a module-prefixed database transaction
+    ///
+    /// Meant to be called only by core internals, and module developers should
+    /// not call it directly.
+    #[doc(hidden)]
+    fn global_dbtx(&mut self, access_token: GlobalDBTxAccessToken)
+        -> &mut dyn IDatabaseTransaction;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -1231,8 +1284,16 @@ where
     async fn commit_tx(&mut self) -> Result<()> {
         (**self).commit_tx().await
     }
-    fn prefix_len(&self) -> usize {
-        (**self).prefix_len()
+
+    fn is_global(&self) -> bool {
+        (**self).is_global()
+    }
+
+    fn global_dbtx(
+        &mut self,
+        access_token: GlobalDBTxAccessToken,
+    ) -> &mut dyn IDatabaseTransaction {
+        (**self).global_dbtx(access_token)
     }
 }
 
@@ -1244,8 +1305,13 @@ where
     async fn commit_tx(&mut self) -> Result<()> {
         (**self).commit_tx().await
     }
-    fn prefix_len(&self) -> usize {
-        (**self).prefix_len()
+
+    fn is_global(&self) -> bool {
+        (**self).is_global()
+    }
+
+    fn global_dbtx(&mut self, access_key: GlobalDBTxAccessToken) -> &mut dyn IDatabaseTransaction {
+        (**self).global_dbtx(access_key)
     }
 }
 
@@ -1394,8 +1460,15 @@ impl<Tx: IRawDatabaseTransaction + fmt::Debug> IDatabaseTransaction
         Ok(())
     }
 
-    fn prefix_len(&self) -> usize {
-        0
+    fn is_global(&self) -> bool {
+        true
+    }
+
+    fn global_dbtx(
+        &mut self,
+        _access_token: GlobalDBTxAccessToken,
+    ) -> &mut dyn IDatabaseTransaction {
+        panic!("Illegal to call global_dbtx on BaseDatabaseTransaction");
     }
 }
 
@@ -1562,6 +1635,7 @@ impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
         DatabaseTransaction {
             tx: Box::new(PrefixDatabaseTransaction {
                 inner: self.tx,
+                global_dbtx_access_token: None,
                 prefix,
             }),
             decoders: self.decoders,
@@ -1572,16 +1646,31 @@ impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
     }
 
     /// Get [`DatabaseTransaction`] isolated to a prefix of a given
-    /// `module_instance_id`
+    /// `module_instance_id`, allowing the module to access global_dbtx
+    /// with the right access token.
     pub fn with_prefix_module_id<'a: 'tx>(
         self,
         module_instance_id: ModuleInstanceId,
-    ) -> DatabaseTransaction<'a, Cap>
+    ) -> (DatabaseTransaction<'a, Cap>, GlobalDBTxAccessToken)
     where
         'tx: 'a,
     {
         let prefix = module_instance_id_to_byte_prefix(module_instance_id);
-        self.with_prefix(prefix)
+        let global_dbtx_access_token = GlobalDBTxAccessToken::from_prefix(&prefix);
+        (
+            DatabaseTransaction {
+                tx: Box::new(PrefixDatabaseTransaction {
+                    inner: self.tx,
+                    global_dbtx_access_token: Some(global_dbtx_access_token),
+                    prefix,
+                }),
+                decoders: self.decoders,
+                commit_tracker: self.commit_tracker,
+                on_commit_hooks: self.on_commit_hooks,
+                capability: self.capability,
+            },
+            global_dbtx_access_token,
+        )
     }
 
     /// Get [`DatabaseTransaction`] to `self`
@@ -1614,6 +1703,7 @@ impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
         DatabaseTransaction {
             tx: Box::new(PrefixDatabaseTransaction {
                 inner: &mut self.tx,
+                global_dbtx_access_token: None,
                 prefix,
             }),
             decoders: self.decoders.clone(),
@@ -1632,17 +1722,37 @@ impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
     pub fn to_ref_with_prefix_module_id<'a>(
         &'a mut self,
         module_instance_id: ModuleInstanceId,
-    ) -> DatabaseTransaction<'a, Cap>
+    ) -> (DatabaseTransaction<'a, Cap>, GlobalDBTxAccessToken)
     where
         'tx: 'a,
     {
         let prefix = module_instance_id_to_byte_prefix(module_instance_id);
-        self.to_ref_with_prefix(prefix)
+        let global_dbtx_access_token = GlobalDBTxAccessToken::from_prefix(&prefix);
+        (
+            DatabaseTransaction {
+                tx: Box::new(PrefixDatabaseTransaction {
+                    inner: &mut self.tx,
+                    global_dbtx_access_token: Some(global_dbtx_access_token),
+                    prefix,
+                }),
+                decoders: self.decoders.clone(),
+                commit_tracker: match self.commit_tracker {
+                    MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
+                    MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
+                },
+                on_commit_hooks: match self.on_commit_hooks {
+                    MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
+                    MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
+                },
+                capability: self.capability,
+            },
+            global_dbtx_access_token,
+        )
     }
 
     /// Is this `Database` a global, unpartitioned `Database`
     pub fn is_global(&self) -> bool {
-        self.tx.prefix_len() == 0
+        self.tx.is_global()
     }
 
     /// `Err` if [`Self::is_global`] is not true
@@ -1679,6 +1789,50 @@ impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
     #[instrument(level = "trace", skip_all)]
     pub fn on_commit(&mut self, f: maybe_add_send!(impl FnOnce() + 'static)) {
         self.on_commit_hooks.push(Box::new(f));
+    }
+
+    pub fn global_dbtx<'a>(
+        &'a mut self,
+        access_token: GlobalDBTxAccessToken,
+    ) -> DatabaseTransaction<'a, Cap>
+    where
+        'tx: 'a,
+    {
+        let decoders = self.decoders.clone();
+
+        DatabaseTransaction {
+            tx: Box::new(self.tx.global_dbtx(access_token)),
+            decoders,
+            commit_tracker: match self.commit_tracker {
+                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
+            },
+            on_commit_hooks: match self.on_commit_hooks {
+                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
+            },
+            capability: self.capability,
+        }
+    }
+}
+
+/// Code used to access `global_dbtx`
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct GlobalDBTxAccessToken(u32);
+
+impl GlobalDBTxAccessToken {
+    /// Calculate an access code for accessing global_dbtx from a prefixed
+    /// database tx
+    ///
+    /// Since we need to do it at runtime, we want the user modules not to be
+    /// able to call `global_dbtx` too easily. But at the same time we don't
+    /// need to be paranoid.
+    ///
+    /// This must be deterministic during whole instance of the software running
+    /// (because it's being rederived independently in multiple codepahs) , but
+    /// it could be somewhat randomized between different runs and releases.
+    fn from_prefix(prefix: &[u8]) -> Self {
+        Self(prefix.iter().fold(0, |acc, b| acc + u32::from(*b)) + 513)
     }
 }
 
@@ -2108,6 +2262,7 @@ pub async fn apply_migrations(
                     migration(
                         &mut global_dbtx
                             .to_ref_with_prefix_module_id(module_instance_id)
+                            .0
                             .into_nc(),
                     )
                     .await?;
@@ -2170,6 +2325,7 @@ pub async fn create_database_version(
             remove_current_db_version_if_exists(
                 &mut global_dbtx
                     .to_ref_with_prefix_module_id(module_instance_id)
+                    .0
                     .into_nc(),
                 is_new_db,
                 target_db_version,
@@ -2880,7 +3036,7 @@ mod test_utils {
     pub async fn verify_module_prefix(db: Database) {
         let mut test_dbtx = db.begin_transaction().await;
         {
-            let mut test_module_dbtx = test_dbtx.to_ref_with_prefix_module_id(TEST_MODULE_PREFIX);
+            let mut test_module_dbtx = test_dbtx.to_ref_with_prefix_module_id(TEST_MODULE_PREFIX).0;
 
             test_module_dbtx
                 .insert_entry(&TestKey(100), &TestVal(101))
@@ -2895,7 +3051,7 @@ mod test_utils {
 
         let mut alt_dbtx = db.begin_transaction().await;
         {
-            let mut alt_module_dbtx = alt_dbtx.to_ref_with_prefix_module_id(ALT_MODULE_PREFIX);
+            let mut alt_module_dbtx = alt_dbtx.to_ref_with_prefix_module_id(ALT_MODULE_PREFIX).0;
 
             alt_module_dbtx
                 .insert_entry(&TestKey(100), &TestVal(103))
@@ -2910,7 +3066,7 @@ mod test_utils {
 
         // verify test_module_dbtx can only see key/value pairs from its own module
         let mut test_dbtx = db.begin_transaction().await;
-        let mut test_module_dbtx = test_dbtx.to_ref_with_prefix_module_id(TEST_MODULE_PREFIX);
+        let mut test_module_dbtx = test_dbtx.to_ref_with_prefix_module_id(TEST_MODULE_PREFIX).0;
         assert_eq!(
             test_module_dbtx.get_value(&TestKey(100)).await,
             Some(TestVal(101))
@@ -3270,7 +3426,7 @@ mod tests {
         let key = TestKey(1);
         let val = TestVal(2);
         let db = MemDatabase::new().into_database();
-        let db = db.with_prefix_module_id(module_instance_id);
+        let db = db.with_prefix_module_id(module_instance_id).0;
 
         let key_task = waiter(&db, TestKey(1)).await;
 
@@ -3292,10 +3448,10 @@ mod tests {
         let val = TestVal(2);
         let db = MemDatabase::new().into_database();
 
-        let key_task = waiter(&db.with_prefix_module_id(module_instance_id), TestKey(1)).await;
+        let key_task = waiter(&db.with_prefix_module_id(module_instance_id).0, TestKey(1)).await;
 
         let mut tx = db.begin_transaction().await;
-        let mut tx_mod = tx.to_ref_with_prefix_module_id(module_instance_id);
+        let mut tx_mod = tx.to_ref_with_prefix_module_id(module_instance_id).0;
         tx_mod.insert_new_entry(&key, &val).await;
         drop(tx_mod);
         tx.commit_tx().await;
@@ -3317,5 +3473,76 @@ mod tests {
             None,
             "should not notify"
         );
+    }
+
+    #[tokio::test]
+    async fn test_prefix_global_dbtx() {
+        let module_instance_id = 10;
+        let db = MemDatabase::new().into_database();
+
+        {
+            // Plain module id prefix, can use `global_dbtx` to access global_dbtx
+            let (db, access_token) = db.with_prefix_module_id(module_instance_id);
+
+            let mut tx = db.begin_transaction().await;
+            let mut tx = tx.global_dbtx(access_token);
+            tx.insert_new_entry(&TestKey(1), &TestVal(1)).await;
+            tx.commit_tx().await;
+        }
+
+        assert_eq!(
+            db.begin_transaction_nc().await.get_value(&TestKey(1)).await,
+            Some(TestVal(1))
+        );
+
+        {
+            // Additional non-module inner prefix, does not interfere with `global_dbtx`
+            let (db, access_token) = db.with_prefix_module_id(module_instance_id);
+
+            let db = db.with_prefix(vec![3, 4]);
+
+            let mut tx = db.begin_transaction().await;
+            let mut tx = tx.global_dbtx(access_token);
+            tx.insert_new_entry(&TestKey(2), &TestVal(2)).await;
+            tx.commit_tx().await;
+        }
+
+        assert_eq!(
+            db.begin_transaction_nc().await.get_value(&TestKey(2)).await,
+            Some(TestVal(2))
+        );
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "Illegal to call global_dbtx on BaseDatabaseTransaction")]
+    async fn test_prefix_global_dbtx_panics_on_global_db() {
+        let db = MemDatabase::new().into_database();
+
+        let mut tx = db.begin_transaction().await;
+        let _tx = tx.global_dbtx(GlobalDBTxAccessToken::from_prefix(&[1]));
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "Illegal to call global_dbtx on BaseDatabaseTransaction")]
+    async fn test_prefix_global_dbtx_panics_on_non_module_prefix() {
+        let db = MemDatabase::new().into_database();
+
+        let prefix = vec![3, 4];
+        let db = db.with_prefix(prefix.clone());
+
+        let mut tx = db.begin_transaction().await;
+        let _tx = tx.global_dbtx(GlobalDBTxAccessToken::from_prefix(&prefix));
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "Illegal to call global_dbtx on BaseDatabaseTransaction")]
+    async fn test_prefix_global_dbtx_panics_on_wrong_access_token() {
+        let db = MemDatabase::new().into_database();
+
+        let prefix = vec![3, 4];
+        let db = db.with_prefix(prefix.clone());
+
+        let mut tx = db.begin_transaction().await;
+        let _tx = tx.global_dbtx(GlobalDBTxAccessToken::from_prefix(&[1]));
     }
 }

@@ -51,7 +51,7 @@ tokio-rustls = { version = "0.26.0", default-features = false, features = [
     "tls12",
     "ring",
 ] }
-webpki-roots = { version = "0.26.5" }
+webpki-roots = { version = "0.26.6" }
 rustls-pki-types = { version = "1.8.0" }
 arti-client = { version = "0.20.0", default-features = false, package = "fedimint-arti-client", optional = true }
 strum = { workspace = true, optional = true }
