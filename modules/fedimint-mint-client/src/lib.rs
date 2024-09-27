@@ -1740,6 +1740,23 @@ impl MintClientModule {
         .await
         .expect("Must deleted existing spendable note");
     }
+
+    pub async fn advance_note_idx(&self, amount: Amount) -> anyhow::Result<DerivableSecret> {
+        let db = self.client_ctx.module_db().clone();
+
+        Ok(db
+            .autocommit(
+                |dbtx, _| {
+                    Box::pin(async {
+                        Ok::<DerivableSecret, anyhow::Error>(
+                            self.new_note_secret(amount, dbtx).await,
+                        )
+                    })
+                },
+                None,
+            )
+            .await?)
+    }
 }
 
 pub fn spendable_notes_to_operation_id(
