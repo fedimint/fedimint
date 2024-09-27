@@ -11,24 +11,6 @@ pub const FM_PORT_ESPLORA_ENV: &str = "FM_PORT_ESPLORA";
 pub const FM_TEST_DIR_ENV: &str = "FM_TEST_DIR";
 
 // Env variable to TODO
-pub const FM_PORT_CLN_ENV: &str = "FM_PORT_CLN";
-
-// Env variable to TODO
-pub const FM_GATEWAY_LIGHTNING_ADDR_ENV: &str = "FM_GATEWAY_LIGHTNING_ADDR";
-
-// Env variable to TODO
-pub const FM_PORT_LND_LISTEN_ENV: &str = "FM_PORT_LND_LISTEN";
-
-// Env variable to TODO
-pub const FM_LND_RPC_ADDR_ENV: &str = "FM_LND_RPC_ADDR";
-
-// Env variable to TODO
-pub const FM_LND_MACAROON_ENV: &str = "FM_LND_MACAROON";
-
-// Env variable to TODO
-pub const FM_LND_TLS_CERT_ENV: &str = "FM_LND_TLS_CERT";
-
-// Env variable to TODO
 pub const FM_TEST_BITCOIND_RPC_ENV: &str = "FM_TEST_BITCOIND_RPC";
 
 // Overrides the wallet server's Bitcoin RPC kind used in testing fixtures.

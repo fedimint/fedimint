@@ -17,8 +17,6 @@ use crate::{DynGlobalClientContext, DynState};
 /// Reserved module instance id used for client-internal state machines
 pub const TRANSACTION_SUBMISSION_MODULE_INSTANCE: ModuleInstanceId = 0xffff;
 
-pub const LOG_TARGET: &str = "transaction_submission";
-
 const RETRY_INTERVAL: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone)]

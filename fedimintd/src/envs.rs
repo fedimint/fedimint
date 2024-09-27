@@ -37,8 +37,5 @@ pub const FM_BIND_METRICS_API_ENV: &str = "FM_BIND_METRICS_API";
 // Env variable to TODO
 pub const FM_PORT_ESPLORA_ENV: &str = "FM_PORT_ESPLORA";
 
-// Api authentication (pass,...)
-pub const FM_DEFAULT_API_SECRETS_ENV: &str = "FM_DEFAULT_API_SECRETS";
-
 // Can be used to absolutely override the values stored in the db
 pub const FM_FORCE_API_SECRETS_ENV: &str = "FM_FORCE_API_SECRETS";
