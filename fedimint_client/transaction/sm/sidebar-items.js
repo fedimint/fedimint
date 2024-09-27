@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["LOG_TARGET","RETRY_INTERVAL","TRANSACTION_SUBMISSION_MODULE_INSTANCE"],"enum":["TxSubmissionStates"],"fn":["tx_submission_sm_decoder"],"struct":["TxSubmissionContext"]};
+window.SIDEBAR_ITEMS = {"constant":["RETRY_INTERVAL","TRANSACTION_SUBMISSION_MODULE_INSTANCE"],"enum":["TxSubmissionStates"],"fn":["tx_submission_sm_decoder"],"struct":["TxSubmissionContext"]};

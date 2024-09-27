@@ -4,14 +4,10 @@
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
 <a href="#5" id="5">5</a>
-<a href="#6" id="6">6</a>
-<a href="#7" id="7">7</a>
-<a href="#8" id="8">8</a></pre></div><pre class="rust"><code><span class="doccomment">/// Env variable to set to force git hash during build process
+<a href="#6" id="6">6</a></pre></div><pre class="rust"><code><span class="doccomment">/// Env variable to set to force git hash during build process
 </span><span class="kw">pub const </span>FORCE_GIT_HASH_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FEDIMINT_BUILD_FORCE_GIT_HASH"</span>;
 
 <span class="doccomment">/// Env variable the cargo will set during crate build to pass the detected git
 /// hash to the binary itself.
-</span><span class="comment">// Note: Keep in sync with `fedimint_core::envs`, which is not reused-to avoid
-// introducing extra dependencies between core and build modules.
 </span><span class="kw">pub const </span>FEDIMINT_BUILD_CODE_VERSION_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FEDIMINT_BUILD_CODE_VERSION"</span>;
 </code></pre></div></section></main></body></html>

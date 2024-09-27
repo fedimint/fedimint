@@ -97,11 +97,7 @@
 <a href="#96" id="96">96</a>
 <a href="#97" id="97">97</a>
 <a href="#98" id="98">98</a>
-<a href="#99" id="99">99</a>
-<a href="#100" id="100">100</a>
-<a href="#101" id="101">101</a>
-<a href="#102" id="102">102</a>
-<a href="#103" id="103">103</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
+<a href="#99" id="99">99</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
@@ -110,10 +106,6 @@
 <span class="kw">use </span>jsonrpsee_core::Serialize;
 <span class="kw">use </span>serde::Deserialize;
 <span class="kw">use </span>tracing::warn;
-
-<span class="comment">// Note: Keep in sync with `fedimint_build::envs`, which is not reused-to avoid
-// introducing extra dependencies between core and build modules.
-</span><span class="kw">pub const </span>FEDIMINT_BUILD_CODE_VERSION_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FEDIMINT_BUILD_CODE_VERSION"</span>;
 
 <span class="doccomment">/// In tests we want to routinely enable an extra unknown module to ensure
 /// all client code handles correct modules that client doesn't know about.
@@ -140,7 +132,7 @@
     is_env_var_set(<span class="string">"FM_UNSAFE_ENABLE_RBF_WITHDRAWAL"</span>)
 }
 
-<span class="doccomment">/// Get value of [`FEDIMINT_BUILD_CODE_VERSION_ENV`] at compile time
+<span class="doccomment">/// Get value of `FEDIMINT_BUILD_CODE_VERSION` at compile time
 </span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules!</span> fedimint_build_code_version_env {
     () =&gt; {

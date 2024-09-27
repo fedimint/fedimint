@@ -148,9 +148,7 @@
 <a href="#147" id="147">147</a>
 <a href="#148" id="148">148</a>
 <a href="#149" id="149">149</a>
-<a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a>
-<a href="#152" id="152">152</a></pre></div><pre class="rust"><code><span class="doccomment">//! State machine for submitting transactions
+<a href="#150" id="150">150</a></pre></div><pre class="rust"><code><span class="doccomment">//! State machine for submitting transactions
 
 </span><span class="kw">use </span>std::time::Duration;
 
@@ -168,8 +166,6 @@
 <span class="comment">// TODO: how to prevent collisions? Generally reserve some range for custom IDs?
 </span><span class="doccomment">/// Reserved module instance id used for client-internal state machines
 </span><span class="kw">pub const </span>TRANSACTION_SUBMISSION_MODULE_INSTANCE: ModuleInstanceId = <span class="number">0xffff</span>;
-
-<span class="kw">pub const </span>LOG_TARGET: <span class="kw-2">&amp;</span>str = <span class="string">"transaction_submission"</span>;
 
 <span class="kw">const </span>RETRY_INTERVAL: Duration = Duration::from_secs(<span class="number">5</span>);
 

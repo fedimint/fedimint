@@ -165,9 +165,7 @@
 <a href="#164" id="164">164</a>
 <a href="#165" id="165">165</a>
 <a href="#166" id="166">166</a>
-<a href="#167" id="167">167</a>
-<a href="#168" id="168">168</a>
-<a href="#169" id="169">169</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
+<a href="#167" id="167">167</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::ops;
 <span class="kw">use </span>std::time::SystemTime;
 
@@ -222,8 +220,6 @@
 }
 
 <span class="kw">impl </span>TweakIdx {
-    <span class="kw">pub const </span>ZERO: <span class="self">Self </span>= TweakIdx(<span class="number">0</span>);
-
     <span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>next(<span class="self">self</span>) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(<span class="self">self</span>.<span class="number">0 </span>+ <span class="number">1</span>)
