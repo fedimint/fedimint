@@ -1262,7 +1262,31 @@
 <a href="#1261" id="1261">1261</a>
 <a href="#1262" id="1262">1262</a>
 <a href="#1263" id="1263">1263</a>
-<a href="#1264" id="1264">1264</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1264" id="1264">1264</a>
+<a href="#1265" id="1265">1265</a>
+<a href="#1266" id="1266">1266</a>
+<a href="#1267" id="1267">1267</a>
+<a href="#1268" id="1268">1268</a>
+<a href="#1269" id="1269">1269</a>
+<a href="#1270" id="1270">1270</a>
+<a href="#1271" id="1271">1271</a>
+<a href="#1272" id="1272">1272</a>
+<a href="#1273" id="1273">1273</a>
+<a href="#1274" id="1274">1274</a>
+<a href="#1275" id="1275">1275</a>
+<a href="#1276" id="1276">1276</a>
+<a href="#1277" id="1277">1277</a>
+<a href="#1278" id="1278">1278</a>
+<a href="#1279" id="1279">1279</a>
+<a href="#1280" id="1280">1280</a>
+<a href="#1281" id="1281">1281</a>
+<a href="#1282" id="1282">1282</a>
+<a href="#1283" id="1283">1283</a>
+<a href="#1284" id="1284">1284</a>
+<a href="#1285" id="1285">1285</a>
+<a href="#1286" id="1286">1286</a>
+<a href="#1287" id="1287">1287</a>
+<a href="#1288" id="1288">1288</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1313,11 +1337,11 @@
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased};
 <span class="kw">use </span>fedimint_core::util::{backoff_util, handle_version_hash_command, retry, SafeUrl};
-<span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, runtime, PeerId, TieredMulti};
+<span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, runtime, Amount, PeerId, TieredMulti};
 <span class="kw">use </span>fedimint_ln_client::LightningClientInit;
 <span class="kw">use </span>fedimint_logging::{TracingSetup, LOG_CLIENT};
 <span class="kw">use </span>fedimint_meta_client::{MetaClientInit, MetaModuleMetaSourceWithFallback};
-<span class="kw">use </span>fedimint_mint_client::{MintClientInit, OOBNotes, SpendableNote};
+<span class="kw">use </span>fedimint_mint_client::{MintClientInit, MintClientModule, OOBNotes, SpendableNote};
 <span class="kw">use </span>fedimint_wallet_client::api::WalletFederationApi;
 <span class="kw">use </span>fedimint_wallet_client::{WalletClientInit, WalletClientModule};
 <span class="kw">use </span>futures::future::pending;
@@ -1748,6 +1772,15 @@ Examples:
     },
 
     ApiAnnouncements,
+
+    <span class="doccomment">/// Advance the note_idx
+    </span>AdvanceNoteIdx {
+        <span class="attr">#[clap(long, default_value = <span class="string">"1"</span>)]
+        </span>count: usize,
+
+        <span class="attr">#[clap(long)]
+        </span>amount: Amount,
+    },
 
     <span class="doccomment">/// Wait for the fed to reach a consensus block count
     </span>WaitBlockCount {
@@ -2192,6 +2225,21 @@ Examples:
                 };
 
                 <span class="prelude-val">Ok</span>(CliOutput::UntypedApiOutput { value: response })
+            }
+            Command::Dev(DevCmd::AdvanceNoteIdx { count, amount }) =&gt; {
+                <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
+
+                <span class="kw">let </span>mint = client
+                    .get_first_module::&lt;MintClientModule&gt;()
+                    .map_err_cli_msg(<span class="string">"can't get mint module"</span>)<span class="question-mark">?</span>;
+
+                <span class="kw">for _ in </span><span class="number">0</span>..count {
+                    mint.advance_note_idx(amount)
+                        .<span class="kw">await
+                        </span>.map_err_cli_msg(<span class="string">"failed to advance the note_idx"</span>)<span class="question-mark">?</span>;
+                }
+
+                <span class="prelude-val">Ok</span>(CliOutput::Raw(serde_json::Value::Null))
             }
             Command::Dev(DevCmd::ApiAnnouncements) =&gt; {
                 <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;

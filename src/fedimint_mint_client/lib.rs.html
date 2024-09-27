@@ -2556,7 +2556,24 @@
 <a href="#2555" id="2555">2555</a>
 <a href="#2556" id="2556">2556</a>
 <a href="#2557" id="2557">2557</a>
-<a href="#2558" id="2558">2558</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2558" id="2558">2558</a>
+<a href="#2559" id="2559">2559</a>
+<a href="#2560" id="2560">2560</a>
+<a href="#2561" id="2561">2561</a>
+<a href="#2562" id="2562">2562</a>
+<a href="#2563" id="2563">2563</a>
+<a href="#2564" id="2564">2564</a>
+<a href="#2565" id="2565">2565</a>
+<a href="#2566" id="2566">2566</a>
+<a href="#2567" id="2567">2567</a>
+<a href="#2568" id="2568">2568</a>
+<a href="#2569" id="2569">2569</a>
+<a href="#2570" id="2570">2570</a>
+<a href="#2571" id="2571">2571</a>
+<a href="#2572" id="2572">2572</a>
+<a href="#2573" id="2573">2573</a>
+<a href="#2574" id="2574">2574</a>
+<a href="#2575" id="2575">2575</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -4297,6 +4314,23 @@
         })
         .<span class="kw">await
         </span>.expect(<span class="string">"Must deleted existing spendable note"</span>);
+    }
+
+    <span class="kw">pub async fn </span>advance_note_idx(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; anyhow::Result&lt;DerivableSecret&gt; {
+        <span class="kw">let </span>db = <span class="self">self</span>.client_ctx.module_db().clone();
+
+        <span class="prelude-val">Ok</span>(db
+            .autocommit(
+                |dbtx, <span class="kw">_</span>| {
+                    Box::pin(<span class="kw">async </span>{
+                        <span class="prelude-val">Ok</span>::&lt;DerivableSecret, anyhow::Error&gt;(
+                            <span class="self">self</span>.new_note_secret(amount, dbtx).<span class="kw">await</span>,
+                        )
+                    })
+                },
+                <span class="prelude-val">None</span>,
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>)
     }
 }
 

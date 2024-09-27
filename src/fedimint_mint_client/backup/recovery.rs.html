@@ -564,7 +564,7 @@
             MintRecovery {
                 state: MintRecoveryState::from_backup(
                     snapshot,
-                    <span class="number">30</span>,
+                    <span class="number">100</span>,
                     config.tbs_pks.clone(),
                     config.peer_tbs_pks.clone(),
                     <span class="kw-2">&amp;</span>secret,
@@ -680,7 +680,7 @@
         <span class="macro">debug!</span>(
             target: LOG_CLIENT_RECOVERY_MINT,
             len = finalized.unconfirmed_notes.len(),
-            <span class="string">"Restoring unconfigured notes state machines"
+            <span class="string">"Restoring unconfirmed notes state machines"
         </span>);
 
         <span class="kw">for </span>(out_point, amount, issuance_request) <span class="kw">in </span>finalized.unconfirmed_notes {
