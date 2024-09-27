@@ -266,17 +266,11 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
         )
         .route(LIST_ACTIVE_CHANNELS_ENDPOINT, get(list_active_channels))
         .route(GET_BALANCES_ENDPOINT, get(get_balances))
-<<<<<<< HEAD
         .route(SPEND_ECASH_ENDPOINT, post(spend_ecash))
         .route(MNEMONIC_ENDPOINT, get(mnemonic))
         .route(STOP_ENDPOINT, get(stop))
         .route(SYNC_TO_CHAIN_ENDPOINT, post(sync_to_chain))
-        .layer(middleware::from_fn(auth_middleware));
-||||||| parent of 2e3fc7e1b5 (feat: start gateway auth)
-        .layer(middleware::from_fn(auth_middleware));
-=======
         .layer(middleware::from_fn(auth_jwt_middleware));
->>>>>>> 2e3fc7e1b5 (feat: start gateway auth)
 
     // Routes that are un-authenticated before gateway configuration, then become
     // authenticated after a password has been set.
