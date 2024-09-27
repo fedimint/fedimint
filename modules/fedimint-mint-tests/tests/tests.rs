@@ -325,7 +325,9 @@ mod fedimint_migration_tests {
     use fedimint_core::time::now;
     use fedimint_core::{secp256k1, Amount, OutPoint, Tiered, TieredMulti, TransactionId};
     use fedimint_logging::TracingSetup;
-    use fedimint_mint_client::backup::recovery::{MintRecovery, MintRecoveryState};
+    use fedimint_mint_client::backup::recovery::{
+        MintRecovery, MintRecoveryState, MintRecoveryStateV0,
+    };
     use fedimint_mint_client::backup::{EcashBackup, EcashBackupV0};
     use fedimint_mint_client::client_db::{
         CancelledOOBSpendKey, CancelledOOBSpendKeyPrefix, NextECashNoteIndexKey,
@@ -464,8 +466,13 @@ mod fedimint_migration_tests {
 
         let backup = create_ecash_backup_v0(spendable_note, secret.clone());
 
-        let mint_recovery_state =
-            MintRecoveryState::from_backup(backup, 10, tbs_pks, pub_key_shares, &secret);
+        let mint_recovery_state = MintRecoveryState::V0(MintRecoveryStateV0::from_backup(
+            backup,
+            10,
+            tbs_pks,
+            pub_key_shares,
+            &secret,
+        ));
 
         MintRecovery::store_finalized(&mut dbtx.to_ref_nc(), true).await;
         dbtx.insert_new_entry(
