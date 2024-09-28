@@ -608,19 +608,12 @@ rec {
         pkgs.writeShellScriptBin "entrypoint" ''
           exec bash "${../misc/fedimintd-container-entrypoint.sh}" "$@"
         '';
+      defaultPackages = [ pkgs.bash pkgs.coreutils pkgs.fakeNss pkgs.busybox pkgs.curl pkgs.rsync ];
     in
     {
       fedimintd = pkgs.dockerTools.buildLayeredImage {
         name = "fedimintd";
-        contents = [
-          fedimint-pkgs
-          pkgs.bash
-          pkgs.coreutils
-          pkgs.fakeNss
-          pkgs.busybox
-          pkgs.curl
-          pkgs.rsync
-        ];
+        contents = [ fedimint-pkgs ] ++ defaultPackages;
         config = {
           Cmd = [ ]; # entrypoint will handle empty vs non-empty cmd
           Env = [
@@ -642,7 +635,7 @@ rec {
 
       fedimint-cli = pkgs.dockerTools.buildLayeredImage {
         name = "fedimint-cli";
-        contents = [ fedimint-pkgs pkgs.bash pkgs.coreutils pkgs.sqlite pkgs.fakeNss pkgs.busybox pkgs.curl pkgs.rsync ];
+        contents = [ fedimint-pkgs ] ++ defaultPackages;
         config = {
           Cmd = [
             "${fedimint-pkgs}/bin/fedimint-cli"
@@ -652,7 +645,7 @@ rec {
 
       gatewayd = pkgs.dockerTools.buildLayeredImage {
         name = "gatewayd";
-        contents = [ gateway-pkgs pkgs.bash pkgs.coreutils pkgs.sqlite pkgs.fakeNss pkgs.busybox pkgs.curl pkgs.rsync ];
+        contents = [ gateway-pkgs ] ++ defaultPackages;
         config = {
           Cmd = [
             "${gateway-pkgs}/bin/gatewayd"
@@ -660,9 +653,40 @@ rec {
         };
       };
 
+      cln-light-gateway = let
+        entrypoint = pkgs.writeShellScriptBin "entrypoint.sh" ''
+          ${pkgs.clightning}/bin/lightningd \
+            --lightning-dir=/lightning \
+            --disable-plugin=bcli \
+            --network=$NETWORK \
+            --plugin=${pkgs.trustedcoin}/bin/trustedcoin \
+            --plugin=${gateway-pkgs}/bin/gateway-cln-extension \
+            --fm-gateway-listen=0.0.0.0:3301 \
+            $@
+        '';
+      in pkgs.dockerTools.buildLayeredImage {
+        name = "cln-light-gateway";
+        contents = [ gateway-pkgs pkgs.clightning pkgs.trustedcoin pkgs.cacert ] ++ defaultPackages;
+        config = {
+          Cmd = [
+            "${entrypoint}/bin/entrypoint.sh"
+          ];
+          Volumes = {
+            "/lightning" = {};
+          };
+          ExposedPorts = {
+            "9735/tcp" = {};
+            "3301/tcp" = {};
+          };
+          Env = [
+            "NETWORK=bitcoin"
+          ];
+        };
+      };
+
       gateway-cli = pkgs.dockerTools.buildLayeredImage {
         name = "gateway-cli";
-        contents = [ gateway-pkgs pkgs.bash pkgs.coreutils pkgs.sqlite pkgs.fakeNss pkgs.busybox pkgs.curl pkgs.rsync ];
+        contents = [ gateway-pkgs ] ++ defaultPackages;
         config = {
           Cmd = [
             "${gateway-pkgs}/bin/gateway-cli"
@@ -679,13 +703,7 @@ rec {
               fedimint-dbtool
               fedimint-load-test-tool
               fedimint-recoverytool
-              pkgs.bash
-              pkgs.coreutils
-              pkgs.sqlite
-              pkgs.busybox
-              pkgs.curl
-              pkgs.rsync
-            ];
+            ] ++ defaultPackages;
             config = {
               Cmd = [
                 "${pkgs.bash}/bin/bash"

@@ -36,6 +36,7 @@
             (import ./nix/overlays/clightning.nix)
             (import ./nix/overlays/darwin-compile-fixes.nix)
             (import ./nix/overlays/cargo-honggfuzz.nix)
+            (import ./nix/overlays/trustedcoin.nix)
           ];
     in
     {
