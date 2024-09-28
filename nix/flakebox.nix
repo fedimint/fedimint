@@ -661,7 +661,7 @@ rec {
             --network=$NETWORK \
             --plugin=${pkgs.trustedcoin}/bin/trustedcoin \
             --plugin=${gateway-pkgs}/bin/gateway-cln-extension \
-            --fm-gateway-listen=127.0.0.1:3301 \
+            --fm-gateway-listen=0.0.0.0:3301 \
             $@
         '';
       in pkgs.dockerTools.buildLayeredImage {
