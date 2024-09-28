@@ -553,11 +553,12 @@ fn check_bitcoind_status(
     let blockchain_info = block_in_place(|| client.get_blockchain_info())
         .map_err(|e| ApiError::server_error(format!("Failed to get blockchain info: {e}")))?;
 
-    if blockchain_info.verification_progress < 0.99 {
+    if blockchain_info.initial_block_download {
         return Ok(BitcoinRpcConnectionStatus::Syncing(
             blockchain_info.verification_progress,
         ));
     }
+
     Ok(BitcoinRpcConnectionStatus::Synced)
 }
 
