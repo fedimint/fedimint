@@ -36,7 +36,7 @@ futures = { workspace = true }
 hex = { workspace = true }
 hyper = { workspace = true }
 itertools = { workspace = true }
-jsonrpsee = { version = "0.24.4", features = ["server"] }
+jsonrpsee = { version = "0.24.5", features = ["server"] }
 parity-scale-codec = "3.6.12"
 pin-project = "1.1.5"
 rand = { workspace = true }
@@ -49,7 +49,7 @@ sha3 = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 subtle = { workspace = true }
-tar = "0.4.41"
+tar = "0.4.42"
 tbs = { workspace = true }
 threshold_crypto = { workspace = true }
 tokio = { workspace = true }
