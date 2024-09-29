@@ -2205,7 +2205,7 @@ dependencies = [
  "bincode",
  "bitcoin 0.29.2",
  "bitcoin 0.30.2",
- "bitcoin_hashes 0.12.0",
+ "bitcoin_hashes 0.14.0",
  "bitvec",
  "bls12_381",
  "erased-serde",
@@ -2293,7 +2293,7 @@ name = "fedimint-derive-secret"
 version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
- "bitcoin_hashes 0.11.0",
+ "bitcoin_hashes 0.14.0",
  "bls12_381",
  "fedimint-core",
  "fedimint-hkdf",
@@ -2447,7 +2447,7 @@ dependencies = [
 name = "fedimint-hkdf"
 version = "0.5.0-alpha"
 dependencies = [
- "bitcoin_hashes 0.12.0",
+ "bitcoin_hashes 0.14.0",
 ]
 
 [[package]]
@@ -2488,7 +2488,7 @@ version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
  "bitcoin 0.30.2",
- "bitcoin_hashes 0.12.0",
+ "bitcoin_hashes 0.14.0",
  "fedimint-client",
  "fedimint-core",
  "fedimint-threshold-crypto",
@@ -2514,7 +2514,7 @@ dependencies = [
  "axum 0.7.7",
  "bip39",
  "bitcoin 0.30.2",
- "bitcoin_hashes 0.12.0",
+ "bitcoin_hashes 0.14.0",
  "clap",
  "cln-plugin",
  "cln-rpc",
@@ -2572,7 +2572,7 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "async-trait",
- "bitcoin_hashes 0.12.0",
+ "bitcoin_hashes 0.14.0",
  "erased-serde",
  "fedimint-bitcoind",
  "fedimint-core",
@@ -2597,7 +2597,7 @@ version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
  "assert_matches",
- "bitcoin_hashes 0.12.0",
+ "bitcoin_hashes 0.14.0",
  "fedimint-client",
  "fedimint-core",
  "fedimint-dummy-client",
@@ -2652,7 +2652,7 @@ version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
  "bitcoin 0.30.2",
- "bitcoin_hashes 0.12.0",
+ "bitcoin_hashes 0.14.0",
  "fedimint-core",
  "fedimint-ln-common",
  "fedimint-tpe",
@@ -2835,7 +2835,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "base64-url",
- "bitcoin_hashes 0.12.0",
+ "bitcoin_hashes 0.14.0",
  "bls12_381",
  "clap",
  "criterion",
@@ -2870,7 +2870,7 @@ version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
  "bincode",
- "bitcoin_hashes 0.12.0",
+ "bitcoin_hashes 0.14.0",
  "fedimint-core",
  "fedimint-tbs",
  "secp256k1-zkp",
@@ -2911,7 +2911,7 @@ name = "fedimint-mint-tests"
 version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
- "bitcoin_hashes 0.12.0",
+ "bitcoin_hashes 0.14.0",
  "bls12_381",
  "devimint",
  "fedimint-client",
@@ -2997,7 +2997,7 @@ dependencies = [
  "base64 0.22.1",
  "bincode",
  "bitcoin 0.30.2",
- "bitcoin_hashes 0.12.0",
+ "bitcoin_hashes 0.14.0",
  "bls12_381",
  "bytes",
  "fedimint-aead",
@@ -3196,7 +3196,7 @@ dependencies = [
 name = "fedimint-tpe"
 version = "0.5.0-alpha"
 dependencies = [
- "bitcoin_hashes 0.12.0",
+ "bitcoin_hashes 0.14.0",
  "bls12_381",
  "fedimint-core",
  "group",
