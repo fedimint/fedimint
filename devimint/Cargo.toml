@@ -46,7 +46,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["full", "tracing"] }
 tonic_lnd = { workspace = true }
-tower-http = { version = "0.6.0", features = ["cors", "auth"] }
+tower-http = { version = "0.6.1", features = ["cors", "auth"] }
 tracing = { workspace = true }
 
 [build-dependencies]

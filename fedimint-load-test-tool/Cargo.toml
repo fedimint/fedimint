@@ -26,7 +26,7 @@ fedimint-mint-client = { workspace = true }
 fedimint-rocksdb = { workspace = true }
 fedimint-wallet-client = { workspace = true }
 futures = { workspace = true }
-jsonrpsee-core = { version = "0.24.4", features = ["client"] }
+jsonrpsee-core = { version = "0.24.5", features = ["client"] }
 lightning-invoice = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
@@ -35,4 +35,4 @@ tokio = { workspace = true, features = ["full", "tracing"] }
 tracing = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-jsonrpsee-ws-client = { version = "0.24.4", default-features = false }
+jsonrpsee-ws-client = { version = "0.24.5", default-features = false }
