@@ -52,7 +52,7 @@ tokio-rustls = { version = "0.26.0", default-features = false, features = [
     "ring",
 ] }
 webpki-roots = { version = "0.26.6" }
-rustls-pki-types = { version = "1.8.0" }
+rustls-pki-types = { version = "1.9.0" }
 arti-client = { version = "0.20.0", default-features = false, package = "fedimint-arti-client", optional = true }
 strum = { workspace = true, optional = true }
 # We need to pin this arti's `curve25519-dalek` dependency, due to `https://rustsec.org/advisories/RUSTSEC-2024-0344` vulnerability
