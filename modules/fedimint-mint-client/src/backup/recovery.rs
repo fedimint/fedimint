@@ -432,12 +432,6 @@ impl MintRecoveryState {
                     (out_point, output.amount, issuance_request),
                 );
             } else {
-                // put it back, incorrect amount
-                self.pending_nonces.insert(
-                    output.blind_nonce.0.into(),
-                    (issuance_request, note_idx, pending_amount),
-                );
-
                 warn!(
                     output = ?out_point,
                     blind_nonce = ?output.blind_nonce.0,
