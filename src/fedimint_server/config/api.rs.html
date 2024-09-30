@@ -1301,14 +1301,109 @@
 <a href="#1300" id="1300">1300</a>
 <a href="#1301" id="1301">1301</a>
 <a href="#1302" id="1302">1302</a>
-<a href="#1303" id="1303">1303</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#1303" id="1303">1303</a>
+<a href="#1304" id="1304">1304</a>
+<a href="#1305" id="1305">1305</a>
+<a href="#1306" id="1306">1306</a>
+<a href="#1307" id="1307">1307</a>
+<a href="#1308" id="1308">1308</a>
+<a href="#1309" id="1309">1309</a>
+<a href="#1310" id="1310">1310</a>
+<a href="#1311" id="1311">1311</a>
+<a href="#1312" id="1312">1312</a>
+<a href="#1313" id="1313">1313</a>
+<a href="#1314" id="1314">1314</a>
+<a href="#1315" id="1315">1315</a>
+<a href="#1316" id="1316">1316</a>
+<a href="#1317" id="1317">1317</a>
+<a href="#1318" id="1318">1318</a>
+<a href="#1319" id="1319">1319</a>
+<a href="#1320" id="1320">1320</a>
+<a href="#1321" id="1321">1321</a>
+<a href="#1322" id="1322">1322</a>
+<a href="#1323" id="1323">1323</a>
+<a href="#1324" id="1324">1324</a>
+<a href="#1325" id="1325">1325</a>
+<a href="#1326" id="1326">1326</a>
+<a href="#1327" id="1327">1327</a>
+<a href="#1328" id="1328">1328</a>
+<a href="#1329" id="1329">1329</a>
+<a href="#1330" id="1330">1330</a>
+<a href="#1331" id="1331">1331</a>
+<a href="#1332" id="1332">1332</a>
+<a href="#1333" id="1333">1333</a>
+<a href="#1334" id="1334">1334</a>
+<a href="#1335" id="1335">1335</a>
+<a href="#1336" id="1336">1336</a>
+<a href="#1337" id="1337">1337</a>
+<a href="#1338" id="1338">1338</a>
+<a href="#1339" id="1339">1339</a>
+<a href="#1340" id="1340">1340</a>
+<a href="#1341" id="1341">1341</a>
+<a href="#1342" id="1342">1342</a>
+<a href="#1343" id="1343">1343</a>
+<a href="#1344" id="1344">1344</a>
+<a href="#1345" id="1345">1345</a>
+<a href="#1346" id="1346">1346</a>
+<a href="#1347" id="1347">1347</a>
+<a href="#1348" id="1348">1348</a>
+<a href="#1349" id="1349">1349</a>
+<a href="#1350" id="1350">1350</a>
+<a href="#1351" id="1351">1351</a>
+<a href="#1352" id="1352">1352</a>
+<a href="#1353" id="1353">1353</a>
+<a href="#1354" id="1354">1354</a>
+<a href="#1355" id="1355">1355</a>
+<a href="#1356" id="1356">1356</a>
+<a href="#1357" id="1357">1357</a>
+<a href="#1358" id="1358">1358</a>
+<a href="#1359" id="1359">1359</a>
+<a href="#1360" id="1360">1360</a>
+<a href="#1361" id="1361">1361</a>
+<a href="#1362" id="1362">1362</a>
+<a href="#1363" id="1363">1363</a>
+<a href="#1364" id="1364">1364</a>
+<a href="#1365" id="1365">1365</a>
+<a href="#1366" id="1366">1366</a>
+<a href="#1367" id="1367">1367</a>
+<a href="#1368" id="1368">1368</a>
+<a href="#1369" id="1369">1369</a>
+<a href="#1370" id="1370">1370</a>
+<a href="#1371" id="1371">1371</a>
+<a href="#1372" id="1372">1372</a>
+<a href="#1373" id="1373">1373</a>
+<a href="#1374" id="1374">1374</a>
+<a href="#1375" id="1375">1375</a>
+<a href="#1376" id="1376">1376</a>
+<a href="#1377" id="1377">1377</a>
+<a href="#1378" id="1378">1378</a>
+<a href="#1379" id="1379">1379</a>
+<a href="#1380" id="1380">1380</a>
+<a href="#1381" id="1381">1381</a>
+<a href="#1382" id="1382">1382</a>
+<a href="#1383" id="1383">1383</a>
+<a href="#1384" id="1384">1384</a>
+<a href="#1385" id="1385">1385</a>
+<a href="#1386" id="1386">1386</a>
+<a href="#1387" id="1387">1387</a>
+<a href="#1388" id="1388">1388</a>
+<a href="#1389" id="1389">1389</a>
+<a href="#1390" id="1390">1390</a>
+<a href="#1391" id="1391">1391</a>
+<a href="#1392" id="1392">1392</a>
+<a href="#1393" id="1393">1393</a>
+<a href="#1394" id="1394">1394</a>
+<a href="#1395" id="1395">1395</a>
+<a href="#1396" id="1396">1396</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256;
+<span class="kw">use </span>bitcoincore_rpc::RpcApi;
 <span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, StatusResponse};
+<span class="kw">use </span>fedimint_bitcoind::create_bitcoind;
 <span class="kw">use </span>fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsConsensus, ConfigGenParamsRequest,
     ConfigGenParamsResponse, PeerServerParams, ServerStatus,
@@ -1320,21 +1415,25 @@
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
-    ADD_CONFIG_GEN_PEER_ENDPOINT, AUTH_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
-    CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
-    RESTART_FEDERATION_SETUP_ENDPOINT, RUN_DKG_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
-    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, START_CONSENSUS_ENDPOINT,
-    STATUS_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
+    ADD_CONFIG_GEN_PEER_ENDPOINT, AUTH_ENDPOINT, CHECK_BITCOIN_STATUS_ENDPOINT,
+    CONFIG_GEN_PEERS_ENDPOINT, CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
+    DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT, RESTART_FEDERATION_SETUP_ENDPOINT, RUN_DKG_ENDPOINT,
+    SET_CONFIG_GEN_CONNECTIONS_ENDPOINT, SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT,
+    START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT,
+    VERIFY_CONFIG_HASH_ENDPOINT,
 };
+<span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
 };
-<span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
+<span class="kw">use </span>fedimint_core::task::{block_in_place, sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>itertools::Itertools;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tokio::sync::mpsc::Sender;
-<span class="kw">use </span>tokio::sync::{Mutex, MutexGuard};
+<span class="kw">use </span>tokio::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+<span class="kw">use </span>tokio::time::Instant;
 <span class="kw">use </span>tokio_rustls::rustls;
 <span class="kw">use </span>tracing::{error, info};
 
@@ -1358,8 +1457,9 @@
     </span>code_version_str: String,
     <span class="doccomment">/// Api secret to use
     </span>api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
-
     p2p_bind_addr: SocketAddr,
+    bitcoin_status_cache: Arc&lt;RwLock&lt;<span class="prelude-ty">Option</span>&lt;(Instant, BitcoinRpcConnectionStatus)&gt;&gt;&gt;,
+    bitcoin_status_cache_duration: Duration,
 }
 
 <span class="kw">impl </span>ConfigGenApi {
@@ -1380,6 +1480,8 @@
             code_version_str,
             api_secret,
             p2p_bind_addr,
+            bitcoin_status_cache: Arc::new(RwLock::new(<span class="prelude-val">None</span>)),
+            bitcoin_status_cache_duration: Duration::from_secs(<span class="number">60</span>),
         };
         <span class="macro">info!</span>(target: fedimint_logging::LOG_NET_PEER_DKG, <span class="string">"Created new config gen Api"</span>);
         config_gen_api
@@ -1784,6 +1886,82 @@
             sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
         }
     }
+
+    <span class="comment">// Check the status of the bitcoin rpc connection
+    </span><span class="kw">pub async fn </span>check_bitcoin_status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;BitcoinRpcConnectionStatus&gt; {
+        <span class="comment">// Check the cache first
+        </span>{
+            <span class="kw">let </span>cached_status: RwLockReadGuard&lt;<span class="lifetime">'_</span>, <span class="prelude-ty">Option</span>&lt;(Instant, BitcoinRpcConnectionStatus)&gt;&gt; =
+                <span class="self">self</span>.bitcoin_status_cache.read().<span class="kw">await</span>;
+            <span class="kw">if let </span><span class="prelude-val">Some</span>((timestamp, status)) = cached_status.as_ref() {
+                <span class="kw">if </span>timestamp.elapsed() &lt; <span class="self">self</span>.bitcoin_status_cache_duration {
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(status.clone());
+                }
+            }
+        }
+
+        <span class="comment">// If cache is invalid or expired, fetch new status
+        </span><span class="kw">let </span>bitcoin_rpc_config = BitcoinRpcConfig::get_defaults_from_env_vars().map_err(|e| {
+            ApiError::server_error(<span class="macro">format!</span>(<span class="string">"Failed to get bitcoin rpc env vars: {e}"</span>))
+        })<span class="question-mark">?</span>;
+        <span class="kw">let </span>status = <span class="kw">match </span>bitcoin_rpc_config.kind.as_str() {
+            <span class="string">"bitcoind" </span>=&gt; check_bitcoind_status(<span class="kw-2">&amp;</span>bitcoin_rpc_config),
+            <span class="string">"esplora" </span>=&gt; <span class="self">self</span>.check_esplora_status(<span class="kw-2">&amp;</span>bitcoin_rpc_config).<span class="kw">await</span>,
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(ApiError::bad_request(<span class="macro">format!</span>(
+                <span class="string">"Unsupported bitcoin rpc kind: {}"</span>,
+                bitcoin_rpc_config.kind
+            ))),
+        }<span class="question-mark">?</span>;
+
+        <span class="comment">// Update the bitcoin status cache
+        </span><span class="kw">let </span><span class="kw-2">mut </span>cached_status: RwLockWriteGuard&lt;<span class="lifetime">'_</span>, <span class="prelude-ty">Option</span>&lt;(Instant, BitcoinRpcConnectionStatus)&gt;&gt; =
+            <span class="self">self</span>.bitcoin_status_cache.write().<span class="kw">await</span>;
+        <span class="kw-2">*</span>cached_status = <span class="prelude-val">Some</span>((Instant::now(), status.clone()));
+
+        <span class="prelude-val">Ok</span>(status)
+    }
+
+    <span class="kw">async fn </span>check_esplora_status(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        bitcoin_rpc_config: <span class="kw-2">&amp;</span>BitcoinRpcConfig,
+    ) -&gt; ApiResult&lt;BitcoinRpcConnectionStatus&gt; {
+        <span class="kw">let </span>client =
+            create_bitcoind(bitcoin_rpc_config, <span class="self">self</span>.task_group.make_handle()).map_err(|e| {
+                ApiError::server_error(<span class="macro">format!</span>(<span class="string">"Failed to connect to bitcoin rpc: {e}"</span>))
+            })<span class="question-mark">?</span>;
+        <span class="comment">// TODO: Find a better way to check if esplora is synced, just returning Synced
+        // if it connects
+        </span><span class="kw">let </span>_network_info = client
+            .get_network()
+            .<span class="kw">await
+            </span>.map_err(|e| ApiError::server_error(<span class="macro">format!</span>(<span class="string">"Failed to get esplora info: {e}"</span>)))<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(BitcoinRpcConnectionStatus::Synced)
+    }
+}
+
+<span class="kw">fn </span>check_bitcoind_status(
+    bitcoin_rpc_config: <span class="kw-2">&amp;</span>BitcoinRpcConfig,
+) -&gt; ApiResult&lt;BitcoinRpcConnectionStatus&gt; {
+    <span class="kw">let </span>(url, auth) = fedimint_bitcoind::bitcoincore::from_url_to_url_auth(<span class="kw-2">&amp;</span>bitcoin_rpc_config.url)
+        .map_err(|e| ApiError::server_error(<span class="macro">format!</span>(<span class="string">"Failed to parse bitcoin rpc url: {e}"</span>)))<span class="question-mark">?</span>;
+    <span class="kw">let </span>client = bitcoincore_rpc::Client::new(<span class="kw-2">&amp;</span>url, auth)
+        .map_err(|e| ApiError::server_error(<span class="macro">format!</span>(<span class="string">"Failed to connect to bitcoin rpc: {e}"</span>)))<span class="question-mark">?</span>;
+    <span class="kw">let </span>blockchain_info = block_in_place(|| client.get_blockchain_info())
+        .map_err(|e| ApiError::server_error(<span class="macro">format!</span>(<span class="string">"Failed to get blockchain info: {e}"</span>)))<span class="question-mark">?</span>;
+
+    <span class="kw">if </span>blockchain_info.initial_block_download {
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(BitcoinRpcConnectionStatus::Syncing(
+            blockchain_info.verification_progress,
+        ));
+    }
+
+    <span class="prelude-val">Ok</span>(BitcoinRpcConnectionStatus::Synced)
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+</span><span class="kw">pub enum </span>BitcoinRpcConnectionStatus {
+    Synced,
+    Syncing(f64),
 }
 
 <span class="doccomment">/// Config gen params that are only used locally, shouldn't be shared
@@ -2142,6 +2320,14 @@
             <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, context, _v: ()| -&gt; () {
                 check_auth(context)<span class="question-mark">?</span>;
                 config.restart_federation_setup().<span class="kw">await
+            </span>}
+        },
+        <span class="macro">api_endpoint!</span> {
+            CHECK_BITCOIN_STATUS_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
+            <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, context, _v: ()| -&gt; BitcoinRpcConnectionStatus {
+                check_auth(context)<span class="question-mark">?</span>;
+                config.check_bitcoin_status().<span class="kw">await
             </span>}
         },
     ]
