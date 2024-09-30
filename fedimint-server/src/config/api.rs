@@ -5,7 +5,9 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
+use bitcoincore_rpc::RpcApi;
 use fedimint_api_client::api::{DynGlobalApi, StatusResponse};
+use fedimint_bitcoind::create_bitcoind;
 use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsConsensus, ConfigGenParamsRequest,
     ConfigGenParamsResponse, PeerServerParams, ServerStatus,
@@ -17,21 +19,25 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::endpoint_constants::{
-    ADD_CONFIG_GEN_PEER_ENDPOINT, AUTH_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
-    CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
-    RESTART_FEDERATION_SETUP_ENDPOINT, RUN_DKG_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
-    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, START_CONSENSUS_ENDPOINT,
-    STATUS_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
+    ADD_CONFIG_GEN_PEER_ENDPOINT, AUTH_ENDPOINT, CHECK_BITCOIN_STATUS_ENDPOINT,
+    CONFIG_GEN_PEERS_ENDPOINT, CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
+    DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT, RESTART_FEDERATION_SETUP_ENDPOINT, RUN_DKG_ENDPOINT,
+    SET_CONFIG_GEN_CONNECTIONS_ENDPOINT, SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT,
+    START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT,
+    VERIFY_CONFIG_HASH_ENDPOINT,
 };
+use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::{
     api_endpoint, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
 };
-use fedimint_core::task::{sleep, TaskGroup};
+use fedimint_core::task::{block_in_place, sleep, TaskGroup};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
-use tokio::sync::{Mutex, MutexGuard};
+use tokio::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use tokio::time::Instant;
 use tokio_rustls::rustls;
 use tracing::{error, info};
 
@@ -55,8 +61,9 @@ pub struct ConfigGenApi {
     code_version_str: String,
     /// Api secret to use
     api_secret: Option<String>,
-
     p2p_bind_addr: SocketAddr,
+    bitcoin_status_cache: Arc<RwLock<Option<(Instant, BitcoinRpcConnectionStatus)>>>,
+    bitcoin_status_cache_duration: Duration,
 }
 
 impl ConfigGenApi {
@@ -77,6 +84,8 @@ impl ConfigGenApi {
             code_version_str,
             api_secret,
             p2p_bind_addr,
+            bitcoin_status_cache: Arc::new(RwLock::new(None)),
+            bitcoin_status_cache_duration: Duration::from_secs(60),
         };
         info!(target: fedimint_logging::LOG_NET_PEER_DKG, "Created new config gen Api");
         config_gen_api
@@ -481,6 +490,82 @@ impl ConfigGenApi {
             sleep(Duration::from_millis(100)).await;
         }
     }
+
+    // Check the status of the bitcoin rpc connection
+    pub async fn check_bitcoin_status(&self) -> ApiResult<BitcoinRpcConnectionStatus> {
+        // Check the cache first
+        {
+            let cached_status: RwLockReadGuard<'_, Option<(Instant, BitcoinRpcConnectionStatus)>> =
+                self.bitcoin_status_cache.read().await;
+            if let Some((timestamp, status)) = cached_status.as_ref() {
+                if timestamp.elapsed() < self.bitcoin_status_cache_duration {
+                    return Ok(status.clone());
+                }
+            }
+        }
+
+        // If cache is invalid or expired, fetch new status
+        let bitcoin_rpc_config = BitcoinRpcConfig::get_defaults_from_env_vars().map_err(|e| {
+            ApiError::server_error(format!("Failed to get bitcoin rpc env vars: {e}"))
+        })?;
+        let status = match bitcoin_rpc_config.kind.as_str() {
+            "bitcoind" => check_bitcoind_status(&bitcoin_rpc_config),
+            "esplora" => self.check_esplora_status(&bitcoin_rpc_config).await,
+            _ => Err(ApiError::bad_request(format!(
+                "Unsupported bitcoin rpc kind: {}",
+                bitcoin_rpc_config.kind
+            ))),
+        }?;
+
+        // Update the bitcoin status cache
+        let mut cached_status: RwLockWriteGuard<'_, Option<(Instant, BitcoinRpcConnectionStatus)>> =
+            self.bitcoin_status_cache.write().await;
+        *cached_status = Some((Instant::now(), status.clone()));
+
+        Ok(status)
+    }
+
+    async fn check_esplora_status(
+        &self,
+        bitcoin_rpc_config: &BitcoinRpcConfig,
+    ) -> ApiResult<BitcoinRpcConnectionStatus> {
+        let client =
+            create_bitcoind(bitcoin_rpc_config, self.task_group.make_handle()).map_err(|e| {
+                ApiError::server_error(format!("Failed to connect to bitcoin rpc: {e}"))
+            })?;
+        // TODO: Find a better way to check if esplora is synced, just returning Synced
+        // if it connects
+        let _network_info = client
+            .get_network()
+            .await
+            .map_err(|e| ApiError::server_error(format!("Failed to get esplora info: {e}")))?;
+        Ok(BitcoinRpcConnectionStatus::Synced)
+    }
+}
+
+fn check_bitcoind_status(
+    bitcoin_rpc_config: &BitcoinRpcConfig,
+) -> ApiResult<BitcoinRpcConnectionStatus> {
+    let (url, auth) = fedimint_bitcoind::bitcoincore::from_url_to_url_auth(&bitcoin_rpc_config.url)
+        .map_err(|e| ApiError::server_error(format!("Failed to parse bitcoin rpc url: {e}")))?;
+    let client = bitcoincore_rpc::Client::new(&url, auth)
+        .map_err(|e| ApiError::server_error(format!("Failed to connect to bitcoin rpc: {e}")))?;
+    let blockchain_info = block_in_place(|| client.get_blockchain_info())
+        .map_err(|e| ApiError::server_error(format!("Failed to get blockchain info: {e}")))?;
+
+    if blockchain_info.initial_block_download {
+        return Ok(BitcoinRpcConnectionStatus::Syncing(
+            blockchain_info.verification_progress,
+        ));
+    }
+
+    Ok(BitcoinRpcConnectionStatus::Synced)
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+pub enum BitcoinRpcConnectionStatus {
+    Synced,
+    Syncing(f64),
 }
 
 /// Config gen params that are only used locally, shouldn't be shared
@@ -839,6 +924,14 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
             async |config: &ConfigGenApi, context, _v: ()| -> () {
                 check_auth(context)?;
                 config.restart_federation_setup().await
+            }
+        },
+        api_endpoint! {
+            CHECK_BITCOIN_STATUS_ENDPOINT,
+            ApiVersion::new(0, 0),
+            async |config: &ConfigGenApi, context, _v: ()| -> BitcoinRpcConnectionStatus {
+                check_auth(context)?;
+                config.check_bitcoin_status().await
             }
         },
     ]
