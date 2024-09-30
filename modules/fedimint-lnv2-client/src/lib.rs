@@ -107,7 +107,7 @@ impl ReceiveOperationMeta {
 
 /// Number of blocks until outgoing lightning contracts times out and user
 /// client can refund it unilaterally
-pub const EXPIRATION_DELTA_LIMIT_DEFAULT: u64 = 500;
+pub const EXPIRATION_DELTA_LIMIT_DEFAULT: u64 = 1008;
 
 /// A two hour buffer in case either the client or gateway go offline
 pub const CONTRACT_CONFIRMATION_BUFFER: u64 = 12;
