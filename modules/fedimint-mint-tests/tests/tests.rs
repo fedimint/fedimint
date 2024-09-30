@@ -331,7 +331,8 @@ mod fedimint_migration_tests {
     use fedimint_mint_client::backup::{EcashBackup, EcashBackupV0};
     use fedimint_mint_client::client_db::{
         CancelledOOBSpendKey, CancelledOOBSpendKeyPrefix, NextECashNoteIndexKey,
-        NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix, RecoveryStateKey,
+        NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix, RecoveryFinalizedKey,
+        RecoveryStateKey,
     };
     use fedimint_mint_client::output::NoteIssuanceRequest;
     use fedimint_mint_client::{MintClientInit, MintClientModule, NoteIndex, SpendableNote};
@@ -466,7 +467,7 @@ mod fedimint_migration_tests {
 
         let backup = create_ecash_backup_v0(spendable_note, secret.clone());
 
-        let mint_recovery_state = MintRecoveryState::V0(MintRecoveryStateV0::from_backup(
+        let mint_recovery_state = MintRecoveryState::V1(MintRecoveryStateV0::from_backup(
             backup,
             10,
             tbs_pks,
@@ -655,13 +656,13 @@ mod fedimint_migration_tests {
                         fedimint_mint_client::client_db::DbKeyPrefix::RecoveryState => {
                             let restore_state = dbtx.get_value(&RecoveryStateKey).await;
                             ensure!(
-                                restore_state.is_some(),
-                                "validate_migrations was not able to read any RecoveryState"
+                                restore_state.is_none(),
+                                "validate_migrations expect the restore state to get deleted"
                             );
                             info!("Validated RecoveryState");
                         }
                         fedimint_mint_client::client_db::DbKeyPrefix::RecoveryFinalized => {
-                            let recovery_finalized = dbtx.get_value(&RecoveryStateKey).await;
+                            let recovery_finalized = dbtx.get_value(&RecoveryFinalizedKey).await;
                             ensure!(
                                 recovery_finalized.is_some(),
                                 "validate_migrations was not able to read any RecoveryFinalized"

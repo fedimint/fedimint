@@ -1,5 +1,6 @@
 use fedimint_client::module::init::recovery::RecoveryFromHistoryCommon;
 use fedimint_core::core::OperationId;
+use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record, Amount};
 use fedimint_mint_common::Nonce;
@@ -98,3 +99,14 @@ impl_db_lookup!(
     key = CancelledOOBSpendKey,
     query_prefix = CancelledOOBSpendKeyPrefix,
 );
+
+pub async fn migrate_to_v1(
+    dbtx: &mut DatabaseTransaction<'_>,
+) -> anyhow::Result<Option<(Vec<(Vec<u8>, OperationId)>, Vec<(Vec<u8>, OperationId)>)>> {
+    // between v0 and v1, we changed the format of `MintRecoveryState`, and instead
+    // of migrating it, we can just delete it, so the recovery will just start
+    // again, ignoring any existing state from before the migration
+    dbtx.remove_entry(&RecoveryStateKey).await;
+
+    Ok(None)
+}
