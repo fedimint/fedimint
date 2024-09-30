@@ -939,17 +939,29 @@ pub async fn open_channels_between_gateways(
     }
 
     // Wait for all channel funding transaction to be known by bitcoind.
-    for txid in &channel_funding_txids {
-        loop {
-            // Bitcoind's getrawtransaction RPC call will return an error if the transaction
-            // is not known.
-            if bitcoind.get_raw_transaction(txid).is_ok() {
-                break;
-            }
+    let mut is_missing_any_txids = false;
+    for txid_or in &channel_funding_txids {
+        if let Some(txid) = txid_or {
+            loop {
+                // Bitcoind's getrawtransaction RPC call will return an error if the transaction
+                // is not known.
+                if bitcoind.get_raw_transaction(txid).is_ok() {
+                    break;
+                }
 
-            // Wait for a bit, then restart the check.
-            fedimint_core::runtime::sleep(Duration::from_millis(100)).await;
+                // Wait for a bit, then restart the check.
+                fedimint_core::runtime::sleep(Duration::from_millis(100)).await;
+            }
+        } else {
+            is_missing_any_txids = true;
         }
+    }
+
+    // `open_channel` may not have sent out the channel funding transaction
+    // immediately. Since it didn't return a funding txid, we need to wait for
+    // it to get to the mempool.
+    if is_missing_any_txids {
+        fedimint_core::runtime::sleep(Duration::from_secs(2)).await;
     }
 
     bitcoind.mine_blocks(10).await?;
