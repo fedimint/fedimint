@@ -382,7 +382,19 @@
 <a href="#381" id="381">381</a>
 <a href="#382" id="382">382</a>
 <a href="#383" id="383">383</a>
-<a href="#384" id="384">384</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -682,30 +694,42 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>open_channel(
+    <span class="doccomment">/// Open a channel with the gateway's lightning node.
+    /// Returns the txid of the funding transaction if the gateway is a new
+    /// enough version to return it. Otherwise, returns `None`.
+    ///
+    /// TODO(support:v0.5): Remove the `Option&lt;Txid&gt;` return type and just
+    /// return `Txid`.
+    </span><span class="kw">pub async fn </span>open_channel(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         gw: <span class="kw-2">&amp;</span>Gatewayd,
         channel_size_sats: u64,
         push_amount_sats: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Txid&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Txid&gt;&gt; {
         <span class="kw">let </span>pubkey = gw.lightning_pubkey().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(Txid::from_str(
-            <span class="kw-2">&amp;</span><span class="macro">cmd!</span>(
-                <span class="self">self</span>,
-                <span class="string">"lightning"</span>,
-                <span class="string">"open-channel"</span>,
-                <span class="string">"--pubkey"</span>,
-                pubkey,
-                <span class="string">"--host"</span>,
-                gw.lightning_node_addr,
-                <span class="string">"--channel-size-sats"</span>,
-                channel_size_sats,
-                <span class="string">"--push-amount-sats"</span>,
-                push_amount_sats.unwrap_or(<span class="number">0</span>)
-            )
-            .out_string()
-            .<span class="kw">await</span><span class="question-mark">?</span>,
-        )<span class="question-mark">?</span>)
+
+        <span class="kw">let </span><span class="kw-2">mut </span>command = <span class="macro">cmd!</span>(
+            <span class="self">self</span>,
+            <span class="string">"lightning"</span>,
+            <span class="string">"open-channel"</span>,
+            <span class="string">"--pubkey"</span>,
+            pubkey,
+            <span class="string">"--host"</span>,
+            gw.lightning_node_addr,
+            <span class="string">"--channel-size-sats"</span>,
+            channel_size_sats,
+            <span class="string">"--push-amount-sats"</span>,
+            push_amount_sats.unwrap_or(<span class="number">0</span>)
+        );
+
+        <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
+        <span class="kw">if </span>gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_5_0_ALPHA {
+            command.run().<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+        } <span class="kw">else </span>{
+            <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(Txid::from_str(<span class="kw-2">&amp;</span>command.out_string().<span class="kw">await</span><span class="question-mark">?</span>)<span class="question-mark">?</span>))
+        }
     }
 
     <span class="kw">pub async fn </span>list_active_channels(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;ChannelInfo&gt;&gt; {
