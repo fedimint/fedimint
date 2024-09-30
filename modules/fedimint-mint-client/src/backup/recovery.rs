@@ -86,7 +86,7 @@ impl RecoveryFromHistory for MintRecovery {
             .get_value(&RecoveryStateKey)
             .await
             .and_then(|(state, common)| {
-                if let MintRecoveryState::V0(state) = state {
+                if let MintRecoveryState::V1(state) = state {
                     Some((state, common))
                 } else {
                     warn!(target: LOG_CLIENT_RECOVERY, "Found unknown version recovery state. Ignoring");
@@ -112,7 +112,7 @@ impl RecoveryFromHistory for MintRecovery {
     ) {
         dbtx.insert_entry(
             &RecoveryStateKey,
-            &(MintRecoveryState::V0(self.state.clone()), common.clone()),
+            &(MintRecoveryState::V1(self.state.clone()), common.clone()),
         )
         .await;
     }
@@ -266,7 +266,7 @@ impl From<CompressedBlindedMessage> for BlindedMessage {
 
 #[derive(Debug, Clone, Decodable, Encodable)]
 pub enum MintRecoveryState {
-    V0(MintRecoveryStateV0),
+    V1(MintRecoveryStateV0),
     #[encodable_default]
     Default {
         variant: u64,
