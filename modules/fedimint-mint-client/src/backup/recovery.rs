@@ -12,7 +12,7 @@ use fedimint_core::{
     apply, async_trait_maybe_send, Amount, NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti,
 };
 use fedimint_derive_secret::DerivableSecret;
-use fedimint_logging::{LOG_CLIENT_MODULE_MINT, LOG_CLIENT_RECOVERY_MINT};
+use fedimint_logging::{LOG_CLIENT_MODULE_MINT, LOG_CLIENT_RECOVERY, LOG_CLIENT_RECOVERY_MINT};
 use fedimint_mint_common::{MintInput, MintOutput, Nonce};
 use serde::{Deserialize, Serialize};
 use tbs::{AggregatePublicKey, BlindedMessage, PublicKeyShare};
@@ -29,7 +29,7 @@ use crate::{MintClientInit, MintClientModule, MintClientStateMachines, NoteIndex
 
 #[derive(Clone, Debug)]
 pub struct MintRecovery {
-    state: MintRecoveryState,
+    state: MintRecoveryStateV0,
     secret: DerivableSecret,
     client_ctx: ClientContext<MintClientModule>,
 }
@@ -63,7 +63,7 @@ impl RecoveryFromHistory for MintRecovery {
 
         Ok((
             MintRecovery {
-                state: MintRecoveryState::from_backup(
+                state: MintRecoveryStateV0::from_backup(
                     snapshot,
                     100,
                     config.tbs_pks.clone(),
@@ -85,6 +85,14 @@ impl RecoveryFromHistory for MintRecovery {
         Ok(dbtx
             .get_value(&RecoveryStateKey)
             .await
+            .and_then(|(state, common)| {
+                if let MintRecoveryState::V1(state) = state {
+                    Some((state, common))
+                } else {
+                    warn!(target: LOG_CLIENT_RECOVERY, "Found unknown version recovery state. Ignoring");
+                    None
+                }
+            })
             .map(|(state, common)| {
                 (
                     MintRecovery {
@@ -102,8 +110,11 @@ impl RecoveryFromHistory for MintRecovery {
         dbtx: &mut DatabaseTransaction<'_>,
         common: &RecoveryFromHistoryCommon,
     ) {
-        dbtx.insert_entry(&RecoveryStateKey, &(self.state.clone(), common.clone()))
-            .await;
+        dbtx.insert_entry(
+            &RecoveryStateKey,
+            &(MintRecoveryState::V1(self.state.clone()), common.clone()),
+        )
+        .await;
     }
 
     async fn delete_dbtx(&self, dbtx: &mut DatabaseTransaction<'_>) {
@@ -151,7 +162,11 @@ impl RecoveryFromHistory for MintRecovery {
             .sum::<Amount>()
             + finalized.spendable_notes.total_amount();
 
-        info!(amount = %restored_amount, "Finalizing mint recovery");
+        info!(
+            amount = %restored_amount,
+            burned_total = %finalized.burned_total,
+            "Finalizing mint recovery"
+        );
 
         debug!(
             target: LOG_CLIENT_RECOVERY_MINT,
@@ -224,6 +239,8 @@ pub struct EcashRecoveryFinalState {
     pub unconfirmed_notes: Vec<(OutPoint, Amount, NoteIssuanceRequest)>,
     /// Note index to derive next note in a given amount tier
     pub next_note_idx: Tiered<NoteIndex>,
+    /// Total burned amount
+    pub burned_total: Amount,
 }
 
 /// Newtype over [`BlindedMessage`] to enable `Ord`
@@ -247,6 +264,16 @@ impl From<CompressedBlindedMessage> for BlindedMessage {
     }
 }
 
+#[derive(Debug, Clone, Decodable, Encodable)]
+pub enum MintRecoveryState {
+    V1(MintRecoveryStateV0),
+    #[encodable_default]
+    Default {
+        variant: u64,
+        bytes: Vec<u8>,
+    },
+}
+
 /// The state machine used for fast-forwarding backup from point when it was
 /// taken to the present time by following epoch history items from the time the
 /// snapshot was taken.
@@ -255,7 +282,7 @@ impl From<CompressedBlindedMessage> for BlindedMessage {
 /// valid consensus items from the epoch history between time taken (or even
 /// somewhat before it) and present time.
 #[derive(Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
-pub struct MintRecoveryState {
+pub struct MintRecoveryStateV0 {
     spendable_notes: BTreeMap<Nonce, (Amount, SpendableNote)>,
     /// Nonces that we track that are currently spendable.
     pending_outputs: BTreeMap<Nonce, (OutPoint, Amount, NoteIssuanceRequest)>,
@@ -266,6 +293,11 @@ pub struct MintRecoveryState {
     /// the pool is kept shared (so only one lookup is enough), and
     /// replenishment is done each time a note is consumed.
     pending_nonces: BTreeMap<CompressedBlindedMessage, (NoteIssuanceRequest, NoteIndex, Amount)>,
+    /// Nonces that we have already used. Used for detecting double-used nonces
+    /// (accidentally burning funds).
+    used_nonces: BTreeMap<CompressedBlindedMessage, (NoteIssuanceRequest, NoteIndex, Amount)>,
+    /// Total amount probably burned due to re-using nonces
+    burned_total: Amount,
     /// Tail of `pending`. `pending_notes` is filled by generating note with
     /// this index and incrementing it.
     next_pending_note_idx: Tiered<NoteIndex>,
@@ -288,17 +320,19 @@ pub struct MintRecoveryState {
     gap_limit: u64,
 }
 
-impl fmt::Debug for MintRecoveryState {
+impl fmt::Debug for MintRecoveryStateV0 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!(
-            "MintRestoreInProgressState(pending_outputs: {}, pending_nonces: {})",
+            "MintRestoreInProgressState(pending_outputs: {}, pending_nonces: {}, used_nonces: {}, burned_total: {})",
             self.pending_outputs.len(),
-            self.pending_nonces.len()
+            self.pending_nonces.len(),
+            self.used_nonces.len(),
+            self.burned_total,
         ))
     }
 }
 
-impl MintRecoveryState {
+impl MintRecoveryStateV0 {
     pub fn from_backup(
         backup: EcashBackupV0,
         gap_limit: u64,
@@ -324,6 +358,8 @@ impl MintRecoveryState {
                 })
                 .collect(),
             pending_nonces: BTreeMap::default(),
+            used_nonces: BTreeMap::default(),
+            burned_total: Amount::ZERO,
             next_pending_note_idx: backup.next_note_idx.clone(),
             last_used_nonce_idx: backup
                 .next_note_idx
@@ -397,6 +433,18 @@ impl MintRecoveryState {
             }
         };
 
+        if let Some((_issuance_request, note_idx, amount)) =
+            self.used_nonces.get(&output.blind_nonce.0.into())
+        {
+            self.burned_total += *amount;
+            warn!(
+                target: LOG_CLIENT_RECOVERY_MINT,
+                %note_idx,
+                %amount,
+                burned_total = %self.burned_total,
+                "Detected reused nonce during recovery. This means client probably burned funds in the past."
+            );
+        }
         // There is nothing preventing other users from creating valid
         // transactions mining notes to our own blind nonce, possibly
         // even racing with us. Including amount in blind nonce
@@ -411,10 +459,8 @@ impl MintRecoveryState {
         // greedy no matter what and take what we can, and just report
         // anything suspicious.
 
-        if let Some((issuance_request, note_idx, pending_amount)) = self
-            .pending_nonces
-            .get(&output.blind_nonce.0.into())
-            .copied()
+        if let Some((issuance_request, note_idx, pending_amount)) =
+            self.pending_nonces.remove(&output.blind_nonce.0.into())
         {
             // the moment we see our blind nonce in the epoch history, correctly or
             // incorrectly used, we know that we must have used
@@ -422,17 +468,23 @@ impl MintRecoveryState {
             self.observe_nonce_idx_being_used(pending_amount, note_idx, secret);
 
             if pending_amount == output.amount {
-                assert!(self
-                    .pending_nonces
-                    .remove(&output.blind_nonce.0.into())
-                    .is_some());
+                self.used_nonces.insert(
+                    output.blind_nonce.0.into(),
+                    (issuance_request, note_idx, pending_amount),
+                );
 
                 self.pending_outputs.insert(
                     issuance_request.nonce(),
                     (out_point, output.amount, issuance_request),
                 );
             } else {
+                // put it back, incorrect amount
+                self.pending_nonces.insert(
+                    output.blind_nonce.0.into(),
+                    (issuance_request, note_idx, pending_amount),
+                );
                 warn!(
+                    target: LOG_CLIENT_RECOVERY_MINT,
                     output = ?out_point,
                     blind_nonce = ?output.blind_nonce.0,
                     expected_amount = %pending_amount,
@@ -488,6 +540,7 @@ impl MintRecoveryState {
                 .iter()
                 .map(|(amount, value)| (amount, value.next()))
                 .collect(),
+            burned_total: self.burned_total,
         }
     }
 }

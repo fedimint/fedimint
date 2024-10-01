@@ -381,11 +381,14 @@ mod fedimint_migration_tests {
     use fedimint_core::time::now;
     use fedimint_core::{secp256k1, Amount, OutPoint, Tiered, TieredMulti, TransactionId};
     use fedimint_logging::TracingSetup;
-    use fedimint_mint_client::backup::recovery::{MintRecovery, MintRecoveryState};
+    use fedimint_mint_client::backup::recovery::{
+        MintRecovery, MintRecoveryState, MintRecoveryStateV0,
+    };
     use fedimint_mint_client::backup::{EcashBackup, EcashBackupV0};
     use fedimint_mint_client::client_db::{
         CancelledOOBSpendKey, CancelledOOBSpendKeyPrefix, NextECashNoteIndexKey,
-        NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix, RecoveryStateKey,
+        NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix, RecoveryFinalizedKey,
+        RecoveryStateKey,
     };
     use fedimint_mint_client::output::NoteIssuanceRequest;
     use fedimint_mint_client::{MintClientInit, MintClientModule, NoteIndex, SpendableNote};
@@ -520,8 +523,13 @@ mod fedimint_migration_tests {
 
         let backup = create_ecash_backup_v0(spendable_note, secret.clone());
 
-        let mint_recovery_state =
-            MintRecoveryState::from_backup(backup, 10, tbs_pks, pub_key_shares, &secret);
+        let mint_recovery_state = MintRecoveryState::V1(MintRecoveryStateV0::from_backup(
+            backup,
+            10,
+            tbs_pks,
+            pub_key_shares,
+            &secret,
+        ));
 
         MintRecovery::store_finalized(&mut dbtx.to_ref_nc(), true).await;
         dbtx.insert_new_entry(
@@ -704,13 +712,13 @@ mod fedimint_migration_tests {
                         fedimint_mint_client::client_db::DbKeyPrefix::RecoveryState => {
                             let restore_state = dbtx.get_value(&RecoveryStateKey).await;
                             ensure!(
-                                restore_state.is_some(),
-                                "validate_migrations was not able to read any RecoveryState"
+                                restore_state.is_none(),
+                                "validate_migrations expect the restore state to get deleted"
                             );
                             info!("Validated RecoveryState");
                         }
                         fedimint_mint_client::client_db::DbKeyPrefix::RecoveryFinalized => {
-                            let recovery_finalized = dbtx.get_value(&RecoveryStateKey).await;
+                            let recovery_finalized = dbtx.get_value(&RecoveryFinalizedKey).await;
                             ensure!(
                                 recovery_finalized.is_some(),
                                 "validate_migrations was not able to read any RecoveryFinalized"
