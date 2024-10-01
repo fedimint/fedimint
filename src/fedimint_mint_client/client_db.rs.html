@@ -98,8 +98,21 @@
 <a href="#97" id="97">97</a>
 <a href="#98" id="98">98</a>
 <a href="#99" id="99">99</a>
-<a href="#100" id="100">100</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::module::init::recovery::RecoveryFromHistoryCommon;
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::module::init::recovery::RecoveryFromHistoryCommon;
 <span class="kw">use </span>fedimint_core::core::OperationId;
+<span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped <span class="kw">as _</span>};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, Amount};
 <span class="kw">use </span>fedimint_mint_common::Nonce;
@@ -198,4 +211,15 @@
     key = CancelledOOBSpendKey,
     query_prefix = CancelledOOBSpendKeyPrefix,
 );
+
+<span class="kw">pub async fn </span>migrate_to_v1(
+    dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
+) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;(Vec&lt;(Vec&lt;u8&gt;, OperationId)&gt;, Vec&lt;(Vec&lt;u8&gt;, OperationId)&gt;)&gt;&gt; {
+    <span class="comment">// between v0 and v1, we changed the format of `MintRecoveryState`, and instead
+    // of migrating it, we can just delete it, so the recovery will just start
+    // again, ignoring any existing state from before the migration
+    </span>dbtx.remove_entry(<span class="kw-2">&amp;</span>RecoveryStateKey).<span class="kw">await</span>;
+
+    <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+}
 </code></pre></div></section></main></body></html>
