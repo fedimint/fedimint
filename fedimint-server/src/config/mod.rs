@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use anyhow::{bail, format_err};
 use fedimint_core::admin_client::ConfigGenParamsConsensus;
+use fedimint_core::config::TransactionFee;
 pub use fedimint_core::config::{
     serde_binary_human_readable, ClientConfig, DkgError, DkgPeerMsg, DkgResult, FederationId,
     GlobalClientConfig, JsonWithKind, ModuleInitRegistry, PeerUrl, ServerModuleConfig,
@@ -19,7 +20,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
 use fedimint_core::task::{timeout, Cancelled, Elapsed, TaskGroup};
-use fedimint_core::{secp256k1, timing, PeerId};
+use fedimint_core::{secp256k1, timing, Amount, PeerId};
 use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 use futures::future::join_all;
 use rand::rngs::OsRng;
@@ -58,6 +59,13 @@ fn default_broadcast_rounds_per_session() -> u16 {
 /// Consensus broadcast settings that result in 10 seconds session time
 const DEFAULT_TEST_BROADCAST_ROUND_DELAY_MS: u16 = 50;
 const DEFAULT_TEST_BROADCAST_ROUNDS_PER_SESSION: u16 = 200;
+
+fn default_transaction_fee() -> TransactionFee {
+    TransactionFee {
+        base: Amount::ZERO,
+        parts_per_million: 0,
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// All the serializable configuration for the fedimint server
@@ -124,6 +132,8 @@ pub struct ServerConfigConsensus {
     /// Number of rounds per session.
     #[serde(default = "default_broadcast_rounds_per_session")]
     pub broadcast_rounds_per_session: u16,
+    #[serde(default = "default_transaction_fee")]
+    pub transaction_fee: TransactionFee,
     /// Network addresses and names for all peer APIs
     pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
     /// Certs for TLS communication, required for peer authentication
@@ -179,6 +189,7 @@ impl ServerConfigConsensus {
             global: GlobalClientConfig {
                 api_endpoints: self.api_endpoints.clone(),
                 broadcast_public_keys: Some(self.broadcast_public_keys.clone()),
+                transaction_fee: self.transaction_fee.clone(),
                 consensus_version: self.version,
                 meta: self.meta.clone(),
             },
@@ -241,6 +252,12 @@ impl ServerConfig {
                 DEFAULT_TEST_BROADCAST_ROUNDS_PER_SESSION
             } else {
                 DEFAULT_BROADCAST_ROUNDS_PER_SESSION
+            },
+            // We can set this to a non-zero value (probably 1 sat), when we retire ln legacy;
+            // otherwise a user would need ecash to create an invoice.
+            transaction_fee: TransactionFee {
+                base: Amount::ZERO,
+                parts_per_million: 0,
             },
             api_endpoints: params.api_urls(),
             tls_certs: params.tls_certs(),

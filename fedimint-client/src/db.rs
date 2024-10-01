@@ -3,7 +3,10 @@ use std::io::Cursor;
 use std::time::SystemTime;
 
 use fedimint_api_client::api::ApiVersionSet;
-use fedimint_core::config::{ClientConfig, ClientConfigV0, FederationId, GlobalClientConfig};
+use fedimint_core::config::{
+    ClientConfig, ClientConfigV0, ClientConfigV1, FederationId, GlobalClientConfig,
+    GlobalClientConfigV1, TransactionFee,
+};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{
     apply_migrations, create_database_version, CoreMigrationFn, Database, DatabaseTransaction,
@@ -14,7 +17,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::SupportedApiVersionsSummary;
 use fedimint_core::util::BoxFuture;
-use fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
+use fedimint_core::{impl_db_lookup, impl_db_record, Amount, PeerId};
 use fedimint_logging::LOG_CLIENT_DB;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -30,7 +33,7 @@ use crate::sm::executor::{
 };
 use crate::sm::{ActiveStateMeta, InactiveStateMeta};
 
-pub const CORE_CLIENT_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
+pub const CORE_CLIENT_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(2);
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -167,6 +170,15 @@ pub struct ClientConfigKey;
 impl_db_record!(
     key = ClientConfigKey,
     value = ClientConfig,
+    db_prefix = DbKeyPrefix::ClientConfig
+);
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct ClientConfigKeyV1;
+
+impl_db_record!(
+    key = ClientConfigKeyV1,
+    value = ClientConfigV1,
     db_prefix = DbKeyPrefix::ClientConfig
 );
 
@@ -416,20 +428,46 @@ pub fn get_core_client_database_migrations() -> BTreeMap<DatabaseVersion, CoreMi
                 return Ok(());
             };
 
-            let global = GlobalClientConfig {
+            let global = GlobalClientConfigV1 {
                 api_endpoints: config_v0.global.api_endpoints,
                 broadcast_public_keys: None,
                 consensus_version: config_v0.global.consensus_version,
                 meta: config_v0.global.meta,
             };
 
-            let config = ClientConfig {
+            let config = ClientConfigV1 {
                 global,
                 modules: config_v0.modules,
             };
 
             dbtx.remove_entry(&id).await;
+            dbtx.insert_new_entry(&ClientConfigKeyV1, &config).await;
+            Ok(())
+        })
+    });
+
+    migrations.insert(DatabaseVersion(1), |dbtx| {
+        Box::pin(async {
+            let Some(config_v1) = dbtx.remove_entry(&ClientConfigKeyV1).await else {
+                return Ok(());
+            };
+
+            let config = ClientConfig {
+                global: GlobalClientConfig {
+                    api_endpoints: config_v1.global.api_endpoints,
+                    broadcast_public_keys: config_v1.global.broadcast_public_keys,
+                    transaction_fee: TransactionFee {
+                        base: Amount::ZERO,
+                        parts_per_million: 0,
+                    },
+                    consensus_version: config_v1.global.consensus_version,
+                    meta: config_v1.global.meta,
+                },
+                modules: config_v1.modules,
+            };
+
             dbtx.insert_new_entry(&ClientConfigKey, &config).await;
+
             Ok(())
         })
     });

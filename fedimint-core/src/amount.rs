@@ -71,6 +71,18 @@ impl Amount {
         Ok(Self::from(btc_amt))
     }
 
+    pub fn saturating_mul(self, multiplier: u64) -> Self {
+        Self {
+            msats: self.msats.saturating_mul(multiplier),
+        }
+    }
+
+    pub fn saturating_div(self, divisor: u64) -> Self {
+        Self {
+            msats: self.msats.saturating_div(divisor),
+        }
+    }
+
     pub fn saturating_sub(self, other: Self) -> Self {
         Self {
             msats: self.msats.saturating_sub(other.msats),

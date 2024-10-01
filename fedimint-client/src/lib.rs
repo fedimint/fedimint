@@ -950,7 +950,7 @@ impl Client {
     /// # Panics
     /// If any of the input or output versions in the transaction builder are
     /// unknown by the respective module.
-    fn transaction_builder_balance(&self, builder: &TransactionBuilder) -> (Amount, Amount) {
+    async fn tx_builder_balance(&self, builder: &TransactionBuilder) -> (Amount, Amount) {
         // FIXME: prevent overflows, currently not suitable for untrusted input
         let mut in_amount = Amount::ZERO;
         let mut out_amount = Amount::ZERO;
@@ -978,7 +978,14 @@ impl Client {
             fee_amount += item_fee;
         }
 
-        (in_amount, out_amount + fee_amount)
+        let transaction_fee = self.config().await.global.transaction_fee;
+
+        let transaction_fee = transaction_fee.base
+            + in_amount
+                .saturating_mul(transaction_fee.parts_per_million)
+                .saturating_div(1_000_000);
+
+        (in_amount, out_amount + fee_amount + transaction_fee)
     }
 
     pub fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {
@@ -1035,7 +1042,7 @@ impl Client {
         operation_id: OperationId,
         mut partial_transaction: TransactionBuilder,
     ) -> anyhow::Result<(Transaction, Vec<DynState>, Range<u64>)> {
-        let (input_amount, output_amount) = self.transaction_builder_balance(&partial_transaction);
+        let (input_amount, output_amount) = self.tx_builder_balance(&partial_transaction).await;
 
         let (added_inputs, change_outputs) = self
             .primary_module()
@@ -1059,7 +1066,7 @@ impl Client {
         partial_transaction.inputs.extend(added_inputs);
         partial_transaction.outputs.extend(change_outputs);
 
-        let (input_amount, output_amount) = self.transaction_builder_balance(&partial_transaction);
+        let (input_amount, output_amount) = self.tx_builder_balance(&partial_transaction).await;
 
         assert_eq!(input_amount, output_amount, "Transaction is not balanced");
 
