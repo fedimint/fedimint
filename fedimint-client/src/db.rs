@@ -6,9 +6,9 @@ use fedimint_api_client::api::ApiVersionSet;
 use fedimint_core::config::{ClientConfig, ClientConfigV0, FederationId, GlobalClientConfig};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{
-    apply_migrations, create_database_version, CoreMigrationFn, Database, DatabaseTransaction,
-    DatabaseValue, DatabaseVersion, DatabaseVersionKey, IDatabaseTransactionOpsCore,
-    IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
+    apply_migrations, create_database_version, get_current_database_version, CoreMigrationFn,
+    Database, DatabaseTransaction, DatabaseValue, DatabaseVersion, DatabaseVersionKey,
+    IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -29,8 +29,6 @@ use crate::sm::executor::{
     InactiveStateKeyPrefixBytes,
 };
 use crate::sm::{ActiveStateMeta, InactiveStateMeta};
-
-pub const CORE_CLIENT_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -440,13 +438,11 @@ pub fn get_core_client_database_migrations() -> BTreeMap<DatabaseVersion, CoreMi
 pub async fn apply_migrations_core_client(
     db: &Database,
     kind: String,
-    target_version: DatabaseVersion,
     migrations: BTreeMap<DatabaseVersion, CoreMigrationFn>,
 ) -> Result<(), anyhow::Error> {
     apply_migrations(
         db,
         kind,
-        target_version,
         migrations,
         None,
         Some(DbKeyPrefix::UserData as u8),
@@ -466,7 +462,6 @@ pub async fn apply_migrations_core_client(
 pub async fn apply_migrations_client(
     db: &Database,
     kind: String,
-    target_version: DatabaseVersion,
     migrations: BTreeMap<DatabaseVersion, ClientMigrationFn>,
     module_instance_id: ModuleInstanceId,
 ) -> Result<(), anyhow::Error> {
@@ -479,6 +474,8 @@ pub async fn apply_migrations_client(
         .next()
         .await
         .is_none();
+
+    let target_version = get_current_database_version(&migrations);
 
     // First write the database version to disk if it does not exist.
     create_database_version(
@@ -579,7 +576,7 @@ pub async fn apply_migrations_client(
                 inactive_states = new_inactive_states;
             }
 
-            current_version.increment();
+            current_version = current_version.increment();
             global_dbtx
                 .insert_entry(&DatabaseVersionKey(module_instance_id), &current_version)
                 .await;

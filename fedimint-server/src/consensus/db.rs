@@ -9,8 +9,6 @@ use fedimint_core::{impl_db_lookup, impl_db_record, TransactionId};
 use serde::Serialize;
 use strum_macros::EnumIter;
 
-pub const GLOBAL_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
-
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
@@ -132,7 +130,7 @@ mod fedimint_migration_tests {
     use super::{
         get_global_database_migrations, AcceptedItem, AcceptedItemKey, AcceptedItemPrefix,
         AcceptedTransactionKey, AcceptedTransactionKeyPrefix, AlephUnitsKey, AlephUnitsPrefix,
-        DbKeyPrefix, SignedSessionOutcomeKey, SignedSessionOutcomePrefix, GLOBAL_DATABASE_VERSION,
+        DbKeyPrefix, SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
     };
     use crate::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix};
 
@@ -318,7 +316,6 @@ mod fedimint_migration_tests {
                 Ok(())
             },
             "fedimint-server",
-            GLOBAL_DATABASE_VERSION,
             get_global_database_migrations(),
             ModuleDecoderRegistry::from_iter([(
                 TEST_MODULE_INSTANCE_ID,

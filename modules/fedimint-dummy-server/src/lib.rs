@@ -50,7 +50,6 @@ pub struct DummyInit;
 // TODO: Boilerplate-code
 impl ModuleInit for DummyInit {
     type Common = DummyCommonInit;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
 
     /// Dumps all database items for debugging
     async fn dump_database(

@@ -45,9 +45,7 @@ use clap::Parser;
 use client::GatewayClientBuilder;
 use config::GatewayOpts;
 pub use config::GatewayParameters;
-use db::{
-    GatewayConfiguration, GatewayConfigurationKey, GatewayDbtxNcExt, GATEWAYD_DATABASE_VERSION,
-};
+use db::{GatewayConfiguration, GatewayConfigurationKey, GatewayDbtxNcExt};
 use error::FederationNotConnected;
 use federation_manager::FederationManager;
 use fedimint_api_client::api::net::Connector;
@@ -354,7 +352,6 @@ impl Gateway {
         apply_migrations_server(
             &gateway_db,
             "gatewayd".to_string(),
-            GATEWAYD_DATABASE_VERSION,
             get_gatewayd_database_migrations(),
         )
         .await?;

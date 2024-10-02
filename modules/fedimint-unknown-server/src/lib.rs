@@ -38,7 +38,6 @@ pub struct UnknownInit;
 // TODO: Boilerplate-code
 impl ModuleInit for UnknownInit {
     type Common = UnknownCommonInit;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
 
     /// Dumps all database items for debugging
     async fn dump_database(

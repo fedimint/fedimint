@@ -155,7 +155,6 @@ pub struct MetaClientInit;
 // TODO: Boilerplate-code
 impl ModuleInit for MetaClientInit {
     type Common = MetaCommonInit;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     async fn dump_database(
         &self,
