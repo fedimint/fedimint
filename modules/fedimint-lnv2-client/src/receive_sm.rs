@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use bitcoin::key::KeyPair;
+use bitcoin::key::Keypair;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
@@ -33,7 +33,7 @@ impl ReceiveStateMachine {
 pub struct ReceiveSMCommon {
     pub operation_id: OperationId,
     pub contract: IncomingContract,
-    pub claim_keypair: KeyPair,
+    pub claim_keypair: Keypair,
     pub agg_decryption_key: AggregateDecryptionKey,
 }
 

@@ -45,7 +45,7 @@ use fedimint_ln_common::{
 };
 use futures::StreamExt;
 use lightning_invoice::RoutingFees;
-use secp256k1::KeyPair;
+use secp256k1::Keypair;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, warn};
 
@@ -157,7 +157,7 @@ impl ClientModuleInit for GatewayClientInit {
 
 #[derive(Debug, Clone)]
 pub struct GatewayClientContext {
-    redeem_key: KeyPair,
+    redeem_key: Keypair,
     timelock_delta: u64,
     secp: Secp256k1<All>,
     pub ln_decoder: Decoder,
@@ -187,7 +187,7 @@ impl From<&GatewayClientContext> for LightningClientContext {
 pub struct GatewayClientModule {
     cfg: LightningClientConfig,
     pub notifier: ModuleNotifier<GatewayClientStateMachines>,
-    pub redeem_key: KeyPair,
+    pub redeem_key: Keypair,
     timelock_delta: u64,
     federation_index: u64,
     module_api: DynModuleApi,
@@ -376,7 +376,7 @@ impl GatewayClientModule {
     /// removing gateway registrations is best effort, this does not return
     /// an error and simply emits a warning when the registration cannot be
     /// removed.
-    pub async fn remove_from_federation(&self, gateway_keypair: KeyPair) {
+    pub async fn remove_from_federation(&self, gateway_keypair: Keypair) {
         // Removing gateway registrations is best effort, so just emit a warning if it
         // fails
         if let Err(e) = self.remove_from_federation_inner(gateway_keypair).await {
@@ -395,7 +395,7 @@ impl GatewayClientModule {
     /// peer maintains their own list of registered gateways, the gateway
     /// needs to provide a signature that is signed by the private key of the
     /// gateway id to remove the registration.
-    async fn remove_from_federation_inner(&self, gateway_keypair: KeyPair) -> anyhow::Result<()> {
+    async fn remove_from_federation_inner(&self, gateway_keypair: Keypair) -> anyhow::Result<()> {
         let gateway_id = gateway_keypair.public_key();
         let challenges = self
             .module_api

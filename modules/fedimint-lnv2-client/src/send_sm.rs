@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bitcoin::hashes::sha256;
-use bitcoin::secp256k1;
+use bitcoin::secp256k1::{self, Message};
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
@@ -15,7 +15,7 @@ use fedimint_core::{OutPoint, TransactionId};
 use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
 use secp256k1::schnorr::Signature;
-use secp256k1::KeyPair;
+use secp256k1::Keypair;
 use tracing::error;
 
 use crate::api::LnFederationApi;
@@ -45,7 +45,7 @@ pub struct SendSMCommon {
     pub gateway_api: SafeUrl,
     pub contract: OutgoingContract,
     pub invoice: LightningInvoice,
-    pub refund_keypair: KeyPair,
+    pub refund_keypair: Keypair,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -159,7 +159,7 @@ impl SendStateMachine {
         federation_id: FederationId,
         contract: OutgoingContract,
         invoice: LightningInvoice,
-        refund_keypair: KeyPair,
+        refund_keypair: Keypair,
         context: LightningClientContext,
     ) -> Result<[u8; 32], Signature> {
         loop {
@@ -170,7 +170,9 @@ impl SendStateMachine {
                     federation_id,
                     contract.clone(),
                     invoice.clone(),
-                    refund_keypair.sign_schnorr(invoice.consensus_hash::<sha256::Hash>().into()),
+                    refund_keypair.sign_schnorr(Message::from_digest(
+                        *invoice.consensus_hash::<sha256::Hash>().as_ref(),
+                    )),
                 )
                 .await
             {

@@ -1101,7 +1101,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     assert!(tx
         .output
         .iter()
-        .any(|o| o.script_pubkey == address.script_pubkey() && o.value == 50000));
+        .any(|o| o.script_pubkey == address.script_pubkey() && o.value.to_sat() == 50000));
 
     let post_withdraw_walletng_balance = client.balance().await?;
     let expected_wallet_balance = initial_walletng_balance - 50_000_000 - (fees_sat * 1000);
@@ -1212,7 +1212,7 @@ pub async fn start_hold_invoice_payment(
     gw_cln: &Gatewayd,
     gw_cln_id: String,
     lnd: &Lnd,
-) -> anyhow::Result<([u8; 32], cln_rpc::primitives::Sha256, String)> {
+) -> anyhow::Result<([u8; 32], bitcoin::hashes::sha256::Hash, String)> {
     client.use_gateway(gw_cln).await?;
     let (preimage, payment_request, hash) = lnd.create_hold_invoice(1000).await?;
     let operation_id = ln_pay(client, payment_request, gw_cln_id, true).await?;
@@ -1223,7 +1223,7 @@ pub async fn finish_hold_invoice_payment(
     client: &Client,
     hold_invoice_operation_id: String,
     lnd: &Lnd,
-    hold_invoice_hash: cln_rpc::primitives::Sha256,
+    hold_invoice_hash: bitcoin::hashes::sha256::Hash,
     hold_invoice_preimage: [u8; 32],
 ) -> anyhow::Result<()> {
     lnd.settle_hold_invoice(hold_invoice_preimage, hold_invoice_hash)
@@ -2052,10 +2052,10 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
             .iter()
             .find(|o| o.to_owned().script_pubkey != withdrawal_address.script_pubkey())
             .expect("withdrawal must have change output");
-        assert!(fed_utxos_sats.insert(change_output.value));
+        assert!(fed_utxos_sats.insert(change_output.value.to_sat()));
 
         // Remove the utxo consumed from the withdrawal tx
-        let total_output_sats = tx.output.iter().map(|o| o.value).sum::<u64>();
+        let total_output_sats = tx.output.iter().map(|o| o.value.to_sat()).sum::<u64>();
         let input_sats = total_output_sats + fees_sat;
         assert!(fed_utxos_sats.remove(&input_sats));
 
@@ -2106,7 +2106,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
 
     debug!(target: LOG_DEVIMINT, ?utxos_descriptors, "recoverytool descriptors using UTXOs method");
 
-    let descriptors_json = [serde_json::value::to_raw_value(&serde_json::Value::Array(
+    let descriptors_json = serde_json::value::to_raw_value(&serde_json::Value::Array(
         utxos_descriptors
             .iter()
             .map(|d| {
@@ -2117,14 +2117,14 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
                 object
             })
             .collect::<Vec<_>>(),
-    ))?];
+    ))?;
     info!("Getting wallet balances before import");
     let bitcoin_client = bitcoind.wallet_client().await?;
     let balances_before = bitcoin_client.get_balances().await?;
     info!("Importing descriptors into bitcoin wallet");
     let request = bitcoin_client
         .get_jsonrpc_client()
-        .build_request("importdescriptors", &descriptors_json);
+        .build_request("importdescriptors", Some(&descriptors_json));
     let response = block_in_place(|| bitcoin_client.get_jsonrpc_client().send_request(request))?;
     response.check_error()?;
     info!("Getting wallet balances after import");

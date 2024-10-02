@@ -685,7 +685,7 @@ impl Lnd {
     pub async fn create_hold_invoice(
         &self,
         amount: u64,
-    ) -> anyhow::Result<([u8; 32], String, cln_rpc::primitives::Sha256)> {
+    ) -> anyhow::Result<([u8; 32], String, bitcoin::hashes::sha256::Hash)> {
         let preimage = rand::random::<[u8; 32]>();
         let hash = {
             let mut engine = bitcoin::hashes::sha256::Hash::engine();
@@ -709,7 +709,7 @@ impl Lnd {
     pub async fn settle_hold_invoice(
         &self,
         preimage: [u8; 32],
-        payment_hash: cln_rpc::primitives::Sha256,
+        payment_hash: bitcoin::hashes::sha256::Hash,
     ) -> anyhow::Result<()> {
         let mut hold_invoice_subscription = self
             .invoices_client_lock()

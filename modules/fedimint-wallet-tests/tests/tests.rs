@@ -68,7 +68,7 @@ async fn peg_in<'a>(
         )
         .await;
     let height = bitcoin
-        .get_tx_block_height(&tx.txid())
+        .get_tx_block_height(&tx.compute_txid())
         .await
         .context("expected tx to be mined")?;
     info!(?height, ?tx, "Peg-in transaction mined");
@@ -143,7 +143,7 @@ async fn sanity_check_bitcoin_blocks() -> anyhow::Result<()> {
     let expected_transaction_block_count = current_block_count;
     let expected_transaction_height = expected_transaction_block_count - 1;
     assert_eq!(
-        bitcoin.get_tx_block_height(&tx.txid()).await,
+        bitcoin.get_tx_block_height(&tx.compute_txid()).await,
         Some(expected_transaction_height),
     );
     let expected_transaction_block_hash = dyn_bitcoin_rpc
@@ -221,7 +221,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     info!("Waiting for confirmation");
     assert!(matches!(
         deposit_updates.next().await.unwrap(),
-        DepositStateV2::WaitingForConfirmation { btc_out_point, .. } if btc_out_point.txid == tx.txid()
+        DepositStateV2::WaitingForConfirmation { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
     ));
 
     bitcoin.mine_blocks(finality_delay).await;
@@ -245,13 +245,13 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     info!("Waiting for claim tx");
     assert!(matches!(
         await_update_while_rechecking.await.unwrap(),
-        DepositStateV2::Confirmed { btc_out_point, .. } if btc_out_point.txid == tx.txid()
+        DepositStateV2::Confirmed { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
     ));
 
     info!("Waiting for e-cash");
     assert!(matches!(
         deposit_updates.next().await.unwrap(),
-        DepositStateV2::Claimed { btc_out_point, .. } if btc_out_point.txid == tx.txid()
+        DepositStateV2::Claimed { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
     ));
 
     info!("Checking balance after deposit");
@@ -337,10 +337,10 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
             )
             .await;
         let height = bitcoin
-            .get_tx_block_height(&tx.txid())
+            .get_tx_block_height(&tx.compute_txid())
             .await
             .context("expected tx to be mined")?;
-        info!(?height, ?tx, txid = ?tx.txid(), "First peg-in transaction mined");
+        info!(?height, ?tx, txid = ?tx.compute_txid(), "First peg-in transaction mined");
         bitcoin.mine_blocks(finality_delay).await;
         wallet_module
             .await_num_deposit_by_operation_id(op, 1)
@@ -364,10 +364,10 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
             .await;
 
         let height = bitcoin
-            .get_tx_block_height(&tx.txid())
+            .get_tx_block_height(&tx.compute_txid())
             .await
             .context("expected tx to be mined")?;
-        info!(?height, ?tx, txid = ?tx.txid(), "Second peg-in transaction mined");
+        info!(?height, ?tx, txid = ?tx.compute_txid(), "Second peg-in transaction mined");
         bitcoin.mine_blocks(finality_delay).await;
         wallet_module.await_num_deposits(tweak_idx, 2).await?;
         assert_eq!(
@@ -764,13 +764,13 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
             .find_map(|(idx, output)| {
                 // bitcoin core randomizes the change output index so we can't assume the fed's
                 // utxo is always index 0
-                if output.value == expected_peg_in_amount {
+                if output.value.to_sat() == expected_peg_in_amount {
                     Some(TxOutputSummary {
                         outpoint: bitcoin::OutPoint {
-                            txid: tx.txid(),
+                            txid: tx.compute_txid(),
                             vout: idx as u32,
                         },
-                        amount: bitcoin::Amount::from_sat(output.value),
+                        amount: output.value,
                     })
                 } else {
                     None
@@ -860,7 +860,8 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
                 .output
                 .first()
                 .expect("peg-out tx includes withdrawal output")
-                .value,
+                .value
+                .to_sat(),
         ),
     };
 
@@ -871,7 +872,8 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
                 .output
                 .last()
                 .expect("peg-out tx includes change output")
-                .value,
+                .value
+                .to_sat(),
         ),
     };
 
@@ -887,6 +889,7 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
                 .last()
                 .expect("peg-out tx includes change output")
                 .value
+                .to_sat()
         ),
         wallet_summary_before_mining.total_pending_change_balance()
     );
@@ -1003,7 +1006,7 @@ mod fedimint_migration_tests {
     use anyhow::ensure;
     use bitcoin::absolute::LockTime;
     use bitcoin::hashes::Hash;
-    use bitcoin::psbt::{Input, PartiallySignedTransaction};
+    use bitcoin::psbt::{Input, Psbt};
     use bitcoin::{
         secp256k1, Amount, BlockHash, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid,
         WPubkeyHash,
@@ -1082,14 +1085,14 @@ mod fedimint_migration_tests {
 
         let selected_utxos: Vec<(UTXOKey, SpendableUTXO)> = vec![(utxo.clone(), spendable_utxo)];
 
-        let destination = ScriptBuf::new_v0_p2wpkh(&WPubkeyHash::from_slice(&BYTE_20).unwrap());
+        let destination = ScriptBuf::new_p2wpkh(&WPubkeyHash::from_slice(&BYTE_20).unwrap());
         let output: Vec<TxOut> = vec![TxOut {
-            value: 10000,
+            value: Amount::from_sat(10_000),
             script_pubkey: destination.clone(),
         }];
 
         let transaction = Transaction {
-            version: 2,
+            version: bitcoin::transaction::Version(2),
             lock_time: LockTime::ZERO,
             input: vec![TxIn {
                 previous_output: utxo.0,
@@ -1103,7 +1106,7 @@ mod fedimint_migration_tests {
         let inputs = vec![Input {
             non_witness_utxo: None,
             witness_utxo: Some(bitcoin::TxOut {
-                value: 10000,
+                value: Amount::from_sat(10_000),
                 script_pubkey: destination.clone(),
             }),
             partial_sigs: Default::default(),
@@ -1127,7 +1130,7 @@ mod fedimint_migration_tests {
             unknown: Default::default(),
         }];
 
-        let psbt = PartiallySignedTransaction {
+        let psbt = Psbt {
             unsigned_tx: transaction.clone(),
             version: 0,
             xpub: Default::default(),
@@ -1180,7 +1183,7 @@ mod fedimint_migration_tests {
 
         let (sk, _) = secp256k1::generate_keypair(&mut OsRng);
         let secp = secp256k1::Secp256k1::new();
-        let signature = secp.sign_ecdsa(&Message::from_slice(&BYTE_32).unwrap(), &sk);
+        let signature = secp.sign_ecdsa(&Message::from_digest_slice(&BYTE_32).unwrap(), &sk);
         dbtx.insert_new_entry(
             &PegOutTxSignatureCI(Txid::from_byte_array(BYTE_32)),
             &vec![signature],

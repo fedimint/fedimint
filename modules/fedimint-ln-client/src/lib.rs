@@ -24,7 +24,7 @@ use anyhow::{anyhow, bail, ensure, format_err, Context};
 use api::LnFederationApi;
 use async_stream::{stream, try_stream};
 use bitcoin::hashes::{sha256, Hash, HashEngine, Hmac, HmacEngine};
-use bitcoin::key::KeyPair;
+use bitcoin::key::Keypair;
 use bitcoin::Network;
 use db::{
     DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
@@ -80,9 +80,7 @@ use pay::PayInvoicePayload;
 use rand::rngs::OsRng;
 use rand::seq::IteratorRandom as _;
 use rand::{CryptoRng, Rng, RngCore};
-use secp256k1::{
-    All, PublicKey, Scalar, Secp256k1, SecretKey, Signing, ThirtyTwoByteHash, Verification,
-};
+use secp256k1::{All, PublicKey, Scalar, Secp256k1, SecretKey, Signing, Verification};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::IntoEnumIterator;
@@ -140,7 +138,7 @@ impl PayType {
 pub enum ReceivingKey {
     /// The keypair used to receive payments for ourselves, we will use this to
     /// sweep to our own ecash wallet on success
-    Personal(KeyPair),
+    Personal(Keypair),
     /// A public key of another user, the lightning payment will be locked to
     /// this key for them to claim on success
     External(PublicKey),
@@ -383,10 +381,10 @@ impl ClientModuleInit for LightningClientInit {
 pub struct LightningClientModule {
     pub cfg: LightningClientConfig,
     notifier: ModuleNotifier<LightningClientStateMachines>,
-    redeem_key: KeyPair,
+    redeem_key: Keypair,
     secp: Secp256k1<All>,
     module_api: DynModuleApi,
-    preimage_auth: KeyPair,
+    preimage_auth: Keypair,
     client_ctx: ClientContext<Self>,
     update_gateway_cache_merge: UpdateMerge,
     gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
@@ -500,7 +498,7 @@ impl ClientModule for LightningClientModule {
                 }
                 "scan_receive_for_user_tweaked" => {
                     let req: ScanReceiveForUserTweakedRequest = serde_json::from_value(payload)?;
-                    let keypair = KeyPair::from_secret_key(&self.secp, &req.user_key);
+                    let keypair = Keypair::from_secret_key(&self.secp, &req.user_key);
                     let operation_ids = self.scan_receive_for_user_tweaked(keypair, req.indices, req.extra_meta).await;
                     yield serde_json::to_value(operation_ids)?;
                 }
@@ -705,7 +703,7 @@ impl LightningClientModule {
         let gateway_fee = gateway.fees.to_amount(&invoice_amount);
         let contract_amount = invoice_amount + gateway_fee;
 
-        let user_sk = KeyPair::new(&self.secp, &mut rng);
+        let user_sk = Keypair::new(&self.secp, &mut rng);
 
         let preimage_auth = self.get_preimage_authentication(invoice.payment_hash());
         let payment_hash = *invoice.payment_hash();
@@ -960,7 +958,7 @@ impl LightningClientModule {
                 amount: Amount::ZERO,
                 state_machines: sm_gen,
             },
-            preimage.into_32(),
+            *preimage.as_ref(),
         ))
     }
 
@@ -1409,7 +1407,7 @@ impl LightningClientModule {
     /// tweaked keys in the `indices` vector
     pub async fn scan_receive_for_user_tweaked<M: Serialize + Send + Sync + Clone>(
         &self,
-        key_pair: KeyPair,
+        key_pair: Keypair,
         indices: Vec<u64>,
         extra_meta: M,
     ) -> Vec<OperationId> {
@@ -1434,7 +1432,7 @@ impl LightningClientModule {
     /// key and claim the incoming contract
     pub async fn scan_receive_for_user<M: Serialize + Send + Sync>(
         &self,
-        key_pair: KeyPair,
+        key_pair: Keypair,
         extra_meta: M,
     ) -> anyhow::Result<OperationId> {
         let preimage_key: [u8; 33] = key_pair.public_key().serialize();
@@ -1448,7 +1446,7 @@ impl LightningClientModule {
     /// to the federation and awaiting the primary module's outputs
     pub async fn claim_funded_incoming_contract<M: Serialize + Send + Sync>(
         &self,
-        key_pair: KeyPair,
+        key_pair: Keypair,
         contract_id: ContractId,
         extra_meta: M,
     ) -> anyhow::Result<OperationId> {
@@ -1494,7 +1492,7 @@ impl LightningClientModule {
         gateway: Option<LightningGateway>,
     ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
         let receiving_key =
-            ReceivingKey::Personal(KeyPair::new(&self.secp, &mut rand::rngs::OsRng));
+            ReceivingKey::Personal(Keypair::new(&self.secp, &mut rand::rngs::OsRng));
         self.create_bolt11_invoice_internal(
             amount,
             description,
@@ -1945,7 +1943,7 @@ pub async fn create_incoming_contract_output(
     module_api: &DynModuleApi,
     payment_hash: sha256::Hash,
     amount_msat: Amount,
-    redeem_key: KeyPair,
+    redeem_key: Keypair,
 ) -> Result<(LightningOutputV0, Amount, ContractId), IncomingSmError> {
     let offer = fetch_and_validate_offer(module_api, payment_hash, amount_msat).await?;
     let our_pub_key = secp256k1::PublicKey::from_keypair(&redeem_key);
@@ -2009,9 +2007,9 @@ pub fn tweak_user_key<Ctx: Verification + Signing>(
 /// contract.
 fn tweak_user_secret_key<Ctx: Verification + Signing>(
     secp: &Secp256k1<Ctx>,
-    key_pair: KeyPair,
+    key_pair: Keypair,
     index: u64,
-) -> KeyPair {
+) -> Keypair {
     let public_key = key_pair.public_key();
     let mut hasher = HmacEngine::<sha256::Hash>::new(&public_key.serialize()[..]);
     hasher.input(&index.to_be_bytes());
@@ -2021,7 +2019,7 @@ fn tweak_user_secret_key<Ctx: Verification + Signing>(
     let sk_tweaked = secret_key
         .add_tweak(&Scalar::from_be_bytes(tweak).expect("Cant fail"))
         .expect("Cant fail");
-    KeyPair::from_secret_key(secp, &sk_tweaked)
+    Keypair::from_secret_key(secp, &sk_tweaked)
 }
 
 /// Get LN invoice with given settings
@@ -2080,7 +2078,7 @@ pub async fn get_invoice(
 #[derive(Debug, Clone)]
 pub struct LightningClientContext {
     pub ln_decoder: Decoder,
-    pub redeem_key: KeyPair,
+    pub redeem_key: Keypair,
     pub gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
 }
 

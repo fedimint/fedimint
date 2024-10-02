@@ -1,6 +1,7 @@
 use std::fmt::{self, Display};
 use std::sync::Arc;
 
+use bitcoin::secp256k1::Message;
 use bitcoin_hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput};
@@ -587,7 +588,7 @@ impl GatewayPayInvoice {
 
     fn validate_outgoing_account(
         account: &OutgoingContractAccount,
-        redeem_key: bitcoin::key::KeyPair,
+        redeem_key: bitcoin::key::Keypair,
         timelock_delta: u64,
         consensus_block_count: u64,
         payment_data: &PaymentData,
@@ -902,7 +903,7 @@ impl GatewayPayCancelContract {
     ) -> GatewayPayStateMachine {
         info!("Canceling outgoing contract {contract:?}");
         let cancel_signature = context.secp.sign_schnorr(
-            &contract.contract.cancellation_message().into(),
+            &Message::from_digest(*contract.contract.cancellation_message().as_ref()),
             &context.redeem_key,
         );
         let cancel_output = LightningOutput::new_v0_cancel_outgoing(

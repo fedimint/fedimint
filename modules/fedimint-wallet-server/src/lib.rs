@@ -21,7 +21,7 @@ use bitcoin::address::NetworkUnchecked;
 use bitcoin::ecdsa::Signature as EcdsaSig;
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
 use bitcoin::policy::DEFAULT_MIN_RELAY_TX_FEE;
-use bitcoin::psbt::{Input, PartiallySignedTransaction};
+use bitcoin::psbt::{Input, Psbt};
 use bitcoin::secp256k1::{All, Secp256k1, Verification};
 use bitcoin::sighash::{EcdsaSighashType, SighashCache};
 use bitcoin::{Address, BlockHash, Network, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid};
@@ -524,7 +524,7 @@ impl ServerModule for Wallet {
                 &UTXOKey(input.outpoint()),
                 &SpendableUTXO {
                     tweak: input.tweak_contract_key().serialize(),
-                    amount: bitcoin::Amount::from_sat(input.tx_output().value),
+                    amount: input.tx_output().value,
                 },
             )
             .await
@@ -532,7 +532,7 @@ impl ServerModule for Wallet {
         {
             return Err(WalletInputError::PegInAlreadyClaimed);
         }
-        let amount = fedimint_core::Amount::from_sats(input.tx_output().value);
+        let amount = fedimint_core::Amount::from_sats(input.tx_output().value.to_sat());
         let fee = self.cfg.consensus.fee_consensus.peg_in_abs;
         calculate_pegin_metrics(dbtx, amount, fee);
         Ok(InputMeta {
@@ -575,7 +575,7 @@ impl ServerModule for Wallet {
 
         self.offline_wallet().sign_psbt(&mut tx.psbt);
 
-        let txid = tx.psbt.unsigned_tx.txid();
+        let txid = tx.psbt.unsigned_tx.compute_txid();
 
         info!(
             %txid,
@@ -852,7 +852,7 @@ impl Wallet {
     /// Try to attach signatures to a pending peg-out tx.
     fn sign_peg_out_psbt(
         &self,
-        psbt: &mut PartiallySignedTransaction,
+        psbt: &mut Psbt,
         peer: PeerId,
         signature: &PegOutSignatureItem,
     ) -> Result<(), ProcessPegOutSigError> {
@@ -878,7 +878,7 @@ impl Wallet {
             .enumerate()
         {
             let tx_hash = tx_hasher
-                .segwit_signature_hash(
+                .p2wsh_signature_hash(
                     idx,
                     input
                         .witness_script
@@ -897,7 +897,7 @@ impl Wallet {
             let tweaked_peer_key = peer_key.tweak(tweak, &self.secp);
             self.secp
                 .verify_ecdsa(
-                    &Message::from_slice(&tx_hash[..]).unwrap(),
+                    &Message::from_digest_slice(&tx_hash[..]).unwrap(),
                     signature,
                     &tweaked_peer_key.key,
                 )
@@ -936,7 +936,7 @@ impl Wallet {
             return Err(ProcessPegOutSigError::ErrorFinalizingPsbt(error));
         }
 
-        let tx = unsigned.psbt.clone().extract_tx();
+        let tx = unsigned.psbt.clone().extract_tx()?;
 
         Ok(PendingTransaction {
             tx,
@@ -1095,12 +1095,12 @@ impl Wallet {
             if output.script_pubkey == script_pk {
                 dbtx.insert_entry(
                     &UTXOKey(bitcoin::OutPoint {
-                        txid: pending_tx.tx.txid(),
+                        txid: pending_tx.tx.compute_txid(),
                         vout: idx as u32,
                     }),
                     &SpendableUTXO {
                         tweak: pending_tx.tweak,
-                        amount: bitcoin::Amount::from_sat(output.value),
+                        amount: output.value,
                     },
                 )
                 .await;
@@ -1124,8 +1124,8 @@ impl Wallet {
         // We need to search and remove all `PendingTransactions` invalidated by RBF
         let mut pending_to_remove = vec![pending_tx.clone()];
         while let Some(removed) = pending_to_remove.pop() {
-            all_transactions.remove(&removed.tx.txid());
-            dbtx.remove_entry(&PendingTransactionKey(removed.tx.txid()))
+            all_transactions.remove(&removed.tx.compute_txid());
+            dbtx.remove_entry(&PendingTransactionKey(removed.tx.compute_txid()))
                 .await;
 
             // Search for tx that this `removed` has as RBF
@@ -1138,7 +1138,7 @@ impl Wallet {
             // Search for tx that wanted to RBF the `removed` one
             for tx in all_transactions.values() {
                 if let Some(rbf) = &tx.rbf {
-                    if rbf.txid == removed.tx.txid() {
+                    if rbf.txid == removed.tx.compute_txid() {
                         pending_to_remove.push(tx.clone());
                     }
                 }
@@ -1217,7 +1217,7 @@ impl Wallet {
             let mut change_utxos: Vec<TxOutputSummary> = Vec::new();
 
             for tx in transactions {
-                let txid = tx.txid();
+                let txid = tx.compute_txid();
 
                 // to identify outputs for the peg_out (idx = 0) and change (idx = 1), we lean
                 // on how the wallet constructs the transaction
@@ -1230,12 +1230,12 @@ impl Wallet {
 
                 peg_out_txos.push(TxOutputSummary {
                     outpoint: bitcoin::OutPoint { txid, vout: 0 },
-                    amount: bitcoin::Amount::from_sat(peg_out_output.value),
+                    amount: peg_out_output.value,
                 });
 
                 change_utxos.push(TxOutputSummary {
                     outpoint: bitcoin::OutPoint { txid, vout: 1 },
-                    amount: bitcoin::Amount::from_sat(change_output.value),
+                    amount: change_output.value,
                 });
             }
 
@@ -1405,9 +1405,9 @@ pub async fn broadcast_pending_tx(mut dbtx: DatabaseTransaction<'_>, rpc: &DynBi
     );
 
     for PendingTransaction { tx, .. } in pending_tx {
-        if !rbf_txids.contains(&tx.txid()) {
+        if !rbf_txids.contains(&tx.compute_txid()) {
             debug!(
-                tx = %tx.txid(),
+                tx = %tx.compute_txid(),
                 weight = tx.weight().to_wu(),
                 output = ?tx.output,
                 "Broadcasting peg-out",
@@ -1435,15 +1435,19 @@ impl<'a> StatelessWallet<'a> {
     ) -> Result<(), WalletOutputError> {
         if let WalletOutputV0::PegOut(peg_out) = output {
             if !peg_out.recipient.is_valid_for_network(network) {
-                return Err(WalletOutputError::WrongNetwork(
-                    network,
-                    peg_out.recipient.network,
-                ));
+                return match fedimint_core::encoding::get_network_from_address(
+                    peg_out.recipient.assume_checked_ref(),
+                ) {
+                    Ok(recipient_network) => {
+                        Err(WalletOutputError::WrongNetwork(network, recipient_network))
+                    }
+                    Err(_) => Err(WalletOutputError::UnknownNetwork),
+                };
             }
         }
 
         // Validate the tx amount is over the dust limit
-        if tx.peg_out_amount < tx.destination.dust_value() {
+        if tx.peg_out_amount < tx.destination.minimal_non_dust() {
             return Err(WalletOutputError::PegOutUnderDustLimit);
         }
 
@@ -1539,7 +1543,7 @@ impl<'a> StatelessWallet<'a> {
         let mut selected_utxos: Vec<(UTXOKey, SpendableUTXO)> = vec![];
         let mut fees = fee_rate.calculate_fee(total_weight);
 
-        while total_selected_value < peg_out_amount + change_script.dust_value() + fees {
+        while total_selected_value < peg_out_amount + change_script.minimal_non_dust() + fees {
             match included_utxos.pop() {
                 Some((utxo_key, utxo)) => {
                     total_selected_value += utxo.amount;
@@ -1556,11 +1560,11 @@ impl<'a> StatelessWallet<'a> {
         let change = total_selected_value - fees - peg_out_amount;
         let output: Vec<TxOut> = vec![
             TxOut {
-                value: peg_out_amount.to_sat(),
+                value: peg_out_amount,
                 script_pubkey: destination.clone(),
             },
             TxOut {
-                value: change.to_sat(),
+                value: change,
                 script_pubkey: change_script,
             },
         ];
@@ -1581,7 +1585,7 @@ impl<'a> StatelessWallet<'a> {
         );
 
         let transaction = Transaction {
-            version: 2,
+            version: bitcoin::transaction::Version(2),
             lock_time: LockTime::ZERO,
             input: selected_utxos
                 .iter()
@@ -1594,11 +1598,11 @@ impl<'a> StatelessWallet<'a> {
                 .collect(),
             output,
         };
-        info!(txid = %transaction.txid(), "Creating peg-out tx");
+        info!(txid = %transaction.compute_txid(), "Creating peg-out tx");
 
         // FIXME: use custom data structure that guarantees more invariants and only
         // convert to PSBT for finalization
-        let psbt = PartiallySignedTransaction {
+        let psbt = Psbt {
             unsigned_tx: transaction,
             version: 0,
             xpub: Default::default(),
@@ -1614,7 +1618,7 @@ impl<'a> StatelessWallet<'a> {
                     Input {
                         non_witness_utxo: None,
                         witness_utxo: Some(TxOut {
-                            value: utxo.amount.to_sat(),
+                            value: utxo.amount,
                             script_pubkey,
                         }),
                         partial_sigs: Default::default(),
@@ -1664,7 +1668,7 @@ impl<'a> StatelessWallet<'a> {
         })
     }
 
-    fn sign_psbt(&self, psbt: &mut PartiallySignedTransaction) {
+    fn sign_psbt(&self, psbt: &mut Psbt) {
         let mut tx_hasher = SighashCache::new(&psbt.unsigned_tx);
 
         for (idx, (psbt_input, _tx_input)) in psbt
@@ -1683,7 +1687,7 @@ impl<'a> StatelessWallet<'a> {
             };
 
             let tx_hash = tx_hasher
-                .segwit_signature_hash(
+                .p2wsh_signature_hash(
                     idx,
                     psbt_input
                         .witness_script
@@ -1698,9 +1702,10 @@ impl<'a> StatelessWallet<'a> {
                 )
                 .expect("Failed to create segwit sighash");
 
-            let signature = self
-                .secp
-                .sign_ecdsa(&Message::from_slice(&tx_hash[..]).unwrap(), &tweaked_secret);
+            let signature = self.secp.sign_ecdsa(
+                &Message::from_digest_slice(&tx_hash[..]).unwrap(),
+                &tweaked_secret,
+            );
 
             psbt_input.partial_sigs.insert(
                 bitcoin::PublicKey {
@@ -1796,7 +1801,7 @@ impl Serialize for PendingTransaction {
 /// `PendingTransaction`
 #[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable)]
 pub struct UnsignedTransaction {
-    pub psbt: PartiallySignedTransaction,
+    pub psbt: Psbt,
     pub signatures: Vec<(PeerId, PegOutSignatureItem)>,
     pub change: bitcoin::Amount,
     pub fees: PegOutFees,

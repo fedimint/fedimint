@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-use bitcoin::secp256k1::KeyPair;
+use bitcoin::secp256k1::Keypair;
 use fedimint_client::ClientHandleArc;
 use fedimint_core::config::{FederationId, FederationIdPrefix, JsonClientConfig};
 use fedimint_core::db::{DatabaseTransaction, NonCommittable};
@@ -129,7 +129,7 @@ impl FederationManager {
     async fn unannounce_from_federation(
         &self,
         federation_id: FederationId,
-        gateway_keypair: KeyPair,
+        gateway_keypair: Keypair,
     ) -> AdminResult<()> {
         let client = self
             .clients
@@ -149,7 +149,7 @@ impl FederationManager {
 
     /// Iterates through all of the federations the gateway is registered with
     /// and requests to remove the registration record.
-    pub async fn unannounce_from_all_federations(&self, gateway_keypair: KeyPair) {
+    pub async fn unannounce_from_all_federations(&self, gateway_keypair: Keypair) {
         let removal_futures = self
             .clients
             .values()

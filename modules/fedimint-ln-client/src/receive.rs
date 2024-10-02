@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use bitcoin::key::KeyPair;
+use bitcoin::key::Keypair;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, DynState, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
@@ -93,7 +93,7 @@ impl IntoDynInstance for LightningReceiveStateMachine {
 pub struct LightningReceiveSubmittedOfferV0 {
     pub offer_txid: TransactionId,
     pub invoice: Bolt11Invoice,
-    pub payment_keypair: KeyPair,
+    pub payment_keypair: Keypair,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -278,7 +278,7 @@ impl LightningReceiveConfirmedInvoice {
     async fn claim_incoming_contract(
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         contract: IncomingContractAccount,
-        keypair: KeyPair,
+        keypair: Keypair,
         global_context: DynGlobalClientContext,
     ) -> (TransactionId, Vec<OutPoint>) {
         let input = contract.claim();

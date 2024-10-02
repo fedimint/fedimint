@@ -14,7 +14,7 @@ use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::secp256k1::KeyPair;
+use fedimint_core::secp256k1::Keypair;
 use fedimint_core::task::sleep;
 use fedimint_core::{NumPeersExt, OutPoint, PeerId, TransactionId};
 use fedimint_lnv2_client::LightningClientStateMachines;
@@ -59,7 +59,7 @@ pub struct ReceiveSMCommon {
     pub operation_id: OperationId,
     pub contract: IncomingContract,
     pub out_point: OutPoint,
-    pub refund_keypair: KeyPair,
+    pub refund_keypair: Keypair,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]

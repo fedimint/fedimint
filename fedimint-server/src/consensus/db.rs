@@ -99,7 +99,7 @@ mod fedimint_migration_tests {
     use std::str::FromStr;
 
     use anyhow::ensure;
-    use bitcoin::key::KeyPair;
+    use bitcoin::key::Keypair;
     use bitcoin::secp256k1;
     use bitcoin_hashes::Hash;
     use fedimint_core::core::{DynInput, DynOutput};
@@ -151,9 +151,9 @@ mod fedimint_migration_tests {
 
         let (sk, _) = secp256k1::generate_keypair(&mut OsRng);
         let secp = secp256k1::Secp256k1::new();
-        let key_pair = KeyPair::from_secret_key(&secp, &sk);
+        let key_pair = Keypair::from_secret_key(&secp, &sk);
         let schnorr = secp.sign_schnorr_with_rng(
-            &Message::from_slice(&BYTE_32).unwrap(),
+            &Message::from_digest_slice(&BYTE_32).unwrap(),
             &key_pair,
             &mut thread_rng(),
         );

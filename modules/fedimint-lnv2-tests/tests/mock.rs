@@ -5,7 +5,7 @@ use bitcoin::secp256k1::{SecretKey, SECP256K1};
 use fedimint_core::config::FederationId;
 use fedimint_core::secp256k1::rand::rngs::OsRng;
 use fedimint_core::secp256k1::schnorr::Signature;
-use fedimint_core::secp256k1::KeyPair;
+use fedimint_core::secp256k1::Keypair;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Amount};
 use fedimint_ln_common::bitcoin;
@@ -32,7 +32,7 @@ pub fn gateway() -> SafeUrl {
     SafeUrl::parse("https://gateway.xyz").expect("Valid Url")
 }
 
-pub fn gateway_keypair() -> KeyPair {
+pub fn gateway_keypair() -> Keypair {
     SecretKey::from_slice(&GATEWAY_SECRET)
         .expect("32 bytes; within curve order")
         .keypair(SECP256K1)
@@ -72,7 +72,7 @@ pub fn signet_bolt_11_invoice() -> Bolt11Invoice {
 
 #[derive(Debug)]
 pub struct MockGatewayConnection {
-    keypair: KeyPair,
+    keypair: Keypair,
 }
 
 impl Default for MockGatewayConnection {

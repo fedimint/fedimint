@@ -19,7 +19,7 @@ use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use fedimint_wallet_common::txoproof::PegInProof;
 use fedimint_wallet_common::WalletInput;
 use futures::StreamExt as _;
-use secp256k1::KeyPair;
+use secp256k1::Keypair;
 use tokio::sync::watch;
 use tracing::{debug, instrument, trace, warn};
 
@@ -332,7 +332,7 @@ async fn check_idx_pegins(
     let mut outcomes = vec![];
 
     for (transaction, out_idx) in filter_onchain_deposit_outputs(history.into_iter(), &script) {
-        let txid = transaction.txid();
+        let txid = transaction.compute_txid();
         let outpoint = bitcoin::OutPoint {
             txid,
             vout: out_idx,
@@ -397,7 +397,7 @@ async fn check_idx_pegins(
 async fn claim_peg_in(
     client_ctx: &ClientContext<WalletClientModule>,
     tweak_idx: TweakIdx,
-    tweak_key: KeyPair,
+    tweak_key: Keypair,
     transaction: &bitcoin::Transaction,
     operation_id: OperationId,
     out_point: bitcoin::OutPoint,
@@ -408,7 +408,7 @@ async fn claim_peg_in(
         dbtx: &mut DatabaseTransaction<'_>,
         btc_transaction: &bitcoin::Transaction,
         out_idx: u32,
-        tweak_key: KeyPair,
+        tweak_key: Keypair,
         txout_proof: TxOutProof,
         operation_id: OperationId,
     ) -> (fedimint_core::TransactionId, Vec<fedimint_core::OutPoint>) {
@@ -420,7 +420,7 @@ async fn claim_peg_in(
         )
         .expect("TODO: handle API returning faulty proofs");
 
-        let amount = Amount::from_sats(pegin_proof.tx_output().value);
+        let amount = Amount::from_sats(pegin_proof.tx_output().value.to_sat());
 
         let wallet_input = WalletInput::new_v0(pegin_proof);
 

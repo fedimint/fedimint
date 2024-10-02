@@ -25,7 +25,7 @@ use fedimint_core::db::{
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-use fedimint_core::secp256k1::{KeyPair, PublicKey, Secp256k1};
+use fedimint_core::secp256k1::{Keypair, PublicKey, Secp256k1};
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
 pub use fedimint_dummy_common as common;
@@ -45,7 +45,7 @@ pub mod states;
 #[derive(Debug)]
 pub struct DummyClientModule {
     cfg: DummyClientConfig,
-    key: KeyPair,
+    key: Keypair,
     notifier: ModuleNotifier<DummyStateMachine>,
     client_ctx: ClientContext<Self>,
     db: Database,
@@ -213,7 +213,7 @@ impl DummyClientModule {
     pub async fn print_using_account(
         &self,
         amount: Amount,
-        account_kp: KeyPair,
+        account_kp: Keypair,
     ) -> anyhow::Result<(OperationId, OutPoint)> {
         let op_id = OperationId(rand::random());
 

@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::anyhow;
-use bitcoin::network::constants::Network;
+use bitcoin::network::Network;
 use bitcoin::OutPoint;
 use clap::{ArgGroup, Parser, Subcommand};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
@@ -314,7 +314,7 @@ fn tweak_descriptor(
         .translate_pk(&mut SecretKeyInjector {
             secret: bitcoin::key::PrivateKey {
                 compressed: true,
-                network,
+                network: network.into(),
                 inner: secret_key,
             },
             public: pub_key,

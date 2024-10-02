@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Cursor, Error, Read, Write};
 
 use anyhow::{bail, ensure, Context, Result};
-use bitcoin::secp256k1::{KeyPair, PublicKey, Secp256k1, SignOnly};
+use bitcoin::secp256k1::{Keypair, PublicKey, Secp256k1, SignOnly};
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::core::backup::{
     BackupRequest, SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES,
@@ -223,7 +223,7 @@ impl EncryptedClientBackup {
         )?)
     }
 
-    pub fn into_backup_request(self, keypair: &KeyPair) -> Result<SignedBackupRequest> {
+    pub fn into_backup_request(self, keypair: &Keypair) -> Result<SignedBackupRequest> {
         let request = BackupRequest {
             id: keypair.public_key(),
             timestamp: fedimint_core::time::now(),
@@ -402,7 +402,7 @@ impl Client {
 
     /// Static version of [`Self::get_derived_backup_signing_key`] for testing
     /// without creating whole `MintClient`
-    fn get_derived_backup_signing_key_static(secret: &DerivableSecret) -> KeyPair {
+    fn get_derived_backup_signing_key_static(secret: &DerivableSecret) -> Keypair {
         secret
             .derive_backup_secret()
             .to_secp_key(&Secp256k1::<SignOnly>::gen_new())
@@ -412,7 +412,7 @@ impl Client {
         Self::get_derived_backup_encryption_key_static(&self.root_secret())
     }
 
-    fn get_derived_backup_signing_key(&self) -> KeyPair {
+    fn get_derived_backup_signing_key(&self) -> Keypair {
         Self::get_derived_backup_signing_key_static(&self.root_secret())
     }
 

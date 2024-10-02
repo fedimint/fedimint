@@ -7,7 +7,7 @@ use fedimint_client::backup::{ClientBackup, Metadata};
 use fedimint_client::transaction::{ClientInput, TransactionBuilder};
 use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::OperationId;
-use fedimint_core::secp256k1::KeyPair;
+use fedimint_core::secp256k1::Keypair;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{sats, secp256k1, Amount};
@@ -59,7 +59,7 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
     let fed = fixtures.new_default_fed().await;
     let client = fed.new_client().await;
 
-    let keypair = KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
+    let keypair = Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
 
     let client_input = ClientInput::<MintInput, MintClientStateMachines> {
         input: MintInput::V0(MintInputV0 {
@@ -405,7 +405,7 @@ mod fedimint_migration_tests {
     use ff::Field;
     use futures::StreamExt;
     use rand::rngs::OsRng;
-    use secp256k1::KeyPair;
+    use secp256k1::Keypair;
     use strum::IntoEnumIterator;
     use tbs::{
         blind_message, sign_blinded_msg, AggregatePublicKey, BlindingKey, Message, PublicKeyShare,
@@ -481,7 +481,7 @@ mod fedimint_migration_tests {
             .await;
 
         let (_, pubkey) = secp256k1::generate_keypair(&mut OsRng);
-        let keypair = KeyPair::new_global(&mut OsRng);
+        let keypair = Keypair::new_global(&mut OsRng);
 
         let sig = Signature(G1Affine::generator());
 

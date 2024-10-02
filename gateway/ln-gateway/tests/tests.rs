@@ -13,7 +13,7 @@ use fedimint_client::ClientHandleArc;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::encoding::Encodable;
-use fedimint_core::secp256k1::{KeyPair, PublicKey};
+use fedimint_core::secp256k1::{Keypair, PublicKey};
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{msats, sats, secp256k1, Amount, OutPoint, TransactionId};
@@ -980,12 +980,12 @@ async fn lnv2_incoming_contract_with_invalid_preimage_is_refunded() -> anyhow::R
         PaymentImage::Hash([0_u8; 32].consensus_hash()),
         Amount::from_sats(1000),
         u64::MAX,
-        KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
         client
             .get_first_module::<GatewayClientModuleV2>()?
             .keypair
             .public_key(),
-        KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
     );
 
     assert!(contract.verify());
@@ -1024,12 +1024,12 @@ async fn lnv2_expired_incoming_contract_is_rejected() -> anyhow::Result<()> {
         PaymentImage::Hash([0_u8; 32].consensus_hash()),
         Amount::from_sats(1000),
         0, // this incoming contract expired on the 1st of January 1970
-        KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
         client
             .get_first_module::<GatewayClientModuleV2>()?
             .keypair
             .public_key(),
-        KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
     );
 
     assert!(contract.verify());
@@ -1068,12 +1068,12 @@ async fn lnv2_malleated_incoming_contract_is_rejected() -> anyhow::Result<()> {
         PaymentImage::Hash([0_u8; 32].consensus_hash()),
         Amount::from_sats(1000),
         u64::MAX,
-        KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
         client
             .get_first_module::<GatewayClientModuleV2>()?
             .keypair
             .public_key(),
-        KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
     );
 
     assert!(contract.verify());

@@ -63,7 +63,7 @@ use fedimint_wallet_common::tweakable::Tweakable;
 pub use fedimint_wallet_common::*;
 use futures::{Stream, StreamExt};
 use rand::{thread_rng, Rng};
-use secp256k1::{All, KeyPair, Secp256k1, SECP256K1};
+use secp256k1::{All, Keypair, Secp256k1, SECP256K1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tokio::sync::watch;
@@ -312,12 +312,7 @@ impl WalletClientModuleData {
     fn derive_deposit_address(
         &self,
         idx: TweakIdx,
-    ) -> (
-        secp256k1::KeyPair,
-        secp256k1::PublicKey,
-        Address,
-        OperationId,
-    ) {
+    ) -> (Keypair, secp256k1::PublicKey, Address, OperationId) {
         let idx = ChildId(idx.0);
 
         let secret_tweak_key = self
@@ -344,7 +339,7 @@ impl WalletClientModuleData {
     fn derive_peg_in_script(
         &self,
         idx: TweakIdx,
-    ) -> (ScriptBuf, bitcoin::Address, KeyPair, OperationId) {
+    ) -> (ScriptBuf, bitcoin::Address, Keypair, OperationId) {
         let (secret_tweak_key, _, address, operation_id) = self.derive_deposit_address(idx);
 
         (
@@ -732,11 +727,9 @@ impl WalletClientModule {
 
             let outcome_v2 = match outcome_v1 {
                 DepositStateV1::Claimed(tx_info) => DepositStateV2::Claimed {
-                    btc_deposited: bitcoin::Amount::from_sat(
-                        tx_info.btc_transaction.output[tx_info.out_idx as usize].value,
-                    ),
+                    btc_deposited: tx_info.btc_transaction.output[tx_info.out_idx as usize].value,
                     btc_out_point: bitcoin::OutPoint {
-                        txid: tx_info.btc_transaction.txid(),
+                        txid: tx_info.btc_transaction.compute_txid(),
                         vout: tx_info.out_idx,
                     },
                 },
@@ -770,14 +763,14 @@ impl WalletClientModule {
                                 .iter()
                                 .enumerate()
                                 .find_map(|(idx, output)| (output.script_pubkey == stream_script_pub_key).then_some((idx, output.value)))?;
-                            let txid = tx.txid();
+                            let txid = tx.compute_txid();
 
                             Some((
                                 bitcoin::OutPoint {
                                     txid,
                                     vout: out_idx as u32,
                                 },
-                                bitcoin::Amount::from_sat(amount)
+                                amount
                             ))
                         }).context("No deposit transaction found")
                     }

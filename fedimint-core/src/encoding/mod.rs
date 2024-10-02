@@ -26,6 +26,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{cmp, mem};
 
 use anyhow::{format_err, Context};
+use bitcoin::{Address, Network};
 pub use fedimint_derive::{Decodable, Encodable};
 use hex::{FromHex, ToHex};
 use lightning::util::ser::{Readable, Writeable};
@@ -257,7 +258,7 @@ impl Decodable for BigSize {
         r: &mut R,
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Self::read(r)
+        Self::read(&mut std::io::BufReader::new(r))
             .map_err(|e| DecodeError::new_custom(anyhow::anyhow!("BigSize decoding error: {e:?}")))
     }
 }
@@ -816,7 +817,7 @@ impl Decodable for lightning_invoice::Bolt11Invoice {
     ) -> Result<Self, DecodeError> {
         String::consensus_decode(d, modules)?
             .parse::<Self>()
-            .map_err(DecodeError::from_err)
+            .map_err(|err| DecodeError(anyhow::anyhow!(err)))
     }
 }
 
@@ -997,15 +998,18 @@ impl<W> From<W> for CountWrite<W> {
     }
 }
 
-impl<W: Write> Write for CountWrite<W> {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+impl<W: Write> bitcoin_io::Write for CountWrite<W> {
+    fn write(&mut self, buf: &[u8]) -> bitcoin_io::Result<usize> {
         let written = self.inner.write(buf)?;
         self.count += written as u64;
         Ok(written)
     }
 
-    fn flush(&mut self) -> io::Result<()> {
-        self.inner.flush()
+    fn flush(&mut self) -> bitcoin_io::Result<()> {
+        // TODO: Use `err` rather than hardcoding `Other`.
+        self.inner
+            .flush()
+            .map_err(|_err| bitcoin_io::Error::from(bitcoin_io::ErrorKind::Other))
     }
 }
 
@@ -1154,6 +1158,59 @@ where
             Self::Decoded(v) => v.consensus_encode(writer),
         }
     }
+}
+
+pub fn get_network_from_address(address: &Address) -> anyhow::Result<Network> {
+    /// Mainnet (bitcoin) pubkey address prefix.
+    const PUBKEY_ADDRESS_PREFIX_MAIN: u8 = 0; // 0x00
+    /// Mainnet (bitcoin) script address prefix.
+    const SCRIPT_ADDRESS_PREFIX_MAIN: u8 = 5; // 0x05
+    /// Test (tesnet, signet, regtest) pubkey address prefix.
+    const PUBKEY_ADDRESS_PREFIX_TEST: u8 = 111; // 0x6f
+    /// Test (tesnet, signet, regtest) script address prefix.
+    const SCRIPT_ADDRESS_PREFIX_TEST: u8 = 196; // 0xc4
+
+    let s = address.to_string();
+
+    // Try bech32.
+    let bech32_network = match find_bech32_prefix(&s) {
+        // note that upper or lowercase is allowed but NOT mixed case
+        "bc" | "BC" => Some(Network::Bitcoin),
+        "tb" | "TB" => Some(Network::Testnet), // this may also be signet
+        "bcrt" | "BCRT" => Some(Network::Regtest),
+        _ => None,
+    };
+    if let Some(network) = bech32_network {
+        return Ok(network);
+    }
+
+    // Base58
+    if s.len() > 50 {
+        return Err(anyhow::anyhow!("Address too long"));
+    }
+    let data = bitcoin::base58::decode_check(&s)?;
+    if data.len() != 21 {
+        return Err(anyhow::anyhow!("Invalid base58 data length"));
+    }
+
+    let network = match *data.first().unwrap() {
+        PUBKEY_ADDRESS_PREFIX_MAIN | SCRIPT_ADDRESS_PREFIX_MAIN => Network::Bitcoin,
+        PUBKEY_ADDRESS_PREFIX_TEST | SCRIPT_ADDRESS_PREFIX_TEST => Network::Testnet,
+        x => return Err(anyhow::anyhow!("Unknown address prefix: {}", x)),
+    };
+
+    Ok(network)
+}
+
+/// Extracts the bech32 prefix.
+///
+/// # Returns
+/// The input slice if no prefix is found.
+fn find_bech32_prefix(bech32: &str) -> &str {
+    // Split at the last occurrence of the separator character '1'.
+    bech32
+        .rfind('1')
+        .map_or(bech32, |sep| bech32.split_at(sep).0)
 }
 
 #[cfg(test)]

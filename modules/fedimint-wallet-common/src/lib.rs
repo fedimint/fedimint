@@ -9,6 +9,7 @@ use std::hash::Hasher;
 
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::psbt::raw::ProprietaryKey;
+use bitcoin::psbt::ExtractTxError;
 use bitcoin::{Address, Amount, BlockHash, Network, Txid};
 use config::WalletClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
@@ -441,6 +442,8 @@ pub enum WalletOutputError {
     BelowMinRelayFee,
     #[error("The wallet output version is not supported by this federation")]
     UnknownOutputVariant(#[from] UnknownWalletOutputVariantError),
+    #[error("Error extracting network from PSBT")]
+    UnknownNetwork,
 }
 
 // For backwards-compatibility with old clients, we use an UnknownOutputVariant
@@ -467,4 +470,6 @@ pub enum ProcessPegOutSigError {
     MissingOrMalformedChangeTweak,
     #[error("Error finalizing PSBT {0:?}")]
     ErrorFinalizingPsbt(Vec<miniscript::psbt::Error>),
+    #[error("Error extracting transaction from PSBT {0}")]
+    ExtractTxError(#[from] ExtractTxError),
 }

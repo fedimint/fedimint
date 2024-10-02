@@ -53,13 +53,7 @@ impl BitcoinClient {
 impl IBitcoindRpc for BitcoinClient {
     async fn get_network(&self) -> anyhow::Result<Network> {
         let network = block_in_place(|| self.client.get_blockchain_info())?;
-        Ok(match network.chain.as_str() {
-            "main" => Network::Bitcoin,
-            "test" => Network::Testnet,
-            "regtest" => Network::Regtest,
-            "signet" => Network::Signet,
-            n => panic!("Unknown Network \"{n}\""),
-        })
+        Ok(network.chain)
     }
 
     async fn get_block_count(&self) -> anyhow::Result<u64> {

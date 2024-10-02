@@ -26,7 +26,7 @@ use std::io::{Error, ErrorKind, Read, Write};
 use std::time::{Duration, SystemTime};
 
 use anyhow::{bail, Context as AnyhowContext};
-use bitcoin_hashes::sha256;
+use bitcoin_hashes::{sha256, Hash};
 use config::LightningClientConfig;
 use fedimint_client::oplog::OperationLogEntry;
 use fedimint_client::ClientHandleArc;
@@ -38,7 +38,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{
     extensible_associated_module_type, plugin_types_trait_impl_common, Amount, PeerId,
 };
-use lightning::util::ser::{WithoutLength, Writeable};
+use lightning::util::ser::Writeable;
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use secp256k1::schnorr::Signature;
 use secp256k1::Message;
@@ -675,11 +675,7 @@ impl PrunedInvoice {
         let expiry_timestamp = invoice.expires_at().map_or(u64::MAX, |t| t.as_secs());
 
         let destination_features = if let Some(features) = invoice.features() {
-            let mut feature_bytes = vec![];
-            WithoutLength(features)
-                .write(&mut feature_bytes)
-                .expect("Writing to byte vec can't fail");
-            feature_bytes
+            features.encode()
         } else {
             vec![]
         };
@@ -742,5 +738,5 @@ pub fn create_gateway_remove_message(
     let guardian_id: u16 = peer_id.into();
     message_preimage.append(&mut guardian_id.consensus_encode_to_vec());
     message_preimage.append(&mut challenge.consensus_encode_to_vec());
-    Message::from_hashed_data::<sha256::Hash>(message_preimage.as_slice())
+    Message::from_digest(*sha256::Hash::hash(message_preimage.as_slice()).as_ref())
 }

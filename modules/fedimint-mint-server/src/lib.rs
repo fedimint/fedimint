@@ -750,8 +750,8 @@ mod test {
     fn issue_note(
         server_cfgs: &[ServerModuleConfig],
         denomination: Amount,
-    ) -> (secp256k1::KeyPair, Note) {
-        let note_key = secp256k1::KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
+    ) -> (secp256k1::Keypair, Note) {
+        let note_key = secp256k1::Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
         let nonce = Nonce(note_key.public_key());
         let message = nonce.to_message();
         let blinding_key = tbs::BlindingKey::random();

@@ -238,7 +238,9 @@ pub enum ParseAmountError {
     #[error("Error parsing string as integer: {0}")]
     NotANumber(#[from] ParseIntError),
     #[error("Error parsing string as a bitcoin amount: {0}")]
-    WrongBitcoinAmount(#[from] bitcoin::amount::ParseAmountError),
+    WrongBitcoinAmount(#[from] bitcoin_units::amount::ParseAmountError),
+    #[error("Error parsing bitcoin denomination from string: {0}")]
+    WrongBitcoinDenomination(#[from] bitcoin_units::amount::ParseDenominationError),
 }
 
 #[cfg(test)]

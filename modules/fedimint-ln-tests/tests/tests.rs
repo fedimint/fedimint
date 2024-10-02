@@ -21,7 +21,7 @@ use fedimint_testing::ln::FakeLightningTest;
 use fedimint_testing::{Gateway, LightningModuleMode};
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use rand::rngs::OsRng;
-use secp256k1::KeyPair;
+use secp256k1::Keypair;
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
@@ -373,7 +373,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
     let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
 
     // generate a new keypair
-    let keypair = KeyPair::new_global(&mut OsRng);
+    let keypair = Keypair::new_global(&mut OsRng);
 
     // Print money for client2
     let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
@@ -436,7 +436,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
     let gw = gateway(&fixtures, &fed).await;
 
     // generate a new keypair
-    let keypair = KeyPair::new_global(&mut OsRng);
+    let keypair = Keypair::new_global(&mut OsRng);
 
     let ln_module = client1.get_first_module::<LightningClientModule>()?;
     let ln_gateway = ln_module.select_gateway(&gw.gateway_id()).await;
@@ -507,7 +507,7 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
     client2.await_primary_module_output(op, outpoint).await?;
 
     // generate a new keypair
-    let keypair = KeyPair::new_global(&mut OsRng);
+    let keypair = Keypair::new_global(&mut OsRng);
 
     let ln_module = client1.get_first_module::<LightningClientModule>()?;
     let ln_gateway = ln_module.select_gateway(&gw.gateway_id()).await;
@@ -657,7 +657,7 @@ mod fedimint_migration_tests {
     use rand::distributions::Standard;
     use rand::prelude::Distribution;
     use rand::rngs::OsRng;
-    use secp256k1::{All, KeyPair, Secp256k1, SecretKey};
+    use secp256k1::{All, Keypair, Secp256k1, SecretKey};
     use strum::IntoEnumIterator;
     use threshold_crypto::G1Projective;
     use tracing::info;
@@ -889,7 +889,7 @@ mod fedimint_migration_tests {
             invoice
                 .consensus_encode(&mut submitted_offer_variant)
                 .expect("Invoice is encodable");
-            let receiving_key = ReceivingKey::Personal(KeyPair::new_global(&mut OsRng));
+            let receiving_key = ReceivingKey::Personal(Keypair::new_global(&mut OsRng));
             receiving_key
                 .consensus_encode(&mut submitted_offer_variant)
                 .expect("ReceivingKey is encodable");
@@ -908,7 +908,7 @@ mod fedimint_migration_tests {
             invoice
                 .consensus_encode(&mut submitted_offer_variant)
                 .expect("Invoice is encodable");
-            let keypair = KeyPair::new_global(&mut OsRng);
+            let keypair = Keypair::new_global(&mut OsRng);
             keypair
                 .consensus_encode(&mut submitted_offer_variant)
                 .expect("Keypair is encodable");
@@ -923,7 +923,7 @@ mod fedimint_migration_tests {
             invoice
                 .consensus_encode(&mut confirmed_variant)
                 .expect("Invoice is encodable");
-            let keypair = KeyPair::new_global(&mut OsRng);
+            let keypair = Keypair::new_global(&mut OsRng);
             keypair
                 .consensus_encode(&mut confirmed_variant)
                 .expect("Keypair is encodable");
@@ -945,7 +945,7 @@ mod fedimint_migration_tests {
             contract: outgoing_contract.clone(),
         };
         let contract = OutgoingContractData {
-            recovery_key: KeyPair::from_secret_key(&secp, &sk),
+            recovery_key: Keypair::from_secret_key(&secp, &sk),
             contract_account: outgoing_account,
         };
         let ln_common = LightningPayCommon {

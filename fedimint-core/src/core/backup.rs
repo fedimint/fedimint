@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::encoding::{Decodable, Encodable};
-use secp256k1::{KeyPair, Message, Secp256k1, Signing, Verification};
+use secp256k1::{Keypair, Message, Secp256k1, Signing, Verification};
 use serde::{Deserialize, Serialize};
 
 /// Maximum payload size of a backup request
@@ -27,8 +27,9 @@ impl BackupRequest {
         self.consensus_hash()
     }
 
-    pub fn sign(self, keypair: &KeyPair) -> anyhow::Result<SignedBackupRequest> {
-        let signature = secp256k1::SECP256K1.sign_schnorr(&Message::from(self.hash()), keypair);
+    pub fn sign(self, keypair: &Keypair) -> anyhow::Result<SignedBackupRequest> {
+        let signature = secp256k1::SECP256K1
+            .sign_schnorr(&Message::from_digest(*self.hash().as_ref()), keypair);
 
         Ok(SignedBackupRequest {
             request: self,
@@ -51,7 +52,7 @@ impl SignedBackupRequest {
     {
         ctx.verify_schnorr(
             &self.signature,
-            &Message::from_slice(&self.request.hash().to_byte_array()).expect("Can't fail"),
+            &Message::from_digest_slice(&self.request.hash().to_byte_array()).expect("Can't fail"),
             &self.request.id.x_only_public_key().0,
         )?;
 

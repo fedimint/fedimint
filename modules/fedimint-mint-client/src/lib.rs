@@ -59,7 +59,7 @@ use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-use fedimint_core::secp256k1::{All, KeyPair, Secp256k1};
+use fedimint_core::secp256k1::{All, Keypair, Secp256k1};
 use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, PeerId, Tiered,
@@ -387,7 +387,7 @@ impl OOBNotes {
 pub struct OOBNoteV2 {
     pub amount: Amount,
     pub sig: Signature,
-    pub key: KeyPair,
+    pub key: Keypair,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encodable, Decodable)]
@@ -2047,7 +2047,7 @@ impl State for MintClientStateMachines {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct SpendableNote {
     pub signature: tbs::Signature,
-    pub spend_key: KeyPair,
+    pub spend_key: Keypair,
 }
 
 impl fmt::Debug for SpendableNote {
@@ -2106,7 +2106,7 @@ pub struct SpendableNoteUndecoded {
     // verifying they serialize and decode the same.
     #[serde(serialize_with = "serdect::array::serialize_hex_lower_or_bin")]
     pub signature: [u8; 48],
-    pub spend_key: KeyPair,
+    pub spend_key: Keypair,
 }
 
 impl fmt::Display for SpendableNoteUndecoded {

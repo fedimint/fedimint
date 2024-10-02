@@ -5,7 +5,7 @@ use std::time::Duration;
 use async_stream::stream;
 use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash};
-use bitcoin::key::KeyPair;
+use bitcoin::key::Keypair;
 use bitcoin::secp256k1::{PublicKey, SecretKey};
 use bitcoin::Address;
 use fedimint_core::task::TaskGroup;
@@ -44,7 +44,7 @@ impl FakeLightningTest {
     pub fn new() -> Self {
         info!(target: LOG_TEST, "Setting up fake lightning test fixture");
         let ctx = bitcoin::secp256k1::Secp256k1::new();
-        let kp = KeyPair::new(&ctx, &mut OsRng);
+        let kp = Keypair::new(&ctx, &mut OsRng);
         let amount_sent = AtomicU64::new(0);
 
         FakeLightningTest {
@@ -91,7 +91,7 @@ impl FakeLightningTest {
     pub fn unpayable_invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Bolt11Invoice {
         let ctx = bitcoin::secp256k1::Secp256k1::new();
         // Generate fake node keypair
-        let kp = KeyPair::new(&ctx, &mut OsRng);
+        let kp = Keypair::new(&ctx, &mut OsRng);
         let payment_hash = sha256::Hash::hash(&MOCK_INVOICE_PREIMAGE);
 
         // `FakeLightningTest` will fail to pay any invoice with
