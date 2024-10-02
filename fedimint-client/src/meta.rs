@@ -5,6 +5,8 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::{bail, Context as _};
 use async_stream::stream;
+use fedimint_api_client::api::DynGlobalApi;
+use fedimint_core::config::ClientConfig;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::task::waiter::Waiter;
 use fedimint_core::task::{MaybeSend, MaybeSync};
@@ -27,7 +29,8 @@ pub trait MetaSource: MaybeSend + MaybeSync + 'static {
     async fn wait_for_update(&self);
     async fn fetch(
         &self,
-        client: &Client,
+        client_config: &ClientConfig,
+        api: &DynGlobalApi,
         fetch_kind: FetchKind,
         last_revision: Option<u64>,
     ) -> anyhow::Result<MetaValues>;
@@ -171,9 +174,15 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
         let mut current_revision = self
             .current_revision(&mut client.db().begin_transaction_nc().await)
             .await;
+        let client_config = client.config().await;
         let meta_values = self
             .source
-            .fetch(client, FetchKind::Initial, current_revision)
+            .fetch(
+                &client_config,
+                &client.api,
+                FetchKind::Initial,
+                current_revision,
+            )
             .await;
         let failed_initial = meta_values.is_err();
         match meta_values {
@@ -191,7 +200,12 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
         loop {
             if let Ok(meta_values) = self
                 .source
-                .fetch(client, FetchKind::Background, current_revision)
+                .fetch(
+                    &client_config,
+                    &client.api,
+                    FetchKind::Background,
+                    current_revision,
+                )
                 .await
             {
                 current_revision = Some(meta_values.revision);
@@ -237,16 +251,15 @@ impl MetaSource for LegacyMetaSource {
 
     async fn fetch(
         &self,
-        client: &Client,
+        client_config: &ClientConfig,
+        _api: &DynGlobalApi,
         fetch_kind: FetchKind,
         last_revision: Option<u64>,
     ) -> anyhow::Result<MetaValues> {
-        let config_iter = client
-            .config()
-            .await
+        let config_iter = client_config
             .global
             .meta
-            .into_iter()
+            .iter()
             .map(|(key, value)| (MetaFieldKey(key.clone()), MetaFieldValue(value.clone())));
         let backoff = match fetch_kind {
             // need to be fast the first time.
@@ -254,7 +267,7 @@ impl MetaSource for LegacyMetaSource {
             FetchKind::Background => backoff_util::background_backoff(),
         };
         let overrides = retry("fetch_meta_overrides", backoff, || {
-            fetch_meta_overrides(&self.reqwest, client, "meta_override_url")
+            fetch_meta_overrides(&self.reqwest, client_config, "meta_override_url")
         })
         .await?;
         Ok(MetaValues {
@@ -266,10 +279,10 @@ impl MetaSource for LegacyMetaSource {
 
 pub async fn fetch_meta_overrides(
     reqwest: &reqwest::Client,
-    client: &Client,
+    client_config: &ClientConfig,
     field_name: &str,
 ) -> anyhow::Result<BTreeMap<MetaFieldKey, MetaFieldValue>> {
-    let Some(url) = client.config().await.meta::<String>(field_name)? else {
+    let Some(url) = client_config.meta::<String>(field_name)? else {
         return Ok(BTreeMap::new());
     };
     let response = reqwest
@@ -292,7 +305,7 @@ pub async fn fetch_meta_overrides(
         .await
         .context("Meta override could not be parsed as JSON")?;
 
-    let federation_id = client.federation_id().to_string();
+    let federation_id = client_config.calculate_federation_id().to_string();
     let meta_fields = federation_map
         .remove(&federation_id)
         .with_context(|| anyhow::format_err!("No entry for federation {federation_id} in {url}"))?

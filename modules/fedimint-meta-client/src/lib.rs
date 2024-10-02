@@ -14,21 +14,20 @@ use std::time::Duration;
 use api::MetaFederationApi;
 use common::{MetaConsensusValue, MetaKey, MetaValue, KIND};
 use db::DbKeyPrefix;
-use fedimint_api_client::api::DynModuleApi;
+use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
 use fedimint_client::db::ClientMigrationFn;
 use fedimint_client::meta::{FetchKind, LegacyMetaSource, MetaSource, MetaValues};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::sm::Context;
-use fedimint_client::Client;
+use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{Decoder, ModuleKind};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 use fedimint_core::module::{ApiAuth, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion};
 use fedimint_core::util::backoff_util::FibonacciBackoff;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, PeerId};
-use fedimint_logging::LOG_CLIENT_MODULE_META;
 pub use fedimint_meta_common as common;
 use fedimint_meta_common::{MetaCommonInit, MetaModuleTypes, DEFAULT_META_KEY};
 use states::MetaStateMachine;
@@ -220,7 +219,8 @@ impl<S: MetaSource> MetaSource for MetaModuleMetaSourceWithFallback<S> {
 
     async fn fetch(
         &self,
-        client: &fedimint_client::Client,
+        client_config: &ClientConfig,
+        api: &DynGlobalApi,
         fetch_kind: fedimint_client::meta::FetchKind,
         last_revision: Option<u64>,
     ) -> anyhow::Result<fedimint_client::meta::MetaValues> {
@@ -230,7 +230,7 @@ impl<S: MetaSource> MetaSource for MetaModuleMetaSourceWithFallback<S> {
             FetchKind::Background => backoff_util::background_backoff(),
         };
 
-        let maybe_meta_module_meta = get_meta_module_value(client, backoff)
+        let maybe_meta_module_meta = get_meta_module_value(client_config, api, backoff)
             .await
             .map(|meta| {
                 Result::<_, anyhow::Error>::Ok(MetaValues {
@@ -245,23 +245,23 @@ impl<S: MetaSource> MetaSource for MetaModuleMetaSourceWithFallback<S> {
         if let Some(maybe_meta_module_meta) = maybe_meta_module_meta {
             Ok(maybe_meta_module_meta)
         } else {
-            self.legacy.fetch(client, fetch_kind, last_revision).await
+            self.legacy
+                .fetch(client_config, api, fetch_kind, last_revision)
+                .await
         }
     }
 }
 
 async fn get_meta_module_value(
-    client: &Client,
+    client_config: &ClientConfig,
+    api: &DynGlobalApi,
     backoff: FibonacciBackoff,
 ) -> Option<MetaConsensusValue> {
-    if client.get_first_instance(&KIND).is_some() {
-        let Ok(meta_client) = client.get_first_module::<MetaClientModule>() else {
-            warn!(target: LOG_CLIENT_MODULE_META, "Meta module instance not found");
-            return None;
-        };
+    if let Ok((instance_id, _)) = client_config.get_first_module_by_kind_cfg(KIND) {
+        let meta_api = api.with_module(instance_id);
 
-        let overrides_res = retry("fetch_meta_values", backoff, || {
-            meta_client.get_consensus_value(DEFAULT_META_KEY)
+        let overrides_res = retry("fetch_meta_values", backoff, || async {
+            Ok(meta_api.get_consensus(DEFAULT_META_KEY).await?)
         })
         .await;
 
