@@ -6,9 +6,9 @@ use fedimint_api_client::api::ApiVersionSet;
 use fedimint_core::config::{ClientConfig, ClientConfigV0, FederationId, GlobalClientConfig};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{
-    apply_migrations, create_database_version, CoreMigrationFn, Database, DatabaseTransaction,
-    DatabaseValue, DatabaseVersion, DatabaseVersionKey, IDatabaseTransactionOpsCore,
-    IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
+    apply_migrations, create_database_version, get_current_database_version, CoreMigrationFn,
+    Database, DatabaseTransaction, DatabaseValue, DatabaseVersion, DatabaseVersionKey,
+    IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -475,12 +475,7 @@ pub async fn apply_migrations_client(
         .await
         .is_none();
 
-    let last_key_value = migrations.last_key_value();
-    let target_version = if let Some((last_key, _)) = last_key_value {
-        DatabaseVersion(last_key.0 + 1)
-    } else {
-        DatabaseVersion(0)
-    };
+    let target_version = get_current_database_version(&migrations);
 
     // First write the database version to disk if it does not exist.
     create_database_version(
@@ -581,7 +576,7 @@ pub async fn apply_migrations_client(
                 inactive_states = new_inactive_states;
             }
 
-            current_version.increment();
+            current_version = current_version.increment();
             global_dbtx
                 .insert_entry(&DatabaseVersionKey(module_instance_id), &current_version)
                 .await;

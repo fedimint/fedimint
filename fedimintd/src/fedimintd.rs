@@ -12,7 +12,7 @@ use fedimint_core::config::{
     EmptyGenParams, ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
 use fedimint_core::core::ModuleKind;
-use fedimint_core::db::{Database, DatabaseVersion};
+use fedimint_core::db::{get_current_database_version, Database};
 use fedimint_core::envs::{
     is_env_var_set, BitcoinRpcConfig, FM_ENABLE_MODULE_LNV2_ENV, FM_USE_UNKNOWN_MODULE_ENV,
 };
@@ -487,14 +487,10 @@ impl Fedimintd {
                         .expect("module is present")
                 })
                 .map(|module_init| {
-                    let migrations = module_init.get_database_migrations();
-                    let last_migration = migrations.last_key_value();
-                    let database_version = if let Some((last_key, _)) = last_migration {
-                        DatabaseVersion(last_key.0 + 1)
-                    } else {
-                        DatabaseVersion(0)
-                    };
-                    (module_init.module_kind(), database_version)
+                    (
+                        module_init.module_kind(),
+                        get_current_database_version(&module_init.get_database_migrations()),
+                    )
                 })
                 .collect(),
         }

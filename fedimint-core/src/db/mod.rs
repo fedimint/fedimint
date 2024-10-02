@@ -2101,8 +2101,8 @@ impl std::fmt::Display for DatabaseVersion {
 }
 
 impl DatabaseVersion {
-    pub fn increment(&mut self) {
-        self.0 += 1;
+    pub fn increment(&self) -> Self {
+        Self(self.0 + 1)
     }
 }
 
@@ -2184,6 +2184,28 @@ pub type CoreMigrationFn = for<'r, 'tx> fn(
     Box<maybe_add_send!(dyn futures::Future<Output = anyhow::Result<()>> + 'r)>,
 >;
 
+/// Verifies that all database migrations are defined contiguously and returns
+/// the "current" database version, which is one greater than the last key in
+/// the map.
+pub fn get_current_database_version<F>(
+    migrations: &BTreeMap<DatabaseVersion, F>,
+) -> DatabaseVersion {
+    let versions = migrations.keys().copied().collect::<Vec<_>>();
+
+    // Verify that all database migrations are defined contiguously. If there is a
+    // gap, this indicates a programming error and we should panic.
+    if !versions
+        .windows(2)
+        .all(|window| window[0].increment() == window[1])
+    {
+        panic!("Database Migrations are not defined contiguously");
+    }
+
+    versions
+        .last()
+        .map_or(DatabaseVersion(0), DatabaseVersion::increment)
+}
+
 /// Applies the database migrations to a non-isolated database.
 pub async fn apply_migrations_server(
     db: &Database,
@@ -2227,12 +2249,7 @@ pub async fn apply_migrations(
         .await
         .is_none();
 
-    let last_key_value = migrations.last_key_value();
-    let target_db_version = if let Some((last_key, _)) = last_key_value {
-        DatabaseVersion(last_key.0 + 1)
-    } else {
-        DatabaseVersion(0)
-    };
+    let target_db_version = get_current_database_version(&migrations);
 
     // First write the database version to disk if it does not exist.
     create_database_version(
@@ -2278,7 +2295,7 @@ pub async fn apply_migrations(
                 warn!(target: LOG_DB, ?current_db_version, "Missing server db migration");
             }
 
-            current_db_version.increment();
+            current_db_version = current_db_version.increment();
             global_dbtx
                 .insert_entry(
                     &DatabaseVersionKey(module_instance_id_key),
