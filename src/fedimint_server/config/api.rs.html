@@ -1895,7 +1895,7 @@
                 <span class="self">self</span>.bitcoin_status_cache.read().<span class="kw">await</span>;
             <span class="kw">if let </span><span class="prelude-val">Some</span>((timestamp, status)) = cached_status.as_ref() {
                 <span class="kw">if </span>timestamp.elapsed() &lt; <span class="self">self</span>.bitcoin_status_cache_duration {
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(status.clone());
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="kw-2">*</span>status);
                 }
             }
         }
@@ -1916,7 +1916,7 @@
         <span class="comment">// Update the bitcoin status cache
         </span><span class="kw">let </span><span class="kw-2">mut </span>cached_status: RwLockWriteGuard&lt;<span class="lifetime">'_</span>, <span class="prelude-ty">Option</span>&lt;(Instant, BitcoinRpcConnectionStatus)&gt;&gt; =
             <span class="self">self</span>.bitcoin_status_cache.write().<span class="kw">await</span>;
-        <span class="kw-2">*</span>cached_status = <span class="prelude-val">Some</span>((Instant::now(), status.clone()));
+        <span class="kw-2">*</span>cached_status = <span class="prelude-val">Some</span>((Instant::now(), status));
 
         <span class="prelude-val">Ok</span>(status)
     }
