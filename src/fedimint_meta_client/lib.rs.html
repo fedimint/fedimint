@@ -296,21 +296,20 @@
 <span class="kw">use </span>api::MetaFederationApi;
 <span class="kw">use </span>common::{MetaConsensusValue, MetaKey, MetaValue, KIND};
 <span class="kw">use </span>db::DbKeyPrefix;
-<span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
+<span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
 <span class="kw">use </span>fedimint_client::db::ClientMigrationFn;
 <span class="kw">use </span>fedimint_client::meta::{FetchKind, LegacyMetaSource, MetaSource, MetaValues};
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
 <span class="kw">use </span>fedimint_client::module::{ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::sm::Context;
-<span class="kw">use </span>fedimint_client::Client;
+<span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion};
 <span class="kw">use </span>fedimint_core::util::backoff_util::FibonacciBackoff;
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, PeerId};
-<span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_META;
 <span class="kw">pub use </span>fedimint_meta_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_meta_common::{MetaCommonInit, MetaModuleTypes, DEFAULT_META_KEY};
 <span class="kw">use </span>states::MetaStateMachine;
@@ -502,7 +501,8 @@
 
     <span class="kw">async fn </span>fetch(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        client: <span class="kw-2">&amp;</span>fedimint_client::Client,
+        client_config: <span class="kw-2">&amp;</span>ClientConfig,
+        api: <span class="kw-2">&amp;</span>DynGlobalApi,
         fetch_kind: fedimint_client::meta::FetchKind,
         last_revision: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     ) -&gt; anyhow::Result&lt;fedimint_client::meta::MetaValues&gt; {
@@ -512,7 +512,7 @@
             FetchKind::Background =&gt; backoff_util::background_backoff(),
         };
 
-        <span class="kw">let </span>maybe_meta_module_meta = get_meta_module_value(client, backoff)
+        <span class="kw">let </span>maybe_meta_module_meta = get_meta_module_value(client_config, api, backoff)
             .<span class="kw">await
             </span>.map(|meta| {
                 <span class="prelude-ty">Result</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;::Ok(MetaValues {
@@ -527,23 +527,23 @@
         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(maybe_meta_module_meta) = maybe_meta_module_meta {
             <span class="prelude-val">Ok</span>(maybe_meta_module_meta)
         } <span class="kw">else </span>{
-            <span class="self">self</span>.legacy.fetch(client, fetch_kind, last_revision).<span class="kw">await
+            <span class="self">self</span>.legacy
+                .fetch(client_config, api, fetch_kind, last_revision)
+                .<span class="kw">await
         </span>}
     }
 }
 
 <span class="kw">async fn </span>get_meta_module_value(
-    client: <span class="kw-2">&amp;</span>Client,
+    client_config: <span class="kw-2">&amp;</span>ClientConfig,
+    api: <span class="kw-2">&amp;</span>DynGlobalApi,
     backoff: FibonacciBackoff,
 ) -&gt; <span class="prelude-ty">Option</span>&lt;MetaConsensusValue&gt; {
-    <span class="kw">if </span>client.get_first_instance(<span class="kw-2">&amp;</span>KIND).is_some() {
-        <span class="kw">let </span><span class="prelude-val">Ok</span>(meta_client) = client.get_first_module::&lt;MetaClientModule&gt;() <span class="kw">else </span>{
-            <span class="macro">warn!</span>(target: LOG_CLIENT_MODULE_META, <span class="string">"Meta module instance not found"</span>);
-            <span class="kw">return </span><span class="prelude-val">None</span>;
-        };
+    <span class="kw">if let </span><span class="prelude-val">Ok</span>((instance_id, <span class="kw">_</span>)) = client_config.get_first_module_by_kind_cfg(KIND) {
+        <span class="kw">let </span>meta_api = api.with_module(instance_id);
 
-        <span class="kw">let </span>overrides_res = retry(<span class="string">"fetch_meta_values"</span>, backoff, || {
-            meta_client.get_consensus_value(DEFAULT_META_KEY)
+        <span class="kw">let </span>overrides_res = retry(<span class="string">"fetch_meta_values"</span>, backoff, || <span class="kw">async </span>{
+            <span class="prelude-val">Ok</span>(meta_api.get_consensus(DEFAULT_META_KEY).<span class="kw">await</span><span class="question-mark">?</span>)
         })
         .<span class="kw">await</span>;
 
