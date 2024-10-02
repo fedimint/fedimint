@@ -499,7 +499,7 @@ impl ConfigGenApi {
                 self.bitcoin_status_cache.read().await;
             if let Some((timestamp, status)) = cached_status.as_ref() {
                 if timestamp.elapsed() < self.bitcoin_status_cache_duration {
-                    return Ok(status.clone());
+                    return Ok(*status);
                 }
             }
         }
@@ -520,7 +520,7 @@ impl ConfigGenApi {
         // Update the bitcoin status cache
         let mut cached_status: RwLockWriteGuard<'_, Option<(Instant, BitcoinRpcConnectionStatus)>> =
             self.bitcoin_status_cache.write().await;
-        *cached_status = Some((Instant::now(), status.clone()));
+        *cached_status = Some((Instant::now(), status));
 
         Ok(status)
     }
