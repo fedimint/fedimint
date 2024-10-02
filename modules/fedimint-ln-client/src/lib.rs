@@ -278,7 +278,6 @@ impl Default for LightningClientInit {
 
 impl ModuleInit for LightningClientInit {
     type Common = LightningCommonInit;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(4);
 
     async fn dump_database(
         &self,

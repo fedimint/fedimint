@@ -427,8 +427,6 @@ pub trait IDynCommonModuleInit: Debug {
 
     fn to_dyn_common(&self) -> DynCommonModuleInit;
 
-    fn database_version(&self) -> DatabaseVersion;
-
     async fn dump_database(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -439,14 +437,6 @@ pub trait IDynCommonModuleInit: Debug {
 /// Trait implemented by every `*ModuleInit` (server or client side)
 pub trait ModuleInit: Debug + Clone + Send + Sync + 'static {
     type Common: CommonModuleInit;
-
-    /// This represents the module's database version that the current code is
-    /// compatible with. It is important to increment this value whenever a
-    /// key or a value that is persisted to the database within the module
-    /// changes. It is also important to add the corresponding
-    /// migration function in `get_database_migrations` which should define how
-    /// to move from the previous database version to the current version.
-    const DATABASE_VERSION: DatabaseVersion;
 
     fn dump_database(
         &self,
@@ -476,10 +466,6 @@ where
 
     fn to_dyn_common(&self) -> DynCommonModuleInit {
         DynCommonModuleInit::from_inner(Arc::new(self.clone()))
-    }
-
-    fn database_version(&self) -> DatabaseVersion {
-        <Self as ModuleInit>::DATABASE_VERSION
     }
 
     async fn dump_database(

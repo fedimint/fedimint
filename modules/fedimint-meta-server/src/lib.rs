@@ -59,7 +59,6 @@ pub struct MetaInit;
 // TODO: Boilerplate-code
 impl ModuleInit for MetaInit {
     type Common = MetaCommonInit;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     /// Dumps all database items for debugging
     async fn dump_database(

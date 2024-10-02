@@ -2188,10 +2188,9 @@ pub type CoreMigrationFn = for<'r, 'tx> fn(
 pub async fn apply_migrations_server(
     db: &Database,
     kind: String,
-    target_db_version: DatabaseVersion,
     migrations: BTreeMap<DatabaseVersion, CoreMigrationFn>,
 ) -> Result<(), anyhow::Error> {
-    apply_migrations(db, kind, target_db_version, migrations, None, None).await
+    apply_migrations(db, kind, migrations, None, None).await
 }
 
 /// `apply_migrations` iterates from the on disk database version for the module
@@ -2205,7 +2204,6 @@ pub async fn apply_migrations_server(
 pub async fn apply_migrations(
     db: &Database,
     kind: String,
-    target_db_version: DatabaseVersion,
     migrations: BTreeMap<DatabaseVersion, CoreMigrationFn>,
     module_instance_id: Option<ModuleInstanceId>,
     // When used in client side context, we can/should ignore keys that external app
@@ -2228,6 +2226,13 @@ pub async fn apply_migrations(
         .next()
         .await
         .is_none();
+
+    let last_key_value = migrations.last_key_value();
+    let target_db_version = if let Some((last_key, _)) = last_key_value {
+        DatabaseVersion(last_key.0 + 1)
+    } else {
+        DatabaseVersion(0)
+    };
 
     // First write the database version to disk if it does not exist.
     create_database_version(
@@ -3132,16 +3137,9 @@ mod test_utils {
             migrate_test_db_version_0(dbtx).boxed()
         });
 
-        apply_migrations(
-            &db,
-            "TestModule".to_string(),
-            DatabaseVersion(1),
-            migrations,
-            None,
-            None,
-        )
-        .await
-        .expect("Error applying migrations for TestModule");
+        apply_migrations(&db, "TestModule".to_string(), migrations, None, None)
+            .await
+            .expect("Error applying migrations for TestModule");
 
         // Verify that the migrations completed successfully
         let mut dbtx = db.begin_transaction().await;

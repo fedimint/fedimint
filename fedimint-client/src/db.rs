@@ -30,8 +30,6 @@ use crate::sm::executor::{
 };
 use crate::sm::{ActiveStateMeta, InactiveStateMeta};
 
-pub const CORE_CLIENT_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
-
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
@@ -440,13 +438,11 @@ pub fn get_core_client_database_migrations() -> BTreeMap<DatabaseVersion, CoreMi
 pub async fn apply_migrations_core_client(
     db: &Database,
     kind: String,
-    target_version: DatabaseVersion,
     migrations: BTreeMap<DatabaseVersion, CoreMigrationFn>,
 ) -> Result<(), anyhow::Error> {
     apply_migrations(
         db,
         kind,
-        target_version,
         migrations,
         None,
         Some(DbKeyPrefix::UserData as u8),
@@ -466,7 +462,6 @@ pub async fn apply_migrations_core_client(
 pub async fn apply_migrations_client(
     db: &Database,
     kind: String,
-    target_version: DatabaseVersion,
     migrations: BTreeMap<DatabaseVersion, ClientMigrationFn>,
     module_instance_id: ModuleInstanceId,
 ) -> Result<(), anyhow::Error> {
@@ -479,6 +474,13 @@ pub async fn apply_migrations_client(
         .next()
         .await
         .is_none();
+
+    let last_key_value = migrations.last_key_value();
+    let target_version = if let Some((last_key, _)) = last_key_value {
+        DatabaseVersion(last_key.0 + 1)
+    } else {
+        DatabaseVersion(0)
+    };
 
     // First write the database version to disk if it does not exist.
     create_database_version(

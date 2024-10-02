@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use anyhow::bail;
 use async_channel::Sender;
-use db::{get_global_database_migrations, GLOBAL_DATABASE_VERSION};
+use db::get_global_database_migrations;
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::config::ServerModuleInitRegistry;
@@ -60,7 +60,6 @@ pub async fn run(
     apply_migrations_server(
         &db,
         "fedimint-server".to_string(),
-        GLOBAL_DATABASE_VERSION,
         get_global_database_migrations(),
     )
     .await?;
@@ -75,7 +74,6 @@ pub async fn run(
                 apply_migrations(
                     &db,
                     module_init.module_kind().to_string(),
-                    module_init.database_version(),
                     module_init.get_database_migrations(),
                     Some(*module_id),
                     None,

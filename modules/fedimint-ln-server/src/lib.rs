@@ -16,9 +16,7 @@ use fedimint_core::config::{
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{
-    DatabaseTransaction, DatabaseValue, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-};
+use fedimint_core::db::{DatabaseTransaction, DatabaseValue, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -80,7 +78,6 @@ pub struct LightningInit;
 
 impl ModuleInit for LightningInit {
     type Common = LightningCommonInit;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     async fn dump_database(
         &self,

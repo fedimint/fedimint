@@ -23,8 +23,6 @@ use strum_macros::EnumIter;
 
 use crate::rpc::rpc_server::hash_password;
 
-pub const GATEWAYD_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(2);
-
 pub trait GatewayDbtxNcExt {
     async fn save_federation_config(&mut self, config: &FederationConfig);
     async fn load_federation_configs_v0(&mut self) -> BTreeMap<FederationId, FederationConfigV0>;
@@ -566,7 +564,6 @@ mod fedimint_migration_tests {
                 Ok(())
             },
             "gatewayd",
-            GATEWAYD_DATABASE_VERSION,
             get_gatewayd_database_migrations(),
             ModuleDecoderRegistry::from_iter([]),
         )

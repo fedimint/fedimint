@@ -95,7 +95,7 @@ use db::{
     apply_migrations_client, apply_migrations_core_client, get_core_client_database_migrations,
     ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientInitStateKey,
     ClientModuleRecovery, ClientPreRootSecretHashKey, EncodedClientSecretKey, InitMode,
-    PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey, CORE_CLIENT_DATABASE_VERSION,
+    PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey,
 };
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{
@@ -794,7 +794,6 @@ impl Client {
         apply_migrations_core_client(
             &db,
             "fedimint-client".to_string(),
-            CORE_CLIENT_DATABASE_VERSION,
             get_core_client_database_migrations(),
         )
         .await?;
@@ -2119,7 +2118,6 @@ impl ClientBuilder {
                 apply_migrations_client(
                     db,
                     kind.to_string(),
-                    init.database_version(),
                     init.get_database_migrations(),
                     module_id,
                 )

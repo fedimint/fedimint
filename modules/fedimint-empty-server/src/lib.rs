@@ -42,7 +42,6 @@ pub struct EmptyInit;
 // TODO: Boilerplate-code
 impl ModuleInit for EmptyInit {
     type Common = EmptyCommonInit;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     /// Dumps all database items for debugging
     async fn dump_database(

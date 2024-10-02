@@ -38,9 +38,7 @@ use fedimint_core::config::{
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-};
+use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{is_rbf_withdrawal_enabled, is_running_in_test_env, BitcoinRpcConfig};
 use fedimint_core::module::audit::Audit;
@@ -104,7 +102,6 @@ pub struct WalletInit;
 
 impl ModuleInit for WalletInit {
     type Common = WalletCommonInit;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     async fn dump_database(
         &self,

@@ -6,7 +6,6 @@ use std::{env, fs, io};
 use anyhow::{bail, format_err, Context};
 use fedimint_client::db::{
     apply_migrations_client, apply_migrations_core_client, get_core_client_database_migrations,
-    CORE_CLIENT_DATABASE_VERSION,
 };
 use fedimint_client::module::init::DynClientModuleInit;
 use fedimint_client::module::ClientModule;
@@ -282,7 +281,6 @@ fn get_temp_database(
 pub async fn validate_migrations_global<F, Fut>(
     validate: F,
     db_prefix: &str,
-    target_db_version: DatabaseVersion,
     migrations: BTreeMap<DatabaseVersion, CoreMigrationFn>,
     decoders: ModuleDecoderRegistry,
 ) -> anyhow::Result<()>
@@ -291,7 +289,7 @@ where
     Fut: futures::Future<Output = anyhow::Result<()>>,
 {
     let (db, _tmp_dir) = get_temp_database(db_prefix, &decoders)?;
-    apply_migrations_server(&db, db_prefix.to_string(), target_db_version, migrations)
+    apply_migrations_server(&db, db_prefix.to_string(), migrations)
         .await
         .context("Error applying migrations to temp database")?;
 
@@ -322,7 +320,6 @@ where
     apply_migrations(
         &db,
         module.module_kind().to_string(),
-        module.database_version(),
         module.get_database_migrations(),
         Some(TEST_MODULE_INSTANCE_ID),
         None,
@@ -354,7 +351,6 @@ where
     apply_migrations_core_client(
         &db,
         db_prefix.to_string(),
-        CORE_CLIENT_DATABASE_VERSION,
         get_core_client_database_migrations(),
     )
     .await
@@ -391,7 +387,6 @@ where
     apply_migrations_client(
         &db,
         module.as_common().module_kind().to_string(),
-        module.database_version(),
         module.get_database_migrations(),
         TEST_MODULE_INSTANCE_ID,
     )
