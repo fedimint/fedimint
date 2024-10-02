@@ -765,10 +765,7 @@
 <a href="#764" id="764">764</a>
 <a href="#765" id="765">765</a>
 <a href="#766" id="766">766</a>
-<a href="#767" id="767">767</a>
-<a href="#768" id="768">768</a>
-<a href="#769" id="769">769</a>
-<a href="#770" id="770">770</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#767" id="767">767</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::time::SystemTime;
 
@@ -776,9 +773,9 @@
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, ClientConfigV0, FederationId, GlobalClientConfig};
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
-    apply_migrations, create_database_version, CoreMigrationFn, Database, DatabaseTransaction,
-    DatabaseValue, DatabaseVersion, DatabaseVersionKey, IDatabaseTransactionOpsCore,
-    IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
+    apply_migrations, create_database_version, get_current_database_version, CoreMigrationFn,
+    Database, DatabaseTransaction, DatabaseValue, DatabaseVersion, DatabaseVersionKey,
+    IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
 };
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -799,8 +796,6 @@
     InactiveStateKeyPrefixBytes,
 };
 <span class="kw">use </span><span class="kw">crate</span>::sm::{ActiveStateMeta, InactiveStateMeta};
-
-<span class="kw">pub const </span>CORE_CLIENT_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">1</span>);
 
 <span class="attr">#[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -1210,13 +1205,11 @@
 <span class="kw">pub async fn </span>apply_migrations_core_client(
     db: <span class="kw-2">&amp;</span>Database,
     kind: String,
-    target_version: DatabaseVersion,
     migrations: BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
     apply_migrations(
         db,
         kind,
-        target_version,
         migrations,
         <span class="prelude-val">None</span>,
         <span class="prelude-val">Some</span>(DbKeyPrefix::UserData <span class="kw">as </span>u8),
@@ -1236,7 +1229,6 @@
 </span><span class="kw">pub async fn </span>apply_migrations_client(
     db: <span class="kw-2">&amp;</span>Database,
     kind: String,
-    target_version: DatabaseVersion,
     migrations: BTreeMap&lt;DatabaseVersion, ClientMigrationFn&gt;,
     module_instance_id: ModuleInstanceId,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
@@ -1249,6 +1241,8 @@
         </span>.next()
         .<span class="kw">await
         </span>.is_none();
+
+    <span class="kw">let </span>target_version = get_current_database_version(<span class="kw-2">&amp;</span>migrations);
 
     <span class="comment">// First write the database version to disk if it does not exist.
     </span>create_database_version(
@@ -1349,7 +1343,7 @@
                 inactive_states = new_inactive_states;
             }
 
-            current_version.increment();
+            current_version = current_version.increment();
             global_dbtx
                 .insert_entry(<span class="kw-2">&amp;</span>DatabaseVersionKey(module_instance_id), <span class="kw-2">&amp;</span>current_version)
                 .<span class="kw">await</span>;

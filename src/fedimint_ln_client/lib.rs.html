@@ -2151,8 +2151,7 @@
 <a href="#2150" id="2150">2150</a>
 <a href="#2151" id="2151">2151</a>
 <a href="#2152" id="2152">2152</a>
-<a href="#2153" id="2153">2153</a>
-<a href="#2154" id="2154">2154</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2153" id="2153">2153</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2432,7 +2431,6 @@
 
 <span class="kw">impl </span>ModuleInit <span class="kw">for </span>LightningClientInit {
     <span class="kw">type </span>Common = LightningCommonInit;
-    <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">4</span>);
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,

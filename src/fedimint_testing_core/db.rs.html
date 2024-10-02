@@ -531,12 +531,7 @@
 <a href="#530" id="530">530</a>
 <a href="#531" id="531">531</a>
 <a href="#532" id="532">532</a>
-<a href="#533" id="533">533</a>
-<a href="#534" id="534">534</a>
-<a href="#535" id="535">535</a>
-<a href="#536" id="536">536</a>
-<a href="#537" id="537">537</a>
-<a href="#538" id="538">538</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#533" id="533">533</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::ErrorKind;
 <span class="kw">use </span>std::path::{Path, PathBuf};
 <span class="kw">use </span>std::{env, fs, io};
@@ -544,7 +539,6 @@
 <span class="kw">use </span>anyhow::{bail, format_err, Context};
 <span class="kw">use </span>fedimint_client::db::{
     apply_migrations_client, apply_migrations_core_client, get_core_client_database_migrations,
-    CORE_CLIENT_DATABASE_VERSION,
 };
 <span class="kw">use </span>fedimint_client::module::init::DynClientModuleInit;
 <span class="kw">use </span>fedimint_client::module::ClientModule;
@@ -820,7 +814,6 @@
 </span><span class="kw">pub async fn </span>validate_migrations_global&lt;F, Fut&gt;(
     validate: F,
     db_prefix: <span class="kw-2">&amp;</span>str,
-    target_db_version: DatabaseVersion,
     migrations: BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt;,
     decoders: ModuleDecoderRegistry,
 ) -&gt; anyhow::Result&lt;()&gt;
@@ -829,7 +822,7 @@
     Fut: futures::Future&lt;Output = anyhow::Result&lt;()&gt;&gt;,
 {
     <span class="kw">let </span>(db, _tmp_dir) = get_temp_database(db_prefix, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
-    apply_migrations_server(<span class="kw-2">&amp;</span>db, db_prefix.to_string(), target_db_version, migrations)
+    apply_migrations_server(<span class="kw-2">&amp;</span>db, db_prefix.to_string(), migrations)
         .<span class="kw">await
         </span>.context(<span class="string">"Error applying migrations to temp database"</span>)<span class="question-mark">?</span>;
 
@@ -860,7 +853,6 @@
     apply_migrations(
         <span class="kw-2">&amp;</span>db,
         module.module_kind().to_string(),
-        module.database_version(),
         module.get_database_migrations(),
         <span class="prelude-val">Some</span>(TEST_MODULE_INSTANCE_ID),
         <span class="prelude-val">None</span>,
@@ -892,7 +884,6 @@
     apply_migrations_core_client(
         <span class="kw-2">&amp;</span>db,
         db_prefix.to_string(),
-        CORE_CLIENT_DATABASE_VERSION,
         get_core_client_database_migrations(),
     )
     .<span class="kw">await
@@ -929,7 +920,6 @@
     apply_migrations_client(
         <span class="kw-2">&amp;</span>db,
         module.as_common().module_kind().to_string(),
-        module.database_version(),
         module.get_database_migrations(),
         TEST_MODULE_INSTANCE_ID,
     )

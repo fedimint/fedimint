@@ -271,9 +271,7 @@
 <a href="#270" id="270">270</a>
 <a href="#271" id="271">271</a>
 <a href="#272" id="272">272</a>
-<a href="#273" id="273">273</a>
-<a href="#274" id="274">274</a>
-<a href="#275" id="275">275</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>aleph_bft;
+<a href="#273" id="273">273</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>aleph_bft;
 <span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>debug;
@@ -289,7 +287,7 @@
 
 <span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>async_channel::Sender;
-<span class="kw">use </span>db::{get_global_database_migrations, GLOBAL_DATABASE_VERSION};
+<span class="kw">use </span>db::get_global_database_migrations;
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
 <span class="kw">use </span>fedimint_api_client::api::DynGlobalApi;
 <span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
@@ -335,7 +333,6 @@
     apply_migrations_server(
         <span class="kw-2">&amp;</span>db,
         <span class="string">"fedimint-server"</span>.to_string(),
-        GLOBAL_DATABASE_VERSION,
         get_global_database_migrations(),
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -350,7 +347,6 @@
                 apply_migrations(
                     <span class="kw-2">&amp;</span>db,
                     module_init.module_kind().to_string(),
-                    module_init.database_version(),
                     module_init.get_database_migrations(),
                     <span class="prelude-val">Some</span>(<span class="kw-2">*</span>module_id),
                     <span class="prelude-val">None</span>,

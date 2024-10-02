@@ -524,8 +524,7 @@
 <a href="#523" id="523">523</a>
 <a href="#524" id="524">524</a>
 <a href="#525" id="525">525</a>
-<a href="#526" id="526">526</a>
-<a href="#527" id="527">527</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#526" id="526">526</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
 
 </span><span class="kw">pub mod </span>db;
@@ -586,7 +585,6 @@
 <span class="comment">// TODO: Boilerplate-code
 </span><span class="kw">impl </span>ModuleInit <span class="kw">for </span>MetaInit {
     <span class="kw">type </span>Common = MetaCommonInit;
-    <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">0</span>);
 
     <span class="doccomment">/// Dumps all database items for debugging
     </span><span class="kw">async fn </span>dump_database(

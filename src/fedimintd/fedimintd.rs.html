@@ -580,7 +580,12 @@
 <a href="#579" id="579">579</a>
 <a href="#580" id="580">580</a>
 <a href="#581" id="581">581</a>
-<a href="#582" id="582">582</a></pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+<a href="#585" id="585">585</a>
+<a href="#586" id="586">586</a>
+<a href="#587" id="587">587</a></pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -594,7 +599,7 @@
     EmptyGenParams, ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
-<span class="kw">use </span>fedimint_core::db::Database;
+<span class="kw">use </span>fedimint_core::db::{get_current_database_version, Database};
 <span class="kw">use </span>fedimint_core::envs::{
     is_env_var_set, BitcoinRpcConfig, FM_ENABLE_MODULE_LNV2_ENV, FM_USE_UNKNOWN_MODULE_ENV,
 };
@@ -1068,7 +1073,12 @@
                         .get(<span class="kw-2">&amp;</span>module_kind)
                         .expect(<span class="string">"module is present"</span>)
                 })
-                .map(|module_init| (module_init.module_kind(), module_init.database_version()))
+                .map(|module_init| {
+                    (
+                        module_init.module_kind(),
+                        get_current_database_version(<span class="kw-2">&amp;</span>module_init.get_database_migrations()),
+                    )
+                })
                 .collect(),
         }
     }

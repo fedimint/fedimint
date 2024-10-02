@@ -326,10 +326,7 @@
 <a href="#325" id="325">325</a>
 <a href="#326" id="326">326</a>
 <a href="#327" id="327">327</a>
-<a href="#328" id="328">328</a>
-<a href="#329" id="329">329</a>
-<a href="#330" id="330">330</a>
-<a href="#331" id="331">331</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#328" id="328">328</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
@@ -339,8 +336,6 @@
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, TransactionId};
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;
-
-<span class="kw">pub const </span>GLOBAL_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">0</span>);
 
 <span class="attr">#[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -463,7 +458,7 @@
     <span class="kw">use super</span>::{
         get_global_database_migrations, AcceptedItem, AcceptedItemKey, AcceptedItemPrefix,
         AcceptedTransactionKey, AcceptedTransactionKeyPrefix, AlephUnitsKey, AlephUnitsPrefix,
-        DbKeyPrefix, SignedSessionOutcomeKey, SignedSessionOutcomePrefix, GLOBAL_DATABASE_VERSION,
+        DbKeyPrefix, SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
     };
     <span class="kw">use </span><span class="kw">crate</span>::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix};
 
@@ -649,7 +644,6 @@
                 <span class="prelude-val">Ok</span>(())
             },
             <span class="string">"fedimint-server"</span>,
-            GLOBAL_DATABASE_VERSION,
             get_global_database_migrations(),
             ModuleDecoderRegistry::from_iter([(
                 TEST_MODULE_INSTANCE_ID,

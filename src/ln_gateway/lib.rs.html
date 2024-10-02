@@ -2165,10 +2165,7 @@
 <a href="#2164" id="2164">2164</a>
 <a href="#2165" id="2165">2165</a>
 <a href="#2166" id="2166">2166</a>
-<a href="#2167" id="2167">2167</a>
-<a href="#2168" id="2168">2168</a>
-<a href="#2169" id="2169">2169</a>
-<a href="#2170" id="2170">2170</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2167" id="2167">2167</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2215,9 +2212,7 @@
 <span class="kw">use </span>client::GatewayClientBuilder;
 <span class="kw">use </span>config::GatewayOpts;
 <span class="kw">pub use </span>config::GatewayParameters;
-<span class="kw">use </span>db::{
-    GatewayConfiguration, GatewayConfigurationKey, GatewayDbtxNcExt, GATEWAYD_DATABASE_VERSION,
-};
+<span class="kw">use </span>db::{GatewayConfiguration, GatewayConfigurationKey, GatewayDbtxNcExt};
 <span class="kw">use </span>error::FederationNotConnected;
 <span class="kw">use </span>federation_manager::FederationManager;
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
@@ -2524,7 +2519,6 @@
         </span>apply_migrations_server(
             <span class="kw-2">&amp;</span>gateway_db,
             <span class="string">"gatewayd"</span>.to_string(),
-            GATEWAYD_DATABASE_VERSION,
             get_gatewayd_database_migrations(),
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
