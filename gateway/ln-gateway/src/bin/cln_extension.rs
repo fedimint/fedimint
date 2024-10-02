@@ -14,6 +14,10 @@ use cln_rpc::model;
 use cln_rpc::model::requests::SendpayRoute;
 use cln_rpc::model::responses::ListpeerchannelsChannels;
 use cln_rpc::primitives::ShortChannelId;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_payment_hash,
+    bitcoin32_to_bitcoin30_secp256k1_pubkey,
+};
 use fedimint_core::secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use fedimint_core::task::{timeout, TaskGroup};
 use fedimint_core::util::handle_version_hash_command;
@@ -236,7 +240,13 @@ impl ClnRpcService {
                     let alias = alias.unwrap_or_default();
                     let synced_to_chain =
                         warning_bitcoind_sync.is_none() && warning_lightningd_sync.is_none();
-                    Ok((id, alias, network, blockheight, synced_to_chain))
+                    Ok((
+                        bitcoin30_to_bitcoin32_secp256k1_pubkey(&id),
+                        alias,
+                        network,
+                        blockheight,
+                        synced_to_chain,
+                    ))
                 }
                 _ => Err(ClnExtensionError::RpcWrongResponse),
             })
@@ -256,8 +266,10 @@ impl ClnRpcService {
             .await?
             .call(cln_rpc::Request::GetRoute(
                 model::requests::GetrouteRequest {
-                    id: PublicKey::from_slice(&pruned_invoice.destination)
-                        .expect("Should parse public key"),
+                    id: bitcoin32_to_bitcoin30_secp256k1_pubkey(
+                        &PublicKey::from_slice(&pruned_invoice.destination)
+                            .expect("Should parse public key"),
+                    ),
                     amount_msat: cln_rpc::primitives::Amount::from_msat(pruned_invoice.amount_msat),
                     riskfactor,
                     cltv: Some(pruned_invoice.min_final_cltv_delta as u32),
@@ -318,7 +330,7 @@ impl ClnRpcService {
                 partid: None,
                 payment_metadata: None,
                 payment_secret,
-                payment_hash,
+                payment_hash: bitcoin32_to_bitcoin30_payment_hash(&payment_hash),
                 route,
             }))
             .await?;
@@ -340,7 +352,7 @@ impl ClnRpcService {
                     groupid: None,
                     partid: None,
                     timeout: None,
-                    payment_hash,
+                    payment_hash: bitcoin32_to_bitcoin30_payment_hash(&payment_hash),
                 },
             ))
             .await;
@@ -542,11 +554,9 @@ impl GatewayLightning for ClnRpcService {
 
             let channel = match channels_response {
                 cln_rpc::Response::ListChannels(channels) => {
-                    let Some(channel) = channels
-                        .channels
-                        .into_iter()
-                        .find(|chan| chan.destination == node_info.0)
-                    else {
+                    let Some(channel) = channels.channels.into_iter().find(|chan| {
+                        chan.destination == bitcoin32_to_bitcoin30_secp256k1_pubkey(&node_info.0)
+                    }) else {
                         warn!(?scid, "Channel not found in graph");
                         continue;
                     };
@@ -1087,7 +1097,9 @@ impl GatewayLightning for ClnRpcService {
             .await
             .map_err(|e| Status::internal(e.to_string()))?
             .call(cln_rpc::Request::ListPeerChannels(
-                model::requests::ListpeerchannelsRequest { id: Some(peer_id) },
+                model::requests::ListpeerchannelsRequest {
+                    id: Some(bitcoin32_to_bitcoin30_secp256k1_pubkey(&peer_id)),
+                },
             ))
             .await
             .map(|response| match response {

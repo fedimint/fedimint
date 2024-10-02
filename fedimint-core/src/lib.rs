@@ -44,8 +44,6 @@ use std::str::FromStr;
 pub use amount::*;
 /// Mostly re-exported for [`Decodable`] macros.
 pub use anyhow;
-use bitcoin_hashes::hash_newtype;
-use bitcoin_hashes::sha256::Hash as Sha256;
 pub use bitcoin_hashes::Hash as BitcoinHash;
 pub use macro_rules_attribute::apply;
 pub use module::ServerModule;
@@ -117,10 +115,17 @@ pub mod util;
 /// Atomic BFT unit containing consensus items
 pub mod session_outcome;
 
-hash_newtype!(
-    /// A transaction id for peg-ins, peg-outs and reissuances
-    pub struct TransactionId(Sha256);
-);
+mod foo {
+    use bitcoin_hashes::hash_newtype;
+    use bitcoin_hashes::sha256::Hash as Sha256;
+
+    hash_newtype!(
+        /// A transaction id for peg-ins, peg-outs and reissuances
+        pub struct TransactionId(Sha256);
+    );
+}
+
+pub use foo::TransactionId;
 
 /// Amount of bitcoin to send, or `All` to send all available funds
 #[derive(Debug, Eq, PartialEq, Copy, Hash, Clone, Serialize, Deserialize)]

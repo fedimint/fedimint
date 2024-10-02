@@ -18,7 +18,7 @@ use std::fmt::Formatter;
 use bls12_381::Scalar;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::secp256k1::{KeyPair, Secp256k1, Signing};
+use fedimint_core::secp256k1::{Keypair, Secp256k1, Signing};
 use fedimint_core::BitcoinHash;
 use hkdf::hashes::Sha512;
 use hkdf::Hkdf;
@@ -98,14 +98,14 @@ impl DerivableSecret {
 
     /// secp256k1 keys are used for bitcoin deposit addresses, redeem keys and
     /// contract keys for lightning.
-    pub fn to_secp_key<C: Signing>(self, ctx: &Secp256k1<C>) -> KeyPair {
+    pub fn to_secp_key<C: Signing>(self, ctx: &Secp256k1<C>) -> Keypair {
         for key_try in 0u64.. {
             let secret = self
                 .kdf
                 .derive::<32>(&tagged_derive(SECP256K1_TAG, ChildId(key_try)));
             // The secret not forming a valid key is highly unlikely, this approach is the
             // same used when generating a random secp key.
-            if let Ok(key) = KeyPair::from_seckey_slice(ctx, &secret) {
+            if let Ok(key) = Keypair::from_seckey_slice(ctx, &secret) {
                 return key;
             }
         }
