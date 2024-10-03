@@ -1,4 +1,5 @@
-{ pkgs }: {
+{ pkgs }:
+{
   env = {
     OPENSSL_DIR = "${pkgs.openssl.dev}";
     LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
