@@ -96,7 +96,7 @@ use rpc::{
 };
 use state_machine::{GatewayClientModule, GatewayExtPayStates};
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, info_span, warn, Instrument};
+use tracing::{debug, error, info, info_span, warn};
 
 use crate::config::LightningModuleMode;
 use crate::db::{get_gatewayd_database_migrations, FederationConfig};
@@ -1165,7 +1165,7 @@ impl Gateway {
                     federation_config.fees,
                     lightning_context,
                 )
-                .await?;
+                .await;
         }
 
         if self.is_running_lnv2() {
@@ -1360,10 +1360,10 @@ impl Gateway {
             let all_federations_configs: Vec<_> =
                 dbtx.load_federation_configs().await.into_iter().collect();
             self.register_federations(&new_gateway_config, &all_federations_configs)
-                .await?;
+                .await;
         } else {
             self.register_federations(&new_gateway_config, &register_federations)
-                .await?;
+                .await;
         }
 
         dbtx.commit_tx().await;
@@ -1624,7 +1624,7 @@ impl Gateway {
         &self,
         gateway_config: &GatewayConfiguration,
         federations: &[(FederationId, FederationConfig)],
-    ) -> AdminResult<()> {
+    ) {
         if let Ok(lightning_context) = self.get_lightning_context().await {
             let route_hints = lightning_context
                 .lnrpc
@@ -1636,30 +1636,20 @@ impl Gateway {
 
             for (federation_id, federation_config) in federations {
                 if let Some(client) = self.federation_manager.read().await.client(federation_id) {
-                    if async {
-                        client
-                            .value()
-                            .get_first_module::<GatewayClientModule>()?
-                            .register_with_federation(
-                                route_hints.clone(),
-                                GW_ANNOUNCEMENT_TTL,
-                                federation_config.fees,
-                                lightning_context.clone(),
-                            )
-                            .await
-                    }
-                    .instrument(client.span())
-                    .await
-                    .is_err()
-                    {
-                        Err(AdminGatewayError::RegistrationError {
-                            federation_id: *federation_id,
-                        })?;
-                    }
+                    client
+                        .value()
+                        .get_first_module::<GatewayClientModule>()
+                        .expect("No GatewayClientModule exists")
+                        .register_with_federation(
+                            route_hints.clone(),
+                            GW_ANNOUNCEMENT_TTL,
+                            federation_config.fees,
+                            lightning_context.clone(),
+                        )
+                        .await;
                 }
             }
         }
-        Ok(())
     }
 
     /// This function will return a `GatewayConfiguration` one of two
@@ -1800,15 +1790,13 @@ impl Gateway {
             let gateway = self.clone();
             task_group.spawn_cancellable("register clients", async move {
                 loop {
-                    let mut registration_result: Option<AdminResult<()>> = None;
                     let gateway_config = gateway.clone_gateway_config().await;
                     if let Some(gateway_config) = gateway_config {
                         let gateway_state = gateway.get_state().await;
                         if let GatewayState::Running { .. } = &gateway_state {
                             let mut dbtx = gateway.gateway_db.begin_transaction_nc().await;
                             let all_federations_configs: Vec<_> = dbtx.load_federation_configs().await.into_iter().collect();
-                            let result = gateway.register_federations(&gateway_config, &all_federations_configs).await;
-                            registration_result = Some(result);
+                            gateway.register_federations(&gateway_config, &all_federations_configs).await;
                         } else {
                             // We need to retry more often if the gateway is not in the Running state
                             const NOT_RUNNING_RETRY: Duration = Duration::from_secs(10);
@@ -1820,16 +1808,9 @@ impl Gateway {
                         warn!("Cannot register clients because gateway configuration is not set.");
                     }
 
-                    let registration_delay: Duration = if let Some(Err(AdminGatewayError::RegistrationError { .. })) = registration_result {
-                        // Retry to register gateway with federations in 10 seconds since it failed
-                        Duration::from_secs(10)
-                    } else {
-                        // Allow a 15% buffer of the TTL before the re-registering gateway
-                        // with the federations.
-                        GW_ANNOUNCEMENT_TTL.mul_f32(0.85)
-                    };
-
-                    sleep(registration_delay).await;
+                    // Allow a 15% buffer of the TTL before the re-registering gateway
+                    // with the federations.
+                    sleep(GW_ANNOUNCEMENT_TTL.mul_f32(0.85)).await;
                 }
             });
         }
