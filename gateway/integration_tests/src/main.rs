@@ -523,6 +523,18 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
 
                 leave_federation(gw, fed_id, 1).await?;
                 leave_federation(gw, new_fed_id, 2).await?;
+
+                // Rejoin new federation, verify that the balance is the same
+                let output = cmd!(gw, "connect-fed", new_invite_code.clone())
+                    .out_json()
+                    .await?;
+                let rejoined_federation_info: FederationInfo =
+                    serde_json::from_value(output).expect("Could not parse FederationInfo");
+                info!(?rejoined_federation_info, "Rejoined Federation Info");
+                assert_eq!(
+                    second_fed_info.balance_msat,
+                    rejoined_federation_info.balance_msat
+                );
             }
 
             info!("Gateway configuration test successful");
