@@ -36,7 +36,8 @@ use async_stream::{stream, try_stream};
 use backup::recovery::MintRecovery;
 use base64::Engine as _;
 use bitcoin_hashes::{sha256, sha256t, Hash, HashEngine as BitcoinHashEngine};
-use client_db::{DbKeyPrefix, NoteKeyPrefix, RecoveryFinalizedKey};
+use client_db::{migrate_to_v1, DbKeyPrefix, NoteKeyPrefix, RecoveryFinalizedKey};
+use fedimint_client::db::ClientMigrationFn;
 use fedimint_client::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
@@ -514,7 +515,7 @@ pub struct MintClientInit;
 
 impl ModuleInit for MintClientInit {
     type Common = MintCommonInit;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
 
     async fn dump_database(
         &self,
@@ -599,6 +600,15 @@ impl ClientModuleInit for MintClientInit {
     ) -> anyhow::Result<()> {
         args.recover_from_history::<MintRecovery>(self, snapshot)
             .await
+    }
+
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
+        let mut migrations: BTreeMap<DatabaseVersion, ClientMigrationFn> = BTreeMap::new();
+        migrations.insert(DatabaseVersion(0), |dbtx, _, _| {
+            Box::pin(migrate_to_v1(dbtx))
+        });
+
+        migrations
     }
 }
 
