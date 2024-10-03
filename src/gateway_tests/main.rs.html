@@ -557,7 +557,19 @@
 <a href="#556" id="556">556</a>
 <a href="#557" id="557">557</a>
 <a href="#558" id="558">558</a>
-<a href="#559" id="559">559</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
+<a href="#570" id="570">570</a>
+<a href="#571" id="571">571</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 
 </span><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::fs::remove_dir_all;
@@ -1082,6 +1094,18 @@
 
                 leave_federation(gw, fed_id, <span class="number">1</span>).<span class="kw">await</span><span class="question-mark">?</span>;
                 leave_federation(gw, new_fed_id, <span class="number">2</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+
+                <span class="comment">// Rejoin new federation, verify that the balance is the same
+                </span><span class="kw">let </span>output = <span class="macro">cmd!</span>(gw, <span class="string">"connect-fed"</span>, new_invite_code.clone())
+                    .out_json()
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>rejoined_federation_info: FederationInfo =
+                    serde_json::from_value(output).expect(<span class="string">"Could not parse FederationInfo"</span>);
+                <span class="macro">info!</span>(<span class="question-mark">?</span>rejoined_federation_info, <span class="string">"Rejoined Federation Info"</span>);
+                <span class="macro">assert_eq!</span>(
+                    second_fed_info.balance_msat,
+                    rejoined_federation_info.balance_msat
+                );
             }
 
             <span class="macro">info!</span>(<span class="string">"Gateway configuration test successful"</span>);
