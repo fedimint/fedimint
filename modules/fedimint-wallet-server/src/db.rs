@@ -1,5 +1,6 @@
 use bitcoin::{BlockHash, Txid};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
 use secp256k1::ecdsa::Signature;
 use serde::Serialize;
@@ -19,6 +20,7 @@ pub enum DbKeyPrefix {
     PegOutTxSigCi = 0x36,
     PegOutBitcoinOutPoint = 0x37,
     PegOutNonce = 0x38,
+    ConsensusVersionVote = 0x39,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -145,6 +147,23 @@ impl_db_record!(
 );
 
 impl_db_lookup!(key = FeeRateVoteKey, query_prefix = FeeRateVotePrefix);
+
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct ConsensusVersionVoteKey(pub PeerId);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct ConsensusVersionVotePrefix;
+
+impl_db_record!(
+    key = ConsensusVersionVoteKey,
+    value = ModuleConsensusVersion,
+    db_prefix = DbKeyPrefix::ConsensusVersionVote
+);
+
+impl_db_lookup!(
+    key = ConsensusVersionVoteKey,
+    query_prefix = ConsensusVersionVotePrefix
+);
 
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct PegOutNonceKey;

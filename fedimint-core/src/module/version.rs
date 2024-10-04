@@ -107,7 +107,20 @@ pub const CORE_CONSENSUS_VERSION: CoreConsensusVersion = CoreConsensusVersion::n
 /// the same time (each of different `ModuleKind` version), allow users to
 /// slowly migrate to a new one. This avoids complex and error-prone server-side
 /// consensus-migration logic.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(
+    Debug,
+    Hash,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    Encodable,
+    Decodable,
+)]
 pub struct ModuleConsensusVersion {
     pub major: u32,
     pub minor: u32,
