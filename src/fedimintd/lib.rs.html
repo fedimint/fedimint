@@ -65,7 +65,7 @@
             std::env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from(<span class="string">"50002"</span>))
         ))
         .expect(<span class="string">"Failed to parse default esplora server"</span>),
-        Network::Signet =&gt; SafeUrl::parse(<span class="string">"https://mutinynet.com/api/"</span>)
+        Network::Signet =&gt; SafeUrl::parse(<span class="string">"https://blockstream.info/signet/api/"</span>)
             .expect(<span class="string">"Failed to parse default esplora server"</span>),
         <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Failed to parse default esplora server"</span>),
     };
