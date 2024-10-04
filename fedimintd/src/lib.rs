@@ -27,7 +27,7 @@ pub fn default_esplora_server(network: Network) -> BitcoinRpcConfig {
             std::env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from("50002"))
         ))
         .expect("Failed to parse default esplora server"),
-        Network::Signet => SafeUrl::parse("https://mutinynet.com/api/")
+        Network::Signet => SafeUrl::parse("https://blockstream.info/signet/api/")
             .expect("Failed to parse default esplora server"),
         _ => panic!("Failed to parse default esplora server"),
     };
