@@ -19,7 +19,7 @@ path = "src/lib.rs"
 anyhow = { workspace = true }
 async-recursion = "1.1.1"
 async-trait = { workspace = true }
-backon = "1.2.0"
+backon = { version = "1.2.0", default-features = false }
 backtrace = "0.3.74"
 base64-url = { workspace = true }
 bech32 = "0.11.0"
