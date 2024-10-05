@@ -36,17 +36,17 @@ erased-serde = { workspace = true }
 fedimint-derive = { workspace = true }
 fedimint-logging = { workspace = true }
 futures = { workspace = true }
-hex = { workspace = true, features = ["serde"] }
+hex = { workspace = true }
 imbl = "3.0.0"
 itertools = { workspace = true }
 jsonrpsee-core = { version = "0.24.5", features = ["client"] }
 lightning = { workspace = true }
 lightning-invoice = { workspace = true }
 macro_rules_attribute = "0.2.0"
-miniscript = { workspace = true, features = ["serde"] }
+miniscript = { workspace = true }
 parity-scale-codec = { version = "3.6.12", features = ["derive"] }
 rand = { workspace = true }
-secp256k1 = { workspace = true, features = ["global-context", "rand-std"] }
+secp256k1 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serdect = { workspace = true }
@@ -55,14 +55,14 @@ strum_macros = { workspace = true }
 thiserror = { workspace = true }
 threshold_crypto = { workspace = true }
 tracing = { workspace = true }
-url = { workspace = true, features = ["serde"] }
+url = { workspace = true }
 
 [dev-dependencies]
 test-log = { workspace = true }
 tokio-test = "0.4.4"
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-tokio = { workspace = true, features = ["full", "tracing"] }
+tokio = { workspace = true, features = ["signal"] }
 tokio-rustls = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]

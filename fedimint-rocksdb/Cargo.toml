@@ -27,4 +27,4 @@ tracing = { workspace = true }
 tempfile = "3.13.0"
 
 [target.'cfg(not(target_family="wasm"))'.dependencies]
-tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time"] }
+tokio = { workspace = true }

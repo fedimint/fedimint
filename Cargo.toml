@@ -104,7 +104,6 @@ devimint = { path = "./devimint", version = "=0.5.0-alpha" }
 electrum-client = { version = "0.18.0", features = ["use-rustls"] }
 erased-serde = "0.4"
 esplora-client = { version = "0.6.0", default-features = false, features = [
-    "async",
     "async-https-rustls",
 ] }
 fedimintd = { path = "./fedimintd", version = "=0.5.0-alpha" }
@@ -149,26 +148,23 @@ fs-lock = "0.1.4"
 futures = "0.3.30"
 futures-util = "0.3.30"
 group = "0.13.0"
-hex = "0.4.3"
+hex = { version = "0.4.3", features = ["serde"] }
 hkdf = { package = "fedimint-hkdf", path = "./crypto/hkdf", version = "=0.5.0-alpha" }
 hyper = "1.4"
 itertools = "0.13.0"
 lightning = "0.0.123"
-lightning-invoice = "0.31.0"
+lightning-invoice = { version = "0.31.0", features = ["serde"] }
 ln-gateway = { package = "fedimint-ln-gateway", path = "./gateway/ln-gateway", version = "=0.5.0-alpha" }
-miniscript = "10.0.0"
+miniscript = { version = "10.0.0", features = ["serde"] }
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 reqwest = { version = "0.12.8", features = [
-    "json",
     "rustls-tls",
-    "charset",
-    "http2",
 ], default-features = false }
 ring = "0.17.8"
-secp256k1 = { version = "0.27.0", default-features = false }
+secp256k1 = { version = "0.27.0", features = ["global-context", "rand-std"] }
 semver = "1.0.23"
-serde = { version = "1.0.210", features = ["derive"] }
+serde = { version = "1.0.210" }
 serdect = "0.2.0"
 serde-big-array = "0.5.1"
 serde_json = "1.0.128"
@@ -183,14 +179,11 @@ threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
 tokio = "1.40.0"
 tokio-rustls = "0.24.1"
 tokio-stream = "0.1.16"
-tonic_lnd = { version = "0.2.0", package = "fedimint-tonic-lnd", features = [
-    "lightningrpc",
-    "routerrpc",
-] }
+tonic_lnd = { version = "0.2.0", package = "fedimint-tonic-lnd" }
 tpe = { package = "fedimint-tpe", path = "./crypto/tpe", version = "=0.5.0-alpha" }
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
-url = "2.5.2"
+url = { version = "2.5.2", features = ["serde"] }
 
 # Workaround: https://github.com/rust-lang/cargo/issues/12457 which causes
 #             https://github.com/ipetkov/crane/issues/370

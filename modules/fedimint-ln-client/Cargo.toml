@@ -38,7 +38,7 @@ fedimint-ln-common = { workspace = true }
 fedimint-logging = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
-lightning-invoice = { workspace = true, features = ["serde"] }
+lightning-invoice = { workspace = true }
 lnurl-rs = { version = "0.8.0", features = ["async"], default-features = false }
 rand = { workspace = true }
 reqwest = { workspace = true }
