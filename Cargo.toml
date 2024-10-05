@@ -183,7 +183,7 @@ threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
 tokio = "1.40.0"
 tokio-rustls = "0.24.1"
 tokio-stream = "0.1.16"
-tonic_lnd = { git = "https://github.com/tvolk131/fedimint_tonic_lnd.git", branch = "update_deps", package = "fedimint-tonic-lnd", features = [
+tonic_lnd = { git = "https://github.com/tvolk131/fedimint_tonic_lnd.git", branch = "update_deps_3", package = "fedimint-tonic-lnd", features = [
     "lightningrpc",
     "routerrpc",
 ] }
