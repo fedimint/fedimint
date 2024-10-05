@@ -58,13 +58,11 @@
 <a href="#57" id="57">57</a>
 <a href="#58" id="58">58</a>
 <a href="#59" id="59">59</a>
-<a href="#60" id="60">60</a>
-<a href="#61" id="61">61</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
+<a href="#60" id="60">60</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>secp256k1::{Secp256k1, Signing, Verification};
-<span class="kw">use </span>secp256k1_zkp::{KeyPair, Message};
+<span class="kw">use </span>secp256k1::{KeyPair, Message, Secp256k1, Signing, Verification};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="doccomment">/// Maximum payload size of a backup request

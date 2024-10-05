@@ -2638,6 +2638,7 @@
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
+<span class="kw">use </span>fedimint_core::secp256k1::{All, KeyPair, Secp256k1};
 <span class="kw">use </span>fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, PeerId, Tiered,
@@ -2650,7 +2651,6 @@
 <span class="kw">pub use </span>fedimint_mint_common::<span class="kw-2">*</span>;
 <span class="kw">use </span>futures::{pin_mut, StreamExt};
 <span class="kw">use </span>hex::ToHex;
-<span class="kw">use </span>secp256k1_zkp::{All, KeyPair, Secp256k1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>tbs::{AggregatePublicKey, Signature};
@@ -4832,13 +4832,13 @@
     <span class="kw">use </span>fedimint_core::encoding::Decodable;
     <span class="kw">use </span>fedimint_core::invite_code::{InviteCode, InviteCodeV2};
     <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
-    <span class="kw">use </span>fedimint_core::secp256k1::rand::rngs::OsRng;
-    <span class="kw">use </span>fedimint_core::secp256k1::SecretKey;
     <span class="kw">use </span>fedimint_core::util::SafeUrl;
     <span class="kw">use </span>fedimint_core::{
         secp256k1, Amount, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId,
     };
     <span class="kw">use </span>itertools::Itertools;
+    <span class="kw">use </span>secp256k1::rand::rngs::OsRng;
+    <span class="kw">use </span>secp256k1::{SecretKey, SECP256K1};
     <span class="kw">use </span>serde_json::json;
     <span class="kw">use </span>tbs::Signature;
 
@@ -5087,7 +5087,7 @@
             notes: iter::repeat(OOBNoteV2 {
                 amount: Amount::from_msats(<span class="number">1</span>),
                 sig: Signature(bls12_381::G1Affine::generator()),
-                key: SecretKey::new(<span class="kw-2">&amp;mut </span>OsRng).keypair(secp256k1::SECP256K1),
+                key: SecretKey::new(<span class="kw-2">&amp;mut </span>OsRng).keypair(SECP256K1),
             })
             .take(NUMBER_OF_NOTES)
             .collect(),

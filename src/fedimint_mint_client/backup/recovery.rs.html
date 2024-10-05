@@ -938,7 +938,7 @@
         <span class="kw">let </span>note_idx_ref = <span class="self">self</span>.next_pending_note_idx.get_mut_or_default(amount);
 
         <span class="kw">let </span>(note_issuance_request, blind_nonce) = NoteIssuanceRequest::new(
-            secp256k1_zkp::SECP256K1,
+            fedimint_core::secp256k1::SECP256K1,
             <span class="kw-2">&amp;</span>MintClientModule::new_note_secret_static(secret, amount, <span class="kw-2">*</span>note_idx_ref),
         );
         <span class="macro">assert!</span>(<span class="self">self

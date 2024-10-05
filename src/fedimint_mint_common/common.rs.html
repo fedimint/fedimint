@@ -51,20 +51,17 @@
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
 <a href="#52" id="52">52</a>
-<a href="#53" id="53">53</a>
-<a href="#54" id="54">54</a>
-<a href="#55" id="55">55</a>
-<a href="#56" id="56">56</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
+<a href="#53" id="53">53</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::secp256k1;
-<span class="kw">use </span>secp256k1_zkp::{KeyPair, Message, Secp256k1, Signing, Verification};
+<span class="kw">use </span>secp256k1::{KeyPair, Message, PublicKey, Secp256k1, Signing, Verification, SECP256K1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>BackupRequest {
-    <span class="kw">pub </span>id: secp256k1::PublicKey,
+    <span class="kw">pub </span>id: PublicKey,
     <span class="attr">#[serde(with = <span class="string">"fedimint_core::hex::serde"</span>)]
     </span><span class="kw">pub </span>payload: Vec&lt;u8&gt;,
     <span class="kw">pub </span>timestamp: std::time::SystemTime,
@@ -76,7 +73,7 @@
     }
 
     <span class="kw">pub fn </span>sign(<span class="self">self</span>, keypair: <span class="kw-2">&amp;</span>KeyPair) -&gt; anyhow::Result&lt;SignedBackupRequest&gt; {
-        <span class="kw">let </span>signature = secp256k1::SECP256K1.sign_schnorr(<span class="kw-2">&amp;</span>Message::from(<span class="self">self</span>.hash()), keypair);
+        <span class="kw">let </span>signature = SECP256K1.sign_schnorr(<span class="kw-2">&amp;</span>Message::from(<span class="self">self</span>.hash()), keypair);
 
         <span class="prelude-val">Ok</span>(SignedBackupRequest {
             request: <span class="self">self</span>,
@@ -94,10 +91,7 @@
 }
 
 <span class="kw">impl </span>SignedBackupRequest {
-    <span class="kw">pub fn </span>verify_valid&lt;C&gt;(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span>BackupRequest, secp256k1_zkp::Error&gt;
+    <span class="kw">pub fn </span>verify_valid&lt;C&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span>BackupRequest, secp256k1::Error&gt;
     <span class="kw">where
         </span>C: Signing + Verification,
     {

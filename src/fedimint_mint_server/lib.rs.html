@@ -812,8 +812,7 @@
 <a href="#811" id="811">811</a>
 <a href="#812" id="812">812</a>
 <a href="#813" id="813">813</a>
-<a href="#814" id="814">814</a>
-<a href="#815" id="815">815</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#814" id="814">814</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -839,8 +838,8 @@
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, NumPeersExt,
-    OutPoint, PeerId, ServerModule, Tiered, TieredMulti,
+    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, secp256k1, Amount,
+    NumPeersExt, OutPoint, PeerId, ServerModule, Tiered, TieredMulti,
 };
 <span class="kw">use </span>fedimint_logging::LOG_MODULE_MINT;
 <span class="kw">pub use </span>fedimint_mint_common <span class="kw">as </span>common;
@@ -863,7 +862,6 @@
     MINT_REDEEMED_ECASH_FEES_SATS, MINT_REDEEMED_ECASH_SATS,
 };
 <span class="kw">use </span>rand::rngs::OsRng;
-<span class="kw">use </span>secp256k1_zkp::SECP256K1;
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>tbs::{
     aggregate_public_key_shares, sign_blinded_msg, AggregatePublicKey, PublicKeyShare,
@@ -1334,7 +1332,7 @@
             <span class="macro">api_endpoint!</span> {
                 RECOVER_ENDPOINT,
                 ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
-                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Mint, context, id: secp256k1_zkp::PublicKey| -&gt; <span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt; {
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Mint, context, id: secp256k1::PublicKey| -&gt; <span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt; {
                     <span class="prelude-val">Ok</span>(module
                         .handle_recover_request(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc(), id).<span class="kw">await</span>)
                 }
@@ -1350,7 +1348,7 @@
         request: SignedBackupRequest,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ApiError&gt; {
         <span class="kw">let </span>request = request
-            .verify_valid(SECP256K1)
+            .verify_valid(secp256k1::SECP256K1)
             .map_err(|<span class="kw">_</span>| ApiError::bad_request(<span class="string">"invalid request"</span>.into()))<span class="question-mark">?</span>;
 
         <span class="macro">debug!</span>(id = %request.id, len = request.payload.len(), <span class="string">"Received user e-cash backup request"</span>);
@@ -1377,7 +1375,7 @@
     <span class="kw">async fn </span>handle_recover_request(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-        id: secp256k1_zkp::PublicKey,
+        id: secp256k1::PublicKey,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt; {
         dbtx.get_value(<span class="kw-2">&amp;</span>EcashBackupKey(id)).<span class="kw">await
     </span>}

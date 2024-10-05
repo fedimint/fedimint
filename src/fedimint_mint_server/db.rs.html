@@ -173,7 +173,7 @@
 
 <span class="doccomment">/// Key used to store user's ecash backups
 </span><span class="attr">#[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
-</span><span class="kw">pub struct </span>EcashBackupKey(<span class="kw">pub </span>secp256k1_zkp::PublicKey);
+</span><span class="kw">pub struct </span>EcashBackupKey(<span class="kw">pub </span>fedimint_core::secp256k1::PublicKey);
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>EcashBackupKeyPrefix;

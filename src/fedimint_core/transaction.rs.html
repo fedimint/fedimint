@@ -149,13 +149,11 @@
 <a href="#148" id="148">148</a>
 <a href="#149" id="149">149</a>
 <a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a>
-<a href="#152" id="152">152</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
+<a href="#151" id="151">151</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::SerdeModuleEncoding;
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
-<span class="kw">use </span>secp256k1_zkp::schnorr;
 <span class="kw">use </span>thiserror::Error;
 
 <span class="kw">use </span><span class="kw">crate</span>::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
@@ -231,7 +229,7 @@
     <span class="doccomment">/// Validate the schnorr signatures signed over the `tx_hash`
     </span><span class="kw">pub fn </span>validate_signatures(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pub_keys: <span class="kw-2">&amp;</span>[secp256k1_zkp::PublicKey],
+        pub_keys: <span class="kw-2">&amp;</span>[secp256k1::PublicKey],
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionError&gt; {
         <span class="kw">let </span>signatures = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.signatures {
             TransactionSignature::NaiveMultisig(sigs) =&gt; sigs,
@@ -245,10 +243,10 @@
         }
 
         <span class="kw">let </span>txid = <span class="self">self</span>.tx_hash();
-        <span class="kw">let </span>msg = secp256k1_zkp::Message::from_slice(<span class="kw-2">&amp;</span>txid[..]).expect(<span class="string">"txid has right length"</span>);
+        <span class="kw">let </span>msg = secp256k1::Message::from_slice(<span class="kw-2">&amp;</span>txid[..]).expect(<span class="string">"txid has right length"</span>);
 
         <span class="kw">for </span>(pk, signature) <span class="kw">in </span>pub_keys.iter().zip(signatures) {
-            <span class="kw">if </span>secp256k1_zkp::global::SECP256K1
+            <span class="kw">if </span>secp256k1::global::SECP256K1
                 .verify_schnorr(signature, <span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>pk.x_only_public_key().<span class="number">0</span>)
                 .is_err()
             {
@@ -267,7 +265,7 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 </span><span class="kw">pub enum </span>TransactionSignature {
-    NaiveMultisig(Vec&lt;schnorr::Signature&gt;),
+    NaiveMultisig(Vec&lt;secp256k1::schnorr::Signature&gt;),
     <span class="attr">#[encodable_default]
     </span>Default {
         variant: u64,
