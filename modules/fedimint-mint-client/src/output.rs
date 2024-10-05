@@ -11,14 +11,13 @@ use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::secp256k1::KeyPair;
+use fedimint_core::secp256k1::{KeyPair, Secp256k1, Signing};
 use fedimint_core::task::sleep;
 use fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 use fedimint_mint_common::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_mint_common::{BlindNonce, MintOutputOutcome, Nonce};
-use secp256k1_zkp::{Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
 use tbs::{
     aggregate_signature_shares, blind_message, unblind_signature, AggregatePublicKey,
