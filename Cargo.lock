@@ -2107,7 +2107,6 @@ version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
- "bip39",
  "bitcoin 0.30.2",
  "clap",
  "clap_complete",
@@ -2512,7 +2511,6 @@ dependencies = [
  "async-stream",
  "async-trait",
  "axum 0.7.7",
- "bip39",
  "bitcoin 0.30.2",
  "bitcoin_hashes 0.12.0",
  "clap",

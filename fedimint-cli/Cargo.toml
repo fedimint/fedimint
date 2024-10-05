@@ -26,7 +26,6 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-bip39 = { version = "2.0.0", features = ["rand"] }
 bitcoin = { workspace = true }
 clap = { workspace = true }
 clap_complete = "4.5.29"

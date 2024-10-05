@@ -38,7 +38,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::anyhow;
-use bip39::Mnemonic;
 use bitcoin::{Address, Network, Txid};
 use bitcoin_hashes::{sha256, Hash};
 use clap::Parser;
@@ -49,7 +48,7 @@ use db::{GatewayConfiguration, GatewayConfigurationKey, GatewayDbtxNcExt};
 use error::FederationNotConnected;
 use federation_manager::FederationManager;
 use fedimint_api_client::api::net::Connector;
-use fedimint_bip39::Bip39RootSecretStrategy;
+use fedimint_bip39::{Bip39RootSecretStrategy, Language, Mnemonic};
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{Client, ClientHandleArc};
@@ -1733,12 +1732,13 @@ impl Gateway {
             } else {
                 let mnemonic = if let Ok(words) = std::env::var(FM_GATEWAY_MNEMONIC_ENV) {
                     info!("Using provided mnemonic from environment variable");
-                    Mnemonic::parse_in_normalized(bip39::Language::English, words.as_str())
-                        .map_err(|e| {
+                    Mnemonic::parse_in_normalized(Language::English, words.as_str()).map_err(
+                        |e| {
                             AdminGatewayError::MnemonicError(anyhow!(format!(
                                 "Seed phrase provided in environment was invalid {e:?}"
                             )))
-                        })?
+                        },
+                    )?
                 } else {
                     info!("Generating mnemonic and writing entropy to client storage");
                     Bip39RootSecretStrategy::<12>::random(&mut thread_rng())

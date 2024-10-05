@@ -4,8 +4,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use bip39::Mnemonic;
 use bitcoin::{secp256k1, Address, Network, OutPoint};
+use fedimint_bip39::Mnemonic;
 use fedimint_core::runtime::spawn;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{Amount, BitcoinAmountOrAll};

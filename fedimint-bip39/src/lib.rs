@@ -4,6 +4,7 @@
 
 use std::io::{Read, Write};
 
+pub use bip39::{Language, Mnemonic};
 use fedimint_client::derivable_secret::DerivableSecret;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
@@ -15,7 +16,7 @@ use rand::{CryptoRng, RngCore};
 pub struct Bip39RootSecretStrategy<const WORD_COUNT: usize = 12>;
 
 impl<const WORD_COUNT: usize> RootSecretStrategy for Bip39RootSecretStrategy<WORD_COUNT> {
-    type Encoding = bip39::Mnemonic;
+    type Encoding = Mnemonic;
 
     fn to_root_secret(secret: &Self::Encoding) -> DerivableSecret {
         const FEDIMINT_CLIENT_NONCE: &[u8] = b"Fedimint Client Salt";
@@ -38,14 +39,14 @@ impl<const WORD_COUNT: usize> RootSecretStrategy for Bip39RootSecretStrategy<WOR
         reader: &mut impl Read,
     ) -> Result<Self::Encoding, fedimint_core::encoding::DecodeError> {
         let bytes = Vec::<u8>::consensus_decode(reader, &ModuleRegistry::default())?;
-        bip39::Mnemonic::from_entropy(&bytes).map_err(DecodeError::from_err)
+        Mnemonic::from_entropy(&bytes).map_err(DecodeError::from_err)
     }
 
     fn random<R>(rng: &mut R) -> Self::Encoding
     where
         R: RngCore + CryptoRng,
     {
-        bip39::Mnemonic::generate_in_with(rng, bip39::Language::English, WORD_COUNT)
+        Mnemonic::generate_in_with(rng, Language::English, WORD_COUNT)
             .expect("Failed to generate mnemonic, bad word count")
     }
 }
