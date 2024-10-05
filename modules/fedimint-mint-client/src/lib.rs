@@ -56,6 +56,7 @@ use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
+use fedimint_core::secp256k1::{All, KeyPair, Secp256k1};
 use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, PeerId, Tiered,
@@ -68,7 +69,6 @@ use fedimint_mint_common::config::MintClientConfig;
 pub use fedimint_mint_common::*;
 use futures::{pin_mut, StreamExt};
 use hex::ToHex;
-use secp256k1_zkp::{All, KeyPair, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tbs::{AggregatePublicKey, Signature};
@@ -2250,13 +2250,13 @@ mod tests {
     use fedimint_core::encoding::Decodable;
     use fedimint_core::invite_code::{InviteCode, InviteCodeV2};
     use fedimint_core::module::registry::ModuleRegistry;
-    use fedimint_core::secp256k1::rand::rngs::OsRng;
-    use fedimint_core::secp256k1::SecretKey;
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{
         secp256k1, Amount, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId,
     };
     use itertools::Itertools;
+    use secp256k1::rand::rngs::OsRng;
+    use secp256k1::{SecretKey, SECP256K1};
     use serde_json::json;
     use tbs::Signature;
 
@@ -2505,7 +2505,7 @@ mod tests {
             notes: iter::repeat(OOBNoteV2 {
                 amount: Amount::from_msats(1),
                 sig: Signature(bls12_381::G1Affine::generator()),
-                key: SecretKey::new(&mut OsRng).keypair(secp256k1::SECP256K1),
+                key: SecretKey::new(&mut OsRng).keypair(SECP256K1),
             })
             .take(NUMBER_OF_NOTES)
             .collect(),

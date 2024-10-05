@@ -392,7 +392,7 @@ impl MintRecoveryStateV0 {
         let note_idx_ref = self.next_pending_note_idx.get_mut_or_default(amount);
 
         let (note_issuance_request, blind_nonce) = NoteIssuanceRequest::new(
-            secp256k1_zkp::SECP256K1,
+            fedimint_core::secp256k1::SECP256K1,
             &MintClientModule::new_note_secret_static(secret, amount, *note_idx_ref),
         );
         assert!(self

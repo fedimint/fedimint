@@ -18,11 +18,11 @@ use std::fmt::Formatter;
 use bls12_381::Scalar;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::secp256k1::{KeyPair, Secp256k1, Signing};
 use fedimint_core::BitcoinHash;
 use hkdf::hashes::Sha512;
 use hkdf::Hkdf;
 use ring::aead;
-use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 
 const CHILD_TAG: &[u8; 8] = b"childkey";
 const SECP256K1_TAG: &[u8; 8] = b"secp256k";

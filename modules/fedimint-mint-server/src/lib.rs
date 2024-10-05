@@ -24,8 +24,8 @@ use fedimint_core::module::{
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, NumPeersExt,
-    OutPoint, PeerId, ServerModule, Tiered, TieredMulti,
+    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, secp256k1, Amount,
+    NumPeersExt, OutPoint, PeerId, ServerModule, Tiered, TieredMulti,
 };
 use fedimint_logging::LOG_MODULE_MINT;
 pub use fedimint_mint_common as common;
@@ -48,7 +48,6 @@ use metrics::{
     MINT_REDEEMED_ECASH_FEES_SATS, MINT_REDEEMED_ECASH_SATS,
 };
 use rand::rngs::OsRng;
-use secp256k1_zkp::SECP256K1;
 use strum::IntoEnumIterator;
 use tbs::{
     aggregate_public_key_shares, sign_blinded_msg, AggregatePublicKey, PublicKeyShare,
@@ -519,7 +518,7 @@ impl ServerModule for Mint {
             api_endpoint! {
                 RECOVER_ENDPOINT,
                 ApiVersion::new(0, 0),
-                async |module: &Mint, context, id: secp256k1_zkp::PublicKey| -> Option<ECashUserBackupSnapshot> {
+                async |module: &Mint, context, id: secp256k1::PublicKey| -> Option<ECashUserBackupSnapshot> {
                     Ok(module
                         .handle_recover_request(&mut context.dbtx().into_nc(), id).await)
                 }
@@ -535,7 +534,7 @@ impl Mint {
         request: SignedBackupRequest,
     ) -> Result<(), ApiError> {
         let request = request
-            .verify_valid(SECP256K1)
+            .verify_valid(secp256k1::SECP256K1)
             .map_err(|_| ApiError::bad_request("invalid request".into()))?;
 
         debug!(id = %request.id, len = request.payload.len(), "Received user e-cash backup request");
@@ -562,7 +561,7 @@ impl Mint {
     async fn handle_recover_request(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        id: secp256k1_zkp::PublicKey,
+        id: secp256k1::PublicKey,
     ) -> Option<ECashUserBackupSnapshot> {
         dbtx.get_value(&EcashBackupKey(id)).await
     }

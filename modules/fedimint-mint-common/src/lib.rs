@@ -13,7 +13,9 @@ use config::MintClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-use fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common, Amount};
+use fedimint_core::{
+    extensible_associated_module_type, plugin_types_trait_impl_common, secp256k1, Amount,
+};
 use serde::{Deserialize, Serialize};
 use tbs::BlindedSignatureShare;
 use thiserror::Error;
@@ -98,7 +100,7 @@ impl fmt::Display for Note {
     Encodable,
     Decodable,
 )]
-pub struct Nonce(pub secp256k1_zkp::PublicKey);
+pub struct Nonce(pub secp256k1::PublicKey);
 
 impl fmt::Display for Nonce {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -204,7 +206,7 @@ impl Note {
     }
 
     /// Access the nonce as the public key to the spend key
-    pub fn spend_key(&self) -> &secp256k1_zkp::PublicKey {
+    pub fn spend_key(&self) -> &secp256k1::PublicKey {
         &self.nonce.0
     }
 }

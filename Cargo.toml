@@ -222,8 +222,6 @@ rand = { opt-level = 3 }
 ring = { opt-level = 3 }
 secp256k1 = { opt-level = 3 }
 secp256k1-sys = { opt-level = 3 }
-secp256k1-zkp = { opt-level = 3 }
-secp256k1-zkp-sys = { opt-level = 3 }
 subtle = { opt-level = 3 }
 zeroize = { opt-level = 3 }
 
