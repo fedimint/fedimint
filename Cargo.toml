@@ -86,7 +86,7 @@ keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
 anyhow = "1.0.89"
 aquamarine = "0.5.0"
 assert_matches = "1.5.0"
-async-stream = "0.3.5"
+async-stream = "0.3.6"
 async-trait = "0.1.83"
 axum = "0.7.7"
 base64 = "0.22.1"
@@ -97,7 +97,7 @@ bitcoincore-rpc = "0.17.0"
 bitcoin_hashes = "0.12.0"
 bls12_381 = "0.8.0"
 bytes = "1.7.2"
-clap = { version = "4.5.18", features = ["derive", "env"] }
+clap = { version = "4.5.19", features = ["derive", "env"] }
 cln-rpc = "0.2.0"
 criterion = "0.5.1"
 devimint = { path = "./devimint", version = "=0.5.0-alpha" }
@@ -159,7 +159,7 @@ ln-gateway = { package = "fedimint-ln-gateway", path = "./gateway/ln-gateway", v
 miniscript = "10.0.0"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
-reqwest = { version = "0.12.7", features = [
+reqwest = { version = "0.12.8", features = [
     "json",
     "rustls-tls",
     "charset",
