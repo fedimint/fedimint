@@ -3,8 +3,7 @@ use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use bip39::Mnemonic;
-use fedimint_bip39::Bip39RootSecretStrategy;
+use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::db::ClientConfigKey;
 use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 use fedimint_client::module::init::ClientModuleInitRegistry;

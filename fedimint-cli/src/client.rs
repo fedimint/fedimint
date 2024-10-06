@@ -4,10 +4,10 @@ use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context};
-use bip39::Mnemonic;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{secp256k1, Network};
 use clap::Subcommand;
+use fedimint_bip39::Mnemonic;
 use fedimint_client::backup::Metadata;
 use fedimint_client::ClientHandleArc;
 use fedimint_core::config::{ClientModuleConfig, FederationId};

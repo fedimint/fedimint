@@ -24,7 +24,6 @@ use std::time::Duration;
 use std::{fs, result};
 
 use anyhow::{format_err, Context};
-use bip39::Mnemonic;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use db_locked::LockedBuilder;
 #[cfg(feature = "tor")]
@@ -35,7 +34,7 @@ use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{
     DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, WsFederationApi,
 };
-use fedimint_bip39::Bip39RootSecretStrategy;
+use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::meta::{FetchKind, LegacyMetaSource, MetaSource};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
