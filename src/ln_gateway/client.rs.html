@@ -223,14 +223,12 @@
 <a href="#222" id="222">222</a>
 <a href="#223" id="223">223</a>
 <a href="#224" id="224">224</a>
-<a href="#225" id="225">225</a>
-<a href="#226" id="226">226</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
+<a href="#225" id="225">225</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 
-<span class="kw">use </span>bip39::Mnemonic;
-<span class="kw">use </span>fedimint_bip39::Bip39RootSecretStrategy;
+<span class="kw">use </span>fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 <span class="kw">use </span>fedimint_client::db::ClientConfigKey;
 <span class="kw">use </span>fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;

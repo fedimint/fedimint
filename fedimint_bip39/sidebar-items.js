@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["Bip39RootSecretStrategy"]};
+window.SIDEBAR_ITEMS = {"enum":["Language"],"struct":["Bip39RootSecretStrategy","Mnemonic"]};

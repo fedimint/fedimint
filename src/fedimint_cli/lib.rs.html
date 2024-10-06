@@ -1290,8 +1290,7 @@
 <a href="#1289" id="1289">1289</a>
 <a href="#1290" id="1290">1290</a>
 <a href="#1291" id="1291">1291</a>
-<a href="#1292" id="1292">1292</a>
-<a href="#1293" id="1293">1293</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1292" id="1292">1292</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1317,7 +1316,6 @@
 <span class="kw">use </span>std::{fs, result};
 
 <span class="kw">use </span>anyhow::{format_err, Context};
-<span class="kw">use </span>bip39::Mnemonic;
 <span class="kw">use </span>clap::{Args, CommandFactory, Parser, Subcommand};
 <span class="kw">use </span>db_locked::LockedBuilder;
 <span class="attr">#[cfg(feature = <span class="string">"tor"</span>)]
@@ -1328,7 +1326,7 @@
 <span class="kw">use </span>fedimint_api_client::api::{
     DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, WsFederationApi,
 };
-<span class="kw">use </span>fedimint_bip39::Bip39RootSecretStrategy;
+<span class="kw">use </span>fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 <span class="kw">use </span>fedimint_client::meta::{FetchKind, LegacyMetaSource, MetaSource};
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 <span class="kw">use </span>fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};

@@ -2205,7 +2205,6 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::anyhow;
-<span class="kw">use </span>bip39::Mnemonic;
 <span class="kw">use </span>bitcoin::{Address, Network, Txid};
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>clap::Parser;
@@ -2216,7 +2215,7 @@
 <span class="kw">use </span>error::FederationNotConnected;
 <span class="kw">use </span>federation_manager::FederationManager;
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
-<span class="kw">use </span>fedimint_bip39::Bip39RootSecretStrategy;
+<span class="kw">use </span>fedimint_bip39::{Bip39RootSecretStrategy, Language, Mnemonic};
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::secret::RootSecretStrategy;
 <span class="kw">use </span>fedimint_client::{Client, ClientHandleArc};
@@ -3900,12 +3899,13 @@
             </span>} <span class="kw">else </span>{
                 <span class="kw">let </span>mnemonic = <span class="kw">if let </span><span class="prelude-val">Ok</span>(words) = std::env::var(FM_GATEWAY_MNEMONIC_ENV) {
                     <span class="macro">info!</span>(<span class="string">"Using provided mnemonic from environment variable"</span>);
-                    Mnemonic::parse_in_normalized(bip39::Language::English, words.as_str())
-                        .map_err(|e| {
+                    Mnemonic::parse_in_normalized(Language::English, words.as_str()).map_err(
+                        |e| {
                             AdminGatewayError::MnemonicError(<span class="macro">anyhow!</span>(<span class="macro">format!</span>(
                                 <span class="string">"Seed phrase provided in environment was invalid {e:?}"
                             </span>)))
-                        })<span class="question-mark">?
+                        },
+                    )<span class="question-mark">?
                 </span>} <span class="kw">else </span>{
                     <span class="macro">info!</span>(<span class="string">"Generating mnemonic and writing entropy to client storage"</span>);
                     Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::random(<span class="kw-2">&amp;mut </span>thread_rng())
