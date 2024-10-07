@@ -1676,7 +1676,6 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
         return Ok(());
     }
 
-    #[allow(unused_variables)]
     let DevFed {
         bitcoind,
         cln,
@@ -1684,8 +1683,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
         fed,
         gw_cln,
         gw_lnd,
-        electrs,
-        esplora,
+        gw_ldk,
         ..
     } = dev_fed;
 
@@ -1693,13 +1691,32 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     client.use_gateway(&gw_cln).await?;
     fed.pegin_client(10_000, &client).await?;
 
-    // Query current gateway infos
-    let (cln_value, lnd_value) = try_join!(gw_cln.get_info(), gw_lnd.get_info())?;
+    // Wait for gateways to sync to chain
+    gw_cln.wait_for_chain_sync(&bitcoind).await?;
+    gw_lnd.wait_for_chain_sync(&bitcoind).await?;
+    if let Some(gw_ldk) = &gw_ldk {
+        gw_ldk.wait_for_chain_sync(&bitcoind).await?;
+    }
 
-    // Drop references to cln and lnd gateways so the test can kill them
+    // Query current gateway infos
+    let (cln_value, lnd_value, ldk_value_or) = if let Some(gw_ldk) = &gw_ldk {
+        let (cln_value, lnd_value, ldk_value) =
+            try_join!(gw_cln.get_info(), gw_lnd.get_info(), gw_ldk.get_info())?;
+
+        (cln_value, lnd_value, Some(ldk_value))
+    } else {
+        let (cln_value, lnd_value) = try_join!(gw_cln.get_info(), gw_lnd.get_info())?;
+
+        (cln_value, lnd_value, None)
+    };
+
+    // Drop references to gateways so the test can kill them
     let cln_gateway_id = gw_cln.gateway_id().await?;
     drop(gw_cln);
     drop(gw_lnd);
+    if let Some(gw_ldk) = gw_ldk {
+        drop(gw_ldk);
+    }
 
     // Verify that making a payment while the gateways are down does not result in
     // funds being stuck
@@ -1714,10 +1731,22 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
 
     // Reboot gateways with the same Lightning node instances
     info!("Rebooting gateways...");
-    let (new_gw_cln, new_gw_lnd) = try_join!(
-        Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
-        Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone()))
-    )?;
+    let (new_gw_cln, new_gw_lnd, new_gw_ldk_or) = if ldk_value_or.is_some() {
+        let (new_gw_cln, new_gw_lnd, new_gw_ldk) = try_join!(
+            Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
+            Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
+            Gatewayd::new(process_mgr, LightningNode::Ldk)
+        )?;
+
+        (new_gw_cln, new_gw_lnd, Some(new_gw_ldk))
+    } else {
+        let (new_gw_cln, new_gw_lnd) = try_join!(
+            Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
+            Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone()))
+        )?;
+
+        (new_gw_cln, new_gw_lnd, None)
+    };
 
     let cln_info: GatewayInfo = serde_json::from_value(cln_value)?;
     poll(
@@ -1758,6 +1787,27 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
         },
     )
     .await?;
+
+    if let (Some(new_gw_ldk), Some(ldk_value)) = (new_gw_ldk_or, ldk_value_or) {
+        let ldk_info: GatewayInfo = serde_json::from_value(ldk_value)?;
+        poll(
+            "Waiting for LDK Gateway Running state after reboot",
+            || async {
+                let mut new_ldk_cmd = cmd!(new_gw_ldk, "info");
+                let ldk_value = new_ldk_cmd.out_json().await.map_err(ControlFlow::Continue)?;
+                let reboot_info: GatewayInfo = serde_json::from_value(ldk_value).context("json invalid").map_err(ControlFlow::Break)?;
+
+                if reboot_info.gateway_state == "Running" {
+                    info!(target: LOG_DEVIMINT, "LDK Gateway restarted, with auto-rejoin to federation");
+                    // Assert that the gateway info is the same as before the reboot
+                    assert_eq!(ldk_info, reboot_info);
+                    return Ok(());
+                }
+                Err(ControlFlow::Continue(anyhow!("gateway not running")))
+            },
+        )
+        .await?;
+    }
 
     info!(LOG_DEVIMINT, "gateway_reboot_test: success");
     Ok(())
