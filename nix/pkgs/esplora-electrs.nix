@@ -1,10 +1,11 @@
-{ lib
-, stdenv
-, llvmPackages_12
-, fetchFromGitHub
-, rocksdb_8_3
-, Security
-, rustPlatform
+{
+  lib,
+  stdenv,
+  llvmPackages_12,
+  fetchFromGitHub,
+  rocksdb_8_3,
+  Security,
+  rustPlatform,
 }:
 let
   rocksdb = rocksdb_8_3;

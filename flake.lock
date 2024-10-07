@@ -26,17 +26,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1719001124,
-        "narHash": "sha256-JXrMwYlQarZPyjN5UkD4fS9mrHSE1PUa7P//1Z5Sqr0=",
+        "lastModified": 1727381935,
+        "narHash": "sha256-G2fOYRZM7bXK5eBb+GK3k/WmO+q5JA/GtFwSPc3kdc8=",
         "owner": "tadfisher",
         "repo": "android-nixpkgs",
-        "rev": "7fa1348249564e43185d3053f579f9fa923d46cc",
+        "rev": "522d86121cbd413aff922c54f38106ecf8740107",
         "type": "github"
       },
       "original": {
         "owner": "tadfisher",
         "repo": "android-nixpkgs",
-        "rev": "7fa1348249564e43185d3053f579f9fa923d46cc",
+        "rev": "522d86121cbd413aff922c54f38106ecf8740107",
         "type": "github"
       }
     },
@@ -231,17 +231,17 @@
         "systems": "systems_4"
       },
       "locked": {
-        "lastModified": 1719004469,
-        "narHash": "sha256-TZSHiEJ3qYgA46vikQKT2bwGCEF2LrJVw7cettqa+/g=",
+        "lastModified": 1727478500,
+        "narHash": "sha256-nrDYdwIAI1nskNEE/r9rhDJDaouZ4tpSyURfndRsPho=",
         "owner": "dpc",
         "repo": "flakebox",
-        "rev": "12d5ee4f6c47bc01f07ec6f5848a83db265902d3",
+        "rev": "ee39d59b2c3779e5827f8fa2d269610c556c04c8",
         "type": "github"
       },
       "original": {
         "owner": "dpc",
         "repo": "flakebox",
-        "rev": "12d5ee4f6c47bc01f07ec6f5848a83db265902d3",
+        "rev": "ee39d59b2c3779e5827f8fa2d269610c556c04c8",
         "type": "github"
       }
     },

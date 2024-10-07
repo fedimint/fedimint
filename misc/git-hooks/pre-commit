@@ -55,7 +55,7 @@ function check_cargo_lock() {
     set -euo pipefail
 
     # https://users.rust-lang.org/t/check-if-the-cargo-lock-is-up-to-date-without-building-anything/91048/5
-    flakebox-in-each-cargo-workspace cargo update --workspace --locked
+    flakebox-in-each-cargo-workspace cargo update --workspace --locked |& while read -r note ; do echo "$note    (cargo)"; done
 
 }
 export -f check_cargo_lock
@@ -87,7 +87,6 @@ function check_check_forbidden_dependencies() {
         return 1
       fi
     done
-    # FIXME: (@leonardo) temporally allow the `openssl`, it's currently being brought by tor-proto -...-> native-tls.
     find ./ -name Cargo.lock | while read -r cargo_lock ; do
       if grep -E "openssl" "$cargo_lock" >&2 ; then
         >&2 echo "$cargo_lock must not depend on openssl"

@@ -39,7 +39,7 @@ format:
     cd {{invocation_directory()}}
   fi
   cargo fmt --all
-  nixpkgs-fmt $(echo **.nix)
+  nixfmt $(git ls-files | grep "\.nix$")
 
 
 # run lints (git pre-commit hook)
