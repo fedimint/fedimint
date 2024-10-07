@@ -498,9 +498,14 @@ where
     }
 
     fn disconnect_err(&self, err: &anyhow::Error, disconnect_count: u64) -> PeerConnectionState<M> {
-        debug!(target: LOG_NET_PEER,
+        debug!(
+            target: LOG_NET_PEER,
             our_id = ?self.our_id,
-            peer = ?self.peer_id, %err, %disconnect_count, "Peer disconnected");
+            peer = ?self.peer_id,
+            %err,
+            %disconnect_count,
+            "Peer disconnected"
+        );
 
         self.disconnect(disconnect_count)
     }
@@ -577,15 +582,30 @@ where
     }
 
     async fn try_reconnect(&self) -> Result<AnyFramedTransport<PeerMessage<M>>, anyhow::Error> {
-        debug!(target: LOG_NET_PEER, our_id = ?self.our_id, peer = ?self.peer_id, "Trying to reconnect");
+        let addr = self.peer_address.with_port_or_known_default();
+        debug!(
+            target: LOG_NET_PEER,
+            our_id = ?self.our_id,
+            peer = ?self.peer_id,
+            addr = %&addr,
+            "Trying to reconnect"
+        );
         let (connected_peer, conn) = self
             .connect
-            .connect_framed(self.peer_address.with_port_or_known_default(), self.peer_id)
+            .connect_framed(addr.clone(), self.peer_id)
             .await?;
 
         if connected_peer == self.peer_id {
             Ok(conn)
         } else {
+            warn!(
+                target: LOG_NET_PEER,
+                our_id = ?self.our_id,
+                peer = ?self.peer_id,
+                peer_self_id=?connected_peer,
+                %addr,
+                "Peer identified itself incorrectly"
+            );
             Err(anyhow::anyhow!(
                 "Peer identified itself incorrectly: {:?}",
                 connected_peer
