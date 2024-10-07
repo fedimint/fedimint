@@ -2563,7 +2563,57 @@
 <a href="#2562" id="2562">2562</a>
 <a href="#2563" id="2563">2563</a>
 <a href="#2564" id="2564">2564</a>
-<a href="#2565" id="2565">2565</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
+<a href="#2565" id="2565">2565</a>
+<a href="#2566" id="2566">2566</a>
+<a href="#2567" id="2567">2567</a>
+<a href="#2568" id="2568">2568</a>
+<a href="#2569" id="2569">2569</a>
+<a href="#2570" id="2570">2570</a>
+<a href="#2571" id="2571">2571</a>
+<a href="#2572" id="2572">2572</a>
+<a href="#2573" id="2573">2573</a>
+<a href="#2574" id="2574">2574</a>
+<a href="#2575" id="2575">2575</a>
+<a href="#2576" id="2576">2576</a>
+<a href="#2577" id="2577">2577</a>
+<a href="#2578" id="2578">2578</a>
+<a href="#2579" id="2579">2579</a>
+<a href="#2580" id="2580">2580</a>
+<a href="#2581" id="2581">2581</a>
+<a href="#2582" id="2582">2582</a>
+<a href="#2583" id="2583">2583</a>
+<a href="#2584" id="2584">2584</a>
+<a href="#2585" id="2585">2585</a>
+<a href="#2586" id="2586">2586</a>
+<a href="#2587" id="2587">2587</a>
+<a href="#2588" id="2588">2588</a>
+<a href="#2589" id="2589">2589</a>
+<a href="#2590" id="2590">2590</a>
+<a href="#2591" id="2591">2591</a>
+<a href="#2592" id="2592">2592</a>
+<a href="#2593" id="2593">2593</a>
+<a href="#2594" id="2594">2594</a>
+<a href="#2595" id="2595">2595</a>
+<a href="#2596" id="2596">2596</a>
+<a href="#2597" id="2597">2597</a>
+<a href="#2598" id="2598">2598</a>
+<a href="#2599" id="2599">2599</a>
+<a href="#2600" id="2600">2600</a>
+<a href="#2601" id="2601">2601</a>
+<a href="#2602" id="2602">2602</a>
+<a href="#2603" id="2603">2603</a>
+<a href="#2604" id="2604">2604</a>
+<a href="#2605" id="2605">2605</a>
+<a href="#2606" id="2606">2606</a>
+<a href="#2607" id="2607">2607</a>
+<a href="#2608" id="2608">2608</a>
+<a href="#2609" id="2609">2609</a>
+<a href="#2610" id="2610">2610</a>
+<a href="#2611" id="2611">2611</a>
+<a href="#2612" id="2612">2612</a>
+<a href="#2613" id="2613">2613</a>
+<a href="#2614" id="2614">2614</a>
+<a href="#2615" id="2615">2615</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -4241,16 +4291,14 @@
         <span class="kw">return </span><span class="prelude-val">Ok</span>(());
     }
 
-    <span class="attr">#[allow(unused_variables)]
-    </span><span class="kw">let </span>DevFed {
+    <span class="kw">let </span>DevFed {
         bitcoind,
         cln,
         lnd,
         fed,
         gw_cln,
         gw_lnd,
-        electrs,
-        esplora,
+        gw_ldk,
         ..
     } = dev_fed;
 
@@ -4258,13 +4306,32 @@
     client.use_gateway(<span class="kw-2">&amp;</span>gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
     fed.pegin_client(<span class="number">10_000</span>, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="comment">// Query current gateway infos
-    </span><span class="kw">let </span>(cln_value, lnd_value) = <span class="macro">try_join!</span>(gw_cln.get_info(), gw_lnd.get_info())<span class="question-mark">?</span>;
+    <span class="comment">// Wait for gateways to sync to chain
+    </span>gw_cln.wait_for_chain_sync(<span class="kw-2">&amp;</span>bitcoind).<span class="kw">await</span><span class="question-mark">?</span>;
+    gw_lnd.wait_for_chain_sync(<span class="kw-2">&amp;</span>bitcoind).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(gw_ldk) = <span class="kw-2">&amp;</span>gw_ldk {
+        gw_ldk.wait_for_chain_sync(<span class="kw-2">&amp;</span>bitcoind).<span class="kw">await</span><span class="question-mark">?</span>;
+    }
 
-    <span class="comment">// Drop references to cln and lnd gateways so the test can kill them
+    <span class="comment">// Query current gateway infos
+    </span><span class="kw">let </span>(cln_value, lnd_value, ldk_value_or) = <span class="kw">if let </span><span class="prelude-val">Some</span>(gw_ldk) = <span class="kw-2">&amp;</span>gw_ldk {
+        <span class="kw">let </span>(cln_value, lnd_value, ldk_value) =
+            <span class="macro">try_join!</span>(gw_cln.get_info(), gw_lnd.get_info(), gw_ldk.get_info())<span class="question-mark">?</span>;
+
+        (cln_value, lnd_value, <span class="prelude-val">Some</span>(ldk_value))
+    } <span class="kw">else </span>{
+        <span class="kw">let </span>(cln_value, lnd_value) = <span class="macro">try_join!</span>(gw_cln.get_info(), gw_lnd.get_info())<span class="question-mark">?</span>;
+
+        (cln_value, lnd_value, <span class="prelude-val">None</span>)
+    };
+
+    <span class="comment">// Drop references to gateways so the test can kill them
     </span><span class="kw">let </span>cln_gateway_id = gw_cln.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>;
     drop(gw_cln);
     drop(gw_lnd);
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(gw_ldk) = gw_ldk {
+        drop(gw_ldk);
+    }
 
     <span class="comment">// Verify that making a payment while the gateways are down does not result in
     // funds being stuck
@@ -4279,10 +4346,22 @@
 
     <span class="comment">// Reboot gateways with the same Lightning node instances
     </span><span class="macro">info!</span>(<span class="string">"Rebooting gateways..."</span>);
-    <span class="kw">let </span>(new_gw_cln, new_gw_lnd) = <span class="macro">try_join!</span>(
-        Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
-        Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone()))
-    )<span class="question-mark">?</span>;
+    <span class="kw">let </span>(new_gw_cln, new_gw_lnd, new_gw_ldk_or) = <span class="kw">if </span>ldk_value_or.is_some() {
+        <span class="kw">let </span>(new_gw_cln, new_gw_lnd, new_gw_ldk) = <span class="macro">try_join!</span>(
+            Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
+            Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
+            Gatewayd::new(process_mgr, LightningNode::Ldk)
+        )<span class="question-mark">?</span>;
+
+        (new_gw_cln, new_gw_lnd, <span class="prelude-val">Some</span>(new_gw_ldk))
+    } <span class="kw">else </span>{
+        <span class="kw">let </span>(new_gw_cln, new_gw_lnd) = <span class="macro">try_join!</span>(
+            Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
+            Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone()))
+        )<span class="question-mark">?</span>;
+
+        (new_gw_cln, new_gw_lnd, <span class="prelude-val">None</span>)
+    };
 
     <span class="kw">let </span>cln_info: GatewayInfo = serde_json::from_value(cln_value)<span class="question-mark">?</span>;
     poll(
@@ -4323,6 +4402,27 @@
         },
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">if let </span>(<span class="prelude-val">Some</span>(new_gw_ldk), <span class="prelude-val">Some</span>(ldk_value)) = (new_gw_ldk_or, ldk_value_or) {
+        <span class="kw">let </span>ldk_info: GatewayInfo = serde_json::from_value(ldk_value)<span class="question-mark">?</span>;
+        poll(
+            <span class="string">"Waiting for LDK Gateway Running state after reboot"</span>,
+            || <span class="kw">async </span>{
+                <span class="kw">let </span><span class="kw-2">mut </span>new_ldk_cmd = <span class="macro">cmd!</span>(new_gw_ldk, <span class="string">"info"</span>);
+                <span class="kw">let </span>ldk_value = new_ldk_cmd.out_json().<span class="kw">await</span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
+                <span class="kw">let </span>reboot_info: GatewayInfo = serde_json::from_value(ldk_value).context(<span class="string">"json invalid"</span>).map_err(ControlFlow::Break)<span class="question-mark">?</span>;
+
+                <span class="kw">if </span>reboot_info.gateway_state == <span class="string">"Running" </span>{
+                    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"LDK Gateway restarted, with auto-rejoin to federation"</span>);
+                    <span class="comment">// Assert that the gateway info is the same as before the reboot
+                    </span><span class="macro">assert_eq!</span>(ldk_info, reboot_info);
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+                }
+                <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">"gateway not running"</span>)))
+            },
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+    }
 
     <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">"gateway_reboot_test: success"</span>);
     <span class="prelude-val">Ok</span>(())
