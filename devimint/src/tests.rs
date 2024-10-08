@@ -18,6 +18,7 @@ use fedimint_core::task::block_in_place;
 use fedimint_core::{Amount, PeerId};
 use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_logging::LOG_DEVIMINT;
+use futures::future::try_join_all;
 use hex::ToHex;
 use ln_gateway::rpc::GatewayInfo;
 use serde_json::json;
@@ -584,22 +585,24 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                 let new_gateway_extension_path = gateway_cln_extension_paths
                     .get(i)
                     .expect("Not enough gateway-cln-extension paths");
-                try_join!(
-                    dev_fed.gw_cln.restart_with_bin(
+
+                let gateways = if let Some(gw_ldk) = &mut dev_fed.gw_ldk {
+                    vec![&mut dev_fed.gw_cln, &mut dev_fed.gw_lnd, gw_ldk]
+                } else {
+                    vec![&mut dev_fed.gw_cln, &mut dev_fed.gw_lnd]
+                };
+
+                try_join_all(gateways.into_iter().map(|gateway| {
+                    gateway.restart_with_bin(
                         process_mgr,
                         new_gatewayd_path,
                         new_gateway_cli_path,
                         new_gateway_extension_path,
                         dev_fed.bitcoind.clone(),
-                    ),
-                    dev_fed.gw_lnd.restart_with_bin(
-                        process_mgr,
-                        new_gatewayd_path,
-                        new_gateway_cli_path,
-                        new_gateway_extension_path,
-                        dev_fed.bitcoind.clone(),
-                    ),
-                )?;
+                    )
+                }))
+                .await?;
+
                 try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
                 let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
                 let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
