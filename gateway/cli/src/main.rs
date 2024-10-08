@@ -42,7 +42,8 @@ async fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
     let versioned_api = cli.address.join(V1_API_ENDPOINT)?;
-    let create_client = || GatewayRpcClient::new(versioned_api.clone(), cli.rpcpassword.clone());
+    let create_client =
+        || GatewayRpcClient::new(versioned_api.clone(), cli.rpcpassword.clone(), None);
 
     match cli.command {
         Commands::General(general_command) => general_command.handle(create_client).await?,

@@ -1,5 +1,6 @@
 use anyhow::bail;
 use bitcoin::address::NetworkUnchecked;
+use bitcoin::secp256k1::schnorr::Signature;
 use bitcoin::Address;
 use clap::Subcommand;
 use fedimint_core::config::FederationId;
@@ -7,9 +8,9 @@ use fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll}
 use fedimint_mint_client::OOBNotes;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
-    BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, DepositAddressPayload,
-    FederationRoutingFees, LeaveFedPayload, ReceiveEcashPayload, SetConfigurationPayload,
-    SpendEcashPayload, WithdrawPayload,
+    AuthChallengePayload, AuthChallengeResponse, BackupPayload, BalancePayload, ConfigPayload,
+    ConnectFedPayload, DepositAddressPayload, FederationRoutingFees, LeaveFedPayload,
+    ReceiveEcashPayload, SetConfigurationPayload, SpendEcashPayload, WithdrawPayload,
 };
 
 use crate::print_response;
@@ -142,6 +143,21 @@ pub enum GeneralCommands {
         notes: OOBNotes,
         #[arg(long = "no-wait", action = clap::ArgAction::SetFalse)]
         wait: bool,
+    },
+    /// Request a challenge code from Auth Manager
+    GetChallengeAuth,
+    /// Sign the challenge code received from Auth Manager
+    SignChallengeAuth {
+        #[clap(long)]
+        challenge_auth: String,
+    },
+    /// Using the signed challenge code, request a JWT token for future
+    /// interactions
+    SessionAuth {
+        #[clap(long)]
+        challenge: String,
+        #[clap(long)]
+        response: Signature,
     },
 }
 
@@ -286,6 +302,32 @@ impl GeneralCommands {
             }
             Self::Stop => {
                 create_client().stop().await?;
+            }
+            Self::GetChallengeAuth => {
+                let client = create_client();
+                let challenge = client.challenge_auth().await?;
+                print_response(challenge);
+            }
+            Self::SignChallengeAuth { challenge_auth } => {
+                let client = create_client();
+                let signature = client
+                    .sign_challenge_auth(AuthChallengeResponse {
+                        challenge: challenge_auth,
+                    })
+                    .await?;
+                print_response(signature);
+            }
+            Self::SessionAuth {
+                challenge,
+                response,
+            } => {
+                let response = create_client()
+                    .session_auth(AuthChallengePayload {
+                        challenge,
+                        response,
+                    })
+                    .await?;
+                print_response(response);
             }
         }
 

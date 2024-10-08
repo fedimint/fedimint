@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::UNIX_EPOCH;
 
 use axum::extract::Request;
 use axum::http::{header, StatusCode};
@@ -11,13 +12,13 @@ use fedimint_core::config::FederationId;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::TaskGroup;
 use fedimint_ln_common::gateway_endpoint_constants::{
-    ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
-    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT,
-    GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_GATEWAY_ID_ENDPOINT,
-    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
-    MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT, RECEIVE_ECASH_ENDPOINT,
-    SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SYNC_TO_CHAIN_ENDPOINT,
-    WITHDRAW_ENDPOINT,
+    ADDRESS_ENDPOINT, AUTH_CHALLENGE_ENDPOINT, AUTH_SESSION_ENDPOINT, AUTH_SIGN_CHALLENGE_ENDPOINT,
+    BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
+    CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
+    GET_GATEWAY_ID_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT,
+    LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT,
+    RECEIVE_ECASH_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
+    SYNC_TO_CHAIN_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 use fedimint_lnv2_client::{CreateBolt11InvoicePayload, SendPaymentPayload};
 use fedimint_lnv2_common::endpoint_constants::{
@@ -32,11 +33,12 @@ use tower_http::cors::CorsLayer;
 use tracing::{error, info, instrument};
 
 use super::{
-    BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
-    CreateInvoiceForSelfPayload, DepositAddressPayload, GetLnOnchainAddressPayload, InfoPayload,
-    LeaveFedPayload, OpenChannelPayload, PayInvoicePayload, ReceiveEcashPayload,
-    SetConfigurationPayload, SpendEcashPayload, SyncToChainPayload, WithdrawOnchainPayload,
-    WithdrawPayload, V1_API_ENDPOINT,
+    AuthChallengePayload, AuthChallengeResponse, BackupPayload, BalancePayload,
+    CloseChannelsWithPeerPayload, ConnectFedPayload, CreateInvoiceForSelfPayload,
+    DepositAddressPayload, GetLnOnchainAddressPayload, InfoPayload, LeaveFedPayload,
+    OpenChannelPayload, PayInvoicePayload, ReceiveEcashPayload, SetConfigurationPayload,
+    SpendEcashPayload, SyncToChainPayload, WithdrawOnchainPayload, WithdrawPayload,
+    V1_API_ENDPOINT,
 };
 use crate::error::{AdminGatewayError, PublicGatewayError};
 use crate::rpc::ConfigPayload;
@@ -101,6 +103,37 @@ async fn auth_middleware(
     let gateway_hashed_password = gateway_config.hashed_password;
     let password_salt = gateway_config.password_salt;
     authenticate(gateway_hashed_password, password_salt, request, next).await
+}
+
+/// Middleware to authenticate an incoming request. Routes that are
+/// authenticated with this middleware always require a Bearer token
+/// with the JWT generated previously to be supplied in the Authorization
+/// header.
+async fn auth_jwt_middleware(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    request: Request,
+    next: Next,
+) -> Result<impl IntoResponse, StatusCode> {
+    let jwt_token = extract_bearer_token(&request)?;
+    let auth_manager = gateway.auth_manager.lock().await;
+    match jsonwebtoken::decode::<crate::auth_manager::Session>(
+        &jwt_token,
+        &jsonwebtoken::DecodingKey::from_secret(auth_manager.encoding_secret.as_ref()),
+        &jsonwebtoken::Validation::default(),
+    ) {
+        Ok(decoded_token_data) => {
+            let now = fedimint_core::time::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs();
+            if now > decoded_token_data.claims.exp {
+                Err(StatusCode::UNAUTHORIZED)
+            } else {
+                Ok(next.run(request).await)
+            }
+        }
+        Err(_) => Err(StatusCode::UNAUTHORIZED),
+    }
 }
 
 /// Middleware to authenticate an incoming request. Routes that are
@@ -188,7 +221,7 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
 
     // Authenticated, public routes used for gateway administration
     let always_authenticated_routes = Router::new()
-        .route(BALANCE_ENDPOINT, post(balance))
+        // .route(BALANCE_ENDPOINT, post(balance))
         .route(ADDRESS_ENDPOINT, post(address))
         .route(WITHDRAW_ENDPOINT, post(withdraw))
         .route(CONNECT_FED_ENDPOINT, post(connect_fed))
@@ -223,13 +256,60 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
         .route(GATEWAY_INFO_ENDPOINT, get(info))
         .layer(middleware::from_fn(auth_after_config_middleware));
 
+    // Authenticated with JWT, public routes used for gateway administration
+    let auth_jwt_routes = Router::new()
+        .route(BALANCE_ENDPOINT, post(balance))
+        .layer(middleware::from_fn(auth_jwt_middleware));
+
+    let auth_routes = Router::new()
+        .route(AUTH_CHALLENGE_ENDPOINT, get(auth_get_challenge))
+        .route(AUTH_SESSION_ENDPOINT, post(auth_get_jwt_session))
+        .route(AUTH_SIGN_CHALLENGE_ENDPOINT, post(auth_sign_challenge));
+
     Router::new()
         .merge(public_routes)
         .merge(always_authenticated_routes)
         .merge(authenticated_after_config_routes)
+        .merge(auth_routes)
+        .merge(auth_jwt_routes)
         .layer(Extension(gateway))
         .layer(Extension(task_group))
         .layer(CorsLayer::permissive())
+}
+
+/// Auth Challenge Endpoint
+async fn auth_get_challenge(
+    Extension(gateway): Extension<Arc<Gateway>>,
+) -> Result<impl IntoResponse, AdminGatewayError> {
+    let mut auth_manager = gateway.auth_manager.lock().await;
+    let challenge = auth_manager.create_challenge();
+    Ok(Json(json!(challenge)))
+}
+
+/// Auth Sign Challenge Endpoint
+async fn auth_sign_challenge(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<AuthChallengeResponse>,
+) -> Result<impl IntoResponse, AdminGatewayError> {
+    let auth_manager = gateway.auth_manager.lock().await;
+    let signature =
+        auth_manager.sign_challenge(bitcoin::secp256k1::SECP256K1, payload.challenge)?;
+    Ok(Json(json!(signature)))
+}
+
+/// Auth Session Endpoint
+async fn auth_get_jwt_session(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<AuthChallengePayload>,
+) -> Result<impl IntoResponse, AdminGatewayError> {
+    let mut auth_manager = gateway.auth_manager.lock().await;
+    let session = auth_manager
+        .verify_challenge_response(bitcoin::secp256k1::SECP256K1, &payload)
+        .map_err(|err| AdminGatewayError::Unauthorized {
+            failure_reason: format!("Unauthorized {}", err),
+        })?;
+    let token = session.encode_jwt(auth_manager.encoding_secret.clone())?;
+    Ok(Json(json!(token)))
 }
 
 /// Creates a password hash by appending a 4 byte salt to the plaintext
