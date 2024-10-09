@@ -58,7 +58,7 @@ use fedimint_server::config::distributedgen::PeerHandleOps;
 use futures::StreamExt;
 use metrics::{LN_CANCEL_OUTGOING_CONTRACTS, LN_FUNDED_CONTRACT_SATS, LN_INCOMING_OFFER};
 use rand::rngs::OsRng;
-use secp256k1::PublicKey;
+use secp256k1::{Message, PublicKey};
 use strum::IntoEnumIterator;
 use tracing::{debug, error, info, info_span, trace, warn};
 
@@ -750,7 +750,7 @@ impl ServerModule for Lightning {
                 secp256k1::global::SECP256K1
                     .verify_schnorr(
                         gateway_signature,
-                        &outgoing_contract.cancellation_message().into(),
+                        &Message::from_digest(*outgoing_contract.cancellation_message().as_ref()),
                         &outgoing_contract.gateway_key.x_only_public_key().0,
                     )
                     .map_err(|_| LightningOutputError::InvalidCancellationSignature)?;

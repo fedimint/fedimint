@@ -104,7 +104,10 @@ impl FakeBitcoinTest {
     }
 
     fn pending_merkle_tree(pending: &[Transaction]) -> PartialMerkleTree {
-        let txs = pending.iter().map(Transaction::txid).collect::<Vec<Txid>>();
+        let txs = pending
+            .iter()
+            .map(Transaction::compute_txid)
+            .collect::<Vec<Txid>>();
         let matches = repeat(true).take(txs.len()).collect::<Vec<bool>>();
         PartialMerkleTree::from_txids(txs.as_slice(), matches.as_slice())
     }
@@ -115,7 +118,7 @@ impl FakeBitcoinTest {
     /// which can accidenatally happen due to how simplicit our fakes are.
     fn new_transaction(out: Vec<TxOut>, nonce: u32) -> Transaction {
         Transaction {
-            version: 0,
+            version: bitcoin::transaction::Version(0),
             lock_time: LockTime::from_height(nonce).unwrap(),
             input: vec![],
             output: out,
@@ -138,8 +141,8 @@ impl FakeBitcoinTest {
         // gives the correct height
         let block_height = blocks.len();
         for tx in pending.iter() {
-            addresses.insert(tx.txid(), Amount::from_sats(output_sum(tx)));
-            txid_to_block_height.insert(tx.txid(), block_height);
+            addresses.insert(tx.compute_txid(), Amount::from_sats(output_sum(tx)));
+            txid_to_block_height.insert(tx.compute_txid(), block_height);
         }
         // all blocks need at least one transaction
         if pending.is_empty() {
@@ -207,12 +210,14 @@ impl BitcoinTest for FakeBitcoinTest {
 
         let transaction = FakeBitcoinTest::new_transaction(
             vec![TxOut {
-                value: amount.to_sat(),
-                script_pubkey: address.payload.script_pubkey(),
+                value: amount,
+                script_pubkey: address.script_pubkey(),
             }],
             inner.blocks.len() as u32,
         );
-        inner.addresses.insert(transaction.txid(), amount.into());
+        inner
+            .addresses
+            .insert(transaction.compute_txid(), amount.into());
 
         inner.pending.push(transaction.clone());
         let merkle_proof = FakeBitcoinTest::pending_merkle_tree(&inner.pending);
@@ -230,10 +235,12 @@ impl BitcoinTest for FakeBitcoinTest {
             block_header,
             merkle_proof,
         };
-        inner.proofs.insert(transaction.txid(), proof.clone());
+        inner
+            .proofs
+            .insert(transaction.compute_txid(), proof.clone());
         inner
             .scripts
-            .insert(address.payload.script_pubkey(), vec![transaction.clone()]);
+            .insert(address.script_pubkey(), vec![transaction.clone()]);
 
         (proof, transaction)
     }
@@ -242,7 +249,7 @@ impl BitcoinTest for FakeBitcoinTest {
         let ctx = bitcoin::secp256k1::Secp256k1::new();
         let (_, public_key) = ctx.generate_keypair(&mut OsRng);
 
-        Address::p2wpkh(&bitcoin::PublicKey::new(public_key), Network::Regtest).unwrap()
+        Address::p2wpkh(&bitcoin::CompressedPublicKey(public_key), Network::Regtest)
     }
 
     async fn mine_block_and_get_received(&self, address: &Address) -> Amount {
@@ -254,8 +261,8 @@ impl BitcoinTest for FakeBitcoinTest {
             .blocks
             .iter()
             .flat_map(|block| block.txdata.iter().flat_map(|tx| tx.output.clone()))
-            .find(|out| out.script_pubkey == address.payload.script_pubkey())
-            .map_or(0, |tx| tx.value);
+            .find(|out| out.script_pubkey == address.script_pubkey())
+            .map_or(0, |tx| tx.value.to_sat());
         Amount::from_sats(sats)
     }
 
@@ -267,7 +274,7 @@ impl BitcoinTest for FakeBitcoinTest {
             };
 
             let mut fee = Amount::ZERO;
-            let maybe_tx = pending.iter().find(|tx| tx.txid() == *txid);
+            let maybe_tx = pending.iter().find(|tx| tx.compute_txid() == *txid);
 
             let tx = match maybe_tx {
                 None => {
@@ -284,7 +291,7 @@ impl BitcoinTest for FakeBitcoinTest {
             }
 
             for output in &tx.output {
-                fee -= Amount::from_sats(output.value);
+                fee -= Amount::from_sats(output.value.to_sat());
             }
 
             return fee;
@@ -309,7 +316,7 @@ impl BitcoinTest for FakeBitcoinTest {
         let mempool_transactions = inner.pending.clone();
         mempool_transactions
             .iter()
-            .find(|tx| tx.txid() == *txid)
+            .find(|tx| tx.compute_txid() == *txid)
             .map(std::borrow::ToOwned::to_owned)
     }
 }
@@ -358,7 +365,7 @@ impl IBitcoindRpc for FakeBitcoinTest {
 
     async fn get_tx_block_height(&self, txid: &bitcoin::Txid) -> BitcoinRpcResult<Option<u64>> {
         for (height, block) in self.inner.read().unwrap().blocks.iter().enumerate() {
-            if block.txdata.iter().any(|tx| tx.txid() == *txid) {
+            if block.txdata.iter().any(|tx| tx.compute_txid() == *txid) {
                 return Ok(Some(height as u64));
             }
         }
@@ -377,7 +384,7 @@ impl IBitcoindRpc for FakeBitcoinTest {
             "Block height for hash does not match expected height"
         );
 
-        Ok(block.txdata.iter().any(|tx| tx.txid() == *txid))
+        Ok(block.txdata.iter().any(|tx| tx.compute_txid() == *txid))
     }
 
     async fn watch_script_history(&self, _: &ScriptBuf) -> BitcoinRpcResult<()> {
@@ -408,7 +415,7 @@ impl IBitcoindRpc for FakeBitcoinTest {
 }
 
 fn output_sum(tx: &Transaction) -> u64 {
-    tx.output.iter().map(|output| output.value).sum()
+    tx.output.iter().map(|output| output.value.to_sat()).sum()
 }
 
 fn inputs(tx: &Transaction) -> Vec<OutPoint> {

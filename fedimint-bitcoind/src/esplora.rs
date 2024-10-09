@@ -75,10 +75,11 @@ impl IBitcoindRpc for EsploraClient {
     }
 
     async fn get_fee_rate(&self, confirmation_target: u16) -> anyhow::Result<Option<Feerate>> {
-        let fee_estimates: HashMap<String, f64> = self.client.get_fee_estimates().await?;
+        let fee_estimates: HashMap<u16, f64> = self.client.get_fee_estimates().await?;
 
         let fee_rate_vb =
-            esplora_client::convert_fee_rate(confirmation_target.into(), fee_estimates)?;
+            esplora_client::convert_fee_rate(confirmation_target.into(), fee_estimates)
+                .ok_or_else(|| format_err!("No fee rate for confirmation target"))?;
 
         let fee_rate_kvb = fee_rate_vb * 1_000f32;
 

@@ -7,6 +7,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use anyhow::{anyhow, ensure};
+use bitcoin::secp256k1::Message;
 use bitcoin_hashes::sha256;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -34,7 +35,7 @@ use fedimint_lnv2_common::{
 use futures::StreamExt;
 use receive_sm::{ReceiveSMState, ReceiveStateMachine};
 use secp256k1::schnorr::Signature;
-use secp256k1::KeyPair;
+use secp256k1::Keypair;
 use send_sm::{SendSMState, SendStateMachine};
 use serde::{Deserialize, Serialize};
 use tpe::{AggregatePublicKey, PublicKeyShare};
@@ -99,7 +100,7 @@ pub struct GatewayClientModuleV2 {
     pub notifier: ModuleNotifier<GatewayClientStateMachinesV2>,
     pub client_ctx: ClientContext<Self>,
     pub module_api: DynModuleApi,
-    pub keypair: KeyPair,
+    pub keypair: Keypair,
     pub gateway: Arc<Gateway>,
 }
 
@@ -257,7 +258,9 @@ impl GatewayClientModuleV2 {
             secp256k1::SECP256K1
                 .verify_schnorr(
                     &payload.auth,
-                    &payload.invoice.consensus_hash::<sha256::Hash>().into(),
+                    &Message::from_digest(
+                        *payload.invoice.consensus_hash::<sha256::Hash>().as_ref()
+                    ),
                     &payload.contract.refund_pk.x_only_public_key().0,
                 )
                 .is_ok(),

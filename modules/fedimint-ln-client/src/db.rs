@@ -7,7 +7,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{impl_db_lookup, impl_db_record, OutPoint, TransactionId};
 use fedimint_ln_common::{LightningGateway, LightningGatewayRegistration};
 use lightning_invoice::Bolt11Invoice;
-use secp256k1::{KeyPair, PublicKey};
+use secp256k1::{Keypair, PublicKey};
 use serde::Serialize;
 use strum_macros::EnumIter;
 
@@ -101,7 +101,7 @@ pub(crate) fn get_v1_migrated_state(
     #[derive(Debug, Clone, Decodable)]
     pub struct LightningReceiveConfirmedInvoiceV0 {
         invoice: Bolt11Invoice,
-        receiving_key: KeyPair,
+        receiving_key: Keypair,
     }
 
     let decoders = ModuleDecoderRegistry::default();
@@ -270,7 +270,7 @@ mod tests {
     use fedimint_core::{BitcoinHash, TransactionId};
     use lightning_invoice::Bolt11Invoice;
     use rand::thread_rng;
-    use secp256k1::KeyPair;
+    use secp256k1::Keypair;
 
     use crate::db::{get_v1_migrated_state, get_v2_migrated_state};
     use crate::receive::{
@@ -288,7 +288,7 @@ mod tests {
         cqp2rzjq0ag45qspt2vd47jvj3t5nya5vsn0hlhf5wel8h779npsrspm6eeuqtjuuqqqqgqqyqqqqqqqqqqqqqqqc9q\
         yysgqddrv0jqhyf3q6z75rt7nrwx0crxme87s8rx2rt8xr9slzu0p3xg3f3f0zmqavtmsnqaj5v0y5mdzszah7thrmg\
         2we42dvjggjkf44egqheymyw",).expect("Invalid invoice");
-        let claim_key = KeyPair::new(secp256k1::SECP256K1, &mut thread_rng());
+        let claim_key = Keypair::new(secp256k1::SECP256K1, &mut thread_rng());
         let operation_id = OperationId::new_random();
         let txid = TransactionId::from_byte_array([42; 32]);
 
@@ -366,7 +366,7 @@ mod tests {
     async fn test_sm_migration_to_v2_confirmed() -> anyhow::Result<()> {
         let operation_id = OperationId::new_random();
         let instance_id = 0x42;
-        let claim_key = KeyPair::new(secp256k1::SECP256K1, &mut thread_rng());
+        let claim_key = Keypair::new(secp256k1::SECP256K1, &mut thread_rng());
         let dummy_invoice = Bolt11Invoice::from_str("lntbs1u1pj8308gsp5xhxz908q5usddjjm6mfq6nwc2nu62twwm6za69d32kyx8h49a4hqpp5j5egfqw9kf5e96nk\
         6htr76a8kggl0xyz3pzgemv887pya4flguzsdp5235xzmntwvsxvmmjypex2en4dejxjmn8yp6xsefqvesh2cm9wsss\
         cqp2rzjq0ag45qspt2vd47jvj3t5nya5vsn0hlhf5wel8h779npsrspm6eeuqtjuuqqqqgqqyqqqqqqqqqqqqqqqc9q\
@@ -436,7 +436,7 @@ mod tests {
         cqp2rzjq0ag45qspt2vd47jvj3t5nya5vsn0hlhf5wel8h779npsrspm6eeuqtjuuqqqqgqqyqqqqqqqqqqqqqqqc9q\
         yysgqddrv0jqhyf3q6z75rt7nrwx0crxme87s8rx2rt8xr9slzu0p3xg3f3f0zmqavtmsnqaj5v0y5mdzszah7thrmg\
         2we42dvjggjkf44egqheymyw",).expect("Invalid invoice");
-        let claim_key = KeyPair::new(secp256k1::SECP256K1, &mut thread_rng());
+        let claim_key = Keypair::new(secp256k1::SECP256K1, &mut thread_rng());
         let operation_id = OperationId::new_random();
         let txid = TransactionId::from_byte_array([42; 32]);
 

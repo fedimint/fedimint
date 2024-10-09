@@ -142,7 +142,7 @@ impl OutgoingContract {
     }
 
     pub fn forfeit_message(&self) -> Message {
-        Message::from(self.contract_id().0)
+        Message::from_digest(*self.contract_id().0.as_ref())
     }
 
     pub fn verify_preimage(&self, preimage: &[u8; 32]) -> bool {
@@ -170,7 +170,7 @@ impl OutgoingContract {
         secp256k1::global::SECP256K1
             .verify_schnorr(
                 signature,
-                &message.into(),
+                &Message::from_digest(*message.as_ref()),
                 &self.refund_pk.x_only_public_key().0,
             )
             .is_ok()
