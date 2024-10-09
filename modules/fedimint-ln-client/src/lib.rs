@@ -80,7 +80,9 @@ use pay::PayInvoicePayload;
 use rand::rngs::OsRng;
 use rand::seq::IteratorRandom as _;
 use rand::{CryptoRng, Rng, RngCore};
-use secp256k1::{All, PublicKey, Scalar, Secp256k1, Signing, ThirtyTwoByteHash, Verification};
+use secp256k1::{
+    All, PublicKey, Scalar, Secp256k1, SecretKey, Signing, ThirtyTwoByteHash, Verification,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::IntoEnumIterator;
@@ -476,6 +478,38 @@ impl ClientModule for LightningClientModule {
                         yield serde_json::to_value(state)?;
                     }
                 }
+                "create_bolt11_invoice_for_user_tweaked" => {
+                    let req: CreateBolt11InvoiceForUserTweakedRequest = serde_json::from_value(payload)?;
+                    let (op, invoice, _) = self
+                        .create_bolt11_invoice_for_user_tweaked(
+                            req.amount,
+                            lightning_invoice::Bolt11InvoiceDescription::Direct(
+                                &lightning_invoice::Description::new(req.description)?,
+                            ),
+                            req.expiry_time,
+                            req.user_key,
+                            req.index,
+                            req.extra_meta,
+                            req.gateway,
+                        )
+                        .await?;
+                    yield serde_json::json!({
+                        "operation_id": op,
+                        "invoice": invoice,
+                    });
+                }
+                "scan_receive_for_user_tweaked" => {
+                    let req: ScanReceiveForUserTweakedRequest = serde_json::from_value(payload)?;
+                    let keypair = KeyPair::from_secret_key(&self.secp, &req.user_key);
+                    let operation_ids = self.scan_receive_for_user_tweaked(keypair, req.indices, req.extra_meta).await;
+                    yield serde_json::to_value(operation_ids)?;
+                }
+                "subscribe_ln_claim" => {
+                    let req: SubscribeLnClaimRequest = serde_json::from_value(payload)?;
+                    for await state in self.subscribe_ln_claim(req.operation_id).await?.into_stream() {
+                        yield serde_json::to_value(state)?;
+                    }
+                }
                 "get_gateway" => {
                     let req: GetGatewayRequest = serde_json::from_value(payload)?;
                     let gateway = self.get_gateway(req.gateway_id, req.force_internal).await?;
@@ -521,6 +555,29 @@ struct SubscribeLnPayRequest {
 
 #[derive(Deserialize)]
 struct SubscribeLnReceiveRequest {
+    operation_id: OperationId,
+}
+
+#[derive(Deserialize)]
+struct CreateBolt11InvoiceForUserTweakedRequest {
+    amount: Amount,
+    description: String,
+    expiry_time: Option<u64>,
+    user_key: PublicKey,
+    index: u64,
+    extra_meta: serde_json::Value,
+    gateway: Option<LightningGateway>,
+}
+
+#[derive(Deserialize)]
+struct ScanReceiveForUserTweakedRequest {
+    user_key: SecretKey,
+    indices: Vec<u64>,
+    extra_meta: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+struct SubscribeLnClaimRequest {
     operation_id: OperationId,
 }
 
