@@ -86,7 +86,7 @@ impl GatewayRpcClient {
         self.call_post(url, payload).await
     }
 
-    pub async fn get_balance(&mut self, payload: BalancePayload) -> GatewayRpcResult<Amount> {
+    pub async fn get_balance(&self, payload: BalancePayload) -> GatewayRpcResult<Amount> {
         let url = self
             .base_url
             .join(BALANCE_ENDPOINT)
@@ -298,22 +298,6 @@ impl GatewayRpcClient {
             .join(AUTH_SESSION_ENDPOINT)
             .expect("invalid base url");
         self.call_post(url, payload).await
-    }
-
-    pub async fn get_auth_session_token(&self) -> Result<String, GatewayRpcError> {
-        let challenge = self.challenge_auth().await?;
-        let signature = self
-            .sign_challenge_auth(AuthChallengeResponse {
-                challenge: challenge.to_string(),
-            })
-            .await?;
-        let jwt_token = self
-            .session_auth(AuthChallengePayload {
-                response: signature,
-                challenge: challenge.to_string(),
-            })
-            .await?;
-        Ok(jwt_token)
     }
 
     async fn call<P: Serialize, T: DeserializeOwned>(
