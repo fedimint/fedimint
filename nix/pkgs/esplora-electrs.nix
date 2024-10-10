@@ -13,7 +13,7 @@ in
 rustPlatform.buildRustPackage {
   pname = "esplora";
   # last tagged version is far behind master
-  version = "20240603";
+  version = "20241009";
 
   src = fetchFromGitHub {
     # original:
@@ -25,8 +25,8 @@ rustPlatform.buildRustPackage {
     # pre-allocation size patch:
     owner = "dpc";
     repo = "esplora-electrs";
-    rev = "6cf03773a594de7dbd68a62be79c5c78710de19a";
-    hash = "sha256-HGFvOy5sBtfaZ/rS7nkIHHFTDJuRKfggxC4y5gW9dAQ=";
+    rev = "9339bfaf40b896f9d0b9ee945edc44ef49f99d2b";
+    hash = "sha256-4PL+dvdUOTlX0IcpkcSxZ7TchsCI4fI8OmsFmwrtPHo=";
   };
 
   doCheck = false;
@@ -36,7 +36,7 @@ rustPlatform.buildRustPackage {
 
     outputHashes = {
       "electrum-client-0.8.0" = "sha256-HDRdGS7CwWsPXkA1HdurwrVu4lhEx0Ay8vHi08urjZ0=";
-      "electrumd-0.1.0" = "sha256-M9yd53LsKheS9dQwDQKjcwbBM+66QGoNXIoSgV8G/Ao=";
+      "electrumd-0.1.0" = "sha256-QsoMD2uVDEITuYmYItfP6BJCq7ApoRztOCs7kdeRL9Y=";
       "jsonrpc-0.12.0" = "sha256-lSNkkQttb8LnJej4Vfe7MrjiNPOuJ5A6w5iLstl9O1k=";
     };
   };
