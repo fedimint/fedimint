@@ -584,22 +584,48 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                 let new_gateway_extension_path = gateway_cln_extension_paths
                     .get(i)
                     .expect("Not enough gateway-cln-extension paths");
-                try_join!(
-                    dev_fed.gw_cln.restart_with_bin(
-                        process_mgr,
-                        new_gatewayd_path,
-                        new_gateway_cli_path,
-                        new_gateway_extension_path,
-                        dev_fed.bitcoind.clone(),
-                    ),
-                    dev_fed.gw_lnd.restart_with_bin(
-                        process_mgr,
-                        new_gatewayd_path,
-                        new_gateway_cli_path,
-                        new_gateway_extension_path,
-                        dev_fed.bitcoind.clone(),
-                    ),
-                )?;
+                if let Some(gw_ldk) = &mut dev_fed.gw_ldk {
+                    try_join!(
+                        dev_fed.gw_cln.restart_with_bin(
+                            process_mgr,
+                            new_gatewayd_path,
+                            new_gateway_cli_path,
+                            new_gateway_extension_path,
+                            dev_fed.bitcoind.clone(),
+                        ),
+                        dev_fed.gw_lnd.restart_with_bin(
+                            process_mgr,
+                            new_gatewayd_path,
+                            new_gateway_cli_path,
+                            new_gateway_extension_path,
+                            dev_fed.bitcoind.clone(),
+                        ),
+                        gw_ldk.restart_with_bin(
+                            process_mgr,
+                            new_gatewayd_path,
+                            new_gateway_cli_path,
+                            new_gateway_extension_path,
+                            dev_fed.bitcoind.clone(),
+                        ),
+                    )?;
+                } else {
+                    try_join!(
+                        dev_fed.gw_cln.restart_with_bin(
+                            process_mgr,
+                            new_gatewayd_path,
+                            new_gateway_cli_path,
+                            new_gateway_extension_path,
+                            dev_fed.bitcoind.clone(),
+                        ),
+                        dev_fed.gw_lnd.restart_with_bin(
+                            process_mgr,
+                            new_gatewayd_path,
+                            new_gateway_cli_path,
+                            new_gateway_extension_path,
+                            dev_fed.bitcoind.clone(),
+                        ),
+                    )?;
+                }
                 try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
                 let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
                 let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
