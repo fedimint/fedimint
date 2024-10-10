@@ -2151,7 +2151,64 @@
 <a href="#2150" id="2150">2150</a>
 <a href="#2151" id="2151">2151</a>
 <a href="#2152" id="2152">2152</a>
-<a href="#2153" id="2153">2153</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2153" id="2153">2153</a>
+<a href="#2154" id="2154">2154</a>
+<a href="#2155" id="2155">2155</a>
+<a href="#2156" id="2156">2156</a>
+<a href="#2157" id="2157">2157</a>
+<a href="#2158" id="2158">2158</a>
+<a href="#2159" id="2159">2159</a>
+<a href="#2160" id="2160">2160</a>
+<a href="#2161" id="2161">2161</a>
+<a href="#2162" id="2162">2162</a>
+<a href="#2163" id="2163">2163</a>
+<a href="#2164" id="2164">2164</a>
+<a href="#2165" id="2165">2165</a>
+<a href="#2166" id="2166">2166</a>
+<a href="#2167" id="2167">2167</a>
+<a href="#2168" id="2168">2168</a>
+<a href="#2169" id="2169">2169</a>
+<a href="#2170" id="2170">2170</a>
+<a href="#2171" id="2171">2171</a>
+<a href="#2172" id="2172">2172</a>
+<a href="#2173" id="2173">2173</a>
+<a href="#2174" id="2174">2174</a>
+<a href="#2175" id="2175">2175</a>
+<a href="#2176" id="2176">2176</a>
+<a href="#2177" id="2177">2177</a>
+<a href="#2178" id="2178">2178</a>
+<a href="#2179" id="2179">2179</a>
+<a href="#2180" id="2180">2180</a>
+<a href="#2181" id="2181">2181</a>
+<a href="#2182" id="2182">2182</a>
+<a href="#2183" id="2183">2183</a>
+<a href="#2184" id="2184">2184</a>
+<a href="#2185" id="2185">2185</a>
+<a href="#2186" id="2186">2186</a>
+<a href="#2187" id="2187">2187</a>
+<a href="#2188" id="2188">2188</a>
+<a href="#2189" id="2189">2189</a>
+<a href="#2190" id="2190">2190</a>
+<a href="#2191" id="2191">2191</a>
+<a href="#2192" id="2192">2192</a>
+<a href="#2193" id="2193">2193</a>
+<a href="#2194" id="2194">2194</a>
+<a href="#2195" id="2195">2195</a>
+<a href="#2196" id="2196">2196</a>
+<a href="#2197" id="2197">2197</a>
+<a href="#2198" id="2198">2198</a>
+<a href="#2199" id="2199">2199</a>
+<a href="#2200" id="2200">2200</a>
+<a href="#2201" id="2201">2201</a>
+<a href="#2202" id="2202">2202</a>
+<a href="#2203" id="2203">2203</a>
+<a href="#2204" id="2204">2204</a>
+<a href="#2205" id="2205">2205</a>
+<a href="#2206" id="2206">2206</a>
+<a href="#2207" id="2207">2207</a>
+<a href="#2208" id="2208">2208</a>
+<a href="#2209" id="2209">2209</a>
+<a href="#2210" id="2210">2210</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2233,7 +2290,9 @@
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::seq::IteratorRandom <span class="kw">as _</span>;
 <span class="kw">use </span>rand::{CryptoRng, Rng, RngCore};
-<span class="kw">use </span>secp256k1::{All, PublicKey, Scalar, Secp256k1, Signing, ThirtyTwoByteHash, Verification};
+<span class="kw">use </span>secp256k1::{
+    All, PublicKey, Scalar, Secp256k1, SecretKey, Signing, ThirtyTwoByteHash, Verification,
+};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>strum::IntoEnumIterator;
@@ -2629,6 +2688,38 @@
                         <span class="kw">yield </span>serde_json::to_value(state)<span class="question-mark">?</span>;
                     }
                 }
+                <span class="string">"create_bolt11_invoice_for_user_tweaked" </span>=&gt; {
+                    <span class="kw">let </span>req: CreateBolt11InvoiceForUserTweakedRequest = serde_json::from_value(payload)<span class="question-mark">?</span>;
+                    <span class="kw">let </span>(op, invoice, <span class="kw">_</span>) = <span class="self">self
+                        </span>.create_bolt11_invoice_for_user_tweaked(
+                            req.amount,
+                            lightning_invoice::Bolt11InvoiceDescription::Direct(
+                                <span class="kw-2">&amp;</span>lightning_invoice::Description::new(req.description)<span class="question-mark">?</span>,
+                            ),
+                            req.expiry_time,
+                            req.user_key,
+                            req.index,
+                            req.extra_meta,
+                            req.gateway,
+                        )
+                        .<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">yield </span><span class="macro">serde_json::json!</span>({
+                        <span class="string">"operation_id"</span>: op,
+                        <span class="string">"invoice"</span>: invoice,
+                    });
+                }
+                <span class="string">"scan_receive_for_user_tweaked" </span>=&gt; {
+                    <span class="kw">let </span>req: ScanReceiveForUserTweakedRequest = serde_json::from_value(payload)<span class="question-mark">?</span>;
+                    <span class="kw">let </span>keypair = KeyPair::from_secret_key(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;</span>req.user_key);
+                    <span class="kw">let </span>operation_ids = <span class="self">self</span>.scan_receive_for_user_tweaked(keypair, req.indices, req.extra_meta).<span class="kw">await</span>;
+                    <span class="kw">yield </span>serde_json::to_value(operation_ids)<span class="question-mark">?</span>;
+                }
+                <span class="string">"subscribe_ln_claim" </span>=&gt; {
+                    <span class="kw">let </span>req: SubscribeLnClaimRequest = serde_json::from_value(payload)<span class="question-mark">?</span>;
+                    <span class="kw">for await </span>state <span class="kw">in </span><span class="self">self</span>.subscribe_ln_claim(req.operation_id).<span class="kw">await</span><span class="question-mark">?</span>.into_stream() {
+                        <span class="kw">yield </span>serde_json::to_value(state)<span class="question-mark">?</span>;
+                    }
+                }
                 <span class="string">"get_gateway" </span>=&gt; {
                     <span class="kw">let </span>req: GetGatewayRequest = serde_json::from_value(payload)<span class="question-mark">?</span>;
                     <span class="kw">let </span>gateway = <span class="self">self</span>.get_gateway(req.gateway_id, req.force_internal).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2674,6 +2765,29 @@
 
 <span class="attr">#[derive(Deserialize)]
 </span><span class="kw">struct </span>SubscribeLnReceiveRequest {
+    operation_id: OperationId,
+}
+
+<span class="attr">#[derive(Deserialize)]
+</span><span class="kw">struct </span>CreateBolt11InvoiceForUserTweakedRequest {
+    amount: Amount,
+    description: String,
+    expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    user_key: PublicKey,
+    index: u64,
+    extra_meta: serde_json::Value,
+    gateway: <span class="prelude-ty">Option</span>&lt;LightningGateway&gt;,
+}
+
+<span class="attr">#[derive(Deserialize)]
+</span><span class="kw">struct </span>ScanReceiveForUserTweakedRequest {
+    user_key: SecretKey,
+    indices: Vec&lt;u64&gt;,
+    extra_meta: serde_json::Value,
+}
+
+<span class="attr">#[derive(Deserialize)]
+</span><span class="kw">struct </span>SubscribeLnClaimRequest {
     operation_id: OperationId,
 }
 
