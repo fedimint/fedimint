@@ -30,7 +30,7 @@ use self::init::ClientModuleInit;
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
 use crate::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use crate::sm::{self, ActiveStateMeta, Context, DynContext, DynState, State};
-use crate::transaction::{ClientInput, ClientOutput, TransactionBuilder};
+use crate::transaction::{ChangeStrategy, ClientInput, ClientOutput, TransactionBuilder};
 use crate::{
     oplog, states_add_instance, states_to_instanceless_dyn, AddStateMachinesResult, Client,
     ClientStrong, ClientWeak, InstancelessDynClientInput, TransactionUpdates,
@@ -670,6 +670,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         _operation_id: OperationId,
         _input_amount: Amount,
         _output_amount: Amount,
+        _change_strategy: ChangeStrategy,
     ) -> anyhow::Result<(
         Vec<ClientInput<<Self::Common as ModuleCommon>::Input, Self::States>>,
         Vec<ClientOutput<<Self::Common as ModuleCommon>::Output, Self::States>>,
@@ -799,6 +800,7 @@ pub trait IClientModule: Debug {
         operation_id: OperationId,
         input_amount: Amount,
         output_amount: Amount,
+        change_strategy: ChangeStrategy,
     ) -> anyhow::Result<(Vec<ClientInput>, Vec<ClientOutput>)>;
 
     async fn await_primary_module_output(
@@ -898,6 +900,7 @@ where
         operation_id: OperationId,
         input_amount: Amount,
         output_amount: Amount,
+        change_strategy: ChangeStrategy,
     ) -> anyhow::Result<(Vec<ClientInput>, Vec<ClientOutput>)> {
         let (inputs, outputs) = <T as ClientModule>::create_final_inputs_and_outputs(
             self,
@@ -905,6 +908,7 @@ where
             operation_id,
             input_amount,
             output_amount,
+            change_strategy,
         )
         .await?;
 
