@@ -6,6 +6,7 @@ use std::fmt::Debug;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use bitcoin::{Address, Network};
@@ -23,6 +24,7 @@ use futures::stream::BoxStream;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tracing::warn;
 
 use self::cln::NetworkLnRpcClient;
 use self::lnd::GatewayLndClient;
@@ -247,6 +249,21 @@ impl dyn ILnRpcClient {
                 failure_reason: format!("Invalid network {network}: {e}"),
             })?;
         Ok((node_pub_key, alias, network, block_height, synced_to_chain))
+    }
+
+    /// Waits for the Lightning node to be synced to the Bitcoin blockchain.
+    pub async fn wait_for_chain_sync(&self) -> std::result::Result<(), LightningRpcError> {
+        loop {
+            let info = self.info().await?;
+            let synced = info.synced_to_chain;
+            let block_height = info.block_height;
+            if synced {
+                return Ok(());
+            }
+
+            warn!(?block_height, "Lightning node is not synced");
+            fedimint_core::task::sleep(Duration::from_secs(30)).await;
+        }
     }
 }
 
