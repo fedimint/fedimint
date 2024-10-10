@@ -22,10 +22,10 @@ test-ci-all:
 test-count:
   ./scripts/tests/test-cov.sh
 
-test-compatibility *VERSIONS="v0.2.1":
+test-compatibility *VERSIONS="v0.3.0":
   ./scripts/tests/test-ci-all-backcompat.sh {{VERSIONS}}
 
-test-full-compatibility *VERSIONS="v0.2.1":
+test-full-compatibility *VERSIONS="v0.3.0":
   env FM_FULL_VERSION_MATRIX=1 ./scripts/tests/test-ci-all-backcompat.sh {{VERSIONS}}
 
 test-upgrades *VERSIONS="v0.3.3 v0.4.0 current":
