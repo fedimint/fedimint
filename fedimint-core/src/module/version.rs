@@ -68,7 +68,20 @@ use crate::encoding::{Decodable, Encodable};
 ///
 /// See [`ModuleConsensusVersion`] for more details on how it interacts with
 /// module's consensus.
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    Encodable,
+    Decodable,
+    PartialEq,
+    Eq,
+)]
 pub struct CoreConsensusVersion {
     pub major: u32,
     pub minor: u32,
@@ -107,7 +120,20 @@ pub const CORE_CONSENSUS_VERSION: CoreConsensusVersion = CoreConsensusVersion::n
 /// the same time (each of different `ModuleKind` version), allow users to
 /// slowly migrate to a new one. This avoids complex and error-prone server-side
 /// consensus-migration logic.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    Hash,
+    Serialize,
+    Deserialize,
+    Encodable,
+    Decodable,
+)]
 pub struct ModuleConsensusVersion {
     pub major: u32,
     pub minor: u32,
