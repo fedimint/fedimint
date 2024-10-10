@@ -411,7 +411,19 @@
 <a href="#410" id="410">410</a>
 <a href="#411" id="411">411</a>
 <a href="#412" id="412">412</a>
-<a href="#413" id="413">413</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::Reverse;
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::Reverse;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::io::{Cursor, Error, Read, Write};
 
@@ -431,6 +443,7 @@
 <span class="kw">use </span>tracing::{debug, info, warn};
 
 <span class="kw">use </span><span class="kw">super</span>::Client;
+<span class="kw">use </span><span class="kw">crate</span>::db::event_log::{Event, EventKind};
 <span class="kw">use </span><span class="kw">crate</span>::db::LastBackupKey;
 <span class="kw">use </span><span class="kw">crate</span>::get_decoded_client_secret;
 <span class="kw">use </span><span class="kw">crate</span>::module::recovery::DynModuleBackup;
@@ -655,6 +668,15 @@
     </span>}
 }
 
+<span class="attr">#[derive(Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>EventBackupDone;
+
+<span class="kw">impl </span>Event <span class="kw">for </span>EventBackupDone {
+    <span class="kw">const </span>MODULE: <span class="prelude-ty">Option</span>&lt;fedimint_core::core::ModuleKind&gt; = <span class="prelude-val">None</span>;
+
+    <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"backup-done"</span>);
+}
+
 <span class="kw">impl </span>Client {
     <span class="doccomment">/// Create a backup, include provided `metadata`
     </span><span class="kw">pub async fn </span>create_backup(<span class="kw-2">&amp;</span><span class="self">self</span>, metadata: Metadata) -&gt; anyhow::Result&lt;ClientBackup&gt; {
@@ -709,6 +731,8 @@
         <span class="self">self</span>.store_last_backup(<span class="kw-2">&amp;</span>new_backup).<span class="kw">await</span>;
 
         <span class="self">self</span>.upload_backup(<span class="kw-2">&amp;</span>encrypted).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="self">self</span>.log_event(<span class="prelude-val">None</span>, EventBackupDone).<span class="kw">await</span>;
 
         <span class="prelude-val">Ok</span>(())
     }

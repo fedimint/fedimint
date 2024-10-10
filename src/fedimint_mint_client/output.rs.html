@@ -374,13 +374,28 @@
 <a href="#373" id="373">373</a>
 <a href="#374" id="374">374</a>
 <a href="#375" id="375">375</a>
-<a href="#376" id="376">376</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::hash;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
 <span class="kw">use </span>fedimint_api_client::query::FilterMapThreshold;
+<span class="kw">use </span>fedimint_client::module::ClientContext;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::{Decoder, OperationId};
@@ -402,7 +417,8 @@
 <span class="kw">use </span>tracing::{debug, error};
 
 <span class="kw">use </span><span class="kw">crate</span>::client_db::NoteKey;
-<span class="kw">use crate</span>::{MintClientContext, SpendableNote};
+<span class="kw">use </span><span class="kw">crate</span>::event::NoteCreated;
+<span class="kw">use crate</span>::{MintClientContext, MintClientModule, SpendableNote};
 
 <span class="kw">const </span>RETRY_DELAY: Duration = Duration::from_secs(<span class="number">1</span>);
 
@@ -496,6 +512,7 @@
         common: MintOutputCommon,
     ) -&gt; Vec&lt;StateTransition&lt;MintOutputStateMachine&gt;&gt; {
         <span class="kw">let </span>tbs_pks = context.tbs_pks.clone();
+        <span class="kw">let </span>client_ctx = context.client_ctx.clone();
 
         <span class="macro">vec!</span>[
             <span class="comment">// Check if transaction was rejected
@@ -515,6 +532,7 @@
                 ),
                 <span class="kw">move </span>|dbtx, blinded_signature_shares, old_state| {
                     Box::pin(<span class="self">Self</span>::transition_outcome_ready(
+                        client_ctx.clone(),
                         dbtx,
                         blinded_signature_shares,
                         old_state,
@@ -583,6 +601,7 @@
     }
 
     <span class="kw">async fn </span>transition_outcome_ready(
+        client_ctx: ClientContext&lt;MintClientModule&gt;,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         blinded_signature_shares: BTreeMap&lt;PeerId, BlindedSignatureShare&gt;,
         old_state: MintOutputStateMachine,
@@ -625,6 +644,15 @@
         <span class="macro">assert!</span>(spendable_note.note().verify(<span class="kw-2">*</span>amount_key));
 
         <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_MINT, amount = %created.amount, note=%spendable_note, <span class="string">"Adding new note from transaction output"</span>);
+
+        client_ctx
+            .log_event(
+                <span class="kw-2">&amp;mut </span>dbtx.module_tx(),
+                NoteCreated {
+                    nonce: spendable_note.nonce(),
+                },
+            )
+            .<span class="kw">await</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(note) = dbtx
             .module_tx()
             .insert_entry(

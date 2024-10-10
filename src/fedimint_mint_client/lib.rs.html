@@ -2580,7 +2580,23 @@
 <a href="#2579" id="2579">2579</a>
 <a href="#2580" id="2580">2580</a>
 <a href="#2581" id="2581">2581</a>
-<a href="#2582" id="2582">2582</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2582" id="2582">2582</a>
+<a href="#2583" id="2583">2583</a>
+<a href="#2584" id="2584">2584</a>
+<a href="#2585" id="2585">2585</a>
+<a href="#2586" id="2586">2586</a>
+<a href="#2587" id="2587">2587</a>
+<a href="#2588" id="2588">2588</a>
+<a href="#2589" id="2589">2589</a>
+<a href="#2590" id="2590">2590</a>
+<a href="#2591" id="2591">2591</a>
+<a href="#2592" id="2592">2592</a>
+<a href="#2593" id="2593">2593</a>
+<a href="#2594" id="2594">2594</a>
+<a href="#2595" id="2595">2595</a>
+<a href="#2596" id="2596">2596</a>
+<a href="#2597" id="2597">2597</a>
+<a href="#2598" id="2598">2598</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2601,6 +2617,8 @@
 <span class="doccomment">/// State machines for mint outputs
 </span><span class="kw">pub mod </span>output;
 
+<span class="kw">pub mod </span>event;
+
 <span class="kw">use </span>std::cmp::{min, Ordering};
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt;
@@ -2616,6 +2634,7 @@
 <span class="kw">use </span>base64::Engine <span class="kw">as _</span>;
 <span class="kw">use </span>bitcoin_hashes::{sha256, sha256t, Hash, HashEngine <span class="kw">as </span>BitcoinHashEngine};
 <span class="kw">use </span>client_db::{migrate_to_v1, DbKeyPrefix, NoteKeyPrefix, RecoveryFinalizedKey};
+<span class="kw">use </span>event::NoteSpent;
 <span class="kw">use </span>fedimint_client::db::ClientMigrationFn;
 <span class="kw">use </span>fedimint_client::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
@@ -3226,6 +3245,7 @@
 <span class="comment">// TODO: wrap in Arc
 </span><span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>MintClientContext {
+    <span class="kw">pub </span>client_ctx: ClientContext&lt;MintClientModule&gt;,
     <span class="kw">pub </span>mint_decoder: Decoder,
     <span class="kw">pub </span>tbs_pks: Tiered&lt;AggregatePublicKey&gt;,
     <span class="kw">pub </span>peer_tbs_pks: BTreeMap&lt;PeerId, Tiered&lt;tbs::PublicKeyShare&gt;&gt;,
@@ -3259,6 +3279,7 @@
 
     <span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::ModuleStateMachineContext {
         MintClientContext {
+            client_ctx: <span class="self">self</span>.client_ctx.clone(),
             mint_decoder: <span class="self">self</span>.decoder(),
             tbs_pks: <span class="self">self</span>.cfg.tbs_pks.clone(),
             peer_tbs_pks: <span class="self">self</span>.cfg.peer_tbs_pks.clone(),
@@ -3527,7 +3548,7 @@
 
         <span class="kw">for </span>(amount, note) <span class="kw">in </span>selected_notes.iter_items() {
             <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_MINT, %amount, %note, <span class="string">"Spending note as sufficient input to fund a tx"</span>);
-            MintClientModule::delete_spendable_note(dbtx, amount, note).<span class="kw">await</span>;
+            MintClientModule::delete_spendable_note(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx, dbtx, amount, note).<span class="kw">await</span>;
         }
 
         <span class="kw">let </span>inputs = <span class="self">self</span>.create_input_from_notes(operation_id, selected_notes)<span class="question-mark">?</span>;
@@ -3749,7 +3770,8 @@
         <span class="kw">for </span>(amount, note) <span class="kw">in </span>selected_notes.iter_items() {
             <span class="kw">let </span>spendable_note_decoded = note.decode()<span class="question-mark">?</span>;
             <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_MINT, %amount, %note, <span class="string">"Consolidating note"</span>);
-            <span class="self">Self</span>::delete_spendable_note(dbtx, amount, <span class="kw-2">&amp;</span>spendable_note_decoded).<span class="kw">await</span>;
+            <span class="self">Self</span>::delete_spendable_note(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx, dbtx, amount, <span class="kw-2">&amp;</span>spendable_note_decoded)
+                .<span class="kw">await</span>;
             selected_notes_decoded.push((amount, spendable_note_decoded));
         }
 
@@ -3824,7 +3846,7 @@
 
         <span class="kw">for </span>(amount, note) <span class="kw">in </span>selected_notes.iter_items() {
             <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_MINT, %amount, %note, <span class="string">"Spending note as oob"</span>);
-            MintClientModule::delete_spendable_note(dbtx, amount, note).<span class="kw">await</span>;
+            MintClientModule::delete_spendable_note(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx, dbtx, amount, note).<span class="kw">await</span>;
         }
 
         <span class="kw">let </span><span class="kw-2">mut </span>state_machines = Vec::new();
@@ -4318,10 +4340,19 @@
     }
 
     <span class="kw">async fn </span>delete_spendable_note(
+        client_ctx: <span class="kw-2">&amp;</span>ClientContext&lt;MintClientModule&gt;,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         amount: Amount,
         note: <span class="kw-2">&amp;</span>SpendableNote,
     ) {
+        client_ctx
+            .log_event(
+                dbtx,
+                NoteSpent {
+                    nonce: note.nonce(),
+                },
+            )
+            .<span class="kw">await</span>;
         dbtx.remove_entry(<span class="kw-2">&amp;</span>NoteKey {
             amount,
             nonce: note.nonce(),
@@ -4633,7 +4664,7 @@
 }
 
 <span class="kw">impl </span>SpendableNote {
-    <span class="kw">fn </span>nonce(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Nonce {
+    <span class="kw">pub fn </span>nonce(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Nonce {
         Nonce(<span class="self">self</span>.spend_key.public_key())
     }
 
@@ -4643,6 +4674,7 @@
             signature: <span class="self">self</span>.signature,
         }
     }
+
     <span class="kw">pub fn </span>to_undecoded(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SpendableNoteUndecoded {
         SpendableNoteUndecoded {
             signature: <span class="self">self

@@ -1429,7 +1429,12 @@
 <a href="#1428" id="1428">1428</a>
 <a href="#1429" id="1429">1429</a>
 <a href="#1430" id="1430">1430</a>
-<a href="#1431" id="1431">1431</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
+<a href="#1431" id="1431">1431</a>
+<a href="#1432" id="1432">1432</a>
+<a href="#1433" id="1433">1433</a>
+<a href="#1434" id="1434">1434</a>
+<a href="#1435" id="1435">1435</a>
+<a href="#1436" id="1436">1436</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 <span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::io::{Error, Read, Write};
@@ -1679,6 +1684,7 @@
                 <span class="kw-2">&amp;</span>ActiveStateMeta::default(),
             )
             .<span class="kw">await</span>;
+
             <span class="kw">let </span>notify_sender = <span class="self">self</span>.inner.notifier.sender();
             <span class="kw">let </span>sm_updates_tx = <span class="self">self</span>.inner.sm_update_tx.clone();
             dbtx.on_commit(<span class="kw">move </span>|| {
@@ -2069,7 +2075,7 @@
                                                         <span class="kw-2">&amp;mut </span>dbtx.to_ref(),
                                                         state.module_instance_id(),
                                                     ),
-                                                    transition_outcome,
+                                                    transition_outcome.clone(),
                                                     state.clone(),
                                                 )
                                                 .<span class="kw">await</span>;
@@ -2087,11 +2093,15 @@
                                                     .get(<span class="kw-2">&amp;</span>state.module_instance_id())
                                                     .expect(<span class="string">"Unknown module"</span>);
 
+                                                <span class="kw">let </span>operation_id = state.operation_id();
                                                 <span class="kw">let </span>global_context = global_context_gen(
                                                     state.module_instance_id(),
-                                                    state.operation_id(),
+                                                    operation_id,
                                                 );
-                                                <span class="kw">if </span>new_state.is_terminal(context, <span class="kw-2">&amp;</span>global_context) {
+
+                                                <span class="kw">let </span>is_terminal = new_state.is_terminal(context, <span class="kw-2">&amp;</span>global_context);
+
+                                                <span class="kw">if </span>is_terminal {
                                                     <span class="kw">let </span>k = InactiveStateKey::from_state(
                                                         new_state.clone(),
                                                     );

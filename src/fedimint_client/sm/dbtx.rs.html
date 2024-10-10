@@ -35,7 +35,11 @@
 <a href="#34" id="34">34</a>
 <a href="#35" id="35">35</a>
 <a href="#36" id="36">36</a>
-<a href="#37" id="37">37</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
 
 <span class="doccomment">/// A transaction that acts as isolated for module code but can be accessed as a
@@ -70,6 +74,10 @@
     </span><span class="attr">#[allow(dead_code)]
     </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>global_tx(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'parent</span>&gt; {
         <span class="self">self</span>.dbtx
+    }
+
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>module_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleInstanceId {
+        <span class="self">self</span>.module_instance
     }
 }
 </code></pre></div></section></main></body></html>

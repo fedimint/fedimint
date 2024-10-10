@@ -148,7 +148,52 @@
 <a href="#147" id="147">147</a>
 <a href="#148" id="148">148</a>
 <a href="#149" id="149">149</a>
-<a href="#150" id="150">150</a></pre></div><pre class="rust"><code><span class="doccomment">//! State machine for submitting transactions
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a></pre></div><pre class="rust"><code><span class="doccomment">//! State machine for submitting transactions
 
 </span><span class="kw">use </span>std::time::Duration;
 
@@ -160,8 +205,8 @@
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_NET_API;
 <span class="kw">use </span>tracing::warn;
 
-<span class="kw">use </span><span class="kw">crate</span>::sm::{Context, DynContext, OperationState, State, StateTransition};
-<span class="kw">use crate</span>::{DynGlobalClientContext, DynState};
+<span class="kw">use </span><span class="kw">crate</span>::sm::{Context, DynContext, State, StateTransition};
+<span class="kw">use crate</span>::{DynGlobalClientContext, DynState, TxAcceptedEvent, TxRejectedEvent};
 
 <span class="comment">// TODO: how to prevent collisions? Generally reserve some range for custom IDs?
 </span><span class="doccomment">/// Reserved module instance id used for client-internal state machines
@@ -193,7 +238,15 @@
 ///     Created -- tx is accepted by consensus --&gt; Accepted
 ///     Created -- tx is rejected on submission --&gt; Rejected
 /// ```
+</span><span class="comment">// NOTE: This struct needs to retain the same encoding as [`crate::sm::OperationState`],
+// because it was used to replace it, and clients already have it persisted.
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+</span><span class="kw">pub struct </span>TxSubmissionStatesSM {
+    <span class="kw">pub </span>operation_id: OperationId,
+    <span class="kw">pub </span>state: TxSubmissionStates,
+}
+
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>TxSubmissionStates {
     <span class="doccomment">/// The transaction has been created and potentially already been submitted,
     /// but no rejection or acceptance happened so far
@@ -213,7 +266,7 @@
     </span>NonRetryableError(String),
 }
 
-<span class="kw">impl </span>State <span class="kw">for </span>TxSubmissionStates {
+<span class="kw">impl </span>State <span class="kw">for </span>TxSubmissionStatesSM {
     <span class="kw">type </span>ModuleContext = TxSubmissionContext;
 
     <span class="kw">fn </span>transitions(
@@ -221,19 +274,56 @@
         _context: <span class="kw-2">&amp;</span><span class="self">Self</span>::ModuleContext,
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
-        <span class="kw">match </span><span class="self">self </span>{
+        <span class="kw">let </span>operation_id = <span class="self">self</span>.operation_id;
+        <span class="kw">match </span><span class="self">self</span>.state.clone() {
             TxSubmissionStates::Created(transaction) =&gt; {
                 <span class="kw">let </span>txid = transaction.tx_hash();
                 <span class="macro">vec!</span>[
                     StateTransition::new(
-                        <span class="self">Self</span>::trigger_created_rejected(transaction.clone(), global_context.clone()),
-                        <span class="kw">move </span>|<span class="kw">_</span>, error, <span class="kw">_</span>| {
-                            Box::pin(<span class="kw">async move </span>{ TxSubmissionStates::Rejected(txid, error) })
+                        TxSubmissionStates::trigger_created_rejected(
+                            transaction.clone(),
+                            global_context.clone(),
+                        ),
+                        {
+                            <span class="kw">let </span>global_context = global_context.clone();
+                            <span class="kw">move </span>|sm_dbtx, error, <span class="kw">_</span>| {
+                                <span class="kw">let </span>global_context = global_context.clone();
+                                Box::pin(<span class="kw">async move </span>{
+                                    global_context
+                                        .log_event(
+                                            sm_dbtx,
+                                            TxRejectedEvent {
+                                                txid,
+                                                operation_id,
+                                                error: error.clone(),
+                                            },
+                                        )
+                                        .<span class="kw">await</span>;
+                                    TxSubmissionStatesSM {
+                                        state: TxSubmissionStates::Rejected(txid, error),
+                                        operation_id,
+                                    }
+                                })
+                            }
                         },
                     ),
                     StateTransition::new(
-                        <span class="self">Self</span>::trigger_created_accepted(txid, global_context.clone()),
-                        <span class="kw">move </span>|<span class="kw">_</span>, (), <span class="kw">_</span>| Box::pin(<span class="kw">async move </span>{ TxSubmissionStates::Accepted(txid) }),
+                        TxSubmissionStates::trigger_created_accepted(txid, global_context.clone()),
+                        {
+                            <span class="kw">let </span>global_context = global_context.clone();
+                            <span class="kw">move </span>|sm_dbtx, (), <span class="kw">_</span>| {
+                                <span class="kw">let </span>global_context = global_context.clone();
+                                Box::pin(<span class="kw">async move </span>{
+                                    global_context
+                                        .log_event(sm_dbtx, TxAcceptedEvent { txid, operation_id })
+                                        .<span class="kw">await</span>;
+                                    TxSubmissionStatesSM {
+                                        state: TxSubmissionStates::Accepted(txid),
+                                        operation_id,
+                                    }
+                                })
+                            }
+                        },
                     ),
                 ]
             }
@@ -246,7 +336,7 @@
     }
 
     <span class="kw">fn </span>operation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; OperationId {
-        <span class="macro">unimplemented!</span>(<span class="string">"TxSubmissionStates has to be wrapped in OperationState"</span>)
+        <span class="self">self</span>.operation_id
     }
 }
 
@@ -285,7 +375,7 @@
     }
 }
 
-<span class="kw">impl </span>IntoDynInstance <span class="kw">for </span>TxSubmissionStates {
+<span class="kw">impl </span>IntoDynInstance <span class="kw">for </span>TxSubmissionStatesSM {
     <span class="kw">type </span>DynType = DynState;
 
     <span class="kw">fn </span>into_dyn(<span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType {
@@ -295,7 +385,7 @@
 
 <span class="kw">pub fn </span>tx_submission_sm_decoder() -&gt; Decoder {
     <span class="kw">let </span><span class="kw-2">mut </span>decoder_builder = Decoder::builder_system();
-    decoder_builder.with_decodable_type::&lt;OperationState&lt;TxSubmissionStates&gt;&gt;();
+    decoder_builder.with_decodable_type::&lt;TxSubmissionStatesSM&gt;();
     decoder_builder.build()
 }
 </code></pre></div></section></main></body></html>

@@ -765,7 +765,13 @@
 <a href="#764" id="764">764</a>
 <a href="#765" id="765">765</a>
 <a href="#766" id="766">766</a>
-<a href="#767" id="767">767</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>event_log;
+
+<span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::time::SystemTime;
 
@@ -816,6 +822,8 @@
     ApiSecret = <span class="number">0x36</span>,
     PeerLastApiVersionsSummaryCache = <span class="number">0x37</span>,
     ApiUrlAnnouncement = <span class="number">0x38</span>,
+    EventLog = <span class="number">0x39</span>,
+    UnorderedEventLog = <span class="number">0x3a</span>,
 
     <span class="doccomment">/// Arbitrary data of the applications integrating Fedimint client and
     /// wanting to store some Federation-specific data in Fedimint client

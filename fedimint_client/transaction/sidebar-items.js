@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["TRANSACTION_SUBMISSION_MODULE_INSTANCE"],"enum":["TxSubmissionStates"],"fn":["tx_submission_sm_decoder"],"mod":["builder","sm"],"struct":["ClientInput","ClientOutput","TransactionBuilder","TxSubmissionContext"]};
+window.SIDEBAR_ITEMS = {"constant":["TRANSACTION_SUBMISSION_MODULE_INSTANCE"],"enum":["TxSubmissionStates"],"fn":["tx_submission_sm_decoder"],"mod":["builder","sm"],"struct":["ClientInput","ClientOutput","TransactionBuilder","TxSubmissionContext","TxSubmissionStatesSM"]};
