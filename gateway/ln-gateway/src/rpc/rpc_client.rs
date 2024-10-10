@@ -3,12 +3,12 @@ use bitcoin::{Address, Txid};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, TransactionId};
 use fedimint_ln_common::gateway_endpoint_constants::{
-    ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
-    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT,
-    GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
-    LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT,
-    RECEIVE_ECASH_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
-    SYNC_TO_CHAIN_ENDPOINT, WITHDRAW_ENDPOINT,
+    ADDRESS_ENDPOINT, AUTH_CHALLENGE_ENDPOINT, AUTH_SESSION_ENDPOINT, AUTH_SIGN_CHALLENGE_ENDPOINT,
+    BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
+    CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
+    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
+    MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, RECEIVE_ECASH_ENDPOINT, SET_CONFIGURATION_ENDPOINT,
+    SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SYNC_TO_CHAIN_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 use fedimint_lnv2_common::endpoint_constants::{
     CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT, PAY_INVOICE_SELF_ENDPOINT, WITHDRAW_ONCHAIN_ENDPOINT,
@@ -20,12 +20,13 @@ use serde::Serialize;
 use thiserror::Error;
 
 use super::{
-    BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConfigPayload, ConnectFedPayload,
-    CreateInvoiceForSelfPayload, DepositAddressPayload, FederationInfo, GatewayBalances,
-    GatewayFedConfig, GatewayInfo, GetLnOnchainAddressPayload, LeaveFedPayload, MnemonicResponse,
-    OpenChannelPayload, PayInvoicePayload, ReceiveEcashPayload, ReceiveEcashResponse,
-    SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, SyncToChainPayload,
-    WithdrawOnchainPayload, WithdrawPayload,
+    AuthChallengePayload, AuthChallengeResponse, BackupPayload, BalancePayload,
+    CloseChannelsWithPeerPayload, ConfigPayload, ConnectFedPayload, CreateInvoiceForSelfPayload,
+    DepositAddressPayload, FederationInfo, GatewayBalances, GatewayFedConfig, GatewayInfo,
+    GetLnOnchainAddressPayload, LeaveFedPayload, MnemonicResponse, OpenChannelPayload,
+    PayInvoicePayload, ReceiveEcashPayload, ReceiveEcashResponse, SetConfigurationPayload,
+    SpendEcashPayload, SpendEcashResponse, SyncToChainPayload, WithdrawOnchainPayload,
+    WithdrawPayload,
 };
 use crate::lightning::ChannelInfo;
 use crate::CloseChannelsWithPeerResponse;
@@ -38,19 +39,26 @@ pub struct GatewayRpcClient {
     client: reqwest::Client,
     /// Optional gateway password
     password: Option<String>,
+    /// Optional gateway JWT
+    pub jwt_code: Option<String>,
 }
 
 impl GatewayRpcClient {
-    pub fn new(versioned_api: SafeUrl, password: Option<String>) -> Self {
+    pub fn new(versioned_api: SafeUrl, password: Option<String>, jwt_code: Option<String>) -> Self {
         Self {
             base_url: versioned_api,
             client: reqwest::Client::new(),
             password,
+            jwt_code,
         }
     }
 
     pub fn with_password(&self, password: Option<String>) -> Self {
-        GatewayRpcClient::new(self.base_url.clone(), password)
+        GatewayRpcClient::new(self.base_url.clone(), password, self.jwt_code.clone())
+    }
+
+    pub fn with_jwt_code(&self, jwt_code: Option<String>) -> Self {
+        GatewayRpcClient::new(self.base_url.clone(), self.password.clone(), jwt_code)
     }
 
     pub async fn get_info(&self) -> GatewayRpcResult<GatewayInfo> {
@@ -265,6 +273,33 @@ impl GatewayRpcClient {
         self.call_get(url).await
     }
 
+    pub async fn challenge_auth(&self) -> GatewayRpcResult<String> {
+        let url = self
+            .base_url
+            .join(AUTH_CHALLENGE_ENDPOINT)
+            .expect("invalid base url");
+        self.call_get(url).await
+    }
+
+    pub async fn sign_challenge_auth(
+        &self,
+        auth_challenge_payload: AuthChallengeResponse,
+    ) -> GatewayRpcResult<bitcoin::secp256k1::schnorr::Signature> {
+        let url = self
+            .base_url
+            .join(AUTH_SIGN_CHALLENGE_ENDPOINT)
+            .expect("invalid base url");
+        self.call_post(url, auth_challenge_payload).await
+    }
+
+    pub async fn session_auth(&self, payload: AuthChallengePayload) -> GatewayRpcResult<String> {
+        let url = self
+            .base_url
+            .join(AUTH_SESSION_ENDPOINT)
+            .expect("invalid base url");
+        self.call_post(url, payload).await
+    }
+
     async fn call<P: Serialize, T: DeserializeOwned>(
         &self,
         method: Method,
@@ -272,9 +307,13 @@ impl GatewayRpcClient {
         payload: Option<P>,
     ) -> Result<T, GatewayRpcError> {
         let mut builder = self.client.request(method, url.clone().to_unsafe());
-        if let Some(password) = self.password.clone() {
+
+        if let Some(jwt_code) = self.jwt_code.clone() {
+            builder = builder.bearer_auth(jwt_code);
+        } else if let Some(password) = self.password.clone() {
             builder = builder.bearer_auth(password);
         }
+
         if let Some(payload) = payload {
             builder = builder
                 .json(&payload)

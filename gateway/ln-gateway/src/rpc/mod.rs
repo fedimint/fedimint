@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use bitcoin::address::NetworkUnchecked;
+use bitcoin::secp256k1::schnorr::Signature;
 use bitcoin::{Address, Network};
 use fedimint_core::config::{FederationId, JsonClientConfig};
 use fedimint_core::core::OperationId;
@@ -254,4 +255,17 @@ pub struct MnemonicResponse {
     // and do not derive their secrets from the gateway's mnemonic. They also use
     // a separate database from the gateway's db.
     pub legacy_federations: Vec<FederationId>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct AuthChallengePayload {
+    /// The challenge string
+    pub challenge: String,
+    /// The response string
+    pub response: Signature,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct AuthChallengeResponse {
+    pub challenge: String,
 }

@@ -13,6 +13,7 @@
 #![allow(clippy::too_many_lines)]
 #![allow(clippy::wildcard_imports)]
 
+pub mod auth_manager;
 pub mod client;
 pub mod config;
 mod db;
@@ -38,6 +39,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::anyhow;
+use auth_manager::AuthManager;
 use bitcoin::{Address, Network, Txid};
 use bitcoin_hashes::{sha256, Hash};
 use clap::Parser;
@@ -94,7 +96,7 @@ use rpc::{
     SpendEcashResponse, SyncToChainPayload, WithdrawOnchainPayload, V1_API_ENDPOINT,
 };
 use state_machine::{GatewayClientModule, GatewayExtPayStates};
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
 use crate::config::LightningModuleMode;
@@ -199,6 +201,9 @@ enum ReceivePaymentStreamAction {
 pub struct Gateway {
     /// The gateway's federation manager.
     federation_manager: Arc<RwLock<FederationManager>>,
+
+    /// The gateway's authentication manager
+    auth_manager: Arc<Mutex<AuthManager>>,
 
     /// Builder struct that allows the gateway to build a `ILnRpcClient`, which
     /// represents a connection to a lightning node.
@@ -360,13 +365,25 @@ impl Gateway {
         let gateway_config =
             Self::get_gateway_configuration(gateway_db.clone(), &gateway_parameters).await;
 
+        let gateway_id = Self::load_or_create_gateway_id(&gateway_db).await;
+        let encoding_secret = rand::thread_rng()
+            .sample_iter(&rand::distributions::Alphanumeric)
+            .take(15)
+            .map(char::from)
+            .collect::<String>();
+
         Ok(Self {
             federation_manager: Arc::new(RwLock::new(FederationManager::new())),
+            auth_manager: Arc::new(Mutex::new(AuthManager::new(
+                gateway_id,
+                gateway_parameters.versioned_api.to_string(),
+                encoding_secret,
+            ))),
             lightning_builder,
             gateway_config: Arc::new(RwLock::new(gateway_config)),
             state: Arc::new(RwLock::new(gateway_state)),
             client_builder,
-            gateway_id: Self::load_or_create_gateway_id(&gateway_db).await,
+            gateway_id,
             gateway_db,
             versioned_api: gateway_parameters.versioned_api,
             listen: gateway_parameters.listen,
