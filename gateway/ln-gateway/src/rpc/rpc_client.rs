@@ -28,7 +28,6 @@ use super::{
     SpendEcashPayload, SpendEcashResponse, SyncToChainPayload, WithdrawOnchainPayload,
     WithdrawPayload,
 };
-use crate::auth_manager::AuthChallenge;
 use crate::lightning::ChannelInfo;
 use crate::CloseChannelsWithPeerResponse;
 
@@ -58,8 +57,8 @@ impl GatewayRpcClient {
         GatewayRpcClient::new(self.base_url.clone(), password, self.jwt_code.clone())
     }
 
-    pub fn with_jwt_code(&mut self, jwt_code: Option<String>) -> () {
-        self.jwt_code = jwt_code;
+    pub fn with_jwt_code(&self, jwt_code: Option<String>) -> Self {
+        GatewayRpcClient::new(self.base_url.clone(), self.password.clone(), jwt_code)
     }
 
     pub async fn get_info(&self) -> GatewayRpcResult<GatewayInfo> {
@@ -92,7 +91,7 @@ impl GatewayRpcClient {
             .base_url
             .join(BALANCE_ENDPOINT)
             .expect("invalid base url");
-        self.call_post_with_jwt(url, payload).await
+        self.call_post(url, payload).await
     }
 
     pub async fn get_deposit_address(
@@ -274,7 +273,7 @@ impl GatewayRpcClient {
         self.call_get(url).await
     }
 
-    pub async fn challenge_auth(&self) -> GatewayRpcResult<AuthChallenge> {
+    pub async fn challenge_auth(&self) -> GatewayRpcResult<String> {
         let url = self
             .base_url
             .join(AUTH_CHALLENGE_ENDPOINT)
@@ -324,33 +323,13 @@ impl GatewayRpcClient {
         payload: Option<P>,
     ) -> Result<T, GatewayRpcError> {
         let mut builder = self.client.request(method, url.clone().to_unsafe());
-        if let Some(password) = self.password.clone() {
+
+        if let Some(jwt_code) = self.jwt_code.clone() {
+            builder = builder.bearer_auth(jwt_code);
+        } else if let Some(password) = self.password.clone() {
             builder = builder.bearer_auth(password);
         }
-        if let Some(payload) = payload {
-            builder = builder
-                .json(&payload)
-                .header(reqwest::header::CONTENT_TYPE, "application/json");
-        }
 
-        let response = builder.send().await?;
-
-        match response.status() {
-            StatusCode::OK => Ok(response.json::<T>().await?),
-            status => Err(GatewayRpcError::BadStatus(status)),
-        }
-    }
-
-    async fn call_with_jwt<P: Serialize, T: DeserializeOwned>(
-        &self,
-        method: Method,
-        url: SafeUrl,
-        payload: Option<P>,
-    ) -> Result<T, GatewayRpcError> {
-        let mut builder = self.client.request(method, url.clone().to_unsafe());
-        if let Some(jwt_token) = self.jwt_code.clone() {
-            builder = builder.bearer_auth(jwt_token);
-        }
         if let Some(payload) = payload {
             builder = builder
                 .json(&payload)
@@ -375,19 +354,6 @@ impl GatewayRpcClient {
         payload: P,
     ) -> Result<T, GatewayRpcError> {
         self.call(Method::POST, url, Some(payload)).await
-    }
-
-    async fn call_post_with_jwt<P: Serialize, T: DeserializeOwned>(
-        &mut self,
-        url: SafeUrl,
-        payload: P,
-    ) -> Result<T, GatewayRpcError> {
-        if self.jwt_code == None {
-            let jwt_token = self.get_auth_session_token().await?;
-            self.with_jwt_code(Some(jwt_token));
-        }
-        //TODO if jwt is expired, get a new one and try again
-        self.call_with_jwt(Method::POST, url, Some(payload)).await
     }
 }
 

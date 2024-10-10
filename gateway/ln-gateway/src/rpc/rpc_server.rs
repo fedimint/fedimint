@@ -88,28 +88,10 @@ fn extract_bearer_token(request: &Request) -> Result<String, StatusCode> {
 }
 
 /// Middleware to authenticate an incoming request. Routes that are
-/// authenticated with this middleware always require a Bearer token to be
-/// supplied in the Authorization header.
-async fn auth_middleware(
-    Extension(gateway): Extension<Arc<Gateway>>,
-    request: Request,
-    next: Next,
-) -> Result<impl IntoResponse, StatusCode> {
-    // These routes are not available unless the gateway's configuration is set.
-    let gateway_config = gateway
-        .clone_gateway_config()
-        .await
-        .ok_or(StatusCode::NOT_FOUND)?;
-    let gateway_hashed_password = gateway_config.hashed_password;
-    let password_salt = gateway_config.password_salt;
-    authenticate(gateway_hashed_password, password_salt, request, next).await
-}
-
-/// Middleware to authenticate an incoming request. Routes that are
 /// authenticated with this middleware always require a Bearer token
 /// with the JWT generated previously to be supplied in the Authorization
-/// header.
-async fn auth_jwt_middleware(
+/// header. If jwt fails, try to check authentica with password
+async fn auth_jwt_middleware_with_password_fallback(
     Extension(gateway): Extension<Arc<Gateway>>,
     request: Request,
     next: Next,
@@ -132,7 +114,15 @@ async fn auth_jwt_middleware(
                 Ok(next.run(request).await)
             }
         }
-        Err(_) => Err(StatusCode::UNAUTHORIZED),
+        Err(_) => {
+            let gateway_config = gateway
+                .clone_gateway_config()
+                .await
+                .ok_or(StatusCode::NOT_FOUND)?;
+            let gateway_hashed_password = gateway_config.hashed_password;
+            let password_salt = gateway_config.password_salt;
+            authenticate(gateway_hashed_password, password_salt, request, next).await
+        } // fallback to check for password
     }
 }
 
@@ -221,7 +211,7 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
 
     // Authenticated, public routes used for gateway administration
     let always_authenticated_routes = Router::new()
-        // .route(BALANCE_ENDPOINT, post(balance))
+        .route(BALANCE_ENDPOINT, post(balance))
         .route(ADDRESS_ENDPOINT, post(address))
         .route(WITHDRAW_ENDPOINT, post(withdraw))
         .route(CONNECT_FED_ENDPOINT, post(connect_fed))
@@ -244,7 +234,9 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
         .route(MNEMONIC_ENDPOINT, get(mnemonic))
         .route(STOP_ENDPOINT, get(stop))
         .route(SYNC_TO_CHAIN_ENDPOINT, post(sync_to_chain))
-        .layer(middleware::from_fn(auth_middleware));
+        .layer(middleware::from_fn(
+            auth_jwt_middleware_with_password_fallback,
+        ));
 
     // Routes that are un-authenticated before gateway configuration, then become
     // authenticated after a password has been set.
@@ -256,11 +248,6 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
         .route(GATEWAY_INFO_ENDPOINT, get(info))
         .layer(middleware::from_fn(auth_after_config_middleware));
 
-    // Authenticated with JWT, public routes used for gateway administration
-    let auth_jwt_routes = Router::new()
-        .route(BALANCE_ENDPOINT, post(balance))
-        .layer(middleware::from_fn(auth_jwt_middleware));
-
     let auth_routes = Router::new()
         .route(AUTH_CHALLENGE_ENDPOINT, get(auth_get_challenge))
         .route(AUTH_SESSION_ENDPOINT, post(auth_get_jwt_session))
@@ -271,7 +258,6 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
         .merge(always_authenticated_routes)
         .merge(authenticated_after_config_routes)
         .merge(auth_routes)
-        .merge(auth_jwt_routes)
         .layer(Extension(gateway))
         .layer(Extension(task_group))
         .layer(CorsLayer::permissive())
@@ -282,7 +268,7 @@ async fn auth_get_challenge(
     Extension(gateway): Extension<Arc<Gateway>>,
 ) -> Result<impl IntoResponse, AdminGatewayError> {
     let mut auth_manager = gateway.auth_manager.lock().await;
-    let challenge = auth_manager.create_challenge();
+    let challenge = auth_manager.create_challenge().to_string();
     Ok(Json(json!(challenge)))
 }
 
