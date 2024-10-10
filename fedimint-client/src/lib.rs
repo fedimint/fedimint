@@ -91,6 +91,10 @@ use anyhow::{anyhow, bail, ensure, format_err, Context};
 use async_stream::{stream, try_stream};
 use backup::ClientBackup;
 use bitcoin::secp256k1;
+use db::event_log::{
+    self, run_event_log_ordering_task, DBTransactionEventLogExt, Event, EventKind, EventLogEntry,
+    EventLogId,
+};
 use db::{
     apply_migrations_client, apply_migrations_core_client, get_core_client_database_migrations,
     ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientInitStateKey,
@@ -108,7 +112,8 @@ use fedimint_core::core::{
     DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId,
 };
 use fedimint_core::db::{
-    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    AutocommitError, Database, DatabaseKey, DatabaseRecord, DatabaseTransaction,
+    IDatabaseTransactionOpsCoreTyped, NonCommittable,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::{CLIENT_CONFIG_ENDPOINT, VERSION_ENDPOINT};
@@ -138,13 +143,14 @@ use module::{DynClientModule, FinalClient};
 use rand::thread_rng;
 use secp256k1::{PublicKey, Secp256k1};
 use secret::{DeriveableSecretClientExt, PlainRootSecretStrategy, RootSecretStrategy as _};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 #[cfg(not(target_family = "wasm"))]
 use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
 use tokio::sync::{watch, RwLock};
 use tokio_stream::wrappers::WatchStream;
 use tracing::{debug, error, info, warn};
+use transaction::TxSubmissionStatesSM;
 
 use crate::api_announcements::{get_api_urls, run_api_announcement_sync, ApiAnnouncementPrefix};
 use crate::api_version_discovery::discover_common_api_versions_set;
@@ -158,9 +164,7 @@ use crate::oplog::OperationLog;
 use crate::sm::executor::{
     ActiveOperationStateKeyPrefix, ContextGen, InactiveOperationStateKeyPrefix,
 };
-use crate::sm::{
-    ClientSMDatabaseTransaction, DynState, Executor, IState, Notifier, OperationState, State,
-};
+use crate::sm::{ClientSMDatabaseTransaction, DynState, Executor, IState, Notifier, State};
 use crate::transaction::{
     tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder, TxSubmissionContext,
     TxSubmissionStates, TRANSACTION_SUBMISSION_MODULE_INSTANCE,
@@ -188,6 +192,64 @@ mod api_version_discovery;
 pub mod api_announcements;
 /// Management of meta fields
 pub mod meta;
+
+#[derive(Serialize, Deserialize)]
+pub struct TxCreatedEvent {
+    txid: TransactionId,
+    operation_id: OperationId,
+}
+
+impl Event for TxCreatedEvent {
+    const MODULE: Option<ModuleKind> = None;
+
+    const KIND: EventKind = EventKind::from_static("tx-created");
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct TxAcceptedEvent {
+    txid: TransactionId,
+    operation_id: OperationId,
+}
+
+impl Event for TxAcceptedEvent {
+    const MODULE: Option<ModuleKind> = None;
+
+    const KIND: EventKind = EventKind::from_static("tx-accepted");
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct TxRejectedEvent {
+    txid: TransactionId,
+    error: String,
+    operation_id: OperationId,
+}
+impl Event for TxRejectedEvent {
+    const MODULE: Option<ModuleKind> = None;
+
+    const KIND: EventKind = EventKind::from_static("tx-rejected");
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ModuleRecoveryStarted {
+    module_id: ModuleInstanceId,
+}
+
+impl Event for ModuleRecoveryStarted {
+    const MODULE: Option<ModuleKind> = None;
+
+    const KIND: EventKind = EventKind::from_static("module-recovery-started");
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ModuleRecoveryCompleted {
+    module_id: ModuleInstanceId,
+}
+
+impl Event for ModuleRecoveryCompleted {
+    const MODULE: Option<ModuleKind> = None;
+
+    const KIND: EventKind = EventKind::from_static("module-recovery-completed");
+}
 
 pub type InstancelessDynClientInput = ClientInput<
     Box<maybe_add_send_sync!(dyn IInput + 'static)>,
@@ -253,7 +315,15 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
         sm: Box<maybe_add_send_sync!(dyn IState)>,
     ) -> AddStateMachinesResult;
 
-    async fn transaction_update_stream(&self) -> BoxStream<OperationState<TxSubmissionStates>>;
+    async fn log_event_json(
+        &self,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        kind: EventKind,
+        module: Option<(ModuleKind, ModuleInstanceId)>,
+        payload: serde_json::Value,
+    );
+
+    async fn transaction_update_stream(&self) -> BoxStream<TxSubmissionStatesSM>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -298,7 +368,17 @@ impl IGlobalClientContext for () {
         unimplemented!("fake implementation, only for tests");
     }
 
-    async fn transaction_update_stream(&self) -> BoxStream<OperationState<TxSubmissionStates>> {
+    async fn log_event_json(
+        &self,
+        _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        _kind: EventKind,
+        _module: Option<(ModuleKind, ModuleInstanceId)>,
+        _payload: serde_json::Value,
+    ) {
+        unimplemented!("fake implementation, only for tests");
+    }
+
+    async fn transaction_update_stream(&self) -> BoxStream<TxSubmissionStatesSM> {
         unimplemented!("fake implementation, only for tests");
     }
 }
@@ -400,6 +480,19 @@ impl DynGlobalClientContext {
         S: State + MaybeSend + MaybeSync + 'static,
     {
         self.add_state_machine_dyn(dbtx, box_up_state(sm)).await
+    }
+
+    async fn log_event<E>(&self, dbtx: &mut ClientSMDatabaseTransaction<'_, '_>, event: E)
+    where
+        E: Event + Send,
+    {
+        self.log_event_json(
+            dbtx,
+            E::KIND,
+            E::MODULE.map(|m| (m, dbtx.module_id())),
+            serde_json::to_value(&event).expect("Payload serialization can't fail"),
+        )
+        .await;
     }
 }
 
@@ -519,8 +612,25 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
             .await
     }
 
-    async fn transaction_update_stream(&self) -> BoxStream<OperationState<TxSubmissionStates>> {
+    async fn transaction_update_stream(&self) -> BoxStream<TxSubmissionStatesSM> {
         self.client.transaction_update_stream(self.operation).await
+    }
+
+    async fn log_event_json(
+        &self,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        kind: EventKind,
+        module: Option<(ModuleKind, ModuleInstanceId)>,
+        payload: serde_json::Value,
+    ) {
+        self.client
+            .log_event_raw_dbtx(
+                dbtx.global_tx(),
+                kind,
+                module,
+                serde_json::to_vec(&payload).expect("Serialization can't fail"),
+            )
+            .await;
     }
 }
 
@@ -785,6 +895,12 @@ pub struct Client {
     /// Updates about client recovery progress
     client_recovery_progress_receiver:
         watch::Receiver<BTreeMap<ModuleInstanceId, RecoveryProgress>>,
+
+    /// Internal client sender to wake up log ordering task every time a
+    /// (unuordered) log event is added.
+    log_ordering_wakeup_tx: watch::Sender<()>,
+    /// Receiver for events fired every time (ordered) log event is added.
+    log_event_added_rx: watch::Receiver<()>,
 }
 
 impl Client {
@@ -1180,7 +1296,7 @@ impl Client {
 
         let tx_submission_sm = DynState::from_typed(
             TRANSACTION_SUBMISSION_MODULE_INSTANCE,
-            OperationState {
+            TxSubmissionStatesSM {
                 operation_id,
                 state: TxSubmissionStates::Created(transaction),
             },
@@ -1189,18 +1305,19 @@ impl Client {
 
         self.executor.add_state_machines_dbtx(dbtx, states).await?;
 
+        self.log_event_dbtx(dbtx, None, TxCreatedEvent { txid, operation_id })
+            .await;
+
         Ok((txid, change_outpoints))
     }
 
     async fn transaction_update_stream(
         &self,
         operation_id: OperationId,
-    ) -> BoxStream<'static, OperationState<TxSubmissionStates>> {
+    ) -> BoxStream<'static, TxSubmissionStatesSM> {
         self.executor
             .notifier()
-            .module_notifier::<OperationState<TxSubmissionStates>>(
-                TRANSACTION_SUBMISSION_MODULE_INSTANCE,
-            )
+            .module_notifier::<TxSubmissionStatesSM>(TRANSACTION_SUBMISSION_MODULE_INSTANCE)
             .subscribe(operation_id)
             .await
     }
@@ -1737,10 +1854,12 @@ impl Client {
         >,
     ) {
         let db = self.db.clone();
+        let log_ordering_wakeup_tx = self.log_ordering_wakeup_tx.clone();
         self.task_group
             .spawn("module recoveries", |_task_handle| async {
                 Self::run_module_recoveries_task(
                     db,
+                    log_ordering_wakeup_tx,
                     recovery_sender,
                     module_recoveries,
                     module_recovery_progress_receivers,
@@ -1751,6 +1870,7 @@ impl Client {
 
     async fn run_module_recoveries_task(
         db: Database,
+        log_ordering_wakeup_tx: watch::Sender<()>,
         recovery_sender: watch::Sender<BTreeMap<ModuleInstanceId, RecoveryProgress>>,
         module_recoveries: BTreeMap<
             ModuleInstanceId,
@@ -1811,11 +1931,29 @@ impl Client {
                 prev_progress.to_complete()
             };
 
-            info!(
-                module_instance_id,
-                progress = format!("{}/{}", progress.complete, progress.total),
-                "Recovery progress"
-            );
+            if !prev_progress.is_done() && progress.is_done() {
+                info!(
+                    module_instance_id,
+                    prev_progress = format!("{}/{}", prev_progress.complete, prev_progress.total),
+                    progress = format!("{}/{}", progress.complete, progress.total),
+                    "Recovery complete"
+                );
+                dbtx.log_event(
+                    log_ordering_wakeup_tx.clone(),
+                    None,
+                    ModuleRecoveryCompleted {
+                        module_id: module_instance_id,
+                    },
+                )
+                .await;
+            } else {
+                info!(
+                    module_instance_id,
+                    prev_progress = format!("{}/{}", prev_progress.complete, prev_progress.total),
+                    progress = format!("{}/{}", progress.complete, progress.total),
+                    "Recovery progress"
+                );
+            }
 
             dbtx.insert_entry(
                 &ClientModuleRecovery { module_instance_id },
@@ -1990,7 +2128,100 @@ impl Client {
             }
         })
     }
+
+    pub async fn log_event<E>(&self, module_id: Option<ModuleInstanceId>, event: E)
+    where
+        E: Event + Send,
+    {
+        let mut dbtx = self.db.begin_transaction().await;
+        self.log_event_dbtx(&mut dbtx, module_id, event).await;
+        dbtx.commit_tx().await;
+    }
+
+    pub async fn log_event_dbtx<E, Cap>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_, Cap>,
+        module_id: Option<ModuleInstanceId>,
+        event: E,
+    ) where
+        E: Event + Send,
+        Cap: Send,
+    {
+        dbtx.log_event(self.log_ordering_wakeup_tx.clone(), module_id, event)
+            .await;
+    }
+
+    pub async fn log_event_raw_dbtx<Cap>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_, Cap>,
+        kind: EventKind,
+        module: Option<(ModuleKind, ModuleInstanceId)>,
+        payload: Vec<u8>,
+    ) where
+        Cap: Send,
+    {
+        let module_id = module.as_ref().map(|m| m.1);
+        let module_kind = module.map(|m| m.0);
+        dbtx.log_event_raw(
+            self.log_ordering_wakeup_tx.clone(),
+            kind,
+            module_kind,
+            module_id,
+            payload,
+        )
+        .await;
+    }
+
+    pub async fn handle_events<F, R, K>(&self, pos_key: &K, call_fn: F) -> anyhow::Result<()>
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+        K: DatabaseRecord<Value = EventLogId>,
+        F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
+        R: Future<Output = anyhow::Result<()>>,
+    {
+        event_log::handle_events(
+            self.db.clone(),
+            pos_key,
+            self.log_event_added_rx.clone(),
+            call_fn,
+        )
+        .await
+    }
+
+    pub async fn get_event_log(
+        &self,
+        pos: Option<EventLogId>,
+        limit: u64,
+    ) -> Vec<(
+        EventLogId,
+        EventKind,
+        Option<(ModuleKind, ModuleInstanceId)>,
+        u64,
+        serde_json::Value,
+    )> {
+        self.get_event_log_dbtx(&mut self.db.begin_transaction_nc().await, pos, limit)
+            .await
+    }
+
+    pub async fn get_event_log_dbtx<Cap>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_, Cap>,
+        pos: Option<EventLogId>,
+        limit: u64,
+    ) -> Vec<(
+        EventLogId,
+        EventKind,
+        Option<(ModuleKind, ModuleInstanceId)>,
+        u64,
+        serde_json::Value,
+    )>
+    where
+        Cap: Send,
+    {
+        dbtx.get_event_log(pos, limit).await
+    }
 }
+
 #[derive(Deserialize)]
 struct GetInviteCodeRequest {
     peer: PeerId,
@@ -1998,7 +2229,7 @@ struct GetInviteCodeRequest {
 
 /// See [`Client::transaction_updates`]
 pub struct TransactionUpdates {
-    update_stream: BoxStream<'static, OperationState<TxSubmissionStates>>,
+    update_stream: BoxStream<'static, TxSubmissionStatesSM>,
 }
 
 impl TransactionUpdates {
@@ -2457,6 +2688,9 @@ impl ClientBuilder {
 
         debug!(?common_api_versions, "Completed api version negotiation");
 
+        let (log_event_added_tx, log_event_added_rx) = watch::channel(());
+        let (log_ordering_wakeup_tx, log_ordering_wakeup_rx) = watch::channel(());
+
         let mut module_recoveries: BTreeMap<
             ModuleInstanceId,
             Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<()>>)>>,
@@ -2559,11 +2793,29 @@ impl ClientBuilder {
                             ))
                         }
                     } else {
+                        let progress = RecoveryProgress::none();
+                        let mut dbtx = db.begin_transaction().await;
+                        dbtx.log_event(
+                            log_ordering_wakeup_tx.clone(),
+                            None,
+                            ModuleRecoveryStarted {
+                                module_id: module_instance_id,
+                            },
+                        )
+                        .await;
+                        dbtx.insert_entry(
+                            &ClientModuleRecovery { module_instance_id },
+                            &ClientModuleRecoveryState { progress },
+                        )
+                        .await;
+
+                        dbtx.commit_tx().await;
+
                         debug!(
                             id = %module_instance_id,
                             %kind, "Starting new module recovery"
                         );
-                        Some(start_module_recover_fn(snapshot, RecoveryProgress::none()))
+                        Some(start_module_recover_fn(snapshot, progress))
                     }
                 } else {
                     None
@@ -2648,12 +2900,14 @@ impl ClientBuilder {
             primary_module_instance,
             modules,
             module_inits: self.module_inits.clone(),
+            log_ordering_wakeup_tx,
+            log_event_added_rx,
             executor,
             api,
             secp_ctx: Secp256k1::new(),
             root_secret,
             task_group,
-            operation_log: OperationLog::new(db),
+            operation_log: OperationLog::new(db.clone()),
             client_recovery_progress_receiver,
             meta_service: self.meta_service,
             connector,
@@ -2675,6 +2929,10 @@ impl ClientBuilder {
             run_api_announcement_sync(client_inner.clone()),
         );
 
+        client_inner.task_group.spawn_cancellable(
+            "event log ordering task",
+            run_event_log_ordering_task(db.clone(), log_ordering_wakeup_rx, log_event_added_tx),
+        );
         let client_arc = ClientHandle::new(client_inner);
 
         for (_, _, module) in client_arc.modules.iter_modules() {

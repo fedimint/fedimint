@@ -36,6 +36,7 @@ pub const LOG_TEST: &str = "fm::test";
 pub const LOG_TIMING: &str = "fm::timing";
 pub const LOG_CLIENT: &str = "fm::client";
 pub const LOG_CLIENT_DB: &str = "fm::client::db";
+pub const LOG_CLIENT_EVENT_LOG: &str = "fm::client::event-log";
 pub const LOG_MODULE_MINT: &str = "fm::module::mint";
 pub const LOG_MODULE_META: &str = "fm::module::meta";
 pub const LOG_MODULE_WALLET: &str = "fm::module::wallet";

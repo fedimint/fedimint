@@ -248,6 +248,7 @@ impl Executor {
                 &ActiveStateMeta::default(),
             )
             .await;
+
             let notify_sender = self.inner.notifier.sender();
             let sm_updates_tx = self.inner.sm_update_tx.clone();
             dbtx.on_commit(move || {
@@ -638,7 +639,7 @@ impl ExecutorInner {
                                                         &mut dbtx.to_ref(),
                                                         state.module_instance_id(),
                                                     ),
-                                                    transition_outcome,
+                                                    transition_outcome.clone(),
                                                     state.clone(),
                                                 )
                                                 .await;
@@ -656,11 +657,15 @@ impl ExecutorInner {
                                                     .get(&state.module_instance_id())
                                                     .expect("Unknown module");
 
+                                                let operation_id = state.operation_id();
                                                 let global_context = global_context_gen(
                                                     state.module_instance_id(),
-                                                    state.operation_id(),
+                                                    operation_id,
                                                 );
-                                                if new_state.is_terminal(context, &global_context) {
+
+                                                let is_terminal = new_state.is_terminal(context, &global_context);
+
+                                                if is_terminal {
                                                     let k = InactiveStateKey::from_state(
                                                         new_state.clone(),
                                                     );

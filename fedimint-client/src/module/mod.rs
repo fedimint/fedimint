@@ -27,6 +27,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use self::init::ClientModuleInit;
+use crate::db::event_log::Event;
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
 use crate::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use crate::sm::{self, ActiveStateMeta, Context, DynContext, DynState, State};
@@ -538,6 +539,21 @@ where
                 operation_id,
                 operation_type,
                 operation_meta,
+            )
+            .await;
+    }
+
+    pub async fn log_event<E, Cap>(&self, dbtx: &mut DatabaseTransaction<'_, Cap>, event: E)
+    where
+        E: Event + Send,
+        Cap: Send,
+    {
+        self.client
+            .get()
+            .log_event_dbtx(
+                &mut dbtx.global_dbtx(self.global_dbtx_access_token),
+                Some(self.module_instance_id),
+                event,
             )
             .await;
     }

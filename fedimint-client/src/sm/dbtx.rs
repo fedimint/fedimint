@@ -34,4 +34,8 @@ impl<'inner, 'parent> ClientSMDatabaseTransaction<'inner, 'parent> {
     pub(crate) fn global_tx(&mut self) -> &mut DatabaseTransaction<'parent> {
         self.dbtx
     }
+
+    pub(crate) fn module_id(&self) -> ModuleInstanceId {
+        self.module_instance
+    }
 }
