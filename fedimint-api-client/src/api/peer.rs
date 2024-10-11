@@ -193,12 +193,15 @@ impl FederationPeerClientConnectionState {
     async fn wait(&mut self) {
         let now_ts = now();
         let desired_timeout = self.connection_backoff.next().unwrap_or(Self::MAX_BACKOFF);
-        let since_last_connect = match self.last_connection_attempt_or {
-            Some(last) => now_ts.duration_since(last).unwrap_or_default(),
+
+        let sleep_duration = match self.last_connection_attempt_or {
+            Some(last) => {
+                let since_last_connect = now_ts.duration_since(last).unwrap_or_default();
+                desired_timeout.saturating_sub(since_last_connect)
+            }
             None => Duration::ZERO,
         };
 
-        let sleep_duration = desired_timeout.saturating_sub(since_last_connect);
         if Duration::ZERO < sleep_duration {
             debug!(
                 target: LOG_CLIENT_NET_API,
