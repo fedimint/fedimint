@@ -344,7 +344,7 @@ impl ConsensusEngine {
         signature_sender: watch::Sender<Option<SchnorrSignature>>,
         timestamp_receiver: Receiver<(Instant, u64)>,
     ) -> anyhow::Result<SignedSessionOutcome> {
-        let mut item_index = 0;
+        let mut item_index = self.pending_accepted_items().await.len() as u64;
 
         let mut request_signed_session_outcome = Box::pin(async {
             self.request_signed_session_outcome(&self.federation_api, session_index)
