@@ -145,7 +145,7 @@ where
     ) {
         let mut connection_state_guard = connection_state.lock().await;
 
-        if connection_state_guard.last_connection_attempt_or.is_none() {
+        if connection_state_guard.last_connection_attempt.is_none() {
             debug!(
                 target: LOG_CLIENT_NET_API,
                 peer_id = %peer_id,
@@ -169,7 +169,7 @@ where
 struct FederationPeerClientConnectionState {
     /// Last time a connection attempt was made, or `None` if no attempt has
     /// been made yet.
-    last_connection_attempt_or: Option<SystemTime>,
+    last_connection_attempt: Option<SystemTime>,
     connection_backoff: backoff_util::FibonacciBackoff,
 }
 
@@ -179,7 +179,7 @@ impl FederationPeerClientConnectionState {
 
     fn new() -> Self {
         Self {
-            last_connection_attempt_or: None,
+            last_connection_attempt: None,
             connection_backoff: backoff_util::custom_backoff(
                 Self::MIN_BACKOFF,
                 Self::MAX_BACKOFF,
@@ -194,7 +194,7 @@ impl FederationPeerClientConnectionState {
         let now_ts = now();
         let desired_timeout = self.connection_backoff.next().unwrap_or(Self::MAX_BACKOFF);
 
-        let sleep_duration = match self.last_connection_attempt_or {
+        let sleep_duration = match self.last_connection_attempt {
             Some(last) => {
                 let since_last_connect = now_ts.duration_since(last).unwrap_or_default();
                 desired_timeout.saturating_sub(since_last_connect)
@@ -210,7 +210,7 @@ impl FederationPeerClientConnectionState {
             fedimint_core::runtime::sleep(sleep_duration).await;
         }
 
-        self.last_connection_attempt_or = Some(now_ts);
+        self.last_connection_attempt = Some(now_ts);
     }
 
     fn reset(&mut self) {
