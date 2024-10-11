@@ -418,7 +418,11 @@ impl ConsensusEngine {
                             accepted_item.item.clone(),
                             accepted_item.peer
                         ).await.is_err(){
-                            panic!("Consensus Failure: rejected item accepted by federation consensus");
+                            panic!(
+                                "Consensus Failure: rejected item accepted by federation consensus: {accepted_item:?}, items: {}+{}, session_idx: {session_index}",
+                                processed.len(),
+                                unprocessed.len(),
+                            );
                         }
 
                         item_index += 1;
