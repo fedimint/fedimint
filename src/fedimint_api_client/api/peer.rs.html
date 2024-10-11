@@ -214,7 +214,10 @@
 <a href="#213" id="213">213</a>
 <a href="#214" id="214">214</a>
 <a href="#215" id="215">215</a>
-<a href="#216" id="216">216</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>fedimint_core::task::jit::JitTryAnyhow;
@@ -361,7 +364,7 @@
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>connection_state_guard = connection_state.lock().<span class="kw">await</span>;
 
-        <span class="kw">if </span>connection_state_guard.last_connection_attempt_or.is_none() {
+        <span class="kw">if </span>connection_state_guard.last_connection_attempt.is_none() {
             <span class="macro">debug!</span>(
                 target: LOG_CLIENT_NET_API,
                 peer_id = %peer_id,
@@ -385,7 +388,7 @@
 </span><span class="kw">struct </span>FederationPeerClientConnectionState {
     <span class="doccomment">/// Last time a connection attempt was made, or `None` if no attempt has
     /// been made yet.
-    </span>last_connection_attempt_or: <span class="prelude-ty">Option</span>&lt;SystemTime&gt;,
+    </span>last_connection_attempt: <span class="prelude-ty">Option</span>&lt;SystemTime&gt;,
     connection_backoff: backoff_util::FibonacciBackoff,
 }
 
@@ -395,7 +398,7 @@
 
     <span class="kw">fn </span>new() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            last_connection_attempt_or: <span class="prelude-val">None</span>,
+            last_connection_attempt: <span class="prelude-val">None</span>,
             connection_backoff: backoff_util::custom_backoff(
                 <span class="self">Self</span>::MIN_BACKOFF,
                 <span class="self">Self</span>::MAX_BACKOFF,
@@ -409,12 +412,15 @@
     </span><span class="kw">async fn </span>wait(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">let </span>now_ts = now();
         <span class="kw">let </span>desired_timeout = <span class="self">self</span>.connection_backoff.next().unwrap_or(<span class="self">Self</span>::MAX_BACKOFF);
-        <span class="kw">let </span>since_last_connect = <span class="kw">match </span><span class="self">self</span>.last_connection_attempt_or {
-            <span class="prelude-val">Some</span>(last) =&gt; now_ts.duration_since(last).unwrap_or_default(),
+
+        <span class="kw">let </span>sleep_duration = <span class="kw">match </span><span class="self">self</span>.last_connection_attempt {
+            <span class="prelude-val">Some</span>(last) =&gt; {
+                <span class="kw">let </span>since_last_connect = now_ts.duration_since(last).unwrap_or_default();
+                desired_timeout.saturating_sub(since_last_connect)
+            }
             <span class="prelude-val">None </span>=&gt; Duration::ZERO,
         };
 
-        <span class="kw">let </span>sleep_duration = desired_timeout.saturating_sub(since_last_connect);
         <span class="kw">if </span>Duration::ZERO &lt; sleep_duration {
             <span class="macro">debug!</span>(
                 target: LOG_CLIENT_NET_API,
@@ -423,7 +429,7 @@
             fedimint_core::runtime::sleep(sleep_duration).<span class="kw">await</span>;
         }
 
-        <span class="self">self</span>.last_connection_attempt_or = <span class="prelude-val">Some</span>(now_ts);
+        <span class="self">self</span>.last_connection_attempt = <span class="prelude-val">Some</span>(now_ts);
     }
 
     <span class="kw">fn </span>reset(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
