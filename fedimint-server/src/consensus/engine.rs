@@ -412,14 +412,14 @@ impl ConsensusEngine {
                     );
 
                     for accepted_item in unprocessed {
-                        if self.process_consensus_item(
+                        if let Err(err) = self.process_consensus_item(
                             session_index,
                             item_index,
                             accepted_item.item.clone(),
                             accepted_item.peer
-                        ).await.is_err(){
+                        ).await {
                             panic!(
-                                "Consensus Failure: rejected item accepted by federation consensus: {accepted_item:?}, items: {}+{}, session_idx: {session_index}",
+                                "Consensus Failure: rejected item accepted by federation consensus: {accepted_item:?}, items: {}+{}, session_idx: {session_index}, item_idx: {item_index}, err: {err}",
                                 processed.len(),
                                 unprocessed.len(),
                             );
@@ -654,15 +654,15 @@ impl ConsensusEngine {
         // When we recover from a mid-session crash aleph bft will replay the units that
         // were already processed before the crash. We therefore skip all consensus
         // items until we have seen every previously accepted items again.
-        if let Some(accepted_item) = dbtx
+        if let Some(existing_item) = dbtx
             .get_value(&AcceptedItemKey(item_index.to_owned()))
             .await
         {
-            if accepted_item.item == item && accepted_item.peer == peer {
+            if existing_item.item == item && existing_item.peer == peer {
                 return Ok(());
             }
 
-            bail!("Item was discarded previously");
+            bail!("Item was discarded previously: existing: {existing_item:?} {}, current: {item:?}, {peer}", existing_item.peer);
         }
 
         self.process_consensus_item_with_db_transaction(&mut dbtx.to_ref_nc(), item.clone(), peer)

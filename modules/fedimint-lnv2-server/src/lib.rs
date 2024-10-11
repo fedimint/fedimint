@@ -366,7 +366,10 @@ impl ServerModule for Lightning {
                     .await
                     .unwrap_or(0);
 
-                ensure!(current_vote < vote, "Unix time vote is redundant");
+                ensure!(
+                    current_vote < vote,
+                    "Unix time vote is redundant {current_vote} < {vote}"
+                );
 
                 Ok(())
             }
