@@ -8,7 +8,7 @@ use fedimint_client::Client;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::invite_code::InviteCode;
-use fedimint_ln_client::LightningClientInit;
+use fedimint_ln_client::{LightningClientInit, LightningClientModule};
 use fedimint_mint_client::MintClientInit;
 use fedimint_wallet_client::WalletClientInit;
 use rand::thread_rng;
@@ -43,14 +43,18 @@ async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientHandl
     let mut builder = make_client_builder().await?;
     let client_secret = load_or_generate_mnemonic(builder.db_no_decoders()).await?;
     builder.stopped();
-    builder
+    let client = builder
         .join(
             PlainRootSecretStrategy::to_root_secret(&client_secret),
             client_config.clone(),
             None,
         )
         .await
-        .map(Arc::new)
+        .map(Arc::new)?;
+    if let Ok(ln_client) = client.get_first_module::<LightningClientModule>() {
+        let _ = ln_client.update_gateway_cache().await;
+    }
+    Ok(client)
 }
 
 mod faucet {
