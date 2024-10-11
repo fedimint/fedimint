@@ -88,6 +88,7 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, ensure, format_err, Context};
+use api::ClientRawFederationApiExt as _;
 use async_stream::{stream, try_stream};
 use backup::ClientBackup;
 use bitcoin::secp256k1;
@@ -103,7 +104,8 @@ use db::{
 };
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{
-    ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
+    ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, GlobalFederationApiWithCacheExt,
+    IGlobalFederationApi, WsFederationApi,
 };
 use fedimint_core::config::{
     ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig, ModuleInitRegistry,
@@ -169,6 +171,8 @@ use crate::transaction::{
     tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder, TxSubmissionContext,
     TxSubmissionStates, TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
+
+pub mod api;
 
 /// Client backup
 pub mod backup;
@@ -2636,6 +2640,9 @@ impl ClientBuilder {
         config: &ClientConfig,
         api_secret: Option<String>,
     ) -> anyhow::Result<ClientHandle> {
+        let (log_event_added_tx, log_event_added_rx) = watch::channel(());
+        let (log_ordering_wakeup_tx, log_ordering_wakeup_rx) = watch::channel(());
+
         let decoders = self.decoders(config);
         let config = Self::config_decoded(config, &decoders)?;
         let fed_id = config.calculate_federation_id();
@@ -2643,7 +2650,7 @@ impl ClientBuilder {
         let connector = self.connector;
         let peer_urls = get_api_urls(&db, &config).await;
         let api = if let Some(admin_creds) = self.admin_creds.as_ref() {
-            DynGlobalApi::new_admin(
+            WsFederationApi::new_admin(
                 admin_creds.peer_id,
                 peer_urls
                     .into_iter()
@@ -2652,8 +2659,14 @@ impl ClientBuilder {
                 &api_secret,
                 &connector,
             )
+            .with_events(db.clone(), log_ordering_wakeup_tx.clone())
+            .with_cache()
+            .into()
         } else {
-            DynGlobalApi::from_endpoints(peer_urls, &api_secret, &connector)
+            WsFederationApi::from_endpoints(peer_urls, &api_secret, &connector)
+                .with_events(db.clone(), log_ordering_wakeup_tx.clone())
+                .with_cache()
+                .into()
         };
         let task_group = TaskGroup::new();
 
@@ -2687,9 +2700,6 @@ impl ClientBuilder {
         });
 
         debug!(?common_api_versions, "Completed api version negotiation");
-
-        let (log_event_added_tx, log_event_added_rx) = watch::channel(());
-        let (log_ordering_wakeup_tx, log_ordering_wakeup_rx) = watch::channel(());
 
         let mut module_recoveries: BTreeMap<
             ModuleInstanceId,
