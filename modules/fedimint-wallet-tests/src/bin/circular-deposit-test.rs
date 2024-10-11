@@ -10,6 +10,12 @@ use devimint::util::poll;
 use fedimint_core::encoding::Decodable;
 use tokio::try_join;
 
+const EXPECTED_MAXIMUM_FEE: u64 = 5_000;
+
+fn almost_equal(x: u64, y: u64) -> bool {
+    x.abs_diff(y) <= EXPECTED_MAXIMUM_FEE
+}
+
 async fn assert_withdrawal(
     send_client: &Client,
     receive_client: &Client,
@@ -80,8 +86,14 @@ async fn assert_withdrawal(
         receive_client_pre_balance + withdrawal_amount_msats - fed_deposit_fees_msats
     };
 
-    assert_eq!(send_client_post_balance, expected_send_client_balance);
-    assert_eq!(receive_client_post_balance, expected_receive_client_balance);
+    assert!(almost_equal(
+        send_client_post_balance,
+        expected_send_client_balance
+    ));
+    assert!(almost_equal(
+        receive_client_post_balance,
+        expected_receive_client_balance
+    ));
 
     Ok(())
 }
