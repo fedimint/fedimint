@@ -97,7 +97,7 @@ bitcoincore-rpc = "0.17.0"
 bitcoin_hashes = "0.12.0"
 bls12_381 = "0.8.0"
 bytes = "1.7.2"
-clap = { version = "4.5.19", features = ["derive", "env"] }
+clap = { version = "4.5.20", features = ["derive", "env"] }
 cln-rpc = "0.2.0"
 criterion = "0.5.1"
 devimint = { path = "./devimint", version = "=0.5.0-alpha" }
@@ -145,8 +145,8 @@ fedimint-unknown-server = { path = "./modules/fedimint-unknown-server", version 
 fedimint-wallet-client = { path = "./modules/fedimint-wallet-client", version = "=0.5.0-alpha" }
 fedimint-wallet-common = { path = "./modules/fedimint-wallet-common", version = "=0.5.0-alpha" }
 fedimint-wallet-server = { path = "./modules/fedimint-wallet-server", version = "=0.5.0-alpha" }
-fs-lock = "0.1.4"
-futures = "0.3.30"
+fs-lock = "0.1.5"
+futures = "0.3.31"
 futures-util = "0.3.30"
 group = "0.13.0"
 hex = "0.4.3"
