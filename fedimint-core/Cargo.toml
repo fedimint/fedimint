@@ -39,7 +39,7 @@ futures = { workspace = true }
 hex = { workspace = true, features = ["serde"] }
 imbl = "3.0.0"
 itertools = { workspace = true }
-jsonrpsee-core = { version = "0.24.5", features = ["client"] }
+jsonrpsee-core = { version = "0.24.6", features = ["client"] }
 lightning = { workspace = true }
 lightning-invoice = { workspace = true }
 macro_rules_attribute = "0.2.0"
