@@ -13,6 +13,8 @@ use devimint::envs::{
     FM_BITCOIN_RPC_URL_ENV, FM_CLIENT_DIR_ENV, FM_CLN_SOCKET_ENV, FM_FAUCET_BIND_ADDR_ENV,
     FM_INVITE_CODE_ENV, FM_PORT_GW_LND_ENV,
 };
+use fedimint_core::fedimint_build_code_version_env;
+use fedimint_core::util::handle_version_hash_command;
 use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::V1_API_ENDPOINT;
 use tokio::net::TcpListener;
@@ -122,6 +124,9 @@ fn get_invite_code(invite_code: Option<String>) -> anyhow::Result<String> {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     TracingSetup::default().init()?;
+
+    handle_version_hash_command(fedimint_build_code_version_env!());
+
     let cmd = Cmd::parse();
     let faucet = Faucet::new(&cmd).await?;
     let router = Router::new()
