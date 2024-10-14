@@ -2613,7 +2613,10 @@
 <a href="#2612" id="2612">2612</a>
 <a href="#2613" id="2613">2613</a>
 <a href="#2614" id="2614">2614</a>
-<a href="#2615" id="2615">2615</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
+<a href="#2615" id="2615">2615</a>
+<a href="#2616" id="2616">2616</a>
+<a href="#2617" id="2617">2617</a>
+<a href="#2618" id="2618">2618</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -2633,6 +2636,7 @@
 <span class="kw">use </span>fedimint_core::{Amount, PeerId};
 <span class="kw">use </span>fedimint_ln_client::cli::LnInvoiceResponse;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
+<span class="kw">use </span>futures::future::try_join_all;
 <span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>ln_gateway::rpc::GatewayInfo;
 <span class="kw">use </span>serde_json::json;
@@ -3199,22 +3203,24 @@
                 <span class="kw">let </span>new_gateway_extension_path = gateway_cln_extension_paths
                     .get(i)
                     .expect(<span class="string">"Not enough gateway-cln-extension paths"</span>);
-                <span class="macro">try_join!</span>(
-                    dev_fed.gw_cln.restart_with_bin(
+
+                <span class="kw">let </span>gateways = <span class="kw">if let </span><span class="prelude-val">Some</span>(gw_ldk) = <span class="kw-2">&amp;mut </span>dev_fed.gw_ldk {
+                    <span class="macro">vec!</span>[<span class="kw-2">&amp;mut </span>dev_fed.gw_cln, <span class="kw-2">&amp;mut </span>dev_fed.gw_lnd, gw_ldk]
+                } <span class="kw">else </span>{
+                    <span class="macro">vec!</span>[<span class="kw-2">&amp;mut </span>dev_fed.gw_cln, <span class="kw-2">&amp;mut </span>dev_fed.gw_lnd]
+                };
+
+                try_join_all(gateways.into_iter().map(|gateway| {
+                    gateway.restart_with_bin(
                         process_mgr,
                         new_gatewayd_path,
                         new_gateway_cli_path,
                         new_gateway_extension_path,
                         dev_fed.bitcoind.clone(),
-                    ),
-                    dev_fed.gw_lnd.restart_with_bin(
-                        process_mgr,
-                        new_gatewayd_path,
-                        new_gateway_cli_path,
-                        new_gateway_extension_path,
-                        dev_fed.bitcoind.clone(),
-                    ),
-                )<span class="question-mark">?</span>;
+                    )
+                }))
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+
                 <span class="macro">try_join!</span>(stress_test_fed(<span class="kw-2">&amp;</span>dev_fed, <span class="prelude-val">None</span>), client.wait_session())<span class="question-mark">?</span>;
                 <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
                 <span class="kw">let </span>gateway_cli_version = <span class="kw">crate</span>::util::GatewayCli::version_or_default().<span class="kw">await</span>;
