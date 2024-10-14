@@ -119,17 +119,8 @@ pub async fn latency_tests(
         return Ok(());
     }
 
-    #[allow(unused_variables)]
     let DevFed {
-        bitcoind,
-        cln,
-        lnd,
-        fed,
-        gw_cln,
-        gw_lnd,
-        electrs,
-        esplora,
-        ..
+        lnd, fed, gw_cln, ..
     } = dev_fed;
 
     let max_p90_factor = 5.0;
@@ -623,7 +614,6 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     log_binary_versions().await?;
     let data_dir = env::var(FM_DATA_DIR_ENV)?;
 
-    #[allow(unused_variables)]
     let DevFed {
         bitcoind,
         cln,
@@ -631,8 +621,6 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         fed,
         gw_cln,
         gw_lnd,
-        electrs,
-        esplora,
         ..
     } = dev_fed;
 
@@ -1581,7 +1569,6 @@ pub async fn lightning_gw_reconnect_test(
         return Ok(());
     }
 
-    #[allow(unused_variables)]
     let DevFed {
         bitcoind,
         cln,
@@ -1589,8 +1576,6 @@ pub async fn lightning_gw_reconnect_test(
         fed,
         gw_cln,
         gw_lnd,
-        electrs,
-        esplora,
         ..
     } = dev_fed;
 
@@ -1952,17 +1937,8 @@ pub async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
         return Ok(());
     }
 
-    #[allow(unused_variables)]
     let DevFed {
-        bitcoind,
-        cln,
-        lnd,
-        mut fed,
-        gw_cln,
-        gw_lnd,
-        electrs,
-        esplora,
-        ..
+        bitcoind, mut fed, ..
     } = dev_fed;
 
     bitcoind.mine_blocks(110).await?;
@@ -2016,18 +1992,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         return Ok(());
     }
 
-    #[allow(unused_variables)]
-    let DevFed {
-        bitcoind,
-        cln,
-        lnd,
-        fed,
-        gw_cln,
-        gw_lnd,
-        electrs,
-        esplora,
-        ..
-    } = dev_fed;
+    let DevFed { bitcoind, fed, .. } = dev_fed;
 
     let data_dir = env::var(FM_DATA_DIR_ENV)?;
     let client = fed.new_joined_client("recoverytool-test-client").await?;
@@ -2218,18 +2183,7 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
         return Ok(());
     }
 
-    #[allow(unused_variables)]
-    let DevFed {
-        bitcoind,
-        cln,
-        lnd,
-        mut fed,
-        gw_cln,
-        gw_lnd,
-        electrs,
-        esplora,
-        ..
-    } = dev_fed;
+    let DevFed { mut fed, .. } = dev_fed;
 
     fed.await_all_peers()
         .await
@@ -2364,18 +2318,7 @@ pub async fn cannot_replay_tx_test(dev_fed: DevFed) -> Result<()> {
     log_binary_versions().await?;
     let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
 
-    #[allow(unused_variables)]
-    let DevFed {
-        bitcoind,
-        cln,
-        lnd,
-        fed,
-        gw_cln,
-        gw_lnd,
-        electrs,
-        esplora,
-        ..
-    } = dev_fed;
+    let DevFed { fed, .. } = dev_fed;
 
     let client = fed.new_joined_client("cannot-replay-client").await?;
 
