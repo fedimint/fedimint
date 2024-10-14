@@ -788,7 +788,10 @@
 <a href="#787" id="787">787</a>
 <a href="#788" id="788">788</a>
 <a href="#789" id="789">789</a>
-<a href="#790" id="790">790</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 
@@ -1156,7 +1159,10 @@
                     .<span class="kw">await
                     </span>.unwrap_or(<span class="number">0</span>);
 
-                <span class="macro">ensure!</span>(current_vote &lt; vote, <span class="string">"Unix time vote is redundant"</span>);
+                <span class="macro">ensure!</span>(
+                    current_vote &lt; vote,
+                    <span class="string">"Unix time vote is redundant {current_vote} &lt; {vote}"
+                </span>);
 
                 <span class="prelude-val">Ok</span>(())
             }

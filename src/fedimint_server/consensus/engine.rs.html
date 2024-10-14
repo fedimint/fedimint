@@ -834,7 +834,11 @@
 <a href="#833" id="833">833</a>
 <a href="#834" id="834">834</a>
 <a href="#835" id="835">835</a>
-<a href="#836" id="836">836</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -1248,13 +1252,17 @@
                     </span>);
 
                     <span class="kw">for </span>accepted_item <span class="kw">in </span>unprocessed {
-                        <span class="kw">if </span><span class="self">self</span>.process_consensus_item(
+                        <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="self">self</span>.process_consensus_item(
                             session_index,
                             item_index,
                             accepted_item.item.clone(),
                             accepted_item.peer
-                        ).<span class="kw">await</span>.is_err(){
-                            <span class="macro">panic!</span>(<span class="string">"Consensus Failure: rejected item accepted by federation consensus"</span>);
+                        ).<span class="kw">await </span>{
+                            <span class="macro">panic!</span>(
+                                <span class="string">"Consensus Failure: rejected item accepted by federation consensus: {accepted_item:?}, items: {}+{}, session_idx: {session_index}, item_idx: {item_index}, err: {err}"</span>,
+                                processed.len(),
+                                unprocessed.len(),
+                            );
                         }
 
                         item_index += <span class="number">1</span>;
@@ -1486,15 +1494,15 @@
         <span class="comment">// When we recover from a mid-session crash aleph bft will replay the units that
         // were already processed before the crash. We therefore skip all consensus
         // items until we have seen every previously accepted items again.
-        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(accepted_item) = dbtx
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(existing_item) = dbtx
             .get_value(<span class="kw-2">&amp;</span>AcceptedItemKey(item_index.to_owned()))
             .<span class="kw">await
         </span>{
-            <span class="kw">if </span>accepted_item.item == item &amp;&amp; accepted_item.peer == peer {
+            <span class="kw">if </span>existing_item.item == item &amp;&amp; existing_item.peer == peer {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());
             }
 
-            <span class="macro">bail!</span>(<span class="string">"Item was discarded previously"</span>);
+            <span class="macro">bail!</span>(<span class="string">"Item was discarded previously: existing: {existing_item:?} {}, current: {item:?}, {peer}"</span>, existing_item.peer);
         }
 
         <span class="self">self</span>.process_consensus_item_with_db_transaction(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(), item.clone(), peer)

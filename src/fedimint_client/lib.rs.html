@@ -3037,7 +3037,8 @@
 <a href="#3036" id="3036">3036</a>
 <a href="#3037" id="3037">3037</a>
 <a href="#3038" id="3038">3038</a>
-<a href="#3039" id="3039">3039</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#3039" id="3039">3039</a>
+<a href="#3040" id="3040">3040</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
@@ -3188,7 +3189,7 @@
 </span><span class="kw">use </span>tokio::runtime::{Handle <span class="kw">as </span>RuntimeHandle, RuntimeFlavor};
 <span class="kw">use </span>tokio::sync::{watch, RwLock};
 <span class="kw">use </span>tokio_stream::wrappers::WatchStream;
-<span class="kw">use </span>tracing::{debug, error, info, warn};
+<span class="kw">use </span>tracing::{debug, error, info, trace, warn};
 <span class="kw">use </span>transaction::TxSubmissionStatesSM;
 
 <span class="kw">use </span><span class="kw">crate</span>::api_announcements::{get_api_urls, run_api_announcement_sync, ApiAnnouncementPrefix};
@@ -3755,6 +3756,7 @@
         <span class="kw">if </span>db_strong_count != <span class="number">1 </span>{
             <span class="macro">debug!</span>(target: LOG_CLIENT, count = db_strong_count - <span class="number">1</span>, <span class="string">"External DB references remaining after last handle dropped"</span>);
         }
+        <span class="macro">trace!</span>(target: LOG_CLIENT, <span class="string">"Dropped last handle to Client"</span>);
     }
 
     <span class="doccomment">/// Restart the client
