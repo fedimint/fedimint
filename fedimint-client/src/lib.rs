@@ -149,7 +149,7 @@ use thiserror::Error;
 use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
 use tokio::sync::{watch, RwLock};
 use tokio_stream::wrappers::WatchStream;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 use transaction::TxSubmissionStatesSM;
 
 use crate::api_announcements::{get_api_urls, run_api_announcement_sync, ApiAnnouncementPrefix};
@@ -716,6 +716,7 @@ impl ClientHandle {
         if db_strong_count != 1 {
             debug!(target: LOG_CLIENT, count = db_strong_count - 1, "External DB references remaining after last handle dropped");
         }
+        trace!(target: LOG_CLIENT, "Dropped last handle to Client");
     }
 
     /// Restart the client
