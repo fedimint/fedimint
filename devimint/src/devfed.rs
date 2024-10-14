@@ -237,15 +237,11 @@ impl DevJitFed {
             let gw_ldk = gw_ldk.clone();
             let fed = fed.clone();
             move || async move {
-                // TODO(support:v0.4.0): Only run LDK gateway when the federation supports LNv2
-                let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
-                if fedimintd_version >= *VERSION_0_4_0_ALPHA {
-                    let gw_ldk = gw_ldk.get_try().await?.deref();
-                    if let Some(gw_ldk) = gw_ldk {
-                        let fed = fed.get_try().await?.deref();
-                        if !skip_setup {
-                            gw_ldk.connect_fed(fed).await?;
-                        }
+                let gw_ldk = gw_ldk.get_try().await?.deref();
+                if let Some(gw_ldk) = gw_ldk {
+                    let fed = fed.get_try().await?.deref();
+                    if !skip_setup {
+                        gw_ldk.connect_fed(fed).await?;
                     }
                 }
                 Ok(Arc::new(()))
