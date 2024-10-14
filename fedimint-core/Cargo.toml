@@ -43,7 +43,7 @@ jsonrpsee-core = { version = "0.24.5", features = ["client"] }
 lightning = { workspace = true }
 lightning-invoice = { workspace = true }
 macro_rules_attribute = "0.2.0"
-miniscript = { workspace = true, features = ["serde"] }
+miniscript = { workspace = true }
 parity-scale-codec = { version = "3.6.12", features = ["derive"] }
 rand = { workspace = true }
 secp256k1 = { workspace = true, features = ["global-context", "rand-std"] }
