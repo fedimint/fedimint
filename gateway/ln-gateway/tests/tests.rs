@@ -109,6 +109,12 @@ where
     let gateway = fixtures.new_gateway(LightningModuleMode::LNv1).await;
     fed.connect_gateway(&gateway).await;
     let user_client = fed.new_client().await;
+
+    // if lightning module is present, update the gateway cache
+    if let Ok(ln_client) = user_client.get_first_module::<LightningClientModule>() {
+        let _ = ln_client.update_gateway_cache().await;
+    }
+
     let bitcoin = fixtures.bitcoin();
     f(gateway, other_ln, fed, user_client, bitcoin).await?;
 
@@ -827,7 +833,15 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
         send_msats_to_gateway(&gateway, id2, 10_000).await;
 
         let client1 = fed1.new_client().await;
+        // if lightning module is present, update the gateway cache
+        if let Ok(ln_client) = client1.get_first_module::<LightningClientModule>() {
+            let _ = ln_client.update_gateway_cache().await;
+        }
         let client2 = fed2.new_client().await;
+        // if lightning module is present, update the gateway cache
+        if let Ok(ln_client) = client2.get_first_module::<LightningClientModule>() {
+            let _ = ln_client.update_gateway_cache().await;
+        }
 
         // Check gateway balances before facilitating direct swap between federations
         let pre_balances = get_balances(&gateway, &[id1, id2]).await;

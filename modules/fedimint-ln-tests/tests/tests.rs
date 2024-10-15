@@ -48,6 +48,7 @@ async fn pay_invoice(
     gateway_id: Option<secp256k1::PublicKey>,
 ) -> anyhow::Result<OutgoingLightningPayment> {
     let ln_module = client.get_first_module::<LightningClientModule>()?;
+    ln_module.update_gateway_cache().await?;
     let gateway = if let Some(gateway_id) = gateway_id {
         ln_module.select_gateway(&gateway_id).await
     } else {

@@ -341,7 +341,7 @@ impl ClientModuleInit for LightningClientInit {
     }
 
     async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
-        Ok(LightningClientModule::new(args, self.gateway_conn.clone()).await?)
+        Ok(LightningClientModule::new(args, self.gateway_conn.clone()))
     }
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
@@ -598,12 +598,12 @@ pub enum PayBolt11InvoiceError {
 }
 
 impl LightningClientModule {
-    async fn new(
+    fn new(
         args: &ClientModuleInitArgs<LightningClientInit>,
         gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
-    ) -> anyhow::Result<LightningClientModule> {
+    ) -> Self {
         let secp = Secp256k1::new();
-        let ln_module = LightningClientModule {
+        Self {
             cfg: args.cfg().clone(),
             notifier: args.notifier().clone(),
             redeem_key: args
@@ -618,16 +618,8 @@ impl LightningClientModule {
             secp,
             client_ctx: args.context(),
             update_gateway_cache_merge: UpdateMerge::default(),
-            gateway_conn: gateway_conn.clone(),
-        };
-
-        // Only initialize the gateway cache if it is empty
-        let gateways = ln_module.list_gateways().await;
-        if gateways.is_empty() {
-            ln_module.update_gateway_cache().await?;
+            gateway_conn,
         }
-
-        Ok(ln_module)
     }
 
     async fn get_prev_payment_result(

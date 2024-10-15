@@ -534,6 +534,10 @@ async fn get_user_client(
         invite_code.clone()
     };
     let (client, invite_code) = build_client(user_invite_code, user_db.as_ref()).await?;
+    // if lightning module is present, update the gateway cache
+    if let Ok(ln_client) = client.get_first_module::<LightningClientModule>() {
+        let _ = ln_client.update_gateway_cache().await;
+    }
     Ok((client, invite_code))
 }
 
