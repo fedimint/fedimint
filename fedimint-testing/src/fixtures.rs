@@ -182,12 +182,11 @@ impl Fixtures {
 
         let lightning_builder: Arc<dyn LightningBuilder + Send + Sync> =
             Arc::new(FakeLightningBuilder);
+        // Note: This runtime isn't used by `FakeLightningBuilder`. It is immediately
+        // dropped.
+        let runtime = Arc::new(tokio::runtime::Runtime::new().unwrap());
+        let ln_client: Arc<dyn ILnRpcClient> = lightning_builder.build(runtime).await.into();
 
-        // Module tests do not use the webserver, so any port is ok
-        let listen: SocketAddr = "127.0.0.1:9000".parse().unwrap();
-        let address: SafeUrl = format!("http://{listen}").parse().unwrap();
-
-        let ln_client: Arc<dyn ILnRpcClient> = lightning_builder.build().await.into();
         let (lightning_public_key, lightning_alias, lightning_network, _, _) = ln_client
             .parsed_node_info()
             .await
@@ -198,6 +197,10 @@ impl Fixtures {
             lightning_alias,
             lightning_network,
         };
+
+        // Module tests do not use the webserver, so any port is ok
+        let listen: SocketAddr = "127.0.0.1:9000".parse().unwrap();
+        let address: SafeUrl = format!("http://{listen}").parse().unwrap();
 
         Gateway::new_with_custom_registry(
             lightning_builder,
