@@ -2203,15 +2203,7 @@
 <a href="#2202" id="2202">2202</a>
 <a href="#2203" id="2203">2203</a>
 <a href="#2204" id="2204">2204</a>
-<a href="#2205" id="2205">2205</a>
-<a href="#2206" id="2206">2206</a>
-<a href="#2207" id="2207">2207</a>
-<a href="#2208" id="2208">2208</a>
-<a href="#2209" id="2209">2209</a>
-<a href="#2210" id="2210">2210</a>
-<a href="#2211" id="2211">2211</a>
-<a href="#2212" id="2212">2212</a>
-<a href="#2213" id="2213">2213</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2205" id="2205">2205</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2554,7 +2546,7 @@
     }
 
     <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ClientModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
-        <span class="prelude-val">Ok</span>(LightningClientModule::new(args, <span class="self">self</span>.gateway_conn.clone()).<span class="kw">await</span><span class="question-mark">?</span>)
+        <span class="prelude-val">Ok</span>(LightningClientModule::new(args, <span class="self">self</span>.gateway_conn.clone()))
     }
 
     <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ClientMigrationFn&gt; {
@@ -2811,12 +2803,12 @@
 }
 
 <span class="kw">impl </span>LightningClientModule {
-    <span class="kw">async fn </span>new(
+    <span class="kw">fn </span>new(
         args: <span class="kw-2">&amp;</span>ClientModuleInitArgs&lt;LightningClientInit&gt;,
         gateway_conn: Arc&lt;<span class="kw">dyn </span>GatewayConnection + Send + Sync&gt;,
-    ) -&gt; anyhow::Result&lt;LightningClientModule&gt; {
+    ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>secp = Secp256k1::new();
-        <span class="kw">let </span>ln_module = LightningClientModule {
+        <span class="self">Self </span>{
             cfg: args.cfg().clone(),
             notifier: args.notifier().clone(),
             redeem_key: args
@@ -2831,16 +2823,8 @@
             secp,
             client_ctx: args.context(),
             update_gateway_cache_merge: UpdateMerge::default(),
-            gateway_conn: gateway_conn.clone(),
-        };
-
-        <span class="comment">// Only initialize the gateway cache if it is empty
-        </span><span class="kw">let </span>gateways = ln_module.list_gateways().<span class="kw">await</span>;
-        <span class="kw">if </span>gateways.is_empty() {
-            ln_module.update_gateway_cache().<span class="kw">await</span><span class="question-mark">?</span>;
+            gateway_conn,
         }
-
-        <span class="prelude-val">Ok</span>(ln_module)
     }
 
     <span class="kw">async fn </span>get_prev_payment_result(
