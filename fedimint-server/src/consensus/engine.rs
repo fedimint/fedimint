@@ -344,6 +344,8 @@ impl ConsensusEngine {
         signature_sender: watch::Sender<Option<SchnorrSignature>>,
         timestamp_receiver: Receiver<(Instant, u64)>,
     ) -> anyhow::Result<SignedSessionOutcome> {
+        // It is guaranteed that aleph bft will always replay all previously processed
+        // items from the current session from index zero
         let mut item_index = 0;
 
         let mut request_signed_session_outcome = Box::pin(async {
@@ -411,10 +413,10 @@ impl ConsensusEngine {
                         "Consensus Failure: pending accepted items disagree with federation consensus"
                     );
 
-                    for accepted_item in unprocessed {
+                    for (accepted_item, item_index) in unprocessed.into_iter().zip(processed.len()..) {
                         if let Err(err) = self.process_consensus_item(
                             session_index,
-                            item_index,
+                            item_index as u64,
                             accepted_item.item.clone(),
                             accepted_item.peer
                         ).await {
@@ -424,8 +426,6 @@ impl ConsensusEngine {
                                 unprocessed.len(),
                             );
                         }
-
-                        item_index += 1;
                     }
 
                     return Ok(signed_session_outcome);
