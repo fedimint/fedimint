@@ -5156,7 +5156,7 @@
                         dev_fed.fed.pegin_gateway(<span class="number">20_000</span>, <span class="kw-2">&amp;</span>dev_fed.gw_lnd),
                         <span class="kw">async </span>{
                             <span class="kw">let </span>faucet = process_mgr
-                                .spawn_daemon(<span class="string">"faucet"</span>, <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::Faucet))
+                                .spawn_daemon(<span class="string">"devimint-faucet"</span>, <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::Faucet))
                                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
                             poll(<span class="string">"waiting for faucet startup"</span>, || <span class="kw">async </span>{
