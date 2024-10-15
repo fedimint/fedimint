@@ -1184,7 +1184,9 @@
         signature_sender: watch::Sender&lt;<span class="prelude-ty">Option</span>&lt;SchnorrSignature&gt;&gt;,
         timestamp_receiver: Receiver&lt;(Instant, u64)&gt;,
     ) -&gt; anyhow::Result&lt;SignedSessionOutcome&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>item_index = <span class="number">0</span>;
+        <span class="comment">// It is guaranteed that aleph bft will always replay all previously processed
+        // items from the current session from index zero
+        </span><span class="kw">let </span><span class="kw-2">mut </span>item_index = <span class="number">0</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>request_signed_session_outcome = Box::pin(<span class="kw">async </span>{
             <span class="self">self</span>.request_signed_session_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>.federation_api, session_index)
@@ -1251,10 +1253,10 @@
                         <span class="string">"Consensus Failure: pending accepted items disagree with federation consensus"
                     </span>);
 
-                    <span class="kw">for </span>accepted_item <span class="kw">in </span>unprocessed {
+                    <span class="kw">for </span>(accepted_item, item_index) <span class="kw">in </span>unprocessed.into_iter().zip(processed.len()..) {
                         <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="self">self</span>.process_consensus_item(
                             session_index,
-                            item_index,
+                            item_index <span class="kw">as </span>u64,
                             accepted_item.item.clone(),
                             accepted_item.peer
                         ).<span class="kw">await </span>{
@@ -1264,8 +1266,6 @@
                                 unprocessed.len(),
                             );
                         }
-
-                        item_index += <span class="number">1</span>;
                     }
 
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(signed_session_outcome);
