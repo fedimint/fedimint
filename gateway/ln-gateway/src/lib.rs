@@ -11,7 +11,6 @@
 #![allow(clippy::return_self_not_must_use)]
 #![allow(clippy::similar_names)]
 #![allow(clippy::too_many_lines)]
-#![allow(clippy::wildcard_imports)]
 
 pub mod client;
 pub mod config;
@@ -158,7 +157,7 @@ const DEFAULT_MODULE_KINDS: [(ModuleInstanceId, &ModuleKind); 2] = [
 /// graph LR
 /// classDef virtual fill:#fff,stroke-dasharray: 5 5
 ///
-///    Initializing -- begin intercepting HTLCs --> Connected
+///    Initializing -- begin intercepting lightning payments --> Connected
 ///    Initializing -- gateway needs config --> Configuring
 ///    Configuring -- configuration set --> Connected
 ///    Connected -- load federation clients --> Running
@@ -394,7 +393,7 @@ impl Gateway {
         self.gateway_config.read().await.clone()
     }
 
-    pub async fn get_state(&self) -> GatewayState {
+    async fn get_state(&self) -> GatewayState {
         self.state.read().await.clone()
     }
 
@@ -409,8 +408,8 @@ impl Gateway {
 
     /// Main entrypoint into the gateway that starts the client registration
     /// timer, loads the federation clients from the persisted config,
-    /// begins listening for intercepted HTLCs, and starts the webserver to
-    /// service requests.
+    /// begins listening for intercepted payments, and starts the webserver
+    /// to service requests.
     pub async fn run(self, tg: TaskGroup) -> anyhow::Result<TaskShutdownToken> {
         self.register_clients_timer(&tg);
         self.load_clients().await?;
@@ -422,53 +421,53 @@ impl Gateway {
         Ok(shutdown_receiver)
     }
 
-    /// Begins the task for listening for intercepted HTLCs from the Lightning
-    /// node.
+    /// Begins the task for listening for intercepted payments from the
+    /// lightning node.
     fn start_gateway(&self, task_group: &TaskGroup) {
-        const HTLC_STREAM_RETRY_SECONDS: u64 = 5;
+        const PAYMENT_STREAM_RETRY_SECONDS: u64 = 5;
 
         let self_copy = self.clone();
         let tg = task_group.clone();
         task_group.spawn(
-            "Subscribe to intercepted HTLCs in stream",
+            "Subscribe to intercepted lightning payments in stream",
             |handle| async move {
-                // Repeatedly attempt to establish a connection to the lightning node and create an HTLC stream, re-trying if the connection is broken.
+                // Repeatedly attempt to establish a connection to the lightning node and create a payment stream, re-trying if the connection is broken.
                 loop {
                     if handle.is_shutting_down() {
-                        info!("Gateway HTLC handler loop is shutting down");
+                        info!("Gateway lightning payment stream handler loop is shutting down");
                         break;
                     }
 
-                    let htlc_task_group = tg.make_subgroup();
+                    let payment_stream_task_group = tg.make_subgroup();
                     let lnrpc_route = self_copy.lightning_builder.build().await;
 
-                    debug!("Establishing HTLC stream...");
-                    let (stream, ln_client) = match lnrpc_route.route_htlcs(&htlc_task_group).await
+                    debug!("Establishing lightning payment stream...");
+                    let (stream, ln_client) = match lnrpc_route.route_htlcs(&payment_stream_task_group).await
                     {
                         Ok((stream, ln_client)) => (stream, ln_client),
                         Err(e) => {
-                            warn!(?e, "Failed to open HTLC stream");
+                            warn!(?e, "Failed to open lightning payment stream");
                             continue
                         }
                     };
 
-                    // Successful calls to route_htlcs establish a connection
+                    // Successful calls to `route_htlcs` establish a connection
                     self_copy.set_gateway_state(GatewayState::Connected).await;
-                    info!("Established HTLC stream");
+                    info!("Established lightning payment stream");
 
-                    let route_htlcs_response =
-                        self_copy.route_htlcs(&handle, stream, ln_client).await;
+                    let route_payments_response =
+                        self_copy.route_lightning_payments(&handle, stream, ln_client).await;
 
                     self_copy.set_gateway_state(GatewayState::Disconnected).await;
-                    if let Err(e) = htlc_task_group.shutdown_join_all(None).await {
-                        error!("HTLC task group shutdown errors: {}", e);
+                    if let Err(e) = payment_stream_task_group.shutdown_join_all(None).await {
+                        error!("Lightning payment stream task group shutdown errors: {}", e);
                     }
 
-                    match route_htlcs_response {
+                    match route_payments_response {
                         ReceivePaymentStreamAction::ImmediatelyRetry => {},
                         ReceivePaymentStreamAction::RetryAfterDelay => {
-                            warn!("Disconnected from Lightning Node. Waiting {HTLC_STREAM_RETRY_SECONDS} seconds and trying again");
-                            sleep(Duration::from_secs(HTLC_STREAM_RETRY_SECONDS)).await;
+                            warn!("Disconnected from lightning node. Waiting {PAYMENT_STREAM_RETRY_SECONDS} seconds and trying again");
+                            sleep(Duration::from_secs(PAYMENT_STREAM_RETRY_SECONDS)).await;
                         }
                         ReceivePaymentStreamAction::NoRetry => break,
                     }
@@ -477,10 +476,10 @@ impl Gateway {
         );
     }
 
-    /// Handles an incoming payment stream from the lightning node after
-    /// ensuring the gateway is properly configured. Blocks until the stream
+    /// Handles a stream of incoming payments from the lightning node after
+    /// ensuring the gateway is properly configured. Awaits until the stream
     /// is closed, then returns with the appropriate action to take.
-    async fn route_htlcs<'a>(
+    async fn route_lightning_payments<'a>(
         &'a self,
         handle: &TaskHandle,
         mut stream: RouteHtlcStream<'a>,
@@ -556,7 +555,7 @@ impl Gateway {
                         }
                     };
 
-                    // Hold the Gateway state's lock so that it doesn't change before `handle_htlc`.
+                    // Hold the Gateway state's lock so that it doesn't change before `handle_lightning_payment`.
                     let state_guard = self.state.read().await;
                     let GatewayState::Running { ref lightning_context } = *state_guard else {
                         warn!(
@@ -577,13 +576,13 @@ impl Gateway {
                         }
                     };
 
-                    self.handle_htlc(payment_request, lightning_context).await;
+                    self.handle_lightning_payment(payment_request, lightning_context).await;
                 }
             })
             .await
             .is_ok()
         {
-            warn!("HTLC Stream Lightning connection broken. Gateway is disconnected");
+            warn!("Lightning payment stream connection broken. Gateway is disconnected");
             ReceivePaymentStreamAction::RetryAfterDelay
         } else {
             info!("Received shutdown signal");
@@ -603,38 +602,42 @@ impl Gateway {
         }
     }
 
-    /// Handles an intercepted HTLC. If the HTLC is part of an incoming payment
-    /// to a federation, spawns a state machine and hands off the HTLC to it.
-    /// Otherwise, forwards the HTLC to the next hop like a normal lightning
-    /// node.
-    async fn handle_htlc(
+    /// Handles an intercepted lightning payment. If the payment is part of an
+    /// incoming payment to a federation, spawns a state machine and hands the
+    /// payment off to it. Otherwise, forwards the payment to the next hop like
+    /// a normal lightning node.
+    async fn handle_lightning_payment(
         &self,
         htlc_request: InterceptHtlcRequest,
         lightning_context: &LightningContext,
     ) {
         info!(
-            "Intercepting HTLC {}",
+            "Intercepting lightning payment {}",
             PrettyInterceptHtlcRequest(&htlc_request)
         );
 
         if self
-            .try_handle_htlc_lnv2(&htlc_request, lightning_context)
+            .try_handle_lightning_payment_lnv2(&htlc_request, lightning_context)
             .await
             .is_ok()
         {
             return;
         }
 
-        if self.try_handle_htlc_ln_legacy(&htlc_request).await.is_ok() {
+        if self
+            .try_handle_lightning_payment_ln_legacy(&htlc_request)
+            .await
+            .is_ok()
+        {
             return;
         }
 
-        Self::forward_htlc(htlc_request, lightning_context).await;
+        Self::forward_lightning_payment(htlc_request, lightning_context).await;
     }
 
-    /// Tries to handle an HTLC using the LNv2 protocol.
-    /// Returns `Ok` if the HTLC was handled, `Err` otherwise.
-    async fn try_handle_htlc_lnv2(
+    /// Tries to handle a lightning payment using the LNv2 protocol.
+    /// Returns `Ok` if the payment was handled, `Err` otherwise.
+    async fn try_handle_lightning_payment_lnv2(
         &self,
         htlc_request: &InterceptHtlcRequest,
         lightning_context: &LightningContext,
@@ -645,8 +648,8 @@ impl Gateway {
         // If `payment_hash` has been registered as a LNv2 payment, we try to complete
         // the payment by getting the preimage from the federation
         // using the LNv2 protocol. If the `payment_hash` is not registered,
-        // this HTLC is either a legacy Lightning payment or the end destination is not
-        // a Fedimint.
+        // this payment is either a legacy Lightning payment or the end destination is
+        // not a Fedimint.
         let (contract, client) = self
             .get_registered_incoming_contract_and_client_v2(
                 PaymentImage::Hash(payment_hash),
@@ -665,7 +668,7 @@ impl Gateway {
             )
             .await
         {
-            error!("Error relaying incoming HTLC: {error:?}");
+            error!("Error relaying incoming lightning payment: {error:?}");
 
             let outcome = InterceptHtlcResponse {
                 action: Some(Action::Cancel(Cancel {
@@ -684,18 +687,19 @@ impl Gateway {
         Ok(())
     }
 
-    /// Tries to handle an HTLC using the legacy lightning protocol.
-    /// Returns `Ok` if the HTLC was handled, `Err` otherwise.
-    async fn try_handle_htlc_ln_legacy(&self, htlc_request: &InterceptHtlcRequest) -> Result<()> {
-        // Check if the HTLC corresponds to a federation supporting legacy Lightning.
+    /// Tries to handle a lightning payment using the legacy lightning protocol.
+    /// Returns `Ok` if the payment was handled, `Err` otherwise.
+    async fn try_handle_lightning_payment_ln_legacy(
+        &self,
+        htlc_request: &InterceptHtlcRequest,
+    ) -> Result<()> {
+        // Check if the payment corresponds to a federation supporting legacy Lightning.
         let Some(federation_index) = htlc_request.short_channel_id else {
             return Err(PublicGatewayError::LNv1(LNv1Error::IncomingPayment(
                 "Incoming payment has not last hop short channel id".to_string(),
             )));
         };
 
-        // Just forward the HTLC if we do not have a federation that
-        // corresponds to the short channel id
         let Some(client) = self
             .federation_manager
             .read()
@@ -718,7 +722,7 @@ impl Gateway {
                     {
                         Ok(_) => Ok(()),
                         Err(e) => Err(PublicGatewayError::LNv1(LNv1Error::IncomingPayment(
-                            format!("Error intercepting HTLC {e:?}"),
+                            format!("Error intercepting lightning payment {e:?}"),
                         ))),
                     }
                 } else {
@@ -730,8 +734,10 @@ impl Gateway {
             .await
     }
 
-    /// Forwards an HTLC to the next hop like a normal lightning node.
-    async fn forward_htlc(
+    /// Forwards a lightning payment to the next hop like a normal lightning
+    /// node. Only necessary for LNv1, since LNv2 uses hold invoices instead
+    /// of HTLC interception for routing incoming payments.
+    async fn forward_lightning_payment(
         htlc_request: InterceptHtlcRequest,
         lightning_context: &LightningContext,
     ) {
@@ -743,7 +749,7 @@ impl Gateway {
         };
 
         if let Err(error) = lightning_context.lnrpc.complete_htlc(outcome).await {
-            error!("Error sending HTLC response to lightning node: {error:?}");
+            error!("Error sending lightning payment response to lightning node: {error:?}");
         }
     }
 
@@ -1993,8 +1999,8 @@ impl Gateway {
 
     /// For the LNv2 protocol, this will create an invoice by fetching it from
     /// the connected Lightning node, then save the payment hash so that
-    /// incoming HTLCs can be matched as a receive attempt to a specific
-    /// federation.
+    /// incoming lightning payments can be matched as a receive attempt to a
+    /// specific federation.
     async fn create_bolt11_invoice_v2(
         &self,
         payload: CreateBolt11InvoicePayload,
