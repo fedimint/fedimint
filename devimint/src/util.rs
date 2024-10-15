@@ -626,7 +626,7 @@ const ESPLORA_FALLBACK: &str = "esplora";
 
 const RECOVERYTOOL_FALLBACK: &str = "fedimint-recoverytool";
 
-const FAUCET_FALLBACK: &str = "faucet";
+const FAUCET_FALLBACK: &str = "devimint-faucet";
 
 const FEDIMINT_DBTOOL_FALLBACK: &str = "fedimint-dbtool";
 

@@ -491,6 +491,9 @@ jobs:
           - flake-output: gateway-pkgs
             bins: gateway-cli,gatewayd,gateway-cln-extension
             deb: fedimint-gateway
+          - flake-output: devimint
+            bins: devimint,devimint-faucet
+            deb: devimint
 
     runs-on: [self-hosted, linux]
     timeout-minutes: 60
