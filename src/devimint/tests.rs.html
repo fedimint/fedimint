@@ -2559,64 +2559,7 @@
 <a href="#2558" id="2558">2558</a>
 <a href="#2559" id="2559">2559</a>
 <a href="#2560" id="2560">2560</a>
-<a href="#2561" id="2561">2561</a>
-<a href="#2562" id="2562">2562</a>
-<a href="#2563" id="2563">2563</a>
-<a href="#2564" id="2564">2564</a>
-<a href="#2565" id="2565">2565</a>
-<a href="#2566" id="2566">2566</a>
-<a href="#2567" id="2567">2567</a>
-<a href="#2568" id="2568">2568</a>
-<a href="#2569" id="2569">2569</a>
-<a href="#2570" id="2570">2570</a>
-<a href="#2571" id="2571">2571</a>
-<a href="#2572" id="2572">2572</a>
-<a href="#2573" id="2573">2573</a>
-<a href="#2574" id="2574">2574</a>
-<a href="#2575" id="2575">2575</a>
-<a href="#2576" id="2576">2576</a>
-<a href="#2577" id="2577">2577</a>
-<a href="#2578" id="2578">2578</a>
-<a href="#2579" id="2579">2579</a>
-<a href="#2580" id="2580">2580</a>
-<a href="#2581" id="2581">2581</a>
-<a href="#2582" id="2582">2582</a>
-<a href="#2583" id="2583">2583</a>
-<a href="#2584" id="2584">2584</a>
-<a href="#2585" id="2585">2585</a>
-<a href="#2586" id="2586">2586</a>
-<a href="#2587" id="2587">2587</a>
-<a href="#2588" id="2588">2588</a>
-<a href="#2589" id="2589">2589</a>
-<a href="#2590" id="2590">2590</a>
-<a href="#2591" id="2591">2591</a>
-<a href="#2592" id="2592">2592</a>
-<a href="#2593" id="2593">2593</a>
-<a href="#2594" id="2594">2594</a>
-<a href="#2595" id="2595">2595</a>
-<a href="#2596" id="2596">2596</a>
-<a href="#2597" id="2597">2597</a>
-<a href="#2598" id="2598">2598</a>
-<a href="#2599" id="2599">2599</a>
-<a href="#2600" id="2600">2600</a>
-<a href="#2601" id="2601">2601</a>
-<a href="#2602" id="2602">2602</a>
-<a href="#2603" id="2603">2603</a>
-<a href="#2604" id="2604">2604</a>
-<a href="#2605" id="2605">2605</a>
-<a href="#2606" id="2606">2606</a>
-<a href="#2607" id="2607">2607</a>
-<a href="#2608" id="2608">2608</a>
-<a href="#2609" id="2609">2609</a>
-<a href="#2610" id="2610">2610</a>
-<a href="#2611" id="2611">2611</a>
-<a href="#2612" id="2612">2612</a>
-<a href="#2613" id="2613">2613</a>
-<a href="#2614" id="2614">2614</a>
-<a href="#2615" id="2615">2615</a>
-<a href="#2616" id="2616">2616</a>
-<a href="#2617" id="2617">2617</a>
-<a href="#2618" id="2618">2618</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
+<a href="#2561" id="2561">2561</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -2738,17 +2681,8 @@
         <span class="kw">return </span><span class="prelude-val">Ok</span>(());
     }
 
-    <span class="attr">#[allow(unused_variables)]
-    </span><span class="kw">let </span>DevFed {
-        bitcoind,
-        cln,
-        lnd,
-        fed,
-        gw_cln,
-        gw_lnd,
-        electrs,
-        esplora,
-        ..
+    <span class="kw">let </span>DevFed {
+        lnd, fed, gw_cln, ..
     } = dev_fed;
 
     <span class="kw">let </span>max_p90_factor = <span class="number">5.0</span>;
@@ -3244,16 +3178,13 @@
     log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>data_dir = env::var(FM_DATA_DIR_ENV)<span class="question-mark">?</span>;
 
-    <span class="attr">#[allow(unused_variables)]
-    </span><span class="kw">let </span>DevFed {
+    <span class="kw">let </span>DevFed {
         bitcoind,
         cln,
         lnd,
         fed,
         gw_cln,
         gw_lnd,
-        electrs,
-        esplora,
         ..
     } = dev_fed;
 
@@ -4202,16 +4133,13 @@
         <span class="kw">return </span><span class="prelude-val">Ok</span>(());
     }
 
-    <span class="attr">#[allow(unused_variables)]
-    </span><span class="kw">let </span>DevFed {
+    <span class="kw">let </span>DevFed {
         bitcoind,
         cln,
         lnd,
         fed,
         gw_cln,
         gw_lnd,
-        electrs,
-        esplora,
         ..
     } = dev_fed;
 
@@ -4573,17 +4501,8 @@
         <span class="kw">return </span><span class="prelude-val">Ok</span>(());
     }
 
-    <span class="attr">#[allow(unused_variables)]
-    </span><span class="kw">let </span>DevFed {
-        bitcoind,
-        cln,
-        lnd,
-        <span class="kw-2">mut </span>fed,
-        gw_cln,
-        gw_lnd,
-        electrs,
-        esplora,
-        ..
+    <span class="kw">let </span>DevFed {
+        bitcoind, <span class="kw-2">mut </span>fed, ..
     } = dev_fed;
 
     bitcoind.mine_blocks(<span class="number">110</span>).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -4637,18 +4556,7 @@
         <span class="kw">return </span><span class="prelude-val">Ok</span>(());
     }
 
-    <span class="attr">#[allow(unused_variables)]
-    </span><span class="kw">let </span>DevFed {
-        bitcoind,
-        cln,
-        lnd,
-        fed,
-        gw_cln,
-        gw_lnd,
-        electrs,
-        esplora,
-        ..
-    } = dev_fed;
+    <span class="kw">let </span>DevFed { bitcoind, fed, .. } = dev_fed;
 
     <span class="kw">let </span>data_dir = env::var(FM_DATA_DIR_ENV)<span class="question-mark">?</span>;
     <span class="kw">let </span>client = fed.new_joined_client(<span class="string">"recoverytool-test-client"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -4839,18 +4747,7 @@
         <span class="kw">return </span><span class="prelude-val">Ok</span>(());
     }
 
-    <span class="attr">#[allow(unused_variables)]
-    </span><span class="kw">let </span>DevFed {
-        bitcoind,
-        cln,
-        lnd,
-        <span class="kw-2">mut </span>fed,
-        gw_cln,
-        gw_lnd,
-        electrs,
-        esplora,
-        ..
-    } = dev_fed;
+    <span class="kw">let </span>DevFed { <span class="kw-2">mut </span>fed, .. } = dev_fed;
 
     fed.await_all_peers()
         .<span class="kw">await
@@ -4985,18 +4882,7 @@
     log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
 
-    <span class="attr">#[allow(unused_variables)]
-    </span><span class="kw">let </span>DevFed {
-        bitcoind,
-        cln,
-        lnd,
-        fed,
-        gw_cln,
-        gw_lnd,
-        electrs,
-        esplora,
-        ..
-    } = dev_fed;
+    <span class="kw">let </span>DevFed { fed, .. } = dev_fed;
 
     <span class="kw">let </span>client = fed.new_joined_client(<span class="string">"cannot-replay-client"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
