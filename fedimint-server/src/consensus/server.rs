@@ -464,6 +464,8 @@ impl ConsensusServer {
         signature_sender: watch::Sender<Option<SchnorrSignature>>,
     ) -> anyhow::Result<SignedSessionOutcome> {
         let mut num_batches = 0;
+        // It is guaranteed that aleph bft will always replay all previously processed
+        // items from the current session from index zero
         let mut item_index = 0;
 
         // We build a session outcome out of the ordered batches until either we have
@@ -500,17 +502,16 @@ impl ConsensusServer {
 
                     assert!(processed.iter().eq(pending_accepted_items.iter()));
 
-                    for accepted_item in unprocessed {
+                    for (accepted_item, item_index)in unprocessed.iter().zip(processed.len()..) {
                         let result = self.process_consensus_item(
                             session_index,
-                            item_index,
+                            item_index as u64,
                             accepted_item.item.clone(),
                             accepted_item.peer
                         ).await;
 
                         assert!(result.is_ok());
 
-                        item_index += 1;
                     }
 
                     return Ok(signed_session_outcome);
