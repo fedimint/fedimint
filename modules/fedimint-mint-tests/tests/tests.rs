@@ -1,5 +1,4 @@
 use std::io::Cursor;
-use std::sync::Arc;
 use std::time::Duration;
 
 use bls12_381::G1Affine;
@@ -16,8 +15,7 @@ use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_logging::LOG_TEST;
 use fedimint_mint_client::{
-    MintClientInit, MintClientModule, MintClientStateMachines, Note, OOBNotes,
-    ReissueExternalNotesState, SpendOOBState,
+    MintClientInit, MintClientModule, Note, OOBNotes, ReissueExternalNotesState, SpendOOBState,
 };
 use fedimint_mint_common::config::{FeeConsensus, MintGenParams, MintGenParamsConsensus};
 use fedimint_mint_common::{MintInput, MintInputV0, Nonce};
@@ -61,7 +59,7 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
 
     let keypair = KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
 
-    let client_input = ClientInput::<MintInput, MintClientStateMachines> {
+    let client_input = ClientInput::<MintInput> {
         input: MintInput::V0(MintInputV0 {
             amount: Amount::from_msats(1024),
             note: Note {
@@ -71,7 +69,6 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
         }),
         amount: Amount::from_msats(1024),
         keys: vec![keypair],
-        state_machines: Arc::new(|_, _| vec![]),
     };
 
     let operation_id = OperationId::new_random();

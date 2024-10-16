@@ -1458,11 +1458,10 @@ impl LightningClientModule {
             .with_context(|| format!("No contract found for {contract_id:?}"))?;
 
         let input = incoming_contract_account.claim();
-        let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
+        let client_input = ClientInput::<LightningInput> {
             input,
             amount: incoming_contract_account.amount,
             keys: vec![key_pair],
-            state_machines: Arc::new(|_, _| vec![]),
         };
 
         let tx =

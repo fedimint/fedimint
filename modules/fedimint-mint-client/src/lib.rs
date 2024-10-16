@@ -45,7 +45,9 @@ use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
-use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
+use fedimint_client::transaction::{
+    ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, TransactionBuilder,
+};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -742,18 +744,22 @@ impl ClientModule for MintClientModule {
         mut input_amount: Amount,
         mut output_amount: Amount,
     ) -> anyhow::Result<(
-        Vec<ClientInput<MintInput, MintClientStateMachines>>,
+        ClientInputBundle<MintInput, MintClientStateMachines>,
         Vec<ClientOutput<MintOutput, MintClientStateMachines>>,
     )> {
         let consolidation_inputs = self.consolidate_notes(dbtx, operation_id).await?;
 
-        input_amount += consolidation_inputs.iter().map(|input| input.amount).sum();
+        input_amount += consolidation_inputs
+            .inputs()
+            .iter()
+            .map(|input| input.amount)
+            .sum();
 
         output_amount += self
             .cfg
             .fee_consensus
             .note_spend_abs
-            .mul_u64(consolidation_inputs.len() as u64);
+            .mul_u64(consolidation_inputs.inputs().len() as u64);
 
         let additional_inputs = self
             .create_sufficient_input(
@@ -763,19 +769,23 @@ impl ClientModule for MintClientModule {
             )
             .await?;
 
-        input_amount += additional_inputs.iter().map(|input| input.amount).sum();
+        input_amount += additional_inputs
+            .inputs()
+            .iter()
+            .map(|input| input.amount)
+            .sum();
 
         output_amount += self
             .cfg
             .fee_consensus
             .note_spend_abs
-            .mul_u64(additional_inputs.len() as u64);
+            .mul_u64(additional_inputs.inputs().len() as u64);
 
         let outputs = self
             .create_exact_output(dbtx, operation_id, 2, input_amount - output_amount)
             .await;
 
-        Ok(([consolidation_inputs, additional_inputs].concat(), outputs))
+        Ok((consolidation_inputs.with(additional_inputs), outputs))
     }
 
     async fn await_primary_module_output(
@@ -935,9 +945,9 @@ impl MintClientModule {
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         min_amount: Amount,
-    ) -> anyhow::Result<Vec<ClientInput<MintInput, MintClientStateMachines>>> {
+    ) -> anyhow::Result<ClientInputBundle<MintInput, MintClientStateMachines>> {
         if min_amount == Amount::ZERO {
-            return Ok(Vec::new());
+            return Ok(ClientInputBundle::new(vec![], vec![]));
         }
 
         let selected_notes = Self::select_notes(
@@ -955,7 +965,8 @@ impl MintClientModule {
 
         let inputs = self.create_input_from_notes(operation_id, selected_notes)?;
 
-        assert!(!inputs.is_empty());
+        assert!(!inputs.inputs().is_empty());
+        assert!(!inputs.sms().is_empty());
 
         Ok(inputs)
     }
@@ -1118,7 +1129,7 @@ impl MintClientModule {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
-    ) -> anyhow::Result<Vec<ClientInput<MintInput, MintClientStateMachines>>> {
+    ) -> anyhow::Result<ClientInputBundle<MintInput, MintClientStateMachines>> {
         /// At how many notes of the same denomination should we try to
         /// consolidate
         const MAX_NOTES_PER_TIER_TRIGGER: usize = 8;
@@ -1140,7 +1151,7 @@ impl MintClientModule {
             .any(|(_, count)| MAX_NOTES_PER_TIER_TRIGGER < count);
 
         if !should_consolidate {
-            return Ok(vec![]);
+            return Ok(ClientInputBundle::new(vec![], vec![]));
         }
 
         let mut max_count = MAX_NOTES_TO_CONSOLIDATE_IN_TX;
@@ -1181,12 +1192,14 @@ impl MintClientModule {
     }
 
     /// Create a mint input from external, potentially untrusted notes
+    #[allow(clippy::type_complexity)]
     pub fn create_input_from_notes(
         &self,
         operation_id: OperationId,
         notes: TieredMulti<SpendableNote>,
-    ) -> anyhow::Result<Vec<ClientInput<MintInput, MintClientStateMachines>>> {
+    ) -> anyhow::Result<ClientInputBundle<MintInput, MintClientStateMachines>> {
         let mut inputs = Vec::new();
+        let mut input_sms = Vec::new();
 
         for (amount, spendable_note) in notes.into_iter_items() {
             let key = self
@@ -1219,11 +1232,14 @@ impl MintClientModule {
                 input: MintInput::new_v0(amount, note),
                 keys: vec![spendable_note.spend_key],
                 amount,
+            });
+
+            input_sms.push(ClientInputSM {
                 state_machines: sm_gen,
             });
         }
 
-        Ok(inputs)
+        Ok(ClientInputBundle::new(inputs, input_sms))
     }
 
     async fn spend_notes_oob(
@@ -1418,10 +1434,9 @@ impl MintClientModule {
         );
 
         let amount = notes.total_amount();
-        let mint_input = self.create_input_from_notes(operation_id, notes)?;
+        let mint_inputs = self.create_input_from_notes(operation_id, notes)?;
 
-        let tx =
-            TransactionBuilder::new().with_inputs(self.client_ctx.map_dyn(mint_input).collect());
+        let tx = TransactionBuilder::new().with_inputs(self.client_ctx.make_dyn(mint_inputs));
 
         let extra_meta = serde_json::to_value(extra_meta)
             .expect("MintClientModule::reissue_external_notes extra_meta is serializable");

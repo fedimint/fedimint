@@ -1,9 +1,8 @@
 use std::cmp;
-use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -277,15 +276,17 @@ pub(crate) async fn transition_btc_tx_confirmed(
 
     let wallet_input = WalletInput::new_v0(pegin_proof);
 
-    let client_input = ClientInput::<WalletInput, WalletClientStates> {
+    let client_input = ClientInput::<WalletInput> {
         input: wallet_input,
         keys: vec![awaiting_confirmation_state.tweak_key],
         amount,
-        state_machines: Arc::new(|_, _| vec![]),
     };
 
     let (fm_txid, change) = global_context
-        .claim_input(dbtx, client_input)
+        .claim_inputs(
+            dbtx,
+            ClientInputBundle::<_, WalletClientStates>::new(vec![client_input], vec![]),
+        )
         .await
         .expect("Cannot claim input, additional funding needed");
 

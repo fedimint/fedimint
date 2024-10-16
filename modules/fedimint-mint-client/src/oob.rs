@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ClientInput, ClientInputBundle, ClientInputSM};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -173,27 +173,36 @@ async fn try_cancel_oob_spend(
     spendable_note: SpendableNote,
     global_context: DynGlobalClientContext,
 ) -> TransactionId {
-    let input = ClientInput {
-        input: MintInput::new_v0(amount, spendable_note.note()),
-        keys: vec![spendable_note.spend_key],
-        amount,
-        state_machines: Arc::new(move |txid, input_idx| {
-            vec![MintClientStateMachines::Input(MintInputStateMachine {
-                common: MintInputCommon {
-                    operation_id,
-                    txid,
-                    input_idx,
-                },
-                state: MintInputStates::Created(MintInputStateCreated {
+    let (inputs, input_sms) = vec![spendable_note]
+        .into_iter()
+        .map(|spendable_note| {
+            (
+                ClientInput {
+                    input: MintInput::new_v0(amount, spendable_note.note()),
+                    keys: vec![spendable_note.spend_key],
                     amount,
-                    spendable_note,
-                }),
-            })]
-        }),
-    };
+                },
+                ClientInputSM {
+                    state_machines: Arc::new(move |txid, input_idx| {
+                        vec![MintClientStateMachines::Input(MintInputStateMachine {
+                            common: MintInputCommon {
+                                operation_id,
+                                txid,
+                                input_idx,
+                            },
+                            state: MintInputStates::Created(MintInputStateCreated {
+                                amount,
+                                spendable_note,
+                            }),
+                        })]
+                    }),
+                },
+            )
+        })
+        .unzip();
 
     global_context
-        .claim_input(dbtx, input)
+        .claim_inputs(dbtx, ClientInputBundle::new(inputs, input_sms))
         .await
         .expect("Cannot claim input, additional funding needed")
         .0

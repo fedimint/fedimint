@@ -31,10 +31,12 @@ use crate::db::event_log::Event;
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
 use crate::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use crate::sm::{self, ActiveStateMeta, Context, DynContext, DynState, State};
-use crate::transaction::{ClientInput, ClientOutput, TransactionBuilder};
+use crate::transaction::{
+    ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, TransactionBuilder,
+};
 use crate::{
-    oplog, states_add_instance, states_to_instanceless_dyn, AddStateMachinesResult, Client,
-    ClientStrong, ClientWeak, InstancelessDynClientInput, TransactionUpdates,
+    oplog, states_add_instance, AddStateMachinesResult, Client, ClientStrong, ClientWeak,
+    InstancelessDynClientInputBundle, TransactionUpdates,
 };
 
 pub mod init;
@@ -219,9 +221,16 @@ where
     }
 
     /// Turn a typed [`ClientInput`] into a dyn version
-    pub fn make_client_input<O, S>(&self, input: ClientInput<O, S>) -> ClientInput
+    pub fn make_client_input<I>(&self, input: ClientInput<I>) -> ClientInput
     where
-        O: IntoDynInstance<DynType = DynInput> + 'static,
+        I: IntoDynInstance<DynType = DynInput> + 'static,
+    {
+        self.make_dyn(input)
+    }
+
+    /// Turn a typed [`ClientInputSM`] into a dyn version
+    pub fn make_client_input_sm<S>(&self, input: ClientInputSM<S>) -> ClientInputSM
+    where
         S: IntoDynInstance<DynType = DynState> + 'static,
     {
         self.make_dyn(input)
@@ -466,48 +475,52 @@ where
         operation.outcome_or_updates(&self.global_db(), operation_id, stream_gen)
     }
 
-    pub async fn claim_input<I, S>(
+    pub async fn claim_inputs<I, S>(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        input: ClientInput<I, S>,
+        inputs: ClientInputBundle<I, S>,
         operation_id: OperationId,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
     where
         I: IInput + MaybeSend + MaybeSync + 'static,
         S: sm::IState + MaybeSend + MaybeSync + 'static,
     {
-        self.claim_input_dyn(
-            dbtx,
-            InstancelessDynClientInput {
-                input: Box::new(input.input),
-                keys: input.keys,
-                amount: input.amount,
-                state_machines: states_to_instanceless_dyn(input.state_machines),
-            },
-            operation_id,
-        )
-        .await
+        self.claim_inputs_dyn(dbtx, inputs.into_instanceless(), operation_id)
+            .await
     }
 
-    async fn claim_input_dyn(
+    async fn claim_inputs_dyn(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        input: InstancelessDynClientInput,
+        ClientInputBundle { inputs, sms }: InstancelessDynClientInputBundle,
         operation_id: OperationId,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
-        let instance_input = ClientInput {
-            input: DynInput::from_parts(self.module_instance_id, input.input),
-            keys: input.keys,
-            amount: input.amount,
-            state_machines: states_add_instance(self.module_instance_id, input.state_machines),
-        };
+        let mut tx_builder = TransactionBuilder::new();
+
+        for input in inputs {
+            let instance_input = ClientInput {
+                input: DynInput::from_parts(self.module_instance_id, input.input),
+                keys: input.keys,
+                amount: input.amount,
+            };
+            tx_builder = tx_builder.with_input(instance_input);
+        }
+        for input_sm in sms {
+            let instance_input_sm = ClientInputSM {
+                state_machines: states_add_instance(
+                    self.module_instance_id,
+                    input_sm.state_machines,
+                ),
+            };
+            tx_builder = tx_builder.with_input_sm(instance_input_sm);
+        }
 
         self.client
             .get()
             .finalize_and_submit_transaction_inner(
                 &mut dbtx.global_dbtx(self.global_dbtx_access_token),
                 operation_id,
-                TransactionBuilder::new().with_input(instance_input),
+                tx_builder,
             )
             .await
     }
@@ -687,7 +700,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         _input_amount: Amount,
         _output_amount: Amount,
     ) -> anyhow::Result<(
-        Vec<ClientInput<<Self::Common as ModuleCommon>::Input, Self::States>>,
+        ClientInputBundle<<Self::Common as ModuleCommon>::Input, Self::States>,
         Vec<ClientOutput<<Self::Common as ModuleCommon>::Output, Self::States>>,
     )> {
         unimplemented!()
@@ -815,7 +828,7 @@ pub trait IClientModule: Debug {
         operation_id: OperationId,
         input_amount: Amount,
         output_amount: Amount,
-    ) -> anyhow::Result<(Vec<ClientInput>, Vec<ClientOutput>)>;
+    ) -> anyhow::Result<(ClientInputBundle, Vec<ClientOutput>)>;
 
     async fn await_primary_module_output(
         &self,
@@ -914,7 +927,7 @@ where
         operation_id: OperationId,
         input_amount: Amount,
         output_amount: Amount,
-    ) -> anyhow::Result<(Vec<ClientInput>, Vec<ClientOutput>)> {
+    ) -> anyhow::Result<(ClientInputBundle, Vec<ClientOutput>)> {
         let (inputs, outputs) = <T as ClientModule>::create_final_inputs_and_outputs(
             self,
             &mut dbtx.to_ref_with_prefix_module_id(module_instance).0,
@@ -924,10 +937,7 @@ where
         )
         .await?;
 
-        let inputs = inputs
-            .into_iter()
-            .map(|input| input.into_dyn(module_instance))
-            .collect::<Vec<ClientInput>>();
+        let inputs = inputs.into_dyn(module_instance);
 
         let outputs = outputs
             .into_iter()

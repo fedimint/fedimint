@@ -1,7 +1,5 @@
-use std::sync::Arc;
-
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -140,17 +138,22 @@ impl MintInputStateCreated {
             _ => panic!("Invalid state transition"),
         };
 
-        let refund_input = ClientInput::<MintInput, MintClientStateMachines> {
+        let refund_input = ClientInput::<MintInput> {
             input: MintInput::new_v0(amount, spendable_note.note()),
             keys: vec![spendable_note.spend_key],
             amount,
-            // The input of the refund tx is managed by this state machine, so no new state machines
-            // need to be created
-            state_machines: Arc::new(|_, _| vec![]),
         };
 
         let (refund_txid, _) = global_context
-            .claim_input(dbtx, refund_input)
+            .claim_inputs(
+                dbtx,
+                ClientInputBundle::<_, MintClientStateMachines>::new(
+                    vec![refund_input],
+                    // The input of the refund tx is managed by this state machine, so no new state
+                    // machines need to be created
+                    vec![],
+                ),
+            )
             .await
             .expect("Cannot claim input, additional funding needed");
 

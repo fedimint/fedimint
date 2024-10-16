@@ -1,9 +1,8 @@
-use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use bitcoin30::hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, OperationId};
@@ -544,17 +543,22 @@ async fn try_refund_outgoing_contract(
         contract_data.contract_account.refund(),
     );
 
-    let refund_client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
+    let refund_client_input = ClientInput::<LightningInput> {
         input: refund_input,
         amount: contract_data.contract_account.amount,
         keys: vec![refund_key],
-        // The input of the refund tx is managed by this state machine, so no new state machines
-        // need to be created
-        state_machines: Arc::new(|_, _| vec![]),
     };
 
     let (txid, out_points) = global_context
-        .claim_input(dbtx, refund_client_input)
+        .claim_inputs(
+            dbtx,
+            ClientInputBundle::<_, LightningClientStateMachines>::new(
+                vec![refund_client_input],
+                // The input of the refund tx is managed by this state machine, so no new state
+                // machines need to be created
+                vec![],
+            ),
+        )
         .await
         .expect("Cannot claim input, additional funding needed");
 

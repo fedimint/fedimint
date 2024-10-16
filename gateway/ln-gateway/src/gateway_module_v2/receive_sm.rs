@@ -1,14 +1,13 @@
 use core::fmt;
 use std::collections::BTreeMap;
 use std::future::pending;
-use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail};
 use fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -257,19 +256,24 @@ impl ReceiveStateMachine {
             return old_state.update(ReceiveSMState::Success(preimage));
         }
 
-        let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
+        let client_input = ClientInput::<LightningInput> {
             input: LightningInput::V0(LightningInputV0::Incoming(
                 old_state.common.contract.contract_id(),
                 agg_decryption_key,
             )),
             amount: old_state.common.contract.commitment.amount,
             keys: vec![old_state.common.refund_keypair],
-            // The input of the refund tx is managed by this state machine
-            state_machines: Arc::new(|_, _| vec![]),
         };
 
         let outpoints = global_context
-            .claim_input(dbtx, client_input)
+            .claim_inputs(
+                dbtx,
+                ClientInputBundle::<_, LightningClientStateMachines>::new(
+                    vec![client_input],
+                    // The input of the refund tx is managed by this state machine
+                    vec![],
+                ),
+            )
             .await
             .expect("Cannot claim input, additional funding needed")
             .1;

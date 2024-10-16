@@ -1,10 +1,9 @@
-use std::sync::Arc;
 use std::time::Duration;
 
 use bitcoin30::hashes::sha256;
 use bitcoin30::secp256k1;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ClientInput, ClientInputBundle, ClientInputSM};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
@@ -213,19 +212,24 @@ impl SendStateMachine {
         match gateway_response {
             Ok(preimage) => old_state.update(SendSMState::Success(preimage)),
             Err(signature) => {
-                let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
+                let client_input = ClientInput::<LightningInput> {
                     input: LightningInput::V0(LightningInputV0::Outgoing(
                         old_state.common.contract.contract_id(),
                         OutgoingWitness::Cancel(signature),
                     )),
                     amount: old_state.common.contract.amount,
                     keys: vec![old_state.common.refund_keypair],
-                    // The input of the refund tx is managed by this state machine
-                    state_machines: Arc::new(|_, _| vec![]),
                 };
 
                 let outpoints = global_context
-                    .claim_input(dbtx, client_input)
+                    .claim_inputs(
+                        dbtx,
+                        ClientInputBundle::new(
+                            vec![client_input],
+                            // The input of the refund tx is managed by this state machine
+                            Vec::<ClientInputSM<LightningClientStateMachines>>::new(),
+                        ),
+                    )
                     .await
                     .expect("Cannot claim input, additional funding needed")
                     .1;
@@ -270,19 +274,23 @@ impl SendStateMachine {
             return old_state.update(SendSMState::Success(preimage));
         }
 
-        let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
+        let client_input = ClientInput::<LightningInput> {
             input: LightningInput::V0(LightningInputV0::Outgoing(
                 old_state.common.contract.contract_id(),
                 OutgoingWitness::Refund,
             )),
             amount: old_state.common.contract.amount,
             keys: vec![old_state.common.refund_keypair],
-            // The input of the refund tx is managed by this state machine
-            state_machines: Arc::new(|_, _| vec![]),
         };
 
         let outpoints = global_context
-            .claim_input(dbtx, client_input)
+            .claim_inputs(
+                dbtx,
+                ClientInputBundle::<_, LightningClientStateMachines>::new(
+                    vec![client_input],
+                    vec![],
+                ),
+            )
             .await
             .expect("Cannot claim input, additional funding needed")
             .1;

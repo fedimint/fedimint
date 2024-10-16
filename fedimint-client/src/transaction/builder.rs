@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use bitcoin30::key::KeyPair;
 use bitcoin30::secp256k1;
-use fedimint_core::core::{DynInput, DynOutput, IntoDynInstance, ModuleInstanceId};
+use fedimint_core::core::{DynInput, DynOutput, IInput, IntoDynInstance, ModuleInstanceId};
+use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{Transaction, TransactionSignature};
 use fedimint_core::Amount;
 use itertools::multiunzip;
@@ -10,20 +11,80 @@ use rand::{CryptoRng, Rng, RngCore};
 use secp256k1::Secp256k1;
 
 use crate::module::StateGenerator;
-use crate::sm::DynState;
+use crate::sm::{self, DynState};
+use crate::{
+    states_to_instanceless_dyn, InstancelessDynClientInput, InstancelessDynClientInputBundle,
+    InstancelessDynClientInputSM,
+};
 
 #[derive(Clone)]
-pub struct ClientInput<I = DynInput, S = DynState> {
+pub struct ClientInput<I = DynInput> {
     pub input: I,
     pub keys: Vec<KeyPair>,
     pub amount: Amount,
+}
+
+#[derive(Clone)]
+pub struct ClientInputSM<S = DynState> {
     pub state_machines: StateGenerator<S>,
 }
 
-impl<I, S> IntoDynInstance for ClientInput<I, S>
+/// A group of inputs and state machines responsible for driving their state
+///
+/// These must be kept together as a whole when including in a transaction.
+#[derive(Clone)]
+pub struct ClientInputBundle<I = DynInput, S = DynState> {
+    pub(crate) inputs: Vec<ClientInput<I>>,
+    pub(crate) sms: Vec<ClientInputSM<S>>,
+}
+
+impl<I, S> ClientInputBundle<I, S>
+where
+    I: IInput + MaybeSend + MaybeSync + 'static,
+    S: sm::IState + MaybeSend + MaybeSync + 'static,
+{
+    pub fn new(inputs: Vec<ClientInput<I>>, sms: Vec<ClientInputSM<S>>) -> Self {
+        Self { inputs, sms }
+    }
+
+    pub fn inputs(&self) -> &[ClientInput<I>] {
+        &self.inputs
+    }
+
+    pub fn sms(&self) -> &[ClientInputSM<S>] {
+        &self.sms
+    }
+
+    pub fn with(mut self, other: Self) -> Self {
+        self.inputs.extend(other.inputs);
+        self.sms.extend(other.sms);
+        self
+    }
+
+    pub fn into_instanceless(self) -> InstancelessDynClientInputBundle {
+        InstancelessDynClientInputBundle {
+            inputs: self
+                .inputs
+                .into_iter()
+                .map(|input| InstancelessDynClientInput {
+                    input: Box::new(input.input),
+                    keys: input.keys,
+                    amount: input.amount,
+                })
+                .collect(),
+            sms: self
+                .sms
+                .into_iter()
+                .map(|input_sm| InstancelessDynClientInputSM {
+                    state_machines: states_to_instanceless_dyn(input_sm.state_machines),
+                })
+                .collect(),
+        }
+    }
+}
+impl<I> IntoDynInstance for ClientInput<I>
 where
     I: IntoDynInstance<DynType = DynInput> + 'static,
-    S: IntoDynInstance<DynType = DynState> + 'static,
 {
     type DynType = ClientInput;
 
@@ -32,7 +93,43 @@ where
             input: self.input.into_dyn(module_instance_id),
             keys: self.keys,
             amount: self.amount,
+        }
+    }
+}
+
+impl<S> IntoDynInstance for ClientInputSM<S>
+where
+    S: IntoDynInstance<DynType = DynState> + 'static,
+{
+    type DynType = ClientInputSM;
+
+    fn into_dyn(self, module_instance_id: ModuleInstanceId) -> ClientInputSM {
+        ClientInputSM {
             state_machines: state_gen_to_dyn(self.state_machines, module_instance_id),
+        }
+    }
+}
+
+impl<I, S> IntoDynInstance for ClientInputBundle<I, S>
+where
+    I: IntoDynInstance<DynType = DynInput> + 'static,
+    S: IntoDynInstance<DynType = DynState> + 'static,
+{
+    type DynType = ClientInputBundle;
+
+    fn into_dyn(self, module_instance_id: ModuleInstanceId) -> ClientInputBundle {
+        ClientInputBundle {
+            inputs: self
+                .inputs
+                .into_iter()
+                .map(|input| input.into_dyn(module_instance_id))
+                .collect::<Vec<ClientInput>>(),
+
+            sms: self
+                .sms
+                .into_iter()
+                .map(|input_sm| input_sm.into_dyn(module_instance_id))
+                .collect::<Vec<ClientInputSM>>(),
         }
     }
 }
@@ -62,8 +159,9 @@ where
 
 #[derive(Default, Clone)]
 pub struct TransactionBuilder {
-    pub(crate) inputs: Vec<ClientInput>,
-    pub(crate) outputs: Vec<ClientOutput>,
+    inputs: Vec<ClientInput>,
+    input_sms: Vec<ClientInputSM>,
+    outputs: Vec<ClientOutput>,
 }
 
 impl TransactionBuilder {
@@ -71,8 +169,27 @@ impl TransactionBuilder {
         Self::default()
     }
 
+    pub fn inputs(&self) -> &[ClientInput] {
+        &self.inputs
+    }
+
+    pub fn outputs(&self) -> &[ClientOutput] {
+        &self.outputs
+    }
+
     pub fn with_input(mut self, input: ClientInput) -> Self {
         self.inputs.push(input);
+        self
+    }
+
+    pub fn with_input_sm(mut self, input: ClientInputSM) -> Self {
+        self.input_sms.push(input);
+        self
+    }
+
+    pub fn with_inputs(mut self, inputs: ClientInputBundle) -> Self {
+        self.inputs.extend(inputs.inputs);
+        self.input_sms.extend(inputs.sms);
         self
     }
 
@@ -81,9 +198,9 @@ impl TransactionBuilder {
         self
     }
 
-    pub fn with_inputs(mut self, inputs: Vec<ClientInput>) -> Self {
-        for input in inputs {
-            self.inputs.push(input);
+    pub fn with_input_sms(mut self, input_sms: Vec<ClientInputSM>) -> Self {
+        for input_sm in input_sms {
+            self.input_sms.push(input_sm);
         }
 
         self
@@ -105,11 +222,17 @@ impl TransactionBuilder {
     where
         C: secp256k1::Signing + secp256k1::Verification,
     {
-        let (inputs, input_keys, input_states): (Vec<_>, Vec<_>, Vec<_>) = multiunzip(
+        let (inputs, input_keys): (Vec<_>, Vec<_>) = multiunzip(
             self.inputs
                 .into_iter()
-                .map(|input| (input.input, input.keys, input.state_machines)),
+                .map(|input| (input.input, input.keys)),
         );
+        let input_sms: Vec<_> = self
+            .input_sms
+            .into_iter()
+            .map(|input_sm| (input_sm.state_machines))
+            .collect();
+
         let (outputs, output_states): (Vec<_>, Vec<_>) = self
             .outputs
             .into_iter()
@@ -134,7 +257,7 @@ impl TransactionBuilder {
             signatures: TransactionSignature::NaiveMultisig(signatures),
         };
 
-        let states = input_states
+        let states = input_sms
             .into_iter()
             .enumerate()
             .chain(output_states.into_iter().enumerate())
