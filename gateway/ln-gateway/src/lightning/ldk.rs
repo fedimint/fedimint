@@ -6,8 +6,8 @@ use std::time::Duration;
 use async_trait::async_trait;
 use bitcoin::{secp256k1, Address, Network, OutPoint};
 use fedimint_bip39::Mnemonic;
-use fedimint_core::runtime::spawn;
-use fedimint_core::task::TaskGroup;
+use fedimint_core::envs::{is_env_var_set, FM_IN_DEVIMINT_ENV};
+use fedimint_core::task::{sleep, TaskGroup, TaskHandle};
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::ln::PaymentHash;
@@ -37,12 +37,8 @@ pub struct GatewayLdkClient {
     /// The client for querying data about the blockchain.
     esplora_client: esplora_client::AsyncClient,
 
-    /// A handle to the task that processes incoming events from the lightning
-    /// node. Responsible for sending incoming HTLCs to the caller of
-    /// `route_htlcs`.
-    /// TODO: This should be a shutdown sender instead, and we can discard the
-    /// handle.
-    event_handler_task_handle: tokio::task::JoinHandle<()>,
+    // Task group for handling events
+    task_group: TaskGroup,
 
     /// The HTLC stream, until it is taken by calling
     /// `ILnRpcClient::route_htlcs`.
@@ -95,18 +91,39 @@ impl GatewayLdkClient {
         })?;
 
         let (htlc_stream_sender, htlc_stream_receiver) = tokio::sync::mpsc::channel(1024);
+        let task_group = TaskGroup::new();
+
+        // LDK Node will sync the wallet's chain automatically in the background, but in
+        // the background it only sync every 10 seconds. In devimint we want
+        // this to sync faster, so we spawn a thread that manually syncs the chain.
+        if is_env_var_set(FM_IN_DEVIMINT_ENV) {
+            let node_clone = node.clone();
+            task_group.spawn("ldk node sync event handler", |handle| async move {
+                loop {
+                    if handle.is_shutting_down() {
+                        return;
+                    }
+
+                    if let Err(e) = node_clone.sync_wallets() {
+                        error!(?e, "Failed to sync LDK Node to chain");
+                    }
+
+                    sleep(Duration::from_millis(500)).await;
+                }
+            });
+        }
 
         let node_clone = node.clone();
-        let event_handler_task_handle = spawn("ldk lightning node event handler", async move {
+        task_group.spawn("ldk lightning node event handler", |handle| async move {
             loop {
-                Self::handle_next_event(&node_clone, &htlc_stream_sender).await;
+                Self::handle_next_event(&node_clone, &htlc_stream_sender, &handle).await;
             }
         });
 
         Ok(GatewayLdkClient {
             node,
             esplora_client: esplora_client::Builder::new(esplora_server_url).build_async()?,
-            event_handler_task_handle,
+            task_group,
             htlc_stream_receiver_or: Some(htlc_stream_receiver),
         })
     }
@@ -114,13 +131,23 @@ impl GatewayLdkClient {
     async fn handle_next_event(
         node: &ldk_node::Node,
         htlc_stream_sender: &Sender<Result<InterceptHtlcRequest, Status>>,
+        handle: &TaskHandle,
     ) {
+        let event = tokio::select! {
+            event = node.next_event_async() => {
+                event
+            }
+            () = handle.make_shutdown_rx() => {
+                return;
+            }
+        };
+
         if let ldk_node::Event::PaymentClaimable {
             payment_id: _,
             payment_hash,
             claimable_amount_msat,
             claim_deadline,
-        } = node.next_event_async().await
+        } = event
         {
             if let Err(e) = htlc_stream_sender
                 .send(Ok(InterceptHtlcRequest {
@@ -182,7 +209,7 @@ impl GatewayLdkClient {
 
 impl Drop for GatewayLdkClient {
     fn drop(&mut self) {
-        self.event_handler_task_handle.abort();
+        self.task_group.shutdown();
 
         info!("Stopping LDK Node...");
         if let Err(e) = self.node.stop() {
@@ -215,15 +242,14 @@ impl ILnRpcClient for GatewayLdkClient {
             });
         };
 
-        let esplora_chain_tip_timestamp = chain_tip_block_summary.time.timestamp;
         let block_height: u32 = chain_tip_block_summary.time.height;
+        let ldk_block_height = node_status.current_best_block.height;
+        let synced_to_chain = block_height == ldk_block_height;
 
-        let synced_to_chain = node_status.latest_wallet_sync_timestamp.unwrap_or_default()
-            > esplora_chain_tip_timestamp
-            && node_status
-                .latest_onchain_wallet_sync_timestamp
-                .unwrap_or_default()
-                > esplora_chain_tip_timestamp;
+        assert!(
+            ldk_block_height <= block_height,
+            "LDK Block Height is in the future"
+        );
 
         Ok(GetNodeInfoResponse {
             pub_key: self.node.node_id().serialize().to_vec(),
@@ -561,23 +587,5 @@ impl ILnRpcClient for GatewayLdkClient {
             lightning_balance_msats: balances.total_lightning_balance_sats * 1000,
             inbound_lightning_liquidity_msats: total_inbound_liquidity_balance_msat,
         })
-    }
-
-    async fn sync_to_chain(&self, block_height: u32) -> Result<EmptyResponse, LightningRpcError> {
-        loop {
-            self.node
-                .sync_wallets()
-                .map_err(|e| LightningRpcError::FailedToSyncToChain {
-                    failure_reason: e.to_string(),
-                })?;
-
-            if self.node.status().current_best_block.height < block_height {
-                fedimint_core::runtime::sleep(Duration::from_millis(100)).await;
-            } else {
-                break;
-            }
-        }
-
-        Ok(EmptyResponse {})
     }
 }

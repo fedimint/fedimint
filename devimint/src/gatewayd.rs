@@ -11,7 +11,7 @@ use fedimint_core::util::{backoff_util, retry};
 use fedimint_testing::gateway::LightningNodeType;
 use ln_gateway::envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV;
 use ln_gateway::lightning::ChannelInfo;
-use ln_gateway::rpc::{MnemonicResponse, V1_API_ENDPOINT};
+use ln_gateway::rpc::{GatewayInfo, MnemonicResponse, V1_API_ENDPOINT};
 use tracing::info;
 
 use crate::envs::{FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV};
@@ -77,16 +77,22 @@ impl Gatewayd {
             .await?;
 
         let gatewayd = Self {
-            ln: Some(ln),
+            ln: Some(ln.clone()),
             process,
             addr,
             lightning_node_addr,
         };
-        poll(
-            "waiting for gateway to be ready to respond to rpc",
-            || async { gatewayd.gateway_id().await.map_err(ControlFlow::Continue) },
-        )
-        .await?;
+
+        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+        if gatewayd_version < *VERSION_0_4_0_ALPHA {
+            match &ln {
+                LightningNode::Cln(lightningd) => lightningd.await_block_processing().await?,
+                LightningNode::Lnd(lnd) => lnd.await_block_processing().await?,
+                LightningNode::Ldk => panic!("LDK not supported"),
+            }
+        } else {
+            gatewayd.wait_for_chain_sync().await?;
+        }
         Ok(gatewayd)
     }
 
@@ -380,20 +386,35 @@ impl Gatewayd {
         Ok(channels)
     }
 
-    pub async fn wait_for_chain_sync(&self, bitcoind: &Bitcoind) -> Result<()> {
-        poll("lightning node block processing", || async {
-            let block_height = bitcoind.get_block_count().map_err(ControlFlow::Continue)? - 1;
-            cmd!(
-                self,
-                "lightning",
-                "wait-for-chain-sync",
-                "--block-height",
-                block_height
-            )
-            .run()
-            .await
-            .map_err(ControlFlow::Continue)?;
+    pub async fn wait_for_chain_sync(&self) -> Result<()> {
+        poll("waiting for gatewayd chain sync", || async {
+            let info = self.get_info().await.map_err(ControlFlow::Continue)?;
+            let gateway_info: GatewayInfo =
+                serde_json::from_value(info).expect("Failed to decode GatewayInfo");
+            if gateway_info.gateway_state != "Running" || !gateway_info.synced_to_chain {
+                return Err(ControlFlow::Continue(anyhow::anyhow!(
+                    "Not synced to chain"
+                )));
+            }
             Ok(())
+        })
+        .await?;
+        Ok(())
+    }
+
+    pub async fn wait_for_block_height(&self, target_block_height: u64) -> Result<()> {
+        poll("waiting for block height", || async {
+            let info = self.get_info().await.map_err(ControlFlow::Continue)?;
+            let gateway_info: GatewayInfo =
+                serde_json::from_value(info).expect("Failed to decode GatewayInfo");
+            if let Some(height) = gateway_info.block_height {
+                if height >= target_block_height as u32 && gateway_info.synced_to_chain {
+                    return Ok(());
+                }
+            }
+            Err(ControlFlow::Continue(anyhow::anyhow!(
+                "Not synced to block"
+            )))
         })
         .await?;
         Ok(())
