@@ -150,7 +150,7 @@ use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
 use tokio::sync::{watch, RwLock};
 use tokio_stream::wrappers::WatchStream;
 use tracing::{debug, error, info, trace, warn};
-use transaction::TxSubmissionStatesSM;
+use transaction::{ClientInputSM, TxSubmissionStatesSM};
 
 use crate::api_announcements::{get_api_urls, run_api_announcement_sync, ApiAnnouncementPrefix};
 use crate::api_version_discovery::discover_common_api_versions_set;
@@ -251,10 +251,9 @@ impl Event for ModuleRecoveryCompleted {
     const KIND: EventKind = EventKind::from_static("module-recovery-completed");
 }
 
-pub type InstancelessDynClientInput = ClientInput<
-    Box<maybe_add_send_sync!(dyn IInput + 'static)>,
-    Box<maybe_add_send_sync!(dyn IState + 'static)>,
->;
+pub type InstancelessDynClientInput = ClientInput<Box<maybe_add_send_sync!(dyn IInput + 'static)>>;
+pub type InstancelessDynClientInputSM =
+    ClientInputSM<Box<maybe_add_send_sync!(dyn IState + 'static)>>;
 
 pub type InstancelessDynClientOutput = ClientOutput<
     Box<maybe_add_send_sync!(dyn IOutput + 'static)>,
@@ -289,13 +288,14 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
     fn decoders(&self) -> &ModuleDecoderRegistry;
 
     /// This function is mostly meant for internal use, you are probably looking
-    /// for [`DynGlobalClientContext::claim_input`].
+    /// for [`DynGlobalClientContext::claim_inputs`].
     /// Returns transaction id of the funding transaction and an optional
     /// `OutPoint` that represents change if change was added.
-    async fn claim_input_dyn(
+    async fn claim_inputs_dyn(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        input: InstancelessDynClientInput,
+        inputs: Vec<InstancelessDynClientInput>,
+        input_sms: Vec<InstancelessDynClientInputSM>,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>;
 
     /// This function is mostly meant for internal use, you are probably looking
@@ -344,10 +344,11 @@ impl IGlobalClientContext for () {
         unimplemented!("fake implementation, only for tests");
     }
 
-    async fn claim_input_dyn(
+    async fn claim_inputs_dyn(
         &self,
         _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        _input: InstancelessDynClientInput,
+        _input: Vec<InstancelessDynClientInput>,
+        _input_sms: Vec<InstancelessDynClientInputSM>,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
         unimplemented!("fake implementation, only for tests");
     }
@@ -422,20 +423,42 @@ impl DynGlobalClientContext {
     pub async fn claim_input<I, S>(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        input: ClientInput<I, S>,
+        input: ClientInput<I>,
+        sm: ClientInputSM<S>,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
     where
         I: IInput + MaybeSend + MaybeSync + 'static,
         S: IState + MaybeSend + MaybeSync + 'static,
     {
-        self.claim_input_dyn(
+        self.claim_inputs(dbtx, vec![input], vec![sm]).await
+    }
+
+    pub async fn claim_inputs<I, S>(
+        &self,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        inputs: Vec<ClientInput<I>>,
+        input_sms: Vec<ClientInputSM<S>>,
+    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
+    where
+        I: IInput + MaybeSend + MaybeSync + 'static,
+        S: IState + MaybeSend + MaybeSync + 'static,
+    {
+        self.claim_inputs_dyn(
             dbtx,
-            InstancelessDynClientInput {
-                input: Box::new(input.input),
-                keys: input.keys,
-                amount: input.amount,
-                state_machines: states_to_instanceless_dyn(input.state_machines),
-            },
+            inputs
+                .into_iter()
+                .map(|input| InstancelessDynClientInput {
+                    input: Box::new(input.input),
+                    keys: input.keys,
+                    amount: input.amount,
+                })
+                .collect(),
+            input_sms
+                .into_iter()
+                .map(|sm| InstancelessDynClientInputSM {
+                    state_machines: states_to_instanceless_dyn(sm.state_machines),
+                })
+                .collect(),
         )
         .await
     }
@@ -558,23 +581,40 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         self.client.config().await
     }
 
-    async fn claim_input_dyn(
+    async fn claim_inputs_dyn(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        input: InstancelessDynClientInput,
+        inputs: Vec<InstancelessDynClientInput>,
+        input_sms: Vec<InstancelessDynClientInputSM>,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
-        let instance_input = ClientInput {
-            input: DynInput::from_parts(self.module_instance_id, input.input),
-            keys: input.keys,
-            amount: input.amount,
-            state_machines: states_add_instance(self.module_instance_id, input.state_machines),
-        };
+        let mut tx_builder = TransactionBuilder::new();
+
+        // Collect all state machines into a single input
+
+        for input_sm in input_sms {
+            let instance_input_sm = ClientInputSM {
+                state_machines: states_add_instance(
+                    self.module_instance_id,
+                    input_sm.state_machines,
+                ),
+            };
+            tx_builder = tx_builder.with_input_sm(instance_input_sm);
+        }
+
+        for input in inputs {
+            let instance_input = ClientInput {
+                input: DynInput::from_parts(self.module_instance_id, input.input),
+                keys: input.keys,
+                amount: input.amount,
+            };
+            tx_builder = tx_builder.with_input(instance_input);
+        }
 
         self.client
             .finalize_and_submit_transaction_inner(
                 &mut dbtx.global_tx().to_ref_nc(),
                 self.operation,
-                TransactionBuilder::new().with_input(instance_input),
+                tx_builder,
             )
             .await
     }
@@ -1153,7 +1193,7 @@ impl Client {
     ) -> anyhow::Result<(Transaction, Vec<DynState>, Range<u64>)> {
         let (input_amount, output_amount) = self.transaction_builder_balance(&partial_transaction);
 
-        let (added_inputs, change_outputs) = self
+        let (added_inputs, added_input_sms, change_outputs) = self
             .primary_module()
             .create_final_inputs_and_outputs(
                 self.primary_module_instance,
@@ -1173,6 +1213,7 @@ impl Client {
         };
 
         partial_transaction.inputs.extend(added_inputs);
+        partial_transaction.input_sms.extend(added_input_sms);
         partial_transaction.outputs.extend(change_outputs);
 
         let (input_amount, output_amount) = self.transaction_builder_balance(&partial_transaction);
