@@ -67,6 +67,51 @@ where
     }
 }
 
+/// Owned [`PeerConnections`] trait object type
+pub struct P2PConnections(Box<dyn IP2PConnections + Send + 'static>);
+
+impl Clone for P2PConnections {
+    fn clone(&self) -> P2PConnections {
+        P2PConnections(self.0.clone_box())
+    }
+}
+
+impl Deref for P2PConnections {
+    type Target = dyn IP2PConnections + Send + 'static;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.0
+    }
+}
+
+impl DerefMut for P2PConnections {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut *self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Recipient {
+    Everyone,
+    Peer(PeerId),
+}
+
+#[async_trait]
+pub trait IP2PConnections {
+    fn send(&self, recipient: Recipient, message: Vec<u8>);
+
+    async fn receive(&mut self) -> Cancellable<(PeerId, Vec<u8>)>;
+
+    fn clone_box(&self) -> Box<dyn IP2PConnections + Send + 'static>;
+
+    fn into_dyn(self) -> P2PConnections
+    where
+        Self: Sized + Send + 'static,
+    {
+        P2PConnections(Box::new(self))
+    }
+}
+
 /// Owned [`MuxPeerConnections`] trait object type
 #[derive(Clone)]
 pub struct MuxPeerConnections<MuxKey, Msg>(

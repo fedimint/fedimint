@@ -1,12 +1,10 @@
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::encoding::Encodable;
-use fedimint_core::net::peers::IPeerConnections;
+use fedimint_core::net::peers::{P2PConnections, Recipient};
 use parity_scale_codec::{Decode, Encode, IoReader};
 
 use super::data_provider::UnitData;
 use super::keychain::Keychain;
-use super::{Message, Recipient};
-use crate::net::peers::ReconnectPeerConnections;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Hasher;
@@ -27,11 +25,11 @@ pub type NetworkData = aleph_bft::NetworkData<
 >;
 
 pub struct Network {
-    connections: ReconnectPeerConnections<Message>,
+    connections: P2PConnections,
 }
 
 impl Network {
-    pub fn new(connections: ReconnectPeerConnections<Message>) -> Self {
+    pub fn new(connections: P2PConnections) -> Self {
         Self { connections }
     }
 }
@@ -50,13 +48,12 @@ impl aleph_bft::Network<NetworkData> for Network {
         // since NetworkData does not implement Encodable we use
         // parity_scale_codec::Encode to serialize it such that Message can
         // implement Encodable
-        self.connections
-            .send_sync(&Message(network_data.encode()), recipient);
+        self.connections.send(recipient, network_data.encode());
     }
 
     async fn next_event(&mut self) -> Option<NetworkData> {
         while let Ok(message) = self.connections.receive().await {
-            if let Ok(network_data) = NetworkData::decode(&mut IoReader(message.1 .0.as_slice())) {
+            if let Ok(network_data) = NetworkData::decode(&mut IoReader(message.1.as_slice())) {
                 // in order to bound the RAM consumption of a session we have to bound an
                 // individual units size, hence the size of its attached unitdata in memory
                 if network_data.included_data().iter().all(UnitData::is_valid) {
