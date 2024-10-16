@@ -163,7 +163,7 @@ impl MintInputStateCreated {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintInputStateRefund {
-    refund_txid: TransactionId,
+    pub refund_txid: TransactionId,
 }
 
 impl MintInputStateRefund {

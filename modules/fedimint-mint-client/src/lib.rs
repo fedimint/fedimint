@@ -78,6 +78,7 @@ use fedimint_mint_common::config::MintClientConfig;
 pub use fedimint_mint_common::*;
 use futures::{pin_mut, StreamExt};
 use hex::ToHex;
+use oob::MintOOBStatesCreatedMulti;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tbs::{AggregatePublicKey, Signature};
@@ -92,7 +93,7 @@ use crate::client_db::{
 use crate::input::{
     MintInputCommon, MintInputStateCreated, MintInputStateMachine, MintInputStates,
 };
-use crate::oob::{MintOOBStateMachine, MintOOBStates, MintOOBStatesCreated};
+use crate::oob::{MintOOBStateMachine, MintOOBStates};
 use crate::output::{
     MintOutputCommon, MintOutputStateMachine, MintOutputStates, MintOutputStatesCreated,
     NoteIssuanceRequest,
@@ -1305,18 +1306,13 @@ impl MintClientModule {
             MintClientModule::delete_spendable_note(&self.client_ctx, dbtx, amount, note).await;
         }
 
-        let mut state_machines = Vec::new();
-
-        for (amount, spendable_note) in selected_notes.clone().into_iter_items() {
-            state_machines.push(MintClientStateMachines::OOB(MintOOBStateMachine {
-                operation_id,
-                state: MintOOBStates::Created(MintOOBStatesCreated {
-                    amount,
-                    spendable_note,
-                    timeout: fedimint_core::time::now() + try_cancel_after,
-                }),
-            }));
-        }
+        let state_machines = vec![MintClientStateMachines::OOB(MintOOBStateMachine {
+            operation_id,
+            state: MintOOBStates::CreatedMulti(MintOOBStatesCreatedMulti {
+                spendable_notes: selected_notes.clone().into_iter_items().collect(),
+                timeout: fedimint_core::time::now() + try_cancel_after,
+            }),
+        })];
 
         Ok((operation_id, state_machines, selected_notes))
     }
@@ -1334,13 +1330,17 @@ impl MintClientModule {
                     match state.state {
                         MintOOBStates::TimeoutRefund(refund) => Some(SpendOOBRefund {
                             user_triggered: false,
-                            transaction_id: refund.refund_txid,
+                            transaction_ids: vec![refund.refund_txid],
                         }),
                         MintOOBStates::UserRefund(refund) => Some(SpendOOBRefund {
                             user_triggered: true,
-                            transaction_id: refund.refund_txid,
+                            transaction_ids: vec![refund.refund_txid],
                         }),
-                        MintOOBStates::Created(_) => None,
+                        MintOOBStates::UserRefundMulti(refund) => Some(SpendOOBRefund {
+                            user_triggered: true,
+                            transaction_ids: vec![refund.refund_txid],
+                        }),
+                        MintOOBStates::Created(_) | MintOOBStates::CreatedMulti(_) => None,
                     }
                 }),
         )
@@ -1771,33 +1771,45 @@ impl MintClientModule {
 
                     if refund.user_triggered {
                         yield SpendOOBState::UserCanceledProcessing;
+                    }
 
-                        match client_ctx
+                    let mut success = true;
+
+                    for txid in refund.transaction_ids {
+                        debug!(
+                            target: LOG_CLIENT_MODULE_MINT,
+                            %txid,
+                            operation_id=%operation_id.fmt_short(),
+                            "Waiting for oob refund txid"
+                        );
+                        if client_ctx
                             .transaction_updates(operation_id)
                             .await
-                            .await_tx_accepted(refund.transaction_id)
-                            .await
-                        {
-                            Ok(()) => {
-                                yield SpendOOBState::UserCanceledSuccess;
-                            },
-                            Err(_) => {
-                                yield SpendOOBState::UserCanceledFailure;
+                            .await_tx_accepted(txid)
+                            .await.is_err() {
+                                success = false;
                             }
-                        }
-                    } else {
-                        match client_ctx
-                            .transaction_updates(operation_id)
-                            .await
-                            .await_tx_accepted(refund.transaction_id)
-                            .await
-                        {
-                            Ok(()) => {
-                                yield SpendOOBState::Refunded;
-                            },
-                            Err(_) => {
-                                yield SpendOOBState::Success;
-                            }
+                    }
+
+                    debug!(
+                        target: LOG_CLIENT_MODULE_MINT,
+                        operation_id=%operation_id.fmt_short(),
+                        %success,
+                        "Done waiting for all refund oob txids"
+                     );
+
+                    match (refund.user_triggered, success) {
+                        (true, true) => {
+                            yield SpendOOBState::UserCanceledSuccess;
+                        },
+                        (true, false) => {
+                            yield SpendOOBState::UserCanceledFailure;
+                        },
+                        (false, true) => {
+                            yield SpendOOBState::Refunded;
+                        },
+                        (false, false) => {
+                            yield SpendOOBState::Success;
                         }
                     }
                 }
@@ -1867,7 +1879,7 @@ pub fn spendable_notes_to_operation_id(
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SpendOOBRefund {
     pub user_triggered: bool,
-    pub transaction_id: TransactionId,
+    pub transaction_ids: Vec<TransactionId>,
 }
 
 /// Defines a strategy for selecting e-cash notes given a specific target amount

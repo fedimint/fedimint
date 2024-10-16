@@ -11,7 +11,7 @@ use fedimint_core::fee_consensus::FeeConsensus;
 use fedimint_core::secp256k1::KeyPair;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending;
-use fedimint_core::{sats, secp256k1, Amount};
+use fedimint_core::{sats, secp256k1, Amount, TieredMulti};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
@@ -312,6 +312,84 @@ async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
             return Ok(());
         }
         debug!(target: LOG_TEST, %balance, %expected_min_balance, "Wallet balance not updated yet");
+        sleep_in_test("waiting for wallet balance", Duration::from_millis(500)).await;
+    }
+
+    panic!("Did not receive refund in time");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "We want this to work eventually, but we need to rewrite the sm created by claim_input to impl the note-by-note refund"]
+async fn sends_ecash_out_of_band_cancel_partial() -> anyhow::Result<()> {
+    let fed = fixtures().new_default_fed().await;
+    let (client, client2) = fed.two_clients().await;
+    let dummy_module = client.get_first_module::<DummyClientModule>()?;
+    info!("### PRINT NOTES");
+    let (print_op, outpoint) = dummy_module.print_money(sats(1000)).await?;
+    client
+        .await_primary_module_output(print_op, outpoint)
+        .await?;
+
+    let client2_mint = client2.get_first_module::<MintClientModule>()?;
+
+    // Spend from client1 to client2
+    info!("### SPEND NOTES");
+    let mint_module = client.get_first_module::<MintClientModule>()?;
+    let (spend_op, notes) = mint_module
+        .spend_notes_with_selector(
+            &SelectNotesWithAtleastAmount,
+            sats(750),
+            TIMEOUT * 3,
+            false,
+            (),
+        )
+        .await?;
+    let sub1 = &mut mint_module
+        .subscribe_spend_notes(spend_op)
+        .await?
+        .into_stream();
+    assert_eq!(sub1.ok().await?, SpendOOBState::Created);
+
+    let oob_notes = notes.notes().clone();
+    let federation_id = notes.federation_id_prefix();
+    let mut oob_notes_iter = oob_notes.into_iter_items().rev();
+    let single_note = oob_notes_iter.next().unwrap();
+    let oob_notes_single_note = TieredMulti::from_iter(vec![single_note]);
+
+    let oob_notes_single_note = OOBNotes::new(federation_id, oob_notes_single_note);
+
+    info!("### REISSUE NOTES (single note)");
+    let reissue_op = client2_mint
+        .reissue_external_notes(oob_notes_single_note, ())
+        .await?;
+
+    let sub2 = client2_mint
+        .subscribe_reissue_external_notes(reissue_op)
+        .await?;
+
+    let mut sub2 = sub2.into_stream();
+    info!("### SUB2: WAIT CREATED");
+    assert_eq!(sub2.ok().await?, ReissueExternalNotesState::Created);
+    info!("### SUB2: WAIT ISSUING");
+    assert_eq!(sub2.ok().await?, ReissueExternalNotesState::Issuing);
+    info!("### SUB2: WAIT DONE");
+    assert_eq!(sub2.ok().await?, ReissueExternalNotesState::Done);
+    info!("### REISSUE: DONE");
+
+    info!("### CANCEL NOTES");
+    mint_module.try_cancel_spend_notes(spend_op).await;
+    assert_eq!(sub1.ok().await?, SpendOOBState::UserCanceledProcessing);
+    info!("### CANCEL NOTES: must fail");
+    assert_eq!(sub1.ok().await?, SpendOOBState::UserCanceledFailure);
+
+    // FIXME: UserCanceledSuccess should mean the money is in our wallet
+    for _ in 0..120 {
+        let balance = client.get_balance().await;
+        let expected_min_balance = sats(1000) - EXPECTED_MAXIMUM_FEE - single_note.0;
+        info!(target: LOG_TEST, %balance, %expected_min_balance, "Checking balance");
+        if expected_min_balance <= balance {
+            return Ok(());
+        }
         sleep_in_test("waiting for wallet balance", Duration::from_millis(500)).await;
     }
 
