@@ -72,6 +72,7 @@ use fedimint_mint_common::config::MintClientConfig;
 pub use fedimint_mint_common::*;
 use futures::{pin_mut, StreamExt};
 use hex::ToHex;
+use oob::MintOOBStatesCreatedMulti;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tbs::{AggregatePublicKey, Signature};
@@ -86,7 +87,7 @@ use crate::client_db::{
 use crate::input::{
     MintInputCommon, MintInputStateCreated, MintInputStateMachine, MintInputStates,
 };
-use crate::oob::{MintOOBStateMachine, MintOOBStates, MintOOBStatesCreated};
+use crate::oob::{MintOOBStateMachine, MintOOBStates};
 use crate::output::{
     MintOutputCommon, MintOutputStateMachine, MintOutputStates, MintOutputStatesCreated,
     NoteIssuanceRequest,
@@ -1271,18 +1272,13 @@ impl MintClientModule {
             MintClientModule::delete_spendable_note(&self.client_ctx, dbtx, amount, note).await;
         }
 
-        let mut state_machines = Vec::new();
-
-        for (amount, spendable_note) in selected_notes.clone().into_iter_items() {
-            state_machines.push(MintClientStateMachines::OOB(MintOOBStateMachine {
-                operation_id,
-                state: MintOOBStates::Created(MintOOBStatesCreated {
-                    amount,
-                    spendable_note,
-                    timeout: fedimint_core::time::now() + try_cancel_after,
-                }),
-            }));
-        }
+        let state_machines = vec![MintClientStateMachines::OOB(MintOOBStateMachine {
+            operation_id,
+            state: MintOOBStates::CreatedMulti(MintOOBStatesCreatedMulti {
+                spendable_notes: selected_notes.clone().into_iter_items().collect(),
+                timeout: fedimint_core::time::now() + try_cancel_after,
+            }),
+        })];
 
         Ok((operation_id, state_machines, selected_notes))
     }
@@ -1306,7 +1302,7 @@ impl MintClientModule {
                             user_triggered: true,
                             transaction_id: refund.refund_txid,
                         }),
-                        MintOOBStates::Created(_) => None,
+                        MintOOBStates::Created(_) | MintOOBStates::CreatedMulti(_) => None,
                     }
                 }),
         )
