@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["cargo_pkg","git_hash"]};
