@@ -113,6 +113,8 @@ pub mod transaction;
 pub mod txoproof;
 /// General purpose utilities
 pub mod util;
+/// Version
+pub mod version;
 
 /// Atomic BFT unit containing consensus items
 pub mod session_outcome;
