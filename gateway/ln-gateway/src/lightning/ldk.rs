@@ -14,6 +14,7 @@ use fedimint_core::bitcoin_migration::{
 use fedimint_core::runtime::spawn;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
+use ldk_node::config::EsploraSyncConfig;
 use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::ln::PaymentHash;
 use ldk_node::lightning::routing::gossip::NodeAlias;
@@ -87,22 +88,27 @@ impl GatewayLdkClient {
             Some(NodeAlias(bytes))
         };
 
-        let mut node_builder = ldk_node::Builder::from_config(ldk_node::Config {
+        let mut node_builder = ldk_node::Builder::from_config(ldk_node::config::Config {
             network: bitcoin30_to_bitcoin32_network(&network),
             listening_addresses: Some(vec![SocketAddress::TcpIpV4 {
                 addr: [0, 0, 0, 0],
                 port: lightning_port,
             }]),
             node_alias,
-            // TODO: Remove these and rely on the default values.
-            // See here for details: https://github.com/lightningdevkit/ldk-node/issues/339#issuecomment-2344230472
-            onchain_wallet_sync_interval_secs: 10,
-            wallet_sync_interval_secs: 10,
             ..Default::default()
         });
         node_builder
             .set_entropy_bip39_mnemonic(mnemonic, None)
-            .set_esplora_server(esplora_server_url.to_string());
+            .set_chain_source_esplora(
+                esplora_server_url.to_string(),
+                Some(EsploraSyncConfig {
+                    // TODO: Remove these and rely on the default values.
+                    // See here for details: https://github.com/lightningdevkit/ldk-node/issues/339#issuecomment-2344230472
+                    onchain_wallet_sync_interval_secs: 10,
+                    lightning_wallet_sync_interval_secs: 10,
+                    ..Default::default()
+                }),
+            );
         let Some(data_dir_str) = data_dir.to_str() else {
             return Err(anyhow::anyhow!("Invalid data dir path"));
         };
@@ -240,7 +246,9 @@ impl ILnRpcClient for GatewayLdkClient {
         let esplora_chain_tip_timestamp = chain_tip_block_summary.time.timestamp;
         let block_height: u32 = chain_tip_block_summary.time.height;
 
-        let synced_to_chain = node_status.latest_wallet_sync_timestamp.unwrap_or_default()
+        let synced_to_chain = node_status
+            .latest_lightning_wallet_sync_timestamp
+            .unwrap_or_default()
             > esplora_chain_tip_timestamp
             && node_status
                 .latest_onchain_wallet_sync_timestamp
