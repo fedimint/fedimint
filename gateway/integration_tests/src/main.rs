@@ -2,13 +2,14 @@
 
 use std::env;
 use std::fs::remove_dir_all;
+use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::str::FromStr;
 
 use clap::{Parser, Subcommand};
 use devimint::envs::FM_DATA_DIR_ENV;
 use devimint::federation::Federation;
-use devimint::util::ProcessManager;
+use devimint::util::{poll, ProcessManager};
 use devimint::version_constants::{VERSION_0_3_0, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA};
 use devimint::{cmd, util, Gatewayd, LightningNode};
 use fedimint_core::config::FederationId;
@@ -187,7 +188,21 @@ async fn stop_and_recover_gateway(
     assert_eq!(mnemonic, new_mnemonic);
     info!("Verified mnemonic is the same after creating new Gateway");
 
-    let info = serde_json::from_value::<GatewayInfo>(new_gw.get_info().await?)?;
+    let info = poll("new gateway ready", || async {
+        let info = serde_json::from_value::<GatewayInfo>(
+            new_gw.get_info().await.map_err(ControlFlow::Continue)?,
+        )
+        .map_err(|err| ControlFlow::Continue(anyhow::anyhow!(err)))?;
+
+        if info.network.is_none() {
+            return Err(ControlFlow::Continue(anyhow::anyhow!(
+                "Gateway is not ready"
+            )));
+        }
+
+        Ok(info)
+    })
+    .await?;
     assert_eq!(0, info.federations.len());
     info!("Verified new Gateway has no federations");
 
