@@ -39,7 +39,7 @@ fedimint-server = { workspace = true }
 fedimint-wallet-client = { workspace = true }
 fedimint-wallet-server = { workspace = true }
 futures = { workspace = true }
-hex = { workspace = true, features = ["serde"] }
+hex = { workspace = true }
 ln-gateway = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

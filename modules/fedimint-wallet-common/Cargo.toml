@@ -21,7 +21,7 @@ bitcoin = { workspace = true }
 fedimint-core = { workspace = true }
 hex = { workspace = true }
 impl-tools = "0.10.0"
-miniscript = { workspace = true, features = ["serde"] }
+miniscript = { workspace = true }
 secp256k1 = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
