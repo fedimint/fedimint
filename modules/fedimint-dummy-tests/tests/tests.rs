@@ -93,7 +93,6 @@ async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Resul
         },
         amount: sats(1000),
         keys: vec![account_kp],
-        state_machines: Arc::new(|_, _| Vec::<DummyStateMachine>::new()),
     };
 
     let tx = TransactionBuilder::new().with_input(input.into_dyn(dummy.id));

@@ -1,12 +1,11 @@
 use std::cmp;
-use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use bitcoin::ScriptBuf;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client::module::ClientContext;
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ClientInput, ClientInputSM};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
@@ -424,15 +423,19 @@ async fn claim_peg_in(
 
         let wallet_input = WalletInput::new_v0(pegin_proof);
 
-        let client_input = ClientInput::<WalletInput, WalletClientStates> {
+        let client_input = ClientInput::<WalletInput> {
             input: wallet_input,
             keys: vec![tweak_key],
             amount,
-            state_machines: Arc::new(|_, _| vec![]),
         };
 
         client_ctx
-            .claim_input(dbtx, client_input, operation_id)
+            .claim_inputs(
+                dbtx,
+                vec![client_input],
+                Vec::<ClientInputSM<WalletClientStates>>::new(),
+                operation_id,
+            )
             .await
             .expect("Cannot claim input, additional funding needed")
     }

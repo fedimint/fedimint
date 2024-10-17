@@ -13,17 +13,20 @@ use crate::module::StateGenerator;
 use crate::sm::DynState;
 
 #[derive(Clone)]
-pub struct ClientInput<I = DynInput, S = DynState> {
+pub struct ClientInput<I = DynInput> {
     pub input: I,
     pub keys: Vec<KeyPair>,
     pub amount: Amount,
+}
+
+#[derive(Clone)]
+pub struct ClientInputSM<S = DynState> {
     pub state_machines: StateGenerator<S>,
 }
 
-impl<I, S> IntoDynInstance for ClientInput<I, S>
+impl<I> IntoDynInstance for ClientInput<I>
 where
     I: IntoDynInstance<DynType = DynInput> + 'static,
-    S: IntoDynInstance<DynType = DynState> + 'static,
 {
     type DynType = ClientInput;
 
@@ -32,6 +35,18 @@ where
             input: self.input.into_dyn(module_instance_id),
             keys: self.keys,
             amount: self.amount,
+        }
+    }
+}
+
+impl<S> IntoDynInstance for ClientInputSM<S>
+where
+    S: IntoDynInstance<DynType = DynState> + 'static,
+{
+    type DynType = ClientInputSM;
+
+    fn into_dyn(self, module_instance_id: ModuleInstanceId) -> ClientInputSM {
+        ClientInputSM {
             state_machines: state_gen_to_dyn(self.state_machines, module_instance_id),
         }
     }
@@ -63,6 +78,7 @@ where
 #[derive(Default, Clone)]
 pub struct TransactionBuilder {
     pub(crate) inputs: Vec<ClientInput>,
+    pub(crate) input_sms: Vec<ClientInputSM>,
     pub(crate) outputs: Vec<ClientOutput>,
 }
 
@@ -76,6 +92,11 @@ impl TransactionBuilder {
         self
     }
 
+    pub fn with_input_sm(mut self, input: ClientInputSM) -> Self {
+        self.input_sms.push(input);
+        self
+    }
+
     pub fn with_output(mut self, output: ClientOutput) -> Self {
         self.outputs.push(output);
         self
@@ -84,6 +105,14 @@ impl TransactionBuilder {
     pub fn with_inputs(mut self, inputs: Vec<ClientInput>) -> Self {
         for input in inputs {
             self.inputs.push(input);
+        }
+
+        self
+    }
+
+    pub fn with_input_sms(mut self, input_sms: Vec<ClientInputSM>) -> Self {
+        for input_sm in input_sms {
+            self.input_sms.push(input_sm);
         }
 
         self
@@ -105,11 +134,17 @@ impl TransactionBuilder {
     where
         C: secp256k1::Signing + secp256k1::Verification,
     {
-        let (inputs, input_keys, input_states): (Vec<_>, Vec<_>, Vec<_>) = multiunzip(
+        let (inputs, input_keys): (Vec<_>, Vec<_>) = multiunzip(
             self.inputs
                 .into_iter()
-                .map(|input| (input.input, input.keys, input.state_machines)),
+                .map(|input| (input.input, input.keys)),
         );
+        let input_sms: Vec<_> = self
+            .input_sms
+            .into_iter()
+            .map(|input_sm| (input_sm.state_machines))
+            .collect();
+
         let (outputs, output_states): (Vec<_>, Vec<_>) = self
             .outputs
             .into_iter()
@@ -134,7 +169,7 @@ impl TransactionBuilder {
             signatures: TransactionSignature::NaiveMultisig(signatures),
         };
 
-        let states = input_states
+        let states = input_sms
             .into_iter()
             .enumerate()
             .chain(output_states.into_iter().enumerate())
