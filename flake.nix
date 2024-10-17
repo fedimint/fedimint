@@ -18,8 +18,8 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     bundlers = {
-      # TODO: switch back to upstream after https://github.com/matthewbauer/nix-bundle/pull/103 is available
-      url = "github:dpc/bundlers?branch=24-02-21-tar-deterministic&rev=e8aafe89a11ae0a5f3ce97d1d7d0fcfb354c79eb";
+      url = "github:NixOS/bundlers?rev=ea1e72ad1dbb0864fd55b3ba52ed166cd190afa2";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
     advisory-db = {
       url = "github:rustsec/advisory-db";
@@ -53,9 +53,6 @@
     in
     {
       overlays = {
-        # technically overlay outputs are supposed to be just a function,
-        # instead of a list, but keeping this one just to phase it out smoothly
-        fedimint = [ overlayAll ];
         all = overlayAll;
         wasm-bindgen = import ./nix/overlays/wasm-bindgen.nix;
         darwin-compile-fixes = import ./nix/overlays/darwin-compile-fixes.nix;
@@ -63,7 +60,6 @@
       };
 
       bundlers = bundlers.bundlers;
-      defaultBundler = bundlers.defaultBundler;
 
       nixosModules = {
         fedimintd = import ./nix/modules/fedimintd.nix;
