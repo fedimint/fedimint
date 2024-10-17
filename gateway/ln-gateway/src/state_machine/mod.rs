@@ -345,13 +345,13 @@ impl GatewayClientModule {
     }
 
     /// Register gateway with federation
-    pub async fn register_with_federation(
+    pub async fn try_register_with_federation(
         &self,
         route_hints: Vec<RouteHint>,
         time_to_live: Duration,
         fees: RoutingFees,
         lightning_context: LightningContext,
-    ) -> anyhow::Result<()> {
+    ) {
         let registration_info =
             self.to_gateway_registration_info(route_hints, time_to_live, fees, lightning_context);
         let gateway_id = registration_info.info.gateway_id;
@@ -362,9 +362,14 @@ impl GatewayClientModule {
             .await
             .global
             .calculate_federation_id();
-        self.module_api.register_gateway(&registration_info).await?;
-        debug!("Successfully registered gateway {gateway_id} with federation {federation_id}");
-        Ok(())
+        if let Err(e) = self.module_api.register_gateway(&registration_info).await {
+            warn!(
+                ?e,
+                "Failed to register gateway {gateway_id} with federation {federation_id}"
+            );
+        } else {
+            info!("Successfully registered gateway {gateway_id} with federation {federation_id}");
+        }
     }
 
     /// Attempts to remove a gateway's registration from the federation. Since
