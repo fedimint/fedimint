@@ -253,7 +253,7 @@ impl ILnRpcClient for GatewayLdkClient {
         _max_delay: u64,
         _max_fee: Amount,
     ) -> Result<PayInvoiceResponse, LightningRpcError> {
-        let payment_id = match self.node.bolt11_payment().send(&invoice) {
+        let payment_id = match self.node.bolt11_payment().send(&invoice, None) {
             Ok(payment_id) => payment_id,
             Err(e) => {
                 return Err(LightningRpcError::FailedPayment {
