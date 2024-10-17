@@ -2171,7 +2171,12 @@
 <a href="#2170" id="2170">2170</a>
 <a href="#2171" id="2171">2171</a>
 <a href="#2172" id="2172">2172</a>
-<a href="#2173" id="2173">2173</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2173" id="2173">2173</a>
+<a href="#2174" id="2174">2174</a>
+<a href="#2175" id="2175">2175</a>
+<a href="#2176" id="2176">2176</a>
+<a href="#2177" id="2177">2177</a>
+<a href="#2178" id="2178">2178</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2267,7 +2272,7 @@
 };
 <span class="kw">use </span>state_machine::{GatewayClientModule, GatewayExtPayStates};
 <span class="kw">use </span>tokio::sync::RwLock;
-<span class="kw">use </span>tracing::{debug, error, info, info_span, warn, Instrument};
+<span class="kw">use </span>tracing::{debug, error, info, info_span, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::config::LightningModuleMode;
 <span class="kw">use </span><span class="kw">crate</span>::db::{get_gatewayd_database_migrations, FederationConfig};
@@ -3336,14 +3341,14 @@
             <span class="self">Self</span>::check_lnv1_federation_network(<span class="kw-2">&amp;</span>client, gateway_config.network).<span class="kw">await</span><span class="question-mark">?</span>;
             client
                 .get_first_module::&lt;GatewayClientModule&gt;()<span class="question-mark">?
-                </span>.register_with_federation(
+                </span>.try_register_with_federation(
                     <span class="comment">// Route hints will be updated in the background
                     </span>Vec::new(),
                     GW_ANNOUNCEMENT_TTL,
                     federation_config.fees,
                     lightning_context,
                 )
-                .<span class="kw">await</span><span class="question-mark">?</span>;
+                .<span class="kw">await</span>;
         }
 
         <span class="kw">if </span><span class="self">self</span>.is_running_lnv2() {
@@ -3534,14 +3539,23 @@
 
         <span class="comment">// If 'num_route_hints' is provided, all federations must be re-registered.
         // Otherwise, only those affected by the new fees need to be re-registered.
-        </span><span class="kw">if </span>num_route_hints.is_some() {
+        </span><span class="kw">let </span>register_task_group = TaskGroup::new();
+        <span class="kw">if </span>num_route_hints.is_some() {
             <span class="kw">let </span>all_federations_configs: Vec&lt;<span class="kw">_</span>&gt; =
                 dbtx.load_federation_configs().<span class="kw">await</span>.into_iter().collect();
-            <span class="self">self</span>.register_federations(<span class="kw-2">&amp;</span>new_gateway_config, <span class="kw-2">&amp;</span>all_federations_configs)
-                .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="self">self</span>.register_federations(
+                <span class="kw-2">&amp;</span>new_gateway_config,
+                <span class="kw-2">&amp;</span>all_federations_configs,
+                <span class="kw-2">&amp;</span>register_task_group,
+            )
+            .<span class="kw">await</span>;
         } <span class="kw">else </span>{
-            <span class="self">self</span>.register_federations(<span class="kw-2">&amp;</span>new_gateway_config, <span class="kw-2">&amp;</span>register_federations)
-                .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="self">self</span>.register_federations(
+                <span class="kw-2">&amp;</span>new_gateway_config,
+                <span class="kw-2">&amp;</span>register_federations,
+                <span class="kw-2">&amp;</span>register_task_group,
+            )
+            .<span class="kw">await</span>;
         }
 
         dbtx.commit_tx().<span class="kw">await</span>;
@@ -3802,7 +3816,8 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         gateway_config: <span class="kw-2">&amp;</span>GatewayConfiguration,
         federations: <span class="kw-2">&amp;</span>[(FederationId, FederationConfig)],
-    ) -&gt; AdminResult&lt;()&gt; {
+        register_task_group: <span class="kw-2">&amp;</span>TaskGroup,
+    ) {
         <span class="kw">if let </span><span class="prelude-val">Ok</span>(lightning_context) = <span class="self">self</span>.get_lightning_context().<span class="kw">await </span>{
             <span class="kw">let </span>route_hints = lightning_context
                 .lnrpc
@@ -3813,31 +3828,34 @@
             }
 
             <span class="kw">for </span>(federation_id, federation_config) <span class="kw">in </span>federations {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(client) = <span class="self">self</span>.federation_manager.read().<span class="kw">await</span>.client(federation_id) {
-                    <span class="kw">if async </span>{
-                        client
-                            .value()
-                            .get_first_module::&lt;GatewayClientModule&gt;()<span class="question-mark">?
-                            </span>.register_with_federation(
-                                route_hints.clone(),
-                                GW_ANNOUNCEMENT_TTL,
-                                federation_config.fees,
-                                lightning_context.clone(),
-                            )
-                            .<span class="kw">await
-                    </span>}
-                    .instrument(client.span())
-                    .<span class="kw">await
-                    </span>.is_err()
-                    {
-                        <span class="prelude-val">Err</span>(AdminGatewayError::RegistrationError {
-                            federation_id: <span class="kw-2">*</span>federation_id,
-                        })<span class="question-mark">?</span>;
+                <span class="kw">let </span>fed_manager = <span class="self">self</span>.federation_manager.read().<span class="kw">await</span>;
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(client) = fed_manager.client(federation_id) {
+                    <span class="kw">let </span>client_arc = client.clone().into_value();
+                    <span class="kw">let </span>route_hints = route_hints.clone();
+                    <span class="kw">let </span>lightning_context = lightning_context.clone();
+                    <span class="kw">let </span>federation_config = federation_config.clone();
+
+                    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = register_task_group
+                        .spawn_cancellable(<span class="string">"register_federation"</span>, <span class="kw">async move </span>{
+                            <span class="kw">let </span>gateway_client = client_arc
+                                .get_first_module::&lt;GatewayClientModule&gt;()
+                                .expect(<span class="string">"No GatewayClientModule exists"</span>);
+                            gateway_client
+                                .try_register_with_federation(
+                                    route_hints,
+                                    GW_ANNOUNCEMENT_TTL,
+                                    federation_config.fees,
+                                    lightning_context,
+                                )
+                                .<span class="kw">await</span>;
+                        })
+                        .<span class="kw">await
+                    </span>{
+                        <span class="macro">warn!</span>(<span class="question-mark">?</span>e, <span class="string">"Failed to shutdown register federation task"</span>);
                     }
                 }
             }
         }
-        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="doccomment">/// This function will return a `GatewayConfiguration` one of two
@@ -3977,17 +3995,16 @@
             <span class="kw">let </span>lightning_module_mode = <span class="self">self</span>.lightning_module_mode;
             <span class="macro">info!</span>(<span class="question-mark">?</span>lightning_module_mode, <span class="string">"Spawning register task..."</span>);
             <span class="kw">let </span>gateway = <span class="self">self</span>.clone();
+            <span class="kw">let </span>register_task_group = task_group.make_subgroup();
             task_group.spawn_cancellable(<span class="string">"register clients"</span>, <span class="kw">async move </span>{
                 <span class="kw">loop </span>{
-                    <span class="kw">let </span><span class="kw-2">mut </span>registration_result: <span class="prelude-ty">Option</span>&lt;AdminResult&lt;()&gt;&gt; = <span class="prelude-val">None</span>;
                     <span class="kw">let </span>gateway_config = gateway.clone_gateway_config().<span class="kw">await</span>;
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_config) = gateway_config {
                         <span class="kw">let </span>gateway_state = gateway.get_state().<span class="kw">await</span>;
                         <span class="kw">if let </span>GatewayState::Running { .. } = <span class="kw-2">&amp;</span>gateway_state {
                             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = gateway.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
                             <span class="kw">let </span>all_federations_configs: Vec&lt;<span class="kw">_</span>&gt; = dbtx.load_federation_configs().<span class="kw">await</span>.into_iter().collect();
-                            <span class="kw">let </span>result = gateway.register_federations(<span class="kw-2">&amp;</span>gateway_config, <span class="kw-2">&amp;</span>all_federations_configs).<span class="kw">await</span>;
-                            registration_result = <span class="prelude-val">Some</span>(result);
+                            gateway.register_federations(<span class="kw-2">&amp;</span>gateway_config, <span class="kw-2">&amp;</span>all_federations_configs, <span class="kw-2">&amp;</span>register_task_group).<span class="kw">await</span>;
                         } <span class="kw">else </span>{
                             <span class="comment">// We need to retry more often if the gateway is not in the Running state
                             </span><span class="kw">const </span>NOT_RUNNING_RETRY: Duration = Duration::from_secs(<span class="number">10</span>);
@@ -3999,16 +4016,9 @@
                         <span class="macro">warn!</span>(<span class="string">"Cannot register clients because gateway configuration is not set."</span>);
                     }
 
-                    <span class="kw">let </span>registration_delay: Duration = <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(AdminGatewayError::RegistrationError { .. })) = registration_result {
-                        <span class="comment">// Retry to register gateway with federations in 10 seconds since it failed
-                        </span>Duration::from_secs(<span class="number">10</span>)
-                    } <span class="kw">else </span>{
-                        <span class="comment">// Allow a 15% buffer of the TTL before the re-registering gateway
-                        // with the federations.
-                        </span>GW_ANNOUNCEMENT_TTL.mul_f32(<span class="number">0.85</span>)
-                    };
-
-                    sleep(registration_delay).<span class="kw">await</span>;
+                    <span class="comment">// Allow a 15% buffer of the TTL before the re-registering gateway
+                    // with the federations.
+                    </span>sleep(GW_ANNOUNCEMENT_TTL.mul_f32(<span class="number">0.85</span>)).<span class="kw">await</span>;
                 }
             });
         }

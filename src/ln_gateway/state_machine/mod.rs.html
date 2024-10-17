@@ -816,7 +816,12 @@
 <a href="#815" id="815">815</a>
 <a href="#816" id="816">816</a>
 <a href="#817" id="817">817</a>
-<a href="#818" id="818">818</a></pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a></pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -1163,13 +1168,13 @@
     }
 
     <span class="doccomment">/// Register gateway with federation
-    </span><span class="kw">pub async fn </span>register_with_federation(
+    </span><span class="kw">pub async fn </span>try_register_with_federation(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         route_hints: Vec&lt;RouteHint&gt;,
         time_to_live: Duration,
         fees: RoutingFees,
         lightning_context: LightningContext,
-    ) -&gt; anyhow::Result&lt;()&gt; {
+    ) {
         <span class="kw">let </span>registration_info =
             <span class="self">self</span>.to_gateway_registration_info(route_hints, time_to_live, fees, lightning_context);
         <span class="kw">let </span>gateway_id = registration_info.info.gateway_id;
@@ -1180,9 +1185,14 @@
             .<span class="kw">await
             </span>.global
             .calculate_federation_id();
-        <span class="self">self</span>.module_api.register_gateway(<span class="kw-2">&amp;</span>registration_info).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">debug!</span>(<span class="string">"Successfully registered gateway {gateway_id} with federation {federation_id}"</span>);
-        <span class="prelude-val">Ok</span>(())
+        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.module_api.register_gateway(<span class="kw-2">&amp;</span>registration_info).<span class="kw">await </span>{
+            <span class="macro">warn!</span>(
+                <span class="question-mark">?</span>e,
+                <span class="string">"Failed to register gateway {gateway_id} with federation {federation_id}"
+            </span>);
+        } <span class="kw">else </span>{
+            <span class="macro">info!</span>(<span class="string">"Successfully registered gateway {gateway_id} with federation {federation_id}"</span>);
+        }
     }
 
     <span class="doccomment">/// Attempts to remove a gateway's registration from the federation. Since
