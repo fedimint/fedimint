@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::env;
 use std::time::Duration;
 
 use anyhow::{bail, Context};
@@ -18,6 +19,7 @@ use fedimint_dummy_client::DummyClientInit;
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_testing::btc::BitcoinTest;
+use fedimint_testing::envs::{FM_TEST_BACKEND_BITCOIN_RPC_KIND_ENV, FM_TEST_USE_REAL_DAEMONS_ENV};
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::{DepositStateV2, WalletClientInit, WalletClientModule, WithdrawState};
@@ -1380,29 +1382,18 @@ mod fedimint_migration_tests {
 
 // Verify the correct Bitcoin RPC is used
 
-#[cfg(feature = "bitcoind")]
 #[test]
 fn verify_bitcoind_backend() {
     let fixtures = fixtures();
     let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
     let bitcoin_rpc_kind = dyn_bitcoin_rpc.get_bitcoin_rpc_config().kind;
-    assert_eq!(bitcoin_rpc_kind, "bitcoind")
-}
 
-#[cfg(feature = "esplora")]
-#[test]
-fn verify_esplora_backend() {
-    let fixtures = fixtures();
-    let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
-    let bitcoin_rpc_kind = dyn_bitcoin_rpc.get_bitcoin_rpc_config().kind;
-    assert_eq!(bitcoin_rpc_kind, "esplora")
-}
-
-#[cfg(feature = "electrum")]
-#[test]
-fn verify_electrum_backend() {
-    let fixtures = fixtures();
-    let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
-    let bitcoin_rpc_kind = dyn_bitcoin_rpc.get_bitcoin_rpc_config().kind;
-    assert_eq!(bitcoin_rpc_kind, "electrum")
+    assert_eq!(
+        bitcoin_rpc_kind,
+        if env::var(FM_TEST_USE_REAL_DAEMONS_ENV) == Ok("1".to_string()) {
+            env::var(FM_TEST_BACKEND_BITCOIN_RPC_KIND_ENV).unwrap_or_else(|_| "bitcoind".into())
+        } else {
+            "mock_kind".into()
+        }
+    )
 }
