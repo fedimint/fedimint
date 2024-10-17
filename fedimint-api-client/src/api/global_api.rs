@@ -49,8 +49,28 @@ use super::{
 };
 use crate::query::FilterMapThreshold;
 
+/// Convenience extension trait used for wrapping [`IRawFederationApi`] in
+/// a [`GlobalFederationApiWithCache`]
+pub trait GlobalFederationApiWithCacheExt
+where
+    Self: Sized,
+{
+    fn with_cache(self) -> GlobalFederationApiWithCache<Self>;
+}
+
+impl<T> GlobalFederationApiWithCacheExt for T
+where
+    T: IRawFederationApi + MaybeSend + MaybeSync + 'static,
+{
+    fn with_cache(self) -> GlobalFederationApiWithCache<T> {
+        GlobalFederationApiWithCache::new(self)
+    }
+}
+
 /// [`IGlobalFederationApi`] wrapping some `T: IRawFederationApi` and adding
 /// a tiny bit of caching.
+///
+/// Use [`GlobalFederationApiWithCacheExt::with_cache`] to create.
 #[derive(Debug)]
 pub struct GlobalFederationApiWithCache<T> {
     inner: T,
