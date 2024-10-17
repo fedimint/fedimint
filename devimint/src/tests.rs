@@ -144,6 +144,13 @@ pub async fn latency_tests(
 
     let cln_gw_id = gw_cln.gateway_id().await?;
 
+    // Ensure that both gateways are caught up to the latest block
+    let block_height = dev_fed.bitcoind.get_block_count()? - 1;
+    try_join!(
+        gw_cln.wait_for_block_height(block_height),
+        dev_fed.gw_lnd.wait_for_block_height(block_height)
+    )?;
+
     match r#type {
         LatencyTest::Reissue => {
             info!("Testing latency of reissue");
@@ -867,6 +874,13 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     .unwrap();
     assert_eq!(client_reissue_amt, reissue_amount);
 
+    // Ensure that both gateways are caught up to the latest block
+    let block_height = bitcoind.get_block_count()? - 1;
+    try_join!(
+        gw_cln.wait_for_block_height(block_height),
+        gw_lnd.wait_for_block_height(block_height)
+    )?;
+
     // Before doing a normal payment, let's start with a HOLD invoice and only
     // finish this payment at the end
     info!("Testing fedimint-cli pays LND HOLD invoice via CLN gateway");
@@ -1249,6 +1263,13 @@ pub async fn cli_load_test_tool_test(dev_fed: DevFed) -> Result<()> {
         .pegin_client(10_000, dev_fed.fed.internal_client().await?)
         .await?;
     let invite_code = dev_fed.fed.invite_code()?;
+
+    // Ensure that both gateways are caught up to the latest block
+    let block_height = dev_fed.bitcoind.get_block_count()? - 1;
+    try_join!(
+        dev_fed.gw_cln.wait_for_block_height(block_height),
+        dev_fed.gw_lnd.wait_for_block_height(block_height)
+    )?;
     run_standard_load_test(&load_test_temp, &invite_code).await?;
     run_ln_circular_load_test(&load_test_temp, &invite_code).await?;
     Ok(())

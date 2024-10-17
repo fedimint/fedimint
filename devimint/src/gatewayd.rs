@@ -11,7 +11,7 @@ use fedimint_core::util::{backoff_util, retry};
 use fedimint_testing::gateway::LightningNodeType;
 use ln_gateway::envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV;
 use ln_gateway::lightning::ChannelInfo;
-use ln_gateway::rpc::{MnemonicResponse, V1_API_ENDPOINT};
+use ln_gateway::rpc::{GatewayInfo, MnemonicResponse, V1_API_ENDPOINT};
 use tracing::info;
 
 use crate::envs::{FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV};
@@ -389,6 +389,39 @@ impl Gatewayd {
             .await
             .map_err(ControlFlow::Continue)?;
             Ok(())
+        })
+        .await?;
+        Ok(())
+    }
+
+    pub async fn wait_for_block_height(&self, target_block_height: u64) -> Result<()> {
+        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+        if gatewayd_version < *VERSION_0_4_0_ALPHA {
+            match self
+                .ln
+                .as_ref()
+                .expect("Gateway does not have Lightning node")
+            {
+                LightningNode::Cln(lightningd) => lightningd.await_block_processing().await?,
+                LightningNode::Lnd(lnd) => lnd.await_block_processing().await?,
+                LightningNode::Ldk => panic!("LDK was not support below v0.4.0"),
+            }
+
+            return Ok(());
+        }
+
+        poll("waiting for block height", || async {
+            let info = self.get_info().await.map_err(ControlFlow::Continue)?;
+            let gateway_info: GatewayInfo =
+                serde_json::from_value(info).expect("Failed to decode GatewayInfo");
+            if let Some(height) = gateway_info.block_height {
+                if height >= target_block_height as u32 && gateway_info.synced_to_chain {
+                    return Ok(());
+                }
+            }
+            Err(ControlFlow::Continue(anyhow::anyhow!(
+                "Not synced to block"
+            )))
         })
         .await?;
         Ok(())
