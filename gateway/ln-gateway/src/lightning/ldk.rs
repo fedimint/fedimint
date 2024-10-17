@@ -6,15 +6,22 @@ use std::time::Duration;
 use async_trait::async_trait;
 use bitcoin::{secp256k1, Address, Network, OutPoint};
 use fedimint_bip39::Mnemonic;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_address, bitcoin30_to_bitcoin32_invoice, bitcoin30_to_bitcoin32_network,
+    bitcoin30_to_bitcoin32_payment_preimage, bitcoin30_to_bitcoin32_secp256k1_pubkey,
+    bitcoin32_to_bitcoin30_outpoint, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+};
 use fedimint_core::runtime::spawn;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
+use ldk_node::config::EsploraSyncConfig;
 use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::ln::PaymentHash;
-use ldk_node::lightning_invoice::Bolt11Invoice;
-use ldk_node::payment::{PaymentKind, PaymentStatus};
+use ldk_node::lightning::routing::gossip::NodeAlias;
+use ldk_node::payment::{PaymentKind, PaymentStatus, SendingParameters};
 use lightning::ln::PaymentPreimage;
 use lightning::util::scid_utils::scid_from_parts;
+use lightning_invoice::Bolt11Invoice;
 use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::Status;
@@ -68,27 +75,48 @@ impl GatewayLdkClient {
         lightning_port: u16,
         mnemonic: Mnemonic,
     ) -> anyhow::Result<Self> {
-        let mut node_builder = ldk_node::Builder::from_config(ldk_node::Config {
-            network,
+        // In devimint, gateways must allow for other gateways to open channels to them.
+        // To ensure this works, we must set a node alias to signal to ldk-node that we
+        // should accept incoming public channels. However, on mainnet we can disable
+        // this for better privacy.
+        let node_alias = if network == Network::Bitcoin {
+            None
+        } else {
+            let alias = format!("{network} LDK Gateway");
+            let mut bytes = [0u8; 32];
+            bytes[..alias.as_bytes().len()].copy_from_slice(alias.as_bytes());
+            Some(NodeAlias(bytes))
+        };
+
+        let mut node_builder = ldk_node::Builder::from_config(ldk_node::config::Config {
+            network: bitcoin30_to_bitcoin32_network(&network),
             listening_addresses: Some(vec![SocketAddress::TcpIpV4 {
                 addr: [0, 0, 0, 0],
                 port: lightning_port,
             }]),
-            // TODO: Remove these and rely on the default values.
-            // See here for details: https://github.com/lightningdevkit/ldk-node/issues/339#issuecomment-2344230472
-            onchain_wallet_sync_interval_secs: 10,
-            wallet_sync_interval_secs: 10,
+            node_alias,
             ..Default::default()
         });
         node_builder
             .set_entropy_bip39_mnemonic(mnemonic, None)
-            .set_esplora_server(esplora_server_url.to_string());
+            .set_chain_source_esplora(
+                esplora_server_url.to_string(),
+                Some(EsploraSyncConfig {
+                    // TODO: Remove these and rely on the default values.
+                    // See here for details: https://github.com/lightningdevkit/ldk-node/issues/339#issuecomment-2344230472
+                    onchain_wallet_sync_interval_secs: 10,
+                    lightning_wallet_sync_interval_secs: 10,
+                    ..Default::default()
+                }),
+            );
         let Some(data_dir_str) = data_dir.to_str() else {
             return Err(anyhow::anyhow!("Invalid data dir path"));
         };
         node_builder.set_storage_dir_path(data_dir_str.to_string());
 
         let node = Arc::new(node_builder.build()?);
+        // TODO: Call `start_with_runtime()` instead of `start()`.
+        // See https://github.com/fedimint/fedimint/issues/6159
         node.start().map_err(|e| {
             error!(?e, "Failed to start LDK Node");
             LightningRpcError::FailedToConnect
@@ -218,7 +246,9 @@ impl ILnRpcClient for GatewayLdkClient {
         let esplora_chain_tip_timestamp = chain_tip_block_summary.time.timestamp;
         let block_height: u32 = chain_tip_block_summary.time.height;
 
-        let synced_to_chain = node_status.latest_wallet_sync_timestamp.unwrap_or_default()
+        let synced_to_chain = node_status
+            .latest_lightning_wallet_sync_timestamp
+            .unwrap_or_default()
             > esplora_chain_tip_timestamp
             && node_status
                 .latest_onchain_wallet_sync_timestamp
@@ -227,8 +257,10 @@ impl ILnRpcClient for GatewayLdkClient {
 
         Ok(GetNodeInfoResponse {
             pub_key: self.node.node_id().serialize().to_vec(),
-            // TODO: This is a placeholder. We need to get the actual alias from the LDK node.
-            alias: format!("LDK Fedimint Gateway Node {}", self.node.node_id()),
+            alias: match self.node.node_alias() {
+                Some(alias) => alias.to_string(),
+                None => format!("LDK Fedimint Gateway Node {}", self.node.node_id()),
+            },
             network: self.node.config().network.to_string(),
             block_height,
             synced_to_chain,
@@ -246,14 +278,21 @@ impl ILnRpcClient for GatewayLdkClient {
         })
     }
 
-    // TODO: Respect `max_delay` and `max_fee` parameters.
     async fn pay(
         &self,
         invoice: Bolt11Invoice,
-        _max_delay: u64,
-        _max_fee: Amount,
+        max_delay: u64,
+        max_fee: Amount,
     ) -> Result<PayInvoiceResponse, LightningRpcError> {
-        let payment_id = match self.node.bolt11_payment().send(&invoice) {
+        let payment_id = match self.node.bolt11_payment().send(
+            &bitcoin30_to_bitcoin32_invoice(&invoice),
+            Some(SendingParameters {
+                max_total_routing_fee_msat: Some(Some(max_fee.msats)),
+                max_total_cltv_expiry_delta: Some(max_delay as u32),
+                max_path_count: None,
+                max_channel_saturation_power_of_half: None,
+            }),
+        ) {
             Ok(payment_id) => payment_id,
             Err(e) => {
                 return Err(LightningRpcError::FailedPayment {
@@ -340,7 +379,9 @@ impl ILnRpcClient for GatewayLdkClient {
                 .claim_for_hash(
                     ph,
                     claimable_amount_msat,
-                    PaymentPreimage(preimage.try_into().unwrap()),
+                    bitcoin30_to_bitcoin32_payment_preimage(&PaymentPreimage(
+                        preimage.try_into().unwrap(),
+                    )),
                 )
                 .map_err(|_| LightningRpcError::FailedToCompleteHtlc {
                     failure_reason: format!("Failed to claim LDK payment with hash {ph_hex_str}"),
@@ -428,10 +469,13 @@ impl ILnRpcClient for GatewayLdkClient {
         let onchain = self.node.onchain_payment();
 
         let txid = match amount {
-            BitcoinAmountOrAll::All => onchain.send_all_to_address(&address),
-            BitcoinAmountOrAll::Amount(amount_sats) => {
-                onchain.send_to_address(&address, amount_sats.to_sat())
+            BitcoinAmountOrAll::All => {
+                onchain.send_all_to_address(&bitcoin30_to_bitcoin32_address(&address))
             }
+            BitcoinAmountOrAll::Amount(amount_sats) => onchain.send_to_address(
+                &bitcoin30_to_bitcoin32_address(&address),
+                amount_sats.to_sat(),
+            ),
         }
         .map_err(|e| LightningRpcError::FailedToWithdrawOnchain {
             failure_reason: e.to_string(),
@@ -457,8 +501,8 @@ impl ILnRpcClient for GatewayLdkClient {
 
         let user_channel_id = self
             .node
-            .connect_open_channel(
-                pubkey,
+            .open_announced_channel(
+                bitcoin30_to_bitcoin32_secp256k1_pubkey(&pubkey),
                 SocketAddress::from_str(&host).map_err(|e| {
                     LightningRpcError::FailedToConnectToPeer {
                         failure_reason: e.to_string(),
@@ -467,7 +511,6 @@ impl ILnRpcClient for GatewayLdkClient {
                 channel_size_sats,
                 push_amount_msats_or,
                 None,
-                true,
             )
             .map_err(|e| LightningRpcError::FailedToOpenChannel {
                 failure_reason: e.to_string(),
@@ -503,15 +546,15 @@ impl ILnRpcClient for GatewayLdkClient {
     ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError> {
         let mut num_channels_closed = 0;
 
-        for channel_with_peer in self
-            .node
-            .list_channels()
-            .iter()
-            .filter(|channel| channel.counterparty_node_id == pubkey)
-        {
+        for channel_with_peer in self.node.list_channels().iter().filter(|channel| {
+            channel.counterparty_node_id == bitcoin30_to_bitcoin32_secp256k1_pubkey(&pubkey)
+        }) {
             if self
                 .node
-                .close_channel(&channel_with_peer.user_channel_id, pubkey)
+                .close_channel(
+                    &channel_with_peer.user_channel_id,
+                    bitcoin30_to_bitcoin32_secp256k1_pubkey(&pubkey),
+                )
                 .is_ok()
             {
                 num_channels_closed += 1;
@@ -533,12 +576,17 @@ impl ILnRpcClient for GatewayLdkClient {
             .filter(|channel| channel.is_channel_ready)
         {
             channels.push(ChannelInfo {
-                remote_pubkey: channel_details.counterparty_node_id,
+                remote_pubkey: bitcoin32_to_bitcoin30_secp256k1_pubkey(
+                    &channel_details.counterparty_node_id,
+                ),
                 channel_size_sats: channel_details.channel_value_sats,
                 outbound_liquidity_sats: channel_details.outbound_capacity_msat / 1000,
                 inbound_liquidity_sats: channel_details.inbound_capacity_msat / 1000,
                 short_channel_id: match channel_details.funding_txo {
-                    Some(funding_txo) => self.outpoint_to_scid(funding_txo).await.unwrap_or(0),
+                    Some(funding_txo) => self
+                        .outpoint_to_scid(bitcoin32_to_bitcoin30_outpoint(&funding_txo))
+                        .await
+                        .unwrap_or(0),
                     None => 0,
                 },
             });
