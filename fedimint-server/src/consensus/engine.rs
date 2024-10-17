@@ -55,6 +55,7 @@ use crate::metrics::{
 };
 use crate::net::connect::{Connector, TlsTcpConnector};
 use crate::net::peers::{DelayCalculator, ReconnectPeerConnections};
+use crate::net::peers_iroh::{IrohPeerConnections, NetworkConfig};
 use crate::LOG_CONSENSUS;
 
 // The name of the directory where the database checkpoints are stored.
@@ -170,16 +171,30 @@ impl ConsensusEngine {
 
         self.confirm_server_config_consensus_hash().await?;
 
-        // Build P2P connections for the atomic broadcast
-        let connections: P2PConnections = ReconnectPeerConnections::new(
-            self.cfg.network_config(p2p_bind_addr),
-            DelayCalculator::PROD_DEFAULT,
-            TlsTcpConnector::new(self.cfg.tls_config(), self.identity()).into_dyn(),
-            &self.task_group,
-            Arc::clone(&self.connection_status_channels),
-        )
-        .await
-        .into_dyn();
+        // Build P2P connections for the atomic broadcast if Iroh public keys are not
+        // available, default to dns api endpoints
+        let connections = if self.cfg.consensus.p2p_public_keys.is_empty() {
+            ReconnectPeerConnections::new(
+                self.cfg.network_config(p2p_bind_addr),
+                DelayCalculator::PROD_DEFAULT,
+                TlsTcpConnector::new(self.cfg.tls_config(), self.identity()).into_dyn(),
+                &self.task_group,
+                Arc::clone(&self.connection_status_channels),
+            )
+            .await
+            .into_dyn()
+        } else {
+            IrohPeerConnections::new(
+                NetworkConfig::new(
+                    self.cfg.private.p2p_secret_key.clone(),
+                    self.cfg.consensus.p2p_public_keys.clone(),
+                ),
+                &self.task_group,
+                Arc::clone(&self.connection_status_channels),
+            )
+            .await?
+            .into_dyn()
+        };
 
         self.initialize_checkpoint_directory(self.get_finished_session_count().await)?;
 

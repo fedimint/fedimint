@@ -286,7 +286,7 @@ impl FederationTestBuilder {
             {
                 sleep_in_test(
                     format!("Waiting for iroh api of peer {peer_id} to come online: {e}"),
-                    Duration::from_millis(500),
+                    Duration::from_secs(5),
                 )
                 .await;
             }
