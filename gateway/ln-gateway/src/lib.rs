@@ -90,7 +90,7 @@ use rpc::{
     CloseChannelsWithPeerPayload, CreateInvoiceForSelfPayload, FederationInfo, GatewayFedConfig,
     GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelPayload, PayInvoicePayload,
     ReceiveEcashPayload, ReceiveEcashResponse, SetConfigurationPayload, SpendEcashPayload,
-    SpendEcashResponse, SyncToChainPayload, WithdrawOnchainPayload, V1_API_ENDPOINT,
+    SpendEcashResponse, WithdrawOnchainPayload, V1_API_ENDPOINT,
 };
 use state_machine::{GatewayClientModule, GatewayExtPayStates};
 use tokio::sync::RwLock;
@@ -168,6 +168,7 @@ const DEFAULT_MODULE_KINDS: [(ModuleInstanceId, &ModuleKind); 2] = [
 pub enum GatewayState {
     Initializing,
     Configuring,
+    Syncing,
     Connected,
     Running { lightning_context: LightningContext },
     Disconnected,
@@ -179,6 +180,7 @@ impl Display for GatewayState {
         match self {
             GatewayState::Initializing => write!(f, "Initializing"),
             GatewayState::Configuring => write!(f, "Configuring"),
+            GatewayState::Syncing => write!(f, "Syncing"),
             GatewayState::Connected => write!(f, "Connected"),
             GatewayState::Running { .. } => write!(f, "Running"),
             GatewayState::Disconnected => write!(f, "Disconnected"),
@@ -485,15 +487,20 @@ impl Gateway {
         mut stream: RouteHtlcStream<'a>,
         ln_client: Arc<dyn ILnRpcClient>,
     ) -> ReceivePaymentStreamAction {
-        let (lightning_public_key, lightning_alias, lightning_network) =
+        let (lightning_public_key, lightning_alias, lightning_network, synced_to_chain) =
             match ln_client.parsed_node_info().await {
                 Ok((
                     lightning_public_key,
                     lightning_alias,
                     lightning_network,
                     _block_height,
-                    _synced_to_chain,
-                )) => (lightning_public_key, lightning_alias, lightning_network),
+                    synced_to_chain,
+                )) => (
+                    lightning_public_key,
+                    lightning_alias,
+                    lightning_network,
+                    synced_to_chain,
+                ),
                 Err(e) => {
                     warn!("Failed to retrieve Lightning info: {e:?}");
                     return ReceivePaymentStreamAction::RetryAfterDelay;
@@ -509,6 +516,16 @@ impl Gateway {
                 .wait_key_exists(&GatewayConfigurationKey)
                 .await
         };
+
+        if synced_to_chain {
+            info!("Gateway is already synced");
+        } else {
+            self.set_gateway_state(GatewayState::Syncing).await;
+            if let Err(e) = ln_client.wait_for_chain_sync().await {
+                error!(?e, "Failed to wait for chain sync");
+                return ReceivePaymentStreamAction::RetryAfterDelay;
+            }
+        }
 
         if gateway_config.network != lightning_network {
             warn!(
@@ -1501,16 +1518,6 @@ impl Gateway {
             inbound_lightning_liquidity_msats: lightning_node_balances
                 .inbound_lightning_liquidity_msats,
         })
-    }
-
-    pub async fn handle_sync_to_chain_msg(&self, payload: SyncToChainPayload) -> AdminResult<()> {
-        self.get_lightning_context()
-            .await?
-            .lnrpc
-            .sync_to_chain(payload.block_height)
-            .await?;
-
-        Ok(())
     }
 
     // Handles a request the spend the gateway's ecash for a given federation.

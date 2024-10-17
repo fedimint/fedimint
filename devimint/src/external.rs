@@ -388,8 +388,7 @@ impl Lightningd {
         Ok(rpc.call_typed(&request).await?)
     }
 
-    // TODO(tvolk131): Remove this method and instead use
-    // `Gatewayd.wait_for_chain_sync()` once 0.4.0 is released
+    // TODO(support:v0.4): In v0.5, gateways wait to be synced to the chain
     pub async fn await_block_processing(&self) -> Result<()> {
         poll("lightningd block processing", || async {
             let btc_height = self
@@ -593,8 +592,7 @@ impl Lnd {
             .identity_pubkey)
     }
 
-    // TODO(tvolk131): Remove this method and instead use
-    // `Gatewayd.wait_for_chain_sync()` once 0.4.0 is released
+    // TODO(support:v0.4): In v0.5, gateways wait to be synced to the chain
     pub async fn await_block_processing(&self) -> Result<()> {
         poll("lnd block processing", || async {
             let synced = self
@@ -869,14 +867,6 @@ pub async fn open_channels_between_gateways(
     bitcoind: &Bitcoind,
     gateways: &[NamedGateway<'_>],
 ) -> Result<()> {
-    debug!(target: LOG_DEVIMINT, "Syncing gateway lightning nodes to chain tip...");
-    futures::future::try_join_all(
-        gateways
-            .iter()
-            .map(|(gw, _gw_name)| gw.wait_for_chain_sync(bitcoind)),
-    )
-    .await?;
-
     debug!(target: LOG_DEVIMINT, "Funding all gateway lightning nodes...");
     for (gw, _gw_name) in gateways {
         let funding_addr = gw.get_ln_onchain_address().await?;
@@ -885,11 +875,12 @@ pub async fn open_channels_between_gateways(
 
     bitcoind.mine_blocks(10).await?;
 
+    let block_count = bitcoind.get_block_count()?;
     debug!(target: LOG_DEVIMINT, "Syncing gateway lightning nodes to chain tip...");
     futures::future::try_join_all(
         gateways
             .iter()
-            .map(|(gw, _gw_name)| gw.wait_for_chain_sync(bitcoind)),
+            .map(|(gw, _gw_name)| gw.wait_for_block_height(block_count - 1)),
     )
     .await?;
 
@@ -965,14 +956,6 @@ pub async fn open_channels_between_gateways(
     }
 
     bitcoind.mine_blocks(10).await?;
-
-    debug!(target: LOG_DEVIMINT, "Syncing gateway lightning nodes to chain tip...");
-    futures::future::try_join_all(
-        gateways
-            .iter()
-            .map(|(gw, _gw_name)| gw.wait_for_chain_sync(bitcoind)),
-    )
-    .await?;
 
     for ((gw_a, _gw_a_name), (gw_b, _gw_b_name)) in &gateway_pairs {
         let gw_a_node_pubkey = gw_a.lightning_pubkey().await?;
