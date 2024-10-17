@@ -754,6 +754,8 @@ impl Federation {
             poll_eq!(gateway_balance, amount * 1000)
         })
         .await?;
+        gw.wait_for_block_height(self.bitcoind.get_block_count()? - 1)
+            .await?;
         Ok(())
     }
 

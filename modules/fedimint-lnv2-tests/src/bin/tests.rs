@@ -94,9 +94,11 @@ async fn pegin_gateways(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         .as_ref()
         .expect("Gateways of version 0.5.0 or higher support LDK");
 
-    federation.pegin_gateway(1_000_000, gw_lnd).await?;
-    federation.pegin_gateway(1_000_000, gw_cln).await?;
-    federation.pegin_gateway(1_000_000, gw_ldk).await?;
+    try_join!(
+        federation.pegin_gateway(1_000_000, gw_lnd),
+        federation.pegin_gateway(1_000_000, gw_cln),
+        federation.pegin_gateway(1_000_000, gw_ldk),
+    )?;
 
     info!("Pegging-in gateways successful");
 
@@ -232,6 +234,13 @@ async fn test_self_payments_success(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         .as_ref()
         .expect("Gateways of version 0.5.0 or higher support LDK");
 
+    let block_height = dev_fed.bitcoind().await?.get_block_count()? - 1;
+    try_join!(
+        gw_cln.wait_for_block_height(block_height),
+        gw_lnd.wait_for_block_height(block_height),
+        gw_ldk.wait_for_block_height(block_height),
+    )?;
+
     let gateways = [(gw_lnd, "LND"), (gw_cln, "CLN"), (gw_ldk, "LDK")];
     let gateway_matrix = gateways.iter().cartesian_product(gateways);
 
@@ -353,9 +362,11 @@ async fn test_inter_federation_payments(
     gw_ldk.connect_fed(&receive_federation).await?;
 
     // pegin gateways for new federation
-    receive_federation.pegin_gateway(1_000_000, gw_cln).await?;
-    receive_federation.pegin_gateway(1_000_000, gw_lnd).await?;
-    receive_federation.pegin_gateway(1_000_000, gw_ldk).await?;
+    try_join!(
+        receive_federation.pegin_gateway(1_000_000, gw_cln),
+        receive_federation.pegin_gateway(1_000_000, gw_lnd),
+        receive_federation.pegin_gateway(1_000_000, gw_ldk),
+    )?;
 
     let receive_client = receive_federation
         .new_joined_client("lnv2-receive-client")
