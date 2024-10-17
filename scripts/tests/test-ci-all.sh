@@ -33,7 +33,7 @@ runLowPrio cargo nextest run --no-run ${CARGO_PROFILE:+--cargo-profile ${CARGO_P
 # let us enforce it, we need to go behind its back. We put a fake 'rustc'
 # in the PATH.
 # If you really need to break this rule, ping dpc
-export FM_CARGO_DENY_COMPILATION=1
+export CARGO_DENY_COMPILATION=1
 
 function rust_unit_tests() {
   # unit tests don't use binaries from old versions, so there's no need to run for backwards-compatibility tests

@@ -13,6 +13,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.fenix.follows = "fenix";
     };
+    cargo-deluxe = {
+      url = "github:rustshop/cargo-deluxe?rev=4acc6488d02f032434a5a1341f21f20d328bba40";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     bundlers = {
       # TODO: switch back to upstream after https://github.com/matthewbauer/nix-bundle/pull/103 is available
       url = "github:dpc/bundlers?branch=24-02-21-tar-deterministic&rev=e8aafe89a11ae0a5f3ce97d1d7d0fcfb354c79eb";
@@ -29,6 +33,7 @@
       nixpkgs,
       flake-utils,
       flakebox,
+      cargo-deluxe,
       advisory-db,
       bundlers,
       ...
@@ -69,7 +74,13 @@
       let
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [ overlayAll ];
+          overlays = [
+            overlayAll
+
+            (final: prev: {
+              cargo-deluxe = cargo-deluxe.packages.${system}.default;
+            })
+          ];
         };
 
         lib = pkgs.lib;
@@ -386,15 +397,12 @@
             # was moved into another shell.
             cross = flakeboxLib.mkDevShell (
               commonShellArgs
-              // craneMultiBuild.commonEnvsShellRocksdbLinkCross
+              // craneMultiBuild.commonEnvsCrossShell
               // {
                 toolchain = toolchainAll;
                 shellHook = ''
-                  # hijack cargo for our evil purposes
-                  export CARGO_ORIG_BIN="$(${pkgs.which}/bin/which cargo)"
                   export REPO_ROOT="$(git rev-parse --show-toplevel)"
                   export PATH="$REPO_ROOT/bin:$PATH"
-                  export PATH="''${REPO_ROOT}/nix/cargo-wrapper/:$PATH"
                 '';
               }
             );
