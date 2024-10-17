@@ -4,7 +4,7 @@ use std::time::Duration;
 use bitcoin::key::KeyPair;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, DynState, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ChangeStrategy, ClientInput};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -292,7 +292,7 @@ impl LightningReceiveConfirmedInvoice {
         };
 
         global_context
-            .claim_input(dbtx, client_input)
+            .claim_input(dbtx, client_input, ChangeStrategy::default())
             .await
             .expect("Cannot claim input, additional funding needed")
     }

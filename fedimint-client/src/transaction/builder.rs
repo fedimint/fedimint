@@ -62,6 +62,7 @@ where
 
 #[derive(Default, Clone)]
 pub struct TransactionBuilder {
+    pub(crate) change_strategy: ChangeStrategy,
     pub(crate) inputs: Vec<ClientInput>,
     pub(crate) outputs: Vec<ClientOutput>,
 }
@@ -94,6 +95,14 @@ impl TransactionBuilder {
             self.outputs.push(output);
         }
 
+        self
+    }
+
+    /// Set the [`ChangeStrategy`] for the transaction to control how many
+    /// change outputs are generated. Defaults to
+    /// [`ChangeStrategy::OptimizeWallet`].
+    pub fn with_change_strategy(mut self, change_strategy: ChangeStrategy) -> Self {
+        self.change_strategy = change_strategy;
         self
     }
 
@@ -159,4 +168,25 @@ where
             .map(|state| state.into_dyn(module_instance))
             .collect()
     })
+}
+
+/// Indicates to the primary module how it is supposed to generate change
+/// outputs for the transaction. Not all primary modules will know how to handle
+/// all strategies, they should just ignore them in that case.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum ChangeStrategy {
+    /// The primary module should minimize the number of change outputs.
+    ///
+    /// This is particularly useful for e-cash refunds where we know that the
+    /// wallet state before the OOB spend was good and the parallel refund of
+    /// many notes would lead to issuing too many small notes.
+    Minimize,
+    /// The primary module should optimize the wallet by creating change outputs
+    /// as needed to approximate the desired wallet structure.
+    ///
+    /// In case of the mint module that means creating small denomination notes
+    /// first in case we are missing these in the wallet and only using the
+    /// remaining funds for creating larger denominations.
+    #[default]
+    OptimizeWallet,
 }

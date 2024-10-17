@@ -166,8 +166,8 @@ use crate::sm::executor::{
 };
 use crate::sm::{ClientSMDatabaseTransaction, DynState, Executor, IState, Notifier, State};
 use crate::transaction::{
-    tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder, TxSubmissionContext,
-    TxSubmissionStates, TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+    tx_submission_sm_decoder, ChangeStrategy, ClientInput, ClientOutput, TransactionBuilder,
+    TxSubmissionContext, TxSubmissionStates, TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
 
 /// Client backup
@@ -296,6 +296,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         input: InstancelessDynClientInput,
+        change_strategy: ChangeStrategy,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>;
 
     /// This function is mostly meant for internal use, you are probably looking
@@ -348,6 +349,7 @@ impl IGlobalClientContext for () {
         &self,
         _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         _input: InstancelessDynClientInput,
+        _change_strategy: ChangeStrategy,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
         unimplemented!("fake implementation, only for tests");
     }
@@ -423,6 +425,7 @@ impl DynGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         input: ClientInput<I, S>,
+        change_strategy: ChangeStrategy,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
     where
         I: IInput + MaybeSend + MaybeSync + 'static,
@@ -436,6 +439,7 @@ impl DynGlobalClientContext {
                 amount: input.amount,
                 state_machines: states_to_instanceless_dyn(input.state_machines),
             },
+            change_strategy,
         )
         .await
     }
@@ -562,6 +566,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         input: InstancelessDynClientInput,
+        change_strategy: ChangeStrategy,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
         let instance_input = ClientInput {
             input: DynInput::from_parts(self.module_instance_id, input.input),
@@ -574,7 +579,9 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
             .finalize_and_submit_transaction_inner(
                 &mut dbtx.global_tx().to_ref_nc(),
                 self.operation,
-                TransactionBuilder::new().with_input(instance_input),
+                TransactionBuilder::new()
+                    .with_input(instance_input)
+                    .with_change_strategy(change_strategy),
             )
             .await
     }
@@ -1161,6 +1168,7 @@ impl Client {
                 operation_id,
                 input_amount,
                 output_amount,
+                partial_transaction.change_strategy,
             )
             .await?;
 

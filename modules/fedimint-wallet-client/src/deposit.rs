@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ChangeStrategy, ClientInput};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -285,7 +285,7 @@ pub(crate) async fn transition_btc_tx_confirmed(
     };
 
     let (fm_txid, change) = global_context
-        .claim_input(dbtx, client_input)
+        .claim_input(dbtx, client_input, ChangeStrategy::default())
         .await
         .expect("Cannot claim input, additional funding needed");
 
