@@ -756,7 +756,7 @@ impl Lnd {
 }
 
 // TODO(tvolk131): Remove this method and instead use
-// `open_channel_between_gateways()` below once 0.4.0 is released
+// `open_channels_between_gateways()` below once 0.4.0 is released
 pub async fn open_channel(
     process_mgr: &ProcessManager,
     bitcoind: &Bitcoind,
@@ -907,16 +907,26 @@ pub async fn open_channels_between_gateways(
     let open_channel_tasks = gateway_pairs.iter()
         .map(|((gw_a, gw_a_name), (gw_b, gw_b_name))| {
             let gw_a = (*gw_a).clone();
+            let gw_a_name = (*gw_a_name).to_string();
             let gw_b = (*gw_b).clone();
+            let gw_b_name = (*gw_b_name).to_string();
 
-            let push_amount = 5_000_000;
-            info!(target: LOG_DEVIMINT, "Opening channel between {gw_a_name} and {gw_b_name} gateway lightning nodes with {push_amount} on each side...");
+            let sats_per_side = 5_000_000;
+            info!(target: LOG_DEVIMINT, "Opening channel from {gw_a_name} gateway to {gw_b_name} gateway with {sats_per_side} sats on each side...");
             tokio::task::spawn(async move {
                 // Sometimes channel openings just after funding the lightning nodes don't work right away.
-                poll_with_timeout("Open channel", Duration::from_secs(30), || async {
-                    gw_a.open_channel(&gw_b, 10_000_000, Some(push_amount)).await.map_err(ControlFlow::Continue)
+                let res = poll_with_timeout(&format!("Open channel from {gw_a_name} to {gw_b_name}"), Duration::from_secs(30), || async {
+                    gw_a.open_channel(&gw_b, sats_per_side * 2, Some(sats_per_side)).await.map_err(ControlFlow::Continue)
                 })
-                .await
+                .await;
+
+                if res.is_ok() {
+                    info!(target: LOG_DEVIMINT, "Opened channel from {gw_a_name} gateway to {gw_b_name} gateway");
+                } else {
+                    info!(target: LOG_DEVIMINT, "Failed to open channel from {gw_a_name} gateway to {gw_b_name} gateway");
+                }
+
+                res
             })
         })
         .collect::<Vec<_>>();
