@@ -171,15 +171,22 @@ pub async fn run(
 
     let api_urls = get_api_urls(&db, &cfg.consensus).await;
 
+    let federation_api = if cfg.consensus.api_public_keys.is_empty() {
+        DynGlobalApi::from_endpoints(
+            api_urls,
+            &force_api_secrets.get_active(),
+            &Connector::default(),
+        )
+    } else {
+        DynGlobalApi::from_iroh_endpoints(cfg.consensus.api_public_keys.clone(), task_group.clone())
+            .await?
+    };
+
     // FIXME: (@leonardo) How should this be handled ?
     // Using the `Connector::default()` for now!
     ConsensusEngine {
         db,
-        federation_api: DynGlobalApi::from_endpoints(
-            api_urls,
-            &force_api_secrets.get_active(),
-            &Connector::default(),
-        ),
+        federation_api,
         self_id_str: cfg.local.identity.to_string(),
         peer_id_str: (0..cfg.consensus.api_endpoints.len())
             .map(|x| x.to_string())

@@ -2522,18 +2522,28 @@ impl ClientBuilder {
         api_secret: Option<String>,
     ) -> anyhow::Result<Option<ClientBackup>> {
         let connector = self.connector;
-        let api = DynGlobalApi::from_endpoints(
-            // TODO: change join logic to use FederationId v2
-            config
-                .global
-                .api_endpoints
-                .iter()
-                .map(|(peer_id, peer_url)| (*peer_id, peer_url.url.clone())),
-            &api_secret,
-            &connector,
-        );
+
+        let federation_api = if config.global.api_public_keys.is_empty() {
+            DynGlobalApi::from_endpoints(
+                // TODO: change join logic to use FederationId v2
+                config
+                    .global
+                    .api_endpoints
+                    .iter()
+                    .map(|(peer_id, peer_url)| (*peer_id, peer_url.url.clone())),
+                &api_secret,
+                &connector,
+            )
+        } else {
+            DynGlobalApi::from_iroh_endpoints(
+                config.global.api_public_keys.clone(),
+                TaskGroup::new(),
+            )
+            .await?
+        };
+
         Client::download_backup_from_federation_static(
-            &api,
+            &federation_api,
             &Self::federation_root_secret(root_secret, config),
             &self.decoders(config),
         )
