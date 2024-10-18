@@ -409,7 +409,7 @@ in
     workspaceClippy = craneLib.cargoClippy {
       cargoArtifacts = workspaceDeps;
 
-      cargoClippyExtraArgs = "--workspace --all-targets --no-deps";
+      cargoClippyExtraArgs = "--workspace --all-targets --no-deps -- -D warnings";
       doInstallCargoArtifacts = false;
     };
 
