@@ -1182,7 +1182,17 @@
 <a href="#1181" id="1181">1181</a>
 <a href="#1182" id="1182">1182</a>
 <a href="#1183" id="1183">1183</a>
-<a href="#1184" id="1184">1184</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
+<a href="#1184" id="1184">1184</a>
+<a href="#1185" id="1185">1185</a>
+<a href="#1186" id="1186">1186</a>
+<a href="#1187" id="1187">1187</a>
+<a href="#1188" id="1188">1188</a>
+<a href="#1189" id="1189">1189</a>
+<a href="#1190" id="1190">1190</a>
+<a href="#1191" id="1191">1191</a>
+<a href="#1192" id="1192">1192</a>
+<a href="#1193" id="1193">1193</a>
+<a href="#1194" id="1194">1194</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -1209,7 +1219,7 @@
 <span class="kw">use </span>tokio::time::Instant;
 <span class="kw">use </span>tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest};
 <span class="kw">use </span>tonic_lnd::Client <span class="kw">as </span>LndClient;
-<span class="kw">use </span>tracing::{debug, info, trace, warn};
+<span class="kw">use </span>tracing::{debug, error, info, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::util::{
     poll, poll_with_timeout, ClnLightningCli, GatewayClnExtension, ProcessHandle, ProcessManager,
@@ -1943,7 +1953,7 @@
 }
 
 <span class="comment">// TODO(tvolk131): Remove this method and instead use
-// `open_channel_between_gateways()` below once 0.4.0 is released
+// `open_channels_between_gateways()` below once 0.4.0 is released
 </span><span class="kw">pub async fn </span>open_channel(
     process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
     bitcoind: <span class="kw-2">&amp;</span>Bitcoind,
@@ -2094,17 +2104,27 @@
     <span class="kw">let </span>open_channel_tasks = gateway_pairs.iter()
         .map(|((gw_a, gw_a_name), (gw_b, gw_b_name))| {
             <span class="kw">let </span>gw_a = (<span class="kw-2">*</span>gw_a).clone();
+            <span class="kw">let </span>gw_a_name = (<span class="kw-2">*</span>gw_a_name).to_string();
             <span class="kw">let </span>gw_b = (<span class="kw-2">*</span>gw_b).clone();
+            <span class="kw">let </span>gw_b_name = (<span class="kw-2">*</span>gw_b_name).to_string();
 
-            <span class="kw">let </span>push_amount = <span class="number">5_000_000</span>;
-            <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"Opening channel between {gw_a_name} and {gw_b_name} gateway lightning nodes with {push_amount} on each side..."</span>);
+            <span class="kw">let </span>sats_per_side = <span class="number">5_000_000</span>;
+            <span class="macro">info!</span>(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, <span class="string">"Opening channel with {sats_per_side} sats on each side..."</span>);
             tokio::task::spawn(<span class="kw">async move </span>{
                 <span class="comment">// Sometimes channel openings just after funding the lightning nodes don't work right away.
-                </span>poll_with_timeout(<span class="string">"Open channel"</span>, Duration::from_secs(<span class="number">30</span>), || <span class="kw">async </span>{
-                    gw_a.open_channel(<span class="kw-2">&amp;</span>gw_b, <span class="number">10_000_000</span>, <span class="prelude-val">Some</span>(push_amount)).<span class="kw">await</span>.map_err(ControlFlow::Continue)
+                </span><span class="kw">let </span>res = poll_with_timeout(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Open channel from {gw_a_name} to {gw_b_name}"</span>), Duration::from_secs(<span class="number">30</span>), || <span class="kw">async </span>{
+                    gw_a.open_channel(<span class="kw-2">&amp;</span>gw_b, sats_per_side * <span class="number">2</span>, <span class="prelude-val">Some</span>(sats_per_side)).<span class="kw">await</span>.map_err(ControlFlow::Continue)
                 })
-                .<span class="kw">await
-            </span>})
+                .<span class="kw">await</span>;
+
+                <span class="kw">if </span>res.is_ok() {
+                    <span class="macro">info!</span>(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, <span class="string">"Opened channel"</span>);
+                } <span class="kw">else </span>{
+                    <span class="macro">error!</span>(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, <span class="string">"Failed to open channel"</span>);
+                }
+
+                res
+            })
         })
         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
     <span class="kw">let </span>open_channel_task_results: Vec&lt;<span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt; =
