@@ -279,7 +279,7 @@ impl CheckOutcome {
             }
             let now = time::now();
             let age = now.duration_since(creation_time).unwrap_or_default();
-            return Some(age / 2);
+            return Some(age / 10);
         }
 
         // The delays is the minimum retry delay.
