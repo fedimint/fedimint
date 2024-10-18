@@ -24,7 +24,7 @@ use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use tokio::time::Instant;
 use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest};
 use tonic_lnd::Client as LndClient;
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use crate::util::{
     poll, poll_with_timeout, ClnLightningCli, GatewayClnExtension, ProcessHandle, ProcessManager,
@@ -912,7 +912,7 @@ pub async fn open_channels_between_gateways(
             let gw_b_name = (*gw_b_name).to_string();
 
             let sats_per_side = 5_000_000;
-            info!(target: LOG_DEVIMINT, "Opening channel from {gw_a_name} gateway to {gw_b_name} gateway with {sats_per_side} sats on each side...");
+            info!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Opening channel with {sats_per_side} sats on each side...");
             tokio::task::spawn(async move {
                 // Sometimes channel openings just after funding the lightning nodes don't work right away.
                 let res = poll_with_timeout(&format!("Open channel from {gw_a_name} to {gw_b_name}"), Duration::from_secs(30), || async {
@@ -921,9 +921,9 @@ pub async fn open_channels_between_gateways(
                 .await;
 
                 if res.is_ok() {
-                    info!(target: LOG_DEVIMINT, "Opened channel from {gw_a_name} gateway to {gw_b_name} gateway");
+                    info!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Opened channel");
                 } else {
-                    info!(target: LOG_DEVIMINT, "Failed to open channel from {gw_a_name} gateway to {gw_b_name} gateway");
+                    error!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Failed to open channel");
                 }
 
                 res
