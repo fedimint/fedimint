@@ -94,9 +94,11 @@ async fn pegin_gateways(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         .as_ref()
         .expect("Gateways of version 0.5.0 or higher support LDK");
 
-    federation.pegin_gateway(1_000_000, gw_lnd).await?;
-    federation.pegin_gateway(1_000_000, gw_cln).await?;
-    federation.pegin_gateway(1_000_000, gw_ldk).await?;
+    try_join!(
+        federation.pegin_gateway(1_000_000, gw_lnd),
+        federation.pegin_gateway(1_000_000, gw_cln),
+        federation.pegin_gateway(1_000_000, gw_ldk),
+    )?;
 
     info!("Pegging-in gateways successful");
 
@@ -353,9 +355,11 @@ async fn test_inter_federation_payments(
     gw_ldk.connect_fed(&receive_federation).await?;
 
     // pegin gateways for new federation
-    receive_federation.pegin_gateway(1_000_000, gw_cln).await?;
-    receive_federation.pegin_gateway(1_000_000, gw_lnd).await?;
-    receive_federation.pegin_gateway(1_000_000, gw_ldk).await?;
+    try_join!(
+        receive_federation.pegin_gateway(1_000_000, gw_cln),
+        receive_federation.pegin_gateway(1_000_000, gw_lnd),
+        receive_federation.pegin_gateway(1_000_000, gw_ldk),
+    )?;
 
     let receive_client = receive_federation
         .new_joined_client("lnv2-receive-client")
