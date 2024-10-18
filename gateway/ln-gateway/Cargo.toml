@@ -56,7 +56,7 @@ fedimint-rocksdb = { workspace = true }
 fedimint-wallet-client = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
-ldk-node = "0.3.0"
+ldk-node = "0.4.1"
 lightning = { workspace = true }
 lightning-invoice = { workspace = true }
 prost = "0.13.3"
