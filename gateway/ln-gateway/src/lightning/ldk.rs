@@ -14,6 +14,7 @@ use ldk_node::lightning::ln::PaymentHash;
 use ldk_node::lightning_invoice::Bolt11Invoice;
 use ldk_node::payment::{PaymentKind, PaymentStatus};
 use lightning::ln::PaymentPreimage;
+use lightning::routing::gossip::NodeAlias;
 use lightning::util::scid_utils::scid_from_parts;
 use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
@@ -68,12 +69,26 @@ impl GatewayLdkClient {
         lightning_port: u16,
         mnemonic: Mnemonic,
     ) -> anyhow::Result<Self> {
+        // In devimint, gateways must allow for other gateways to open channels to them.
+        // To ensure this works, we must set a node alias to signal to ldk-node that we
+        // should accept incoming public channels. However, on mainnet we can disable
+        // this for better privacy.
+        let node_alias = if network == Network::Bitcoin {
+            None
+        } else {
+            let alias = format!("{network} LDK Gateway");
+            let mut bytes = [0u8; 32];
+            bytes[..alias.as_bytes().len()].copy_from_slice(alias.as_bytes());
+            Some(NodeAlias(bytes))
+        };
+
         let mut node_builder = ldk_node::Builder::from_config(ldk_node::Config {
             network,
             listening_addresses: Some(vec![SocketAddress::TcpIpV4 {
                 addr: [0, 0, 0, 0],
                 port: lightning_port,
             }]),
+            node_alias,
             // TODO: Remove these and rely on the default values.
             // See here for details: https://github.com/lightningdevkit/ldk-node/issues/339#issuecomment-2344230472
             onchain_wallet_sync_interval_secs: 10,
@@ -457,7 +472,7 @@ impl ILnRpcClient for GatewayLdkClient {
 
         let user_channel_id = self
             .node
-            .connect_open_channel(
+            .open_announced_channel(
                 pubkey,
                 SocketAddress::from_str(&host).map_err(|e| {
                     LightningRpcError::FailedToConnectToPeer {
@@ -467,7 +482,6 @@ impl ILnRpcClient for GatewayLdkClient {
                 channel_size_sats,
                 push_amount_msats_or,
                 None,
-                true,
             )
             .map_err(|e| LightningRpcError::FailedToOpenChannel {
                 failure_reason: e.to_string(),
