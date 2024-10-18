@@ -112,9 +112,6 @@ pub const EXPIRATION_DELTA_LIMIT_DEFAULT: u64 = 1008;
 /// A two hour buffer in case either the client or gateway go offline
 pub const CONTRACT_CONFIRMATION_BUFFER: u64 = 12;
 
-/// Default expiration time for lightning invoices
-pub const INVOICE_EXPIRATION_SECONDS_DEFAULT: u32 = 24 * 60 * 60;
-
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// The high-level state of sending a payment over lightning.
 ///
@@ -517,25 +514,6 @@ impl LightningClientModule {
         &self,
         invoice: Bolt11Invoice,
         gateway: Option<SafeUrl>,
-    ) -> Result<OperationId, SendPaymentError> {
-        self.send_custom(
-            invoice,
-            PaymentFee::SEND_FEE_LIMIT_DEFAULT,
-            EXPIRATION_DELTA_LIMIT_DEFAULT,
-            gateway,
-            Value::Null,
-        )
-        .await
-    }
-
-    /// Pay an invoice. For  testing  you can optionally specify a gateway to
-    /// route with, otherwise a gateway will be selected automatically.
-    pub async fn send_custom(
-        &self,
-        invoice: Bolt11Invoice,
-        payment_fee_limit: PaymentFee,
-        expiration_delta_limit: u64,
-        gateway: Option<SafeUrl>,
         custom_meta: Value,
     ) -> Result<OperationId, SendPaymentError> {
         let amount = invoice
@@ -577,11 +555,11 @@ impl LightningClientModule {
 
         let (send_fee, expiration_delta) = routing_info.send_parameters(&invoice);
 
-        if !send_fee.le(&payment_fee_limit) {
+        if !send_fee.le(&PaymentFee::SEND_FEE_LIMIT_DEFAULT) {
             return Err(SendPaymentError::PaymentFeeExceedsLimit(send_fee));
         }
 
-        if expiration_delta_limit < expiration_delta {
+        if EXPIRATION_DELTA_LIMIT_DEFAULT < expiration_delta {
             return Err(SendPaymentError::ExpirationDeltaExceedsLimit(
                 expiration_delta,
             ));
@@ -765,27 +743,11 @@ impl LightningClientModule {
     /// Request an invoice. For testing you can optionally specify a gateway to
     /// generate the invoice, otherwise a gateway will be selected
     /// automatically.
-    pub async fn receive(&self, amount: Amount, gateway: Option<SafeUrl>) -> ReceiveResult {
-        self.receive_custom(
-            amount,
-            INVOICE_EXPIRATION_SECONDS_DEFAULT,
-            Bolt11InvoiceDescription::Direct(String::new()),
-            PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
-            gateway,
-            Value::Null,
-        )
-        .await
-    }
-
-    /// Request an invoice. For testing you can optionally specify a gateway to
-    /// generate the invoice, otherwise a gateway will be selected
-    /// automatically.
-    pub async fn receive_custom(
+    pub async fn receive(
         &self,
         amount: Amount,
         expiry_secs: u32,
         description: Bolt11InvoiceDescription,
-        payment_fee_limit: PaymentFee,
         gateway: Option<SafeUrl>,
         custom_meta: Value,
     ) -> Result<(Bolt11Invoice, OperationId), ReceiveError> {
@@ -795,7 +757,6 @@ impl LightningClientModule {
                 amount,
                 expiry_secs,
                 description,
-                payment_fee_limit,
                 gateway,
             )
             .await?;
@@ -817,7 +778,6 @@ impl LightningClientModule {
         amount: Amount,
         expiry_secs: u32,
         description: Bolt11InvoiceDescription,
-        payment_fee_limit: PaymentFee,
         gateway: Option<SafeUrl>,
     ) -> Result<(SafeUrl, IncomingContract, Bolt11Invoice), ReceiveError> {
         let (ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(recipient_static_pk);
@@ -844,7 +804,10 @@ impl LightningClientModule {
                 .map_err(ReceiveError::FailedToSelectGateway)?,
         };
 
-        if !routing_info.receive_fee.le(&payment_fee_limit) {
+        if !routing_info
+            .receive_fee
+            .le(&PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT)
+        {
             return Err(ReceiveError::PaymentFeeExceedsLimit(
                 routing_info.receive_fee,
             ));
