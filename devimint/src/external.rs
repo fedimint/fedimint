@@ -19,6 +19,7 @@ use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing::gateway::LightningNodeType;
 use hex::ToHex;
 use itertools::Itertools;
+use ln_gateway::envs::FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV;
 use tokio::fs;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use tokio::time::Instant;
@@ -367,13 +368,15 @@ impl Lightningd {
             GatewayClnExtension::default_path().await.as_str(),
         );
         let btc_dir = utf8(&process_mgr.globals.FM_BTC_DIR);
+        let fm_gateway_listen = std::env::var(FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV)?;
         let cmd = cmd!(
             crate::util::Lightningd,
             "--dev-fast-gossip",
             "--dev-bitcoind-poll=1",
             format!("--lightning-dir={}", utf8(cln_dir)),
             format!("--bitcoin-datadir={btc_dir}"),
-            "--plugin={extension_path}"
+            "--plugin={extension_path}",
+            "--fm-gateway-listen={fm_gateway_listen}"
         );
 
         process_mgr.spawn_daemon("lightningd", cmd).await
