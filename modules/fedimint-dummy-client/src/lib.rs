@@ -17,7 +17,7 @@ use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::sm::{Context, ModuleNotifier};
-use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
+use fedimint_client::transaction::{ClientInput, ClientInputSM, ClientOutput, TransactionBuilder};
 use fedimint_core::core::{Decoder, ModuleKind, OperationId};
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
@@ -99,7 +99,8 @@ impl ClientModule for DummyClientModule {
         input_amount: Amount,
         output_amount: Amount,
     ) -> anyhow::Result<(
-        Vec<ClientInput<DummyInput, DummyStateMachine>>,
+        Vec<ClientInput<DummyInput>>,
+        Vec<ClientInputSM<DummyStateMachine>>,
         Vec<ClientOutput<DummyOutput, DummyStateMachine>>,
     )> {
         dbtx.ensure_isolated().expect("must be isolated");
@@ -126,6 +127,8 @@ impl ClientModule for DummyClientModule {
                     },
                     amount: missing_input_amount,
                     keys: vec![self.key],
+                };
+                let input_sm = ClientInputSM {
                     state_machines: Arc::new(move |txid, _| {
                         vec![DummyStateMachine::Input(
                             missing_input_amount,
@@ -135,9 +138,9 @@ impl ClientModule for DummyClientModule {
                     }),
                 };
 
-                Ok((vec![input], Vec::new()))
+                Ok((vec![input], vec![input_sm], Vec::new()))
             }
-            Ordering::Equal => Ok((Vec::new(), Vec::new())),
+            Ordering::Equal => Ok((Vec::new(), vec![], Vec::new())),
             Ordering::Greater => {
                 let missing_output_amount = input_amount - output_amount;
                 let output = ClientOutput {
@@ -155,7 +158,7 @@ impl ClientModule for DummyClientModule {
                     }),
                 };
 
-                Ok((Vec::new(), vec![output]))
+                Ok((Vec::new(), vec![], vec![output]))
             }
         }
     }
@@ -226,7 +229,6 @@ impl DummyClientModule {
             },
             amount,
             keys: vec![account_kp],
-            state_machines: Arc::new(|_, _| Vec::<DummyStateMachine>::new()),
         };
 
         // Build and send tx to the fed
