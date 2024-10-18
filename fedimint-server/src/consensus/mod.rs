@@ -28,6 +28,7 @@ use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{TaskGroup, TaskHandle};
 use fedimint_core::NumPeers;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
+use iroh_net::discovery::local_swarm_discovery::LocalSwarmDiscovery;
 use iroh_net::discovery::pkarr::PkarrPublisher;
 use iroh_net::endpoint::{Incoming, RecvStream, SendStream};
 use iroh_net::Endpoint;
@@ -300,8 +301,11 @@ async fn start_iroh_api(
     task_group: &TaskGroup,
 ) -> anyhow::Result<()> {
     let endpoint = Endpoint::builder()
-        .secret_key(secret_key.clone())
-        .discovery(Box::new(PkarrPublisher::n0_dns(secret_key)))
+        .discovery(match is_running_in_test_env() {
+            true => Box::new(LocalSwarmDiscovery::new(secret_key.public())?),
+            false => Box::new(PkarrPublisher::n0_dns(secret_key.clone())),
+        })
+        .secret_key(secret_key)
         .alpns(vec![FEDIMINT_ALPN.to_vec()])
         .bind()
         .await?;

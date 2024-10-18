@@ -28,7 +28,7 @@ bitcoin_hashes = { workspace = true }
 bitcoincore-rpc = { workspace = true }
 bls12_381 = { workspace = true }
 bytes = { workspace = true }
-iroh-net = "0.25.0"
+iroh-net = { workspace = true}
 fedimint-aead = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-bitcoind = { workspace = true }

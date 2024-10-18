@@ -6,11 +6,13 @@ use std::time::Duration;
 use anyhow::Context;
 use async_trait::async_trait;
 use fedimint_api_client::api::PeerConnectionStatus;
+use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::net::peers::{IP2PConnections, Recipient};
 use fedimint_core::task::{Cancellable, TaskGroup, TaskHandle};
 use fedimint_core::PeerId;
 use fedimint_logging::LOG_NET_PEER;
 use futures::future::select_all;
+use iroh_net::discovery::local_swarm_discovery::LocalSwarmDiscovery;
 use iroh_net::discovery::pkarr::{PkarrPublisher, PkarrResolver};
 use iroh_net::discovery::ConcurrentDiscovery;
 use iroh_net::endpoint::{Connection, Endpoint, Incoming};
@@ -68,14 +70,15 @@ impl IrohPeerConnections {
         task_group: &TaskGroup,
         status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
     ) -> anyhow::Result<Self> {
-        let discovery = ConcurrentDiscovery::from_services(vec![
-            Box::new(PkarrPublisher::n0_dns(cfg.secret_key.clone())),
-            Box::new(PkarrResolver::n0_dns()),
-        ]);
-
         let endpoint = Endpoint::builder()
+            .discovery(match is_running_in_test_env() {
+                true => Box::new(LocalSwarmDiscovery::new(cfg.secret_key.public())?),
+                false => Box::new(ConcurrentDiscovery::from_services(vec![
+                    Box::new(PkarrPublisher::n0_dns(cfg.secret_key.clone())),
+                    Box::new(PkarrResolver::n0_dns()),
+                ])),
+            })
             .secret_key(cfg.secret_key.clone())
-            .discovery(Box::new(discovery))
             .alpns(vec![FEDIMINT_ALPN.to_vec()])
             .bind()
             .await?;

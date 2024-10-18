@@ -21,6 +21,7 @@ use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
+use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::fmt_utils::AbbreviateDebug;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::AuditSummary;
@@ -40,8 +41,10 @@ use fedimint_core::{
 use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_PEER};
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
+use iroh_net::discovery::local_swarm_discovery::LocalSwarmDiscovery;
 use iroh_net::discovery::pkarr::PkarrResolver;
 use iroh_net::endpoint::{Connection, Endpoint};
+use iroh_net::key::SecretKey;
 use iroh_net::NodeId;
 use itertools::Itertools;
 use jsonrpsee_core::client::{ClientT, Error as JsonRpcClientError};
@@ -1061,7 +1064,7 @@ impl IrohFederationApi {
             peer_ids: peers.keys().cloned().collect(),
             self_peer_id,
             module_id: None,
-            connections: IrohApiConnections::new(peers, task_group).await?,
+            connections: IrohApiConnections::new(SecretKey::generate(), peers, task_group).await?,
         })
     }
 }
@@ -1134,11 +1137,16 @@ pub struct IrohApiConnections {
 impl IrohApiConnections {
     #[instrument(skip_all)]
     pub(crate) async fn new(
+        secret_key: SecretKey,
         peers: BTreeMap<PeerId, NodeId>,
         task_group: TaskGroup,
     ) -> anyhow::Result<Self> {
         let endpoint = Endpoint::builder()
-            .discovery(Box::new(PkarrResolver::n0_dns()))
+            .discovery(match is_running_in_test_env() {
+                true => Box::new(LocalSwarmDiscovery::new(secret_key.public())?),
+                false => Box::new(PkarrResolver::n0_dns()),
+            })
+            .secret_key(secret_key)
             .alpns(vec![FEDIMINT_ALPN.to_vec()])
             .bind()
             .await?;
