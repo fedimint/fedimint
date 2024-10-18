@@ -234,9 +234,14 @@ impl Gatewayd {
         let federation_id = fed.calculate_federation_id();
         let invite_code = fed.invite_code()?;
         info!("Recovering {federation_id}...");
-        cmd!(self, "connect-fed", invite_code.clone(), "--recover=true")
-            .run()
-            .await?;
+        poll("gateway connect-fed", || async {
+            cmd!(self, "connect-fed", invite_code.clone(), "--recover=true")
+                .run()
+                .await
+                .map_err(ControlFlow::Continue)?;
+            Ok(())
+        })
+        .await?;
         Ok(())
     }
 
