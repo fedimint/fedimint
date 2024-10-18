@@ -15,7 +15,7 @@ use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{backoff_util, retry, SafeUrl};
 use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::PrunedInvoice;
@@ -23,6 +23,7 @@ use futures::stream::BoxStream;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tracing::warn;
 
 use self::cln::NetworkLnRpcClient;
 use self::lnd::GatewayLndClient;
@@ -204,8 +205,6 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError>;
 
     async fn get_balances(&self) -> Result<GetBalancesResponse, LightningRpcError>;
-
-    async fn sync_to_chain(&self, block_height: u32) -> Result<EmptyResponse, LightningRpcError>;
 }
 
 impl dyn ILnRpcClient {
@@ -247,6 +246,31 @@ impl dyn ILnRpcClient {
                 failure_reason: format!("Invalid network {network}: {e}"),
             })?;
         Ok((node_pub_key, alias, network, block_height, synced_to_chain))
+    }
+
+    /// Waits for the Lightning node to be synced to the Bitcoin blockchain.
+    pub async fn wait_for_chain_sync(&self) -> std::result::Result<(), LightningRpcError> {
+        retry(
+            "Wait for chain sync",
+            backoff_util::background_backoff(),
+            || async {
+                let info = self.info().await?;
+                let block_height = info.block_height;
+                if info.synced_to_chain {
+                    Ok(())
+                } else {
+                    warn!(?block_height, "Lightning node is not synced yet");
+                    Err(anyhow::anyhow!("Not synced yet"))
+                }
+            },
+        )
+        .await
+        .map_err(|_| LightningRpcError::FailedToSyncToChain {
+            failure_reason: "Failed to sync to chain".to_string(),
+        })?;
+
+        tracing::info!("Gateway successfully synced with the chain");
+        Ok(())
     }
 }
 

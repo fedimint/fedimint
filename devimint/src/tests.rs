@@ -969,14 +969,8 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
             "test-client".to_string(),
         )
         .await?;
-    let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
     let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-    if gateway_cli_version >= *VERSION_0_4_0_ALPHA && gatewayd_version >= *VERSION_0_4_0_ALPHA {
-        try_join!(
-            gw_cln.wait_for_chain_sync(&bitcoind),
-            gw_lnd.wait_for_chain_sync(&bitcoind)
-        )?;
-    } else {
+    if gatewayd_version < *VERSION_0_5_0_ALPHA {
         try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
     }
     ln_pay(&client, invoice.clone(), lnd_gw_id.clone(), false).await?;
@@ -1679,11 +1673,9 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     client.use_gateway(&gw_cln).await?;
     fed.pegin_client(10_000, &client).await?;
 
-    // Wait for gateways to sync to chain
-    gw_cln.wait_for_chain_sync(&bitcoind).await?;
-    gw_lnd.wait_for_chain_sync(&bitcoind).await?;
     if let Some(gw_ldk) = &gw_ldk {
-        gw_ldk.wait_for_chain_sync(&bitcoind).await?;
+        let block_count = bitcoind.get_block_count()?;
+        gw_ldk.wait_for_block_height(block_count - 1).await?;
     }
 
     // Query current gateway infos

@@ -1,20 +1,14 @@
-use std::time::Duration;
-
 use bitcoin::address::NetworkUnchecked;
 use clap::Subcommand;
-use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use lightning_invoice::Bolt11Invoice;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
     CloseChannelsWithPeerPayload, GetLnOnchainAddressPayload, OpenChannelPayload,
-    SyncToChainPayload, WithdrawOnchainPayload,
+    WithdrawOnchainPayload,
 };
 
 use crate::print_response;
-
-const DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRIES: u32 = 60;
-const DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRY_DELAY_SECONDS: u64 = 2;
 
 /// This API is intentionally kept very minimal, as its main purpose is to
 /// provide a simple and consistent way to establish liquidity between gateways
@@ -88,20 +82,6 @@ pub enum LightningCommands {
         /// The fee rate to use in satoshis per vbyte.
         #[clap(long)]
         fee_rate_sats_per_vbyte: u64,
-    },
-    /// Wait for the lightning node to be synced with the blockchain.
-    WaitForChainSync {
-        /// The block height to wait for
-        #[clap(long)]
-        block_height: u32,
-
-        /// The maximum number of retries
-        #[clap(long)]
-        max_retries: Option<u32>,
-
-        /// The delay between retries
-        #[clap(long)]
-        retry_delay_seconds: Option<u64>,
     },
 }
 
@@ -186,38 +166,6 @@ impl LightningCommands {
                     })
                     .await?;
                 println!("{response}");
-            }
-            Self::WaitForChainSync {
-                block_height,
-                max_retries,
-                retry_delay_seconds,
-            } => {
-                create_client()
-                    .sync_to_chain(SyncToChainPayload { block_height })
-                    .await?;
-
-                let retry_duration = Duration::from_secs(
-                    retry_delay_seconds.unwrap_or(DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRY_DELAY_SECONDS),
-                );
-
-                retry(
-                    "Wait for chain sync",
-                    backoff_util::custom_backoff(
-                        retry_duration,
-                        retry_duration,
-                        Some(max_retries.unwrap_or(DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRIES) as usize),
-                    ),
-                    || async {
-                        let info = create_client().get_info().await?;
-                        if info.block_height.unwrap_or(0) >= block_height && info.synced_to_chain {
-                            Ok(())
-                        } else {
-                            Err(anyhow::anyhow!("Not synced yet"))
-                        }
-                    },
-                )
-                .await
-                .map_err(|_| anyhow::anyhow!("Timed out waiting for chain sync"))?;
             }
         };
 
