@@ -1253,7 +1253,7 @@
                         <span class="string">"Consensus Failure: pending accepted items disagree with federation consensus"
                     </span>);
 
-                    <span class="kw">for </span>(accepted_item, item_index) <span class="kw">in </span>unprocessed.into_iter().zip(processed.len()..) {
+                    <span class="kw">for </span>(accepted_item, item_index) <span class="kw">in </span>unprocessed.iter().zip(processed.len()..) {
                         <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="self">self</span>.process_consensus_item(
                             session_index,
                             item_index <span class="kw">as </span>u64,

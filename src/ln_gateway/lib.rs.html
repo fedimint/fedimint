@@ -3423,7 +3423,7 @@
     </span><span class="kw">pub async fn </span>handle_mnemonic_msg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AdminResult&lt;MnemonicResponse&gt; {
         <span class="kw">let </span>mnemonic = <span class="self">Self</span>::load_or_generate_mnemonic(<span class="kw-2">&amp;</span><span class="self">self</span>.gateway_db).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>words = mnemonic
-            .word_iter()
+            .words()
             .map(std::string::ToString::to_string)
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         <span class="kw">let </span>all_federations = <span class="self">self
