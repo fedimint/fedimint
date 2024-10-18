@@ -4572,7 +4572,7 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 [[package]]
 name = "ldk-node"
 version = "0.3.0"
-source = "git+https://github.com/lightningdevkit/ldk-node?rev=c9ebeb6b802a08a78b4b099a2b56ce5dba380015#c9ebeb6b802a08a78b4b099a2b56ce5dba380015"
+source = "git+https://github.com/lightningdevkit/ldk-node?rev=58188b8892a39e2d17ee73d12e85a94897611b0e#58188b8892a39e2d17ee73d12e85a94897611b0e"
 dependencies = [
  "bdk",
  "bip21",
