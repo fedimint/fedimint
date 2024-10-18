@@ -70,19 +70,21 @@ pub struct SendOperationMeta {
     pub funding_change_outpoints: Vec<OutPoint>,
     pub gateway: SafeUrl,
     pub contract: OutgoingContract,
-    pub invoice: Bolt11Invoice,
+    pub invoice: LightningInvoice,
     pub custom_meta: Value,
 }
 
 impl SendOperationMeta {
     /// Calculate the absolute fee paid to the gateway on success.
     pub fn gateway_fee(&self) -> Amount {
-        self.contract.amount
-            - Amount::from_msats(
-                self.invoice
-                    .amount_milli_satoshis()
-                    .expect("Invoice has amount"),
-            )
+        match &self.invoice {
+            LightningInvoice::Bolt11(invoice) => {
+                self.contract.amount
+                    - Amount::from_msats(
+                        invoice.amount_milli_satoshis().expect("Invoice has amount"),
+                    )
+            }
+        }
     }
 }
 
@@ -90,18 +92,19 @@ impl SendOperationMeta {
 pub struct ReceiveOperationMeta {
     pub gateway: SafeUrl,
     pub contract: IncomingContract,
-    pub invoice: Bolt11Invoice,
+    pub invoice: LightningInvoice,
     pub custom_meta: Value,
 }
 
 impl ReceiveOperationMeta {
     /// Calculate the absolute fee paid to the gateway on success.
     pub fn gateway_fee(&self) -> Amount {
-        Amount::from_msats(
-            self.invoice
-                .amount_milli_satoshis()
-                .expect("Invoice has amount"),
-        ) - self.contract.commitment.amount
+        match &self.invoice {
+            LightningInvoice::Bolt11(invoice) => {
+                Amount::from_msats(invoice.amount_milli_satoshis().expect("Invoice has amount"))
+                    - self.contract.commitment.amount
+            }
+        }
     }
 }
 
@@ -637,7 +640,7 @@ impl LightningClientModule {
                         funding_change_outpoints,
                         gateway: gateway_api.clone(),
                         contract: contract.clone(),
-                        invoice: invoice.clone(),
+                        invoice: LightningInvoice::Bolt11(invoice.clone()),
                         custom_meta: custom_meta.clone(),
                     })
                 },
@@ -937,7 +940,7 @@ impl LightningClientModule {
                 LightningOperationMeta::Receive(ReceiveOperationMeta {
                     gateway,
                     contract,
-                    invoice,
+                    invoice: LightningInvoice::Bolt11(invoice),
                     custom_meta,
                 }),
                 vec![self.client_ctx.make_dyn_state(receive_sm)],
