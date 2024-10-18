@@ -1245,7 +1245,7 @@ impl Gateway {
     pub async fn handle_mnemonic_msg(&self) -> AdminResult<MnemonicResponse> {
         let mnemonic = Self::load_or_generate_mnemonic(&self.gateway_db).await?;
         let words = mnemonic
-            .word_iter()
+            .words()
             .map(std::string::ToString::to_string)
             .collect::<Vec<_>>();
         let all_federations = self

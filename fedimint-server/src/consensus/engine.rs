@@ -413,7 +413,7 @@ impl ConsensusEngine {
                         "Consensus Failure: pending accepted items disagree with federation consensus"
                     );
 
-                    for (accepted_item, item_index) in unprocessed.into_iter().zip(processed.len()..) {
+                    for (accepted_item, item_index) in unprocessed.iter().zip(processed.len()..) {
                         if let Err(err) = self.process_consensus_item(
                             session_index,
                             item_index as u64,
