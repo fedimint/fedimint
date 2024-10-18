@@ -581,7 +581,55 @@
 <a href="#580" id="580">580</a>
 <a href="#581" id="581">581</a>
 <a href="#582" id="582">582</a>
-<a href="#583" id="583">583</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+<a href="#585" id="585">585</a>
+<a href="#586" id="586">586</a>
+<a href="#587" id="587">587</a>
+<a href="#588" id="588">588</a>
+<a href="#589" id="589">589</a>
+<a href="#590" id="590">590</a>
+<a href="#591" id="591">591</a>
+<a href="#592" id="592">592</a>
+<a href="#593" id="593">593</a>
+<a href="#594" id="594">594</a>
+<a href="#595" id="595">595</a>
+<a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a>
+<a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
+<a href="#627" id="627">627</a>
+<a href="#628" id="628">628</a>
+<a href="#629" id="629">629</a>
+<a href="#630" id="630">630</a>
+<a href="#631" id="631">631</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -589,15 +637,22 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::{secp256k1, Address, Network, OutPoint};
 <span class="kw">use </span>fedimint_bip39::Mnemonic;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_address, bitcoin30_to_bitcoin32_invoice, bitcoin30_to_bitcoin32_network,
+    bitcoin30_to_bitcoin32_payment_preimage, bitcoin30_to_bitcoin32_secp256k1_pubkey,
+    bitcoin32_to_bitcoin30_outpoint, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+};
 <span class="kw">use </span>fedimint_core::runtime::spawn;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll};
+<span class="kw">use </span>ldk_node::config::EsploraSyncConfig;
 <span class="kw">use </span>ldk_node::lightning::ln::msgs::SocketAddress;
 <span class="kw">use </span>ldk_node::lightning::ln::PaymentHash;
-<span class="kw">use </span>ldk_node::lightning_invoice::Bolt11Invoice;
-<span class="kw">use </span>ldk_node::payment::{PaymentKind, PaymentStatus};
+<span class="kw">use </span>ldk_node::lightning::routing::gossip::NodeAlias;
+<span class="kw">use </span>ldk_node::payment::{PaymentKind, PaymentStatus, SendingParameters};
 <span class="kw">use </span>lightning::ln::PaymentPreimage;
 <span class="kw">use </span>lightning::util::scid_utils::scid_from_parts;
+<span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>tokio::sync::mpsc::Sender;
 <span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
 <span class="kw">use </span>tonic::Status;
@@ -651,28 +706,49 @@
         lightning_port: u16,
         mnemonic: Mnemonic,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>node_builder = ldk_node::Builder::from_config(ldk_node::Config {
-            network,
+        <span class="comment">// In devimint, gateways must allow for other gateways to open channels to them.
+        // To ensure this works, we must set a node alias to signal to ldk-node that we
+        // should accept incoming public channels. However, on mainnet we can disable
+        // this for better privacy.
+        </span><span class="kw">let </span>node_alias = <span class="kw">if </span>network == Network::Bitcoin {
+            <span class="prelude-val">None
+        </span>} <span class="kw">else </span>{
+            <span class="kw">let </span>alias = <span class="macro">format!</span>(<span class="string">"{network} LDK Gateway"</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; <span class="number">32</span>];
+            bytes[..alias.as_bytes().len()].copy_from_slice(alias.as_bytes());
+            <span class="prelude-val">Some</span>(NodeAlias(bytes))
+        };
+
+        <span class="kw">let </span><span class="kw-2">mut </span>node_builder = ldk_node::Builder::from_config(ldk_node::config::Config {
+            network: bitcoin30_to_bitcoin32_network(<span class="kw-2">&amp;</span>network),
             listening_addresses: <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[SocketAddress::TcpIpV4 {
                 addr: [<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>],
                 port: lightning_port,
             }]),
-            <span class="comment">// TODO: Remove these and rely on the default values.
-            // See here for details: https://github.com/lightningdevkit/ldk-node/issues/339#issuecomment-2344230472
-            </span>onchain_wallet_sync_interval_secs: <span class="number">10</span>,
-            wallet_sync_interval_secs: <span class="number">10</span>,
+            node_alias,
             ..Default::default()
         });
         node_builder
             .set_entropy_bip39_mnemonic(mnemonic, <span class="prelude-val">None</span>)
-            .set_esplora_server(esplora_server_url.to_string());
+            .set_chain_source_esplora(
+                esplora_server_url.to_string(),
+                <span class="prelude-val">Some</span>(EsploraSyncConfig {
+                    <span class="comment">// TODO: Remove these and rely on the default values.
+                    // See here for details: https://github.com/lightningdevkit/ldk-node/issues/339#issuecomment-2344230472
+                    </span>onchain_wallet_sync_interval_secs: <span class="number">10</span>,
+                    lightning_wallet_sync_interval_secs: <span class="number">10</span>,
+                    ..Default::default()
+                }),
+            );
         <span class="kw">let </span><span class="prelude-val">Some</span>(data_dir_str) = data_dir.to_str() <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Invalid data dir path"</span>));
         };
         node_builder.set_storage_dir_path(data_dir_str.to_string());
 
         <span class="kw">let </span>node = Arc::new(node_builder.build()<span class="question-mark">?</span>);
-        node.start().map_err(|e| {
+        <span class="comment">// TODO: Call `start_with_runtime()` instead of `start()`.
+        // See https://github.com/fedimint/fedimint/issues/6159
+        </span>node.start().map_err(|e| {
             <span class="macro">error!</span>(<span class="question-mark">?</span>e, <span class="string">"Failed to start LDK Node"</span>);
             LightningRpcError::FailedToConnect
         })<span class="question-mark">?</span>;
@@ -801,7 +877,9 @@
         <span class="kw">let </span>esplora_chain_tip_timestamp = chain_tip_block_summary.time.timestamp;
         <span class="kw">let </span>block_height: u32 = chain_tip_block_summary.time.height;
 
-        <span class="kw">let </span>synced_to_chain = node_status.latest_wallet_sync_timestamp.unwrap_or_default()
+        <span class="kw">let </span>synced_to_chain = node_status
+            .latest_lightning_wallet_sync_timestamp
+            .unwrap_or_default()
             &gt; esplora_chain_tip_timestamp
             &amp;&amp; node_status
                 .latest_onchain_wallet_sync_timestamp
@@ -810,8 +888,10 @@
 
         <span class="prelude-val">Ok</span>(GetNodeInfoResponse {
             pub_key: <span class="self">self</span>.node.node_id().serialize().to_vec(),
-            <span class="comment">// TODO: This is a placeholder. We need to get the actual alias from the LDK node.
-            </span>alias: <span class="macro">format!</span>(<span class="string">"LDK Fedimint Gateway Node {}"</span>, <span class="self">self</span>.node.node_id()),
+            alias: <span class="kw">match </span><span class="self">self</span>.node.node_alias() {
+                <span class="prelude-val">Some</span>(alias) =&gt; alias.to_string(),
+                <span class="prelude-val">None </span>=&gt; <span class="macro">format!</span>(<span class="string">"LDK Fedimint Gateway Node {}"</span>, <span class="self">self</span>.node.node_id()),
+            },
             network: <span class="self">self</span>.node.config().network.to_string(),
             block_height,
             synced_to_chain,
@@ -829,14 +909,21 @@
         })
     }
 
-    <span class="comment">// TODO: Respect `max_delay` and `max_fee` parameters.
-    </span><span class="kw">async fn </span>pay(
+    <span class="kw">async fn </span>pay(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         invoice: Bolt11Invoice,
-        _max_delay: u64,
-        _max_fee: Amount,
+        max_delay: u64,
+        max_fee: Amount,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, LightningRpcError&gt; {
-        <span class="kw">let </span>payment_id = <span class="kw">match </span><span class="self">self</span>.node.bolt11_payment().send(<span class="kw-2">&amp;</span>invoice) {
+        <span class="kw">let </span>payment_id = <span class="kw">match </span><span class="self">self</span>.node.bolt11_payment().send(
+            <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_invoice(<span class="kw-2">&amp;</span>invoice),
+            <span class="prelude-val">Some</span>(SendingParameters {
+                max_total_routing_fee_msat: <span class="prelude-val">Some</span>(<span class="prelude-val">Some</span>(max_fee.msats)),
+                max_total_cltv_expiry_delta: <span class="prelude-val">Some</span>(max_delay <span class="kw">as </span>u32),
+                max_path_count: <span class="prelude-val">None</span>,
+                max_channel_saturation_power_of_half: <span class="prelude-val">None</span>,
+            }),
+        ) {
             <span class="prelude-val">Ok</span>(payment_id) =&gt; payment_id,
             <span class="prelude-val">Err</span>(e) =&gt; {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedPayment {
@@ -923,7 +1010,9 @@
                 .claim_for_hash(
                     ph,
                     claimable_amount_msat,
-                    PaymentPreimage(preimage.try_into().unwrap()),
+                    bitcoin30_to_bitcoin32_payment_preimage(<span class="kw-2">&amp;</span>PaymentPreimage(
+                        preimage.try_into().unwrap(),
+                    )),
                 )
                 .map_err(|<span class="kw">_</span>| LightningRpcError::FailedToCompleteHtlc {
                     failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to claim LDK payment with hash {ph_hex_str}"</span>),
@@ -1011,10 +1100,13 @@
         <span class="kw">let </span>onchain = <span class="self">self</span>.node.onchain_payment();
 
         <span class="kw">let </span>txid = <span class="kw">match </span>amount {
-            BitcoinAmountOrAll::All =&gt; onchain.send_all_to_address(<span class="kw-2">&amp;</span>address),
-            BitcoinAmountOrAll::Amount(amount_sats) =&gt; {
-                onchain.send_to_address(<span class="kw-2">&amp;</span>address, amount_sats.to_sat())
+            BitcoinAmountOrAll::All =&gt; {
+                onchain.send_all_to_address(<span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_address(<span class="kw-2">&amp;</span>address))
             }
+            BitcoinAmountOrAll::Amount(amount_sats) =&gt; onchain.send_to_address(
+                <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_address(<span class="kw-2">&amp;</span>address),
+                amount_sats.to_sat(),
+            ),
         }
         .map_err(|e| LightningRpcError::FailedToWithdrawOnchain {
             failure_reason: e.to_string(),
@@ -1040,8 +1132,8 @@
 
         <span class="kw">let </span>user_channel_id = <span class="self">self
             </span>.node
-            .connect_open_channel(
-                pubkey,
+            .open_announced_channel(
+                bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>pubkey),
                 SocketAddress::from_str(<span class="kw-2">&amp;</span>host).map_err(|e| {
                     LightningRpcError::FailedToConnectToPeer {
                         failure_reason: e.to_string(),
@@ -1050,7 +1142,6 @@
                 channel_size_sats,
                 push_amount_msats_or,
                 <span class="prelude-val">None</span>,
-                <span class="bool-val">true</span>,
             )
             .map_err(|e| LightningRpcError::FailedToOpenChannel {
                 failure_reason: e.to_string(),
@@ -1086,15 +1177,15 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CloseChannelsWithPeerResponse, LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>num_channels_closed = <span class="number">0</span>;
 
-        <span class="kw">for </span>channel_with_peer <span class="kw">in </span><span class="self">self
-            </span>.node
-            .list_channels()
-            .iter()
-            .filter(|channel| channel.counterparty_node_id == pubkey)
-        {
+        <span class="kw">for </span>channel_with_peer <span class="kw">in </span><span class="self">self</span>.node.list_channels().iter().filter(|channel| {
+            channel.counterparty_node_id == bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>pubkey)
+        }) {
             <span class="kw">if </span><span class="self">self
                 </span>.node
-                .close_channel(<span class="kw-2">&amp;</span>channel_with_peer.user_channel_id, pubkey)
+                .close_channel(
+                    <span class="kw-2">&amp;</span>channel_with_peer.user_channel_id,
+                    bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>pubkey),
+                )
                 .is_ok()
             {
                 num_channels_closed += <span class="number">1</span>;
@@ -1116,12 +1207,17 @@
             .filter(|channel| channel.is_channel_ready)
         {
             channels.push(ChannelInfo {
-                remote_pubkey: channel_details.counterparty_node_id,
+                remote_pubkey: bitcoin32_to_bitcoin30_secp256k1_pubkey(
+                    <span class="kw-2">&amp;</span>channel_details.counterparty_node_id,
+                ),
                 channel_size_sats: channel_details.channel_value_sats,
                 outbound_liquidity_sats: channel_details.outbound_capacity_msat / <span class="number">1000</span>,
                 inbound_liquidity_sats: channel_details.inbound_capacity_msat / <span class="number">1000</span>,
                 short_channel_id: <span class="kw">match </span>channel_details.funding_txo {
-                    <span class="prelude-val">Some</span>(funding_txo) =&gt; <span class="self">self</span>.outpoint_to_scid(funding_txo).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>),
+                    <span class="prelude-val">Some</span>(funding_txo) =&gt; <span class="self">self
+                        </span>.outpoint_to_scid(bitcoin32_to_bitcoin30_outpoint(<span class="kw-2">&amp;</span>funding_txo))
+                        .<span class="kw">await
+                        </span>.unwrap_or(<span class="number">0</span>),
                     <span class="prelude-val">None </span>=&gt; <span class="number">0</span>,
                 },
             });
