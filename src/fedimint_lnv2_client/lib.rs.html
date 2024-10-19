@@ -1123,44 +1123,7 @@
 <a href="#1122" id="1122">1122</a>
 <a href="#1123" id="1123">1123</a>
 <a href="#1124" id="1124">1124</a>
-<a href="#1125" id="1125">1125</a>
-<a href="#1126" id="1126">1126</a>
-<a href="#1127" id="1127">1127</a>
-<a href="#1128" id="1128">1128</a>
-<a href="#1129" id="1129">1129</a>
-<a href="#1130" id="1130">1130</a>
-<a href="#1131" id="1131">1131</a>
-<a href="#1132" id="1132">1132</a>
-<a href="#1133" id="1133">1133</a>
-<a href="#1134" id="1134">1134</a>
-<a href="#1135" id="1135">1135</a>
-<a href="#1136" id="1136">1136</a>
-<a href="#1137" id="1137">1137</a>
-<a href="#1138" id="1138">1138</a>
-<a href="#1139" id="1139">1139</a>
-<a href="#1140" id="1140">1140</a>
-<a href="#1141" id="1141">1141</a>
-<a href="#1142" id="1142">1142</a>
-<a href="#1143" id="1143">1143</a>
-<a href="#1144" id="1144">1144</a>
-<a href="#1145" id="1145">1145</a>
-<a href="#1146" id="1146">1146</a>
-<a href="#1147" id="1147">1147</a>
-<a href="#1148" id="1148">1148</a>
-<a href="#1149" id="1149">1149</a>
-<a href="#1150" id="1150">1150</a>
-<a href="#1151" id="1151">1151</a>
-<a href="#1152" id="1152">1152</a>
-<a href="#1153" id="1153">1153</a>
-<a href="#1154" id="1154">1154</a>
-<a href="#1155" id="1155">1155</a>
-<a href="#1156" id="1156">1156</a>
-<a href="#1157" id="1157">1157</a>
-<a href="#1158" id="1158">1158</a>
-<a href="#1159" id="1159">1159</a>
-<a href="#1160" id="1160">1160</a>
-<a href="#1161" id="1161">1161</a>
-<a href="#1162" id="1162">1162</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1125" id="1125">1125</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -1276,9 +1239,6 @@
 
 <span class="doccomment">/// A two hour buffer in case either the client or gateway go offline
 </span><span class="kw">pub const </span>CONTRACT_CONFIRMATION_BUFFER: u64 = <span class="number">12</span>;
-
-<span class="doccomment">/// Default expiration time for lightning invoices
-</span><span class="kw">pub const </span>INVOICE_EXPIRATION_SECONDS_DEFAULT: u32 = <span class="number">24 </span>* <span class="number">60 </span>* <span class="number">60</span>;
 
 <span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
 </span><span class="doccomment">/// The high-level state of sending a payment over lightning.
@@ -1682,25 +1642,6 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         invoice: Bolt11Invoice,
         gateway: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;OperationId, SendPaymentError&gt; {
-        <span class="self">self</span>.send_custom(
-            invoice,
-            PaymentFee::SEND_FEE_LIMIT_DEFAULT,
-            EXPIRATION_DELTA_LIMIT_DEFAULT,
-            gateway,
-            Value::Null,
-        )
-        .<span class="kw">await
-    </span>}
-
-    <span class="doccomment">/// Pay an invoice. For  testing  you can optionally specify a gateway to
-    /// route with, otherwise a gateway will be selected automatically.
-    </span><span class="kw">pub async fn </span>send_custom(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        invoice: Bolt11Invoice,
-        payment_fee_limit: PaymentFee,
-        expiration_delta_limit: u64,
-        gateway: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
         custom_meta: Value,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OperationId, SendPaymentError&gt; {
         <span class="kw">let </span>amount = invoice
@@ -1742,11 +1683,11 @@
 
         <span class="kw">let </span>(send_fee, expiration_delta) = routing_info.send_parameters(<span class="kw-2">&amp;</span>invoice);
 
-        <span class="kw">if </span>!send_fee.le(<span class="kw-2">&amp;</span>payment_fee_limit) {
+        <span class="kw">if </span>!send_fee.le(<span class="kw-2">&amp;</span>PaymentFee::SEND_FEE_LIMIT_DEFAULT) {
             <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::PaymentFeeExceedsLimit(send_fee));
         }
 
-        <span class="kw">if </span>expiration_delta_limit &lt; expiration_delta {
+        <span class="kw">if </span>EXPIRATION_DELTA_LIMIT_DEFAULT &lt; expiration_delta {
             <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::ExpirationDeltaExceedsLimit(
                 expiration_delta,
             ));
@@ -1930,27 +1871,11 @@
     <span class="doccomment">/// Request an invoice. For testing you can optionally specify a gateway to
     /// generate the invoice, otherwise a gateway will be selected
     /// automatically.
-    </span><span class="kw">pub async fn </span>receive(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount, gateway: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;) -&gt; ReceiveResult {
-        <span class="self">self</span>.receive_custom(
-            amount,
-            INVOICE_EXPIRATION_SECONDS_DEFAULT,
-            Bolt11InvoiceDescription::Direct(String::new()),
-            PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
-            gateway,
-            Value::Null,
-        )
-        .<span class="kw">await
-    </span>}
-
-    <span class="doccomment">/// Request an invoice. For testing you can optionally specify a gateway to
-    /// generate the invoice, otherwise a gateway will be selected
-    /// automatically.
-    </span><span class="kw">pub async fn </span>receive_custom(
+    </span><span class="kw">pub async fn </span>receive(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
         expiry_secs: u32,
         description: Bolt11InvoiceDescription,
-        payment_fee_limit: PaymentFee,
         gateway: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
         custom_meta: Value,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(Bolt11Invoice, OperationId), ReceiveError&gt; {
@@ -1960,7 +1885,6 @@
                 amount,
                 expiry_secs,
                 description,
-                payment_fee_limit,
                 gateway,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1982,7 +1906,6 @@
         amount: Amount,
         expiry_secs: u32,
         description: Bolt11InvoiceDescription,
-        payment_fee_limit: PaymentFee,
         gateway: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(SafeUrl, IncomingContract, Bolt11Invoice), ReceiveError&gt; {
         <span class="kw">let </span>(ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(recipient_static_pk);
@@ -2009,7 +1932,10 @@
                 </span>.map_err(ReceiveError::FailedToSelectGateway)<span class="question-mark">?</span>,
         };
 
-        <span class="kw">if </span>!routing_info.receive_fee.le(<span class="kw-2">&amp;</span>payment_fee_limit) {
+        <span class="kw">if </span>!routing_info
+            .receive_fee
+            .le(<span class="kw-2">&amp;</span>PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT)
+        {
             <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveError::PaymentFeeExceedsLimit(
                 routing_info.receive_fee,
             ));

@@ -97,7 +97,19 @@
 <a href="#96" id="96">96</a>
 <a href="#97" id="97">97</a>
 <a href="#98" id="98">98</a>
-<a href="#99" id="99">99</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::{ffi, iter};
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::{ffi, iter};
 
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::core::OperationId;
@@ -108,7 +120,7 @@
 <span class="kw">use </span>serde_json::Value;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::LnFederationApi;
-<span class="kw">use </span><span class="kw">crate</span>::LightningClientModule;
+<span class="kw">use crate</span>::{Bolt11InvoiceDescription, LightningClientModule};
 
 <span class="attr">#[derive(Parser, Serialize)]
 </span><span class="kw">enum </span>Opts {
@@ -161,9 +173,21 @@
     <span class="kw">let </span>opts = Opts::parse_from(iter::once(<span class="kw-2">&amp;</span>ffi::OsString::from(<span class="string">"lnv2"</span>)).chain(args.iter()));
 
     <span class="kw">let </span>value = <span class="kw">match </span>opts {
-        Opts::Send { gateway, invoice } =&gt; json(lightning.send(invoice, gateway).<span class="kw">await</span><span class="question-mark">?</span>),
+        Opts::Send { gateway, invoice } =&gt; {
+            json(lightning.send(invoice, gateway, Value::Null).<span class="kw">await</span><span class="question-mark">?</span>)
+        }
         Opts::AwaitSend { operation_id } =&gt; json(lightning.await_send(operation_id).<span class="kw">await</span><span class="question-mark">?</span>),
-        Opts::Receive { gateway, amount } =&gt; json(lightning.receive(amount, gateway).<span class="kw">await</span><span class="question-mark">?</span>),
+        Opts::Receive { amount, gateway } =&gt; json(
+            lightning
+                .receive(
+                    amount,
+                    <span class="number">3600</span>,
+                    Bolt11InvoiceDescription::Direct(String::new()),
+                    gateway,
+                    Value::Null,
+                )
+                .<span class="kw">await</span><span class="question-mark">?</span>,
+        ),
         Opts::AwaitReceive { operation_id } =&gt; json(lightning.await_receive(operation_id).<span class="kw">await</span><span class="question-mark">?</span>),
         Opts::Gateway(gateway_opts) =&gt; <span class="kw">match </span>gateway_opts {
             GatewayOpts::Select { invoice } =&gt; json(lightning.select_gateway(invoice).<span class="kw">await</span><span class="question-mark">?</span>.<span class="number">0</span>),
