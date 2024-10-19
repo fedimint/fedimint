@@ -9,7 +9,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::api::LnFederationApi;
-use crate::LightningClientModule;
+use crate::{Bolt11InvoiceDescription, LightningClientModule};
 
 #[derive(Parser, Serialize)]
 enum Opts {
@@ -62,9 +62,21 @@ pub(crate) async fn handle_cli_command(
     let opts = Opts::parse_from(iter::once(&ffi::OsString::from("lnv2")).chain(args.iter()));
 
     let value = match opts {
-        Opts::Send { gateway, invoice } => json(lightning.send(invoice, gateway).await?),
+        Opts::Send { gateway, invoice } => {
+            json(lightning.send(invoice, gateway, Value::Null).await?)
+        }
         Opts::AwaitSend { operation_id } => json(lightning.await_send(operation_id).await?),
-        Opts::Receive { gateway, amount } => json(lightning.receive(amount, gateway).await?),
+        Opts::Receive { amount, gateway } => json(
+            lightning
+                .receive(
+                    amount,
+                    3600,
+                    Bolt11InvoiceDescription::Direct(String::new()),
+                    gateway,
+                    Value::Null,
+                )
+                .await?,
+        ),
         Opts::AwaitReceive { operation_id } => json(lightning.await_receive(operation_id).await?),
         Opts::Gateway(gateway_opts) => match gateway_opts {
             GatewayOpts::Select { invoice } => json(lightning.select_gateway(invoice).await?.0),
