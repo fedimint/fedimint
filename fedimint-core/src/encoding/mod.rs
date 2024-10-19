@@ -253,12 +253,20 @@ impl Encodable for BigSize {
     }
 }
 
+struct SimpleBitcoinRead<R: std::io::Read>(R);
+
+impl<R: std::io::Read> bitcoin_io::Read for SimpleBitcoinRead<R> {
+    fn read(&mut self, buf: &mut [u8]) -> bitcoin_io::Result<usize> {
+        self.0.read(buf).map_err(bitcoin_io::Error::from)
+    }
+}
+
 impl Decodable for BigSize {
     fn consensus_decode<R: std::io::Read>(
         r: &mut R,
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Self::read(&mut std::io::BufReader::new(r))
+        Self::read(&mut SimpleBitcoinRead(r))
             .map_err(|e| DecodeError::new_custom(anyhow::anyhow!("BigSize decoding error: {e:?}")))
     }
 }
