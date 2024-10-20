@@ -2175,7 +2175,7 @@ dependencies = [
  "futures",
  "hex",
  "itertools 0.13.0",
- "lightning-invoice 0.31.0",
+ "lightning-invoice",
  "rand",
  "serde",
  "serde_json",
@@ -2270,8 +2270,7 @@ dependencies = [
  "js-sys",
  "jsonrpsee-core",
  "lightning 0.0.123",
- "lightning-invoice 0.31.0",
- "lightning-invoice 0.32.0",
+ "lightning-invoice",
  "lightning-types",
  "macro_rules_attribute",
  "miniscript 10.0.0",
@@ -2485,7 +2484,7 @@ dependencies = [
  "fedimint-ln-gateway",
  "fedimint-logging",
  "fedimint-mint-client",
- "lightning-invoice 0.31.0",
+ "lightning-invoice",
  "serde",
  "serde_json",
  "tokio",
@@ -2516,7 +2515,7 @@ dependencies = [
  "fedimint-logging",
  "futures",
  "itertools 0.13.0",
- "lightning-invoice 0.31.0",
+ "lightning-invoice",
  "lnurl-rs",
  "rand",
  "reqwest 0.12.8",
@@ -2541,7 +2540,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-threshold-crypto",
  "lightning 0.0.123",
- "lightning-invoice 0.31.0",
+ "lightning-invoice",
  "secp256k1 0.27.0",
  "serde",
  "serde-big-array",
@@ -2594,7 +2593,7 @@ dependencies = [
  "hex",
  "ldk-node",
  "lightning 0.0.123",
- "lightning-invoice 0.31.0",
+ "lightning-invoice",
  "prost 0.13.3",
  "rand",
  "reqwest 0.12.8",
@@ -2657,7 +2656,7 @@ dependencies = [
  "fedimint-testing",
  "fedimint-threshold-crypto",
  "futures",
- "lightning-invoice 0.31.0",
+ "lightning-invoice",
  "rand",
  "secp256k1 0.27.0",
  "serde_json",
@@ -2684,7 +2683,7 @@ dependencies = [
  "fedimint-tpe",
  "futures",
  "itertools 0.13.0",
- "lightning-invoice 0.31.0",
+ "lightning-invoice",
  "rand",
  "reqwest 0.12.8",
  "serde",
@@ -2749,7 +2748,7 @@ dependencies = [
  "fedimint-lnv2-server",
  "fedimint-testing",
  "itertools 0.13.0",
- "lightning-invoice 0.31.0",
+ "lightning-invoice",
  "serde_json",
  "substring",
  "tokio",
@@ -2776,7 +2775,7 @@ dependencies = [
  "futures",
  "jsonrpsee-core",
  "jsonrpsee-ws-client",
- "lightning-invoice 0.31.0",
+ "lightning-invoice",
  "rand",
  "serde",
  "serde_json",
@@ -3121,7 +3120,7 @@ dependencies = [
  "fedimint-server",
  "fedimint-testing-core",
  "fs-lock",
- "lightning-invoice 0.31.0",
+ "lightning-invoice",
  "rand",
  "tempfile",
  "tokio",
@@ -4641,7 +4640,7 @@ dependencies = [
  "lightning 0.0.125",
  "lightning-background-processor",
  "lightning-block-sync",
- "lightning-invoice 0.32.0",
+ "lightning-invoice",
  "lightning-liquidity",
  "lightning-net-tokio",
  "lightning-persister",
@@ -4747,7 +4746,7 @@ checksum = "767f388e50251da71f95a3737d6db32c9729f9de6427a54fa92bb994d04d793f"
 dependencies = [
  "bech32 0.9.1",
  "bitcoin 0.32.3",
- "lightning-invoice 0.32.0",
+ "lightning-invoice",
  "lightning-types",
 ]
 
@@ -4777,19 +4776,6 @@ dependencies = [
 
 [[package]]
 name = "lightning-invoice"
-version = "0.31.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26d07d01cf197bf2184b929b7dc94aa70d935aac6df896c256a3a9475b7e9d40"
-dependencies = [
- "bech32 0.9.1",
- "bitcoin 0.30.2",
- "lightning 0.0.123",
- "secp256k1 0.27.0",
- "serde",
-]
-
-[[package]]
-name = "lightning-invoice"
 version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90ab9f6ea77e20e3129235e62a2e6bd64ed932363df104e864ee65ccffb54a8f"
@@ -4809,7 +4795,7 @@ dependencies = [
  "bitcoin 0.32.3",
  "chrono",
  "lightning 0.0.125",
- "lightning-invoice 0.32.0",
+ "lightning-invoice",
  "lightning-types",
  "serde",
  "serde_json",
