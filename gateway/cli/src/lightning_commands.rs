@@ -3,7 +3,7 @@ use std::time::Duration;
 use bitcoin30::address::NetworkUnchecked;
 use clap::Subcommand;
 use fedimint_core::util::{backoff_util, retry};
-use fedimint_core::{Amount, BitcoinAmountOrAll};
+use fedimint_core::BitcoinAmountOrAll;
 use lightning_invoice::Bolt11Invoice;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
@@ -23,25 +23,16 @@ const DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRY_DELAY_SECONDS: u64 = 2;
 pub enum LightningCommands {
     /// Create an invoice to receive lightning funds to the gateway.
     CreateInvoice {
-        #[clap(long)]
         amount_msats: u64,
 
-        #[clap(long, default_value_t = 300)]
-        expiry_secs: u32,
+        #[clap(long)]
+        expiry_secs: Option<u32>,
 
         #[clap(long)]
         description: Option<String>,
     },
     /// Pay a lightning invoice as the gateway (i.e. no e-cash exchange).
-    PayInvoice {
-        invoice: Bolt11Invoice,
-
-        #[clap(long, default_value_t = 144)]
-        max_delay: u64,
-
-        #[clap(long)]
-        max_fee_msats: Amount,
-    },
+    PayInvoice { invoice: Bolt11Invoice },
     /// Get a Bitcoin address from the gateway's lightning node's onchain
     /// wallet.
     GetLnOnchainAddress,
@@ -118,7 +109,7 @@ impl LightningCommands {
                 description,
             } => {
                 let response = create_client()
-                    .create_invoice_for_self(ln_gateway::rpc::CreateInvoiceForSelfPayload {
+                    .create_invoice_for_self(ln_gateway::rpc::CreateInvoiceForOperatorPayload {
                         amount_msats,
                         expiry_secs,
                         description,
@@ -126,17 +117,9 @@ impl LightningCommands {
                     .await?;
                 println!("{response}");
             }
-            Self::PayInvoice {
-                invoice,
-                max_delay,
-                max_fee_msats,
-            } => {
+            Self::PayInvoice { invoice } => {
                 let response = create_client()
-                    .pay_invoice(ln_gateway::rpc::PayInvoicePayload {
-                        invoice,
-                        max_delay,
-                        max_fee: max_fee_msats,
-                    })
+                    .pay_invoice(ln_gateway::rpc::PayInvoiceForOperatorPayload { invoice })
                     .await?;
                 println!("{response}");
             }

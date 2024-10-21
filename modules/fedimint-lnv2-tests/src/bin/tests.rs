@@ -16,10 +16,6 @@ use tracing::info;
 #[derive(Parser)]
 enum TestOpts {
     All,
-    GatewayRegistration,
-    SelfPaymentsRefund,
-    SelfPaymentsSuccess,
-    LightningPayment,
     InterFederation,
 }
 
@@ -48,27 +44,29 @@ async fn main() -> anyhow::Result<()> {
 
         match opts {
             TestOpts::All => {
+                let lnd = dev_fed.lnd().await?;
+                let cln = dev_fed.cln().await?;
+
+                info!("Verify HOLD invoices still work, create one now for payment later");
+
+                let (preimage, invoice, payment_hash) = lnd.create_hold_invoice(50000).await?;
+
                 test_gateway_registration(&dev_fed).await?;
-                test_self_payments_refund(&dev_fed).await?;
+                test_payments_between_gateways(&dev_fed).await?;
+                test_refund_of_circular_payments(&dev_fed).await?;
 
                 pegin_gateways(&dev_fed).await?;
 
-                test_self_payments_success(&dev_fed).await?;
-                test_lightning_payments(&dev_fed).await?;
-            }
-            TestOpts::GatewayRegistration => {
-                test_gateway_registration(&dev_fed).await?;
-            }
-            TestOpts::SelfPaymentsRefund => {
-                test_self_payments_refund(&dev_fed).await?;
-            }
-            TestOpts::SelfPaymentsSuccess => {
-                pegin_gateways(&dev_fed).await?;
-                test_self_payments_success(&dev_fed).await?;
-            }
-            TestOpts::LightningPayment => {
-                pegin_gateways(&dev_fed).await?;
-                test_lightning_payments(&dev_fed).await?;
+                test_circular_payments(&dev_fed).await?;
+                test_payments_from_client_to_gateways(&dev_fed).await?;
+                test_payments_from_gateways_to_client(&dev_fed).await?;
+
+                info!("Testing that CLN pay HOLD invoice and LND can settle HOLD invoice");
+
+                try_join!(
+                    cln.pay_bolt11_invoice(invoice),
+                    lnd.settle_hold_invoice(preimage, payment_hash)
+                )?;
             }
             TestOpts::InterFederation => {
                 pegin_gateways(&dev_fed).await?;
@@ -99,8 +97,6 @@ async fn pegin_gateways(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         federation.pegin_gateway(1_000_000, gw_cln),
         federation.pegin_gateway(1_000_000, gw_ldk),
     )?;
-
-    info!("Pegging-in gateways successful");
 
     Ok(())
 }
@@ -175,13 +171,40 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
             .is_empty()
     );
 
-    info!("Testing gateway registration successful");
+    Ok(())
+}
+
+async fn test_payments_between_gateways(dev_fed: &DevJitFed) -> anyhow::Result<()> {
+    info!("Testing payments between gateways...");
+
+    let gw_lnd = dev_fed.gw_lnd().await?;
+    let gw_cln = dev_fed.gw_cln().await?;
+    let gw_ldk = dev_fed
+        .gw_ldk()
+        .await?
+        .as_ref()
+        .expect("Gateways of version 0.5.0 or higher support LDK");
+
+    let gateways = [(gw_lnd, "LND"), (gw_cln, "CLN"), (gw_ldk, "LDK")];
+
+    let gateway_matrix = gateways
+        .iter()
+        .cartesian_product(gateways.iter())
+        .filter(|(a, b)| a.1 != b.1);
+
+    for ((gw_send, ln_send), (gw_receive, ln_receive)) in gateway_matrix {
+        info!("Testing payment: {ln_send} -> {ln_receive}");
+
+        let invoice = gw_receive.create_invoice(1_000_000).await?;
+
+        gw_send.pay_invoice(invoice).await?;
+    }
 
     Ok(())
 }
 
-async fn test_self_payments_refund(dev_fed: &DevJitFed) -> anyhow::Result<()> {
-    info!("Testing self payments refund...");
+async fn test_refund_of_circular_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
+    info!("Testing refund of circular payments...");
 
     let federation = dev_fed.fed().await?;
 
@@ -200,23 +223,22 @@ async fn test_self_payments_refund(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         .expect("Gateways of version 0.5.0 or higher support LDK");
 
     let gateways = [(gw_lnd, "LND"), (gw_cln, "CLN"), (gw_ldk, "LDK")];
+
     let gateway_matrix = gateways.iter().cartesian_product(gateways);
 
     for ((gw_send, ln_send), (gw_receive, ln_receive)) in gateway_matrix {
-        info!("Testing self payment refund: {ln_send} -> {ln_receive}");
+        info!("Testing refund of payment: Client -> {ln_send} -> {ln_receive} -> Client");
 
         let invoice = receive(&client, &gw_receive.addr, 1_000_000).await?.0;
 
         test_send(&client, &gw_send.addr, &invoice, FinalSendState::Refunded).await?;
     }
 
-    info!("Testing self payments refund successful");
-
     Ok(())
 }
 
-async fn test_self_payments_success(dev_fed: &DevJitFed) -> anyhow::Result<()> {
-    info!("Testing self payments success...");
+async fn test_circular_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
+    info!("Testing circular payments...");
 
     let federation = dev_fed.fed().await?;
 
@@ -235,10 +257,11 @@ async fn test_self_payments_success(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         .expect("Gateways of version 0.5.0 or higher support LDK");
 
     let gateways = [(gw_lnd, "LND"), (gw_cln, "CLN"), (gw_ldk, "LDK")];
+
     let gateway_matrix = gateways.iter().cartesian_product(gateways);
 
     for ((gw_send, ln_send), (gw_receive, ln_receive)) in gateway_matrix {
-        info!("Testing self payment success: {ln_send} -> {ln_receive}");
+        info!("Testing payment: Client -> {ln_send} -> {ln_receive} -> Client");
 
         let (invoice, receive_op) = receive(&client, &gw_receive.addr, 1_000_000).await?;
 
@@ -247,74 +270,81 @@ async fn test_self_payments_success(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         await_receive_claimed(&client, receive_op).await?;
     }
 
-    info!("Testing self payments success successful");
-
     Ok(())
 }
 
-async fn test_lightning_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
-    info!("Testing lightning payments...");
+async fn test_payments_from_client_to_gateways(dev_fed: &DevJitFed) -> anyhow::Result<()> {
+    info!("Testing payments from client to gateways...");
 
     let federation = dev_fed.fed().await?;
 
     let client = federation
-        .new_joined_client("lnv2-lightning-payments-client")
+        .new_joined_client("lnv2-self-payments-success-client")
         .await?;
+
+    federation.pegin_client(10_000, &client).await?;
 
     let gw_lnd = dev_fed.gw_lnd().await?;
     let gw_cln = dev_fed.gw_cln().await?;
+    let gw_ldk = dev_fed
+        .gw_ldk()
+        .await?
+        .as_ref()
+        .expect("Gateways of version 0.5.0 or higher support LDK");
 
-    let lnd = dev_fed.lnd().await?;
-    let cln = dev_fed.cln().await?;
+    let gateways = [(gw_lnd, "LND"), (gw_cln, "CLN"), (gw_ldk, "LDK")];
 
-    info!("Verify HOLD invoices still work, create one now for payment later");
+    let gateway_matrix = gateways
+        .iter()
+        .cartesian_product(gateways.iter())
+        .filter(|(a, b)| a.1 != b.1);
 
-    let (hold_preimage, hold_invoice, hold_payment_hash) = lnd.create_hold_invoice(50000).await?;
+    for ((gw_send, ln_send), (gw_receive, ln_receive)) in gateway_matrix {
+        info!("Testing payment: Client -> {ln_send} -> {ln_receive}");
 
-    info!("Testing that CLN can pay LND directly");
+        let invoice = gw_receive.create_invoice(1_000_000).await?;
 
-    let (invoice, payment_hash) = lnd.invoice(5000).await?;
+        test_send(&client, &gw_send.addr, &invoice, FinalSendState::Success).await?;
+    }
 
-    cln.pay_bolt11_invoice(invoice).await?;
-    lnd.wait_bolt11_invoice(payment_hash).await?;
+    Ok(())
+}
 
-    info!("Testing that CLN can pay client via LND Gateway");
+async fn test_payments_from_gateways_to_client(dev_fed: &DevJitFed) -> anyhow::Result<()> {
+    info!("Testing payments from gateways to client...");
 
-    let (inv_lnd, receive_op_lnd) = receive(&client, &gw_lnd.addr, 500_000).await?;
+    let federation = dev_fed.fed().await?;
 
-    cln.pay_bolt11_invoice(inv_lnd.to_string()).await?;
-
-    await_receive_claimed(&client, receive_op_lnd).await?;
-
-    info!("Testing that LND can pay CLN directly");
-
-    let invoice = cln
-        .invoice(
-            5000,
-            "lnd-pay-cln-directly".to_string(),
-            "lnd-pay-cln-directly".to_string(),
-        )
+    let client = federation
+        .new_joined_client("lnv2-self-payments-success-client")
         .await?;
 
-    lnd.pay_bolt11_invoice(invoice).await?;
-    cln.wait_any_bolt11_invoice().await?;
+    federation.pegin_client(10_000, &client).await?;
 
-    info!("Testing that LND can pay client via CLN gateway");
+    let gw_lnd = dev_fed.gw_lnd().await?;
+    let gw_cln = dev_fed.gw_cln().await?;
+    let gw_ldk = dev_fed
+        .gw_ldk()
+        .await?
+        .as_ref()
+        .expect("Gateways of version 0.5.0 or higher support LDK");
 
-    let (inv_cln, receive_op_cln) = receive(&client, &gw_cln.addr, 750_000).await?;
+    let gateways = [(gw_lnd, "LND"), (gw_cln, "CLN"), (gw_ldk, "LDK")];
 
-    lnd.pay_bolt11_invoice(inv_cln.to_string()).await?;
+    let gateway_matrix = gateways
+        .iter()
+        .cartesian_product(gateways.iter())
+        .filter(|(a, b)| a.1 != b.1);
 
-    await_receive_claimed(&client, receive_op_cln).await?;
+    for ((gw_send, ln_send), (gw_receive, ln_receive)) in gateway_matrix {
+        info!("Testing payment: {ln_send} -> {ln_receive} -> Client");
 
-    info!("Testing that CLN pay HOLD invoice and LND can settle HOLD invoice");
+        let (invoice, receive_op) = receive(&client, &gw_receive.addr, 1_000_000).await?;
 
-    try_join!(
-        cln.pay_bolt11_invoice(hold_invoice),
-        lnd.settle_hold_invoice(hold_preimage, hold_payment_hash)
-    )?;
+        gw_send.pay_invoice(invoice).await?;
 
-    info!("Testing lightning payments successful");
+        await_receive_claimed(&client, receive_op).await?;
+    }
 
     Ok(())
 }
@@ -323,7 +353,7 @@ async fn test_inter_federation_payments(
     dev_fed: &DevJitFed,
     process_mgr: &ProcessManager,
 ) -> anyhow::Result<()> {
-    info!("Testing inter federation...");
+    info!("Testing inter federation payments...");
     let send_federation = dev_fed.fed().await?;
     let send_client = send_federation
         .new_joined_client("lnv2-send-client")
@@ -381,8 +411,6 @@ async fn test_inter_federation_payments(
         .await?;
         await_receive_claimed(&receive_client, receive_op).await?;
     }
-
-    info!("Testing inter federation payments successful");
 
     Ok(())
 }

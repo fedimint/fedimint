@@ -21,8 +21,8 @@ use fedimint_ln_common::gateway_endpoint_constants::{
 };
 use fedimint_lnv2_client::{CreateBolt11InvoicePayload, SendPaymentPayload};
 use fedimint_lnv2_common::endpoint_constants::{
-    CREATE_BOLT11_INVOICE_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT,
-    PAY_INVOICE_SELF_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_PAYMENT_ENDPOINT,
+    CREATE_BOLT11_INVOICE_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
+    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_PAYMENT_ENDPOINT,
     WITHDRAW_ONCHAIN_ENDPOINT,
 };
 use hex::ToHex;
@@ -33,10 +33,10 @@ use tracing::{error, info, instrument};
 
 use super::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
-    CreateInvoiceForSelfPayload, DepositAddressPayload, GetLnOnchainAddressPayload, InfoPayload,
-    LeaveFedPayload, OpenChannelPayload, PayInvoicePayload, ReceiveEcashPayload,
-    SetConfigurationPayload, SpendEcashPayload, SyncToChainPayload, WithdrawOnchainPayload,
-    WithdrawPayload, V1_API_ENDPOINT,
+    CreateInvoiceForOperatorPayload, DepositAddressPayload, GetLnOnchainAddressPayload,
+    InfoPayload, LeaveFedPayload, OpenChannelPayload, PayInvoiceForOperatorPayload,
+    ReceiveEcashPayload, SetConfigurationPayload, SpendEcashPayload, SyncToChainPayload,
+    WithdrawOnchainPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 use crate::error::{AdminGatewayError, PublicGatewayError};
 use crate::rpc::ConfigPayload;
@@ -171,12 +171,7 @@ fn lnv2_routes() -> Router {
 ///   clients.
 fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
     // Public routes on gateway webserver
-    let mut public_routes = Router::new()
-        .route(
-            CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT,
-            post(create_invoice_for_self),
-        )
-        .route(RECEIVE_ECASH_ENDPOINT, post(receive_ecash));
+    let mut public_routes = Router::new().route(RECEIVE_ECASH_ENDPOINT, post(receive_ecash));
 
     if gateway.is_running_lnv1() {
         public_routes = public_routes.merge(lnv1_routes());
@@ -194,7 +189,14 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
         .route(CONNECT_FED_ENDPOINT, post(connect_fed))
         .route(LEAVE_FED_ENDPOINT, post(leave_fed))
         .route(BACKUP_ENDPOINT, post(backup))
-        .route(PAY_INVOICE_SELF_ENDPOINT, post(pay_invoice_self))
+        .route(
+            CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
+            post(create_invoice_for_operator),
+        )
+        .route(
+            PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
+            post(pay_invoice_operator),
+        )
         .route(
             GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
             post(get_ln_onchain_address),
@@ -308,20 +310,22 @@ async fn withdraw(
 }
 
 #[instrument(skip_all, err, fields(?payload))]
-async fn create_invoice_for_self(
+async fn create_invoice_for_operator(
     Extension(gateway): Extension<Arc<Gateway>>,
-    Json(payload): Json<CreateInvoiceForSelfPayload>,
-) -> Result<impl IntoResponse, PublicGatewayError> {
-    let invoice = gateway.handle_create_invoice_for_self_msg(payload).await?;
+    Json(payload): Json<CreateInvoiceForOperatorPayload>,
+) -> Result<impl IntoResponse, AdminGatewayError> {
+    let invoice = gateway
+        .handle_create_invoice_for_operator_msg(payload)
+        .await?;
     Ok(Json(json!(invoice)))
 }
 
 #[instrument(skip_all, err, fields(?payload))]
-async fn pay_invoice_self(
+async fn pay_invoice_operator(
     Extension(gateway): Extension<Arc<Gateway>>,
-    Json(payload): Json<PayInvoicePayload>,
+    Json(payload): Json<PayInvoiceForOperatorPayload>,
 ) -> Result<impl IntoResponse, AdminGatewayError> {
-    let preimage = gateway.handle_pay_invoice_self_msg(payload).await?;
+    let preimage = gateway.handle_pay_invoice_for_operator_msg(payload).await?;
     Ok(Json(json!(preimage.0.encode_hex::<String>())))
 }
 

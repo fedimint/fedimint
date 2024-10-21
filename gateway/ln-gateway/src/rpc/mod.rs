@@ -148,17 +148,15 @@ pub struct SetConfigurationPayload {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct CreateInvoiceForSelfPayload {
+pub struct CreateInvoiceForOperatorPayload {
     pub amount_msats: u64,
-    pub expiry_secs: u32,
+    pub expiry_secs: Option<u32>,
     pub description: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PayInvoicePayload {
+pub struct PayInvoiceForOperatorPayload {
     pub invoice: Bolt11Invoice,
-    pub max_delay: u64,
-    pub max_fee: Amount,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

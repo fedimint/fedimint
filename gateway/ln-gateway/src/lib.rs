@@ -36,7 +36,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use bitcoin30::{Address, Network, Txid};
 use bitcoin_hashes::{sha256, Hash};
 use clap::Parser;
@@ -87,10 +87,11 @@ use lightning::{ILnRpcClient, LightningBuilder, LightningRpcError};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::{thread_rng, Rng};
 use rpc::{
-    CloseChannelsWithPeerPayload, CreateInvoiceForSelfPayload, FederationInfo, GatewayFedConfig,
-    GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelPayload, PayInvoicePayload,
-    ReceiveEcashPayload, ReceiveEcashResponse, SetConfigurationPayload, SpendEcashPayload,
-    SpendEcashResponse, SyncToChainPayload, WithdrawOnchainPayload, V1_API_ENDPOINT,
+    CloseChannelsWithPeerPayload, CreateInvoiceForOperatorPayload, FederationInfo,
+    GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelPayload,
+    PayInvoiceForOperatorPayload, ReceiveEcashPayload, ReceiveEcashResponse,
+    SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, SyncToChainPayload,
+    WithdrawOnchainPayload, V1_API_ENDPOINT,
 };
 use state_machine::{GatewayClientModule, GatewayExtPayStates};
 use tokio::sync::RwLock;
@@ -952,12 +953,12 @@ impl Gateway {
 
     /// Creates an invoice that is directly payable to the gateway's lightning
     /// node.
-    async fn handle_create_invoice_for_self_msg(
+    async fn handle_create_invoice_for_operator_msg(
         &self,
-        payload: CreateInvoiceForSelfPayload,
-    ) -> Result<Bolt11Invoice> {
+        payload: CreateInvoiceForOperatorPayload,
+    ) -> AdminResult<Bolt11Invoice> {
         let GatewayState::Running { lightning_context } = self.get_state().await else {
-            return Err(PublicGatewayError::Lightning(
+            return Err(AdminGatewayError::Lightning(
                 LightningRpcError::FailedToConnect,
             ));
         };
@@ -966,17 +967,17 @@ impl Gateway {
             &lightning_context
                 .lnrpc
                 .create_invoice(CreateInvoiceRequest {
-                    payment_hash: Vec::new(), /* Empty payment hash indicates an invoice payable
-                                               * directly to the gateway. */
+                    // Empty payment hash indicates an invoice payable directly to the gateway.
+                    payment_hash: Vec::new(),
                     amount_msat: payload.amount_msats,
-                    expiry_secs: payload.expiry_secs,
+                    expiry_secs: payload.expiry_secs.unwrap_or(3600),
                     description: payload.description.map(Description::Direct),
                 })
                 .await?
                 .invoice,
         )
         .map_err(|e| {
-            PublicGatewayError::Lightning(LightningRpcError::InvalidMetadata {
+            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
                 failure_reason: e.to_string(),
             })
         })
@@ -984,20 +985,33 @@ impl Gateway {
 
     /// Requests the gateway to pay an outgoing LN invoice using its own funds.
     /// Returns the payment hash's preimage on success.
-    async fn handle_pay_invoice_self_msg(
+    async fn handle_pay_invoice_for_operator_msg(
         &self,
-        payload: PayInvoicePayload,
+        payload: PayInvoiceForOperatorPayload,
     ) -> AdminResult<Preimage> {
+        // Those are the ldk defaults
+        const BASE_FEE: u64 = 50;
+        const FEE_DENOMINATOR: u64 = 100;
+        const MAX_DELAY: u64 = 1008;
+
         let GatewayState::Running { lightning_context } = self.get_state().await else {
             return Err(AdminGatewayError::Lightning(
                 LightningRpcError::FailedToConnect,
             ));
         };
 
+        let max_fee = BASE_FEE
+            + payload
+                .invoice
+                .amount_milli_satoshis()
+                .context("Invoice is missing amount")?
+                .saturating_div(FEE_DENOMINATOR);
+
         let res = lightning_context
             .lnrpc
-            .pay(payload.invoice, payload.max_delay, payload.max_fee)
+            .pay(payload.invoice, MAX_DELAY, Amount::from_msats(max_fee))
             .await?;
+
         Ok(Preimage(
             res.preimage.try_into().expect("preimage is 32 bytes"),
         ))
