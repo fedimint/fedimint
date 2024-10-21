@@ -1,4 +1,5 @@
 pub mod cln;
+pub mod extension;
 pub mod ldk;
 pub mod lnd;
 
@@ -8,7 +9,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use bitcoin30::{Address, Network};
+use bitcoin30::Network;
 use clap::Subcommand;
 use fedimint_bip39::Mnemonic;
 use fedimint_core::db::Database;
@@ -16,7 +17,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
+use fedimint_core::{secp256k1, Amount};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::PrunedInvoice;
 use futures::stream::BoxStream;
@@ -30,17 +31,12 @@ use crate::envs::{
     FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_LDK_ESPLORA_SERVER_URL, FM_LDK_NETWORK, FM_LND_MACAROON_ENV,
     FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
-use crate::gateway_lnrpc::{
-    CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
-    GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    InterceptHtlcRequest, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
-    WithdrawOnchainResponse,
-};
+use crate::rpc::{CloseChannelsWithPeerPayload, WithdrawOnchainPayload};
+use crate::{OpenChannelPayload, Preimage};
 
 pub const MAX_LIGHTNING_RETRIES: u32 = 10;
 
-pub type HtlcResult = std::result::Result<InterceptHtlcRequest, tonic::Status>;
-pub type RouteHtlcStream<'a> = BoxStream<'a, HtlcResult>;
+pub type RouteHtlcStream<'a> = BoxStream<'a, InterceptPaymentRequest>;
 
 #[derive(
     Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash,
@@ -161,10 +157,7 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// Complete an HTLC that was intercepted by the gateway. Must be called for
     /// all successfully intercepted HTLCs sent to the stream returned by
     /// `route_htlcs`.
-    async fn complete_htlc(
-        &self,
-        htlc: InterceptHtlcResponse,
-    ) -> Result<EmptyResponse, LightningRpcError>;
+    async fn complete_htlc(&self, htlc: InterceptPaymentResponse) -> Result<(), LightningRpcError>;
 
     async fn create_invoice(
         &self,
@@ -179,33 +172,28 @@ pub trait ILnRpcClient: Debug + Send + Sync {
 
     async fn withdraw_onchain(
         &self,
-        address: Address,
-        amount: BitcoinAmountOrAll,
-        fee_rate_sats_per_vbyte: u64,
+        payload: WithdrawOnchainPayload,
     ) -> Result<WithdrawOnchainResponse, LightningRpcError>;
 
     /// Open a channel with a peer lightning node from the gateway's lightning
     /// node.
     async fn open_channel(
         &self,
-        pubkey: secp256k1::PublicKey,
-        host: String,
-        channel_size_sats: u64,
-        push_amount_sats: u64,
+        payload: OpenChannelPayload,
     ) -> Result<OpenChannelResponse, LightningRpcError>;
 
     /// Close all channels with a peer lightning node from the gateway's
     /// lightning node.
     async fn close_channels_with_peer(
         &self,
-        pubkey: secp256k1::PublicKey,
+        payload: CloseChannelsWithPeerPayload,
     ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError>;
 
     async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError>;
 
     async fn get_balances(&self) -> Result<GetBalancesResponse, LightningRpcError>;
 
-    async fn sync_to_chain(&self, block_height: u32) -> Result<EmptyResponse, LightningRpcError>;
+    async fn sync_to_chain(&self, block_height: u32) -> Result<(), LightningRpcError>;
 }
 
 impl dyn ILnRpcClient {
@@ -223,7 +211,7 @@ impl dyn ILnRpcClient {
                 .unwrap_or(GetRouteHintsResponse {
                     route_hints: Vec::new(),
                 });
-        route_hints.try_into().expect("Could not parse route hints")
+        route_hints.route_hints
     }
 
     /// Retrieves the basic information about the Gateway's connected Lightning
@@ -238,19 +226,15 @@ impl dyn ILnRpcClient {
             block_height,
             synced_to_chain,
         } = self.info().await?;
-        let node_pub_key =
-            PublicKey::from_slice(&pub_key).map_err(|e| LightningRpcError::InvalidMetadata {
-                failure_reason: format!("Invalid node pubkey {e}"),
-            })?;
         let network =
             Network::from_str(&network).map_err(|e| LightningRpcError::InvalidMetadata {
                 failure_reason: format!("Invalid network {network}: {e}"),
             })?;
-        Ok((node_pub_key, alias, network, block_height, synced_to_chain))
+        Ok((pub_key, alias, network, block_height, synced_to_chain))
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ChannelInfo {
     pub remote_pubkey: secp256k1::PublicKey,
     pub channel_size_sats: u64,
@@ -350,4 +334,119 @@ impl LightningBuilder for GatewayLightningBuilder {
     fn lightning_mode(&self) -> Option<LightningMode> {
         Some(self.lightning_mode.clone())
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetNodeInfoResponse {
+    pub pub_key: PublicKey,
+    pub alias: String,
+    pub network: String,
+    pub block_height: u32,
+    pub synced_to_chain: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct InterceptPaymentRequest {
+    pub payment_hash: crate::sha256::Hash,
+    pub amount_msat: u64,
+    pub expiry: u32,
+    pub incoming_chan_id: u64,
+    pub short_channel_id: Option<u64>,
+    pub htlc_id: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct InterceptPaymentResponse {
+    pub incoming_chan_id: u64,
+    pub htlc_id: u64,
+    pub payment_hash: crate::sha256::Hash,
+    pub action: PaymentAction,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum PaymentAction {
+    Settle(Preimage),
+    Cancel,
+    Forward,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetRouteHintsRequest {
+    pub num_route_hints: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetRouteHintsResponse {
+    pub route_hints: Vec<RouteHint>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PayInvoiceRequest {
+    pub invoice: String,
+    pub max_delay: u64,
+    pub max_fee_msat: u64,
+    pub payment_hash: Vec<u8>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PayInvoiceResponse {
+    pub preimage: Preimage,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PayPrunedInvoiceRequest {
+    pub pruned_invoice: Option<PrunedInvoice>,
+    pub max_delay: u64,
+    pub max_fee_msat: Amount,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CreateInvoiceRequest {
+    pub payment_hash: Option<crate::sha256::Hash>,
+    pub amount_msat: u64,
+    pub expiry_secs: u32,
+    pub description: Option<InvoiceDescription>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum InvoiceDescription {
+    Direct(String),
+    Hash(crate::sha256::Hash),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CreateInvoiceResponse {
+    pub invoice: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetLnOnchainAddressResponse {
+    pub address: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WithdrawOnchainResponse {
+    pub txid: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OpenChannelResponse {
+    pub funding_txid: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CloseChannelsWithPeerResponse {
+    pub num_channels_closed: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ListActiveChannelsResponse {
+    pub channels: Vec<ChannelInfo>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetBalancesResponse {
+    pub onchain_balance_sats: u64,
+    pub lightning_balance_msats: u64,
+    pub inbound_lightning_liquidity_msats: u64,
 }

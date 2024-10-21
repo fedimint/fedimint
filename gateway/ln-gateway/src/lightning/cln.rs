@@ -1,28 +1,33 @@
 use std::fmt::Debug;
 use std::sync::Arc;
-use std::time::Duration;
 
 use async_trait::async_trait;
-use bitcoin30::Address;
-use fedimint_core::encoding::Encodable;
-use fedimint_core::task::{sleep, TaskGroup};
+use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
+use fedimint_core::Amount;
 use fedimint_ln_common::PrunedInvoice;
-use tonic::transport::{Channel, Endpoint};
-use tonic::Request;
+use futures::stream::StreamExt;
+use reqwest::Method;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use tracing::info;
 
 use super::{ChannelInfo, ILnRpcClient, LightningRpcError, RouteHtlcStream};
-use crate::gateway_lnrpc::gateway_lightning_client::GatewayLightningClient;
-use crate::gateway_lnrpc::{
-    self, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
-    CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetBalancesResponse,
-    GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
-    InterceptHtlcResponse, OpenChannelRequest, OpenChannelResponse, PayInvoiceResponse,
-    PayPrunedInvoiceRequest, WithdrawOnchainRequest, WithdrawOnchainResponse,
+use crate::lightning::extension::{
+    CLN_CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CLN_COMPLETE_PAYMENT_ENDPOINT,
+    CLN_CREATE_INVOICE_ENDPOINT, CLN_GET_BALANCES_ENDPOINT, CLN_INFO_ENDPOINT,
+    CLN_LIST_ACTIVE_CHANNELS_ENDPOINT, CLN_LN_ONCHAIN_ADDRESS_ENDPOINT, CLN_OPEN_CHANNEL_ENDPOINT,
+    CLN_PAY_PRUNED_INVOICE_ENDPOINT, CLN_ROUTE_HINTS_ENDPOINT, CLN_ROUTE_HTLCS_ENDPOINT,
+    CLN_WITHDRAW_ONCHAIN_ENDPOINT,
 };
-use crate::lightning::MAX_LIGHTNING_RETRIES;
+use crate::lightning::{
+    CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
+    GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest,
+    GetRouteHintsResponse, InterceptPaymentRequest, InterceptPaymentResponse,
+    ListActiveChannelsResponse, OpenChannelResponse, PayInvoiceResponse, PayPrunedInvoiceRequest,
+    WithdrawOnchainResponse,
+};
+use crate::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, WithdrawOnchainPayload};
 
 /// An `ILnRpcClient` that wraps around `GatewayLightningClient` for
 /// convenience, and makes real RPC requests over the wire to a remote lightning
@@ -31,6 +36,7 @@ use crate::lightning::MAX_LIGHTNING_RETRIES;
 #[derive(Debug)]
 pub struct NetworkLnRpcClient {
     connection_url: SafeUrl,
+    client: reqwest::Client,
 }
 
 impl NetworkLnRpcClient {
@@ -41,59 +47,72 @@ impl NetworkLnRpcClient {
         );
         NetworkLnRpcClient {
             connection_url: url,
+            client: reqwest::Client::new(),
         }
     }
 
-    async fn connect(&self) -> Result<GatewayLightningClient<Channel>, LightningRpcError> {
-        let mut retries = 0;
-        let client = loop {
-            if retries >= MAX_LIGHTNING_RETRIES {
-                return Err(LightningRpcError::FailedToConnect);
-            }
+    async fn call<P: Serialize, T: DeserializeOwned>(
+        &self,
+        method: Method,
+        url: SafeUrl,
+        payload: Option<P>,
+    ) -> Result<T, reqwest::Error> {
+        let mut builder = self.client.request(method, url.clone().to_unsafe());
+        if let Some(payload) = payload {
+            builder = builder
+                .json(&payload)
+                .header(reqwest::header::CONTENT_TYPE, "application/json");
+        }
 
-            retries += 1;
+        let response = builder.send().await?;
+        response.json::<T>().await
+    }
 
-            if let Ok(endpoint) = Endpoint::from_shared(self.connection_url.to_string()) {
-                if let Ok(client) = GatewayLightningClient::connect(endpoint.clone()).await {
-                    break client;
-                }
-            }
+    async fn call_get<T: DeserializeOwned>(&self, url: SafeUrl) -> Result<T, reqwest::Error> {
+        self.call(Method::GET, url, None::<()>).await
+    }
 
-            tracing::debug!("Couldn't connect to CLN extension, retrying in 1 second...");
-            sleep(Duration::from_secs(1)).await;
-        };
-
-        Ok(client)
+    async fn call_post<P: Serialize, T: DeserializeOwned>(
+        &self,
+        url: SafeUrl,
+        payload: P,
+    ) -> Result<T, reqwest::Error> {
+        self.call(Method::POST, url, Some(payload)).await
     }
 }
 
 #[async_trait]
 impl ILnRpcClient for NetworkLnRpcClient {
     async fn info(&self) -> Result<GetNodeInfoResponse, LightningRpcError> {
-        let req = Request::new(EmptyRequest {});
-        let mut client = self.connect().await?;
-        let res = client.get_node_info(req).await.map_err(|status| {
-            LightningRpcError::FailedToGetNodeInfo {
-                failure_reason: status.message().to_string(),
-            }
-        })?;
-        Ok(res.into_inner())
+        let url = self
+            .connection_url
+            .join(CLN_INFO_ENDPOINT)
+            .expect("invalid base url");
+        self.call_get(url)
+            .await
+            .map_err(|e| LightningRpcError::FailedToGetNodeInfo {
+                failure_reason: e.to_string(),
+            })
     }
 
     async fn routehints(
         &self,
         num_route_hints: usize,
     ) -> Result<GetRouteHintsResponse, LightningRpcError> {
-        let req = Request::new(GetRouteHintsRequest {
-            num_route_hints: num_route_hints as u64,
-        });
-        let mut client = self.connect().await?;
-        let res = client.get_route_hints(req).await.map_err(|status| {
-            LightningRpcError::FailedToGetRouteHints {
-                failure_reason: status.message().to_string(),
-            }
-        })?;
-        Ok(res.into_inner())
+        let url = self
+            .connection_url
+            .join(CLN_ROUTE_HINTS_ENDPOINT)
+            .expect("invalid base url");
+        self.call_post(
+            url,
+            GetRouteHintsRequest {
+                num_route_hints: num_route_hints as u64,
+            },
+        )
+        .await
+        .map_err(|e| LightningRpcError::FailedToGetRouteHints {
+            failure_reason: e.to_string(),
+        })
     }
 
     async fn pay_private(
@@ -102,25 +121,22 @@ impl ILnRpcClient for NetworkLnRpcClient {
         max_delay: u64,
         max_fee: Amount,
     ) -> Result<PayInvoiceResponse, LightningRpcError> {
-        let req = Request::new(PayPrunedInvoiceRequest {
-            pruned_invoice: Some(gateway_lnrpc::PrunedInvoice {
-                amount_msat: invoice.amount.msats,
-                destination: invoice.destination.consensus_encode_to_vec(),
-                destination_features: invoice.destination_features,
-                payment_hash: invoice.payment_hash.consensus_encode_to_vec(),
-                payment_secret: invoice.payment_secret.to_vec(),
-                min_final_cltv_delta: invoice.min_final_cltv_delta,
-            }),
-            max_delay,
-            max_fee_msat: max_fee.msats,
-        });
-        let mut client = self.connect().await?;
-        let res = client.pay_pruned_invoice(req).await.map_err(|status| {
-            LightningRpcError::FailedPayment {
-                failure_reason: status.message().to_string(),
-            }
-        })?;
-        Ok(res.into_inner())
+        let url = self
+            .connection_url
+            .join(CLN_PAY_PRUNED_INVOICE_ENDPOINT)
+            .expect("invalid base url");
+        self.call_post(
+            url,
+            PayPrunedInvoiceRequest {
+                pruned_invoice: Some(invoice),
+                max_delay,
+                max_fee_msat: max_fee,
+            },
+        )
+        .await
+        .map_err(|e| LightningRpcError::FailedPayment {
+            failure_reason: e.to_string(),
+        })
     }
 
     fn supports_private_payments(&self) -> bool {
@@ -131,159 +147,142 @@ impl ILnRpcClient for NetworkLnRpcClient {
         self: Box<Self>,
         _task_group: &TaskGroup,
     ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), LightningRpcError> {
-        let mut client = self.connect().await?;
-        let res = client
-            .route_htlcs(EmptyRequest {})
-            .await
-            .map_err(|status| LightningRpcError::FailedToRouteHtlcs {
-                failure_reason: status.message().to_string(),
-            })?;
+        let url = self
+            .connection_url
+            .join(CLN_ROUTE_HTLCS_ENDPOINT)
+            .expect("invalid base url");
+        let response = reqwest::get(url.to_unsafe()).await.map_err(|e| {
+            LightningRpcError::FailedToRouteHtlcs {
+                failure_reason: e.to_string(),
+            }
+        })?;
+
+        let stream = response.bytes_stream().filter_map(|item| async {
+            let bytes = item.expect("Error receiving JSON over stream");
+            let request = serde_json::from_slice::<InterceptPaymentRequest>(&bytes)
+                .expect("Failed to deserialize InterceptPaymentRequest");
+            Some(request)
+        });
+
         Ok((
-            Box::pin(res.into_inner()),
+            Box::pin(stream),
             Arc::new(Self::new(self.connection_url.clone())),
         ))
     }
 
-    async fn complete_htlc(
-        &self,
-        htlc: InterceptHtlcResponse,
-    ) -> Result<EmptyResponse, LightningRpcError> {
-        let mut client = self.connect().await?;
-        let res = client.complete_htlc(htlc).await.map_err(|status| {
-            LightningRpcError::FailedToCompleteHtlc {
-                failure_reason: status.message().to_string(),
-            }
-        })?;
-        Ok(res.into_inner())
+    async fn complete_htlc(&self, htlc: InterceptPaymentResponse) -> Result<(), LightningRpcError> {
+        let url = self
+            .connection_url
+            .join(CLN_COMPLETE_PAYMENT_ENDPOINT)
+            .expect("invalid base url");
+        self.call_post(url, htlc)
+            .await
+            .map_err(|e| LightningRpcError::FailedToCompleteHtlc {
+                failure_reason: e.to_string(),
+            })
     }
 
     async fn create_invoice(
         &self,
         create_invoice_request: CreateInvoiceRequest,
     ) -> Result<CreateInvoiceResponse, LightningRpcError> {
-        let mut client = self.connect().await?;
-        let res = client
-            .create_invoice(create_invoice_request)
+        let url = self
+            .connection_url
+            .join(CLN_CREATE_INVOICE_ENDPOINT)
+            .expect("invalid base url");
+        self.call_post(url, create_invoice_request)
             .await
-            .map_err(|status| LightningRpcError::FailedToGetInvoice {
-                failure_reason: status.message().to_string(),
-            })?;
-        Ok(res.into_inner())
+            .map_err(|e| LightningRpcError::FailedToGetInvoice {
+                failure_reason: e.to_string(),
+            })
     }
 
     async fn get_ln_onchain_address(
         &self,
     ) -> Result<GetLnOnchainAddressResponse, LightningRpcError> {
-        let mut client = self.connect().await?;
-        let res = client
-            .get_ln_onchain_address(EmptyRequest {})
+        let url = self
+            .connection_url
+            .join(CLN_LN_ONCHAIN_ADDRESS_ENDPOINT)
+            .expect("invalid base url");
+        self.call_get(url)
             .await
-            .map_err(|status| LightningRpcError::FailedToGetLnOnchainAddress {
-                failure_reason: status.message().to_string(),
-            })?;
-        Ok(res.into_inner())
+            .map_err(|e| LightningRpcError::FailedToGetLnOnchainAddress {
+                failure_reason: e.to_string(),
+            })
     }
 
     async fn withdraw_onchain(
         &self,
-        address: Address,
-        amount: BitcoinAmountOrAll,
-        fee_rate_sats_per_vbyte: u64,
+        payload: WithdrawOnchainPayload,
     ) -> Result<WithdrawOnchainResponse, LightningRpcError> {
-        let mut client = self.connect().await?;
-        let res = client
-            .withdraw_onchain(WithdrawOnchainRequest {
-                address: address.to_string(),
-                amount_sats: match amount {
-                    // This leaves the field empty, which is interpreted as "all funds".
-                    BitcoinAmountOrAll::All => None,
-                    BitcoinAmountOrAll::Amount(amount) => Some(amount.to_sat()),
-                },
-                fee_rate_sats_per_vbyte,
-            })
+        let url = self
+            .connection_url
+            .join(CLN_WITHDRAW_ONCHAIN_ENDPOINT)
+            .expect("invalid base url");
+        self.call_post(url, payload)
             .await
-            .map_err(|status| LightningRpcError::FailedToWithdrawOnchain {
-                failure_reason: status.message().to_string(),
-            })?;
-        Ok(res.into_inner())
+            .map_err(|e| LightningRpcError::FailedToWithdrawOnchain {
+                failure_reason: e.to_string(),
+            })
     }
 
     async fn open_channel(
         &self,
-        pubkey: secp256k1::PublicKey,
-        host: String,
-        channel_size_sats: u64,
-        push_amount_sats: u64,
+        payload: OpenChannelPayload,
     ) -> Result<OpenChannelResponse, LightningRpcError> {
-        let mut client = self.connect().await?;
-
-        let res = client
-            .open_channel(OpenChannelRequest {
-                pubkey: pubkey.serialize().to_vec(),
-                host,
-                channel_size_sats,
-                push_amount_sats,
-            })
+        let url = self
+            .connection_url
+            .join(CLN_OPEN_CHANNEL_ENDPOINT)
+            .expect("invalid base url");
+        self.call_post(url, payload)
             .await
-            .map_err(|status| LightningRpcError::FailedToOpenChannel {
-                failure_reason: status.message().to_string(),
-            })?;
-        Ok(res.into_inner())
+            .map_err(|e| LightningRpcError::FailedToOpenChannel {
+                failure_reason: e.to_string(),
+            })
     }
 
     async fn close_channels_with_peer(
         &self,
-        pubkey: secp256k1::PublicKey,
+        payload: CloseChannelsWithPeerPayload,
     ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError> {
-        let mut client = self.connect().await?;
-        let res = client
-            .close_channels_with_peer(CloseChannelsWithPeerRequest {
-                pubkey: pubkey.serialize().to_vec(),
-            })
-            .await
-            .map_err(|status| LightningRpcError::FailedToCloseChannelsWithPeer {
-                failure_reason: status.message().to_string(),
-            })?;
-        Ok(res.into_inner())
+        let url = self
+            .connection_url
+            .join(CLN_CLOSE_CHANNELS_WITH_PEER_ENDPOINT)
+            .expect("invalid base url");
+        self.call_post(url, payload).await.map_err(|e| {
+            LightningRpcError::FailedToCloseChannelsWithPeer {
+                failure_reason: e.to_string(),
+            }
+        })
     }
 
     async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError> {
-        let mut client = self.connect().await?;
-        let res = client
-            .list_active_channels(EmptyRequest {})
-            .await
-            .map_err(|status| LightningRpcError::FailedToListActiveChannels {
-                failure_reason: status.message().to_string(),
-            })?;
-        Ok(res
-            .into_inner()
-            .channels
-            .into_iter()
-            .map(|channel| ChannelInfo {
-                remote_pubkey: secp256k1::PublicKey::from_slice(&channel.remote_pubkey)
-                    .expect("Lightning node returned invalid remote channel pubkey"),
-                channel_size_sats: channel.channel_size_sats,
-                outbound_liquidity_sats: channel.outbound_liquidity_sats,
-                inbound_liquidity_sats: channel.inbound_liquidity_sats,
-                short_channel_id: channel.short_channel_id,
-            })
-            .collect())
+        let url = self
+            .connection_url
+            .join(CLN_LIST_ACTIVE_CHANNELS_ENDPOINT)
+            .expect("invalid base url");
+        let response: ListActiveChannelsResponse = self.call_get(url).await.map_err(|e| {
+            LightningRpcError::FailedToListActiveChannels {
+                failure_reason: e.to_string(),
+            }
+        })?;
+        Ok(response.channels)
     }
 
     async fn get_balances(&self) -> Result<GetBalancesResponse, LightningRpcError> {
-        let mut client = self.connect().await?;
-
-        Ok(client
-            .get_balances(EmptyRequest {})
+        let url = self
+            .connection_url
+            .join(CLN_GET_BALANCES_ENDPOINT)
+            .expect("invalid base url");
+        self.call_get(url)
             .await
-            .map_err(|status| LightningRpcError::FailedToGetBalances {
-                failure_reason: status.message().to_string(),
-            })?
-            .into_inner())
+            .map_err(|e| LightningRpcError::FailedToGetBalances {
+                failure_reason: e.to_string(),
+            })
     }
 
-    async fn sync_to_chain(&self, _block_height: u32) -> Result<EmptyResponse, LightningRpcError> {
+    async fn sync_to_chain(&self, _block_height: u32) -> Result<(), LightningRpcError> {
         // We don't need to do anything here, as CLN automatically syncs to chain.
-        Ok(EmptyResponse {})
+        Ok(())
     }
 }

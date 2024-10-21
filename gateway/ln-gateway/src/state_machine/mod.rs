@@ -54,8 +54,7 @@ use self::pay::{
     GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates,
     OutgoingPaymentError,
 };
-use crate::gateway_lnrpc::InterceptHtlcRequest;
-use crate::lightning::LightningContext;
+use crate::lightning::{InterceptPaymentRequest, LightningContext};
 use crate::state_machine::complete::{
     GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState,
 };
@@ -785,15 +784,15 @@ pub struct Htlc {
     pub htlc_id: u64,
 }
 
-impl TryFrom<InterceptHtlcRequest> for Htlc {
+impl TryFrom<InterceptPaymentRequest> for Htlc {
     type Error = anyhow::Error;
 
-    fn try_from(s: InterceptHtlcRequest) -> Result<Self, Self::Error> {
+    fn try_from(s: InterceptPaymentRequest) -> Result<Self, Self::Error> {
         Ok(Self {
-            payment_hash: sha256::Hash::from_slice(&s.payment_hash)?,
-            incoming_amount_msat: Amount::from_msats(s.incoming_amount_msat),
-            outgoing_amount_msat: Amount::from_msats(s.outgoing_amount_msat),
-            incoming_expiry: s.incoming_expiry,
+            payment_hash: s.payment_hash,
+            incoming_amount_msat: Amount::from_msats(s.amount_msat),
+            outgoing_amount_msat: Amount::from_msats(s.amount_msat),
+            incoming_expiry: s.expiry,
             short_channel_id: s.short_channel_id,
             incoming_chan_id: s.incoming_chan_id,
             htlc_id: s.htlc_id,

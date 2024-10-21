@@ -1,7 +1,6 @@
 use std::fmt;
 use std::time::Duration;
 
-use bitcoin_hashes::Hash;
 use fedimint_client::sm::{State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
@@ -15,8 +14,7 @@ use thiserror::Error;
 use tracing::{debug, info, warn};
 
 use super::{GatewayClientContext, GatewayClientStateMachines};
-use crate::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Settle};
-use crate::gateway_lnrpc::InterceptHtlcResponse;
+use crate::lightning::{InterceptPaymentResponse, PaymentAction};
 
 #[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
 enum CompleteHtlcError {
@@ -210,17 +208,15 @@ impl CompleteHtlcState {
             match lightning_context {
                 Ok(lightning_context) => {
                     let htlc = match htlc_outcome {
-                        HtlcOutcome::Success(preimage) => InterceptHtlcResponse {
-                            action: Some(Action::Settle(Settle {
-                                preimage: preimage.0.to_vec(),
-                            })),
-                            payment_hash: common.payment_hash.to_byte_array().to_vec(),
+                        HtlcOutcome::Success(preimage) => InterceptPaymentResponse {
+                            action: PaymentAction::Settle(preimage),
+                            payment_hash: common.payment_hash,
                             incoming_chan_id: common.incoming_chan_id,
                             htlc_id: common.htlc_id,
                         },
-                        HtlcOutcome::Failure(reason) => InterceptHtlcResponse {
-                            action: Some(Action::Cancel(Cancel { reason })),
-                            payment_hash: common.payment_hash.to_byte_array().to_vec(),
+                        HtlcOutcome::Failure(_) => InterceptPaymentResponse {
+                            action: PaymentAction::Cancel,
+                            payment_hash: common.payment_hash,
                             incoming_chan_id: common.incoming_chan_id,
                             htlc_id: common.htlc_id,
                         },

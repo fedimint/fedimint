@@ -516,6 +516,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "axum-macros"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57d123550fa8d071b7255cb0cc04dc302baa6c8c4a79f55701552684d8399bce"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.79",
+]
+
+[[package]]
 name = "backon"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2561,6 +2572,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "axum 0.7.7",
+ "axum-macros",
  "bitcoin 0.30.2",
  "bitcoin_hashes 0.12.0",
  "clap",
@@ -2592,6 +2604,7 @@ dependencies = [
  "fedimint-unknown-server",
  "fedimint-wallet-client",
  "futures",
+ "futures-util",
  "hex",
  "ldk-node",
  "lightning 0.0.123",
@@ -2607,7 +2620,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic 0.12.3",
- "tonic-build 0.12.3",
  "tower-http",
  "tracing",
  "url",
@@ -3184,7 +3196,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic 0.10.2",
- "tonic-build 0.10.2",
+ "tonic-build",
  "tower 0.4.13",
 ]
 
@@ -5813,27 +5825,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "prost-build"
-version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5bb182580f71dd070f88d01ce3de9f4da5021db7115d2e1c3605a754153b77c1"
-dependencies = [
- "bytes",
- "heck 0.5.0",
- "itertools 0.13.0",
- "log",
- "multimap",
- "once_cell",
- "petgraph",
- "prettyplease 0.2.16",
- "prost 0.13.3",
- "prost-types 0.13.1",
- "regex",
- "syn 2.0.79",
- "tempfile",
-]
-
-[[package]]
 name = "prost-derive"
 version = "0.11.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6193,10 +6184,12 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.26.0",
  "tokio-socks",
+ "tokio-util",
  "tower-service",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wasm-streams",
  "web-sys",
  "webpki-roots 0.26.6",
  "windows-registry",
@@ -7481,20 +7474,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tonic-build"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9557ce109ea773b399c9b9e5dca39294110b74f1f342cb347a80d1fce8c26a11"
-dependencies = [
- "prettyplease 0.2.16",
- "proc-macro2",
- "prost-build 0.13.1",
- "prost-types 0.13.1",
- "quote",
- "syn 2.0.79",
-]
-
-[[package]]
 name = "tor-async-utils"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8635,6 +8614,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.79",
+]
+
+[[package]]
+name = "wasm-streams"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e072d4e72f700fb3443d8fe94a39315df013eef1104903cdb0a2abd322bbecd"
+dependencies = [
+ "futures-util",
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
