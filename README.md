@@ -28,7 +28,7 @@
 [Fedimint](https://fedimint.org) is a module based system for building federated applications. It is designed to be a
 trust-minimized, censorship-resistant, and private alternative to centralized applications.
 
-> **Fedimint is alpha software released under
+> **Fedimint is beta software released under
 an [MIT License](https://github.com/fedimint/fedimint/blob/master/LICENSE). This means that the software here is
 provided "as is", without warranty of any kind. We are a small development team with limited resources. If you
 experience a loss of funds due to a bug in this software, we may not have the means to help you recover the funds. We
