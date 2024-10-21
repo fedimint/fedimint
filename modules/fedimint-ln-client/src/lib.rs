@@ -818,16 +818,15 @@ impl LightningClientModule {
     ) -> Result<bool, LightningReceiveError> {
         let mut stream = self.notifier.subscribe(operation_id).await;
         loop {
-            match stream.next().await {
-                Some(LightningClientStateMachines::Receive(state)) => match state.state {
+            if let Some(LightningClientStateMachines::Receive(state)) = stream.next().await {
+                match state.state {
                     LightningReceiveStates::Funded(_) => return Ok(false),
                     LightningReceiveStates::Success(outpoints) => return Ok(outpoints.is_empty()), /* if the outpoints are empty, it was an external receive */
                     LightningReceiveStates::Canceled(e) => {
                         return Err(e);
                     }
                     _ => {}
-                },
-                Some(_) | None => {}
+                }
             }
         }
     }
@@ -838,15 +837,14 @@ impl LightningClientModule {
     ) -> Result<Vec<OutPoint>, LightningReceiveError> {
         let mut stream = self.notifier.subscribe(operation_id).await;
         loop {
-            match stream.next().await {
-                Some(LightningClientStateMachines::Receive(state)) => match state.state {
+            if let Some(LightningClientStateMachines::Receive(state)) = stream.next().await {
+                match state.state {
                     LightningReceiveStates::Success(out_points) => return Ok(out_points),
                     LightningReceiveStates::Canceled(e) => {
                         return Err(e);
                     }
                     _ => {}
-                },
-                Some(_) | None => {}
+                }
             }
         }
     }

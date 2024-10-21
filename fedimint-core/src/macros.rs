@@ -449,10 +449,11 @@ macro_rules! module_plugin_static_trait_define{
     };
 }
 
-/// A copy of `module_lugin_static_trait_define` but for `ClientConfig`, which
-/// is a snowflake that requires `: Serialize` and conditional implementation
-/// for `DynUnknown`. The macro is getting gnarly, so seems easier to
-/// copy-paste-modify, than pile up conditional argument.
+/// A copy of `module_lugin_static_trait_define` but for `ClientConfig`.
+///
+/// `ClientConfig` is a snowflake that requires `: Serialize` and conditional
+/// implementation for `DynUnknown`. The macro is getting gnarly, so seems
+/// easier to copy-paste-modify, than pile up conditional argument.
 #[macro_export]
 macro_rules! module_plugin_static_trait_define_config{
     (   $(#[$outer:meta])*
@@ -725,6 +726,8 @@ macro_rules! module_plugin_dyn_newtype_display_passthrough {
 }
 
 // TODO: use concat_ident for error name once it lands in stable, see https://github.com/rust-lang/rust/issues/29599
+/// Macro for defining module associated types.
+///
 /// Wraps a type into an enum with a default variant, this allows to add new
 /// versions of the type in the future. Depending on context unknown versions
 /// may be ignored or lead to errors. E.g. the client might just ignore an

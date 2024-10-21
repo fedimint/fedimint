@@ -5,6 +5,8 @@ use crate::encoding::{Decodable, Encodable};
 use crate::epoch::ConsensusItem;
 use crate::PeerId;
 
+/// A consensus item accepted in the consensus
+///
 /// If two correct nodes obtain two ordered items from the broadcast they
 /// are guaranteed to be in the same order. However, an ordered items is
 /// only guaranteed to be seen by all correct nodes if a correct node decides to
