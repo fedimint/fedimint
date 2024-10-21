@@ -8,7 +8,6 @@ use anyhow::ensure;
 use async_trait::async_trait;
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::db::Database;
-use fedimint_core::encoding::Encodable;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::contracts::Preimage;
@@ -1041,12 +1040,6 @@ impl ILnRpcClient for GatewayLndClient {
                 },
             };
 
-            self.payment_hashes.write().await.insert(
-                create_invoice_request
-                    .payment_hash
-                    .consensus_encode_to_vec(),
-            );
-
             let add_invoice_response =
                 client.lightning().add_invoice(invoice).await.map_err(|e| {
                     LightningRpcError::FailedToGetInvoice {
@@ -1057,34 +1050,29 @@ impl ILnRpcClient for GatewayLndClient {
             let invoice = add_invoice_response.into_inner().payment_request;
             Ok(CreateInvoiceResponse { invoice })
         } else {
+            let payment_hash = create_invoice_request
+                .payment_hash
+                .expect("Already checked payment hash")
+                .to_byte_array()
+                .to_vec();
             let hold_invoice_request = match description {
                 InvoiceDescription::Direct(description) => AddHoldInvoiceRequest {
                     memo: description,
-                    hash: create_invoice_request
-                        .payment_hash
-                        .clone()
-                        .consensus_encode_to_vec(),
+                    hash: payment_hash.clone(),
                     value_msat: create_invoice_request.amount_msat as i64,
                     expiry: i64::from(create_invoice_request.expiry_secs),
                     ..Default::default()
                 },
                 InvoiceDescription::Hash(desc_hash) => AddHoldInvoiceRequest {
                     description_hash: desc_hash.to_byte_array().to_vec(),
-                    hash: create_invoice_request
-                        .payment_hash
-                        .clone()
-                        .consensus_encode_to_vec(),
+                    hash: payment_hash.clone(),
                     value_msat: create_invoice_request.amount_msat as i64,
                     expiry: i64::from(create_invoice_request.expiry_secs),
                     ..Default::default()
                 },
             };
 
-            self.payment_hashes.write().await.insert(
-                create_invoice_request
-                    .payment_hash
-                    .consensus_encode_to_vec(),
-            );
+            self.payment_hashes.write().await.insert(payment_hash);
 
             let hold_invoice_response = client
                 .invoices()

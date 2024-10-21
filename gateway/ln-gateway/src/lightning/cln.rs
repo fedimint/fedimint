@@ -158,10 +158,17 @@ impl ILnRpcClient for NetworkLnRpcClient {
         })?;
 
         let stream = response.bytes_stream().filter_map(|item| async {
-            let bytes = item.expect("Error receiving JSON over stream");
-            let request = serde_json::from_slice::<InterceptPaymentRequest>(&bytes)
-                .expect("Failed to deserialize InterceptPaymentRequest");
-            Some(request)
+            match item {
+                Ok(bytes) => {
+                    let request = serde_json::from_slice::<InterceptPaymentRequest>(&bytes)
+                        .expect("Failed to deserialize InterceptPaymentRequest");
+                    Some(request)
+                }
+                Err(e) => {
+                    tracing::error!(?e, "Error receiving JSON over stream");
+                    None
+                }
+            }
         });
 
         Ok((
