@@ -24,7 +24,7 @@ use fedimint_core::{apply, async_trait_maybe_send, impl_db_lookup, impl_db_recor
 use fedimint_logging::LOG_CLIENT_EVENT_LOG;
 use futures::{Future, StreamExt};
 use serde::{Deserialize, Serialize};
-use tokio::sync::watch;
+use tokio::sync::{broadcast, watch};
 use tracing::{debug, trace};
 
 use super::DbKeyPrefix;
@@ -32,6 +32,7 @@ use super::DbKeyPrefix;
 pub trait Event: serde::Serialize + serde::de::DeserializeOwned {
     const MODULE: Option<ModuleKind>;
     const KIND: EventKind;
+    const PERSIST: bool = true;
 }
 
 /// An counter that resets on every restart, that guarantees that
@@ -97,7 +98,7 @@ impl FromStr for EventLogId {
     }
 }
 
-#[derive(Debug, Encodable, Decodable, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Encodable, Decodable, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EventKind(Cow<'static, str>);
 
 impl EventKind {
@@ -118,7 +119,13 @@ impl From<String> for EventKind {
     }
 }
 
-#[derive(Debug, Encodable, Decodable)]
+#[derive(Debug, Encodable, Decodable, Clone)]
+pub struct UnorderedEventLogEntry {
+    pub persist: bool,
+    pub inner: EventLogEntry,
+}
+
+#[derive(Debug, Encodable, Decodable, Clone)]
 pub struct EventLogEntry {
     /// Type/kind of the event
     ///
@@ -147,7 +154,7 @@ pub struct EventLogEntry {
 
 impl_db_record!(
     key = UnordedEventLogId,
-    value = EventLogEntry,
+    value = UnorderedEventLogEntry,
     db_prefix = DbKeyPrefix::UnorderedEventLog,
 );
 
@@ -184,6 +191,7 @@ pub trait DBTransactionEventLogExt {
         module_kind: Option<ModuleKind>,
         module_id: Option<ModuleInstanceId>,
         payload: Vec<u8>,
+        persist: bool,
     );
 
     /// Log an event log event
@@ -204,6 +212,7 @@ pub trait DBTransactionEventLogExt {
             E::MODULE,
             module_id,
             serde_json::to_vec(&event).expect("Serialization can't fail"),
+            <E as Event>::PERSIST,
         )
         .await;
     }
@@ -240,6 +249,7 @@ where
         module_kind: Option<ModuleKind>,
         module_id: Option<ModuleInstanceId>,
         payload: Vec<u8>,
+        persist: bool,
     ) {
         assert_eq!(
             module_kind.is_some(),
@@ -253,11 +263,14 @@ where
         if self
             .insert_entry(
                 &unordered_id,
-                &EventLogEntry {
-                    kind,
-                    module: module_kind.map(|kind| (kind, module_id.unwrap())),
-                    ts_usecs: unordered_id.ts_usecs,
-                    payload,
+                &UnorderedEventLogEntry {
+                    persist,
+                    inner: EventLogEntry {
+                        kind,
+                        module: module_kind.map(|kind| (kind, module_id.unwrap())),
+                        ts_usecs: unordered_id.ts_usecs,
+                        payload,
+                    },
                 },
             )
             .await
@@ -313,6 +326,7 @@ pub(crate) async fn run_event_log_ordering_task(
     db: Database,
     mut log_ordering_task_wakeup: watch::Receiver<()>,
     log_event_added: watch::Sender<()>,
+    log_event_added_transient: broadcast::Sender<EventLogEntry>,
 ) {
     debug!(target: LOG_CLIENT_EVENT_LOG, "Event log ordering task started");
     let mut next_entry_id = db
@@ -336,17 +350,31 @@ pub(crate) async fn run_event_log_ordering_task(
                 dbtx.remove_entry(unordered_id).await.is_some(),
                 "Must never fail to remove entry"
             );
-            assert!(
-                dbtx.insert_entry(&next_entry_id, entry).await.is_none(),
-                "Must never overwrite existing event"
-            );
+            if entry.persist {
+                assert!(
+                    dbtx.insert_entry(&next_entry_id, &entry.inner)
+                        .await
+                        .is_none(),
+                    "Must never overwrite existing event"
+                );
+                trace!(target: LOG_CLIENT_EVENT_LOG, ?unordered_id, id=?next_entry_id, "Ordered event log event");
+                next_entry_id = next_entry_id.next();
+            } else {
+                trace!(target: LOG_CLIENT_EVENT_LOG, ?unordered_id, id=?next_entry_id, "Transient event log event");
+                dbtx.on_commit({
+                    let log_event_added_transient = log_event_added_transient.clone();
+                    let entry = entry.inner.clone();
 
-            trace!(target: LOG_CLIENT_EVENT_LOG, ?unordered_id, id=?next_entry_id, "Ordered event log event");
-            next_entry_id = next_entry_id.next();
+                    move || {
+                        // we ignore the no-subscribers
+                        let _ = log_event_added_transient.send(entry);
+                    }
+                });
+            }
         }
 
         // This thread is the only thread deleting already existing element of unordered
-        // log, And inserting new elements into ordered log, so it should never
+        // log and inserting new elements into ordered log, so it should never
         // fail to commit.
         dbtx.commit_tx().await;
         if !unordered_events.is_empty() {
@@ -380,6 +408,9 @@ where
         .get_value(pos_key)
         .await
         .unwrap_or_default();
+
+    trace!(target: LOG_CLIENT_EVENT_LOG, ?next_key, "Handling events");
+
     loop {
         let mut dbtx = db.begin_transaction().await;
 
@@ -407,8 +438,7 @@ mod tests {
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::impl_db_record;
     use fedimint_core::task::TaskGroup;
-    use fedimint_logging::TracingSetup;
-    use tokio::sync::watch;
+    use tokio::sync::{broadcast, watch};
     use tokio::try_join;
     use tracing::info;
 
@@ -422,19 +452,24 @@ mod tests {
 
     impl_db_record!(key = TestLogIdKey, value = EventLogId, db_prefix = 0x00,);
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn sanity_handle_events() {
-        // Ensure tracing has been set once
-        let _ = TracingSetup::default().init();
         let db = MemDatabase::new().into_database();
         let tg = TaskGroup::new();
 
         let (log_event_added_tx, log_event_added_rx) = watch::channel(());
         let (log_ordering_wakeup_tx, log_ordering_wakeup_rx) = watch::channel(());
+        let (log_event_added_transient_tx, _log_event_added_transient_rx) =
+            broadcast::channel(1024);
 
         tg.spawn_cancellable(
             "event log ordering task",
-            run_event_log_ordering_task(db.clone(), log_ordering_wakeup_rx, log_event_added_tx),
+            run_event_log_ordering_task(
+                db.clone(),
+                log_ordering_wakeup_rx,
+                log_event_added_tx,
+                log_event_added_transient_tx,
+            ),
         );
 
         let counter = Arc::new(AtomicU8::new(0));
@@ -474,6 +509,7 @@ mod tests {
                         None,
                         None,
                         vec![],
+                        true,
                     )
                     .await;
 
