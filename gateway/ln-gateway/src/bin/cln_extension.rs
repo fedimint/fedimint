@@ -61,10 +61,6 @@ struct ClnExtensionOpts {
     /// Gateway CLN extension service listen address
     #[arg(long = "fm-gateway-listen", env = FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV)]
     fm_gateway_listen: Option<SocketAddr>,
-
-    /// Developer mode flag
-    #[arg(long = "developer")]
-    developer: bool,
 }
 
 #[tokio::main]
