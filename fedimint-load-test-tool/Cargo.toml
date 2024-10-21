@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-load-test-tool"
-version = "0.3.3"
+version = "0.3.4-rc.0"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-load-test-tool is a tool to load test the fedimint server and gateway."
@@ -16,15 +16,15 @@ anyhow = "1"
 base64 = "0.22.0"
 bitcoin = "0.29.2"
 clap = { version = "4.5.2", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env" ], default-features = false }
-devimint = { version = "=0.3.3", path = "../devimint" }
-fedimint-client = { version = "=0.3.3", path = "../fedimint-client" }
-fedimint-core = { version = "=0.3.3", path = "../fedimint-core" }
-fedimint-ln-client = { version = "=0.3.3", path = "../modules/fedimint-ln-client" }
+devimint = { version = "=0.3.4-rc.0", path = "../devimint" }
+fedimint-client = { version = "=0.3.4-rc.0", path = "../fedimint-client" }
+fedimint-core = { version = "=0.3.4-rc.0", path = "../fedimint-core" }
+fedimint-ln-client = { version = "=0.3.4-rc.0", path = "../modules/fedimint-ln-client" }
 fedimint-ln-common = { path = "../modules/fedimint-ln-common" }
-fedimint-logging = { version = "=0.3.3", path = "../fedimint-logging" }
-fedimint-mint-client = { version = "=0.3.3", path = "../modules/fedimint-mint-client" }
-fedimint-rocksdb = { version = "=0.3.3", path = "../fedimint-rocksdb" }
-fedimint-wallet-client = { version = "=0.3.3", path = "../modules/fedimint-wallet-client" }
+fedimint-logging = { version = "=0.3.4-rc.0", path = "../fedimint-logging" }
+fedimint-mint-client = { version = "=0.3.4-rc.0", path = "../modules/fedimint-mint-client" }
+fedimint-rocksdb = { version = "=0.3.4-rc.0", path = "../fedimint-rocksdb" }
+fedimint-wallet-client = { version = "=0.3.4-rc.0", path = "../modules/fedimint-wallet-client" }
 futures = "0.3"
 jsonrpsee-core = { version = "0.22.2", features = [ "client" ] }
 jsonrpsee-types = { version = "0.22.2" }
@@ -40,4 +40,4 @@ url = { version = "2.5.0", features = ["serde"] }
 jsonrpsee-ws-client = { version = "0.22.2", features = ["webpki-tls"], default-features = false }
 
 [build-dependencies]
-fedimint-build = { version = "=0.3.3", path = "../fedimint-build" }
+fedimint-build = { version = "=0.3.4-rc.0", path = "../fedimint-build" }

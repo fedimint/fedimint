@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-bip39"
-version = "0.3.3"
+version = "0.3.4-rc.0"
 edition = "2021"
 license = "MIT"
 readme = "../README.md"
@@ -18,6 +18,6 @@ path = "./src/lib.rs"
 
 [dependencies]
 bip39 = { version = "2.0.0", features = ["rand"] }
-fedimint-client = { version = "=0.3.3", path = "../fedimint-client" }
-fedimint-core = { version = "=0.3.3", path = "../fedimint-core" }
+fedimint-client = { version = "=0.3.4-rc.0", path = "../fedimint-client" }
+fedimint-core = { version = "=0.3.4-rc.0", path = "../fedimint-core" }
 rand = "0.8.5"

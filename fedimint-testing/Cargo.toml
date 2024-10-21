@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-testing"
-version = "0.3.3"
+version = "0.3.4-rc.0"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-testing provides a library of shared objects and utilities for testing fedimint components"
@@ -25,15 +25,15 @@ bitcoin = "0.29.2"
 bitcoincore-rpc = "0.16.0"
 clap = { version = "4.5.2", features = ["derive", "std", "help", "usage", "error-context", "suggestions" ], default-features = false }
 cln-rpc = { workspace = true }
-fedimint-core  = { version = "=0.3.3", path = "../fedimint-core" }
-fedimint-client  = { version = "=0.3.3", path = "../fedimint-client" }
-fedimint-server  = { version = "=0.3.3", path = "../fedimint-server" }
-fedimint-bitcoind = { version = "=0.3.3", path = "../fedimint-bitcoind" }
-fedimint-logging = { version = "=0.3.3", path = "../fedimint-logging" }
-fedimint-rocksdb = { version = "=0.3.3", path = "../fedimint-rocksdb" }
+fedimint-core  = { version = "=0.3.4-rc.0", path = "../fedimint-core" }
+fedimint-client  = { version = "=0.3.4-rc.0", path = "../fedimint-client" }
+fedimint-server  = { version = "=0.3.4-rc.0", path = "../fedimint-server" }
+fedimint-bitcoind = { version = "=0.3.4-rc.0", path = "../fedimint-bitcoind" }
+fedimint-logging = { version = "=0.3.4-rc.0", path = "../fedimint-logging" }
+fedimint-rocksdb = { version = "=0.3.4-rc.0", path = "../fedimint-rocksdb" }
 fs-lock = "0.1.3"
 lazy_static = "1.4.0"
-ln-gateway = { version = "=0.3.3", package = "fedimint-ln-gateway", path = "../gateway/ln-gateway" }
+ln-gateway = { version = "=0.3.4-rc.0", package = "fedimint-ln-gateway", path = "../gateway/ln-gateway" }
 futures = "0.3"
 lightning-invoice = "0.26.0"
 tempfile = "3.10.1"
@@ -47,4 +47,4 @@ tokio = { version = "1.36.0", features = ["full", "tracing"] }
 tokio-stream = "0.1.14"
 tonic_lnd = { workspace = true }
 url = "2.5.0"
-fedimint-portalloc = { version = "=0.3.3", path = "../utils/portalloc" }
+fedimint-portalloc = { version = "=0.3.4-rc.0", path = "../utils/portalloc" }

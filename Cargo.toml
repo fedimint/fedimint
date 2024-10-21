@@ -55,7 +55,7 @@ resolver = "2"
 
 [workspace.package]
 name = "fedimint"
-version = "0.3.3"
+version = "0.3.4-rc.0"
 
 [workspace.metadata]
 name = "fedimint"

@@ -1,6 +1,6 @@
 [package]
 name = "devimint"
-version = "0.3.3"
+version = "0.3.4-rc.0"
 edition = "2021"
 license = "MIT"
 publish = false
@@ -51,4 +51,4 @@ fedimint-portalloc = { path = "../utils/portalloc" }
 fs-lock = "0.1.3"
 
 [build-dependencies]
-fedimint-build = { version = "=0.3.3", path = "../fedimint-build" }
+fedimint-build = { version = "=0.3.4-rc.0", path = "../fedimint-build" }

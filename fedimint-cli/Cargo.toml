@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-cli"
-version = "0.3.3"
+version = "0.3.4-rc.0"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-cli is a command line interface wrapper for the client library."
@@ -32,20 +32,20 @@ clap = { version = "4.5.2", features = ["derive", "std", "help", "usage", "error
 futures = "0.3.30"
 itertools = "0.12.1"
 lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
-fedimint-aead = { version = "=0.3.3", path = "../crypto/aead" }
-fedimint-bip39 = { version = "=0.3.3", path = "../fedimint-bip39" }
-fedimint-client = { version = "=0.3.3", path = "../fedimint-client" }
-fedimint-core = { version = "=0.3.3", path = "../fedimint-core" }
-fedimint-rocksdb = { version = "=0.3.3", path = "../fedimint-rocksdb" }
-fedimint-mint-client = { version = "=0.3.3", path = "../modules/fedimint-mint-client" }
-fedimint-mint-common = { version = "=0.3.3", path = "../modules/fedimint-mint-common" }
-fedimint-ln-client = { version = "=0.3.3", path = "../modules/fedimint-ln-client" }
-fedimint-ln-common = { version = "=0.3.3", path = "../modules/fedimint-ln-common" }
-fedimint-wallet-client = { version = "=0.3.3", path = "../modules/fedimint-wallet-client" }
-fedimint-logging = { version = "=0.3.3", path = "../fedimint-logging" }
-fedimint-server = { version = "=0.3.3", path = "../fedimint-server" }
-fedimint-meta-client = { version = "=0.3.3", path = "../modules/fedimint-meta-client", features = [ "cli" ] }
-fedimint-meta-common = { version = "=0.3.3", path = "../modules/fedimint-meta-common" }
+fedimint-aead = { version = "=0.3.4-rc.0", path = "../crypto/aead" }
+fedimint-bip39 = { version = "=0.3.4-rc.0", path = "../fedimint-bip39" }
+fedimint-client = { version = "=0.3.4-rc.0", path = "../fedimint-client" }
+fedimint-core = { version = "=0.3.4-rc.0", path = "../fedimint-core" }
+fedimint-rocksdb = { version = "=0.3.4-rc.0", path = "../fedimint-rocksdb" }
+fedimint-mint-client = { version = "=0.3.4-rc.0", path = "../modules/fedimint-mint-client" }
+fedimint-mint-common = { version = "=0.3.4-rc.0", path = "../modules/fedimint-mint-common" }
+fedimint-ln-client = { version = "=0.3.4-rc.0", path = "../modules/fedimint-ln-client" }
+fedimint-ln-common = { version = "=0.3.4-rc.0", path = "../modules/fedimint-ln-common" }
+fedimint-wallet-client = { version = "=0.3.4-rc.0", path = "../modules/fedimint-wallet-client" }
+fedimint-logging = { version = "=0.3.4-rc.0", path = "../fedimint-logging" }
+fedimint-server = { version = "=0.3.4-rc.0", path = "../fedimint-server" }
+fedimint-meta-client = { version = "=0.3.4-rc.0", path = "../modules/fedimint-meta-client", features = [ "cli" ] }
+fedimint-meta-common = { version = "=0.3.4-rc.0", path = "../modules/fedimint-meta-common" }
 fs-lock = "0.1.3"
 rand = "0.8"
 serde = { version = "1.0.197", features = [ "derive" ] }
@@ -60,4 +60,4 @@ lnurl-rs = { version = "0.4.1", features = ["async"], default-features = false }
 reqwest = { version = "0.11.26", features = [ "json", "rustls-tls" ], default-features = false }
 
 [build-dependencies]
-fedimint-build = { version = "=0.3.3", path = "../fedimint-build" }
+fedimint-build = { version = "=0.3.4-rc.0", path = "../fedimint-build" }

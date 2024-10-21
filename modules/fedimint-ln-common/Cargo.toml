@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-ln-common"
-version = "0.3.3"
+version = "0.3.4-rc.0"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-ln is a lightning payment service module."
@@ -32,8 +32,8 @@ futures = "0.3.30"
 itertools = "0.12.1"
 lightning = { version = "0.0.118", default-features = false, features = ["no-std"] }
 lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
-fedimint-client = { version = "=0.3.3", path = "../../fedimint-client" }
-fedimint-core = { version = "=0.3.3", path = "../../fedimint-core" }
+fedimint-client = { version = "=0.3.4-rc.0", path = "../../fedimint-client" }
+fedimint-core = { version = "=0.3.4-rc.0", path = "../../fedimint-core" }
 secp256k1 = { version="0.24.3", default-features=false }
 serde = {version = "1.0.197", features = [ "derive" ] }
 serde_json = "1.0.114"

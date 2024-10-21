@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-wasm-tests"
-version = "0.3.3"
+version = "0.3.4-rc.0"
 edition = "2021"
 license = "MIT"
 description = "Wasm tests for the fedimint."

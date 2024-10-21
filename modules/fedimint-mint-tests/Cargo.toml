@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-mint-tests"
-version = "0.3.3"
+version = "0.3.4-rc.0"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-mint-tests contains integration tests for the mint module"
@@ -31,7 +31,7 @@ tracing = "0.1.40"
 rand = "0.8"
 secp256k1 = "0.24.3"
 serde = { version = "1.0.197", features = [ "derive" ] }
-tbs = { package = "fedimint-tbs", version = "=0.3.3", path = "../../crypto/tbs" }
+tbs = { package = "fedimint-tbs", version = "=0.3.4-rc.0", path = "../../crypto/tbs" }
 threshold_crypto = { workspace = true }
 ff = "0.12.1"
 strum = "0.26"
