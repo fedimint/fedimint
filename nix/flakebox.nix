@@ -103,30 +103,49 @@ let
     src: filterSrcWithRegexes (filterWorkspaceDepsBuildFilesRegex ++ [ "deny.toml" ]) src;
 
   # env vars for linking rocksdb
-  commonEnvsShellRocksdbLink =
+  commonEnvsCross =
     let
-      target_underscores = lib.strings.replaceStrings [ "-" ] [ "_" ] pkgs.stdenv.buildPlatform.config;
+      build_arch_underscores = lib.strings.replaceStrings [ "-" ] [ "_" ] pkgs.stdenv.buildPlatform.config;
     in
     {
-      ROCKSDB_STATIC = "true";
-      ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
+      # for cargo-deluxe
+      CARGO_TARGET_SPECIFIC_ENVS = builtins.concatStringsSep "," [
+        "ROCKSDB_target_STATIC"
+        "ROCKSDB_target_LIB_DIR"
+        "SNAPPY_target_STATIC"
+        "SNAPPY_target_LIB_DIR"
+        "SNAPPY_target_COMPILE"
+        "SQLITE3_target_STATIC"
+        "SQLITE3_target_LIB_DIR"
+        "SQLCIPHER_target_STATIC"
+        "SQLCIPHER_target_LIB_DIR"
+      ];
+    } // pkgs.lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
+      "ROCKSDB_${build_arch_underscores}_STATIC" = "true";
+      "ROCKSDB_${build_arch_underscores}_LIB_DIR" = "${pkgs.rocksdb}/lib/";
 
-      "ROCKSDB_${target_underscores}_STATIC" = "true";
-      "ROCKSDB_${target_underscores}_LIB_DIR" = "${pkgs.rocksdb}/lib/";
-    }
-    // pkgs.lib.optionalAttrs (!(pkgs.stdenv.isDarwin && pkgs.stdenv.isx86_64)) {
-      # FIX: error: don't yet have a `targetPackages.darwin.LibsystemCross for x86_64-apple-darwin`
-      SNAPPY_LIB_DIR = "${pkgs.pkgsStatic.snappy}/lib/";
-      "SNAPPY_${target_underscores}_LIB_DIR" = "${pkgs.pkgsStatic.snappy}/lib/";
-    }
-    // pkgs.lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
-      # macos can't static libraries
-      SNAPPY_STATIC = "true";
-      "SNAPPY_${target_underscores}_STATIC" = "true";
+      # does not produce static lib in most versions
+      "SNAPPY_${build_arch_underscores}_STATIC" = "true";
+      "SNAPPY_${build_arch_underscores}_LIB_DIR" = "${pkgs.pkgsStatic.snappy}/lib/";
+      # "SNAPPY_${build_arch_underscores}_COMPILE" = "true";
+
+
+      "SQLITE3_${build_arch_underscores}_STATIC" = "true";
+      "SQLITE3_${build_arch_underscores}_LIB_DIR" = "${pkgs.pkgsStatic.sqlite.out}/lib/";
+
+      "SQLCIPHER_${build_arch_underscores}_LIB_DIR" = "${pkgs.pkgsStatic.sqlcipher}/lib/";
+      "SQLCIPHER_${build_arch_underscores}_STATIC" = "true";
+    } // pkgs.lib.optionalAttrs pkgs.stdenv.isDarwin {
+      # tons of problems, just compile
+      # "SNAPPY_${build_arch_underscores}_LIB_DIR" = "${pkgs.snappy}/lib/";
+      "SNAPPY_${build_arch_underscores}_COMPILE" = "true";
+
+      "SQLITE3_${build_arch_underscores}_LIB_DIR" = "${pkgs.sqlite.out}/lib/";
+      "SQLCIPHER_${build_arch_underscores}_LIB_DIR" = "${pkgs.sqlcipher}/lib/";
     };
 
-  commonEnvsShellRocksdbLinkCross =
-    commonEnvsShellRocksdbLink
+  commonEnvsCrossShell =
+    commonEnvsCross
     // pkgs.lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
       # TODO: could we used the android-nixpkgs toolchain instead of another one?
       # ROCKSDB_aarch64_linux_android_STATIC = "true";
@@ -161,7 +180,7 @@ let
     };
 
   # env variables we want to set in all nix derivations & nix develop shell
-  commonEnvsShell = commonEnvsShellRocksdbLink // {
+  commonEnvsShell = commonEnvsCross // {
     PROTOC = "${pkgs.protobuf}/bin/protoc";
     PROTOC_INCLUDE = "${pkgs.protobuf}/include";
     CLIPPY_ARGS = "--deny warnings --allow deprecated";
@@ -175,6 +194,12 @@ let
 
   commonArgs = {
     pname = "fedimint";
+
+    packages = [
+      # flakebox adds toolchains via `packages`, which seems to always take precedence
+      # `nativeBuildInputs` in `mkShell`, so we need to add it here as well.
+      (lib.hiPrio pkgs.cargo-deluxe)
+    ];
 
     buildInputs =
       with pkgs;
@@ -286,7 +311,7 @@ in
               "stable"
               "nightly"
             ])
-          ) commonEnvsShellRocksdbLinkCross
+          ) commonEnvsCrossShell
         );
 
     craneLibTests = craneLib.overrideArgs (
@@ -357,9 +382,7 @@ in
   in
   rec {
     inherit commonArgs;
-    inherit commonEnvsShell;
-    inherit commonEnvsShellRocksdbLink;
-    inherit commonEnvsShellRocksdbLinkCross;
+    inherit commonEnvsShell commonEnvsCrossShell;
     inherit gitHashPlaceholderValue;
     commonArgsBase = commonArgs;
 
@@ -393,7 +416,7 @@ in
       cargoExtraArgs = "--workspace --all-targets --locked";
 
       FM_DISCOVER_API_VERSION_TIMEOUT = "10";
-      FM_CARGO_DENY_COMPILATION = "1";
+      CARGO_DENY_COMPILATION = "1";
     };
 
     workspaceTestDoc = craneLib.cargoTest {
@@ -583,7 +606,7 @@ in
           unset CARGO_BUILD_TARGET
 
           patchShebangs ./scripts
-          export FM_CARGO_DENY_COMPILATION=1
+          export CARGO_DENY_COMPILATION=1
           export FM_TEST_CI_ALL_TIMES=${builtins.toString times}
           export FM_TEST_CI_ALL_DISABLE_ETA=1
           ./scripts/tests/test-ci-all.sh || exit 1
