@@ -1,6 +1,8 @@
-//! This module defines a binary encoding interface which is more suitable for
-//! consensus critical encoding than e.g. `bincode`. Over time all structs that
-//! need to be encoded to binary will be migrated to this interface.
+//! Binary encoding interface suitable for
+//! consensus critical encoding.
+//!
+//! Over time all structs that ! need to be encoded to binary will be migrated
+//! to this interface.
 //!
 //! This code is based on corresponding `rust-bitcoin` types.
 //!

@@ -1090,10 +1090,8 @@ impl Gateway {
 
         #[cfg(feature = "tor")]
         let connector = match &payload.use_tor {
-            Some(use_tor) => match use_tor {
-                true => Connector::tor(),
-                false => Connector::default(),
-            },
+            Some(true) => Connector::tor(),
+            Some(false) => Connector::default(),
             None => {
                 info!("Missing `use_tor` payload field, defaulting to `Connector::Tcp` variant!");
                 Connector::default()

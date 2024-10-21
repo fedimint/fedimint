@@ -2215,6 +2215,9 @@ pub async fn apply_migrations_server(
     apply_migrations(db, kind, migrations, None, None).await
 }
 
+/// `apply_migrations` iterates from the on disk database version for the
+/// module.
+///
 /// `apply_migrations` iterates from the on disk database version for the module
 /// up to `target_db_version` and executes all of the migrations that exist in
 /// the migrations map. Each migration in migrations map updates the
