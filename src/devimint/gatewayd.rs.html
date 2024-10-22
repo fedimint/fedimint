@@ -398,7 +398,12 @@
 <a href="#397" id="397">397</a>
 <a href="#398" id="398">398</a>
 <a href="#399" id="399">399</a>
-<a href="#400" id="400">400</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -634,9 +639,14 @@
         <span class="kw">let </span>federation_id = fed.calculate_federation_id();
         <span class="kw">let </span>invite_code = fed.invite_code()<span class="question-mark">?</span>;
         <span class="macro">info!</span>(<span class="string">"Recovering {federation_id}..."</span>);
-        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"connect-fed"</span>, invite_code.clone(), <span class="string">"--recover=true"</span>)
-            .run()
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        poll(<span class="string">"gateway connect-fed"</span>, || <span class="kw">async </span>{
+            <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"connect-fed"</span>, invite_code.clone(), <span class="string">"--recover=true"</span>)
+                .run()
+                .<span class="kw">await
+                </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>(())
+        })
+        .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
