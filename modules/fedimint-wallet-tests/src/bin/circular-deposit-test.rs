@@ -1,12 +1,10 @@
-use std::ops::ControlFlow;
 use std::str::FromStr;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use bitcoincore_rpc::bitcoin::address::Address;
 use bitcoincore_rpc::bitcoin::{Transaction, Txid};
 use devimint::cmd;
 use devimint::federation::Client;
-use devimint::util::poll;
 use fedimint_core::encoding::Decodable;
 use tokio::try_join;
 
@@ -41,15 +39,7 @@ async fn assert_withdrawal(
 
     // Verify federation broadcasts withdrawal tx
     let txid: Txid = withdraw_res["txid"].as_str().unwrap().parse().unwrap();
-    let tx_hex = poll("Waiting for transaction in mempool", || async {
-        bitcoind
-            .get_raw_transaction(txid)
-            .await
-            .context("getrawtransaction")
-            .map_err(ControlFlow::Continue)
-    })
-    .await
-    .expect("cannot fail, gets stuck");
+    let tx_hex = bitcoind.poll_get_transaction(txid).await?;
 
     let parsed_address = Address::from_str(&deposit_address)?;
     let tx = Transaction::consensus_decode_hex(&tx_hex, &Default::default()).unwrap();
