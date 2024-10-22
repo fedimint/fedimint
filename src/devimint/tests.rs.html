@@ -2559,7 +2559,9 @@
 <a href="#2558" id="2558">2558</a>
 <a href="#2559" id="2559">2559</a>
 <a href="#2560" id="2560">2560</a>
-<a href="#2561" id="2561">2561</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
+<a href="#2561" id="2561">2561</a>
+<a href="#2562" id="2562">2562</a>
+<a href="#2563" id="2563">2563</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -3649,8 +3651,9 @@
     <span class="kw">let </span>tx_hex = poll(<span class="string">"Waiting for transaction in mempool"</span>, || <span class="kw">async </span>{
         <span class="comment">// TODO: distinguish errors from not found
         </span>bitcoind
-            .get_raw_transaction(<span class="kw-2">&amp;</span>txid)
-            .context(<span class="string">"getrawtransaction"</span>)
+            .get_raw_transaction(txid)
+            .<span class="kw">await
+            </span>.context(<span class="string">"getrawtransaction"</span>)
             .map_err(ControlFlow::Continue)
     })
     .<span class="kw">await
@@ -4595,8 +4598,9 @@
             .expect(<span class="string">"txid should be parsable"</span>);
         <span class="kw">let </span>tx_hex = poll(<span class="string">"Waiting for transaction in mempool"</span>, || <span class="kw">async </span>{
             bitcoind
-                .get_raw_transaction(<span class="kw-2">&amp;</span>txid)
-                .context(<span class="string">"getrawtransaction"</span>)
+                .get_raw_transaction(txid)
+                .<span class="kw">await
+                </span>.context(<span class="string">"getrawtransaction"</span>)
                 .map_err(ControlFlow::Continue)
         })
         .<span class="kw">await

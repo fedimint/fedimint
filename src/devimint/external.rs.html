@@ -1190,9 +1190,7 @@
 <a href="#1189" id="1189">1189</a>
 <a href="#1190" id="1190">1190</a>
 <a href="#1191" id="1191">1191</a>
-<a href="#1192" id="1192">1192</a>
-<a href="#1193" id="1193">1193</a>
-<a href="#1194" id="1194">1194</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
+<a href="#1192" id="1192">1192</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -1216,6 +1214,7 @@
 <span class="kw">use </span>ln_gateway::envs::FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV;
 <span class="kw">use </span>tokio::fs;
 <span class="kw">use </span>tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
+<span class="kw">use </span>tokio::task::spawn_blocking;
 <span class="kw">use </span>tokio::time::Instant;
 <span class="kw">use </span>tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest};
 <span class="kw">use </span>tonic_lnd::Client <span class="kw">as </span>LndClient;
@@ -1306,9 +1305,7 @@
         <span class="macro">debug!</span>(<span class="string">"Setting up bitcoind"</span>);
         <span class="comment">// create RPC wallet
         </span><span class="kw">for </span>attempt <span class="kw">in </span><span class="number">0</span>.. {
-            <span class="kw">match </span>fedimint_core::runtime::block_in_place(|| {
-                client.create_wallet(<span class="string">""</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>)
-            }) {
+            <span class="kw">match </span>block_in_place(|| client.create_wallet(<span class="string">""</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>)) {
                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
                     <span class="kw">break</span>;
                 }
@@ -1360,7 +1357,8 @@
     </span><span class="kw">pub async fn </span>poll_ready(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
         poll(<span class="string">"bitcoind rpc ready"</span>, || <span class="kw">async </span>{
             <span class="self">self</span>.get_block_count()
-                .map_err(ControlFlow::Continue::&lt;anyhow::Error, <span class="kw">_</span>&gt;)<span class="question-mark">?</span>;
+                .<span class="kw">await
+                </span>.map_err(ControlFlow::Continue::&lt;anyhow::Error, <span class="kw">_</span>&gt;)<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(())
         })
         .<span class="kw">await
@@ -1378,16 +1376,17 @@
     /// Fedimint's IBitcoindRpc considers block count the total number of
     /// blocks, where bitcoind's rpc returns the height. Since the genesis
     /// block has height 0, we need to add 1 to get the total block count.
-    </span><span class="kw">pub fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
-        <span class="prelude-val">Ok</span>(block_in_place(|| <span class="self">self</span>.client.get_block_count())<span class="question-mark">? </span>+ <span class="number">1</span>)
+    </span><span class="kw">pub async fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
+        <span class="kw">let </span>client = <span class="self">self</span>.client.clone();
+        <span class="prelude-val">Ok</span>(spawn_blocking(<span class="kw">move </span>|| client.get_block_count()).<span class="kw">await</span><span class="question-mark">?? </span>+ <span class="number">1</span>)
     }
 
     <span class="kw">pub async fn </span>mine_blocks_no_wait(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
         <span class="kw">let </span>start_time = Instant::now();
         <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_num, <span class="string">"Mining bitcoin blocks"</span>);
         <span class="kw">let </span>addr = <span class="self">self</span>.get_new_address().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>initial_block_count = <span class="self">self</span>.get_block_count()<span class="question-mark">?</span>;
-        <span class="self">self</span>.generate_to_address(block_num, <span class="kw-2">&amp;</span>addr).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>initial_block_count = <span class="self">self</span>.get_block_count().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="self">self</span>.generate_to_address(block_num, addr).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">debug!</span>(target: LOG_DEVIMINT,
             elapsed_ms = %start_time.elapsed().as_millis(),
             <span class="question-mark">?</span>block_num, <span class="string">"Mined blocks (no wait)"</span>);
@@ -1399,9 +1398,9 @@
         <span class="kw">let </span>start_time = Instant::now();
         <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_num, <span class="string">"Mining bitcoin blocks"</span>);
         <span class="kw">let </span>addr = <span class="self">self</span>.get_new_address().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>initial_block_count = <span class="self">self</span>.get_block_count()<span class="question-mark">?</span>;
-        <span class="self">self</span>.generate_to_address(block_num, <span class="kw-2">&amp;</span>addr).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">while </span><span class="self">self</span>.get_block_count()<span class="question-mark">? </span>&lt; initial_block_count + block_num {
+        <span class="kw">let </span>initial_block_count = <span class="self">self</span>.get_block_count().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="self">self</span>.generate_to_address(block_num, addr).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">while </span><span class="self">self</span>.get_block_count().<span class="kw">await</span><span class="question-mark">? </span>&lt; initial_block_count + block_num {
             <span class="macro">trace!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_num, <span class="string">"Waiting for blocks to be mined"</span>);
             sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
         }
@@ -1419,70 +1418,66 @@
         <span class="kw">let </span>tx = <span class="self">self
             </span>.wallet_client()
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.send_to_address(<span class="kw-2">&amp;</span>bitcoin::Address::from_str(<span class="kw-2">&amp;</span>addr)<span class="question-mark">?</span>.assume_checked(), amount)
+            </span>.send_to_address(bitcoin::Address::from_str(<span class="kw-2">&amp;</span>addr)<span class="question-mark">?</span>.assume_checked(), amount)
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(tx)
     }
 
-    <span class="kw">pub async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>bitcoin::Txid) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-        <span class="kw">let </span>proof = <span class="self">self</span>.get_tx_out_proof(<span class="kw-2">&amp;</span>[<span class="kw-2">*</span>txid], <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">pub async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: bitcoin::Txid) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+        <span class="kw">let </span>client = <span class="self">self</span>.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>.clone();
+        <span class="kw">let </span>proof = spawn_blocking(<span class="kw">move </span>|| client.client.get_tx_out_proof(<span class="kw-2">&amp;</span>[txid], <span class="prelude-val">None</span>)).<span class="kw">await</span><span class="question-mark">??</span>;
         <span class="prelude-val">Ok</span>(proof.encode_hex())
     }
 
-    <span class="kw">pub fn </span>get_raw_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>bitcoin::Txid) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-        <span class="kw">let </span>tx = block_in_place(|| <span class="self">self</span>.client.get_raw_transaction(txid, <span class="prelude-val">None</span>))<span class="question-mark">?</span>;
+    <span class="kw">pub async fn </span>get_raw_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: bitcoin::Txid) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+        <span class="kw">let </span>client = <span class="self">self</span>.client.clone();
+        <span class="kw">let </span>tx = spawn_blocking(<span class="kw">move </span>|| client.get_raw_transaction(<span class="kw-2">&amp;</span>txid, <span class="prelude-val">None</span>)).<span class="kw">await</span><span class="question-mark">??</span>;
         <span class="kw">let </span>bytes = tx.consensus_encode_to_vec();
         <span class="prelude-val">Ok</span>(bytes.encode_hex())
     }
 
     <span class="kw">pub async fn </span>get_new_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Address&gt; {
-        <span class="kw">let </span>client = <span class="kw-2">&amp;</span><span class="self">self</span>.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>addr = block_in_place(|| client.client.get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>))<span class="question-mark">?</span>.assume_checked();
+        <span class="kw">let </span>client = <span class="self">self</span>.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>.clone();
+        <span class="kw">let </span>addr = spawn_blocking(<span class="kw">move </span>|| client.client.get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>))
+            .<span class="kw">await</span><span class="question-mark">??
+            </span>.assume_checked();
         <span class="prelude-val">Ok</span>(addr)
     }
 
     <span class="kw">pub async fn </span>generate_to_address(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         block_num: u64,
-        address: <span class="kw-2">&amp;</span>Address,
+        address: Address,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;BlockHash&gt;&gt; {
-        <span class="kw">let </span>client = <span class="kw-2">&amp;</span><span class="self">self</span>.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(block_in_place(|| {
-            client.client.generate_to_address(block_num, address)
-        })<span class="question-mark">?</span>)
+        <span class="kw">let </span>client = <span class="self">self</span>.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>.clone();
+        <span class="prelude-val">Ok</span>(
+            spawn_blocking(<span class="kw">move </span>|| client.client.generate_to_address(block_num, <span class="kw-2">&amp;</span>address))
+                .<span class="kw">await</span><span class="question-mark">??</span>,
+        )
     }
 
-    <span class="kw">pub async fn </span>get_tx_out_proof(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        txid: <span class="kw-2">&amp;</span>[bitcoin::Txid],
-        block_hash: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>BlockHash&gt;,
-    ) -&gt; anyhow::Result&lt;Vec&lt;u8&gt;&gt; {
-        <span class="kw">let </span>client = <span class="kw-2">&amp;</span><span class="self">self</span>.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(block_in_place(|| {
-            client.client.get_tx_out_proof(txid, block_hash)
-        })<span class="question-mark">?</span>)
-    }
-
-    <span class="kw">pub fn </span>get_blockchain_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;GetBlockchainInfoResult&gt; {
-        <span class="prelude-val">Ok</span>(block_in_place(|| <span class="self">self</span>.client.get_blockchain_info())<span class="question-mark">?</span>)
+    <span class="kw">pub async fn </span>get_blockchain_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;GetBlockchainInfoResult&gt; {
+        <span class="kw">let </span>client = <span class="self">self</span>.client.clone();
+        <span class="prelude-val">Ok</span>(spawn_blocking(<span class="kw">move </span>|| client.get_blockchain_info()).<span class="kw">await</span><span class="question-mark">??</span>)
     }
 
     <span class="kw">pub async fn </span>send_to_address(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        addr: <span class="kw-2">&amp;</span>Address,
+        addr: Address,
         amount: bitcoin::Amount,
     ) -&gt; anyhow::Result&lt;bitcoin::Txid&gt; {
-        <span class="kw">let </span>client = <span class="self">self</span>.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(block_in_place(|| {
+        <span class="kw">let </span>client = <span class="self">self</span>.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>.clone();
+        <span class="prelude-val">Ok</span>(spawn_blocking(<span class="kw">move </span>|| {
             client
                 .client
-                .send_to_address(addr, amount, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>)
-        })<span class="question-mark">?</span>)
+                .send_to_address(<span class="kw-2">&amp;</span>addr, amount, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>)
+        })
+        .<span class="kw">await</span><span class="question-mark">??</span>)
     }
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>get_balances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;GetBalancesResult&gt; {
-        <span class="kw">let </span>client = <span class="self">self</span>.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(block_in_place(|| client.client.get_balances())<span class="question-mark">?</span>)
+        <span class="kw">let </span>client = <span class="self">self</span>.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>.clone();
+        <span class="prelude-val">Ok</span>(spawn_blocking(<span class="kw">move </span>|| client.client.get_balances()).<span class="kw">await</span><span class="question-mark">??</span>)
     }
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_jsonrpc_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>bitcoincore_rpc::jsonrpc::Client {
@@ -1592,7 +1587,8 @@
             <span class="kw">let </span>btc_height = <span class="self">self
                 </span>.bitcoind
                 .get_blockchain_info()
-                .context(<span class="string">"bitcoind getblockchaininfo"</span>)
+                .<span class="kw">await
+                </span>.context(<span class="string">"bitcoind getblockchaininfo"</span>)
                 .map_err(ControlFlow::Continue)<span class="question-mark">?
                 </span>.blocks;
             <span class="kw">let </span>lnd_height = <span class="self">self
@@ -2152,7 +2148,7 @@
             <span class="kw">loop </span>{
                 <span class="comment">// Bitcoind's getrawtransaction RPC call will return an error if the transaction
                 // is not known.
-                </span><span class="kw">if </span>bitcoind.get_raw_transaction(txid).is_ok() {
+                </span><span class="kw">if </span>bitcoind.get_raw_transaction(<span class="kw-2">*</span>txid).<span class="kw">await</span>.is_ok() {
                     <span class="kw">break</span>;
                 }
 
