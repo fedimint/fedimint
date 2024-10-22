@@ -43,7 +43,8 @@ async fn assert_withdrawal(
     let txid: Txid = withdraw_res["txid"].as_str().unwrap().parse().unwrap();
     let tx_hex = poll("Waiting for transaction in mempool", || async {
         bitcoind
-            .get_raw_transaction(&txid)
+            .get_raw_transaction(txid)
+            .await
             .context("getrawtransaction")
             .map_err(ControlFlow::Continue)
     })

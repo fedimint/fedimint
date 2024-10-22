@@ -377,7 +377,11 @@ impl Gatewayd {
 
     pub async fn wait_for_chain_sync(&self, bitcoind: &Bitcoind) -> Result<()> {
         poll("lightning node block processing", || async {
-            let block_height = bitcoind.get_block_count().map_err(ControlFlow::Continue)? - 1;
+            let block_height = bitcoind
+                .get_block_count()
+                .await
+                .map_err(ControlFlow::Continue)?
+                - 1;
             cmd!(
                 self,
                 "lightning",
