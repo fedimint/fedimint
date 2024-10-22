@@ -17,6 +17,8 @@ use fedimint_core::util::write_overwrite_async;
 use fedimint_core::BitcoinHash;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing::gateway::LightningNodeType;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use hex::ToHex;
 use itertools::Itertools;
 use ln_gateway::envs::FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV;
@@ -237,11 +239,51 @@ impl Bitcoind {
         Ok(proof.encode_hex())
     }
 
-    pub async fn get_raw_transaction(&self, txid: bitcoin::Txid) -> Result<String> {
+    /// Get a transaction by its txid. Checks the mempool and all blocks.
+    pub async fn get_transaction(&self, txid: bitcoin::Txid) -> Result<String> {
+        // Check the mempool.
+        if let Ok(tx) = self.get_raw_transaction(txid, None).await {
+            return Ok(tx);
+        };
+
+        let block_height = self.get_block_count().await? - 1;
+
+        let mut per_block_check_futures = FuturesUnordered::new();
+
+        // Check each block.
+        for i in 0..block_height {
+            let block_hash = self.get_block_hash(i).await?;
+            per_block_check_futures.push(self.get_raw_transaction(txid, Some(block_hash)));
+        }
+
+        // Wait for all futures to complete in parallel.
+        // We're doing this after checking the mempool since the tx should
+        // usually be in the mempool, and we don't want to needlessly spam
+        // the bitcoind with block requests.
+        while let Some(tx_or) = per_block_check_futures.next().await {
+            if let Ok(tx) = tx_or {
+                return Ok(tx);
+            };
+        }
+
+        Err(anyhow!("Transaction not found"))
+    }
+
+    async fn get_raw_transaction(
+        &self,
+        txid: bitcoin::Txid,
+        block_hash: Option<BlockHash>,
+    ) -> Result<String> {
         let client = self.client.clone();
-        let tx = spawn_blocking(move || client.get_raw_transaction(&txid, None)).await??;
+        let tx = spawn_blocking(move || client.get_raw_transaction(&txid, block_hash.as_ref()))
+            .await??;
         let bytes = tx.consensus_encode_to_vec();
         Ok(bytes.encode_hex())
+    }
+
+    async fn get_block_hash(&self, height: u64) -> Result<BlockHash> {
+        let client = self.client.clone();
+        Ok(spawn_blocking(move || client.get_block_hash(height)).await??)
     }
 
     pub async fn get_new_address(&self) -> Result<Address> {
@@ -954,9 +996,7 @@ pub async fn open_channels_between_gateways(
     for txid_or in &channel_funding_txids {
         if let Some(txid) = txid_or {
             loop {
-                // Bitcoind's getrawtransaction RPC call will return an error if the transaction
-                // is not known.
-                if bitcoind.get_raw_transaction(*txid).await.is_ok() {
+                if bitcoind.get_transaction(*txid).await.is_ok() {
                     break;
                 }
 
