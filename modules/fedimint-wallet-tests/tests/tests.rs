@@ -31,7 +31,7 @@ use fedimint_wallet_server::WalletInit;
 use futures::stream::StreamExt;
 use secp256k1::rand::rngs::OsRng;
 use tokio::select;
-use tracing::info;
+use tracing::{info, warn};
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
@@ -497,11 +497,30 @@ async fn rbf_withdrawals_are_rejected() -> anyhow::Result<()> {
         sats(PEG_OUT_AMOUNT_SATS)
     );
 
-    let current_balance = client.get_balance().await;
-    assert_eq!(
-        current_balance, balance_after_normal_peg_out,
-        "Balance is {current_balance}, expected {balance_after_normal_peg_out}"
-    );
+    // to prevent flakiness, we need to retry this check
+    // see: https://github.com/fedimint/fedimint/issues/6190
+    fedimint_core::util::retry(
+        "verify client balance",
+        fedimint_core::util::backoff_util::custom_backoff(
+            Duration::from_millis(100),
+            Duration::from_millis(100),
+            Some(100),
+        ),
+        || async {
+            let current_balance = client.get_balance().await;
+            if current_balance == balance_after_normal_peg_out {
+                Ok(())
+            } else {
+                let msg = format!(
+                    "Balance is {current_balance}, expected {balance_after_normal_peg_out}"
+                );
+                warn!(msg);
+                Err(anyhow::anyhow!(msg))
+            }
+        },
+    )
+    .await
+    .expect("couldn't verify balance within 10s");
 
     Ok(())
 }
