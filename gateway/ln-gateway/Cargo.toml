@@ -69,12 +69,12 @@ strum_macros = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
-tonic = { version = "0.12.3", features = ["transport", "tls"] }
+tonic = { version = "0.12.3", features = ["tls"] }
 tonic_lnd = { workspace = true }
 tower-http = { version = "0.6.1", features = ["cors", "auth"] }
 tpe = { workspace = true }
 tracing = { workspace = true, features = ["log"] }
-url = { workspace = true, features = ["serde"] }
+url = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
