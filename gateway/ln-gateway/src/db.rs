@@ -176,7 +176,7 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
             &RegisteredIncomingContractKey(contract.commitment.payment_image.clone()),
             &RegisteredIncomingContract {
                 federation_id,
-                incoming_amount: incoming_amount.msats,
+                incoming_amount_msats: incoming_amount.msats,
                 contract,
             },
         )
@@ -432,8 +432,7 @@ struct RegisteredIncomingContractKey(pub PaymentImage);
 pub struct RegisteredIncomingContract {
     pub federation_id: FederationId,
     /// The amount of the incoming contract, in msats.
-    /// TODO: Rename to `incoming_amount_msats` to be more explicit.
-    pub incoming_amount: u64,
+    pub incoming_amount_msats: u64,
     pub contract: IncomingContract,
 }
 
