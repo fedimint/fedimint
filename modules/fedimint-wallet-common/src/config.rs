@@ -197,7 +197,7 @@ impl WalletConfig {
 impl WalletClientConfig {
     pub fn new(
         peg_in_descriptor: PegInDescriptor,
-        network: bitcoin::network::constants::Network,
+        network: bitcoin::network::Network,
         finality_delay: u32,
         default_bitcoin_rpc: BitcoinRpcConfig,
     ) -> Self {

@@ -92,7 +92,7 @@ impl Transaction {
         }
 
         let txid = self.tx_hash();
-        let msg = secp256k1::Message::from_slice(&txid[..]).expect("txid has right length");
+        let msg = secp256k1::Message::from_digest_slice(&txid[..]).expect("txid has right length");
 
         for (pk, signature) in pub_keys.iter().zip(signatures) {
             if secp256k1::global::SECP256K1

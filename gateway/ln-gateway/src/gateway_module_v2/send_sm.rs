@@ -6,7 +6,7 @@ use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::secp256k1::KeyPair;
+use fedimint_core::secp256k1::Keypair;
 use fedimint_core::{Amount, OutPoint};
 use fedimint_lnv2_client::{LightningClientStateMachines, LightningInvoice};
 use fedimint_lnv2_common::contracts::{OutgoingContract, PaymentImage};
@@ -48,7 +48,7 @@ pub struct SendSMCommon {
     pub max_delay: u64,
     pub min_contract_amount: Amount,
     pub invoice: LightningInvoice,
-    pub claim_keypair: KeyPair,
+    pub claim_keypair: Keypair,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]

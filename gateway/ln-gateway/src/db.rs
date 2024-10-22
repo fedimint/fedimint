@@ -16,7 +16,7 @@ use futures::{FutureExt, StreamExt};
 use lightning_invoice::RoutingFees;
 use rand::rngs::OsRng;
 use rand::Rng;
-use secp256k1::{KeyPair, Secp256k1};
+use secp256k1::{Keypair, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
@@ -34,18 +34,18 @@ pub trait GatewayDbtxNcExt {
     async fn remove_federation_config(&mut self, federation_id: FederationId);
 
     /// Returns the keypair that uniquely identifies the gateway.
-    async fn load_gateway_keypair(&mut self) -> Option<KeyPair>;
+    async fn load_gateway_keypair(&mut self) -> Option<Keypair>;
 
     /// Returns the keypair that uniquely identifies the gateway.
     ///
     /// # Panics
     /// Gateway keypair does not exist.
-    async fn load_gateway_keypair_assert_exists(&mut self) -> KeyPair;
+    async fn load_gateway_keypair_assert_exists(&mut self) -> Keypair;
 
     /// Returns the keypair that uniquely identifies the gateway, creating it if
     /// it does not exist. Remember to commit the transaction after calling this
     /// method.
-    async fn load_or_create_gateway_keypair(&mut self) -> KeyPair;
+    async fn load_or_create_gateway_keypair(&mut self) -> Keypair;
 
     async fn load_gateway_config(&mut self) -> Option<GatewayConfiguration>;
 
@@ -118,23 +118,23 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
             .await;
     }
 
-    async fn load_gateway_keypair(&mut self) -> Option<KeyPair> {
+    async fn load_gateway_keypair(&mut self) -> Option<Keypair> {
         self.get_value(&GatewayPublicKey).await
     }
 
-    async fn load_gateway_keypair_assert_exists(&mut self) -> KeyPair {
+    async fn load_gateway_keypair_assert_exists(&mut self) -> Keypair {
         self.get_value(&GatewayPublicKey)
             .await
             .expect("Gateway keypair does not exist")
     }
 
-    async fn load_or_create_gateway_keypair(&mut self) -> KeyPair {
+    async fn load_or_create_gateway_keypair(&mut self) -> Keypair {
         if let Some(key_pair) = self.get_value(&GatewayPublicKey).await {
             key_pair
         } else {
             let context = Secp256k1::new();
             let (secret_key, _public_key) = context.generate_keypair(&mut OsRng);
-            let key_pair = KeyPair::from_secret_key(&context, &secret_key);
+            let key_pair = Keypair::from_secret_key(&context, &secret_key);
             self.insert_new_entry(&GatewayPublicKey, &key_pair).await;
             key_pair
         }
@@ -312,7 +312,7 @@ struct GatewayPublicKey;
 
 impl_db_record!(
     key = GatewayPublicKey,
-    value = KeyPair,
+    value = Keypair,
     db_prefix = DbKeyPrefix::GatewayPublicKey,
 );
 
@@ -482,7 +482,7 @@ mod fedimint_migration_tests {
 
         let context = secp256k1::Secp256k1::new();
         let (secret, _) = context.generate_keypair(&mut OsRng);
-        let key_pair = secp256k1::KeyPair::from_secret_key(&context, &secret);
+        let key_pair = secp256k1::Keypair::from_secret_key(&context, &secret);
         dbtx.insert_new_entry(&GatewayPublicKey, &key_pair).await;
 
         let gateway_configuration = GatewayConfigurationV0 {

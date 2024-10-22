@@ -48,7 +48,7 @@ use fedimint_lnv2_common::{
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Currency};
 use secp256k1::schnorr::Signature;
-use secp256k1::{ecdh, KeyPair, PublicKey, Scalar, SecretKey};
+use secp256k1::{ecdh, Keypair, PublicKey, Scalar, SecretKey};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
@@ -379,7 +379,7 @@ pub struct LightningClientModule {
     pub notifier: ModuleNotifier<LightningClientStateMachines>,
     pub client_ctx: ClientContext<Self>,
     pub module_api: DynModuleApi,
-    pub keypair: KeyPair,
+    pub keypair: Keypair,
     pub admin_auth: Option<ApiAuth>,
     pub gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
 }
@@ -429,7 +429,7 @@ impl ClientModule for LightningClientModule {
 }
 
 fn generate_ephemeral_tweak(static_pk: PublicKey) -> ([u8; 32], PublicKey) {
-    let keypair = KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
+    let keypair = Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
 
     let tweak = ecdh::SharedSecret::new(&static_pk, &keypair.secret_key());
 
@@ -917,7 +917,7 @@ impl LightningClientModule {
     fn recover_contract_keys(
         &self,
         contract: &IncomingContract,
-    ) -> Option<(KeyPair, AggregateDecryptionKey)> {
+    ) -> Option<(Keypair, AggregateDecryptionKey)> {
         let ephemeral_tweak = ecdh::SharedSecret::new(
             &contract.commitment.ephemeral_pk,
             &self.keypair.secret_key(),

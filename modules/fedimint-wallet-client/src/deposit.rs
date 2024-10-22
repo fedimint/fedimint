@@ -13,7 +13,7 @@ use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::txoproof::PegInProof;
 use fedimint_wallet_common::WalletInput;
-use secp256k1::KeyPair;
+use secp256k1::Keypair;
 use tracing::{debug, instrument, trace, warn};
 
 use crate::api::WalletFederationApi;
@@ -99,7 +99,7 @@ impl State for DepositStateMachine {
 
 async fn await_created_btc_transaction_submitted(
     context: WalletClientContext,
-    tweak: KeyPair,
+    tweak: Keypair,
 ) -> (bitcoin::Transaction, u32) {
     let script = context
         .wallet_descriptor
@@ -209,7 +209,7 @@ async fn await_btc_transaction_confirmed(
 
         let confirmation_block_count = match context
             .rpc
-            .get_tx_block_height(&waiting_state.btc_transaction.txid())
+            .get_tx_block_height(&waiting_state.btc_transaction.compute_txid())
             .await
         {
             Ok(Some(confirmation_height)) => Some(confirmation_height + 1),
@@ -237,7 +237,7 @@ async fn await_btc_transaction_confirmed(
         // Get txout proof
         let txout_proof = match context
             .rpc
-            .get_txout_proof(waiting_state.btc_transaction.txid())
+            .get_txout_proof(waiting_state.btc_transaction.compute_txid())
             .await
         {
             Ok(txout_proof) => txout_proof,
@@ -273,7 +273,7 @@ pub(crate) async fn transition_btc_tx_confirmed(
     )
     .expect("TODO: handle API returning faulty proofs");
 
-    let amount = Amount::from_sats(pegin_proof.tx_output().value);
+    let amount = Amount::from_sats(pegin_proof.tx_output().value.to_sat());
 
     let wallet_input = WalletInput::new_v0(pegin_proof);
 
@@ -308,7 +308,7 @@ pub enum DepositStates {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct CreatedDepositState {
-    pub(crate) tweak_key: KeyPair,
+    pub(crate) tweak_key: Keypair,
     pub(crate) timeout_at: SystemTime,
 }
 
@@ -317,7 +317,7 @@ pub struct WaitingForConfirmationsDepositState {
     /// Key pair of which the public was used to tweak the federation's wallet
     /// descriptor. The secret key is later used to sign the fedimint claim
     /// transaction.
-    tweak_key: KeyPair,
+    tweak_key: Keypair,
     /// The bitcoin transaction is saved as soon as we see it so the transaction
     /// can be re-transmitted if it's evicted from the mempool.
     pub(crate) btc_transaction: bitcoin::Transaction,

@@ -53,9 +53,9 @@ impl ApiAnnouncement {
     pub fn sign<C: secp256k1::Signing>(
         &self,
         ctx: &secp256k1::Secp256k1<C>,
-        key: &secp256k1::KeyPair,
+        key: &secp256k1::Keypair,
     ) -> SignedApiAnnouncement {
-        let msg = self.tagged_hash().into();
+        let msg = Message::from_digest(*self.tagged_hash().as_ref());
         let signature = ctx.sign_schnorr(&msg, key);
         SignedApiAnnouncement {
             api_announcement: self.clone(),
@@ -71,7 +71,7 @@ impl SignedApiAnnouncement {
         ctx: &secp256k1::Secp256k1<C>,
         pk: &secp256k1::PublicKey,
     ) -> bool {
-        let msg: Message = self.api_announcement.tagged_hash().into();
+        let msg = Message::from_digest(*self.api_announcement.tagged_hash().as_ref());
         ctx.verify_schnorr(&self.signature, &msg, &pk.to_x_only_pubkey())
             .is_ok()
     }

@@ -71,13 +71,13 @@ impl Decodable for secp256k1::schnorr::Signature {
     }
 }
 
-impl Encodable for bitcoin::key::KeyPair {
+impl Encodable for bitcoin::key::Keypair {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
         self.secret_bytes().consensus_encode(writer)
     }
 }
 
-impl Decodable for bitcoin::key::KeyPair {
+impl Decodable for bitcoin::key::Keypair {
     fn consensus_decode<D: Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
@@ -100,7 +100,7 @@ mod tests {
         let ctx = secp256k1::Secp256k1::new();
         let (sk, _pk) = ctx.generate_keypair(&mut rand::thread_rng());
         let sig = ctx.sign_ecdsa(
-            &Message::from_hashed_data::<secp256k1::hashes::sha256::Hash>(b"Hello World!"),
+            &Message::from_digest(*secp256k1::hashes::sha256::Hash::hash(b"Hello World!").as_ref()),
             &sk,
         );
 
@@ -111,12 +111,12 @@ mod tests {
     fn test_schnorr_pub_key() {
         let ctx = secp256k1::global::SECP256K1;
         let mut rng = rand::rngs::OsRng;
-        let sec_key = bitcoin::key::KeyPair::new(ctx, &mut rng);
+        let sec_key = bitcoin::key::Keypair::new(ctx, &mut rng);
         let pub_key = sec_key.public_key();
         test_roundtrip(&pub_key);
 
         let sig = ctx.sign_schnorr(
-            &secp256k1::hashes::sha256::Hash::hash(b"Hello World!").into(),
+            &Message::from_digest(*secp256k1::hashes::sha256::Hash::hash(b"Hello World!").as_ref()),
             &sec_key,
         );
 

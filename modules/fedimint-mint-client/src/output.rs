@@ -12,7 +12,7 @@ use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::secp256k1::{KeyPair, Secp256k1, Signing};
+use fedimint_core::secp256k1::{Keypair, Secp256k1, Signing};
 use fedimint_core::task::sleep;
 use fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
@@ -339,7 +339,7 @@ pub struct MintOutputStatesSucceeded {
 pub struct NoteIssuanceRequest {
     /// Spend key from which the note nonce (corresponding public key) is
     /// derived
-    spend_key: KeyPair,
+    spend_key: Keypair,
     /// Key to unblind the blind signature supplied by the mint for this note
     blinding_key: BlindingKey,
 }

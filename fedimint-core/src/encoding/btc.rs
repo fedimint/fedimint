@@ -7,9 +7,10 @@ use bitcoin::hashes::Hash as BitcoinHash;
 use hex::{FromHex, ToHex};
 use miniscript::{Descriptor, MiniscriptKey};
 
+use super::get_network_from_address;
 use crate::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_network_magic, bitcoin29_to_bitcoin30_psbt,
-    bitcoin30_to_bitcoin29_network_magic, bitcoin30_to_bitcoin29_psbt,
+    bitcoin29_to_bitcoin32_network_magic, bitcoin29_to_bitcoin32_psbt,
+    bitcoin32_to_bitcoin29_network_magic, bitcoin32_to_bitcoin29_psbt,
     checked_address_to_unchecked_address,
 };
 use crate::encoding::{Decodable, DecodeError, Encodable};
@@ -22,7 +23,10 @@ macro_rules! impl_encode_decode_bridge {
                 &self,
                 writer: &mut W,
             ) -> Result<usize, std::io::Error> {
-                bitcoin::consensus::Encodable::consensus_encode(self, writer)
+                Ok(bitcoin::consensus::Encodable::consensus_encode(
+                    self,
+                    &mut std::io::BufWriter::new(writer),
+                )?)
             }
         }
 
@@ -31,8 +35,10 @@ macro_rules! impl_encode_decode_bridge {
                 d: &mut D,
                 _modules: &$crate::module::registry::ModuleDecoderRegistry,
             ) -> Result<Self, crate::encoding::DecodeError> {
-                bitcoin::consensus::Decodable::consensus_decode_from_finite_reader(d)
-                    .map_err(crate::encoding::DecodeError::from_err)
+                bitcoin::consensus::Decodable::consensus_decode_from_finite_reader(
+                    &mut std::io::BufReader::new(d),
+                )
+                .map_err(crate::encoding::DecodeError::from_err)
             }
         }
     };
@@ -45,21 +51,21 @@ impl_encode_decode_bridge!(bitcoin::ScriptBuf);
 impl_encode_decode_bridge!(bitcoin::Transaction);
 impl_encode_decode_bridge!(bitcoin::merkle_tree::PartialMerkleTree);
 
-impl crate::encoding::Encodable for bitcoin::psbt::PartiallySignedTransaction {
+impl crate::encoding::Encodable for bitcoin::psbt::Psbt {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         bitcoin29::consensus::Encodable::consensus_encode(
-            &bitcoin30_to_bitcoin29_psbt(self),
+            &bitcoin32_to_bitcoin29_psbt(self),
             writer,
         )
     }
 }
 
-impl crate::encoding::Decodable for bitcoin::psbt::PartiallySignedTransaction {
+impl crate::encoding::Decodable for bitcoin::psbt::Psbt {
     fn consensus_decode_from_finite_reader<D: std::io::Read>(
         d: &mut D,
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, crate::encoding::DecodeError> {
-        Ok(bitcoin29_to_bitcoin30_psbt(
+        Ok(bitcoin29_to_bitcoin32_psbt(
             &bitcoin29::consensus::Decodable::consensus_decode_from_finite_reader(d)
                 .map_err(crate::encoding::DecodeError::from_err)?,
         ))
@@ -68,7 +74,10 @@ impl crate::encoding::Decodable for bitcoin::psbt::PartiallySignedTransaction {
 
 impl crate::encoding::Encodable for bitcoin::Txid {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        bitcoin::consensus::Encodable::consensus_encode(self, writer)
+        Ok(bitcoin::consensus::Encodable::consensus_encode(
+            self,
+            &mut std::io::BufWriter::new(writer),
+        )?)
     }
 
     fn consensus_encode_to_hex(&self) -> String {
@@ -88,8 +97,10 @@ impl crate::encoding::Decodable for bitcoin::Txid {
         d: &mut D,
         _modules: &::fedimint_core::module::registry::ModuleDecoderRegistry,
     ) -> Result<Self, crate::encoding::DecodeError> {
-        bitcoin::consensus::Decodable::consensus_decode_from_finite_reader(d)
-            .map_err(crate::encoding::DecodeError::from_err)
+        bitcoin::consensus::Decodable::consensus_decode_from_finite_reader(
+            &mut std::io::BufReader::new(d),
+        )
+        .map_err(crate::encoding::DecodeError::from_err)
     }
 
     fn consensus_decode_hex(
@@ -133,16 +144,16 @@ where
     }
 }
 
-impl Encodable for bitcoin::network::Magic {
+impl Encodable for bitcoin::p2p::Magic {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
         // The encoding format for bitcoin v0.30 is different from bitcoin v0.29. We're
         // converting before encoding to maintain backwards compatibility.
-        let num = bitcoin30_to_bitcoin29_network_magic(self);
+        let num = bitcoin32_to_bitcoin29_network_magic(self);
         num.consensus_encode(writer)
     }
 }
 
-impl Decodable for bitcoin::network::Magic {
+impl Decodable for bitcoin::p2p::Magic {
     fn consensus_decode<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
@@ -150,7 +161,7 @@ impl Decodable for bitcoin::network::Magic {
         // The encoding format for bitcoin v0.30 is different from bitcoin v0.29. We're
         // converting after decoding to maintain backwards compatibility.
         let num = u32::consensus_decode(d, modules)?;
-        Ok(bitcoin29_to_bitcoin30_network_magic(num))
+        Ok(bitcoin29_to_bitcoin32_network_magic(num))
     }
 }
 
@@ -165,7 +176,7 @@ impl Decodable for bitcoin::Network {
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let magic = bitcoin::network::Magic::consensus_decode(d, modules)?;
+        let magic = bitcoin::p2p::Magic::consensus_decode(d, modules)?;
         Self::from_magic(magic).ok_or_else(|| {
             DecodeError::new_custom(format_err!("Unknown network magic: {:x}", magic))
         })
@@ -190,7 +201,10 @@ impl Decodable for bitcoin::Amount {
 impl Encodable for bitcoin::Address {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         let mut len = 0;
-        len += self.network.magic().consensus_encode(writer)?;
+        len += get_network_from_address(self)
+            .map_err(|_err| std::io::Error::from(std::io::ErrorKind::InvalidData))?
+            .magic()
+            .consensus_encode(writer)?;
         len += self.script_pubkey().consensus_encode(writer)?;
         Ok(len)
     }
@@ -207,10 +221,9 @@ impl Decodable for bitcoin::Address<NetworkUnchecked> {
         mut d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let network = bitcoin::Network::from_magic(bitcoin::network::Magic::consensus_decode(
-            &mut d, modules,
-        )?)
-        .ok_or_else(|| DecodeError::from_str("Unknown network"))?;
+        let network =
+            bitcoin::Network::from_magic(bitcoin::p2p::Magic::consensus_decode(&mut d, modules)?)
+                .ok_or_else(|| DecodeError::from_str("Unknown network"))?;
         let script_pk = bitcoin::ScriptBuf::consensus_decode(&mut d, modules)?;
 
         let address = bitcoin::Address::from_script(&script_pk, network)
