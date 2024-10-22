@@ -1178,7 +1178,7 @@ impl ILnRpcClient for GatewayLndClient {
         let mut client = self.connect().await?;
 
         // Connect to the peer first
-        let _ = client
+        client
             .lightning()
             .connect_peer(ConnectPeerRequest {
                 addr: Some(LightningAddress {
@@ -1188,7 +1188,10 @@ impl ILnRpcClient for GatewayLndClient {
                 perm: false,
                 timeout: 10,
             })
-            .await;
+            .await
+            .map_err(|e| LightningRpcError::FailedToConnectToPeer {
+                failure_reason: format!("Failed to connect to peer {e:?}"),
+            })?;
 
         // Open the channel
         match client

@@ -995,7 +995,7 @@ pub async fn open_channels_between_gateways(
 
     // Wait for all channel funding transaction to be known by bitcoind.
     let mut is_missing_any_txids = false;
-    for (gw_a_name, gw_b_name, txid_or) in &channel_funding_txids {
+    for (_gw_a_name, _gw_b_name, txid_or) in &channel_funding_txids {
         if let Some(txid) = txid_or {
             loop {
                 if bitcoind.get_transaction(*txid).await.is_ok() {
@@ -1008,7 +1008,6 @@ pub async fn open_channels_between_gateways(
         } else {
             is_missing_any_txids = true;
         }
-        info!(target: LOG_DEVIMINT, "Channel funding transaction between {gw_a_name} and {gw_b_name} is known by bitcoind");
     }
 
     // `open_channel` may not have sent out the channel funding transaction
@@ -1028,13 +1027,12 @@ pub async fn open_channels_between_gateways(
     )
     .await?;
 
-    for ((gw_a, gw_a_name), (gw_b, gw_b_name)) in &gateway_pairs {
+    for ((gw_a, _gw_a_name), (gw_b, _gw_b_name)) in &gateway_pairs {
         let gw_a_node_pubkey = gw_a.lightning_pubkey().await?;
         let gw_b_node_pubkey = gw_b.lightning_pubkey().await?;
 
         wait_for_ready_channel_on_gateway_with_counterparty(gw_b, gw_a_node_pubkey).await?;
         wait_for_ready_channel_on_gateway_with_counterparty(gw_a, gw_b_node_pubkey).await?;
-        info!(target: LOG_DEVIMINT, "Channels between {gw_a_name} and {gw_b_name} are ready");
     }
 
     Ok(())
