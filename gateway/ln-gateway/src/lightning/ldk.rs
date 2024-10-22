@@ -630,22 +630,4 @@ impl ILnRpcClient for GatewayLdkClient {
             inbound_lightning_liquidity_msats: total_inbound_liquidity_balance_msat,
         })
     }
-
-    async fn sync_to_chain(&self, block_height: u32) -> Result<(), LightningRpcError> {
-        loop {
-            self.node
-                .sync_wallets()
-                .map_err(|e| LightningRpcError::FailedToSyncToChain {
-                    failure_reason: e.to_string(),
-                })?;
-
-            if self.node.status().current_best_block.height < block_height {
-                fedimint_core::runtime::sleep(Duration::from_millis(100)).await;
-            } else {
-                break;
-            }
-        }
-
-        Ok(())
-    }
 }

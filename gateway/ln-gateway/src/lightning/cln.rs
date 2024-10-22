@@ -287,9 +287,4 @@ impl ILnRpcClient for NetworkLnRpcClient {
                 failure_reason: e.to_string(),
             })
     }
-
-    async fn sync_to_chain(&self, _block_height: u32) -> Result<(), LightningRpcError> {
-        // We don't need to do anything here, as CLN automatically syncs to chain.
-        Ok(())
-    }
 }
