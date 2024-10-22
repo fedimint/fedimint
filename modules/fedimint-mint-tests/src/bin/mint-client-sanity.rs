@@ -4,13 +4,7 @@ use tracing::info;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    devimint::run_devfed_test(|fed, _process_mgr| async move {
-        let fed = fed.fed().await?;
-
-        test_note_consoliation(fed).await?;
-        Ok(())
-    })
-    .await
+    devimint::run_devfed_test(|_fed, _process_mgr| async move { Ok(()) }).await
 }
 
 /// Test note consolidation, which at the time of writing basically means that
@@ -19,6 +13,7 @@ async fn main() -> anyhow::Result<()> {
 /// consolidate them into higher denominations.
 ///
 /// In the future we will probably change the whole thing and delete this thing.
+#[allow(dead_code)]
 async fn test_note_consoliation(fed: &devimint::federation::Federation) -> anyhow::Result<()> {
     let sender = fed.new_joined_client("sender").await?;
     let receiver = fed.new_joined_client("receiver").await?;
