@@ -85,7 +85,8 @@ pub async fn test_restore_gap_test(fed: &Federation) -> Result<()> {
 
     // without existing backup
     {
-        let client = devimint::federation::Client::create("restore-gap-test-without-backup")?;
+        let client =
+            devimint::federation::Client::create("restore-gap-test-without-backup").await?;
         let _ = cmd!(
             client,
             "restore",
