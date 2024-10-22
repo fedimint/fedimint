@@ -4325,7 +4325,7 @@
                 <span class="string">"No corresponding decryption contract available"</span>.to_string(),
             )))<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>registered_incoming_contract.incoming_amount != amount_msats {
+        <span class="kw">if </span>registered_incoming_contract.incoming_amount_msats != amount_msats {
             <span class="kw">return </span><span class="prelude-val">Err</span>(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
                 <span class="string">"The available decryption contract's amount is not equal to the requested amount"
                     </span>.to_string(),
