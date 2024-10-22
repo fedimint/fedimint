@@ -934,7 +934,7 @@ impl FedimintCli {
                 .into();
                 let response: Value = match peer_id {
                     Some(peer_id) => ws_api
-                        .request_raw(peer_id.into(), &method, &[params.to_json()])
+                        .request_raw(peer_id.into(), &method, &params)
                         .await
                         .map_err_cli()?,
                     None => ws_api

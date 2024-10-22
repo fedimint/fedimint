@@ -488,6 +488,12 @@ pub trait PeerHandleOps {
         key: secp256k1::PublicKey,
     ) -> DkgResult<BTreeMap<PeerId, secp256k1::PublicKey>>;
 
+    async fn exchange_iroh_pubkeys(
+        &self,
+        dkg_key: String,
+        key: iroh_net::key::PublicKey,
+    ) -> DkgResult<BTreeMap<PeerId, iroh_net::key::PublicKey>>;
+
     /// Exchanges a `DkgPeerMsg::Module(Vec<u8>)` with all peers. All peers are
     /// required to be online and submit a response for this to return
     /// properly. The caller's message will be included in the returned
@@ -554,6 +560,42 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
                 .await?
             {
                 (peer, DkgPeerMsg::PublicKey(key)) => {
+                    peer_peg_in_keys.insert(peer, key);
+                }
+                (peer, msg) => {
+                    return Err(
+                        format_err!("Invalid message received from: {peer}: {msg:?}").into(),
+                    );
+                }
+            }
+        }
+
+        Ok(peer_peg_in_keys)
+    }
+
+    async fn exchange_iroh_pubkeys(
+        &self,
+        dkg_key: String,
+        key: iroh_net::key::PublicKey,
+    ) -> DkgResult<BTreeMap<PeerId, iroh_net::key::PublicKey>> {
+        let mut peer_peg_in_keys: BTreeMap<PeerId, iroh_net::key::PublicKey> = BTreeMap::new();
+
+        self.connections
+            .send(
+                &self.peers,
+                (self.module_instance_id, dkg_key.clone()),
+                DkgPeerMsg::IrohPublicKey(key),
+            )
+            .await?;
+
+        peer_peg_in_keys.insert(self.our_id, key);
+        while peer_peg_in_keys.len() < self.peers.len() {
+            match self
+                .connections
+                .receive((self.module_instance_id, dkg_key.clone()))
+                .await?
+            {
+                (peer, DkgPeerMsg::IrohPublicKey(key)) => {
                     peer_peg_in_keys.insert(peer, key);
                 }
                 (peer, msg) => {

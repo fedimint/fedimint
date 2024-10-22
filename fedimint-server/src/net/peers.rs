@@ -15,7 +15,7 @@ use std::time::Duration;
 use anyhow::Context;
 use async_trait::async_trait;
 use fedimint_api_client::api::PeerConnectionStatus;
-use fedimint_core::net::peers::IPeerConnections;
+use fedimint_core::net::peers::{IP2PConnections, IPeerConnections, Recipient};
 use fedimint_core::task::{sleep_until, Cancellable, Cancelled, TaskGroup, TaskHandle};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
@@ -30,7 +30,7 @@ use tokio::sync::RwLock;
 use tokio::time::Instant;
 use tracing::{debug, info, instrument, trace, warn};
 
-use crate::consensus::aleph_bft::Recipient;
+use crate::consensus::aleph_bft;
 use crate::metrics::{
     PEER_BANS_COUNT, PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT,
 };
@@ -266,14 +266,14 @@ where
             }
         }
     }
-    pub fn send_sync(&self, msg: &T, recipient: Recipient) {
+    pub fn send_sync(&self, msg: &T, recipient: aleph_bft::Recipient) {
         match recipient {
-            Recipient::Everyone => {
+            aleph_bft::Recipient::Everyone => {
                 for connection in self.connections.values() {
                     connection.send(msg.clone());
                 }
             }
-            Recipient::Peer(peer) => {
+            aleph_bft::Recipient::Peer(peer) => {
                 if let Some(connection) = self.connections.get(&peer) {
                     connection.send(msg.clone());
                 } else {
@@ -329,6 +329,52 @@ where
             .with_label_values(&[&self.self_id.to_string(), &peer.to_string()])
             .inc();
         warn!(target: LOG_NET_PEER, "Peer {} banned.", peer);
+    }
+}
+
+#[async_trait]
+impl IP2PConnections for ReconnectPeerConnections<Vec<u8>> {
+    #[must_use]
+    fn send(&self, recipient: Recipient, message: Vec<u8>) {
+        match recipient {
+            Recipient::Everyone => {
+                for connection in self.connections.values() {
+                    connection.send(message.clone());
+                }
+            }
+            Recipient::Peer(peer) => {
+                if let Some(connection) = self.connections.get(&peer) {
+                    connection.send(message.clone());
+                } else {
+                    trace!(target: LOG_NET_PEER,peer = ?peer, "Not sending message to unknown peer (maybe banned)");
+                }
+            }
+        }
+    }
+
+    async fn receive(&mut self) -> Cancellable<(PeerId, Vec<u8>)> {
+        // if all peers banned (or just solo-federation), just hang here as there's
+        // never going to be any message. This avoids panic on `select_all` with
+        // no futures.
+        if self.connections.is_empty() {
+            std::future::pending::<()>().await;
+        }
+
+        let futures_non_banned = self.connections.iter_mut().map(|(&peer, connection)| {
+            let receive_future = async move {
+                let msg = connection.receive().await;
+                (peer, msg)
+            };
+            Box::pin(receive_future)
+        });
+
+        let first_response = select_all(futures_non_banned).await;
+
+        first_response.0 .1.map(|v| (first_response.0 .0, v))
+    }
+
+    fn clone_box(&self) -> Box<dyn IP2PConnections + Send + 'static> {
+        Box::new(self.clone())
     }
 }
 

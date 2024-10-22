@@ -205,6 +205,7 @@ pub struct GlobalClientConfig {
     /// Optional for 0.3.x backwards compatibility
     #[serde(default, deserialize_with = "optional_de_int_key")]
     pub broadcast_public_keys: Option<BTreeMap<PeerId, PublicKey>>,
+    pub api_public_keys: BTreeMap<PeerId, iroh_net::key::PublicKey>,
     /// Core consensus version
     pub consensus_version: CoreConsensusVersion,
     // TODO: make it a String -> serde_json::Value map?
@@ -216,7 +217,12 @@ impl GlobalClientConfig {
     /// 0.4.0 and later uses a hash of broadcast public keys to calculate the
     /// federation id. 0.3.x and earlier use a hash of api endpoints
     pub fn calculate_federation_id(&self) -> FederationId {
-        FederationId(self.api_endpoints.consensus_hash())
+        // If Iroh public keys are not available, default to dns api endpoints
+        if self.api_public_keys.is_empty() {
+            FederationId(self.api_endpoints.consensus_hash())
+        } else {
+            FederationId(self.api_public_keys.consensus_hash())
+        }
     }
 
     /// Federation name from config metadata (if set)
@@ -880,6 +886,7 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum DkgPeerMsg {
     PublicKey(secp256k1::PublicKey),
+    IrohPublicKey(iroh_net::key::PublicKey),
     DistributedGen(SupportedDkgMessage),
     Module(Vec<u8>),
     // Dkg completed on our side
@@ -1077,6 +1084,7 @@ mod tests {
             global: GlobalClientConfig {
                 api_endpoints: BTreeMap::new(),
                 broadcast_public_keys: None,
+                api_public_keys: BTreeMap::new(),
                 consensus_version: CoreConsensusVersion { major: 0, minor: 0 },
                 meta: vec![
                     ("foo".to_string(), "bar".to_string()),

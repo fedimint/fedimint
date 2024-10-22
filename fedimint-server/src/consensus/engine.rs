@@ -19,6 +19,7 @@ use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ServerModuleRegistry};
 use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
+use fedimint_core::net::peers::P2PConnections;
 use fedimint_core::runtime::spawn;
 use fedimint_core::session_outcome::{
     AcceptedItem, SchnorrSignature, SessionOutcome, SignedSessionOutcome,
@@ -38,7 +39,7 @@ use crate::consensus::aleph_bft::finalization_handler::{FinalizationHandler, Ord
 use crate::consensus::aleph_bft::keychain::Keychain;
 use crate::consensus::aleph_bft::network::Network;
 use crate::consensus::aleph_bft::spawner::Spawner;
-use crate::consensus::aleph_bft::{to_node_index, Message};
+use crate::consensus::aleph_bft::to_node_index;
 use crate::consensus::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AlephUnitsPrefix,
     SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
@@ -46,6 +47,7 @@ use crate::consensus::db::{
 use crate::consensus::debug::{DebugConsensusItem, DebugConsensusItemCompact};
 use crate::consensus::transaction::process_transaction_with_dbtx;
 use crate::fedimint_core::encoding::Encodable;
+use crate::fedimint_core::net::peers::IP2PConnections;
 use crate::metrics::{
     CONSENSUS_ITEMS_PROCESSED_TOTAL, CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS,
     CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS, CONSENSUS_ORDERING_LATENCY_SECONDS,
@@ -53,6 +55,7 @@ use crate::metrics::{
 };
 use crate::net::connect::{Connector, TlsTcpConnector};
 use crate::net::peers::{DelayCalculator, ReconnectPeerConnections};
+use crate::net::peers_iroh::{IrohPeerConnections, NetworkConfig};
 use crate::LOG_CONSENSUS;
 
 // The name of the directory where the database checkpoints are stored.
@@ -168,15 +171,30 @@ impl ConsensusEngine {
 
         self.confirm_server_config_consensus_hash().await?;
 
-        // Build P2P connections for the atomic broadcast
-        let connections = ReconnectPeerConnections::new(
-            self.cfg.network_config(p2p_bind_addr),
-            DelayCalculator::PROD_DEFAULT,
-            TlsTcpConnector::new(self.cfg.tls_config(), self.identity()).into_dyn(),
-            &self.task_group,
-            Arc::clone(&self.connection_status_channels),
-        )
-        .await;
+        // Build P2P connections for the atomic broadcast if Iroh public keys are not
+        // available, default to dns api endpoints
+        let connections = if self.cfg.consensus.p2p_public_keys.is_empty() {
+            ReconnectPeerConnections::new(
+                self.cfg.network_config(p2p_bind_addr),
+                DelayCalculator::PROD_DEFAULT,
+                TlsTcpConnector::new(self.cfg.tls_config(), self.identity()).into_dyn(),
+                &self.task_group,
+                Arc::clone(&self.connection_status_channels),
+            )
+            .await
+            .into_dyn()
+        } else {
+            IrohPeerConnections::new(
+                NetworkConfig::new(
+                    self.cfg.private.p2p_secret_key.clone(),
+                    self.cfg.consensus.p2p_public_keys.clone(),
+                ),
+                &self.task_group,
+                Arc::clone(&self.connection_status_channels),
+            )
+            .await?
+            .into_dyn()
+        };
 
         self.initialize_checkpoint_directory(self.get_finished_session_count().await)?;
 
@@ -230,7 +248,7 @@ impl ConsensusEngine {
 
     pub async fn run_session(
         &self,
-        connections: ReconnectPeerConnections<Message>,
+        connections: P2PConnections,
         session_index: u64,
     ) -> anyhow::Result<()> {
         // In order to bound a sessions RAM consumption we need to bound its number of
