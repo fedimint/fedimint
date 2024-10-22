@@ -12,8 +12,7 @@ use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_payment_preimage, bitcoin30_to_bitcoin32_secp256k1_pubkey,
     bitcoin32_to_bitcoin30_outpoint, bitcoin32_to_bitcoin30_secp256k1_pubkey,
 };
-use fedimint_core::runtime::spawn;
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{TaskGroup, TaskHandle};
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::contracts::Preimage;
 use ldk_node::config::EsploraSyncConfig;
@@ -44,12 +43,7 @@ pub struct GatewayLdkClient {
     /// The client for querying data about the blockchain.
     esplora_client: esplora_client::AsyncClient,
 
-    /// A handle to the task that processes incoming events from the lightning
-    /// node. Responsible for sending incoming HTLCs to the caller of
-    /// `route_htlcs`.
-    /// TODO: This should be a shutdown sender instead, and we can discard the
-    /// handle.
-    event_handler_task_handle: tokio::task::JoinHandle<()>,
+    task_group: TaskGroup,
 
     /// The HTLC stream, until it is taken by calling
     /// `ILnRpcClient::route_htlcs`.
@@ -122,18 +116,19 @@ impl GatewayLdkClient {
         })?;
 
         let (htlc_stream_sender, htlc_stream_receiver) = tokio::sync::mpsc::channel(1024);
+        let task_group = TaskGroup::new();
 
         let node_clone = node.clone();
-        let event_handler_task_handle = spawn("ldk lightning node event handler", async move {
+        task_group.spawn("ldk lightning node event handler", |handle| async move {
             loop {
-                Self::handle_next_event(&node_clone, &htlc_stream_sender).await;
+                Self::handle_next_event(&node_clone, &htlc_stream_sender, &handle).await;
             }
         });
 
         Ok(GatewayLdkClient {
             node,
             esplora_client: esplora_client::Builder::new(esplora_server_url).build_async()?,
-            event_handler_task_handle,
+            task_group,
             htlc_stream_receiver_or: Some(htlc_stream_receiver),
         })
     }
@@ -141,13 +136,23 @@ impl GatewayLdkClient {
     async fn handle_next_event(
         node: &ldk_node::Node,
         htlc_stream_sender: &Sender<InterceptPaymentRequest>,
+        handle: &TaskHandle,
     ) {
+        let event = tokio::select! {
+            event = node.next_event_async() => {
+                event
+            }
+            () = handle.make_shutdown_rx() => {
+                return;
+            }
+        };
+
         if let ldk_node::Event::PaymentClaimable {
             payment_id: _,
             payment_hash,
             claimable_amount_msat,
             claim_deadline,
-        } = node.next_event_async().await
+        } = event
         {
             if let Err(e) = htlc_stream_sender
                 .send(InterceptPaymentRequest {
@@ -208,7 +213,7 @@ impl GatewayLdkClient {
 
 impl Drop for GatewayLdkClient {
     fn drop(&mut self) {
-        self.event_handler_task_handle.abort();
+        self.task_group.shutdown();
 
         info!("Stopping LDK Node...");
         if let Err(e) = self.node.stop() {
