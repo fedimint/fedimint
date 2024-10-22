@@ -1088,7 +1088,8 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let tx_hex = poll("Waiting for transaction in mempool", || async {
         // TODO: distinguish errors from not found
         bitcoind
-            .get_raw_transaction(&txid)
+            .get_raw_transaction(txid)
+            .await
             .context("getrawtransaction")
             .map_err(ControlFlow::Continue)
     })
@@ -2034,7 +2035,8 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
             .expect("txid should be parsable");
         let tx_hex = poll("Waiting for transaction in mempool", || async {
             bitcoind
-                .get_raw_transaction(&txid)
+                .get_raw_transaction(txid)
+                .await
                 .context("getrawtransaction")
                 .map_err(ControlFlow::Continue)
         })

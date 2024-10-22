@@ -22,6 +22,7 @@ use itertools::Itertools;
 use ln_gateway::envs::FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV;
 use tokio::fs;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
+use tokio::task::spawn_blocking;
 use tokio::time::Instant;
 use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest};
 use tonic_lnd::Client as LndClient;
@@ -112,9 +113,7 @@ impl Bitcoind {
         debug!("Setting up bitcoind");
         // create RPC wallet
         for attempt in 0.. {
-            match fedimint_core::runtime::block_in_place(|| {
-                client.create_wallet("", None, None, None, None)
-            }) {
+            match block_in_place(|| client.create_wallet("", None, None, None, None)) {
                 Ok(_) => {
                     break;
                 }
@@ -166,6 +165,7 @@ impl Bitcoind {
     pub async fn poll_ready(&self) -> anyhow::Result<()> {
         poll("bitcoind rpc ready", || async {
             self.get_block_count()
+                .await
                 .map_err(ControlFlow::Continue::<anyhow::Error, _>)?;
             Ok(())
         })
@@ -184,16 +184,17 @@ impl Bitcoind {
     /// Fedimint's IBitcoindRpc considers block count the total number of
     /// blocks, where bitcoind's rpc returns the height. Since the genesis
     /// block has height 0, we need to add 1 to get the total block count.
-    pub fn get_block_count(&self) -> Result<u64> {
-        Ok(block_in_place(|| self.client.get_block_count())? + 1)
+    pub async fn get_block_count(&self) -> Result<u64> {
+        let client = self.client.clone();
+        Ok(spawn_blocking(move || client.get_block_count()).await?? + 1)
     }
 
     pub async fn mine_blocks_no_wait(&self, block_num: u64) -> Result<u64> {
         let start_time = Instant::now();
         debug!(target: LOG_DEVIMINT, ?block_num, "Mining bitcoin blocks");
         let addr = self.get_new_address().await?;
-        let initial_block_count = self.get_block_count()?;
-        self.generate_to_address(block_num, &addr).await?;
+        let initial_block_count = self.get_block_count().await?;
+        self.generate_to_address(block_num, addr).await?;
         debug!(target: LOG_DEVIMINT,
             elapsed_ms = %start_time.elapsed().as_millis(),
             ?block_num, "Mined blocks (no wait)");
@@ -205,9 +206,9 @@ impl Bitcoind {
         let start_time = Instant::now();
         debug!(target: LOG_DEVIMINT, ?block_num, "Mining bitcoin blocks");
         let addr = self.get_new_address().await?;
-        let initial_block_count = self.get_block_count()?;
-        self.generate_to_address(block_num, &addr).await?;
-        while self.get_block_count()? < initial_block_count + block_num {
+        let initial_block_count = self.get_block_count().await?;
+        self.generate_to_address(block_num, addr).await?;
+        while self.get_block_count().await? < initial_block_count + block_num {
             trace!(target: LOG_DEVIMINT, ?block_num, "Waiting for blocks to be mined");
             sleep(Duration::from_millis(100)).await;
         }
@@ -225,70 +226,66 @@ impl Bitcoind {
         let tx = self
             .wallet_client()
             .await?
-            .send_to_address(&bitcoin::Address::from_str(&addr)?.assume_checked(), amount)
+            .send_to_address(bitcoin::Address::from_str(&addr)?.assume_checked(), amount)
             .await?;
         Ok(tx)
     }
 
-    pub async fn get_txout_proof(&self, txid: &bitcoin::Txid) -> Result<String> {
-        let proof = self.get_tx_out_proof(&[*txid], None).await?;
+    pub async fn get_txout_proof(&self, txid: bitcoin::Txid) -> Result<String> {
+        let client = self.wallet_client().await?.clone();
+        let proof = spawn_blocking(move || client.client.get_tx_out_proof(&[txid], None)).await??;
         Ok(proof.encode_hex())
     }
 
-    pub fn get_raw_transaction(&self, txid: &bitcoin::Txid) -> Result<String> {
-        let tx = block_in_place(|| self.client.get_raw_transaction(txid, None))?;
+    pub async fn get_raw_transaction(&self, txid: bitcoin::Txid) -> Result<String> {
+        let client = self.client.clone();
+        let tx = spawn_blocking(move || client.get_raw_transaction(&txid, None)).await??;
         let bytes = tx.consensus_encode_to_vec();
         Ok(bytes.encode_hex())
     }
 
     pub async fn get_new_address(&self) -> Result<Address> {
-        let client = &self.wallet_client().await?;
-        let addr = block_in_place(|| client.client.get_new_address(None, None))?.assume_checked();
+        let client = self.wallet_client().await?.clone();
+        let addr = spawn_blocking(move || client.client.get_new_address(None, None))
+            .await??
+            .assume_checked();
         Ok(addr)
     }
 
     pub async fn generate_to_address(
         &self,
         block_num: u64,
-        address: &Address,
+        address: Address,
     ) -> Result<Vec<BlockHash>> {
-        let client = &self.wallet_client().await?;
-        Ok(block_in_place(|| {
-            client.client.generate_to_address(block_num, address)
-        })?)
+        let client = self.wallet_client().await?.clone();
+        Ok(
+            spawn_blocking(move || client.client.generate_to_address(block_num, &address))
+                .await??,
+        )
     }
 
-    pub async fn get_tx_out_proof(
-        &self,
-        txid: &[bitcoin::Txid],
-        block_hash: Option<&BlockHash>,
-    ) -> anyhow::Result<Vec<u8>> {
-        let client = &self.wallet_client().await?;
-        Ok(block_in_place(|| {
-            client.client.get_tx_out_proof(txid, block_hash)
-        })?)
-    }
-
-    pub fn get_blockchain_info(&self) -> anyhow::Result<GetBlockchainInfoResult> {
-        Ok(block_in_place(|| self.client.get_blockchain_info())?)
+    pub async fn get_blockchain_info(&self) -> anyhow::Result<GetBlockchainInfoResult> {
+        let client = self.client.clone();
+        Ok(spawn_blocking(move || client.get_blockchain_info()).await??)
     }
 
     pub async fn send_to_address(
         &self,
-        addr: &Address,
+        addr: Address,
         amount: bitcoin::Amount,
     ) -> anyhow::Result<bitcoin::Txid> {
-        let client = self.wallet_client().await?;
-        Ok(block_in_place(|| {
+        let client = self.wallet_client().await?.clone();
+        Ok(spawn_blocking(move || {
             client
                 .client
-                .send_to_address(addr, amount, None, None, None, None, None, None)
-        })?)
+                .send_to_address(&addr, amount, None, None, None, None, None, None)
+        })
+        .await??)
     }
 
     pub(crate) async fn get_balances(&self) -> anyhow::Result<GetBalancesResult> {
-        let client = self.wallet_client().await?;
-        Ok(block_in_place(|| client.client.get_balances())?)
+        let client = self.wallet_client().await?.clone();
+        Ok(spawn_blocking(move || client.client.get_balances()).await??)
     }
 
     pub(crate) fn get_jsonrpc_client(&self) -> &bitcoincore_rpc::jsonrpc::Client {
@@ -398,6 +395,7 @@ impl Lightningd {
             let btc_height = self
                 .bitcoind
                 .get_blockchain_info()
+                .await
                 .context("bitcoind getblockchaininfo")
                 .map_err(ControlFlow::Continue)?
                 .blocks;
@@ -958,7 +956,7 @@ pub async fn open_channels_between_gateways(
             loop {
                 // Bitcoind's getrawtransaction RPC call will return an error if the transaction
                 // is not known.
-                if bitcoind.get_raw_transaction(txid).is_ok() {
+                if bitcoind.get_raw_transaction(*txid).await.is_ok() {
                     break;
                 }
 
