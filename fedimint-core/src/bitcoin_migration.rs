@@ -150,6 +150,13 @@ pub fn bitcoin30_to_bitcoin32_network(network: &bitcoin30::Network) -> bitcoin::
     .expect("Failed to convert bitcoin30 network to bitcoin32 network")
 }
 
+pub fn bitcoin32_to_bitcoin30_network(network: &bitcoin::Network) -> bitcoin30::Network {
+    bincode::deserialize(
+        &bincode::serialize(network).expect("Failed to serialize bitcoin32 network"),
+    )
+    .expect("Failed to convert bitcoin32 network to bitcoin30 network")
+}
+
 fn bitcoin30_to_bitcoin32_txid(txid: &bitcoin30::Txid) -> bitcoin::Txid {
     bitcoin::Txid::from_str(&txid.to_string())
         .expect("Failed to convert bitcoin30 txid to bitcoin32 txid")
