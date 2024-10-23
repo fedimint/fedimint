@@ -9,8 +9,8 @@ use anyhow::anyhow;
 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
 use arti_client::{TorAddr, TorClient, TorClientConfig};
 use base64::Engine as _;
-use bitcoin::hashes::sha256;
-use bitcoin::secp256k1;
+use bitcoin30::hashes::sha256;
+use bitcoin30::secp256k1;
 pub use error::{FederationError, OutputOutcomeError, PeerError};
 use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams,

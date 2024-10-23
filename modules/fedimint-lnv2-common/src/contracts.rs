@@ -1,4 +1,4 @@
-use bitcoin::secp256k1;
+use bitcoin30::secp256k1;
 use bitcoin_hashes::sha256;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::Amount;

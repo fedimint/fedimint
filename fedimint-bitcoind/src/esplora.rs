@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::{bail, format_err};
-use bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
+use bitcoin30::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::TaskHandle;
 use fedimint_core::txoproof::TxOutProof;
@@ -140,7 +140,7 @@ impl IBitcoindRpc for EsploraClient {
     async fn get_script_history(
         &self,
         script: &ScriptBuf,
-    ) -> anyhow::Result<Vec<bitcoin::Transaction>> {
+    ) -> anyhow::Result<Vec<bitcoin30::Transaction>> {
         let transactions = self
             .client
             .scripthash_txs(script, None)

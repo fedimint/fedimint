@@ -1,7 +1,7 @@
 use std::fmt;
 
 use anyhow::{anyhow as format_err, bail};
-use bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
+use bitcoin30::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 use electrum_client::ElectrumApi;
 use electrum_client::Error::Protocol;
 use fedimint_core::envs::BitcoinRpcConfig;
@@ -91,7 +91,7 @@ impl IBitcoindRpc for ElectrumClient {
 
     async fn submit_transaction(&self, transaction: Transaction) {
         let mut bytes = vec![];
-        bitcoin::consensus::Encodable::consensus_encode(&transaction, &mut bytes)
+        bitcoin30::consensus::Encodable::consensus_encode(&transaction, &mut bytes)
             .expect("can't fail");
         match block_in_place(|| self.client.transaction_broadcast_raw(&bytes)) {
             Err(Protocol(Value::Object(e))) if is_already_submitted_error(&e) => (),
@@ -162,7 +162,7 @@ impl IBitcoindRpc for ElectrumClient {
     async fn get_script_history(
         &self,
         script: &ScriptBuf,
-    ) -> anyhow::Result<Vec<bitcoin::Transaction>> {
+    ) -> anyhow::Result<Vec<bitcoin30::Transaction>> {
         let mut results = vec![];
         let transactions = block_in_place(|| self.client.script_get_history(script))?;
         for history in transactions {

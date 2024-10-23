@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-pub use bitcoin::Network;
+pub use bitcoin30::Network;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::BitcoinRpcConfig;

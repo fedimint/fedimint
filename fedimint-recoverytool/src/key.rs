@@ -10,7 +10,7 @@ use miniscript::MiniscriptKey;
 #[derive(Debug, Clone, Copy, Eq)]
 pub enum Key {
     Public(CompressedPublicKey),
-    Private(bitcoin::key::PrivateKey),
+    Private(bitcoin30::key::PrivateKey),
 }
 
 impl PartialOrd for Key {
@@ -71,8 +71,8 @@ impl MiniscriptKey for Key {
         0
     }
 
-    type Sha256 = bitcoin::hashes::sha256::Hash;
+    type Sha256 = bitcoin30::hashes::sha256::Hash;
     type Hash256 = miniscript::hash256::Hash;
-    type Ripemd160 = bitcoin::hashes::ripemd160::Hash;
-    type Hash160 = bitcoin::hashes::hash160::Hash;
+    type Ripemd160 = bitcoin30::hashes::ripemd160::Hash;
+    type Hash160 = bitcoin30::hashes::hash160::Hash;
 }

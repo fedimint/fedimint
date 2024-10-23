@@ -21,7 +21,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-bitcoin = { workspace = true }
+bitcoin30 = { workspace = true }
 bitcoincore-rpc = { workspace = true, optional = true }
 electrum-client = { workspace = true, optional = true }
 esplora-client = { workspace = true, optional = true }

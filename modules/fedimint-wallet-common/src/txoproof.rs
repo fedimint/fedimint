@@ -2,7 +2,7 @@ use std::convert::Infallible;
 use std::hash::Hash;
 
 use anyhow::format_err;
-use bitcoin::{BlockHash, OutPoint, Transaction};
+use bitcoin30::{BlockHash, OutPoint, Transaction};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::txoproof::TxOutProof;
@@ -118,18 +118,18 @@ impl PegInProof {
         &self.tweak_contract_key
     }
 
-    pub fn identity(&self) -> (secp256k1::PublicKey, bitcoin::Txid) {
+    pub fn identity(&self) -> (secp256k1::PublicKey, bitcoin30::Txid) {
         (self.tweak_contract_key, self.transaction.txid())
     }
 
-    pub fn tx_output(&self) -> &bitcoin::TxOut {
+    pub fn tx_output(&self) -> &bitcoin30::TxOut {
         self.transaction
             .output
             .get(self.output_idx as usize)
             .expect("output_idx in-rangeness is an invariant guaranteed by constructors")
     }
 
-    pub fn outpoint(&self) -> bitcoin::OutPoint {
+    pub fn outpoint(&self) -> bitcoin30::OutPoint {
         OutPoint {
             txid: self.transaction.txid(),
             vout: self.output_idx,

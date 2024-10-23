@@ -46,7 +46,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use threshold_crypto::PublicKey;
 use tracing::error;
-pub use {bitcoin, lightning_invoice};
+pub use {bitcoin30 as bitcoin, lightning_invoice};
 
 use crate::contracts::incoming::OfferId;
 use crate::contracts::{Contract, ContractId, ContractOutcome, Preimage, PreimageDecryptionShare};

@@ -868,7 +868,7 @@ impl GatewayLightning for ClnRpcService {
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
-        let network = bitcoin::Network::from_str(info.2.as_str())
+        let network = bitcoin30::Network::from_str(info.2.as_str())
             .map_err(|e| Status::internal(e.to_string()))?;
 
         let invoice_builder = InvoiceBuilder::new(Currency::from(network))

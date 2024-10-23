@@ -16,7 +16,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 pub use anyhow::Result;
-use bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
+use bitcoin30::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 use fedimint_core::envs::{
     BitcoinRpcConfig, FM_FORCE_BITCOIN_RPC_KIND_ENV, FM_FORCE_BITCOIN_RPC_URL_ENV,
 };
@@ -110,7 +110,7 @@ dyn_newtype_define! {
 #[apply(async_trait_maybe_send!)]
 pub trait IBitcoindRpc: Debug {
     /// Returns the Bitcoin network the node is connected to
-    async fn get_network(&self) -> Result<bitcoin::Network>;
+    async fn get_network(&self) -> Result<bitcoin30::Network>;
 
     /// Returns the current block count
     async fn get_block_count(&self) -> Result<u64>;

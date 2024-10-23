@@ -13,7 +13,7 @@ pub mod config;
 pub mod contracts;
 pub mod endpoint_constants;
 
-use bitcoin::secp256k1::schnorr::Signature;
+use bitcoin30::secp256k1::schnorr::Signature;
 use bitcoin_hashes::sha256;
 use config::LightningClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};

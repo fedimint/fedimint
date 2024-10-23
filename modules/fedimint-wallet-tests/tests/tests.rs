@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use anyhow::{bail, Context};
 use assert_matches::assert_matches;
-use bitcoin::secp256k1;
+use bitcoin30::secp256k1;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::ClientHandleArc;
 use fedimint_core::bitcoin_migration::checked_address_to_unchecked_address;
@@ -40,8 +40,8 @@ fn fixtures() -> Fixtures {
     fixtures.with_module(wallet_client, WalletInit, wallet_params)
 }
 
-fn bsats(satoshi: u64) -> bitcoin::Amount {
-    bitcoin::Amount::from_sat(satoshi)
+fn bsats(satoshi: u64) -> bitcoin30::Amount {
+    bitcoin30::Amount::from_sat(satoshi)
 }
 
 const PEG_IN_AMOUNT_SATS: u64 = 10000;
@@ -51,7 +51,7 @@ async fn peg_in<'a>(
     client: &'a ClientHandleArc,
     bitcoin: &dyn BitcoinTest,
     finality_delay: u64,
-) -> anyhow::Result<(BoxStream<'a, Amount>, bitcoin::Transaction)> {
+) -> anyhow::Result<(BoxStream<'a, Amount>, bitcoin30::Transaction)> {
     let mut balance_sub = client.subscribe_balance_changes().await;
     let initial_balance = balance_sub.ok().await?;
 
@@ -747,7 +747,7 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
     await_consensus_to_catch_up(&client, 1).await?;
 
     let mut expected_available_utxos: HashSet<TxOutputSummary> = HashSet::new();
-    fn sum_utxos<'a>(utxos: impl Iterator<Item = &'a TxOutputSummary>) -> bitcoin::Amount {
+    fn sum_utxos<'a>(utxos: impl Iterator<Item = &'a TxOutputSummary>) -> bitcoin30::Amount {
         utxos.fold(bsats(0), |acc, utxo| bsats(utxo.amount.to_sat()) + acc)
     }
 
@@ -766,11 +766,11 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
                 // utxo is always index 0
                 if output.value == expected_peg_in_amount {
                     Some(TxOutputSummary {
-                        outpoint: bitcoin::OutPoint {
+                        outpoint: bitcoin30::OutPoint {
                             txid: tx.txid(),
                             vout: idx as u32,
                         },
-                        amount: bitcoin::Amount::from_sat(output.value),
+                        amount: bitcoin30::Amount::from_sat(output.value),
                     })
                 } else {
                     None
@@ -854,8 +854,8 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
     }
 
     let expected_pending_peg_out_txo = TxOutputSummary {
-        outpoint: bitcoin::OutPoint { txid, vout: 0 },
-        amount: bitcoin::Amount::from_sat(
+        outpoint: bitcoin30::OutPoint { txid, vout: 0 },
+        amount: bitcoin30::Amount::from_sat(
             mempool_tx
                 .output
                 .first()
@@ -865,8 +865,8 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
     };
 
     let expected_pending_change_utxo = TxOutputSummary {
-        outpoint: bitcoin::OutPoint { txid, vout: 1 },
-        amount: bitcoin::Amount::from_sat(
+        outpoint: bitcoin30::OutPoint { txid, vout: 1 },
+        amount: bitcoin30::Amount::from_sat(
             mempool_tx
                 .output
                 .last()
@@ -979,7 +979,7 @@ fn build_wallet_server_configs(
                 bitcoin_rpc: bitcoin_rpc.clone(),
             },
             consensus: fedimint_wallet_common::config::WalletGenParamsConsensus {
-                network: bitcoin::Network::Regtest,
+                network: bitcoin30::Network::Regtest,
                 finality_delay: 10,
                 client_default_bitcoin_rpc: bitcoin_rpc.clone(),
                 fee_consensus: Default::default(),
@@ -1001,10 +1001,10 @@ fn build_wallet_server_configs(
 #[cfg(test)]
 mod fedimint_migration_tests {
     use anyhow::ensure;
-    use bitcoin::absolute::LockTime;
-    use bitcoin::hashes::Hash;
-    use bitcoin::psbt::{Input, PartiallySignedTransaction};
-    use bitcoin::{
+    use bitcoin30::absolute::LockTime;
+    use bitcoin30::hashes::Hash;
+    use bitcoin30::psbt::{Input, PartiallySignedTransaction};
+    use bitcoin30::{
         secp256k1, Amount, BlockHash, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid,
         WPubkeyHash,
     };
@@ -1056,7 +1056,7 @@ mod fedimint_migration_tests {
         dbtx.insert_new_entry(&BlockHashKey(BlockHash::from_byte_array(BYTE_32)), &())
             .await;
 
-        let utxo = UTXOKey(bitcoin::OutPoint {
+        let utxo = UTXOKey(bitcoin30::OutPoint {
             txid: Txid::from_byte_array(BYTE_32),
             vout: 0,
         });
@@ -1095,14 +1095,14 @@ mod fedimint_migration_tests {
                 previous_output: utxo.0,
                 script_sig: Default::default(),
                 sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
-                witness: bitcoin::Witness::new(),
+                witness: bitcoin30::Witness::new(),
             }],
             output,
         };
 
         let inputs = vec![Input {
             non_witness_utxo: None,
-            witness_utxo: Some(bitcoin::TxOut {
+            witness_utxo: Some(bitcoin30::TxOut {
                 value: 10000,
                 script_pubkey: destination.clone(),
             }),

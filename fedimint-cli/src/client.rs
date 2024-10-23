@@ -4,8 +4,8 @@ use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context};
-use bitcoin::address::NetworkUnchecked;
-use bitcoin::{secp256k1, Network};
+use bitcoin30::address::NetworkUnchecked;
+use bitcoin30::{secp256k1, Network};
 use clap::Subcommand;
 use fedimint_bip39::Mnemonic;
 use fedimint_client::backup::Metadata;
@@ -155,7 +155,7 @@ pub enum ClientCmd {
         #[clap(long)]
         amount: BitcoinAmountOrAll,
         #[clap(long)]
-        address: bitcoin::Address<NetworkUnchecked>,
+        address: bitcoin30::Address<NetworkUnchecked>,
     },
     /// Upload the (encrypted) snapshot of mint notes to federation
     Backup {
@@ -545,7 +545,7 @@ pub async fn handle_command(
                 // the amount we are withdrawing
                 BitcoinAmountOrAll::All => {
                     let balance =
-                        bitcoin::Amount::from_sat(client.get_balance().await.msats / 1000);
+                        bitcoin30::Amount::from_sat(client.get_balance().await.msats / 1000);
                     let fees = wallet_module
                         .get_withdraw_fees(address.clone(), balance)
                         .await?;

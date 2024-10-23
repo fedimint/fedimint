@@ -205,7 +205,7 @@ impl Fixtures {
             listen,
             address.clone(),
             Some(DEFAULT_GATEWAY_PASSWORD.to_string()),
-            Some(bitcoin::Network::Regtest),
+            Some(bitcoin30::Network::Regtest),
             RoutingFees {
                 base_msat: 0,
                 proportional_millionths: 0,

@@ -99,8 +99,8 @@ mod fedimint_migration_tests {
     use std::str::FromStr;
 
     use anyhow::ensure;
-    use bitcoin::key::KeyPair;
-    use bitcoin::secp256k1;
+    use bitcoin30::key::KeyPair;
+    use bitcoin30::secp256k1;
     use bitcoin_hashes::Hash;
     use fedimint_core::core::{DynInput, DynOutput};
     use fedimint_core::db::{
@@ -212,7 +212,7 @@ mod fedimint_migration_tests {
                     api_url: "wss://foo.bar".parse().expect("valid url"),
                     nonce: 0,
                 },
-                signature: bitcoin::secp256k1::schnorr::Signature::from_slice(&[42; 64]).unwrap(),
+                signature: bitcoin30::secp256k1::schnorr::Signature::from_slice(&[42; 64]).unwrap(),
             },
         )
         .await;

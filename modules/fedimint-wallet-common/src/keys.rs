@@ -1,8 +1,8 @@
 use std::io::{Error, Write};
 use std::str::FromStr;
 
-use bitcoin::secp256k1::{Secp256k1, Verification};
-use bitcoin::PublicKey;
+use bitcoin30::secp256k1::{Secp256k1, Verification};
+use bitcoin30::PublicKey;
 use fedimint_core::encoding::{Decodable, Encodable};
 use miniscript::bitcoin::hashes::{hash160, ripemd160, sha256};
 use miniscript::{hash256, MiniscriptKey, ToPublicKey};
@@ -98,9 +98,9 @@ impl Tweakable for CompressedPublicKey {
     }
 }
 
-impl From<CompressedPublicKey> for bitcoin::PublicKey {
+impl From<CompressedPublicKey> for bitcoin30::PublicKey {
     fn from(key: CompressedPublicKey) -> Self {
-        bitcoin::PublicKey {
+        bitcoin30::PublicKey {
             compressed: true,
             inner: key.key,
         }

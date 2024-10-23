@@ -4,8 +4,8 @@ pub mod rpc_server;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
-use bitcoin::address::NetworkUnchecked;
-use bitcoin::{Address, Network};
+use bitcoin30::address::NetworkUnchecked;
+use bitcoin30::{Address, Network};
 use fedimint_core::config::{FederationId, JsonClientConfig};
 use fedimint_core::core::OperationId;
 use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};

@@ -16,15 +16,15 @@ use std::convert::Infallible;
 use std::time::Duration;
 
 use anyhow::{bail, ensure, format_err, Context};
-use bitcoin::absolute::LockTime;
-use bitcoin::address::NetworkUnchecked;
-use bitcoin::ecdsa::Signature as EcdsaSig;
-use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
-use bitcoin::policy::DEFAULT_MIN_RELAY_TX_FEE;
-use bitcoin::psbt::{Input, PartiallySignedTransaction};
-use bitcoin::secp256k1::{All, Secp256k1, Verification};
-use bitcoin::sighash::{EcdsaSighashType, SighashCache};
-use bitcoin::{Address, BlockHash, Network, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid};
+use bitcoin30::absolute::LockTime;
+use bitcoin30::address::NetworkUnchecked;
+use bitcoin30::ecdsa::Signature as EcdsaSig;
+use bitcoin30::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
+use bitcoin30::policy::DEFAULT_MIN_RELAY_TX_FEE;
+use bitcoin30::psbt::{Input, PartiallySignedTransaction};
+use bitcoin30::secp256k1::{All, Secp256k1, Verification};
+use bitcoin30::sighash::{EcdsaSighashType, SighashCache};
+use bitcoin30::{Address, BlockHash, Network, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid};
 use common::config::WalletConfigConsensus;
 use common::{
     proprietary_tweak_key, PegOutFees, PegOutSignatureItem, ProcessPegOutSigError, SpendableUTXO,
@@ -524,7 +524,7 @@ impl ServerModule for Wallet {
                 &UTXOKey(input.outpoint()),
                 &SpendableUTXO {
                     tweak: input.tweak_contract_key().serialize(),
-                    amount: bitcoin::Amount::from_sat(input.tx_output().value),
+                    amount: bitcoin30::Amount::from_sat(input.tx_output().value),
                 },
             )
             .await
@@ -700,7 +700,7 @@ impl ServerModule for Wallet {
                     let dummy_tweak = [0; 33];
 
                     let tx = module.offline_wallet().create_tx(
-                        bitcoin::Amount::from_sat(sats),
+                        bitcoin30::Amount::from_sat(sats),
                         address.assume_checked().script_pubkey(),
                         vec![],
                         module.available_utxos(&mut context.dbtx().into_nc()).await,
@@ -1094,13 +1094,13 @@ impl Wallet {
         for (idx, output) in pending_tx.tx.output.iter().enumerate() {
             if output.script_pubkey == script_pk {
                 dbtx.insert_entry(
-                    &UTXOKey(bitcoin::OutPoint {
+                    &UTXOKey(bitcoin30::OutPoint {
                         txid: pending_tx.tx.txid(),
                         vout: idx as u32,
                     }),
                     &SpendableUTXO {
                         tweak: pending_tx.tweak,
-                        amount: bitcoin::Amount::from_sat(output.value),
+                        amount: bitcoin30::Amount::from_sat(output.value),
                     },
                 )
                 .await;
@@ -1199,14 +1199,14 @@ impl Wallet {
             .await
     }
 
-    pub async fn get_wallet_value(&self, dbtx: &mut DatabaseTransaction<'_>) -> bitcoin::Amount {
+    pub async fn get_wallet_value(&self, dbtx: &mut DatabaseTransaction<'_>) -> bitcoin30::Amount {
         let sat_sum = self
             .available_utxos(dbtx)
             .await
             .into_iter()
             .map(|(_, utxo)| utxo.amount.to_sat())
             .sum();
-        bitcoin::Amount::from_sat(sat_sum)
+        bitcoin30::Amount::from_sat(sat_sum)
     }
 
     async fn get_wallet_summary(&self, dbtx: &mut DatabaseTransaction<'_>) -> WalletSummary {
@@ -1229,13 +1229,13 @@ impl Wallet {
                 let change_output = tx.output.last().expect("tx must contain change output");
 
                 peg_out_txos.push(TxOutputSummary {
-                    outpoint: bitcoin::OutPoint { txid, vout: 0 },
-                    amount: bitcoin::Amount::from_sat(peg_out_output.value),
+                    outpoint: bitcoin30::OutPoint { txid, vout: 0 },
+                    amount: bitcoin30::Amount::from_sat(peg_out_output.value),
                 });
 
                 change_utxos.push(TxOutputSummary {
-                    outpoint: bitcoin::OutPoint { txid, vout: 1 },
-                    amount: bitcoin::Amount::from_sat(change_output.value),
+                    outpoint: bitcoin30::OutPoint { txid, vout: 1 },
+                    amount: bitcoin30::Amount::from_sat(change_output.value),
                 });
             }
 
@@ -1488,7 +1488,7 @@ impl<'a> StatelessWallet<'a> {
     #[allow(clippy::too_many_arguments)]
     fn create_tx(
         &self,
-        peg_out_amount: bitcoin::Amount,
+        peg_out_amount: bitcoin30::Amount,
         destination: ScriptBuf,
         mut included_utxos: Vec<(UTXOKey, SpendableUTXO)>,
         mut remaining_utxos: Vec<(UTXOKey, SpendableUTXO)>,
@@ -1535,7 +1535,7 @@ impl<'a> StatelessWallet<'a> {
         included_utxos.extend(remaining_utxos);
 
         // Finally we initialize our accumulator for selected input amounts
-        let mut total_selected_value = bitcoin::Amount::from_sat(0);
+        let mut total_selected_value = bitcoin30::Amount::from_sat(0);
         let mut selected_utxos: Vec<(UTXOKey, SpendableUTXO)> = vec![];
         let mut fees = fee_rate.calculate_fee(total_weight);
 
@@ -1564,7 +1564,7 @@ impl<'a> StatelessWallet<'a> {
                 script_pubkey: change_script,
             },
         ];
-        let mut change_out = bitcoin::psbt::Output::default();
+        let mut change_out = bitcoin30::psbt::Output::default();
         change_out
             .proprietary
             .insert(proprietary_tweak_key(), change_tweak.to_vec());
@@ -1589,7 +1589,7 @@ impl<'a> StatelessWallet<'a> {
                     previous_output: utxo_key.0,
                     script_sig: Default::default(),
                     sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
-                    witness: bitcoin::Witness::new(),
+                    witness: bitcoin30::Witness::new(),
                 })
                 .collect(),
             output,
@@ -1703,7 +1703,7 @@ impl<'a> StatelessWallet<'a> {
                 .sign_ecdsa(&Message::from_slice(&tx_hash[..]).unwrap(), &tweaked_secret);
 
             psbt_input.partial_sigs.insert(
-                bitcoin::PublicKey {
+                bitcoin30::PublicKey {
                     compressed: true,
                     inner: secp256k1::PublicKey::from_secret_key(self.secp, &tweaked_secret),
                 },
@@ -1768,11 +1768,11 @@ pub fn nonce_from_idx(nonce_idx: u64) -> [u8; 33] {
 pub struct PendingTransaction {
     pub tx: Transaction,
     pub tweak: [u8; 33],
-    pub change: bitcoin::Amount,
+    pub change: bitcoin30::Amount,
     pub destination: ScriptBuf,
     pub fees: PegOutFees,
     pub selected_utxos: Vec<(UTXOKey, SpendableUTXO)>,
-    pub peg_out_amount: bitcoin::Amount,
+    pub peg_out_amount: bitcoin30::Amount,
     pub rbf: Option<Rbf>,
 }
 
@@ -1798,11 +1798,11 @@ impl Serialize for PendingTransaction {
 pub struct UnsignedTransaction {
     pub psbt: PartiallySignedTransaction,
     pub signatures: Vec<(PeerId, PegOutSignatureItem)>,
-    pub change: bitcoin::Amount,
+    pub change: bitcoin30::Amount,
     pub fees: PegOutFees,
     pub destination: ScriptBuf,
     pub selected_utxos: Vec<(UTXOKey, SpendableUTXO)>,
-    pub peg_out_amount: bitcoin::Amount,
+    pub peg_out_amount: bitcoin30::Amount,
     pub rbf: Option<Rbf>,
 }
 
@@ -1827,8 +1827,8 @@ mod tests {
 
     use std::str::FromStr;
 
-    use bitcoin::Network::{Bitcoin, Testnet};
-    use bitcoin::{Address, Amount, Network, OutPoint, Txid};
+    use bitcoin30::Network::{Bitcoin, Testnet};
+    use bitcoin30::{Address, Amount, Network, OutPoint, Txid};
     use fedimint_core::{BitcoinHash, Feerate};
     use fedimint_wallet_common::{PegOut, PegOutFees, Rbf, WalletOutputV0};
     use miniscript::descriptor::Wsh;

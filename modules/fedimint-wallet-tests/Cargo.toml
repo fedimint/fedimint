@@ -17,7 +17,7 @@ path = "tests/tests.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-bitcoin = { workspace = true }
+bitcoin30 = { workspace = true }
 bitcoincore-rpc = { workspace = true }
 devimint = { workspace = true }
 fedimint-client = { workspace = true }

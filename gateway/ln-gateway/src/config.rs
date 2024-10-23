@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use bitcoin::Network;
+use bitcoin30::Network;
 use clap::Parser;
 use fedimint_core::util::SafeUrl;
 use fedimint_ln_common::config::GatewayFee;

@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use bitcoin::hashes::{sha256, Hash as BitcoinHash, Hmac, HmacEngine};
+use bitcoin30::hashes::{sha256, Hash as BitcoinHash, Hmac, HmacEngine};
 use secp256k1::{Scalar, Secp256k1, Signing, Verification};
 
 /// An object that can be used as a Ricardian contract to tweak a key

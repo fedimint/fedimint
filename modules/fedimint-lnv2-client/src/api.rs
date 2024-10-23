@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use bitcoin::secp256k1;
+use bitcoin30::secp256k1;
 use fedimint_api_client::api::{
     FederationApiExt, FederationResult, IModuleFederationApi, PeerResult,
 };

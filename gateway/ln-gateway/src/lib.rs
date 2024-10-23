@@ -37,7 +37,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::anyhow;
-use bitcoin::{Address, Network, Txid};
+use bitcoin30::{Address, Network, Txid};
 use bitcoin_hashes::{sha256, Hash};
 use clap::Parser;
 use client::GatewayClientBuilder;
@@ -899,7 +899,7 @@ impl Gateway {
             // the amount we are withdrawing
             BitcoinAmountOrAll::All => {
                 let balance =
-                    bitcoin::Amount::from_sat(client.value().get_balance().await.msats / 1000);
+                    bitcoin30::Amount::from_sat(client.value().get_balance().await.msats / 1000);
                 let fees = wallet_module
                     .get_withdraw_fees(address.clone(), balance)
                     .await?;

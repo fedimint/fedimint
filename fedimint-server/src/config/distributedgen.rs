@@ -5,7 +5,7 @@ use std::io::Write;
 
 use anyhow::{ensure, format_err};
 use async_trait::async_trait;
-use bitcoin::secp256k1;
+use bitcoin30::secp256k1;
 use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
 use bls12_381::Scalar;
 use fedimint_core::config::{

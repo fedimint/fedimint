@@ -6,7 +6,7 @@
 #![allow(clippy::return_self_not_must_use)]
 
 /// Module for creating `fedimintd` binary with custom modules
-use bitcoin::Network;
+use bitcoin30::Network;
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::util::SafeUrl;
 pub use fedimintd::*;

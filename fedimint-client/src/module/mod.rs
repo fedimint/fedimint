@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::{ffi, marker, ops};
 
 use anyhow::{anyhow, bail};
-use bitcoin::secp256k1::PublicKey;
+use bitcoin30::secp256k1::PublicKey;
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{

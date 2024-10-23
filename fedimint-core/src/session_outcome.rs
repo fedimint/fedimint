@@ -1,4 +1,4 @@
-use bitcoin::hashes::{sha256, Hash};
+use bitcoin30::hashes::{sha256, Hash};
 use parity_scale_codec::{Decode, Encode};
 
 use crate::encoding::{Decodable, Encodable};
@@ -48,7 +48,7 @@ impl SessionOutcome {
             .iter()
             .map(Encodable::consensus_hash::<sha256::Hash>);
 
-        if let Some(root) = bitcoin::merkle_tree::calculate_root(leaf_hashes) {
+        if let Some(root) = bitcoin30::merkle_tree::calculate_root(leaf_hashes) {
             header[8..].copy_from_slice(&root.to_byte_array());
         }
 

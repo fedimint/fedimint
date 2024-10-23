@@ -100,7 +100,7 @@ impl State for DepositStateMachine {
 async fn await_created_btc_transaction_submitted(
     context: WalletClientContext,
     tweak: KeyPair,
-) -> (bitcoin::Transaction, u32) {
+) -> (bitcoin30::Transaction, u32) {
     let script = context
         .wallet_descriptor
         .tweak(&tweak.public_key(), &context.secp)
@@ -145,7 +145,7 @@ async fn await_created_btc_transaction_submitted(
 
 fn transition_tx_seen(
     old_state: DepositStateMachine,
-    btc_transaction: bitcoin::Transaction,
+    btc_transaction: bitcoin30::Transaction,
     out_idx: u32,
 ) -> DepositStateMachine {
     let DepositStateMachine {
@@ -320,7 +320,7 @@ pub struct WaitingForConfirmationsDepositState {
     tweak_key: KeyPair,
     /// The bitcoin transaction is saved as soon as we see it so the transaction
     /// can be re-transmitted if it's evicted from the mempool.
-    pub(crate) btc_transaction: bitcoin::Transaction,
+    pub(crate) btc_transaction: bitcoin30::Transaction,
     /// Index of the deposit output
     pub(crate) out_idx: u32,
 }
