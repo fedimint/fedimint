@@ -20,7 +20,7 @@ use fedimint_core::transaction::Transaction;
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_core::{fedimint_build_code_version_env, ServerModule};
 use fedimint_logging::TracingSetup;
-use fedimint_rocksdb::{RocksDb, RocksDbReadOnly};
+use fedimint_rocksdb::RocksDbReadOnly;
 use fedimint_server::config::io::read_server_config;
 use fedimint_server::consensus::db::SignedSessionOutcomePrefix;
 use fedimint_wallet_server::common::config::WalletConfig;
@@ -66,10 +66,6 @@ struct RecoveryTool {
     /// Network to operate on, has to be specified if --cfg isn't present
     #[arg(long, default_value = "bitcoin", requires = "descriptor")]
     network: Network,
-    /// Open the database in read-only mode, useful for debugging, should not be
-    /// used in production
-    #[arg(long)]
-    readonly: bool,
     #[command(subcommand)]
     strategy: TweakSource,
 }
@@ -107,18 +103,11 @@ fn tweak_parser(hex: &str) -> anyhow::Result<[u8; 33]> {
         .map_err(|_| anyhow!("tweaks have to be 33 bytes long"))
 }
 
-fn get_db(readonly: bool, path: &Path, module_decoders: ModuleDecoderRegistry) -> Database {
-    if readonly {
-        Database::new(
-            RocksDbReadOnly::open_read_only(path).expect("Error opening readonly DB"),
-            module_decoders,
-        )
-    } else {
-        Database::new(
-            RocksDb::open(path).expect("Error opening DB"),
-            module_decoders,
-        )
-    }
+fn get_db(path: &Path, module_decoders: ModuleDecoderRegistry) -> Database {
+    Database::new(
+        RocksDbReadOnly::open_read_only(path).expect("Error opening readonly DB"),
+        module_decoders,
+    )
 }
 
 #[tokio::main]
@@ -145,21 +134,13 @@ async fn main() -> anyhow::Result<()> {
         panic!("Either config or descriptor need to be provided by clap");
     };
 
-    process_and_print_tweak_source(
-        &opts.strategy,
-        opts.readonly,
-        &base_descriptor,
-        &base_key,
-        network,
-    )
-    .await;
+    process_and_print_tweak_source(&opts.strategy, &base_descriptor, &base_key, network).await;
 
     Ok(())
 }
 
 async fn process_and_print_tweak_source(
     tweak_source: &TweakSource,
-    readonly: bool,
     base_descriptor: &Descriptor<CompressedPublicKey>,
     base_key: &SecretKey,
     network: Network,
@@ -173,7 +154,7 @@ async fn process_and_print_tweak_source(
                 .expect("Could not encode to stdout");
         }
         TweakSource::Utxos { legacy, db } => {
-            let db = get_db(readonly, db, ModuleRegistry::default());
+            let db = get_db(db, ModuleRegistry::default());
 
             let db = if *legacy {
                 db
@@ -211,7 +192,7 @@ async fn process_and_print_tweak_source(
             )])
             .with_fallback();
 
-            let db = get_db(readonly, db, decoders);
+            let db = get_db(db, decoders);
             let mut dbtx = db.begin_transaction_nc().await;
 
             let mut change_tweak_idx: u64 = 0;
