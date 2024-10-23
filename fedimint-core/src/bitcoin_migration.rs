@@ -110,6 +110,15 @@ pub fn bitcoin30_to_bitcoin32_payment_preimage(
     lightning_types::payment::PaymentPreimage(preimage.0)
 }
 
+pub fn bitcoin30_to_bitcoin32_sha256_hash(
+    hash: &bitcoin30::hashes::sha256::Hash,
+) -> bitcoin::hashes::sha256::Hash {
+    bincode::deserialize(
+        &bincode::serialize(&hash).expect("Failed to serialize bitcoin30 sha256 hash"),
+    )
+    .expect("Failed to convert bitcoin30 sha256 hash to bitcoin32 sha256 hash")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
