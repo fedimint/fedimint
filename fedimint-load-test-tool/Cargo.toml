@@ -13,7 +13,6 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-bitcoin30 = { workspace = true }
 clap = { workspace = true }
 devimint = { workspace = true }
 fedimint-api-client = { workspace = true }
@@ -29,6 +28,7 @@ futures = { workspace = true }
 jsonrpsee-core = { version = "0.24.7", features = ["client"] }
 lightning-invoice = { workspace = true }
 rand = { workspace = true }
+secp256k1 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["full", "tracing"] }
