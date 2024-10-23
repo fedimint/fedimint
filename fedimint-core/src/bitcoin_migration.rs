@@ -56,6 +56,26 @@ pub fn bitcoin30_to_bitcoin32_invoice(
     .expect("Failed to convert bitcoin30 invoice to bitcoin32 invoice")
 }
 
+pub fn bitcoin30_to_bitcoin32_secp256k1_secret_key(
+    secret_key: &bitcoin30::secp256k1::SecretKey,
+) -> bitcoin::secp256k1::SecretKey {
+    bincode::deserialize(
+        &bincode::serialize(&secret_key)
+            .expect("Failed to serialize bitcoin30 secp256k1 secret key"),
+    )
+    .expect("Failed to convert bitcoin30 secp256k1 secret key to bitcoin32 secp256k1 secret key")
+}
+
+pub fn bitcoin32_to_bitcoin30_secp256k1_secret_key(
+    secret_key: &bitcoin::secp256k1::SecretKey,
+) -> bitcoin30::secp256k1::SecretKey {
+    bincode::deserialize(
+        &bincode::serialize(&secret_key)
+            .expect("Failed to serialize bitcoin32 secp256k1 secret key"),
+    )
+    .expect("Failed to convert bitcoin32 secp256k1 secret key to bitcoin30 secp256k1 secret key")
+}
+
 pub fn bitcoin30_to_bitcoin32_secp256k1_pubkey(
     pubkey: &bitcoin30::secp256k1::PublicKey,
 ) -> bitcoin::secp256k1::PublicKey {
@@ -97,6 +117,10 @@ pub fn bitcoin32_to_bitcoin30_unchecked_address(
     .expect("Failed to convert bitcoin32 address to bitcoin30 address")
 }
 
+pub fn bitcoin30_to_bitcoin32_amount(amount: &bitcoin30::Amount) -> bitcoin::Amount {
+    bitcoin::Amount::from_sat(amount.to_sat())
+}
+
 pub fn bitcoin32_to_bitcoin30_amount(amount: &bitcoin::Amount) -> bitcoin30::Amount {
     bitcoin30::Amount::from_sat(amount.to_sat())
 }
@@ -108,9 +132,21 @@ pub fn bitcoin30_to_bitcoin32_network(network: &bitcoin30::Network) -> bitcoin::
     .expect("Failed to convert bitcoin30 network to bitcoin32 network")
 }
 
+fn bitcoin30_to_bitcoin32_txid(txid: &bitcoin30::Txid) -> bitcoin::Txid {
+    bitcoin::Txid::from_str(&txid.to_string())
+        .expect("Failed to convert bitcoin30 txid to bitcoin32 txid")
+}
+
 fn bitcoin32_to_bitcoin30_txid(txid: &bitcoin::Txid) -> bitcoin30::Txid {
     bitcoin30::Txid::from_str(&txid.to_string())
         .expect("Failed to convert bitcoin32 txid to bitcoin30 txid")
+}
+
+pub fn bitcoin30_to_bitcoin32_outpoint(outpoint: &bitcoin30::OutPoint) -> bitcoin::OutPoint {
+    bitcoin::OutPoint {
+        txid: bitcoin30_to_bitcoin32_txid(&outpoint.txid),
+        vout: outpoint.vout,
+    }
 }
 
 pub fn bitcoin32_to_bitcoin30_outpoint(outpoint: &bitcoin::OutPoint) -> bitcoin30::OutPoint {
