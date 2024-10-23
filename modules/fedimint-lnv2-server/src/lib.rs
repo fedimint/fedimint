@@ -208,7 +208,7 @@ impl ServerModuleInit for LightningInit {
                             network: params.consensus.network,
                         },
                         private: LightningConfigPrivate {
-                            tpe_sk: sks[peer.to_usize()],
+                            sk: sks[peer.to_usize()],
                         },
                     }
                     .to_erased(),
@@ -250,7 +250,7 @@ impl ServerModuleInit for LightningInit {
                 network: params.consensus.network,
             },
             private: LightningConfigPrivate {
-                tpe_sk: SecretKeyShare(sk),
+                sk: SecretKeyShare(sk),
             },
         };
 
@@ -261,7 +261,7 @@ impl ServerModuleInit for LightningInit {
         let config = config.to_typed::<LightningConfig>()?;
 
         ensure!(
-            tpe::derive_public_key_share(&config.private.tpe_sk)
+            tpe::derive_public_key_share(&config.private.sk)
                 == *config
                     .consensus
                     .tpe_pks
@@ -493,7 +493,7 @@ impl ServerModule for Lightning {
                     return Err(LightningOutputError::ContractAlreadyExists);
                 }
 
-                let dk_share = contract.create_decryption_key_share(&self.cfg.private.tpe_sk);
+                let dk_share = contract.create_decryption_key_share(&self.cfg.private.sk);
 
                 LightningOutputOutcomeV0::Incoming(dk_share)
             }

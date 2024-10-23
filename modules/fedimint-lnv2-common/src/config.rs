@@ -62,7 +62,7 @@ pub struct LightningConfigConsensus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningConfigPrivate {
-    pub tpe_sk: SecretKeyShare,
+    pub sk: SecretKeyShare,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -171,7 +171,7 @@ fn migrate_config_private(
     config: &fedimint_ln_common::config::LightningConfigPrivate,
 ) -> LightningConfigPrivate {
     LightningConfigPrivate {
-        tpe_sk: SecretKeyShare(config.threshold_sec_key.0 .0 .0),
+        sk: SecretKeyShare(config.threshold_sec_key.0 .0 .0),
     }
 }
 
