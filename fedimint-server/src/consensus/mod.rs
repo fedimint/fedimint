@@ -6,7 +6,7 @@ pub mod server;
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::TransactionItemAmount;
-use fedimint_core::transaction::{Transaction, TransactionError};
+use fedimint_core::transaction::{Transaction, TransactionError, TRANSACTION_OVERFLOW_ERROR};
 use fedimint_core::{Amount, OutPoint};
 
 use crate::metrics::{CONSENSUS_TX_PROCESSED_INPUTS, CONSENSUS_TX_PROCESSED_OUTPUTS};
@@ -77,11 +77,11 @@ impl FundingVerifier {
         self.input_amount = self
             .input_amount
             .checked_add(input_amount.amount)
-            .ok_or(TransactionError::AmountOverflow)?;
+            .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
         self.fee_amount = self
             .fee_amount
             .checked_add(input_amount.fee)
-            .ok_or(TransactionError::AmountOverflow)?;
+            .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
         Ok(())
     }
 
@@ -92,11 +92,11 @@ impl FundingVerifier {
         self.output_amount = self
             .output_amount
             .checked_add(output_amount.amount)
-            .ok_or(TransactionError::AmountOverflow)?;
+            .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
         self.fee_amount = self
             .fee_amount
             .checked_add(output_amount.fee)
-            .ok_or(TransactionError::AmountOverflow)?;
+            .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
         Ok(())
     }
 
@@ -104,7 +104,7 @@ impl FundingVerifier {
         let outputs_and_fees = self
             .output_amount
             .checked_add(self.fee_amount)
-            .ok_or(TransactionError::AmountOverflow)?;
+            .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
 
         if self.input_amount == outputs_and_fees {
             Ok(())

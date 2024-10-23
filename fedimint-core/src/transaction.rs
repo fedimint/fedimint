@@ -131,8 +131,6 @@ pub enum TransactionError {
         outputs: Amount,
         fee: Amount,
     },
-    #[error("The inputs or outputs of the transaction overflowed when being added up")]
-    AmountOverflow,
     #[error("The transaction's signature is invalid: tx={tx}, hash={hash}, sig={sig}, key={key}")]
     InvalidSignature {
         tx: String,
@@ -149,3 +147,9 @@ pub enum TransactionError {
     #[error("The transaction had an invalid output")]
     Output(DynOutputError),
 }
+
+pub const TRANSACTION_OVERFLOW_ERROR: TransactionError = TransactionError::UnbalancedTransaction {
+    inputs: Amount::ZERO,
+    outputs: Amount::ZERO,
+    fee: Amount::ZERO,
+};
