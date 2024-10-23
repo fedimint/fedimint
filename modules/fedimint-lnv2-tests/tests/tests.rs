@@ -3,6 +3,7 @@ mod mock;
 use std::sync::Arc;
 
 use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::core::OperationId;
 use fedimint_core::util::NextOrPending as _;
 use fedimint_core::{sats, Amount};
@@ -208,7 +209,7 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
             OutgoingWitness::Claim(MOCK_INVOICE_PREIMAGE),
         )),
         amount: contract.amount,
-        keys: vec![mock::gateway_keypair()],
+        keys: vec![bitcoin30_to_bitcoin32_keypair(&mock::gateway_keypair())],
     };
 
     client

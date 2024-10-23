@@ -56,6 +56,24 @@ pub fn bitcoin30_to_bitcoin32_invoice(
     .expect("Failed to convert bitcoin30 invoice to bitcoin32 invoice")
 }
 
+pub fn bitcoin30_to_bitcoin32_keypair(
+    keypair: &bitcoin30::secp256k1::KeyPair,
+) -> bitcoin::secp256k1::Keypair {
+    bincode::deserialize(
+        &bincode::serialize(&keypair).expect("Failed to serialize bitcoin30 keypair"),
+    )
+    .expect("Failed to convert bitcoin30 keypair to bitcoin32 keypair")
+}
+
+pub fn bitcoin32_to_bitcoin30_keypair(
+    keypair: &bitcoin::secp256k1::Keypair,
+) -> bitcoin30::secp256k1::KeyPair {
+    bincode::deserialize(
+        &bincode::serialize(&keypair).expect("Failed to serialize bitcoin32 keypair"),
+    )
+    .expect("Failed to convert bitcoin32 keypair to bitcoin30 keypair")
+}
+
 pub fn bitcoin30_to_bitcoin32_secp256k1_secret_key(
     secret_key: &bitcoin30::secp256k1::SecretKey,
 ) -> bitcoin::secp256k1::SecretKey {
@@ -169,6 +187,15 @@ pub fn bitcoin30_to_bitcoin32_sha256_hash(
         &bincode::serialize(&hash).expect("Failed to serialize bitcoin30 sha256 hash"),
     )
     .expect("Failed to convert bitcoin30 sha256 hash to bitcoin32 sha256 hash")
+}
+
+pub fn bitcoin32_to_bitcoin30_schnorr_signature(
+    signature: &bitcoin::secp256k1::schnorr::Signature,
+) -> bitcoin30::secp256k1::schnorr::Signature {
+    bincode::deserialize(
+        &bincode::serialize(&signature).expect("Failed to serialize bitcoin32 schnorr signature"),
+    )
+    .expect("Failed to convert bitcoin32 schnorr signature to bitcoin30 schnorr signature")
 }
 
 #[cfg(test)]

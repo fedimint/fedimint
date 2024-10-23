@@ -10,6 +10,7 @@ use assert_matches::assert_matches;
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::ClientHandleArc;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::encoding::Encodable;
@@ -386,7 +387,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
             let client_input = ClientInput::<LightningInput> {
                 input: claim_input,
                 amount: outgoing_contract.amount,
-                keys: vec![gateway_module.redeem_key],
+                keys: vec![bitcoin30_to_bitcoin32_keypair(&gateway_module.redeem_key)],
             };
 
             let tx = TransactionBuilder::new().with_input(client_input.into_dyn(gateway_module.id));

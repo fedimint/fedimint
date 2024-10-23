@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
-use bitcoin30::key::KeyPair;
-use bitcoin30::secp256k1;
+use bitcoin::key::Keypair;
+use bitcoin::secp256k1;
+use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_schnorr_signature;
 use fedimint_core::core::{DynInput, DynOutput, IInput, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::{MaybeSend, MaybeSync};
@@ -21,7 +22,7 @@ use crate::{
 #[derive(Clone)]
 pub struct ClientInput<I = DynInput> {
     pub input: I,
-    pub keys: Vec<KeyPair>,
+    pub keys: Vec<Keypair>,
     pub amount: Amount,
 }
 
@@ -294,12 +295,14 @@ impl TransactionBuilder {
         let nonce: [u8; 8] = rng.gen();
 
         let txid = Transaction::tx_hash_from_parts(&inputs, &outputs, nonce);
-        let msg = secp256k1::Message::from_slice(&txid[..]).expect("txid has right length");
+        let msg = secp256k1::Message::from_digest_slice(&txid[..]).expect("txid has right length");
 
         let signatures = input_keys
             .into_iter()
             .flatten()
-            .map(|keypair| secp_ctx.sign_schnorr(&msg, &keypair))
+            .map(|keypair| {
+                bitcoin32_to_bitcoin30_schnorr_signature(&secp_ctx.sign_schnorr(&msg, &keypair))
+            })
             .collect();
 
         let transaction = Transaction {

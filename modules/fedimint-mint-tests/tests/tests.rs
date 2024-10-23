@@ -4,6 +4,7 @@ use std::time::Duration;
 use bls12_381::G1Affine;
 use fedimint_client::backup::{ClientBackup, Metadata};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::OperationId;
 use fedimint_core::secp256k1::KeyPair;
@@ -68,7 +69,7 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
             },
         }),
         amount: Amount::from_msats(1024),
-        keys: vec![keypair],
+        keys: vec![bitcoin30_to_bitcoin32_keypair(&keypair)],
     };
 
     let operation_id = OperationId::new_random();

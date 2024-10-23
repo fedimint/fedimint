@@ -9,6 +9,7 @@ use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
@@ -261,7 +262,9 @@ impl ReceiveStateMachine {
                 agg_decryption_key,
             )),
             amount: old_state.common.contract.commitment.amount,
-            keys: vec![old_state.common.refund_keypair],
+            keys: vec![bitcoin30_to_bitcoin32_keypair(
+                &old_state.common.refund_keypair,
+            )],
         };
 
         let outpoints = global_context

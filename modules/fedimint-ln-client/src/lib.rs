@@ -42,6 +42,9 @@ use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, TransactionBuilder,
 };
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
@@ -1118,7 +1121,13 @@ impl LightningClientModule {
 
         let markers = self.client_ctx.get_internal_payment_markers()?;
 
-        let mut is_internal_payment = invoice_has_internal_payment_markers(&invoice, markers);
+        let mut is_internal_payment = invoice_has_internal_payment_markers(
+            &invoice,
+            (
+                bitcoin32_to_bitcoin30_secp256k1_pubkey(&markers.0),
+                markers.1,
+            ),
+        );
         if !is_internal_payment {
             let gateways = dbtx
                 .find_by_prefix(&LightningGatewayKeyPrefix)
@@ -1463,7 +1472,7 @@ impl LightningClientModule {
         let client_input = ClientInput::<LightningInput> {
             input,
             amount: incoming_contract_account.amount,
-            keys: vec![key_pair],
+            keys: vec![bitcoin30_to_bitcoin32_keypair(&key_pair)],
         };
 
         let tx = TransactionBuilder::new().with_inputs(
@@ -1576,7 +1585,11 @@ impl LightningClientModule {
         } else {
             // If no gateway is provided, this is assumed to be an internal payment.
             let markers = self.client_ctx.get_internal_payment_markers()?;
-            (markers.0, markers.1, vec![])
+            (
+                bitcoin32_to_bitcoin30_secp256k1_pubkey(&markers.0),
+                markers.1,
+                vec![],
+            )
         };
 
         debug!(target: LOG_CLIENT_MODULE_LN, ?gateway_id, %amount, "Selected LN gateway for invoice generation");
