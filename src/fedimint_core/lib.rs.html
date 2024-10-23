@@ -398,7 +398,7 @@
 </span><span class="kw">pub enum </span>BitcoinAmountOrAll {
     All,
     <span class="attr">#[serde(untagged)]
-    </span>Amount(<span class="attr">#[serde(with = <span class="string">"bitcoin::amount::serde::as_sat"</span>)] </span>bitcoin::Amount),
+    </span>Amount(<span class="attr">#[serde(with = <span class="string">"bitcoin30::amount::serde::as_sat"</span>)] </span>bitcoin30::Amount),
 }
 
 <span class="kw">impl </span>FromStr <span class="kw">for </span>BitcoinAmountOrAll {
@@ -483,13 +483,13 @@
 }
 
 <span class="kw">impl </span>Feerate {
-    <span class="kw">pub fn </span>calculate_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, weight: u64) -&gt; bitcoin::Amount {
+    <span class="kw">pub fn </span>calculate_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, weight: u64) -&gt; bitcoin30::Amount {
         <span class="kw">let </span>sats = weight_to_vbytes(weight) * <span class="self">self</span>.sats_per_kvb / <span class="number">1000</span>;
-        bitcoin::Amount::from_sat(sats)
+        bitcoin30::Amount::from_sat(sats)
     }
 }
 
-<span class="kw">const </span>WITNESS_SCALE_FACTOR: u64 = bitcoin::constants::WITNESS_SCALE_FACTOR <span class="kw">as </span>u64;
+<span class="kw">const </span>WITNESS_SCALE_FACTOR: u64 = bitcoin30::constants::WITNESS_SCALE_FACTOR <span class="kw">as </span>u64;
 
 <span class="doccomment">/// Converts weight to virtual bytes, defined in [BIP-141] as weight / 4
 /// (rounded up to the next integer).
@@ -518,8 +518,8 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>calculate_fee() {
         <span class="kw">let </span>feerate = Feerate { sats_per_kvb: <span class="number">1000 </span>};
-        <span class="macro">assert_eq!</span>(bitcoin::Amount::from_sat(<span class="number">25</span>), feerate.calculate_fee(<span class="number">100</span>));
-        <span class="macro">assert_eq!</span>(bitcoin::Amount::from_sat(<span class="number">26</span>), feerate.calculate_fee(<span class="number">101</span>));
+        <span class="macro">assert_eq!</span>(bitcoin30::Amount::from_sat(<span class="number">25</span>), feerate.calculate_fee(<span class="number">100</span>));
+        <span class="macro">assert_eq!</span>(bitcoin30::Amount::from_sat(<span class="number">26</span>), feerate.calculate_fee(<span class="number">101</span>));
     }
 
     <span class="attr">#[test]
@@ -530,7 +530,7 @@
         <span class="kw">let </span>all: BitcoinAmountOrAll = serde_json::from_str(<span class="string">"12345"</span>).unwrap();
         <span class="macro">assert_eq!</span>(
             all,
-            BitcoinAmountOrAll::Amount(bitcoin::Amount::from_sat(<span class="number">12345</span>))
+            BitcoinAmountOrAll::Amount(bitcoin30::Amount::from_sat(<span class="number">12345</span>))
         );
     }
 }

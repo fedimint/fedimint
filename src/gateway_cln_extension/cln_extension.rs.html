@@ -2279,7 +2279,7 @@
             .<span class="kw">await
             </span>.map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>network = bitcoin::Network::from_str(info.<span class="number">2</span>.as_str())
+        <span class="kw">let </span>network = bitcoin30::Network::from_str(info.<span class="number">2</span>.as_str())
             .map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>invoice_builder = InvoiceBuilder::new(Currency::from(network))

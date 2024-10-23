@@ -83,7 +83,7 @@
 <a href="#82" id="82">82</a>
 <a href="#83" id="83">83</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>bitcoin::Address;
+<span class="kw">use </span>bitcoin30::Address;
 <span class="kw">use </span>fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased};
@@ -102,7 +102,7 @@
     <span class="kw">async fn </span>fetch_peg_out_fees(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         address: <span class="kw-2">&amp;</span>Address,
-        amount: bitcoin::Amount,
+        amount: bitcoin30::Amount,
     ) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt;;
 
     <span class="kw">async fn </span>fetch_bitcoin_rpc_kind(<span class="kw-2">&amp;</span><span class="self">self</span>, peer_id: PeerId) -&gt; FederationResult&lt;String&gt;;
@@ -128,7 +128,7 @@
     <span class="kw">async fn </span>fetch_peg_out_fees(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         address: <span class="kw-2">&amp;</span>Address,
-        amount: bitcoin::Amount,
+        amount: bitcoin30::Amount,
     ) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt; {
         <span class="self">self</span>.request_current_consensus(
             PEG_OUT_FEES_ENDPOINT.to_string(),

@@ -270,7 +270,7 @@
 <span class="kw">use </span>std::hash::Hash;
 
 <span class="kw">use </span>anyhow::format_err;
-<span class="kw">use </span>bitcoin::{BlockHash, OutPoint, Transaction};
+<span class="kw">use </span>bitcoin30::{BlockHash, OutPoint, Transaction};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
@@ -386,18 +386,18 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>.tweak_contract_key
     }
 
-    <span class="kw">pub fn </span>identity(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (secp256k1::PublicKey, bitcoin::Txid) {
+    <span class="kw">pub fn </span>identity(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (secp256k1::PublicKey, bitcoin30::Txid) {
         (<span class="self">self</span>.tweak_contract_key, <span class="self">self</span>.transaction.txid())
     }
 
-    <span class="kw">pub fn </span>tx_output(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>bitcoin::TxOut {
+    <span class="kw">pub fn </span>tx_output(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>bitcoin30::TxOut {
         <span class="self">self</span>.transaction
             .output
             .get(<span class="self">self</span>.output_idx <span class="kw">as </span>usize)
             .expect(<span class="string">"output_idx in-rangeness is an invariant guaranteed by constructors"</span>)
     }
 
-    <span class="kw">pub fn </span>outpoint(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bitcoin::OutPoint {
+    <span class="kw">pub fn </span>outpoint(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bitcoin30::OutPoint {
         OutPoint {
             txid: <span class="self">self</span>.transaction.txid(),
             vout: <span class="self">self</span>.output_idx,

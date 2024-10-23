@@ -2213,7 +2213,7 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::anyhow;
-<span class="kw">use </span>bitcoin::{Address, Network, Txid};
+<span class="kw">use </span>bitcoin30::{Address, Network, Txid};
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>client::GatewayClientBuilder;
@@ -3075,7 +3075,7 @@
             // the amount we are withdrawing
             </span>BitcoinAmountOrAll::All =&gt; {
                 <span class="kw">let </span>balance =
-                    bitcoin::Amount::from_sat(client.value().get_balance().<span class="kw">await</span>.msats / <span class="number">1000</span>);
+                    bitcoin30::Amount::from_sat(client.value().get_balance().<span class="kw">await</span>.msats / <span class="number">1000</span>);
                 <span class="kw">let </span>fees = wallet_module
                     .get_withdraw_fees(address.clone(), balance)
                     .<span class="kw">await</span><span class="question-mark">?</span>;

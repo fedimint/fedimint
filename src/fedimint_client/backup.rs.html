@@ -428,7 +428,7 @@
 <span class="kw">use </span>std::io::{Cursor, Error, Read, Write};
 
 <span class="kw">use </span>anyhow::{bail, ensure, Context, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>bitcoin::secp256k1::{KeyPair, PublicKey, Secp256k1, SignOnly};
+<span class="kw">use </span>bitcoin30::secp256k1::{KeyPair, PublicKey, Secp256k1, SignOnly};
 <span class="kw">use </span>fedimint_api_client::api::DynGlobalApi;
 <span class="kw">use </span>fedimint_core::core::backup::{
     BackupRequest, SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES,

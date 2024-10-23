@@ -2226,9 +2226,9 @@
 <span class="kw">use </span>anyhow::{anyhow, bail, ensure, format_err, Context};
 <span class="kw">use </span>api::LnFederationApi;
 <span class="kw">use </span>async_stream::{stream, try_stream};
-<span class="kw">use </span>bitcoin::hashes::{sha256, Hash, HashEngine, Hmac, HmacEngine};
-<span class="kw">use </span>bitcoin::key::KeyPair;
-<span class="kw">use </span>bitcoin::Network;
+<span class="kw">use </span>bitcoin30::hashes::{sha256, Hash, HashEngine, Hmac, HmacEngine};
+<span class="kw">use </span>bitcoin30::key::KeyPair;
+<span class="kw">use </span>bitcoin30::Network;
 <span class="kw">use </span>db::{
     DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
 };

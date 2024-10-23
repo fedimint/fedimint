@@ -443,7 +443,7 @@
 <a href="#442" id="442">442</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>bitcoin::key::KeyPair;
+<span class="kw">use </span>bitcoin30::key::KeyPair;
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, DynState, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::ClientInput;
@@ -832,7 +832,7 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
+    <span class="kw">use </span>bitcoin30::hashes::{sha256, Hash};
     <span class="kw">use </span>lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
     <span class="kw">use </span>secp256k1::SecretKey;
 

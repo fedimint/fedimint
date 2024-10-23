@@ -297,7 +297,7 @@
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::bail;
-<span class="kw">use </span>bitcoin::Denomination;
+<span class="kw">use </span>bitcoin30::Denomination;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 
@@ -362,7 +362,7 @@
         <span class="kw">if </span>denom == Denomination::MilliSatoshi {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="self">Self</span>::from_msats(s.parse()<span class="question-mark">?</span>));
         }
-        <span class="kw">let </span>btc_amt = bitcoin::amount::Amount::from_str_in(s, denom)<span class="question-mark">?</span>;
+        <span class="kw">let </span>btc_amt = bitcoin30::amount::Amount::from_str_in(s, denom)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="self">Self</span>::from(btc_amt))
     }
 
@@ -506,13 +506,13 @@
             <span class="self">Self</span>::from_str_in(amt.trim(), denom.trim().parse()<span class="question-mark">?</span>)
         } <span class="kw">else </span>{
             <span class="comment">// default to millisatoshi
-            </span><span class="self">Self</span>::from_str_in(s.trim(), bitcoin::Denomination::MilliSatoshi)
+            </span><span class="self">Self</span>::from_str_in(s.trim(), bitcoin30::Denomination::MilliSatoshi)
         }
     }
 }
 
-<span class="kw">impl </span>From&lt;bitcoin::Amount&gt; <span class="kw">for </span>Amount {
-    <span class="kw">fn </span>from(amt: bitcoin::Amount) -&gt; <span class="self">Self </span>{
+<span class="kw">impl </span>From&lt;bitcoin30::Amount&gt; <span class="kw">for </span>Amount {
+    <span class="kw">fn </span>from(amt: bitcoin30::Amount) -&gt; <span class="self">Self </span>{
         <span class="macro">assert!</span>(amt.to_sat() &lt;= <span class="number">2_100_000_000_000_000</span>);
         <span class="self">Self </span>{
             msats: amt.to_sat() * <span class="number">1000</span>,
@@ -520,7 +520,7 @@
     }
 }
 
-<span class="kw">impl </span>TryFrom&lt;Amount&gt; <span class="kw">for </span>bitcoin::Amount {
+<span class="kw">impl </span>TryFrom&lt;Amount&gt; <span class="kw">for </span>bitcoin30::Amount {
     <span class="kw">type </span>Error = anyhow::Error;
 
     <span class="kw">fn </span>try_from(value: Amount) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
@@ -533,7 +533,7 @@
     <span class="attr">#[error(<span class="string">"Error parsing string as integer: {0}"</span>)]
     </span>NotANumber(<span class="attr">#[from] </span>ParseIntError),
     <span class="attr">#[error(<span class="string">"Error parsing string as a bitcoin amount: {0}"</span>)]
-    </span>WrongBitcoinAmount(<span class="attr">#[from] </span>bitcoin::amount::ParseAmountError),
+    </span>WrongBitcoinAmount(<span class="attr">#[from] </span>bitcoin30::amount::ParseAmountError),
 }
 
 <span class="attr">#[cfg(test)]

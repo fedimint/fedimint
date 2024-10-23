@@ -226,7 +226,7 @@
 <a href="#225" id="225">225</a>
 <a href="#226" id="226">226</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>bitcoin::address::NetworkUnchecked;
+<span class="kw">use </span>bitcoin30::address::NetworkUnchecked;
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
 <span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll};
@@ -275,7 +275,7 @@
     </span>OpenChannel {
         <span class="doccomment">/// The public key of the node to open a channel with
         </span><span class="attr">#[clap(long)]
-        </span>pubkey: bitcoin::secp256k1::PublicKey,
+        </span>pubkey: bitcoin30::secp256k1::PublicKey,
 
         <span class="attr">#[clap(long)]
         </span>host: String,
@@ -293,7 +293,7 @@
     </span>CloseChannelsWithPeer {
         <span class="comment">// The public key of the node to close channels with
         </span><span class="attr">#[clap(long)]
-        </span>pubkey: bitcoin::secp256k1::PublicKey,
+        </span>pubkey: bitcoin30::secp256k1::PublicKey,
     },
     <span class="doccomment">/// List active channels.
     </span>ListActiveChannels,
@@ -302,7 +302,7 @@
     </span>WithdrawOnchain {
         <span class="doccomment">/// The address to withdraw funds to.
         </span><span class="attr">#[clap(long)]
-        </span>address: bitcoin::Address&lt;NetworkUnchecked&gt;,
+        </span>address: bitcoin30::Address&lt;NetworkUnchecked&gt;,
 
         <span class="doccomment">/// The amount to withdraw.
         /// Can be "all" to withdraw all funds, an amount + unit (e.g. "1000

@@ -59,7 +59,7 @@
 <span class="kw">pub mod </span>real;
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>bitcoin::{Address, Transaction, Txid};
+<span class="kw">use </span>bitcoin30::{Address, Transaction, Txid};
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::Amount;
 
@@ -70,7 +70,7 @@
     </span><span class="kw">async fn </span>lock_exclusive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>BitcoinTest + Send + Sync&gt;;
 
     <span class="doccomment">/// Mines a given number of blocks
-    </span><span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) -&gt; Vec&lt;bitcoin::BlockHash&gt;;
+    </span><span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) -&gt; Vec&lt;bitcoin30::BlockHash&gt;;
 
     <span class="doccomment">/// Prepare funding wallet
     ///
@@ -86,7 +86,7 @@
     </span><span class="kw">async fn </span>send_and_mine_block(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         address: <span class="kw-2">&amp;</span>Address,
-        amount: bitcoin::Amount,
+        amount: bitcoin30::Amount,
     ) -&gt; (TxOutProof, Transaction);
 
     <span class="doccomment">/// Returns a new address.
@@ -110,6 +110,6 @@
     </span><span class="kw">async fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64;
 
     <span class="doccomment">/// Returns a transaction with the provided txid if it exists in the mempool
-    </span><span class="kw">async fn </span>get_mempool_tx(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;bitcoin::Transaction&gt;;
+    </span><span class="kw">async fn </span>get_mempool_tx(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;bitcoin30::Transaction&gt;;
 }
 </code></pre></div></section></main></body></html>

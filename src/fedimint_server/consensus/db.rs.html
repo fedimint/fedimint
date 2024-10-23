@@ -427,8 +427,8 @@
     <span class="kw">use </span>std::str::FromStr;
 
     <span class="kw">use </span>anyhow::ensure;
-    <span class="kw">use </span>bitcoin::key::KeyPair;
-    <span class="kw">use </span>bitcoin::secp256k1;
+    <span class="kw">use </span>bitcoin30::key::KeyPair;
+    <span class="kw">use </span>bitcoin30::secp256k1;
     <span class="kw">use </span>bitcoin_hashes::Hash;
     <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput};
     <span class="kw">use </span>fedimint_core::db::{
@@ -540,7 +540,7 @@
                     api_url: <span class="string">"wss://foo.bar"</span>.parse().expect(<span class="string">"valid url"</span>),
                     nonce: <span class="number">0</span>,
                 },
-                signature: bitcoin::secp256k1::schnorr::Signature::from_slice(<span class="kw-2">&amp;</span>[<span class="number">42</span>; <span class="number">64</span>]).unwrap(),
+                signature: bitcoin30::secp256k1::schnorr::Signature::from_slice(<span class="kw-2">&amp;</span>[<span class="number">42</span>; <span class="number">64</span>]).unwrap(),
             },
         )
         .<span class="kw">await</span>;

@@ -698,8 +698,8 @@
 <span class="kw">use </span>std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 <span class="kw">use </span>anyhow::{bail, Context};
-<span class="kw">use </span>bitcoin::address::NetworkUnchecked;
-<span class="kw">use </span>bitcoin::{secp256k1, Network};
+<span class="kw">use </span>bitcoin30::address::NetworkUnchecked;
+<span class="kw">use </span>bitcoin30::{secp256k1, Network};
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>fedimint_bip39::Mnemonic;
 <span class="kw">use </span>fedimint_client::backup::Metadata;
@@ -849,7 +849,7 @@
         <span class="attr">#[clap(long)]
         </span>amount: BitcoinAmountOrAll,
         <span class="attr">#[clap(long)]
-        </span>address: bitcoin::Address&lt;NetworkUnchecked&gt;,
+        </span>address: bitcoin30::Address&lt;NetworkUnchecked&gt;,
     },
     <span class="doccomment">/// Upload the (encrypted) snapshot of mint notes to federation
     </span>Backup {
@@ -1239,7 +1239,7 @@
                 // the amount we are withdrawing
                 </span>BitcoinAmountOrAll::All =&gt; {
                     <span class="kw">let </span>balance =
-                        bitcoin::Amount::from_sat(client.get_balance().<span class="kw">await</span>.msats / <span class="number">1000</span>);
+                        bitcoin30::Amount::from_sat(client.get_balance().<span class="kw">await</span>.msats / <span class="number">1000</span>);
                     <span class="kw">let </span>fees = wallet_module
                         .get_withdraw_fees(address.clone(), balance)
                         .<span class="kw">await</span><span class="question-mark">?</span>;

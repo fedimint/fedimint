@@ -293,8 +293,8 @@
 <a href="#292" id="292">292</a>
 <a href="#293" id="293">293</a>
 <a href="#294" id="294">294</a></pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::bail;
-<span class="kw">use </span>bitcoin::address::NetworkUnchecked;
-<span class="kw">use </span>bitcoin::Address;
+<span class="kw">use </span>bitcoin30::address::NetworkUnchecked;
+<span class="kw">use </span>bitcoin30::Address;
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll};
@@ -409,7 +409,7 @@
         </span>routing_fees: <span class="prelude-ty">Option</span>&lt;FederationRoutingFees&gt;,
 
         <span class="attr">#[clap(long)]
-        </span>network: <span class="prelude-ty">Option</span>&lt;bitcoin::Network&gt;,
+        </span>network: <span class="prelude-ty">Option</span>&lt;bitcoin30::Network&gt;,
 
         <span class="doccomment">/// Format federation id,base msat,proportional to millionths part. Any
         /// other federations not given here will keep their current fees.

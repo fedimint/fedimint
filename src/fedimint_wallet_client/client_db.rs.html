@@ -272,7 +272,7 @@
     <span class="kw">pub </span>creation_time: SystemTime,
     <span class="kw">pub </span>last_check_time: <span class="prelude-ty">Option</span>&lt;SystemTime&gt;,
     <span class="kw">pub </span>next_check_time: <span class="prelude-ty">Option</span>&lt;SystemTime&gt;,
-    <span class="kw">pub </span>claimed: Vec&lt;bitcoin::OutPoint&gt;,
+    <span class="kw">pub </span>claimed: Vec&lt;bitcoin30::OutPoint&gt;,
 }
 
 <span class="macro">impl_db_record!</span>(
@@ -289,7 +289,7 @@
 <span class="attr">#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>ClaimedPegInKey {
     <span class="kw">pub </span>peg_in_index: TweakIdx,
-    <span class="kw">pub </span>btc_out_point: bitcoin::OutPoint,
+    <span class="kw">pub </span>btc_out_point: bitcoin30::OutPoint,
 }
 
 <span class="attr">#[derive(Clone, Debug, Encodable, Decodable, Serialize)]

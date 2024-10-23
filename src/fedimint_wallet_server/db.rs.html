@@ -154,7 +154,7 @@
 <a href="#153" id="153">153</a>
 <a href="#154" id="154">154</a>
 <a href="#155" id="155">155</a>
-<a href="#156" id="156">156</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::{BlockHash, Txid};
+<a href="#156" id="156">156</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin30::{BlockHash, Txid};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
 <span class="kw">use </span>secp256k1::ecdsa::Signature;
@@ -197,7 +197,7 @@
 <span class="macro">impl_db_lookup!</span>(key = BlockHashKey, query_prefix = BlockHashKeyPrefix);
 
 <span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize)]
-</span><span class="kw">pub struct </span>UTXOKey(<span class="kw">pub </span>bitcoin::OutPoint);
+</span><span class="kw">pub struct </span>UTXOKey(<span class="kw">pub </span>bitcoin30::OutPoint);
 
 <span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>UTXOPrefixKey;

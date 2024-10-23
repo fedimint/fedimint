@@ -792,7 +792,7 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>threshold_crypto::PublicKey;
 <span class="kw">use </span>tracing::error;
-<span class="kw">pub use </span>{bitcoin, lightning_invoice};
+<span class="kw">pub use </span>{bitcoin30 <span class="kw">as </span>bitcoin, lightning_invoice};
 
 <span class="kw">use </span><span class="kw">crate</span>::contracts::incoming::OfferId;
 <span class="kw">use </span><span class="kw">crate</span>::contracts::{Contract, ContractId, ContractOutcome, Preimage, PreimageDecryptionShare};

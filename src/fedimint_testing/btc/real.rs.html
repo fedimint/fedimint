@@ -345,7 +345,7 @@
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>bitcoin::{Address, Transaction, Txid};
+<span class="kw">use </span>bitcoin30::{Address, Transaction, Txid};
 <span class="kw">use </span>bitcoincore_rpc::{Client, RpcApi};
 <span class="kw">use </span>fedimint_bitcoind::DynBitcoindRpc;
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
@@ -383,7 +383,7 @@
         </span>)
     }
 
-    <span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) -&gt; Vec&lt;bitcoin::BlockHash&gt; {
+    <span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) -&gt; Vec&lt;bitcoin30::BlockHash&gt; {
         <span class="kw">let </span>mined_block_hashes = <span class="self">self
             </span>.client
             .generate_to_address(block_num, <span class="kw-2">&amp;</span><span class="self">self</span>.get_new_address().<span class="kw">await</span>)
@@ -434,7 +434,7 @@
     <span class="kw">async fn </span>send_and_mine_block(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         address: <span class="kw-2">&amp;</span>Address,
-        amount: bitcoin::Amount,
+        amount: bitcoin30::Amount,
     ) -&gt; (TxOutProof, Transaction) {
         <span class="kw">let </span>id = <span class="self">self
             </span>.client
@@ -522,7 +522,7 @@
             .expect(<span class="string">"failed to fetch block count"</span>)
     }
 
-    <span class="kw">async fn </span>get_mempool_tx(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;bitcoin::Transaction&gt; {
+    <span class="kw">async fn </span>get_mempool_tx(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;bitcoin30::Transaction&gt; {
         <span class="self">self</span>.client.get_raw_transaction(txid, <span class="prelude-val">None</span>).ok()
     }
 }
@@ -580,7 +580,7 @@
         })
     }
 
-    <span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) -&gt; Vec&lt;bitcoin::BlockHash&gt; {
+    <span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) -&gt; Vec&lt;bitcoin30::BlockHash&gt; {
         <span class="kw">let </span>_lock = <span class="self">self</span>.lock_exclusive().<span class="kw">await</span>;
         <span class="self">self</span>.inner.mine_blocks(block_num).<span class="kw">await
     </span>}
@@ -593,7 +593,7 @@
     <span class="kw">async fn </span>send_and_mine_block(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         address: <span class="kw-2">&amp;</span>Address,
-        amount: bitcoin::Amount,
+        amount: bitcoin30::Amount,
     ) -&gt; (TxOutProof, Transaction) {
         <span class="kw">let </span>_lock = <span class="self">self</span>.lock_exclusive().<span class="kw">await</span>;
         <span class="self">self</span>.inner.send_and_mine_block(address, amount).<span class="kw">await
@@ -624,7 +624,7 @@
         <span class="self">self</span>.inner.get_block_count().<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>get_mempool_tx(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;bitcoin::Transaction&gt; {
+    <span class="kw">async fn </span>get_mempool_tx(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;bitcoin30::Transaction&gt; {
         <span class="kw">let </span>_lock = <span class="self">self</span>.lock_exclusive().<span class="kw">await</span>;
         <span class="self">self</span>.inner.get_mempool_tx(txid).<span class="kw">await
     </span>}
@@ -636,7 +636,7 @@
         <span class="macro">panic!</span>(<span class="string">"Double-locking would lead to a hang"</span>);
     }
 
-    <span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) -&gt; Vec&lt;bitcoin::BlockHash&gt; {
+    <span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) -&gt; Vec&lt;bitcoin30::BlockHash&gt; {
         <span class="kw">let </span>pre = <span class="self">self</span>.inner.client.get_block_count().unwrap();
         <span class="kw">let </span>mined_block_hashes = <span class="self">self</span>.inner.mine_blocks(block_num).<span class="kw">await</span>;
         <span class="kw">let </span>post = <span class="self">self</span>.inner.client.get_block_count().unwrap();
@@ -651,7 +651,7 @@
     <span class="kw">async fn </span>send_and_mine_block(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         address: <span class="kw-2">&amp;</span>Address,
-        amount: bitcoin::Amount,
+        amount: bitcoin30::Amount,
     ) -&gt; (TxOutProof, Transaction) {
         <span class="self">self</span>.inner.send_and_mine_block(address, amount).<span class="kw">await
     </span>}
@@ -676,7 +676,7 @@
         <span class="self">self</span>.inner.get_block_count().<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>get_mempool_tx(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;bitcoin::Transaction&gt; {
+    <span class="kw">async fn </span>get_mempool_tx(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;bitcoin30::Transaction&gt; {
         <span class="self">self</span>.inner.get_mempool_tx(txid).<span class="kw">await
     </span>}
 }

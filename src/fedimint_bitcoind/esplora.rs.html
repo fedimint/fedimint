@@ -175,7 +175,7 @@
 <a href="#174" id="174">174</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::{bail, format_err};
-<span class="kw">use </span>bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
+<span class="kw">use </span>bitcoin30::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::task::TaskHandle;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
@@ -314,7 +314,7 @@
     <span class="kw">async fn </span>get_script_history(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         script: <span class="kw-2">&amp;</span>ScriptBuf,
-    ) -&gt; anyhow::Result&lt;Vec&lt;bitcoin::Transaction&gt;&gt; {
+    ) -&gt; anyhow::Result&lt;Vec&lt;bitcoin30::Transaction&gt;&gt; {
         <span class="kw">let </span>transactions = <span class="self">self
             </span>.client
             .scripthash_txs(script, <span class="prelude-val">None</span>)

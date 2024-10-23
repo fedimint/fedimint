@@ -326,10 +326,10 @@
 
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
-<span class="kw">use </span>bitcoin::key::KeyPair;
-<span class="kw">use </span>bitcoin::secp256k1::{PublicKey, SecretKey};
-<span class="kw">use </span>bitcoin::Address;
+<span class="kw">use </span>bitcoin30::hashes::{sha256, Hash};
+<span class="kw">use </span>bitcoin30::key::KeyPair;
+<span class="kw">use </span>bitcoin30::secp256k1::{PublicKey, SecretKey};
+<span class="kw">use </span>bitcoin30::Address;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::BoxStream;
 <span class="kw">use </span>fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
@@ -365,7 +365,7 @@
 <span class="kw">impl </span>FakeLightningTest {
     <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
         <span class="macro">info!</span>(target: LOG_TEST, <span class="string">"Setting up fake lightning test fixture"</span>);
-        <span class="kw">let </span>ctx = bitcoin::secp256k1::Secp256k1::new();
+        <span class="kw">let </span>ctx = bitcoin30::secp256k1::Secp256k1::new();
         <span class="kw">let </span>kp = KeyPair::new(<span class="kw-2">&amp;</span>ctx, <span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>amount_sent = AtomicU64::new(<span class="number">0</span>);
 
@@ -389,7 +389,7 @@
         amount: Amount,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     ) -&gt; ln_gateway::Result&lt;Bolt11Invoice&gt; {
-        <span class="kw">let </span>ctx = bitcoin::secp256k1::Secp256k1::new();
+        <span class="kw">let </span>ctx = bitcoin30::secp256k1::Secp256k1::new();
         <span class="kw">let </span>payment_hash = sha256::Hash::hash(<span class="kw-2">&amp;</span>MOCK_INVOICE_PREIMAGE);
 
         <span class="prelude-val">Ok</span>(InvoiceBuilder::new(Currency::Regtest)
@@ -411,7 +411,7 @@
     /// * Mocks use hard-coded invoice description to fail the payment
     /// * Real fixtures won't be able to route to randomly generated node pubkey
     </span><span class="kw">pub fn </span>unpayable_invoice(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount, expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;) -&gt; Bolt11Invoice {
-        <span class="kw">let </span>ctx = bitcoin::secp256k1::Secp256k1::new();
+        <span class="kw">let </span>ctx = bitcoin30::secp256k1::Secp256k1::new();
         <span class="comment">// Generate fake node keypair
         </span><span class="kw">let </span>kp = KeyPair::new(<span class="kw-2">&amp;</span>ctx, <span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>payment_hash = sha256::Hash::hash(<span class="kw-2">&amp;</span>MOCK_INVOICE_PREIMAGE);
@@ -539,7 +539,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         create_invoice_request: CreateInvoiceRequest,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CreateInvoiceResponse, LightningRpcError&gt; {
-        <span class="kw">let </span>ctx = bitcoin::secp256k1::Secp256k1::new();
+        <span class="kw">let </span>ctx = bitcoin30::secp256k1::Secp256k1::new();
 
         <span class="kw">let </span>payment_hash_or = <span class="kw">if </span>create_invoice_request.payment_hash.is_empty() {
             <span class="prelude-val">None
@@ -603,7 +603,7 @@
 
     <span class="kw">async fn </span>open_channel(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _pubkey: bitcoin::secp256k1::PublicKey,
+        _pubkey: bitcoin30::secp256k1::PublicKey,
         _host: String,
         _channel_size_sats: u64,
         _push_amount_sats: u64,
@@ -615,7 +615,7 @@
 
     <span class="kw">async fn </span>close_channels_with_peer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _pubkey: bitcoin::secp256k1::PublicKey,
+        _pubkey: bitcoin30::secp256k1::PublicKey,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CloseChannelsWithPeerResponse, LightningRpcError&gt; {
         <span class="prelude-val">Err</span>(LightningRpcError::FailedToCloseChannelsWithPeer {
             failure_reason: <span class="string">"FakeLightningTest does not support closing channels by peer"

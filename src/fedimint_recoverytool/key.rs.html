@@ -88,7 +88,7 @@
 </span><span class="attr">#[derive(Debug, Clone, Copy, Eq)]
 </span><span class="kw">pub enum </span>Key {
     Public(CompressedPublicKey),
-    Private(bitcoin::key::PrivateKey),
+    Private(bitcoin30::key::PrivateKey),
 }
 
 <span class="kw">impl </span>PartialOrd <span class="kw">for </span>Key {
@@ -149,9 +149,9 @@
         <span class="number">0
     </span>}
 
-    <span class="kw">type </span>Sha256 = bitcoin::hashes::sha256::Hash;
+    <span class="kw">type </span>Sha256 = bitcoin30::hashes::sha256::Hash;
     <span class="kw">type </span>Hash256 = miniscript::hash256::Hash;
-    <span class="kw">type </span>Ripemd160 = bitcoin::hashes::ripemd160::Hash;
-    <span class="kw">type </span>Hash160 = bitcoin::hashes::hash160::Hash;
+    <span class="kw">type </span>Ripemd160 = bitcoin30::hashes::ripemd160::Hash;
+    <span class="kw">type </span>Hash160 = bitcoin30::hashes::hash160::Hash;
 }
 </code></pre></div></section></main></body></html>

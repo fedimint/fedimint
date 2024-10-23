@@ -165,19 +165,19 @@
 
 <span class="kw">pub fn </span>bitcoin29_to_bitcoin30_psbt(
     psbt: <span class="kw-2">&amp;</span>bitcoin29::util::psbt::PartiallySignedTransaction,
-) -&gt; bitcoin::psbt::PartiallySignedTransaction {
+) -&gt; bitcoin30::psbt::PartiallySignedTransaction {
     bincode::deserialize(<span class="kw-2">&amp;</span>bincode::serialize(psbt).expect(<span class="string">"Failed to serialize bitcoin29 psbt"</span>))
         .expect(<span class="string">"Failed to convert bitcoin29 psbt to bitcoin30 psbt"</span>)
 }
 
 <span class="kw">pub fn </span>bitcoin30_to_bitcoin29_psbt(
-    psbt: <span class="kw-2">&amp;</span>bitcoin::psbt::PartiallySignedTransaction,
+    psbt: <span class="kw-2">&amp;</span>bitcoin30::psbt::PartiallySignedTransaction,
 ) -&gt; bitcoin29::util::psbt::PartiallySignedTransaction {
     bincode::deserialize(<span class="kw-2">&amp;</span>bincode::serialize(psbt).expect(<span class="string">"Failed to serialize bitcoin30 psbt"</span>))
         .expect(<span class="string">"Failed to convert bitcoin30 psbt to bitcoin29 psbt"</span>)
 }
 
-<span class="kw">pub fn </span>bitcoin29_to_bitcoin30_network_magic(magic: u32) -&gt; bitcoin::network::Magic {
+<span class="kw">pub fn </span>bitcoin29_to_bitcoin30_network_magic(magic: u32) -&gt; bitcoin30::network::Magic {
     <span class="comment">// Invert the byte order when converting from v0.29 to v0.30.
     // See the following bitcoin v0.29 and v0.30 code:
     // https://docs.rs/bitcoin/0.29.2/src/bitcoin/network/constants.rs.html#81-84
@@ -188,10 +188,10 @@
         ((magic &gt;&gt; <span class="number">16</span>) &amp; <span class="number">0xFF</span>) <span class="kw">as </span>u8,
         ((magic &gt;&gt; <span class="number">24</span>) &amp; <span class="number">0xFF</span>) <span class="kw">as </span>u8,
     ];
-    bitcoin::network::Magic::from_bytes(bytes)
+    bitcoin30::network::Magic::from_bytes(bytes)
 }
 
-<span class="kw">pub fn </span>bitcoin30_to_bitcoin29_network_magic(magic: <span class="kw-2">&amp;</span>bitcoin::network::Magic) -&gt; u32 {
+<span class="kw">pub fn </span>bitcoin30_to_bitcoin29_network_magic(magic: <span class="kw-2">&amp;</span>bitcoin30::network::Magic) -&gt; u32 {
     <span class="kw">let </span>bytes = magic.to_bytes();
     <span class="comment">// Invert the byte order when converting from v0.30 to v0.29.
     // See the following bitcoin v0.29 and v0.30 code:
@@ -204,8 +204,8 @@
 }
 
 <span class="kw">pub fn </span>checked_address_to_unchecked_address(
-    address: <span class="kw-2">&amp;</span>bitcoin::Address,
-) -&gt; bitcoin::Address&lt;bitcoin::address::NetworkUnchecked&gt; {
+    address: <span class="kw-2">&amp;</span>bitcoin30::Address,
+) -&gt; bitcoin30::Address&lt;bitcoin30::address::NetworkUnchecked&gt; {
     bincode::deserialize(<span class="kw-2">&amp;</span>bincode::serialize(address).expect(<span class="string">"Failed to serialize bitcoin address"</span>))
         .expect(<span class="string">"Failed to convert checked bitcoin address to unchecked bitcoin address"</span>)
 }
@@ -220,8 +220,8 @@
 }
 
 <span class="kw">pub fn </span>bitcoin30_to_bitcoin32_secp256k1_pubkey(
-    pubkey: <span class="kw-2">&amp;</span>bitcoin::secp256k1::PublicKey,
-) -&gt; bitcoin32::secp256k1::PublicKey {
+    pubkey: <span class="kw-2">&amp;</span>bitcoin30::secp256k1::PublicKey,
+) -&gt; bitcoin::secp256k1::PublicKey {
     bincode::deserialize(
         <span class="kw-2">&amp;</span>bincode::serialize(<span class="kw-2">&amp;</span>pubkey).expect(<span class="string">"Failed to serialize bitcoin30 secp256k1 pubkey"</span>),
     )
@@ -229,39 +229,39 @@
 }
 
 <span class="kw">pub fn </span>bitcoin32_to_bitcoin30_secp256k1_pubkey(
-    pubkey: <span class="kw-2">&amp;</span>bitcoin32::secp256k1::PublicKey,
-) -&gt; bitcoin::secp256k1::PublicKey {
+    pubkey: <span class="kw-2">&amp;</span>bitcoin::secp256k1::PublicKey,
+) -&gt; bitcoin30::secp256k1::PublicKey {
     bincode::deserialize(
         <span class="kw-2">&amp;</span>bincode::serialize(<span class="kw-2">&amp;</span>pubkey).expect(<span class="string">"Failed to serialize bitcoin32 secp256k1 pubkey"</span>),
     )
     .expect(<span class="string">"Failed to convert bitcoin32 secp256k1 pubkey to bitcoin30 secp256k1 pubkey"</span>)
 }
 
-<span class="kw">pub fn </span>bitcoin30_to_bitcoin32_address(address: <span class="kw-2">&amp;</span>bitcoin::Address) -&gt; bitcoin32::Address {
+<span class="kw">pub fn </span>bitcoin30_to_bitcoin32_address(address: <span class="kw-2">&amp;</span>bitcoin30::Address) -&gt; bitcoin::Address {
     <span class="comment">// The bitcoin crate only allows for deserializing an address as unchecked.
     // However, we can safely call `assume_checked()` since the input address is
     // checked.
-    </span>bincode::deserialize::&lt;bitcoin32::Address&lt;bitcoin32::address::NetworkUnchecked&gt;&gt;(
+    </span>bincode::deserialize::&lt;bitcoin::Address&lt;bitcoin::address::NetworkUnchecked&gt;&gt;(
         <span class="kw-2">&amp;</span>bincode::serialize(address).expect(<span class="string">"Failed to serialize bitcoin30 address"</span>),
     )
     .expect(<span class="string">"Failed to convert bitcoin30 address to bitcoin32 address"</span>)
     .assume_checked()
 }
 
-<span class="kw">pub fn </span>bitcoin30_to_bitcoin32_network(network: <span class="kw-2">&amp;</span>bitcoin::Network) -&gt; bitcoin32::Network {
+<span class="kw">pub fn </span>bitcoin30_to_bitcoin32_network(network: <span class="kw-2">&amp;</span>bitcoin30::Network) -&gt; bitcoin::Network {
     bincode::deserialize(
         <span class="kw-2">&amp;</span>bincode::serialize(network).expect(<span class="string">"Failed to serialize bitcoin30 network"</span>),
     )
     .expect(<span class="string">"Failed to convert bitcoin30 network to bitcoin32 network"</span>)
 }
 
-<span class="kw">fn </span>bitcoin32_to_bitcoin30_txid(txid: <span class="kw-2">&amp;</span>bitcoin32::Txid) -&gt; bitcoin::Txid {
-    bitcoin::Txid::from_str(<span class="kw-2">&amp;</span>txid.to_string())
+<span class="kw">fn </span>bitcoin32_to_bitcoin30_txid(txid: <span class="kw-2">&amp;</span>bitcoin::Txid) -&gt; bitcoin30::Txid {
+    bitcoin30::Txid::from_str(<span class="kw-2">&amp;</span>txid.to_string())
         .expect(<span class="string">"Failed to convert bitcoin32 txid to bitcoin30 txid"</span>)
 }
 
-<span class="kw">pub fn </span>bitcoin32_to_bitcoin30_outpoint(outpoint: <span class="kw-2">&amp;</span>bitcoin32::OutPoint) -&gt; bitcoin::OutPoint {
-    bitcoin::OutPoint {
+<span class="kw">pub fn </span>bitcoin32_to_bitcoin30_outpoint(outpoint: <span class="kw-2">&amp;</span>bitcoin::OutPoint) -&gt; bitcoin30::OutPoint {
+    bitcoin30::OutPoint {
         txid: bitcoin32_to_bitcoin30_txid(<span class="kw-2">&amp;</span>outpoint.txid),
         vout: outpoint.vout,
     }
@@ -280,7 +280,7 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_network_magic_conversions() {
         <span class="kw">let </span>bitcoin29_mainnet_magic: u32 = bitcoin29::network::constants::Network::Bitcoin.magic();
-        <span class="kw">let </span>bitcoin30_mainnet_magic = bitcoin::network::constants::Network::Bitcoin.magic();
+        <span class="kw">let </span>bitcoin30_mainnet_magic = bitcoin30::network::constants::Network::Bitcoin.magic();
         <span class="macro">assert_eq!</span>(
             bitcoin29_to_bitcoin30_network_magic(bitcoin29_mainnet_magic),
             bitcoin30_mainnet_magic
@@ -291,7 +291,7 @@
         );
 
         <span class="kw">let </span>bitcoin29_testnet_magic: u32 = bitcoin29::network::constants::Network::Testnet.magic();
-        <span class="kw">let </span>bitcoin30_testnet_magic = bitcoin::network::constants::Network::Testnet.magic();
+        <span class="kw">let </span>bitcoin30_testnet_magic = bitcoin30::network::constants::Network::Testnet.magic();
         <span class="macro">assert_eq!</span>(
             bitcoin29_to_bitcoin30_network_magic(bitcoin29_testnet_magic),
             bitcoin30_testnet_magic
@@ -302,7 +302,7 @@
         );
 
         <span class="kw">let </span>bitcoin29_signet_magic: u32 = bitcoin29::network::constants::Network::Signet.magic();
-        <span class="kw">let </span>bitcoin30_signet_magic = bitcoin::network::constants::Network::Signet.magic();
+        <span class="kw">let </span>bitcoin30_signet_magic = bitcoin30::network::constants::Network::Signet.magic();
         <span class="macro">assert_eq!</span>(
             bitcoin29_to_bitcoin30_network_magic(bitcoin29_signet_magic),
             bitcoin30_signet_magic
@@ -313,7 +313,7 @@
         );
 
         <span class="kw">let </span>bitcoin29_regtest_magic: u32 = bitcoin29::network::constants::Network::Regtest.magic();
-        <span class="kw">let </span>bitcoin30_regtest_magic = bitcoin::network::constants::Network::Regtest.magic();
+        <span class="kw">let </span>bitcoin30_regtest_magic = bitcoin30::network::constants::Network::Regtest.magic();
         <span class="macro">assert_eq!</span>(
             bitcoin29_to_bitcoin30_network_magic(bitcoin29_regtest_magic),
             bitcoin30_regtest_magic

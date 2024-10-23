@@ -1190,7 +1190,10 @@
 <a href="#1189" id="1189">1189</a>
 <a href="#1190" id="1190">1190</a>
 <a href="#1191" id="1191">1191</a>
-<a href="#1192" id="1192">1192</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
+<a href="#1192" id="1192">1192</a>
+<a href="#1193" id="1193">1193</a>
+<a href="#1194" id="1194">1194</a>
+<a href="#1195" id="1195">1195</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -1199,7 +1202,7 @@
 <span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>bitcoincore_rpc::bitcoin::{Address, BlockHash};
 <span class="kw">use </span>bitcoincore_rpc::bitcoincore_rpc_json::{GetBalancesResult, GetBlockchainInfoResult};
-<span class="kw">use </span>bitcoincore_rpc::{bitcoin, RpcApi};
+<span class="kw">use </span>bitcoincore_rpc::RpcApi;
 <span class="kw">use </span>cln_rpc::primitives::{Amount <span class="kw">as </span>ClnRpcAmount, AmountOrAny};
 <span class="kw">use </span>cln_rpc::ClnRpc;
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
@@ -1412,24 +1415,27 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>send_to(<span class="kw-2">&amp;</span><span class="self">self</span>, addr: String, amount: u64) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin::Txid&gt; {
+    <span class="kw">pub async fn </span>send_to(<span class="kw-2">&amp;</span><span class="self">self</span>, addr: String, amount: u64) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin30::Txid&gt; {
         <span class="macro">debug!</span>(target: LOG_DEVIMINT, amount, addr, <span class="string">"Sending funds from bitcoind"</span>);
-        <span class="kw">let </span>amount = bitcoin::Amount::from_sat(amount);
+        <span class="kw">let </span>amount = bitcoin30::Amount::from_sat(amount);
         <span class="kw">let </span>tx = <span class="self">self
             </span>.wallet_client()
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.send_to_address(bitcoin::Address::from_str(<span class="kw-2">&amp;</span>addr)<span class="question-mark">?</span>.assume_checked(), amount)
+            </span>.send_to_address(
+                bitcoin30::Address::from_str(<span class="kw-2">&amp;</span>addr)<span class="question-mark">?</span>.assume_checked(),
+                amount,
+            )
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(tx)
     }
 
-    <span class="kw">pub async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: bitcoin::Txid) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+    <span class="kw">pub async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: bitcoin30::Txid) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
         <span class="kw">let </span>client = <span class="self">self</span>.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>.clone();
         <span class="kw">let </span>proof = spawn_blocking(<span class="kw">move </span>|| client.client.get_tx_out_proof(<span class="kw-2">&amp;</span>[txid], <span class="prelude-val">None</span>)).<span class="kw">await</span><span class="question-mark">??</span>;
         <span class="prelude-val">Ok</span>(proof.encode_hex())
     }
 
-    <span class="kw">pub async fn </span>get_raw_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: bitcoin::Txid) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+    <span class="kw">pub async fn </span>get_raw_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: bitcoin30::Txid) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
         <span class="kw">let </span>client = <span class="self">self</span>.client.clone();
         <span class="kw">let </span>tx = spawn_blocking(<span class="kw">move </span>|| client.get_raw_transaction(<span class="kw-2">&amp;</span>txid, <span class="prelude-val">None</span>)).<span class="kw">await</span><span class="question-mark">??</span>;
         <span class="kw">let </span>bytes = tx.consensus_encode_to_vec();
@@ -1464,8 +1470,8 @@
     <span class="kw">pub async fn </span>send_to_address(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         addr: Address,
-        amount: bitcoin::Amount,
-    ) -&gt; anyhow::Result&lt;bitcoin::Txid&gt; {
+        amount: bitcoin30::Amount,
+    ) -&gt; anyhow::Result&lt;bitcoin30::Txid&gt; {
         <span class="kw">let </span>client = <span class="self">self</span>.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>.clone();
         <span class="prelude-val">Ok</span>(spawn_blocking(<span class="kw">move </span>|| {
             client
@@ -1880,9 +1886,9 @@
     ) -&gt; anyhow::Result&lt;([u8; <span class="number">32</span>], String, cln_rpc::primitives::Sha256)&gt; {
         <span class="kw">let </span>preimage = rand::random::&lt;[u8; <span class="number">32</span>]&gt;();
         <span class="kw">let </span>hash = {
-            <span class="kw">let </span><span class="kw-2">mut </span>engine = bitcoin::hashes::sha256::Hash::engine();
-            bitcoin::hashes::HashEngine::input(<span class="kw-2">&amp;mut </span>engine, <span class="kw-2">&amp;</span>preimage);
-            bitcoin::hashes::sha256::Hash::from_engine(engine)
+            <span class="kw">let </span><span class="kw-2">mut </span>engine = bitcoin30::hashes::sha256::Hash::engine();
+            bitcoin30::hashes::HashEngine::input(<span class="kw-2">&amp;mut </span>engine, <span class="kw-2">&amp;</span>preimage);
+            bitcoin30::hashes::sha256::Hash::from_engine(engine)
         };
         <span class="kw">let </span>hold_request = <span class="self">self
             </span>.invoices_client_lock()
@@ -2190,7 +2196,7 @@
 
 <span class="kw">async fn </span>wait_for_ready_channel_on_gateway_with_counterparty(
     gw: <span class="kw-2">&amp;</span>Gatewayd,
-    counterparty_lightning_node_pubkey: bitcoin::secp256k1::PublicKey,
+    counterparty_lightning_node_pubkey: bitcoin30::secp256k1::PublicKey,
 ) -&gt; anyhow::Result&lt;()&gt; {
     poll(<span class="string">"Wait for channel update"</span>, || <span class="kw">async </span>{
         <span class="kw">let </span>channels = gw

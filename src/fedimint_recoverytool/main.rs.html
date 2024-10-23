@@ -406,8 +406,8 @@
 <span class="kw">use </span>std::path::{Path, PathBuf};
 
 <span class="kw">use </span>anyhow::anyhow;
-<span class="kw">use </span>bitcoin::network::constants::Network;
-<span class="kw">use </span>bitcoin::OutPoint;
+<span class="kw">use </span>bitcoin30::network::constants::Network;
+<span class="kw">use </span>bitcoin30::OutPoint;
 <span class="kw">use </span>clap::{ArgGroup, Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
@@ -711,7 +711,7 @@
     base_descriptor
         .tweak(tweak, secp256k1::SECP256K1)
         .translate_pk(<span class="kw-2">&amp;mut </span>SecretKeyInjector {
-            secret: bitcoin::key::PrivateKey {
+            secret: bitcoin30::key::PrivateKey {
                 compressed: <span class="bool-val">true</span>,
                 network,
                 inner: secret_key,
@@ -726,8 +726,8 @@
 </span><span class="kw">struct </span>ImportableWallet {
     outpoint: OutPoint,
     descriptor: Descriptor&lt;Key&gt;,
-    <span class="attr">#[serde(with = <span class="string">"bitcoin::amount::serde::as_sat"</span>)]
-    </span>amount_sat: bitcoin::Amount,
+    <span class="attr">#[serde(with = <span class="string">"bitcoin30::amount::serde::as_sat"</span>)]
+    </span>amount_sat: bitcoin30::Amount,
 }
 
 <span class="doccomment">/// A Bitcoin Core importable descriptor
@@ -740,7 +740,7 @@
 /// know.
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">struct </span>SecretKeyInjector {
-    secret: bitcoin::key::PrivateKey,
+    secret: bitcoin30::key::PrivateKey,
     public: CompressedPublicKey,
 }
 

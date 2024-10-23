@@ -109,8 +109,8 @@
 <a href="#108" id="108">108</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
 <span class="kw">use </span>std::str::FromStr;
 
-<span class="kw">use </span>bitcoin::secp256k1::{Secp256k1, Verification};
-<span class="kw">use </span>bitcoin::PublicKey;
+<span class="kw">use </span>bitcoin30::secp256k1::{Secp256k1, Verification};
+<span class="kw">use </span>bitcoin30::PublicKey;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>miniscript::bitcoin::hashes::{hash160, ripemd160, sha256};
 <span class="kw">use </span>miniscript::{hash256, MiniscriptKey, ToPublicKey};
@@ -206,9 +206,9 @@
     }
 }
 
-<span class="kw">impl </span>From&lt;CompressedPublicKey&gt; <span class="kw">for </span>bitcoin::PublicKey {
+<span class="kw">impl </span>From&lt;CompressedPublicKey&gt; <span class="kw">for </span>bitcoin30::PublicKey {
     <span class="kw">fn </span>from(key: CompressedPublicKey) -&gt; <span class="self">Self </span>{
-        bitcoin::PublicKey {
+        bitcoin30::PublicKey {
             compressed: <span class="bool-val">true</span>,
             inner: key.key,
         }

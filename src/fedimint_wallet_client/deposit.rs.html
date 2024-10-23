@@ -436,7 +436,7 @@
 <span class="kw">async fn </span>await_created_btc_transaction_submitted(
     context: WalletClientContext,
     tweak: KeyPair,
-) -&gt; (bitcoin::Transaction, u32) {
+) -&gt; (bitcoin30::Transaction, u32) {
     <span class="kw">let </span>script = context
         .wallet_descriptor
         .tweak(<span class="kw-2">&amp;</span>tweak.public_key(), <span class="kw-2">&amp;</span>context.secp)
@@ -481,7 +481,7 @@
 
 <span class="kw">fn </span>transition_tx_seen(
     old_state: DepositStateMachine,
-    btc_transaction: bitcoin::Transaction,
+    btc_transaction: bitcoin30::Transaction,
     out_idx: u32,
 ) -&gt; DepositStateMachine {
     <span class="kw">let </span>DepositStateMachine {
@@ -656,7 +656,7 @@
     </span>tweak_key: KeyPair,
     <span class="doccomment">/// The bitcoin transaction is saved as soon as we see it so the transaction
     /// can be re-transmitted if it's evicted from the mempool.
-    </span><span class="kw">pub</span>(<span class="kw">crate</span>) btc_transaction: bitcoin::Transaction,
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) btc_transaction: bitcoin30::Transaction,
     <span class="doccomment">/// Index of the deposit output
     </span><span class="kw">pub</span>(<span class="kw">crate</span>) out_idx: u32,
 }

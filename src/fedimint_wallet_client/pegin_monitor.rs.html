@@ -505,7 +505,7 @@
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
-<span class="kw">use </span>bitcoin::ScriptBuf;
+<span class="kw">use </span>bitcoin30::ScriptBuf;
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_bitcoind::DynBitcoindRpc;
 <span class="kw">use </span>fedimint_client::module::ClientContext;
@@ -736,7 +736,7 @@
     <span class="doccomment">/// There's a tx pending (needs more confirmation)
     </span>Pending { num_blocks_needed: u64 },
     <span class="doccomment">/// A state machine was created to claim the peg-in
-    </span>Claimed { outpoint: bitcoin::OutPoint },
+    </span>Claimed { outpoint: bitcoin30::OutPoint },
 
     <span class="doccomment">/// A peg-in transaction was already claimed (state machine created) in the
     /// past
@@ -799,7 +799,7 @@
         min
     }
 
-    <span class="kw">fn </span>get_claimed_now_outpoints(outcomes: <span class="kw-2">&amp;</span>[CheckOutcome]) -&gt; Vec&lt;bitcoin::OutPoint&gt; {
+    <span class="kw">fn </span>get_claimed_now_outpoints(outcomes: <span class="kw-2">&amp;</span>[CheckOutcome]) -&gt; Vec&lt;bitcoin30::OutPoint&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>res = <span class="macro">vec!</span>[];
         <span class="kw">for </span>outcome <span class="kw">in </span>outcomes {
             <span class="kw">if let </span>CheckOutcome::Claimed { outpoint } = outcome {
@@ -836,7 +836,7 @@
 
     <span class="kw">for </span>(transaction, out_idx) <span class="kw">in </span>filter_onchain_deposit_outputs(history.into_iter(), <span class="kw-2">&amp;</span>script) {
         <span class="kw">let </span>txid = transaction.txid();
-        <span class="kw">let </span>outpoint = bitcoin::OutPoint {
+        <span class="kw">let </span>outpoint = bitcoin30::OutPoint {
             txid,
             vout: out_idx,
         };
@@ -901,15 +901,15 @@
     client_ctx: <span class="kw-2">&amp;</span>ClientContext&lt;WalletClientModule&gt;,
     tweak_idx: TweakIdx,
     tweak_key: KeyPair,
-    transaction: <span class="kw-2">&amp;</span>bitcoin::Transaction,
+    transaction: <span class="kw-2">&amp;</span>bitcoin30::Transaction,
     operation_id: OperationId,
-    out_point: bitcoin::OutPoint,
+    out_point: bitcoin30::OutPoint,
     tx_out_proof: TxOutProof,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">async fn </span>claim_peg_in_inner(
         client_ctx: <span class="kw-2">&amp;</span>ClientContext&lt;WalletClientModule&gt;,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-        btc_transaction: <span class="kw-2">&amp;</span>bitcoin::Transaction,
+        btc_transaction: <span class="kw-2">&amp;</span>bitcoin30::Transaction,
         out_idx: u32,
         tweak_key: KeyPair,
         txout_proof: TxOutProof,
@@ -987,9 +987,9 @@
 }
 
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>filter_onchain_deposit_outputs&lt;<span class="lifetime">'a</span>&gt;(
-    tx_iter: <span class="kw">impl </span>Iterator&lt;Item = bitcoin::Transaction&gt; + <span class="lifetime">'a</span>,
+    tx_iter: <span class="kw">impl </span>Iterator&lt;Item = bitcoin30::Transaction&gt; + <span class="lifetime">'a</span>,
     out_script: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ScriptBuf,
-) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (bitcoin::Transaction, u32)&gt; + <span class="lifetime">'a </span>{
+) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (bitcoin30::Transaction, u32)&gt; + <span class="lifetime">'a </span>{
     tx_iter.flat_map(<span class="kw">move </span>|tx| {
         tx.output
             .clone()

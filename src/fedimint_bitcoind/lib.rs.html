@@ -317,7 +317,7 @@
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">pub use </span>anyhow::Result;
-<span class="kw">use </span>bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
+<span class="kw">use </span>bitcoin30::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 <span class="kw">use </span>fedimint_core::envs::{
     BitcoinRpcConfig, FM_FORCE_BITCOIN_RPC_KIND_ENV, FM_FORCE_BITCOIN_RPC_URL_ENV,
 };
@@ -411,7 +411,7 @@
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>IBitcoindRpc: Debug {
     <span class="doccomment">/// Returns the Bitcoin network the node is connected to
-    </span><span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin::Network&gt;;
+    </span><span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin30::Network&gt;;
 
     <span class="doccomment">/// Returns the current block count
     </span><span class="kw">async fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt;;

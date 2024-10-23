@@ -2560,8 +2560,7 @@
 <a href="#2559" id="2559">2559</a>
 <a href="#2560" id="2560">2560</a>
 <a href="#2561" id="2561">2561</a>
-<a href="#2562" id="2562">2562</a>
-<a href="#2563" id="2563">2563</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
+<a href="#2562" id="2562">2562</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -2569,8 +2568,7 @@
 <span class="kw">use </span>std::{env, ffi};
 
 <span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>bitcoincore_rpc::bitcoin;
-<span class="kw">use </span>bitcoincore_rpc::bitcoin::Txid;
+<span class="kw">use </span>bitcoin30::Txid;
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
@@ -3660,7 +3658,7 @@
     </span>.expect(<span class="string">"cannot fail, gets stuck"</span>);
 
     <span class="kw">let </span>tx =
-        bitcoin::Transaction::consensus_decode_hex(<span class="kw-2">&amp;</span>tx_hex, <span class="kw-2">&amp;</span>ModuleRegistry::default()).unwrap();
+        bitcoin30::Transaction::consensus_decode_hex(<span class="kw-2">&amp;</span>tx_hex, <span class="kw-2">&amp;</span>ModuleRegistry::default()).unwrap();
     <span class="macro">assert!</span>(tx
         .output
         .iter()
@@ -4606,7 +4604,7 @@
         .<span class="kw">await
         </span>.expect(<span class="string">"withdrawal tx failed to reach mempool"</span>);
 
-        <span class="kw">let </span>tx = bitcoin::Transaction::consensus_decode_hex(<span class="kw-2">&amp;</span>tx_hex, <span class="kw-2">&amp;</span>ModuleRegistry::default())<span class="question-mark">?</span>;
+        <span class="kw">let </span>tx = bitcoin30::Transaction::consensus_decode_hex(<span class="kw-2">&amp;</span>tx_hex, <span class="kw-2">&amp;</span>ModuleRegistry::default())<span class="question-mark">?</span>;
         <span class="macro">assert_eq!</span>(tx.input.len(), <span class="number">1</span>);
         <span class="macro">assert_eq!</span>(tx.output.len(), <span class="number">2</span>);
 

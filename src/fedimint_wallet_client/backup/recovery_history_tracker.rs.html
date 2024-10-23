@@ -159,13 +159,13 @@
     </span>used_tweak_idxes: BTreeSet&lt;TweakIdx&gt;,
     <span class="doccomment">/// All the pubkey scripts we are looking for in the federation history, to
     /// detect previous successful peg-ins.
-    </span>pending_pubkey_scripts: BTreeMap&lt;bitcoin::ScriptBuf, TweakIdx&gt;,
+    </span>pending_pubkey_scripts: BTreeMap&lt;bitcoin30::ScriptBuf, TweakIdx&gt;,
     <span class="doccomment">/// Next tweak idx to add to `pending_pubkey_scripts`
     </span>next_pending_tweak_idx: TweakIdx,
 
     <span class="doccomment">/// Collection of recent scripts from federation history that do not belong
     /// to us
-    </span>decoys: VecDeque&lt;bitcoin::ScriptBuf&gt;,
+    </span>decoys: VecDeque&lt;bitcoin30::ScriptBuf&gt;,
     <span class="comment">// To avoid updating `decoys` for the whole recovery, which might be a lot of extra updates
     // most of which will be thrown away, ignore script pubkeys from before this `session_idx`
     </span>decoy_session_threshold: u64,
@@ -230,7 +230,7 @@
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>handle_script(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         data: <span class="kw-2">&amp;</span>WalletClientModuleData,
-        script: <span class="kw-2">&amp;</span>bitcoin::ScriptBuf,
+        script: <span class="kw-2">&amp;</span>bitcoin30::ScriptBuf,
         session_idx: u64,
     ) {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(tweak_idx) = <span class="self">self</span>.pending_pubkey_scripts.get(script).copied() {
@@ -248,7 +248,7 @@
     }
 
     <span class="doccomment">/// Write a someone-elses used deposit address to use a decoy
-    </span><span class="kw">fn </span>push_decoy(<span class="kw-2">&amp;mut </span><span class="self">self</span>, script: <span class="kw-2">&amp;</span>bitcoin::ScriptBuf) {
+    </span><span class="kw">fn </span>push_decoy(<span class="kw-2">&amp;mut </span><span class="self">self</span>, script: <span class="kw-2">&amp;</span>bitcoin30::ScriptBuf) {
         <span class="self">self</span>.decoys.push_front(script.clone());
         <span class="kw">if </span><span class="number">50 </span>&lt; <span class="self">self</span>.decoys.len() {
             <span class="self">self</span>.decoys.pop_back();
@@ -256,7 +256,7 @@
     }
 
     <span class="doccomment">/// Pop a someone-elses used deposit address to use a decoy
-    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>pop_decoy(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;bitcoin::ScriptBuf&gt; {
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>pop_decoy(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;bitcoin30::ScriptBuf&gt; {
         <span class="self">self</span>.decoys.pop_front()
     }
 }

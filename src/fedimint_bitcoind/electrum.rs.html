@@ -237,7 +237,7 @@
 <a href="#236" id="236">236</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>anyhow::{anyhow <span class="kw">as </span>format_err, bail};
-<span class="kw">use </span>bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
+<span class="kw">use </span>bitcoin30::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 <span class="kw">use </span>electrum_client::ElectrumApi;
 <span class="kw">use </span>electrum_client::Error::Protocol;
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
@@ -327,7 +327,7 @@
 
     <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) {
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="macro">vec!</span>[];
-        bitcoin::consensus::Encodable::consensus_encode(<span class="kw-2">&amp;</span>transaction, <span class="kw-2">&amp;mut </span>bytes)
+        bitcoin30::consensus::Encodable::consensus_encode(<span class="kw-2">&amp;</span>transaction, <span class="kw-2">&amp;mut </span>bytes)
             .expect(<span class="string">"can't fail"</span>);
         <span class="kw">match </span>block_in_place(|| <span class="self">self</span>.client.transaction_broadcast_raw(<span class="kw-2">&amp;</span>bytes)) {
             <span class="prelude-val">Err</span>(Protocol(Value::Object(e))) <span class="kw">if </span>is_already_submitted_error(<span class="kw-2">&amp;</span>e) =&gt; (),
@@ -398,7 +398,7 @@
     <span class="kw">async fn </span>get_script_history(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         script: <span class="kw-2">&amp;</span>ScriptBuf,
-    ) -&gt; anyhow::Result&lt;Vec&lt;bitcoin::Transaction&gt;&gt; {
+    ) -&gt; anyhow::Result&lt;Vec&lt;bitcoin30::Transaction&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>results = <span class="macro">vec!</span>[];
         <span class="kw">let </span>transactions = block_in_place(|| <span class="self">self</span>.client.script_get_history(script))<span class="question-mark">?</span>;
         <span class="kw">for </span>history <span class="kw">in </span>transactions {

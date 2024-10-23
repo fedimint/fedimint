@@ -196,13 +196,13 @@
     }
 }
 
-<span class="kw">impl </span>Encodable <span class="kw">for </span>bitcoin::key::KeyPair {
+<span class="kw">impl </span>Encodable <span class="kw">for </span>bitcoin30::key::KeyPair {
     <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="self">self</span>.secret_bytes().consensus_encode(writer)
     }
 }
 
-<span class="kw">impl </span>Decodable <span class="kw">for </span>bitcoin::key::KeyPair {
+<span class="kw">impl </span>Decodable <span class="kw">for </span>bitcoin30::key::KeyPair {
     <span class="kw">fn </span>consensus_decode&lt;D: Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
@@ -236,7 +236,7 @@
     </span><span class="kw">fn </span>test_schnorr_pub_key() {
         <span class="kw">let </span>ctx = secp256k1::global::SECP256K1;
         <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng;
-        <span class="kw">let </span>sec_key = bitcoin::key::KeyPair::new(ctx, <span class="kw-2">&amp;mut </span>rng);
+        <span class="kw">let </span>sec_key = bitcoin30::key::KeyPair::new(ctx, <span class="kw-2">&amp;mut </span>rng);
         <span class="kw">let </span>pub_key = sec_key.public_key();
         test_roundtrip(<span class="kw-2">&amp;</span>pub_key);
 

@@ -3130,7 +3130,7 @@
 <span class="kw">use </span>anyhow::{anyhow, bail, ensure, format_err, Context};
 <span class="kw">use </span>async_stream::{stream, try_stream};
 <span class="kw">use </span>backup::ClientBackup;
-<span class="kw">use </span>bitcoin::secp256k1;
+<span class="kw">use </span>bitcoin30::secp256k1;
 <span class="kw">use </span>db::event_log::{
     <span class="self">self</span>, run_event_log_ordering_task, DBTransactionEventLogExt, Event, EventKind, EventLogEntry,
     EventLogId,

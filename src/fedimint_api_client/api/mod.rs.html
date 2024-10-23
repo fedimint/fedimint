@@ -1182,8 +1182,8 @@
 <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
 </span><span class="kw">use </span>arti_client::{TorAddr, TorClient, TorClientConfig};
 <span class="kw">use </span>base64::Engine <span class="kw">as _</span>;
-<span class="kw">use </span>bitcoin::hashes::sha256;
-<span class="kw">use </span>bitcoin::secp256k1;
+<span class="kw">use </span>bitcoin30::hashes::sha256;
+<span class="kw">use </span>bitcoin30::secp256k1;
 <span class="kw">pub use </span>error::{FederationError, OutputOutcomeError, PeerError};
 <span class="kw">use </span>fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams,
