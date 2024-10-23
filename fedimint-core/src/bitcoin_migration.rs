@@ -85,6 +85,22 @@ pub fn bitcoin30_to_bitcoin32_address(address: &bitcoin30::Address) -> bitcoin::
     .assume_checked()
 }
 
+pub fn bitcoin32_to_bitcoin30_unchecked_address(
+    address: &bitcoin::Address<bitcoin::address::NetworkUnchecked>,
+) -> bitcoin30::Address<bitcoin30::address::NetworkUnchecked> {
+    // The bitcoin crate only allows for deserializing an address as unchecked.
+    // However, we can safely call `assume_checked()` since the input address is
+    // checked.
+    bincode::deserialize(
+        &bincode::serialize(address).expect("Failed to serialize bitcoin32 address"),
+    )
+    .expect("Failed to convert bitcoin32 address to bitcoin30 address")
+}
+
+pub fn bitcoin32_to_bitcoin30_amount(amount: &bitcoin::Amount) -> bitcoin30::Amount {
+    bitcoin30::Amount::from_sat(amount.to_sat())
+}
+
 pub fn bitcoin30_to_bitcoin32_network(network: &bitcoin30::Network) -> bitcoin::Network {
     bincode::deserialize(
         &bincode::serialize(network).expect("Failed to serialize bitcoin30 network"),
