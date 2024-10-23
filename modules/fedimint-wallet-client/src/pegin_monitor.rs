@@ -2,7 +2,7 @@ use std::cmp;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use bitcoin::ScriptBuf;
+use bitcoin30::ScriptBuf;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client::module::ClientContext;
@@ -233,7 +233,7 @@ enum CheckOutcome {
     /// There's a tx pending (needs more confirmation)
     Pending { num_blocks_needed: u64 },
     /// A state machine was created to claim the peg-in
-    Claimed { outpoint: bitcoin::OutPoint },
+    Claimed { outpoint: bitcoin30::OutPoint },
 
     /// A peg-in transaction was already claimed (state machine created) in the
     /// past
@@ -296,7 +296,7 @@ impl CheckOutcome {
         min
     }
 
-    fn get_claimed_now_outpoints(outcomes: &[CheckOutcome]) -> Vec<bitcoin::OutPoint> {
+    fn get_claimed_now_outpoints(outcomes: &[CheckOutcome]) -> Vec<bitcoin30::OutPoint> {
         let mut res = vec![];
         for outcome in outcomes {
             if let CheckOutcome::Claimed { outpoint } = outcome {
@@ -333,7 +333,7 @@ async fn check_idx_pegins(
 
     for (transaction, out_idx) in filter_onchain_deposit_outputs(history.into_iter(), &script) {
         let txid = transaction.txid();
-        let outpoint = bitcoin::OutPoint {
+        let outpoint = bitcoin30::OutPoint {
             txid,
             vout: out_idx,
         };
@@ -398,15 +398,15 @@ async fn claim_peg_in(
     client_ctx: &ClientContext<WalletClientModule>,
     tweak_idx: TweakIdx,
     tweak_key: KeyPair,
-    transaction: &bitcoin::Transaction,
+    transaction: &bitcoin30::Transaction,
     operation_id: OperationId,
-    out_point: bitcoin::OutPoint,
+    out_point: bitcoin30::OutPoint,
     tx_out_proof: TxOutProof,
 ) -> anyhow::Result<()> {
     async fn claim_peg_in_inner(
         client_ctx: &ClientContext<WalletClientModule>,
         dbtx: &mut DatabaseTransaction<'_>,
-        btc_transaction: &bitcoin::Transaction,
+        btc_transaction: &bitcoin30::Transaction,
         out_idx: u32,
         tweak_key: KeyPair,
         txout_proof: TxOutProof,
@@ -484,9 +484,9 @@ async fn claim_peg_in(
 }
 
 pub(crate) fn filter_onchain_deposit_outputs<'a>(
-    tx_iter: impl Iterator<Item = bitcoin::Transaction> + 'a,
+    tx_iter: impl Iterator<Item = bitcoin30::Transaction> + 'a,
     out_script: &'a ScriptBuf,
-) -> impl Iterator<Item = (bitcoin::Transaction, u32)> + 'a {
+) -> impl Iterator<Item = (bitcoin30::Transaction, u32)> + 'a {
     tx_iter.flat_map(move |tx| {
         tx.output
             .clone()

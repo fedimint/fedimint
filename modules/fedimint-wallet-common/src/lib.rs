@@ -7,9 +7,9 @@
 
 use std::hash::Hasher;
 
-use bitcoin::address::NetworkUnchecked;
-use bitcoin::psbt::raw::ProprietaryKey;
-use bitcoin::{Address, Amount, BlockHash, Network, Txid};
+use bitcoin30::address::NetworkUnchecked;
+use bitcoin30::psbt::raw::ProprietaryKey;
+use bitcoin30::{Address, Amount, BlockHash, Network, Txid};
 use config::WalletClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -99,16 +99,16 @@ pub struct PegOutSignatureItem {
 pub struct SpendableUTXO {
     #[serde(with = "::fedimint_core::encoding::as_hex")]
     pub tweak: [u8; 33],
-    #[serde(with = "bitcoin::amount::serde::as_sat")]
-    pub amount: bitcoin::Amount,
+    #[serde(with = "bitcoin30::amount::serde::as_sat")]
+    pub amount: bitcoin30::Amount,
 }
 
 /// A transaction output, either unspent or consumed
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct TxOutputSummary {
-    pub outpoint: bitcoin::OutPoint,
-    #[serde(with = "bitcoin::amount::serde::as_sat")]
-    pub amount: bitcoin::Amount,
+    pub outpoint: bitcoin30::OutPoint,
+    #[serde(with = "bitcoin30::amount::serde::as_sat")]
+    pub amount: bitcoin30::Amount,
 }
 
 /// Summary of the coins within the wallet.
@@ -236,9 +236,9 @@ impl PegOutFees {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct PegOut {
-    pub recipient: bitcoin::Address<NetworkUnchecked>,
-    #[serde(with = "bitcoin::amount::serde::as_sat")]
-    pub amount: bitcoin::Amount,
+    pub recipient: bitcoin30::Address<NetworkUnchecked>,
+    #[serde(with = "bitcoin30::amount::serde::as_sat")]
+    pub amount: bitcoin30::Amount,
     pub fees: PegOutFees,
 }
 
@@ -249,7 +249,7 @@ extensible_associated_module_type!(
 );
 
 impl WalletOutputOutcome {
-    pub fn new_v0(txid: bitcoin::Txid) -> WalletOutputOutcome {
+    pub fn new_v0(txid: bitcoin30::Txid) -> WalletOutputOutcome {
         WalletOutputOutcome::V0(WalletOutputOutcomeV0(txid))
     }
 }
@@ -257,7 +257,7 @@ impl WalletOutputOutcome {
 /// Contains the Bitcoin transaction id of the transaction created by the
 /// withdraw request
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct WalletOutputOutcomeV0(pub bitcoin::Txid);
+pub struct WalletOutputOutcomeV0(pub bitcoin30::Txid);
 
 impl std::fmt::Display for WalletOutputOutcomeV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -310,7 +310,7 @@ extensible_associated_module_type!(
 impl WalletOutput {
     pub fn new_v0_peg_out(
         recipient: Address<NetworkUnchecked>,
-        amount: bitcoin::Amount,
+        amount: bitcoin30::Amount,
         fees: PegOutFees,
     ) -> WalletOutput {
         WalletOutput::V0(WalletOutputV0::PegOut(PegOut {

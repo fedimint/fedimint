@@ -3,7 +3,7 @@ use std::io::Cursor;
 use std::path::PathBuf;
 
 use anyhow::{anyhow as format_err, bail};
-use bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
+use bitcoin30::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use bitcoincore_rpc::{Auth, RpcApi};
 use fedimint_core::encoding::Decodable;

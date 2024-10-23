@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use bitcoin::{secp256k1, Address, Network, OutPoint};
+use bitcoin30::{secp256k1, Address, Network, OutPoint};
 use fedimint_bip39::Mnemonic;
 use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_address, bitcoin30_to_bitcoin32_invoice, bitcoin30_to_bitcoin32_network,

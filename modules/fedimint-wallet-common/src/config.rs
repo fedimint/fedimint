@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use bitcoin::Network;
+use bitcoin30::Network;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::BitcoinRpcConfig;
@@ -197,7 +197,7 @@ impl WalletConfig {
 impl WalletClientConfig {
     pub fn new(
         peg_in_descriptor: PegInDescriptor,
-        network: bitcoin::network::constants::Network,
+        network: bitcoin30::network::constants::Network,
         finality_delay: u32,
         default_bitcoin_rpc: BitcoinRpcConfig,
     ) -> Self {

@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use anyhow::ensure;
 use async_trait::async_trait;
-use bitcoin::Address;
+use bitcoin30::Address;
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::db::Database;
 use fedimint_core::task::{sleep, TaskGroup};
@@ -1246,7 +1246,7 @@ impl ILnRpcClient for GatewayLndClient {
 
         for channel in &channels_with_peer {
             let channel_point =
-                bitcoin::OutPoint::from_str(&channel.channel_point).map_err(|e| {
+                bitcoin30::OutPoint::from_str(&channel.channel_point).map_err(|e| {
                     LightningRpcError::FailedToCloseChannelsWithPeer {
                         failure_reason: format!("Failed to parse channel point {e:?}"),
                     }
@@ -1258,7 +1258,7 @@ impl ILnRpcClient for GatewayLndClient {
                     channel_point: Some(ChannelPoint {
                         funding_txid: Some(
                             tonic_lnd::lnrpc::channel_point::FundingTxid::FundingTxidBytes(
-                                <bitcoin::Txid as AsRef<[u8]>>::as_ref(&channel_point.txid)
+                                <bitcoin30::Txid as AsRef<[u8]>>::as_ref(&channel_point.txid)
                                     .to_vec(),
                             ),
                         ),

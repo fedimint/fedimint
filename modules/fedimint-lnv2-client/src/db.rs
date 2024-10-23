@@ -1,4 +1,4 @@
-use bitcoin::secp256k1::PublicKey;
+use bitcoin30::secp256k1::PublicKey;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{impl_db_lookup, impl_db_record};

@@ -17,7 +17,7 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-bitcoin = { workspace = true }
+bitcoin30 = { workspace = true }
 fedimint-core = { workspace = true }
 hex = { workspace = true }
 impl-tools = "0.10.0"

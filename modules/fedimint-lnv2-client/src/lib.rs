@@ -17,8 +17,8 @@ use std::time::Duration;
 
 use api::{GatewayConnection, RealGatewayConnection};
 use async_stream::stream;
-use bitcoin::hashes::{sha256, Hash};
-use bitcoin::secp256k1;
+use bitcoin30::hashes::{sha256, Hash};
+use bitcoin30::secp256k1;
 use db::GatewayKey;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};

@@ -1,5 +1,5 @@
-use bitcoin::address::NetworkUnchecked;
-use bitcoin::{Address, Txid};
+use bitcoin30::address::NetworkUnchecked;
+use bitcoin30::{Address, Txid};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, TransactionId};
 use fedimint_ln_common::gateway_endpoint_constants::{

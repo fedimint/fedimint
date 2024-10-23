@@ -7,7 +7,7 @@ use std::time::Duration;
 use anyhow::{anyhow, bail, Context, Result};
 use bitcoincore_rpc::bitcoin::{Address, BlockHash};
 use bitcoincore_rpc::bitcoincore_rpc_json::{GetBalancesResult, GetBlockchainInfoResult};
-use bitcoincore_rpc::{bitcoin, RpcApi};
+use bitcoincore_rpc::RpcApi;
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::ClnRpc;
 use fedimint_core::encoding::Encodable;
@@ -220,24 +220,27 @@ impl Bitcoind {
         Ok(())
     }
 
-    pub async fn send_to(&self, addr: String, amount: u64) -> Result<bitcoin::Txid> {
+    pub async fn send_to(&self, addr: String, amount: u64) -> Result<bitcoin30::Txid> {
         debug!(target: LOG_DEVIMINT, amount, addr, "Sending funds from bitcoind");
-        let amount = bitcoin::Amount::from_sat(amount);
+        let amount = bitcoin30::Amount::from_sat(amount);
         let tx = self
             .wallet_client()
             .await?
-            .send_to_address(bitcoin::Address::from_str(&addr)?.assume_checked(), amount)
+            .send_to_address(
+                bitcoin30::Address::from_str(&addr)?.assume_checked(),
+                amount,
+            )
             .await?;
         Ok(tx)
     }
 
-    pub async fn get_txout_proof(&self, txid: bitcoin::Txid) -> Result<String> {
+    pub async fn get_txout_proof(&self, txid: bitcoin30::Txid) -> Result<String> {
         let client = self.wallet_client().await?.clone();
         let proof = spawn_blocking(move || client.client.get_tx_out_proof(&[txid], None)).await??;
         Ok(proof.encode_hex())
     }
 
-    pub async fn get_raw_transaction(&self, txid: bitcoin::Txid) -> Result<String> {
+    pub async fn get_raw_transaction(&self, txid: bitcoin30::Txid) -> Result<String> {
         let client = self.client.clone();
         let tx = spawn_blocking(move || client.get_raw_transaction(&txid, None)).await??;
         let bytes = tx.consensus_encode_to_vec();
@@ -272,8 +275,8 @@ impl Bitcoind {
     pub async fn send_to_address(
         &self,
         addr: Address,
-        amount: bitcoin::Amount,
-    ) -> anyhow::Result<bitcoin::Txid> {
+        amount: bitcoin30::Amount,
+    ) -> anyhow::Result<bitcoin30::Txid> {
         let client = self.wallet_client().await?.clone();
         Ok(spawn_blocking(move || {
             client
@@ -688,9 +691,9 @@ impl Lnd {
     ) -> anyhow::Result<([u8; 32], String, cln_rpc::primitives::Sha256)> {
         let preimage = rand::random::<[u8; 32]>();
         let hash = {
-            let mut engine = bitcoin::hashes::sha256::Hash::engine();
-            bitcoin::hashes::HashEngine::input(&mut engine, &preimage);
-            bitcoin::hashes::sha256::Hash::from_engine(engine)
+            let mut engine = bitcoin30::hashes::sha256::Hash::engine();
+            bitcoin30::hashes::HashEngine::input(&mut engine, &preimage);
+            bitcoin30::hashes::sha256::Hash::from_engine(engine)
         };
         let hold_request = self
             .invoices_client_lock()
@@ -998,7 +1001,7 @@ pub async fn open_channels_between_gateways(
 
 async fn wait_for_ready_channel_on_gateway_with_counterparty(
     gw: &Gatewayd,
-    counterparty_lightning_node_pubkey: bitcoin::secp256k1::PublicKey,
+    counterparty_lightning_node_pubkey: bitcoin30::secp256k1::PublicKey,
 ) -> anyhow::Result<()> {
     poll("Wait for channel update", || async {
         let channels = gw

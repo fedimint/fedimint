@@ -8,7 +8,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use bitcoin::{Address, Network};
+use bitcoin30::{Address, Network};
 use clap::Subcommand;
 use fedimint_bip39::Mnemonic;
 use fedimint_core::db::Database;

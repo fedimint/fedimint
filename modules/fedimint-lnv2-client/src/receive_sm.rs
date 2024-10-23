@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use bitcoin::key::KeyPair;
+use bitcoin30::key::KeyPair;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;

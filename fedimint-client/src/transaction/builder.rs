@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use bitcoin::key::KeyPair;
-use bitcoin::secp256k1;
+use bitcoin30::key::KeyPair;
+use bitcoin30::secp256k1;
 use fedimint_core::core::{DynInput, DynOutput, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::transaction::{Transaction, TransactionSignature};
 use fedimint_core::Amount;

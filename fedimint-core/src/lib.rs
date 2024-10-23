@@ -130,7 +130,7 @@ hash_newtype!(
 pub enum BitcoinAmountOrAll {
     All,
     #[serde(untagged)]
-    Amount(#[serde(with = "bitcoin::amount::serde::as_sat")] bitcoin::Amount),
+    Amount(#[serde(with = "bitcoin30::amount::serde::as_sat")] bitcoin30::Amount),
 }
 
 impl FromStr for BitcoinAmountOrAll {
@@ -215,13 +215,13 @@ pub struct Feerate {
 }
 
 impl Feerate {
-    pub fn calculate_fee(&self, weight: u64) -> bitcoin::Amount {
+    pub fn calculate_fee(&self, weight: u64) -> bitcoin30::Amount {
         let sats = weight_to_vbytes(weight) * self.sats_per_kvb / 1000;
-        bitcoin::Amount::from_sat(sats)
+        bitcoin30::Amount::from_sat(sats)
     }
 }
 
-const WITNESS_SCALE_FACTOR: u64 = bitcoin::constants::WITNESS_SCALE_FACTOR as u64;
+const WITNESS_SCALE_FACTOR: u64 = bitcoin30::constants::WITNESS_SCALE_FACTOR as u64;
 
 /// Converts weight to virtual bytes, defined in [BIP-141] as weight / 4
 /// (rounded up to the next integer).
@@ -250,8 +250,8 @@ mod tests {
     #[test]
     fn calculate_fee() {
         let feerate = Feerate { sats_per_kvb: 1000 };
-        assert_eq!(bitcoin::Amount::from_sat(25), feerate.calculate_fee(100));
-        assert_eq!(bitcoin::Amount::from_sat(26), feerate.calculate_fee(101));
+        assert_eq!(bitcoin30::Amount::from_sat(25), feerate.calculate_fee(100));
+        assert_eq!(bitcoin30::Amount::from_sat(26), feerate.calculate_fee(101));
     }
 
     #[test]
@@ -262,7 +262,7 @@ mod tests {
         let all: BitcoinAmountOrAll = serde_json::from_str("12345").unwrap();
         assert_eq!(
             all,
-            BitcoinAmountOrAll::Amount(bitcoin::Amount::from_sat(12345))
+            BitcoinAmountOrAll::Amount(bitcoin30::Amount::from_sat(12345))
         );
     }
 }

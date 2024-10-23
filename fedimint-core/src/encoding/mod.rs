@@ -1471,7 +1471,7 @@ mod tests {
     #[test]
     fn test_bitcoin_consensus_encoding() {
         // encodings should follow the bitcoin consensus encoding
-        let txid = bitcoin::Txid::from_str(
+        let txid = bitcoin30::Txid::from_str(
             "51f7ed2f23e58cc6e139e715e9ce304a1e858416edc9079dd7b74fa8d2efc09a",
         )
         .unwrap();
@@ -1486,7 +1486,7 @@ mod tests {
             "02000000000101d35b66c54cf6c09b81a8d94cd5d179719cd7595c258449452a9305ab9b12df250200000000fdffffff020cd50a0000000000160014ae5d450b71c04218e6e81c86fcc225882d7b7caae695b22100000000160014f60834ef165253c571b11ce9fa74e46692fc5ec10248304502210092062c609f4c8dc74cd7d4596ecedc1093140d90b3fd94b4bdd9ad3e102ce3bc02206bb5a6afc68d583d77d5d9bcfb6252a364d11a307f3418be1af9f47f7b1b3d780121026e5628506ecd33242e5ceb5fdafe4d3066b5c0f159b3c05a621ef65f177ea28600000000"
         ).unwrap();
         let transaction =
-            bitcoin::Transaction::from_bytes(&transaction, &ModuleDecoderRegistry::default())
+            bitcoin30::Transaction::from_bytes(&transaction, &ModuleDecoderRegistry::default())
                 .unwrap();
         test_roundtrip_expected(
             &transaction,
@@ -1505,7 +1505,7 @@ mod tests {
                 89, 179, 192, 90, 98, 30, 246, 95, 23, 126, 162, 134, 0, 0, 0, 0,
             ],
         );
-        let blockhash = bitcoin::BlockHash::from_str(
+        let blockhash = bitcoin30::BlockHash::from_str(
             "0000000000000000000065bda8f8a88f2e1e00d9a6887a43d640e52a4c7660f2",
         )
         .unwrap();

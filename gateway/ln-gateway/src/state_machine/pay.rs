@@ -587,7 +587,7 @@ impl GatewayPayInvoice {
 
     fn validate_outgoing_account(
         account: &OutgoingContractAccount,
-        redeem_key: bitcoin::key::KeyPair,
+        redeem_key: bitcoin30::key::KeyPair,
         timelock_delta: u64,
         consensus_block_count: u64,
         payment_data: &PaymentData,

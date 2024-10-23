@@ -5,8 +5,8 @@ use std::result;
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use bitcoin::hashes::sha256;
-use bitcoin::secp256k1;
+use bitcoin30::hashes::sha256;
+use bitcoin30::secp256k1;
 use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams,
 };

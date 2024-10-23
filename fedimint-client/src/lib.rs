@@ -90,7 +90,7 @@ use std::time::Duration;
 use anyhow::{anyhow, bail, ensure, format_err, Context};
 use async_stream::{stream, try_stream};
 use backup::ClientBackup;
-use bitcoin::secp256k1;
+use bitcoin30::secp256k1;
 use db::event_log::{
     self, run_event_log_ordering_task, DBTransactionEventLogExt, Event, EventKind, EventLogEntry,
     EventLogId,

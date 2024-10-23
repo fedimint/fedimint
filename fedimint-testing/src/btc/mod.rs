@@ -2,7 +2,7 @@ pub mod mock;
 pub mod real;
 
 use async_trait::async_trait;
-use bitcoin::{Address, Transaction, Txid};
+use bitcoin30::{Address, Transaction, Txid};
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::Amount;
 
@@ -13,7 +13,7 @@ pub trait BitcoinTest {
     async fn lock_exclusive(&self) -> Box<dyn BitcoinTest + Send + Sync>;
 
     /// Mines a given number of blocks
-    async fn mine_blocks(&self, block_num: u64) -> Vec<bitcoin::BlockHash>;
+    async fn mine_blocks(&self, block_num: u64) -> Vec<bitcoin30::BlockHash>;
 
     /// Prepare funding wallet
     ///
@@ -29,7 +29,7 @@ pub trait BitcoinTest {
     async fn send_and_mine_block(
         &self,
         address: &Address,
-        amount: bitcoin::Amount,
+        amount: bitcoin30::Amount,
     ) -> (TxOutProof, Transaction);
 
     /// Returns a new address.
@@ -53,5 +53,5 @@ pub trait BitcoinTest {
     async fn get_block_count(&self) -> u64;
 
     /// Returns a transaction with the provided txid if it exists in the mempool
-    async fn get_mempool_tx(&self, txid: &Txid) -> Option<bitcoin::Transaction>;
+    async fn get_mempool_tx(&self, txid: &Txid) -> Option<bitcoin30::Transaction>;
 }

@@ -1,6 +1,6 @@
 use anyhow::bail;
-use bitcoin::address::NetworkUnchecked;
-use bitcoin::Address;
+use bitcoin30::address::NetworkUnchecked;
+use bitcoin30::Address;
 use clap::Subcommand;
 use fedimint_core::config::FederationId;
 use fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll};
@@ -115,7 +115,7 @@ pub enum GeneralCommands {
         routing_fees: Option<FederationRoutingFees>,
 
         #[clap(long)]
-        network: Option<bitcoin::Network>,
+        network: Option<bitcoin30::Network>,
 
         /// Format federation id,base msat,proportional to millionths part. Any
         /// other federations not given here will keep their current fees.

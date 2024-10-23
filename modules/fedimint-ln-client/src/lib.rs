@@ -23,9 +23,9 @@ use std::time::Duration;
 use anyhow::{anyhow, bail, ensure, format_err, Context};
 use api::LnFederationApi;
 use async_stream::{stream, try_stream};
-use bitcoin::hashes::{sha256, Hash, HashEngine, Hmac, HmacEngine};
-use bitcoin::key::KeyPair;
-use bitcoin::Network;
+use bitcoin30::hashes::{sha256, Hash, HashEngine, Hmac, HmacEngine};
+use bitcoin30::key::KeyPair;
+use bitcoin30::Network;
 use db::{
     DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
 };

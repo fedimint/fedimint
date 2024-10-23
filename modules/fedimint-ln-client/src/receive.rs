@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use bitcoin::key::KeyPair;
+use bitcoin30::key::KeyPair;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, DynState, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
@@ -390,7 +390,7 @@ impl LightningReceiveFunded {
 
 #[cfg(test)]
 mod tests {
-    use bitcoin::hashes::{sha256, Hash};
+    use bitcoin30::hashes::{sha256, Hash};
     use lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
     use secp256k1::SecretKey;
 

@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
 axum = { workspace = true, features = ["tracing"] }
+bitcoin30 = { workspace = true }
 bitcoincore-rpc = { workspace = true }
 clap = { workspace = true }
 cln-rpc = { workspace = true }

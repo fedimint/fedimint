@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use bitcoin::address::NetworkUnchecked;
+use bitcoin30::address::NetworkUnchecked;
 use clap::Subcommand;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{Amount, BitcoinAmountOrAll};
@@ -49,7 +49,7 @@ pub enum LightningCommands {
     OpenChannel {
         /// The public key of the node to open a channel with
         #[clap(long)]
-        pubkey: bitcoin::secp256k1::PublicKey,
+        pubkey: bitcoin30::secp256k1::PublicKey,
 
         #[clap(long)]
         host: String,
@@ -67,7 +67,7 @@ pub enum LightningCommands {
     CloseChannelsWithPeer {
         // The public key of the node to close channels with
         #[clap(long)]
-        pubkey: bitcoin::secp256k1::PublicKey,
+        pubkey: bitcoin30::secp256k1::PublicKey,
     },
     /// List active channels.
     ListActiveChannels,
@@ -76,7 +76,7 @@ pub enum LightningCommands {
     WithdrawOnchain {
         /// The address to withdraw funds to.
         #[clap(long)]
-        address: bitcoin::Address<NetworkUnchecked>,
+        address: bitcoin30::Address<NetworkUnchecked>,
 
         /// The amount to withdraw.
         /// Can be "all" to withdraw all funds, an amount + unit (e.g. "1000

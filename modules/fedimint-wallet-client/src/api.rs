@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use bitcoin::Address;
+use bitcoin30::Address;
 use fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
@@ -19,7 +19,7 @@ pub trait WalletFederationApi {
     async fn fetch_peg_out_fees(
         &self,
         address: &Address,
-        amount: bitcoin::Amount,
+        amount: bitcoin30::Amount,
     ) -> FederationResult<Option<PegOutFees>>;
 
     async fn fetch_bitcoin_rpc_kind(&self, peer_id: PeerId) -> FederationResult<String>;
@@ -45,7 +45,7 @@ where
     async fn fetch_peg_out_fees(
         &self,
         address: &Address,
-        amount: bitcoin::Amount,
+        amount: bitcoin30::Amount,
     ) -> FederationResult<Option<PegOutFees>> {
         self.request_current_consensus(
             PEG_OUT_FEES_ENDPOINT.to_string(),

@@ -7,8 +7,8 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::anyhow;
-use bitcoin::network::constants::Network;
-use bitcoin::OutPoint;
+use bitcoin30::network::constants::Network;
+use bitcoin30::OutPoint;
 use clap::{ArgGroup, Parser, Subcommand};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
@@ -312,7 +312,7 @@ fn tweak_descriptor(
     base_descriptor
         .tweak(tweak, secp256k1::SECP256K1)
         .translate_pk(&mut SecretKeyInjector {
-            secret: bitcoin::key::PrivateKey {
+            secret: bitcoin30::key::PrivateKey {
                 compressed: true,
                 network,
                 inner: secret_key,
@@ -327,8 +327,8 @@ fn tweak_descriptor(
 struct ImportableWallet {
     outpoint: OutPoint,
     descriptor: Descriptor<Key>,
-    #[serde(with = "bitcoin::amount::serde::as_sat")]
-    amount_sat: bitcoin::Amount,
+    #[serde(with = "bitcoin30::amount::serde::as_sat")]
+    amount_sat: bitcoin30::Amount,
 }
 
 /// A Bitcoin Core importable descriptor
@@ -341,7 +341,7 @@ struct ImportableWalletMin {
 /// know.
 #[derive(Debug)]
 struct SecretKeyInjector {
-    secret: bitcoin::key::PrivateKey,
+    secret: bitcoin30::key::PrivateKey,
     public: CompressedPublicKey,
 }
 
