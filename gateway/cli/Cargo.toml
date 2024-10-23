@@ -25,7 +25,7 @@ clap = { version = "4.5.8", features = ["derive", "std", "help", "usage", "error
 clap_complete = "4.5.7"
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
-ln-gateway = { version = "=0.4.3-rc.2", package = "fedimint-ln-gateway", path = "../ln-gateway" }
+ln-gateway = { version = "=0.4.4-rc.0", package = "fedimint-ln-gateway", path = "../ln-gateway" }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -34,4 +34,4 @@ tracing = { version = "0.1.40", default-features = false, features = ["log", "at
 url = { version = "2.5.2", features = ["serde"] }
 
 [build-dependencies]
-fedimint-build = { version = "=0.4.3-rc.2", path = "../../fedimint-build" }
+fedimint-build = { version = "=0.4.4-rc.0", path = "../../fedimint-build" }

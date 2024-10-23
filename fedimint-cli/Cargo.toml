@@ -31,22 +31,22 @@ clap = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 lightning-invoice = { workspace = true }
-fedimint-aead = { version = "=0.4.3-rc.2", path = "../crypto/aead" }
-fedimint-bip39 = { version = "=0.4.3-rc.2", path = "../fedimint-bip39" }
+fedimint-aead = { version = "=0.4.4-rc.0", path = "../crypto/aead" }
+fedimint-bip39 = { version = "=0.4.4-rc.0", path = "../fedimint-bip39" }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
-fedimint-rocksdb = { version = "=0.4.3-rc.2", path = "../fedimint-rocksdb" }
-fedimint-mint-client = { version = "=0.4.3-rc.2", path = "../modules/fedimint-mint-client" }
-fedimint-mint-common = { version = "=0.4.3-rc.2", path = "../modules/fedimint-mint-common" }
+fedimint-rocksdb = { version = "=0.4.4-rc.0", path = "../fedimint-rocksdb" }
+fedimint-mint-client = { version = "=0.4.4-rc.0", path = "../modules/fedimint-mint-client" }
+fedimint-mint-common = { version = "=0.4.4-rc.0", path = "../modules/fedimint-mint-common" }
 fedimint-ln-client = { workspace = true, features = ["cli"] }
-fedimint-lnv2-client = { version = "=0.4.3-rc.2", path = "../modules/fedimint-lnv2-client", features = ["cli"] }
-fedimint-ln-common = { version = "=0.4.3-rc.2", path = "../modules/fedimint-ln-common" }
-fedimint-wallet-client = { version = "=0.4.3-rc.2", path = "../modules/fedimint-wallet-client", features = [ "cli" ] }
+fedimint-lnv2-client = { version = "=0.4.4-rc.0", path = "../modules/fedimint-lnv2-client", features = ["cli"] }
+fedimint-ln-common = { version = "=0.4.4-rc.0", path = "../modules/fedimint-ln-common" }
+fedimint-wallet-client = { version = "=0.4.4-rc.0", path = "../modules/fedimint-wallet-client", features = [ "cli" ] }
 fedimint-logging = { workspace = true }
-fedimint-server = { version = "=0.4.3-rc.2", path = "../fedimint-server" }
-fedimint-meta-client = { version = "=0.4.3-rc.2", path = "../modules/fedimint-meta-client", features = ["cli"] }
-fedimint-meta-common = { version = "=0.4.3-rc.2", path = "../modules/fedimint-meta-common" }
+fedimint-server = { version = "=0.4.4-rc.0", path = "../fedimint-server" }
+fedimint-meta-client = { version = "=0.4.4-rc.0", path = "../modules/fedimint-meta-client", features = ["cli"] }
+fedimint-meta-common = { version = "=0.4.4-rc.0", path = "../modules/fedimint-meta-common" }
 fs-lock = "0.1.3"
 hex = { workspace = true }
 rand = { workspace = true }
@@ -61,4 +61,4 @@ clap_complete = "4.5.7"
 reqwest = { workspace = true }
 
 [build-dependencies]
-fedimint-build = { version = "=0.4.3-rc.2", path = "../fedimint-build" }
+fedimint-build = { version = "=0.4.4-rc.0", path = "../fedimint-build" }
