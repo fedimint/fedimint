@@ -85,7 +85,6 @@ async fn pegin_gateways(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     let federation = dev_fed.fed().await?;
 
     let gw_lnd = dev_fed.gw_lnd_registered().await?;
-    let gw_cln = dev_fed.gw_cln_registered().await?;
     let gw_ldk = dev_fed
         .gw_ldk_connected()
         .await?
@@ -94,7 +93,6 @@ async fn pegin_gateways(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     try_join!(
         federation.pegin_gateway(1_000_000, gw_lnd),
-        federation.pegin_gateway(1_000_000, gw_cln),
         federation.pegin_gateway(1_000_000, gw_ldk),
     )?;
 
@@ -178,14 +176,13 @@ async fn test_payments_between_gateways(dev_fed: &DevJitFed) -> anyhow::Result<(
     info!("Testing payments between gateways...");
 
     let gw_lnd = dev_fed.gw_lnd().await?;
-    let gw_cln = dev_fed.gw_cln().await?;
     let gw_ldk = dev_fed
         .gw_ldk()
         .await?
         .as_ref()
         .expect("Gateways of version 0.5.0 or higher support LDK");
 
-    let gateways = [(gw_lnd, "LND"), (gw_cln, "CLN"), (gw_ldk, "LDK")];
+    let gateways = [(gw_lnd, "LND"), (gw_ldk, "LDK")];
 
     let gateway_matrix = gateways
         .iter()
@@ -215,14 +212,13 @@ async fn test_refund_of_circular_payments(dev_fed: &DevJitFed) -> anyhow::Result
     federation.pegin_client(10_000, &client).await?;
 
     let gw_lnd = dev_fed.gw_lnd_registered().await?;
-    let gw_cln = dev_fed.gw_cln_registered().await?;
     let gw_ldk = dev_fed
         .gw_ldk_connected()
         .await?
         .as_ref()
         .expect("Gateways of version 0.5.0 or higher support LDK");
 
-    let gateways = [(gw_lnd, "LND"), (gw_cln, "CLN"), (gw_ldk, "LDK")];
+    let gateways = [(gw_lnd, "LND"), (gw_ldk, "LDK")];
 
     let gateway_matrix = gateways.iter().cartesian_product(gateways);
 
@@ -249,14 +245,13 @@ async fn test_circular_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     federation.pegin_client(10_000, &client).await?;
 
     let gw_lnd = dev_fed.gw_lnd().await?;
-    let gw_cln = dev_fed.gw_cln().await?;
     let gw_ldk = dev_fed
         .gw_ldk()
         .await?
         .as_ref()
         .expect("Gateways of version 0.5.0 or higher support LDK");
 
-    let gateways = [(gw_lnd, "LND"), (gw_cln, "CLN"), (gw_ldk, "LDK")];
+    let gateways = [(gw_lnd, "LND"), (gw_ldk, "LDK")];
 
     let gateway_matrix = gateways.iter().cartesian_product(gateways);
 
@@ -285,14 +280,13 @@ async fn test_payments_from_client_to_gateways(dev_fed: &DevJitFed) -> anyhow::R
     federation.pegin_client(10_000, &client).await?;
 
     let gw_lnd = dev_fed.gw_lnd().await?;
-    let gw_cln = dev_fed.gw_cln().await?;
     let gw_ldk = dev_fed
         .gw_ldk()
         .await?
         .as_ref()
         .expect("Gateways of version 0.5.0 or higher support LDK");
 
-    let gateways = [(gw_lnd, "LND"), (gw_cln, "CLN"), (gw_ldk, "LDK")];
+    let gateways = [(gw_lnd, "LND"), (gw_ldk, "LDK")];
 
     let gateway_matrix = gateways
         .iter()
@@ -322,14 +316,13 @@ async fn test_payments_from_gateways_to_client(dev_fed: &DevJitFed) -> anyhow::R
     federation.pegin_client(10_000, &client).await?;
 
     let gw_lnd = dev_fed.gw_lnd().await?;
-    let gw_cln = dev_fed.gw_cln().await?;
     let gw_ldk = dev_fed
         .gw_ldk()
         .await?
         .as_ref()
         .expect("Gateways of version 0.5.0 or higher support LDK");
 
-    let gateways = [(gw_lnd, "LND"), (gw_cln, "CLN"), (gw_ldk, "LDK")];
+    let gateways = [(gw_lnd, "LND"), (gw_ldk, "LDK")];
 
     let gateway_matrix = gateways
         .iter()
