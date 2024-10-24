@@ -619,7 +619,17 @@
 <a href="#618" id="618">618</a>
 <a href="#619" id="619">619</a>
 <a href="#620" id="620">620</a>
-<a href="#621" id="621">621</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
+<a href="#627" id="627">627</a>
+<a href="#628" id="628">628</a>
+<a href="#629" id="629">629</a>
+<a href="#630" id="630">630</a>
+<a href="#631" id="631">631</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -635,6 +645,7 @@
 <span class="kw">use </span>fedimint_core::runtime::spawn;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll};
+<span class="kw">use </span>ldk_node::config::EsploraSyncConfig;
 <span class="kw">use </span>ldk_node::lightning::ln::msgs::SocketAddress;
 <span class="kw">use </span>ldk_node::lightning::ln::PaymentHash;
 <span class="kw">use </span>ldk_node::lightning::routing::gossip::NodeAlias;
@@ -719,7 +730,16 @@
         });
         node_builder
             .set_entropy_bip39_mnemonic(mnemonic, <span class="prelude-val">None</span>)
-            .set_chain_source_esplora(esplora_server_url.to_string(), <span class="prelude-val">None</span>);
+            .set_chain_source_esplora(
+                esplora_server_url.to_string(),
+                <span class="prelude-val">Some</span>(EsploraSyncConfig {
+                    <span class="comment">// TODO: Remove these and rely on the default values.
+                    // See here for details: https://github.com/lightningdevkit/ldk-node/issues/339#issuecomment-2344230472
+                    </span>onchain_wallet_sync_interval_secs: <span class="number">10</span>,
+                    lightning_wallet_sync_interval_secs: <span class="number">10</span>,
+                    ..Default::default()
+                }),
+            );
         <span class="kw">let </span><span class="prelude-val">Some</span>(data_dir_str) = data_dir.to_str() <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Invalid data dir path"</span>));
         };
@@ -835,13 +855,9 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ILnRpcClient <span class="kw">for </span>GatewayLdkClient {
     <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse, LightningRpcError&gt; {
-        <span class="comment">// It's important that this is called before getting esplora chain tip data
-        // since we assume that the node is _never_ ahead of esplora. But if we called
-        // this after esplora, a block could be mined and processed in between the two
-        // calls.
-        </span><span class="kw">let </span>node_status = <span class="self">self</span>.node.status();
+        <span class="kw">let </span>node_status = <span class="self">self</span>.node.status();
 
-        <span class="kw">let </span><span class="prelude-val">Some</span>(esplora_chain_tip_block_summary) = <span class="self">self
+        <span class="kw">let </span><span class="prelude-val">Some</span>(chain_tip_block_summary) = <span class="self">self
             </span>.esplora_client
             .get_blocks(<span class="prelude-val">None</span>)
             .<span class="kw">await
@@ -858,13 +874,17 @@
             });
         };
 
-        <span class="kw">let </span>esplora_chain_tip_block_height = esplora_chain_tip_block_summary.time.height;
-        <span class="kw">let </span>ldk_node_chain_tip_block_height = node_status.current_best_block.height;
+        <span class="kw">let </span>esplora_chain_tip_timestamp = chain_tip_block_summary.time.timestamp;
+        <span class="kw">let </span>block_height: u32 = chain_tip_block_summary.time.height;
 
-        <span class="comment">// The LDK node should never be ahead of the Esplora chain tip block height.
-        </span><span class="macro">assert!</span>(esplora_chain_tip_block_height &gt;= ldk_node_chain_tip_block_height);
-
-        <span class="kw">let </span>synced_to_chain = esplora_chain_tip_block_height == ldk_node_chain_tip_block_height;
+        <span class="kw">let </span>synced_to_chain = node_status
+            .latest_lightning_wallet_sync_timestamp
+            .unwrap_or_default()
+            &gt; esplora_chain_tip_timestamp
+            &amp;&amp; node_status
+                .latest_onchain_wallet_sync_timestamp
+                .unwrap_or_default()
+                &gt; esplora_chain_tip_timestamp;
 
         <span class="prelude-val">Ok</span>(GetNodeInfoResponse {
             pub_key: <span class="self">self</span>.node.node_id().serialize().to_vec(),
@@ -873,7 +893,7 @@
                 <span class="prelude-val">None </span>=&gt; <span class="macro">format!</span>(<span class="string">"LDK Fedimint Gateway Node {}"</span>, <span class="self">self</span>.node.node_id()),
             },
             network: <span class="self">self</span>.node.config().network.to_string(),
-            block_height: ldk_node_chain_tip_block_height,
+            block_height,
             synced_to_chain,
         })
     }
