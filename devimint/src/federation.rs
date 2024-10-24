@@ -33,7 +33,7 @@ use fedimintd::envs::FM_EXTRA_DKG_META_ENV;
 use fs_lock::FileLock;
 use futures::future::join_all;
 use rand::Rng;
-use tokio::task::JoinSet;
+use tokio::task::{spawn_blocking, JoinSet};
 use tokio::time::Instant;
 use tracing::{debug, info};
 
@@ -103,9 +103,10 @@ impl Client {
     }
 
     /// Create a [`Client`] that starts with a fresh state.
-    pub fn create(name: &str) -> Result<Client> {
-        block_in_place(|| {
-            let _lock = Self::client_name_lock(name);
+    pub async fn create(name: impl ToString) -> Result<Client> {
+        let name = name.to_string();
+        spawn_blocking(move || {
+            let _lock = Self::client_name_lock(&name);
             for i in 0u64.. {
                 let client = Self {
                     name: format!("{name}-{i}"),
@@ -118,6 +119,7 @@ impl Client {
             }
             unreachable!()
         })
+        .await?
     }
 
     /// Open or create a [`Client`] that starts with a fresh state.
@@ -185,8 +187,8 @@ impl Client {
 
     /// Create a [`Client`] that starts with a state that is a copy of
     /// of another one.
-    pub async fn new_forked(&self, name: &str) -> Result<Client> {
-        let new = Client::create(name)?;
+    pub async fn new_forked(&self, name: impl ToString) -> Result<Client> {
+        let new = Client::create(name).await?;
 
         cmd!(
             "cp",
@@ -476,14 +478,9 @@ impl Federation {
             .context("Internal client joining Federation")
     }
 
-    /// Fork the built-in client of `Federation` and give it a name
-    pub async fn fork_client(&self, name: &str) -> Result<Client> {
-        Client::new_forked(self.internal_client().await?, name).await
-    }
-
     /// New [`Client`] that already joined `self`
-    pub async fn new_joined_client(&self, name: &str) -> Result<Client> {
-        let client = Client::create(name)?;
+    pub async fn new_joined_client(&self, name: impl ToString) -> Result<Client> {
+        let client = Client::create(name).await?;
         client.join_federation(self.invite_code()?).await?;
         Ok(client)
     }
