@@ -773,7 +773,7 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
                             txid: tx.txid(),
                             vout: idx as u32,
                         },
-                        amount: bitcoin30::Amount::from_sat(output.value),
+                        amount: bitcoin::Amount::from_sat(output.value),
                     })
                 } else {
                     None
@@ -858,7 +858,7 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
 
     let expected_pending_peg_out_txo = TxOutputSummary {
         outpoint: bitcoin30::OutPoint { txid, vout: 0 },
-        amount: bitcoin30::Amount::from_sat(
+        amount: bitcoin::Amount::from_sat(
             mempool_tx
                 .output
                 .first()
@@ -869,7 +869,7 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
 
     let expected_pending_change_utxo = TxOutputSummary {
         outpoint: bitcoin30::OutPoint { txid, vout: 1 },
-        amount: bitcoin30::Amount::from_sat(
+        amount: bitcoin::Amount::from_sat(
             mempool_tx
                 .output
                 .last()
@@ -1004,12 +1004,12 @@ fn build_wallet_server_configs(
 #[cfg(test)]
 mod fedimint_migration_tests {
     use anyhow::ensure;
+    use bitcoin::Amount;
     use bitcoin30::absolute::LockTime;
     use bitcoin30::hashes::Hash;
     use bitcoin30::psbt::{Input, PartiallySignedTransaction};
     use bitcoin30::{
-        secp256k1, Amount, BlockHash, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid,
-        WPubkeyHash,
+        secp256k1, BlockHash, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, WPubkeyHash,
     };
     use fedimint_client::module::init::DynClientModuleInit;
     use fedimint_core::db::{

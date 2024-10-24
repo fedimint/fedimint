@@ -172,13 +172,13 @@ impl Decodable for bitcoin::Network {
     }
 }
 
-impl Encodable for bitcoin30::Amount {
+impl Encodable for bitcoin::Amount {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         self.to_sat().consensus_encode(writer)
     }
 }
 
-impl Decodable for bitcoin30::Amount {
+impl Decodable for bitcoin::Amount {
     fn consensus_decode<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,

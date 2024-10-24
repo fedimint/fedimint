@@ -3362,6 +3362,7 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "bitcoin 0.30.2",
+ "bitcoin 0.32.3",
  "bitcoincore-rpc",
  "devimint",
  "fedimint-client",

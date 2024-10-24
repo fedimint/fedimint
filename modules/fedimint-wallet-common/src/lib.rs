@@ -12,6 +12,9 @@ use bitcoin30::address::NetworkUnchecked;
 use bitcoin30::psbt::raw::ProprietaryKey;
 use bitcoin30::{Address, Amount, BlockHash, Txid};
 use config::WalletClientConfig;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_amount, bitcoin32_to_bitcoin30_amount,
+};
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
@@ -100,16 +103,16 @@ pub struct PegOutSignatureItem {
 pub struct SpendableUTXO {
     #[serde(with = "::fedimint_core::encoding::as_hex")]
     pub tweak: [u8; 33],
-    #[serde(with = "bitcoin30::amount::serde::as_sat")]
-    pub amount: bitcoin30::Amount,
+    #[serde(with = "bitcoin::amount::serde::as_sat")]
+    pub amount: bitcoin::Amount,
 }
 
 /// A transaction output, either unspent or consumed
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct TxOutputSummary {
     pub outpoint: bitcoin30::OutPoint,
-    #[serde(with = "bitcoin30::amount::serde::as_sat")]
-    pub amount: bitcoin30::Amount,
+    #[serde(with = "bitcoin::amount::serde::as_sat")]
+    pub amount: bitcoin::Amount,
 }
 
 /// Summary of the coins within the wallet.
@@ -140,7 +143,9 @@ pub struct WalletSummary {
 
 impl WalletSummary {
     fn sum<'a>(txos: impl Iterator<Item = &'a TxOutputSummary>) -> Amount {
-        txos.fold(Amount::ZERO, |acc, txo| txo.amount + acc)
+        txos.fold(Amount::ZERO, |acc, txo| {
+            bitcoin32_to_bitcoin30_amount(&txo.amount) + acc
+        })
     }
 
     /// Total amount of all spendable UTXOs
@@ -238,8 +243,8 @@ impl PegOutFees {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct PegOut {
     pub recipient: bitcoin30::Address<NetworkUnchecked>,
-    #[serde(with = "bitcoin30::amount::serde::as_sat")]
-    pub amount: bitcoin30::Amount,
+    #[serde(with = "bitcoin::amount::serde::as_sat")]
+    pub amount: bitcoin::Amount,
     pub fees: PegOutFees,
 }
 
@@ -316,7 +321,7 @@ impl WalletOutput {
     ) -> WalletOutput {
         WalletOutput::V0(WalletOutputV0::PegOut(PegOut {
             recipient,
-            amount,
+            amount: bitcoin30_to_bitcoin32_amount(&amount),
             fees,
         }))
     }
@@ -343,7 +348,9 @@ pub struct Rbf {
 impl WalletOutputV0 {
     pub fn amount(&self) -> Amount {
         match self {
-            WalletOutputV0::PegOut(pegout) => pegout.amount + pegout.fees.amount(),
+            WalletOutputV0::PegOut(pegout) => {
+                bitcoin32_to_bitcoin30_amount(&pegout.amount) + pegout.fees.amount()
+            }
             WalletOutputV0::Rbf(rbf) => rbf.fees.amount(),
         }
     }

@@ -11,8 +11,7 @@ use bitcoin::network::Network;
 use bitcoin::OutPoint;
 use clap::{ArgGroup, Parser, Subcommand};
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_outpoint,
-    bitcoin30_to_bitcoin32_secp256k1_secret_key,
+    bitcoin30_to_bitcoin32_outpoint, bitcoin30_to_bitcoin32_secp256k1_secret_key,
 };
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
@@ -178,7 +177,7 @@ async fn process_and_print_tweak_source(
                     ImportableWallet {
                         outpoint: bitcoin30_to_bitcoin32_outpoint(&outpoint),
                         descriptor,
-                        amount_sat: bitcoin30_to_bitcoin32_amount(&amount),
+                        amount_sat: amount,
                     }
                 })
                 .collect()
