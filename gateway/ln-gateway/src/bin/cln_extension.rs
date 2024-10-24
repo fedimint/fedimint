@@ -1,4 +1,3 @@
-use std::array::TryFromSliceError;
 use std::collections::{BTreeMap, HashMap};
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -7,45 +6,55 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::anyhow;
-use bitcoin_hashes::{sha256, Hash};
+use axum::body::{Body, Bytes};
+use axum::response::{IntoResponse, Response};
+use axum::routing::{get, post};
+use axum::{Extension, Json, Router};
+use bitcoin30::secp256k1;
+use bitcoin_hashes::sha256;
 use clap::Parser;
 use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::model;
 use cln_rpc::model::requests::SendpayRoute;
 use cln_rpc::model::responses::ListpeerchannelsChannels;
-use cln_rpc::primitives::ShortChannelId;
-use fedimint_core::secp256k1::{All, PublicKey, Secp256k1, SecretKey};
-use fedimint_core::task::{timeout, TaskGroup};
+use cln_rpc::primitives::{AmountOrAll, ShortChannelId};
+use fedimint_core::secp256k1::{PublicKey, SecretKey};
+use fedimint_core::task::timeout;
 use fedimint_core::util::handle_version_hash_command;
-use fedimint_core::{fedimint_build_code_version_env, Amount};
+use fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll};
+use fedimint_ln_common::contracts::Preimage;
+use fedimint_ln_common::route_hints::{RouteHint, RouteHintHop};
+use fedimint_ln_common::PrunedInvoice;
+use futures_util::stream::StreamExt;
 use hex::ToHex;
 use lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
 use ln_gateway::envs::FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV;
-use ln_gateway::gateway_lnrpc::create_invoice_request::Description;
-use ln_gateway::gateway_lnrpc::gateway_lightning_server::{
-    GatewayLightning, GatewayLightningServer,
+use ln_gateway::lightning::extension::{
+    CLN_CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CLN_COMPLETE_PAYMENT_ENDPOINT,
+    CLN_CREATE_INVOICE_ENDPOINT, CLN_GET_BALANCES_ENDPOINT, CLN_INFO_ENDPOINT,
+    CLN_LIST_ACTIVE_CHANNELS_ENDPOINT, CLN_LN_ONCHAIN_ADDRESS_ENDPOINT, CLN_OPEN_CHANNEL_ENDPOINT,
+    CLN_PAY_INVOICE_ENDPOINT, CLN_PAY_PRUNED_INVOICE_ENDPOINT, CLN_ROUTE_HINTS_ENDPOINT,
+    CLN_ROUTE_HTLCS_ENDPOINT, CLN_WITHDRAW_ONCHAIN_ENDPOINT,
 };
-use ln_gateway::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
-use ln_gateway::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
-use ln_gateway::gateway_lnrpc::list_active_channels_response::ChannelInfo;
-use ln_gateway::gateway_lnrpc::{
-    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
-    CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetBalancesResponse,
-    GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
-    InterceptHtlcRequest, InterceptHtlcResponse, ListActiveChannelsResponse, OpenChannelRequest,
-    OpenChannelResponse, PayInvoiceRequest, PayInvoiceResponse, PayPrunedInvoiceRequest,
-    PrunedInvoice, WithdrawOnchainRequest, WithdrawOnchainResponse,
+use ln_gateway::lightning::{
+    CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
+    GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest,
+    GetRouteHintsResponse, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
+    ListActiveChannelsResponse, OpenChannelResponse, PayInvoiceRequest, PayInvoiceResponse,
+    PayPrunedInvoiceRequest, PaymentAction, WithdrawOnchainResponse,
 };
+use ln_gateway::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, WithdrawOnchainPayload};
 use rand::rngs::OsRng;
 use rand::Rng;
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::io::{stdin, stdout};
+use tokio::net::TcpListener;
 use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::transport::Server;
-use tonic::Status;
-use tracing::{debug, error, info, warn};
+use tower_http::cors::CorsLayer;
+use tracing::{debug, error, info, instrument, warn};
 
 const MAX_HTLC_PROCESSING_DURATION: Duration = Duration::MAX;
 // Amount of time to attempt making a payment before returning an error
@@ -68,7 +77,7 @@ async fn main() -> Result<(), anyhow::Error> {
     handle_version_hash_command(fedimint_build_code_version_env!());
 
     let extension_opts = ClnExtensionOpts::parse();
-    let (service, listen, plugin) = ClnRpcService::new(extension_opts)
+    let (service, interceptor, listen, plugin) = ClnRpcService::new(extension_opts)
         .await
         .expect("Failed to create cln rpc service");
 
@@ -77,20 +86,779 @@ async fn main() -> Result<(), anyhow::Error> {
         listen
     );
 
-    Server::builder()
-        .add_service(GatewayLightningServer::new(service))
-        .serve_with_shutdown(listen, async {
-            // Wait for plugin to signal it's shutting down
-            // Shut down everything else via TaskGroup regardless of error
-            let _ = plugin.join().await;
-            // lightningd needs to see exit code 0 to notice the plugin has
-            // terminated -- even if we return from main().
-            std::process::exit(0);
-        })
-        .await
-        .map_err(|e| ClnExtensionError::Error(anyhow!("Failed to start server, {:?}", e)))?;
+    run_webserver(listen, service.clone(), interceptor, plugin).await?;
+
+    // lightningd needs to see exit code 0 to notice the plugin has
+    // terminated -- even if we return from main().
+    info!("gateway cln extension exiting...");
+    std::process::exit(0);
+}
+
+async fn run_webserver(
+    listen: SocketAddr,
+    cln_service: ClnRpcService,
+    interceptor: Arc<ClnHtlcInterceptor>,
+    plugin: Plugin<Arc<ClnHtlcInterceptor>>,
+) -> anyhow::Result<()> {
+    let routes = routes(cln_service, interceptor);
+    let listener = TcpListener::bind(&listen).await?;
+    let serve = axum::serve(listener, routes.into_make_service());
+    info!("Starting cln extension webserver on {}", listen);
+    let graceful = serve.with_graceful_shutdown(async move {
+        // Wait for plugin to signal it's shutting down
+        let _ = plugin.join().await;
+    });
+
+    if let Err(e) = graceful.await {
+        error!("Error shutting down cln extension webserver: {:?}", e);
+    } else {
+        info!("Successfully shutdown cln extension webserver");
+    }
 
     Ok(())
+}
+
+fn routes(cln_service: ClnRpcService, interceptor: Arc<ClnHtlcInterceptor>) -> Router {
+    let public_routes = Router::new()
+        .route(CLN_INFO_ENDPOINT, get(cln_info))
+        .route(CLN_ROUTE_HINTS_ENDPOINT, post(cln_route_hints))
+        .route(CLN_ROUTE_HTLCS_ENDPOINT, get(cln_route_htlcs))
+        .route(CLN_PAY_INVOICE_ENDPOINT, post(cln_pay_invoice))
+        .route(
+            CLN_PAY_PRUNED_INVOICE_ENDPOINT,
+            post(cln_pay_pruned_invoice),
+        )
+        .route(CLN_COMPLETE_PAYMENT_ENDPOINT, post(cln_complete_payment))
+        .route(CLN_CREATE_INVOICE_ENDPOINT, post(cln_create_invoice))
+        .route(CLN_LN_ONCHAIN_ADDRESS_ENDPOINT, get(cln_ln_onchain_address))
+        .route(CLN_WITHDRAW_ONCHAIN_ENDPOINT, post(cln_withdraw_onchain))
+        .route(CLN_OPEN_CHANNEL_ENDPOINT, post(cln_open_channel))
+        .route(
+            CLN_CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
+            post(cln_close_channels_with_peer),
+        )
+        .route(
+            CLN_LIST_ACTIVE_CHANNELS_ENDPOINT,
+            get(cln_list_active_channels),
+        )
+        .route(CLN_GET_BALANCES_ENDPOINT, get(cln_get_balances));
+    Router::new()
+        .merge(public_routes)
+        .layer(Extension(cln_service))
+        .layer(Extension(interceptor))
+        .layer(CorsLayer::permissive())
+}
+
+#[instrument(skip_all, err)]
+#[axum_macros::debug_handler]
+async fn cln_info(
+    Extension(cln_service): Extension<ClnRpcService>,
+) -> Result<Json<GetNodeInfoResponse>, ClnExtensionError> {
+    let response = cln_service.info().await.map(
+        |(pub_key, alias, network, block_height, synced_to_chain)| GetNodeInfoResponse {
+            pub_key,
+            alias,
+            network,
+            block_height,
+            synced_to_chain,
+        },
+    )?;
+
+    Ok(Json(response))
+}
+
+#[instrument(skip_all, err)]
+#[axum_macros::debug_handler]
+async fn cln_route_hints(
+    Extension(cln_service): Extension<ClnRpcService>,
+    Json(payload): Json<GetRouteHintsRequest>,
+) -> Result<Json<GetRouteHintsResponse>, ClnExtensionError> {
+    let GetRouteHintsRequest { num_route_hints } = payload;
+    let node_info = cln_service.info().await?;
+
+    let mut client = cln_service.rpc_client().await?;
+
+    let active_peer_channels_response = client
+        .call(cln_rpc::Request::ListPeerChannels(
+            model::requests::ListpeerchannelsRequest { id: None },
+        ))
+        .await?;
+
+    let mut active_peer_channels = match active_peer_channels_response {
+        cln_rpc::Response::ListPeerChannels(channels) => channels.channels,
+        _ => unreachable!("Unexpected response from ListPeerChannels"),
+    }
+    .into_iter()
+    .filter_map(|chan| {
+        if matches!(
+            chan.state,
+            model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
+        ) {
+            return chan.short_channel_id.map(|scid| (chan.peer_id, scid));
+        }
+
+        None
+    })
+    .collect::<Vec<_>>();
+
+    debug!(
+        "Found {} active channels to use as route hints",
+        active_peer_channels.len()
+    );
+
+    let listfunds_response = client
+        .call(cln_rpc::Request::ListFunds(
+            model::requests::ListfundsRequest { spent: None },
+        ))
+        .await?;
+    let pubkey_to_incoming_capacity = match listfunds_response {
+        cln_rpc::Response::ListFunds(listfunds) => listfunds
+            .channels
+            .into_iter()
+            .map(|chan| (chan.peer_id, chan.amount_msat - chan.our_amount_msat))
+            .collect::<HashMap<_, _>>(),
+        _ => unreachable!("Unexpected response from ListFunds"),
+    };
+    active_peer_channels.sort_by(|a, b| {
+        let a_incoming = pubkey_to_incoming_capacity.get(&a.0).unwrap().msat();
+        let b_incoming = pubkey_to_incoming_capacity.get(&b.0).unwrap().msat();
+        b_incoming.cmp(&a_incoming)
+    });
+    active_peer_channels.truncate(num_route_hints as usize);
+
+    let mut route_hints = vec![];
+    for (peer_id, scid) in active_peer_channels {
+        let channels_response = client
+            .call(cln_rpc::Request::ListChannels(
+                model::requests::ListchannelsRequest {
+                    short_channel_id: Some(scid),
+                    source: None,
+                    destination: None,
+                },
+            ))
+            .await?;
+
+        let channel = match channels_response {
+            cln_rpc::Response::ListChannels(channels) => {
+                let Some(channel) = channels
+                    .channels
+                    .into_iter()
+                    .find(|chan| chan.destination == node_info.0)
+                else {
+                    warn!(?scid, "Channel not found in graph");
+                    continue;
+                };
+                channel
+            }
+            _ => unreachable!("Unexpected response from ListChannels"),
+        };
+
+        let route_hint_hop = RouteHintHop {
+            src_node_id: peer_id,
+            short_channel_id: scid_to_u64(scid),
+            base_msat: channel.base_fee_millisatoshi,
+            proportional_millionths: channel.fee_per_millionth,
+            cltv_expiry_delta: channel.delay as u16,
+            htlc_minimum_msat: Some(channel.htlc_minimum_msat.msat()),
+            htlc_maximum_msat: channel.htlc_maximum_msat.map(|amt| amt.msat()),
+        };
+
+        debug!("Constructed route hint {:?}", route_hint_hop);
+        route_hints.push(RouteHint(vec![route_hint_hop]));
+    }
+
+    Ok(Json(GetRouteHintsResponse { route_hints }))
+}
+
+#[instrument(skip_all, err)]
+#[axum_macros::debug_handler]
+async fn cln_pay_invoice(
+    Extension(cln_service): Extension<ClnRpcService>,
+    Json(payload): Json<PayInvoiceRequest>,
+) -> Result<Json<PayInvoiceResponse>, ClnExtensionError> {
+    let PayInvoiceRequest {
+        invoice,
+        max_delay,
+        max_fee_msat,
+        payment_hash: _,
+    } = payload;
+
+    let outcome = cln_service
+        .rpc_client()
+        .await?
+        .call(cln_rpc::Request::Pay(model::requests::PayRequest {
+            bolt11: invoice,
+            amount_msat: None,
+            label: None,
+            riskfactor: None,
+            retry_for: None,
+            maxdelay: Some(max_delay as u16),
+            exemptfee: None,
+            localinvreqid: None,
+            exclude: None,
+            maxfee: Some(cln_rpc::primitives::Amount::from_msat(max_fee_msat)),
+            maxfeepercent: None,
+            description: None,
+            partial_msat: None,
+        }))
+        .await
+        .map(|response| match response {
+            cln_rpc::Response::Pay(model::responses::PayResponse {
+                payment_preimage, ..
+            }) => PayInvoiceResponse {
+                preimage: Preimage(
+                    payment_preimage
+                        .to_vec()
+                        .try_into()
+                        .expect("Failed to parse preimage"),
+                ),
+            },
+            _ => unreachable!("Unexpected response from Pay"),
+        })?;
+
+    Ok(Json(outcome))
+}
+
+#[instrument(skip_all, err)]
+#[axum_macros::debug_handler]
+async fn cln_pay_pruned_invoice(
+    Extension(cln_service): Extension<ClnRpcService>,
+    Json(payload): Json<PayPrunedInvoiceRequest>,
+) -> Result<Json<PayInvoiceResponse>, ClnExtensionError> {
+    let PayPrunedInvoiceRequest {
+        pruned_invoice,
+        max_delay,
+        max_fee_msat,
+    } = payload;
+
+    let pruned_invoice = pruned_invoice.ok_or_else(|| anyhow!("PrunedInvoice is None"))?;
+    let payment_hash = pruned_invoice.payment_hash;
+
+    let mut excluded_nodes = vec![];
+
+    let payment_future = async {
+        let mut route_attempt = 0;
+
+        loop {
+            let route = cln_service
+                .get_route(
+                    pruned_invoice.clone(),
+                    ROUTE_RISK_FACTOR,
+                    excluded_nodes.clone(),
+                )
+                .await?;
+
+            // Verify `max_delay` is greater than the worst case timeout for the payment
+            // failure in blocks
+            let delay = route
+                .first()
+                .ok_or_else(|| anyhow!("First hop in route did not contain a delay"))?
+                .delay;
+            if max_delay < delay.into() {
+                return Err(ClnExtensionError::Error(anyhow!(
+                    "Max delay is greater than worse case timeout"
+                )));
+            }
+
+            // Verify the total fee is less than `max_fee_msat`
+            let first_hop_amount = route
+                .first()
+                .ok_or_else(|| anyhow!("First hop did not contain an amount"))?
+                .amount_msat;
+            let last_hop_amount = route
+                .last()
+                .ok_or_else(|| anyhow!("Last hop did not contain an amount"))?
+                .amount_msat;
+            let fee = first_hop_amount - last_hop_amount;
+            if max_fee_msat.msats < fee.msat() {
+                return Err(ClnExtensionError::Error(anyhow!(
+                    "Total fee is greater than `max_fee_msat`"
+                )));
+            }
+
+            debug!(
+                ?route_attempt,
+                ?payment_hash,
+                ?route,
+                "Attempting payment with route"
+            );
+            match cln_service
+                .pay_with_route(pruned_invoice.clone(), payment_hash, route.clone())
+                .await
+            {
+                Ok(preimage) => {
+                    let response = PayInvoiceResponse {
+                        preimage: Preimage(preimage.try_into().expect("Failed to parse preimage")),
+                    };
+                    return Ok(Json(response));
+                }
+                Err(ClnExtensionError::FailedPayment { erring_node }) => {
+                    error!(
+                        ?route_attempt,
+                        ?payment_hash,
+                        ?erring_node,
+                        "Pruned invoice payment attempt failure"
+                    );
+                    excluded_nodes.push(erring_node);
+                }
+                Err(e) => {
+                    error!(
+                        ?route_attempt,
+                        ?payment_hash,
+                        ?e,
+                        "Permanent Pruned invoice payment attempt failure"
+                    );
+                    return Err(e);
+                }
+            }
+
+            route_attempt += 1;
+        }
+    };
+
+    match timeout(PAYMENT_TIMEOUT_DURATION, payment_future).await {
+        Ok(preimage) => preimage,
+        Err(elapsed) => {
+            error!(
+                ?PAYMENT_TIMEOUT_DURATION,
+                ?elapsed,
+                ?payment_hash,
+                "Payment exceeded max attempt duration"
+            );
+            Err(ClnExtensionError::Error(anyhow!(
+                "Payment exceeded max attempt duration"
+            )))
+        }
+    }
+}
+
+#[instrument(skip_all, err)]
+#[axum_macros::debug_handler]
+async fn cln_route_htlcs(
+    Extension(interceptor): Extension<Arc<ClnHtlcInterceptor>>,
+) -> Result<Body, ClnExtensionError> {
+    // First create new channel that we will use to send responses back to gatewayd
+    let (gatewayd_sender, gatewayd_receiver) = mpsc::channel::<InterceptPaymentRequest>(100);
+
+    let mut sender = interceptor.sender.lock().await;
+    *sender = Some(gatewayd_sender.clone());
+    debug!("Gateway channel sender replaced");
+
+    let receiver_stream = ReceiverStream::new(gatewayd_receiver).map(|msg| {
+        // TODO: Handle JSON decoding error
+        let json = serde_json::to_vec(&msg).unwrap_or_default();
+        Ok::<Bytes, ClnExtensionError>(Bytes::from(json))
+    });
+
+    let body = Body::from_stream(receiver_stream);
+
+    Ok(body)
+}
+
+#[instrument(skip_all, err)]
+#[axum_macros::debug_handler]
+async fn cln_complete_payment(
+    Extension(interceptor): Extension<Arc<ClnHtlcInterceptor>>,
+    Json(payload): Json<InterceptPaymentResponse>,
+) -> Result<Json<()>, ClnExtensionError> {
+    let InterceptPaymentResponse {
+        action,
+        incoming_chan_id,
+        htlc_id,
+        ..
+    } = payload;
+
+    if let Some(outcome) = interceptor
+        .outcomes
+        .lock()
+        .await
+        .remove(&(incoming_chan_id, htlc_id))
+    {
+        // Translate action request into a cln rpc response for
+        // `htlc_accepted` event
+        let htlca_res = match action {
+            PaymentAction::Settle(preimage) => {
+                serde_json::json!({ "result": "resolve", "payment_key": preimage.0.encode_hex::<String>() })
+            }
+            PaymentAction::Cancel => {
+                // Simply forward the HTLC so that a "NoRoute" error response is returned.
+                serde_json::json!({ "result": "continue" })
+            }
+            PaymentAction::Forward => {
+                serde_json::json!({ "result": "continue" })
+            }
+        };
+
+        // Send translated response to the HTLC interceptor for submission
+        // to the cln rpc
+        match outcome.send(htlca_res) {
+            Ok(_) => {}
+            Err(e) => {
+                error!(
+                    "Failed to send htlc_accepted response to interceptor: {:?}",
+                    e
+                );
+                return Err(ClnExtensionError::Error(anyhow!(
+                    "Failed to send htlc_accepted response to interceptor"
+                )));
+            }
+        };
+    } else {
+        error!(
+            ?incoming_chan_id,
+            ?htlc_id,
+            "No interceptor reference found for this processed htlc",
+        );
+        return Err(ClnExtensionError::Error(anyhow!(
+            "No interceptor reference found for this processed htlc"
+        )));
+    }
+    Ok(Json(()))
+}
+
+#[instrument(skip_all, err)]
+#[axum_macros::debug_handler]
+async fn cln_create_invoice(
+    Extension(cln_service): Extension<ClnRpcService>,
+    Json(payload): Json<CreateInvoiceRequest>,
+) -> Result<Json<CreateInvoiceResponse>, ClnExtensionError> {
+    let CreateInvoiceRequest {
+        payment_hash,
+        amount_msat,
+        expiry_secs,
+        description,
+    } = payload;
+
+    let payment_hash = if let Some(payment_hash) = payment_hash {
+        payment_hash
+    } else {
+        return cln_service
+            .create_invoice_for_self(amount_msat, expiry_secs.into(), description)
+            .await;
+    };
+
+    let description = description.ok_or(anyhow!("InvoiceDescription is None"))?;
+
+    let info = cln_service.info().await?;
+
+    let network = bitcoin30::Network::from_str(info.2.as_str())
+        .map_err(|e| ClnExtensionError::Error(anyhow!(e)))?;
+
+    let invoice_builder = InvoiceBuilder::new(Currency::from(network))
+        .amount_milli_satoshis(amount_msat)
+        .payment_hash(payment_hash)
+        .payment_secret(PaymentSecret(OsRng.gen()))
+        .duration_since_epoch(fedimint_core::time::duration_since_epoch())
+        .min_final_cltv_expiry_delta(18)
+        .expiry_time(Duration::from_secs(expiry_secs.into()));
+
+    let invoice_builder = match description {
+        InvoiceDescription::Direct(description) => invoice_builder.invoice_description(
+            lightning_invoice::Bolt11InvoiceDescription::Direct(
+                &lightning_invoice::Description::new(description).expect("Description is valid"),
+            ),
+        ),
+        InvoiceDescription::Hash(hash) => invoice_builder.invoice_description(
+            lightning_invoice::Bolt11InvoiceDescription::Hash(&lightning_invoice::Sha256(hash)),
+        ),
+    };
+
+    let invoice = invoice_builder
+        // Temporarily sign with an ephemeral private key, we will request CLN to sign this
+        // invoice next.
+        .build_signed(|m| {
+            let ctx = secp256k1::global::SECP256K1;
+            ctx.sign_ecdsa_recoverable(m, &SecretKey::new(&mut OsRng))
+        })
+        .map_err(|e| ClnExtensionError::Error(anyhow!(e)))?;
+
+    let invstring = invoice.to_string();
+
+    let response = cln_service
+        .rpc_client()
+        .await?
+        .call(cln_rpc::Request::SignInvoice(
+            model::requests::SigninvoiceRequest { invstring },
+        ))
+        .await
+        .map(|response| match response {
+            cln_rpc::Response::SignInvoice(model::responses::SigninvoiceResponse { bolt11 }) => {
+                CreateInvoiceResponse { invoice: bolt11 }
+            }
+            _ => unreachable!("Unexpected response from SignInvoice"),
+        })?;
+
+    Ok(Json(response))
+}
+
+#[instrument(skip_all, err)]
+#[axum_macros::debug_handler]
+async fn cln_ln_onchain_address(
+    Extension(cln_service): Extension<ClnRpcService>,
+) -> Result<Json<GetLnOnchainAddressResponse>, ClnExtensionError> {
+    let address_or = cln_service
+        .rpc_client()
+        .await?
+        .call(cln_rpc::Request::NewAddr(model::requests::NewaddrRequest {
+            addresstype: None,
+        }))
+        .await
+        .map(|response| match response {
+            cln_rpc::Response::NewAddr(model::responses::NewaddrResponse { bech32, .. }) => bech32,
+            _ => unreachable!("Unexpected response from NewAddr"),
+        })?;
+
+    Ok(Json(GetLnOnchainAddressResponse {
+        address: address_or.expect("NewAddr did not return bech32 address"),
+    }))
+}
+
+#[instrument(skip_all, err)]
+#[axum_macros::debug_handler]
+async fn cln_withdraw_onchain(
+    Extension(cln_service): Extension<ClnRpcService>,
+    Json(payload): Json<WithdrawOnchainPayload>,
+) -> Result<Json<WithdrawOnchainResponse>, ClnExtensionError> {
+    let txid = cln_service
+        .rpc_client()
+        .await?
+        .call(cln_rpc::Request::Withdraw(
+            model::requests::WithdrawRequest {
+                feerate: Some(cln_rpc::primitives::Feerate::PerKw(
+                    // 1 vbyte = 4 weight units, so 250 vbytes = 1,000 weight units.
+                    payload.fee_rate_sats_per_vbyte as u32 * 250,
+                )),
+                minconf: Some(0),
+                utxos: None,
+                destination: payload.address.assume_checked().to_string(),
+                satoshi: match payload.amount {
+                    BitcoinAmountOrAll::All => AmountOrAll::All,
+                    BitcoinAmountOrAll::Amount(amount) => {
+                        AmountOrAll::Amount(cln_rpc::primitives::Amount::from_sat(amount.to_sat()))
+                    }
+                },
+            },
+        ))
+        .await
+        .map(|response| match response {
+            cln_rpc::Response::Withdraw(model::responses::WithdrawResponse { txid, .. }) => txid,
+            _ => unreachable!("Unexpected response from Withdraw"),
+        })?;
+
+    Ok(Json(WithdrawOnchainResponse { txid }))
+}
+
+#[instrument(skip_all, err)]
+#[axum_macros::debug_handler]
+async fn cln_open_channel(
+    Extension(cln_service): Extension<ClnRpcService>,
+    Json(payload): Json<OpenChannelPayload>,
+) -> Result<Json<OpenChannelResponse>, ClnExtensionError> {
+    cln_service
+        .rpc_client()
+        .await?
+        .call(cln_rpc::Request::Connect(model::requests::ConnectRequest {
+            id: format!("{}@{}", payload.pubkey, payload.host),
+            host: None,
+            port: None,
+        }))
+        .await?;
+
+    let funding_txid = cln_service
+        .rpc_client()
+        .await?
+        .call(cln_rpc::Request::FundChannel(
+            model::requests::FundchannelRequest {
+                id: payload.pubkey,
+                amount: cln_rpc::primitives::AmountOrAll::Amount(
+                    cln_rpc::primitives::Amount::from_sat(payload.channel_size_sats),
+                ),
+                feerate: None,
+                announce: None,
+                minconf: None,
+                push_msat: Some(cln_rpc::primitives::Amount::from_sat(
+                    payload.push_amount_sats,
+                )),
+                close_to: None,
+                request_amt: None,
+                compact_lease: None,
+                utxos: None,
+                mindepth: None,
+                reserve: None,
+                channel_type: None,
+            },
+        ))
+        .await
+        .map(|response| match response {
+            cln_rpc::Response::FundChannel(model::responses::FundchannelResponse {
+                txid, ..
+            }) => txid,
+            _ => unreachable!("Unexpected response from FundChannel"),
+        })?;
+
+    Ok(Json(OpenChannelResponse { funding_txid }))
+}
+
+#[instrument(skip_all, err)]
+#[axum_macros::debug_handler]
+async fn cln_close_channels_with_peer(
+    Extension(cln_service): Extension<ClnRpcService>,
+    Json(payload): Json<CloseChannelsWithPeerPayload>,
+) -> Result<Json<CloseChannelsWithPeerResponse>, ClnExtensionError> {
+    let channels_with_peer: Vec<ListpeerchannelsChannels> = cln_service
+        .rpc_client()
+        .await?
+        .call(cln_rpc::Request::ListPeerChannels(
+            model::requests::ListpeerchannelsRequest {
+                id: Some(payload.pubkey),
+            },
+        ))
+        .await
+        .map(|response| match response {
+            cln_rpc::Response::ListPeerChannels(model::responses::ListpeerchannelsResponse {
+                channels,
+            }) => channels
+                .into_iter()
+                .filter(|channel| {
+                    channel.state
+                        == model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
+                })
+                .collect(),
+            _ => unreachable!("Unexpected response from ListPeerChannels"),
+        })?;
+
+    for channel_id in channels_with_peer
+        .iter()
+        .filter_map(|channel| channel.channel_id)
+    {
+        cln_service
+            .rpc_client()
+            .await?
+            .call(cln_rpc::Request::Close(model::requests::CloseRequest {
+                id: channel_id.to_string(),
+                unilateraltimeout: None,
+                destination: None,
+                fee_negotiation_step: None,
+                wrong_funding: None,
+                force_lease_closed: None,
+                feerange: None,
+            }))
+            .await
+            .map_err(ClnExtensionError::RpcError)?;
+    }
+
+    Ok(Json(CloseChannelsWithPeerResponse {
+        num_channels_closed: channels_with_peer.len() as u32,
+    }))
+}
+
+#[instrument(skip_all, err)]
+#[axum_macros::debug_handler]
+async fn cln_list_active_channels(
+    Extension(cln_service): Extension<ClnRpcService>,
+) -> Result<Json<ListActiveChannelsResponse>, ClnExtensionError> {
+    let channels = cln_service
+        .rpc_client()
+        .await?
+        .call(cln_rpc::Request::ListPeerChannels(
+            model::requests::ListpeerchannelsRequest { id: None },
+        ))
+        .await
+        .map(|response| match response {
+            cln_rpc::Response::ListPeerChannels(model::responses::ListpeerchannelsResponse {
+                channels,
+            }) => channels
+                .into_iter()
+                .filter_map(|channel| {
+                    if matches!(
+                        channel.state,
+                        model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
+                    ) {
+                        Some(ln_gateway::lightning::ChannelInfo {
+                            remote_pubkey: channel.peer_id,
+                            channel_size_sats: channel
+                                .total_msat
+                                .map(|value| value.msat() / 1000)
+                                .unwrap_or(0),
+                            outbound_liquidity_sats: channel
+                                .spendable_msat
+                                .map(|value| value.msat() / 1000)
+                                .unwrap_or(0),
+                            inbound_liquidity_sats: channel
+                                .receivable_msat
+                                .map(|value| value.msat() / 1000)
+                                .unwrap_or(0),
+                            short_channel_id: match channel.short_channel_id {
+                                Some(scid) => scid_to_u64(scid),
+                                None => return None,
+                            },
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+            _ => unreachable!("Unexpected response from ListPeerChannels"),
+        })?;
+
+    Ok(Json(ListActiveChannelsResponse { channels }))
+}
+
+#[instrument(skip_all, err)]
+#[axum_macros::debug_handler]
+async fn cln_get_balances(
+    Extension(cln_service): Extension<ClnRpcService>,
+) -> Result<Json<GetBalancesResponse>, ClnExtensionError> {
+    let (channels, outputs) = cln_service
+        .rpc_client()
+        .await?
+        .call(cln_rpc::Request::ListFunds(
+            model::requests::ListfundsRequest { spent: None },
+        ))
+        .await
+        .map(|response| match response {
+            cln_rpc::Response::ListFunds(model::responses::ListfundsResponse {
+                channels,
+                outputs,
+            }) => (channels, outputs),
+            _ => unreachable!("Unexpected response from ListFunds"),
+        })?;
+
+    let total_receivable_msat = cln_service
+        .rpc_client()
+        .await?
+        .call(cln_rpc::Request::ListPeerChannels(
+            model::requests::ListpeerchannelsRequest { id: None },
+        ))
+        .await
+        .map(|response| match response {
+            cln_rpc::Response::ListPeerChannels(model::responses::ListpeerchannelsResponse {
+                channels,
+            }) => channels
+                .into_iter()
+                .filter(|channel| {
+                    matches!(
+                        channel.state,
+                        model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
+                    )
+                })
+                .filter_map(|channel| channel.receivable_msat.map(|value| value.msat()))
+                .sum::<u64>(), // Sum the receivable_msat values directly
+            _ => unreachable!("Unexpected response from ListPeerChannels"),
+        })?;
+
+    let lightning_balance_msats = channels
+        .into_iter()
+        .fold(0, |acc, channel| acc + channel.our_amount_msat.msat());
+    let onchain_balance_sats = outputs
+        .into_iter()
+        .fold(0, |acc, output| acc + output.amount_msat.msat() / 1000);
+
+    Ok(Json(GetBalancesResponse {
+        onchain_balance_sats,
+        lightning_balance_msats,
+        inbound_lightning_liquidity_msats: total_receivable_msat,
+    }))
 }
 
 // TODO: upstream these structs to cln-plugin
@@ -121,18 +889,23 @@ struct HtlcAccepted {
     onion: Onion,
 }
 
-#[allow(dead_code)]
+#[derive(Clone)]
 struct ClnRpcService {
     socket: PathBuf,
-    interceptor: Arc<ClnHtlcInterceptor>,
-    task_group: TaskGroup,
-    secp: Secp256k1<All>,
 }
 
 impl ClnRpcService {
     async fn new(
         extension_opts: ClnExtensionOpts,
-    ) -> Result<(Self, SocketAddr, Plugin<Arc<ClnHtlcInterceptor>>), ClnExtensionError> {
+    ) -> Result<
+        (
+            Self,
+            Arc<ClnHtlcInterceptor>,
+            SocketAddr,
+            Plugin<Arc<ClnHtlcInterceptor>>,
+        ),
+        ClnExtensionError,
+    > {
         let interceptor = Arc::new(ClnHtlcInterceptor::new());
 
         if let Some(plugin) = Builder::new(stdin(), stdout())
@@ -188,10 +961,8 @@ impl ClnRpcService {
             Ok((
                 Self {
                     socket,
-                    interceptor,
-                    task_group: TaskGroup::new(),
-                    secp: Secp256k1::gen_new(),
                 },
+                interceptor,
                 fm_gateway_listen,
                 plugin,
             ))
@@ -236,11 +1007,11 @@ impl ClnRpcService {
                     let alias = alias.unwrap_or_default();
                     let synced_to_chain =
                         warning_bitcoind_sync.is_none() && warning_lightningd_sync.is_none();
-                    Ok((id, alias, network, blockheight, synced_to_chain))
+                    (id, alias, network, blockheight, synced_to_chain)
                 }
-                _ => Err(ClnExtensionError::RpcWrongResponse),
+                _ => unreachable!("Unexpected response from Getinfo"),
             })
-            .map_err(ClnExtensionError::RpcError)?
+            .map_err(ClnExtensionError::RpcError)
     }
 
     /// Requests a route for a payment. Payment route will be passed to
@@ -256,9 +1027,10 @@ impl ClnRpcService {
             .await?
             .call(cln_rpc::Request::GetRoute(
                 model::requests::GetrouteRequest {
-                    id: PublicKey::from_slice(&pruned_invoice.destination)
-                        .expect("Should parse public key"),
-                    amount_msat: cln_rpc::primitives::Amount::from_msat(pruned_invoice.amount_msat),
+                    id: pruned_invoice.destination,
+                    amount_msat: cln_rpc::primitives::Amount::from_msat(
+                        pruned_invoice.amount.msats,
+                    ),
                     riskfactor,
                     cltv: Some(pruned_invoice.min_final_cltv_delta as u32),
                     fromid: None,
@@ -279,7 +1051,7 @@ impl ClnRpcService {
                     channel: r.channel,
                 })
                 .collect::<Vec<_>>()),
-            _ => Err(ClnExtensionError::RpcWrongResponse),
+            _ => unreachable!("Unexpected response from GetRoute"),
         }
     }
 
@@ -292,11 +1064,11 @@ impl ClnRpcService {
         route: Vec<SendpayRoute>,
     ) -> Result<Vec<u8>, ClnExtensionError> {
         let payment_secret = Some(
-            cln_rpc::primitives::Secret::try_from(pruned_invoice.payment_secret)
+            cln_rpc::primitives::Secret::try_from(pruned_invoice.payment_secret.to_vec())
                 .map_err(ClnExtensionError::Error)?,
         );
         let amount_msat = Some(cln_rpc::primitives::Amount::from_msat(
-            pruned_invoice.amount_msat,
+            pruned_invoice.amount.msats,
         ));
 
         info!(
@@ -324,11 +1096,9 @@ impl ClnRpcService {
             .await?;
 
         let status = match response {
-            cln_rpc::Response::SendPay(model::responses::SendpayResponse { status, .. }) => {
-                Ok(status)
-            }
-            _ => Err(ClnExtensionError::RpcWrongResponse),
-        }?;
+            cln_rpc::Response::SendPay(model::responses::SendpayResponse { status, .. }) => status,
+            _ => unreachable!("Unexpected response from Sendpay"),
+        };
 
         info!(?payment_hash, ?status, "Initiated payment");
 
@@ -364,12 +1134,12 @@ impl ClnRpcService {
                     }
                     None => {
                         error!(?e, "Returned RpcError did not contain route failure object");
-                        Err(ClnExtensionError::RpcWrongResponse)
+                        Err(ClnExtensionError::RpcError(e))
                     }
                 }
             }
             Err(e) => Err(ClnExtensionError::RpcError(e)),
-            _ => Err(ClnExtensionError::RpcWrongResponse),
+            _ => unreachable!("Unexpected response from WaitSendPay"),
         }?;
 
         info!(
@@ -381,7 +1151,7 @@ impl ClnRpcService {
 
         let preimage = preimage.ok_or_else(|| {
             error!(?payment_hash, "WaitSendPay did not return a preimage");
-            ClnExtensionError::RpcWrongResponse
+            ClnExtensionError::Error(anyhow!("WaitSendPay did not return a preimage"))
         })?;
         Ok(preimage.to_vec())
     }
@@ -392,22 +1162,21 @@ impl ClnRpcService {
         &self,
         amount_msat: u64,
         expiry_secs: u64,
-        description_or: Option<Description>,
-    ) -> Result<tonic::Response<CreateInvoiceResponse>, Status> {
+        description_or: Option<InvoiceDescription>,
+    ) -> Result<Json<CreateInvoiceResponse>, ClnExtensionError> {
         let description = match description_or {
-            None => String::new(),
-            Some(Description::Direct(description)) => description,
-            Some(Description::Hash(_hash)) => {
-                return Err(Status::unimplemented(
-                    "Only direct descriptions are supported for CLN gateways at this time",
-                ));
+            Some(InvoiceDescription::Direct(desc)) => desc,
+            Some(InvoiceDescription::Hash(_)) => {
+                return Err(ClnExtensionError::Error(anyhow!(
+                    "create_invoice_for_self does not support description hashes"
+                )))
             }
+            None => String::new(),
         };
 
         let response = self
             .rpc_client()
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?
+            .await?
             .call(cln_rpc::Request::Invoice(model::requests::InvoiceRequest {
                 cltv: None,
                 deschashonly: None,
@@ -425,842 +1194,11 @@ impl ClnRpcService {
             .map(|response| match response {
                 cln_rpc::Response::Invoice(model::responses::InvoiceResponse {
                     bolt11, ..
-                }) => Ok(CreateInvoiceResponse { invoice: bolt11 }),
-                _ => Err(ClnExtensionError::RpcWrongResponse),
-            })
-            .map_err(|e| {
-                error!("cln invoice returned error {e:?}");
-                tonic::Status::internal(e.to_string())
-            })?
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
-
-        Ok(tonic::Response::new(response))
-    }
-}
-
-#[tonic::async_trait]
-impl GatewayLightning for ClnRpcService {
-    async fn get_node_info(
-        &self,
-        _request: tonic::Request<EmptyRequest>,
-    ) -> Result<tonic::Response<GetNodeInfoResponse>, Status> {
-        self.info()
-            .await
-            .map(|(pub_key, alias, network, block_height, synced_to_chain)| {
-                tonic::Response::new(GetNodeInfoResponse {
-                    pub_key: pub_key.serialize().to_vec(),
-                    alias,
-                    network,
-                    block_height,
-                    synced_to_chain,
-                })
-            })
-            .map_err(|e| {
-                error!("cln getinfo returned error: {:?}", e);
-                Status::internal(e.to_string())
-            })
-    }
-
-    async fn get_route_hints(
-        &self,
-        request: tonic::Request<GetRouteHintsRequest>,
-    ) -> Result<tonic::Response<GetRouteHintsResponse>, Status> {
-        let GetRouteHintsRequest { num_route_hints } = request.into_inner();
-        let node_info = self
-            .info()
-            .await
-            .map_err(|err| tonic::Status::internal(err.to_string()))?;
-
-        let mut client = self
-            .rpc_client()
-            .await
-            .map_err(|err| tonic::Status::internal(err.to_string()))?;
-
-        let active_peer_channels_response = client
-            .call(cln_rpc::Request::ListPeerChannels(
-                model::requests::ListpeerchannelsRequest { id: None },
-            ))
-            .await
-            .map_err(|err| tonic::Status::internal(err.to_string()))?;
-
-        let mut active_peer_channels = match active_peer_channels_response {
-            cln_rpc::Response::ListPeerChannels(channels) => Ok(channels.channels),
-            _ => Err(ClnExtensionError::RpcWrongResponse),
-        }
-        .map_err(|err| tonic::Status::internal(err.to_string()))?
-        .into_iter()
-        .filter_map(|chan| {
-            if matches!(
-                chan.state,
-                model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
-            ) {
-                return chan.short_channel_id.map(|scid| (chan.peer_id, scid));
-            }
-
-            None
-        })
-        .collect::<Vec<_>>();
-
-        debug!(
-            "Found {} active channels to use as route hints",
-            active_peer_channels.len()
-        );
-
-        let listfunds_response = client
-            .call(cln_rpc::Request::ListFunds(
-                model::requests::ListfundsRequest { spent: None },
-            ))
-            .await
-            .map_err(|err| tonic::Status::internal(err.to_string()))?;
-        let pubkey_to_incoming_capacity = match listfunds_response {
-            cln_rpc::Response::ListFunds(listfunds) => listfunds
-                .channels
-                .into_iter()
-                .map(|chan| (chan.peer_id, chan.amount_msat - chan.our_amount_msat))
-                .collect::<HashMap<_, _>>(),
-            err => panic!("CLN received unexpected response: {err:?}"),
-        };
-        active_peer_channels.sort_by(|a, b| {
-            let a_incoming = pubkey_to_incoming_capacity.get(&a.0).unwrap().msat();
-            let b_incoming = pubkey_to_incoming_capacity.get(&b.0).unwrap().msat();
-            b_incoming.cmp(&a_incoming)
-        });
-        active_peer_channels.truncate(num_route_hints as usize);
-
-        let mut route_hints = vec![];
-        for (peer_id, scid) in active_peer_channels {
-            let channels_response = client
-                .call(cln_rpc::Request::ListChannels(
-                    model::requests::ListchannelsRequest {
-                        short_channel_id: Some(scid),
-                        source: None,
-                        destination: None,
-                    },
-                ))
-                .await
-                .map_err(|err| tonic::Status::internal(err.to_string()))?;
-
-            let channel = match channels_response {
-                cln_rpc::Response::ListChannels(channels) => {
-                    let Some(channel) = channels
-                        .channels
-                        .into_iter()
-                        .find(|chan| chan.destination == node_info.0)
-                    else {
-                        warn!(?scid, "Channel not found in graph");
-                        continue;
-                    };
-                    Ok(channel)
-                }
-                _ => Err(ClnExtensionError::RpcWrongResponse),
-            }
-            .map_err(|err| tonic::Status::internal(err.to_string()))?;
-
-            let route_hint_hop = RouteHintHop {
-                src_node_id: peer_id.serialize().to_vec(),
-                short_channel_id: scid_to_u64(scid),
-                base_msat: channel.base_fee_millisatoshi,
-                proportional_millionths: channel.fee_per_millionth,
-                cltv_expiry_delta: channel.delay,
-                htlc_minimum_msat: Some(channel.htlc_minimum_msat.msat()),
-                htlc_maximum_msat: channel.htlc_maximum_msat.map(|amt| amt.msat()),
-            };
-
-            debug!("Constructed route hint {:?}", route_hint_hop);
-            route_hints.push(RouteHint {
-                hops: vec![route_hint_hop],
-            });
-        }
-
-        Ok(tonic::Response::new(GetRouteHintsResponse { route_hints }))
-    }
-
-    async fn pay_invoice(
-        &self,
-        request: tonic::Request<PayInvoiceRequest>,
-    ) -> Result<tonic::Response<PayInvoiceResponse>, tonic::Status> {
-        let PayInvoiceRequest {
-            invoice,
-            max_delay,
-            max_fee_msat,
-            payment_hash: _,
-        } = request.into_inner();
-
-        let outcome = self
-            .rpc_client()
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?
-            .call(cln_rpc::Request::Pay(model::requests::PayRequest {
-                bolt11: invoice,
-                amount_msat: None,
-                label: None,
-                riskfactor: None,
-                retry_for: None,
-                maxdelay: Some(max_delay as u16),
-                exemptfee: None,
-                localinvreqid: None,
-                exclude: None,
-                maxfee: Some(cln_rpc::primitives::Amount::from_msat(max_fee_msat)),
-                maxfeepercent: None,
-                description: None,
-                partial_msat: None,
-            }))
-            .await
-            .map(|response| match response {
-                cln_rpc::Response::Pay(model::responses::PayResponse {
-                    payment_preimage, ..
-                }) => Ok(PayInvoiceResponse {
-                    preimage: payment_preimage.to_vec(),
-                }),
-                _ => Err(ClnExtensionError::RpcWrongResponse),
-            })
-            .map_err(|e| {
-                error!("cln pay rpc returned error {:?}", e);
-                tonic::Status::internal(e.to_string())
-            })?
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
-
-        Ok(tonic::Response::new(outcome))
-    }
-
-    async fn pay_pruned_invoice(
-        &self,
-        request: tonic::Request<PayPrunedInvoiceRequest>,
-    ) -> Result<tonic::Response<PayInvoiceResponse>, tonic::Status> {
-        let PayPrunedInvoiceRequest {
-            pruned_invoice,
-            max_delay,
-            max_fee_msat,
-        } = request.into_inner();
-
-        let pruned_invoice = pruned_invoice
-            .ok_or_else(|| tonic::Status::internal("Pruned Invoice was not supplied"))?;
-        let payment_hash = sha256::Hash::from_slice(&pruned_invoice.payment_hash)
-            .map_err(|err| tonic::Status::internal(err.to_string()))?;
-
-        let mut excluded_nodes = vec![];
-
-        let payment_future = async {
-            let mut route_attempt = 0;
-
-            loop {
-                let route = self
-                    .get_route(
-                        pruned_invoice.clone(),
-                        ROUTE_RISK_FACTOR,
-                        excluded_nodes.clone(),
-                    )
-                    .await
-                    .map_err(|err| tonic::Status::internal(err.to_string()))?;
-
-                // Verify `max_delay` is greater than the worst case timeout for the payment
-                // failure in blocks
-                let delay = route
-                    .first()
-                    .ok_or_else(|| {
-                        tonic::Status::internal(format!(
-                            "Returned route did not have any hops for payment_hash: {payment_hash}"
-                        ))
-                    })?
-                    .delay;
-                if max_delay < delay.into() {
-                    return Err(tonic::Status::internal(format!("Worst case timeout for the payment is too long. max_delay: {max_delay} delay: {delay} payment_hash: {payment_hash}")));
-                }
-
-                // Verify the total fee is less than `max_fee_msat`
-                let first_hop_amount = route
-                    .first()
-                    .ok_or_else(|| {
-                        tonic::Status::internal(format!(
-                            "Returned route did not have any hops for payment_hash: {payment_hash}"
-                        ))
-                    })?
-                    .amount_msat;
-                let last_hop_amount = route
-                    .last()
-                    .ok_or_else(|| {
-                        tonic::Status::internal(format!(
-                            "Returned route did not have any hops for payment_hash: {payment_hash}"
-                        ))
-                    })?
-                    .amount_msat;
-                let fee = first_hop_amount - last_hop_amount;
-                if max_fee_msat < fee.msat() {
-                    return Err(tonic::Status::internal(format!(
-                        "Fee: {} for payment {payment_hash} is greater than max_fee_msat: {max_fee_msat}",
-                        fee.msat()
-                    )));
-                }
-
-                debug!(
-                    ?route_attempt,
-                    ?payment_hash,
-                    ?route,
-                    "Attempting payment with route"
-                );
-                match self
-                    .pay_with_route(pruned_invoice.clone(), payment_hash, route.clone())
-                    .await
-                {
-                    Ok(preimage) => {
-                        let response = PayInvoiceResponse { preimage };
-                        return Ok(tonic::Response::new(response));
-                    }
-                    Err(ClnExtensionError::FailedPayment { erring_node }) => {
-                        error!(
-                            ?route_attempt,
-                            ?payment_hash,
-                            ?erring_node,
-                            "Pruned invoice payment attempt failure"
-                        );
-                        excluded_nodes.push(erring_node);
-                    }
-                    Err(e) => {
-                        error!(
-                            ?route_attempt,
-                            ?payment_hash,
-                            ?e,
-                            "Permanent Pruned invoice payment attempt failure"
-                        );
-                        return Err(tonic::Status::internal(format!(
-                            "Permanent Pruned invoice payment attempt failure for {payment_hash}"
-                        )));
-                    }
-                }
-
-                route_attempt += 1;
-            }
-        };
-
-        match timeout(PAYMENT_TIMEOUT_DURATION, payment_future).await {
-            Ok(preimage) => preimage,
-            Err(elapsed) => {
-                error!(
-                    ?PAYMENT_TIMEOUT_DURATION,
-                    ?elapsed,
-                    ?payment_hash,
-                    "Payment exceeded max attempt duration"
-                );
-                Err(tonic::Status::internal(format!(
-                    "Payment exceeded max attempt duration: {PAYMENT_TIMEOUT_DURATION:?}"
-                )))
-            }
-        }
-    }
-
-    type RouteHtlcsStream = ReceiverStream<Result<InterceptHtlcRequest, Status>>;
-
-    async fn route_htlcs(
-        &self,
-        _: tonic::Request<EmptyRequest>,
-    ) -> Result<tonic::Response<Self::RouteHtlcsStream>, Status> {
-        // First create new channel that we will use to send responses back to gatewayd
-        let (gatewayd_sender, gatewayd_receiver) =
-            mpsc::channel::<Result<InterceptHtlcRequest, Status>>(100);
-
-        let mut sender = self.interceptor.sender.lock().await;
-        *sender = Some(gatewayd_sender.clone());
-        debug!("Gateway channel sender replaced");
-
-        Ok(tonic::Response::new(ReceiverStream::new(gatewayd_receiver)))
-    }
-
-    async fn complete_htlc(
-        &self,
-        intercept_response: tonic::Request<InterceptHtlcResponse>,
-    ) -> Result<tonic::Response<EmptyResponse>, Status> {
-        let InterceptHtlcResponse {
-            action,
-            incoming_chan_id,
-            htlc_id,
-            ..
-        } = intercept_response.into_inner();
-
-        if let Some(outcome) = self
-            .interceptor
-            .outcomes
-            .lock()
-            .await
-            .remove(&(incoming_chan_id, htlc_id))
-        {
-            // Translate action request into a cln rpc response for
-            // `htlc_accepted` event
-            let htlca_res = match action {
-                Some(Action::Settle(Settle { preimage })) => {
-                    let assert_pk: Result<[u8; 32], TryFromSliceError> =
-                        preimage.as_slice().try_into();
-                    if let Ok(pk) = assert_pk {
-                        serde_json::json!({ "result": "resolve", "payment_key": pk.encode_hex::<String>() })
-                    } else {
-                        htlc_processing_failure()
-                    }
-                }
-                Some(Action::Cancel(Cancel { reason: _ })) => {
-                    // Simply forward the HTLC so that a "NoRoute" error response is returned.
-                    serde_json::json!({ "result": "continue" })
-                }
-                Some(Action::Forward(Forward {})) => {
-                    serde_json::json!({ "result": "continue" })
-                }
-                None => {
-                    error!(
-                        ?incoming_chan_id,
-                        ?htlc_id,
-                        "No action specified for intercepted htlc"
-                    );
-                    return Err(Status::internal(
-                        "No action specified on this intercepted htlc",
-                    ));
-                }
-            };
-
-            // Send translated response to the HTLC interceptor for submission
-            // to the cln rpc
-            match outcome.send(htlca_res) {
-                Ok(_) => {}
-                Err(e) => {
-                    error!(
-                        "Failed to send htlc_accepted response to interceptor: {:?}",
-                        e
-                    );
-                    return Err(Status::internal(
-                        "Failed to send htlc_accepted response to interceptor",
-                    ));
-                }
-            };
-        } else {
-            error!(
-                ?incoming_chan_id,
-                ?htlc_id,
-                "No interceptor reference found for this processed htlc",
-            );
-            return Err(Status::internal("No interceptor reference found for htlc"));
-        }
-        Ok(tonic::Response::new(EmptyResponse {}))
-    }
-
-    async fn create_invoice(
-        &self,
-        create_invoice_request: tonic::Request<CreateInvoiceRequest>,
-    ) -> Result<tonic::Response<CreateInvoiceResponse>, Status> {
-        let CreateInvoiceRequest {
-            payment_hash,
-            amount_msat,
-            expiry_secs,
-            description,
-        } = create_invoice_request.into_inner();
-
-        let payment_hash = if payment_hash.is_empty() {
-            return self
-                .create_invoice_for_self(amount_msat, expiry_secs.into(), description)
-                .await;
-        } else {
-            sha256::Hash::from_slice(&payment_hash)
-                .map_err(|e| tonic::Status::internal(e.to_string()))?
-        };
-
-        let description = description.ok_or(tonic::Status::internal(
-            "Description or description hash was not provided".to_string(),
-        ))?;
-
-        let info = self
-            .info()
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        let network = bitcoin30::Network::from_str(info.2.as_str())
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        let invoice_builder = InvoiceBuilder::new(Currency::from(network))
-            .amount_milli_satoshis(amount_msat)
-            .payment_hash(payment_hash)
-            .payment_secret(PaymentSecret(OsRng.gen()))
-            .duration_since_epoch(fedimint_core::time::duration_since_epoch())
-            .min_final_cltv_expiry_delta(18)
-            .expiry_time(Duration::from_secs(expiry_secs.into()));
-
-        let invoice_builder = match description {
-            Description::Direct(description) => invoice_builder.invoice_description(
-                lightning_invoice::Bolt11InvoiceDescription::Direct(
-                    &lightning_invoice::Description::new(description)
-                        .expect("Description is valid"),
-                ),
-            ),
-            Description::Hash(hash) => invoice_builder.invoice_description(
-                lightning_invoice::Bolt11InvoiceDescription::Hash(&lightning_invoice::Sha256(
-                    bitcoin_hashes::sha256::Hash::from_slice(&hash)
-                        .expect("Couldnt create hash from description hash"),
-                )),
-            ),
-        };
-
-        let invoice = invoice_builder
-            // Temporarily sign with an ephemeral private key, we will request CLN to sign this
-            // invoice next.
-            .build_signed(|m| {
-                self.secp
-                    .sign_ecdsa_recoverable(m, &SecretKey::new(&mut OsRng))
-            })
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        let invstring = invoice.to_string();
-
-        let response = self
-            .rpc_client()
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?
-            .call(cln_rpc::Request::SignInvoice(
-                model::requests::SigninvoiceRequest { invstring },
-            ))
-            .await
-            .map(|response| match response {
-                cln_rpc::Response::SignInvoice(model::responses::SigninvoiceResponse {
-                    bolt11,
-                }) => Ok(CreateInvoiceResponse { invoice: bolt11 }),
-                _ => Err(ClnExtensionError::RpcWrongResponse),
-            })
-            .map_err(|e| {
-                error!("cln invoice returned error {e:?}");
-                tonic::Status::internal(e.to_string())
-            })?
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
-
-        Ok(tonic::Response::new(response))
-    }
-
-    async fn get_ln_onchain_address(
-        &self,
-        _request: tonic::Request<EmptyRequest>,
-    ) -> Result<tonic::Response<GetLnOnchainAddressResponse>, Status> {
-        let address_or = self
-            .rpc_client()
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?
-            .call(cln_rpc::Request::NewAddr(model::requests::NewaddrRequest {
-                addresstype: None,
-            }))
-            .await
-            .map(|response| match response {
-                cln_rpc::Response::NewAddr(model::responses::NewaddrResponse {
-                    bech32, ..
-                }) => Ok(bech32),
-                _ => Err(ClnExtensionError::RpcWrongResponse),
-            })
-            .map_err(|e| {
-                error!("cln newaddr rpc returned error {:?}", e);
-                tonic::Status::internal(e.to_string())
-            })?
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
-
-        match address_or {
-            Some(address) => Ok(tonic::Response::new(GetLnOnchainAddressResponse {
-                address,
-            })),
-            None => Err(Status::internal("cln newaddr rpc returned no address")),
-        }
-    }
-
-    async fn withdraw_onchain(
-        &self,
-        request: tonic::Request<WithdrawOnchainRequest>,
-    ) -> Result<tonic::Response<WithdrawOnchainResponse>, Status> {
-        let request_inner = request.into_inner();
-
-        let txid = self
-            .rpc_client()
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?
-            .call(cln_rpc::Request::Withdraw(
-                model::requests::WithdrawRequest {
-                    feerate: Some(cln_rpc::primitives::Feerate::PerKw(
-                        // 1 vbyte = 4 weight units, so 250 vbytes = 1,000 weight units.
-                        request_inner.fee_rate_sats_per_vbyte as u32 * 250,
-                    )),
-                    minconf: Some(0),
-                    utxos: None,
-                    destination: request_inner.address,
-                    satoshi: if let Some(amount_sats) = request_inner.amount_sats {
-                        cln_rpc::primitives::AmountOrAll::Amount(
-                            cln_rpc::primitives::Amount::from_sat(amount_sats),
-                        )
-                    } else {
-                        cln_rpc::primitives::AmountOrAll::All
-                    },
-                },
-            ))
-            .await
-            .map(|response| match response {
-                cln_rpc::Response::Withdraw(model::responses::WithdrawResponse {
-                    txid, ..
-                }) => Ok(txid),
-                _ => Err(ClnExtensionError::RpcWrongResponse),
-            })
-            .map_err(|e| {
-                error!("cln connect rpc returned error {:?}", e);
-                tonic::Status::internal(e.to_string())
-            })?
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
-
-        Ok(tonic::Response::new(WithdrawOnchainResponse { txid }))
-    }
-
-    async fn open_channel(
-        &self,
-        request: tonic::Request<OpenChannelRequest>,
-    ) -> Result<tonic::Response<OpenChannelResponse>, Status> {
-        let request_inner = request.into_inner();
-
-        let public_key = cln_rpc::primitives::PublicKey::from_slice(&request_inner.pubkey)
-            .map_err(|e| {
-                error!("cln fundchannel pubkey parse error {:?}", e);
-                tonic::Status::invalid_argument(e.to_string())
+                }) => CreateInvoiceResponse { invoice: bolt11 },
+                _ => unreachable!("Unexpected response from Invoice"),
             })?;
 
-        self.rpc_client()
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?
-            .call(cln_rpc::Request::Connect(model::requests::ConnectRequest {
-                id: format!("{}@{}", public_key, request_inner.host),
-                host: None,
-                port: None,
-            }))
-            .await
-            .map_err(|e| {
-                error!("cln connect rpc returned error {:?}", e);
-                tonic::Status::internal(e.to_string())
-            })?;
-
-        let funding_txid = self
-            .rpc_client()
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?
-            .call(cln_rpc::Request::FundChannel(
-                model::requests::FundchannelRequest {
-                    id: public_key,
-                    amount: cln_rpc::primitives::AmountOrAll::Amount(
-                        cln_rpc::primitives::Amount::from_sat(request_inner.channel_size_sats),
-                    ),
-                    feerate: None,
-                    announce: None,
-                    minconf: None,
-                    push_msat: Some(cln_rpc::primitives::Amount::from_sat(
-                        request_inner.push_amount_sats,
-                    )),
-                    close_to: None,
-                    request_amt: None,
-                    compact_lease: None,
-                    utxos: None,
-                    mindepth: None,
-                    reserve: None,
-                    channel_type: None,
-                },
-            ))
-            .await
-            .map(|response| match response {
-                cln_rpc::Response::FundChannel(model::responses::FundchannelResponse {
-                    txid,
-                    ..
-                }) => Ok(txid),
-                _ => Err(ClnExtensionError::RpcWrongResponse),
-            })
-            .map_err(|e| {
-                error!("cln fundchannel rpc returned error {:?}", e);
-                tonic::Status::internal(e.to_string())
-            })?
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
-
-        Ok(tonic::Response::new(OpenChannelResponse { funding_txid }))
-    }
-
-    async fn close_channels_with_peer(
-        &self,
-        request: tonic::Request<CloseChannelsWithPeerRequest>,
-    ) -> Result<tonic::Response<CloseChannelsWithPeerResponse>, Status> {
-        let request_inner = request.into_inner();
-
-        let peer_id = PublicKey::from_slice(&request_inner.pubkey).map_err(|e| {
-            Status::invalid_argument(format!("Unable to parse request pubkey: {e}"))
-        })?;
-
-        let channels_with_peer: Vec<ListpeerchannelsChannels> = self
-            .rpc_client()
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?
-            .call(cln_rpc::Request::ListPeerChannels(
-                model::requests::ListpeerchannelsRequest { id: Some(peer_id) },
-            ))
-            .await
-            .map(|response| match response {
-                cln_rpc::Response::ListPeerChannels(
-                    model::responses::ListpeerchannelsResponse { channels },
-                ) => Ok(channels
-                    .into_iter()
-                    .filter(|channel| {
-                        channel.state
-                            == model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
-                    })
-                    .collect()),
-                _ => Err(ClnExtensionError::RpcWrongResponse),
-            })
-            .map_err(|e| {
-                error!("cln listchannels rpc returned error {:?}", e);
-                tonic::Status::internal(e.to_string())
-            })?
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
-
-        for channel_id in channels_with_peer
-            .iter()
-            .filter_map(|channel| channel.channel_id)
-        {
-            self.rpc_client()
-                .await
-                .map_err(|e| Status::internal(e.to_string()))?
-                .call(cln_rpc::Request::Close(model::requests::CloseRequest {
-                    id: channel_id.to_string(),
-                    unilateraltimeout: None,
-                    destination: None,
-                    fee_negotiation_step: None,
-                    wrong_funding: None,
-                    force_lease_closed: None,
-                    feerange: None,
-                }))
-                .await
-                .map_err(|e| {
-                    error!("cln fundchannel rpc returned error {:?}", e);
-                    tonic::Status::internal(e.to_string())
-                })?;
-        }
-
-        Ok(tonic::Response::new(CloseChannelsWithPeerResponse {
-            num_channels_closed: channels_with_peer.len() as u32,
-        }))
-    }
-
-    async fn list_active_channels(
-        &self,
-        _request: tonic::Request<EmptyRequest>,
-    ) -> Result<tonic::Response<ListActiveChannelsResponse>, Status> {
-        let channels = self
-            .rpc_client()
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?
-            .call(cln_rpc::Request::ListPeerChannels(
-                model::requests::ListpeerchannelsRequest { id: None },
-            ))
-            .await
-            .map(|response| match response {
-                cln_rpc::Response::ListPeerChannels(
-                    model::responses::ListpeerchannelsResponse { channels },
-                ) => Ok(channels
-                    .into_iter()
-                    .filter_map(|channel| {
-                        if matches!(
-                            channel.state,
-                            model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
-                        ) {
-                            Some(ChannelInfo {
-                                remote_pubkey: channel.peer_id.serialize().to_vec(),
-                                channel_size_sats: channel
-                                    .total_msat
-                                    .map(|value| value.msat() / 1000)
-                                    .unwrap_or(0),
-                                outbound_liquidity_sats: channel
-                                    .spendable_msat
-                                    .map(|value| value.msat() / 1000)
-                                    .unwrap_or(0),
-                                inbound_liquidity_sats: channel
-                                    .receivable_msat
-                                    .map(|value| value.msat() / 1000)
-                                    .unwrap_or(0),
-                                short_channel_id: match channel.short_channel_id {
-                                    Some(scid) => scid_to_u64(scid),
-                                    None => return None,
-                                },
-                            })
-                        } else {
-                            None
-                        }
-                    })
-                    .collect()),
-                _ => Err(ClnExtensionError::RpcWrongResponse),
-            })
-            .map_err(|e| {
-                error!("cln listchannels rpc returned error {:?}", e);
-                tonic::Status::internal(e.to_string())
-            })?
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
-
-        Ok(tonic::Response::new(ListActiveChannelsResponse {
-            channels,
-        }))
-    }
-
-    async fn get_balances(
-        &self,
-        _request: tonic::Request<EmptyRequest>,
-    ) -> Result<tonic::Response<GetBalancesResponse>, Status> {
-        let (channels, outputs) = self
-            .rpc_client()
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?
-            .call(cln_rpc::Request::ListFunds(
-                model::requests::ListfundsRequest { spent: None },
-            ))
-            .await
-            .map(|response| match response {
-                cln_rpc::Response::ListFunds(model::responses::ListfundsResponse {
-                    channels,
-                    outputs,
-                }) => Ok((channels, outputs)),
-                _ => Err(ClnExtensionError::RpcWrongResponse),
-            })
-            .map_err(|e| {
-                error!("cln listchannels rpc returned error {:?}", e);
-                tonic::Status::internal(e.to_string())
-            })?
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
-
-        let total_receivable_msat = self
-            .rpc_client()
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?
-            .call(cln_rpc::Request::ListPeerChannels(
-                model::requests::ListpeerchannelsRequest { id: None },
-            ))
-            .await
-            .map(|response| match response {
-                cln_rpc::Response::ListPeerChannels(
-                    model::responses::ListpeerchannelsResponse { channels },
-                ) => Ok(channels
-                    .into_iter()
-                    .filter(|channel| {
-                        matches!(
-                            channel.state,
-                            model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
-                        )
-                    })
-                    .filter_map(|channel| channel.receivable_msat.map(|value| value.msat()))
-                    .sum::<u64>()), // Sum the receivable_msat values directly
-                _ => Err(ClnExtensionError::RpcWrongResponse),
-            })
-            .map_err(|e| {
-                error!("cln listchannels rpc returned error {:?}", e);
-                tonic::Status::internal(e.to_string())
-            })?
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
-
-        let lightning_balance_msats = channels
-            .into_iter()
-            .fold(0, |acc, channel| acc + channel.our_amount_msat.msat());
-        let onchain_balance_sats = outputs
-            .into_iter()
-            .fold(0, |acc, output| acc + output.amount_msat.msat() / 1000);
-
-        Ok(tonic::Response::new(GetBalancesResponse {
-            onchain_balance_sats,
-            lightning_balance_msats,
-            inbound_lightning_liquidity_msats: total_receivable_msat,
-        }))
+        Ok(Json(response))
     }
 }
 
@@ -1270,10 +1208,18 @@ enum ClnExtensionError {
     Error(#[from] anyhow::Error),
     #[error("Gateway CLN Extension Error : {0:?}")]
     RpcError(#[from] cln_rpc::RpcError),
-    #[error("Gateway CLN Extension, CLN RPC Wrong Response")]
-    RpcWrongResponse,
     #[error("Gateway CLN Extension failed payment")]
     FailedPayment { erring_node: String },
+}
+
+impl IntoResponse for ClnExtensionError {
+    fn into_response(self) -> axum::response::Response {
+        error!("{self}");
+        Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(self.to_string().into())
+            .expect("Failed to create Response")
+    }
 }
 
 // TODO: upstream
@@ -1284,19 +1230,7 @@ fn scid_to_u64(scid: ShortChannelId) -> u64 {
     scid_num
 }
 
-// BOLT 4: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
-// 16399 error code reports unknown payment details.
-//
-// TODO: We should probably use a more specific error code based on htlc
-// processing fail reason
-fn htlc_processing_failure() -> serde_json::Value {
-    serde_json::json!({
-        "result": "fail",
-        "failure_message": "1639"
-    })
-}
-
-type HtlcInterceptionSender = mpsc::Sender<Result<InterceptHtlcRequest, Status>>;
+type HtlcInterceptionSender = mpsc::Sender<InterceptPaymentRequest>;
 type HtlcOutcomeSender = oneshot::Sender<serde_json::Value>;
 
 /// Functional structure to filter intercepted HTLCs into subscription streams.
@@ -1350,8 +1284,6 @@ impl ClnHtlcInterceptor {
         // Clone the sender to avoid holding the lock while sending the HTLC
         let sender = self.sender.lock().await.clone();
         if let Some(sender) = sender {
-            let payment_hash = payload.htlc.payment_hash.to_byte_array().to_vec();
-
             let incoming_chan_id =
                 match Self::convert_short_channel_id(payload.htlc.short_channel_id.as_str()) {
                     Ok(scid) => scid,
@@ -1360,15 +1292,14 @@ impl ClnHtlcInterceptor {
                 };
 
             let htlc_ret = match sender
-                .send(Ok(InterceptHtlcRequest {
-                    payment_hash: payment_hash.clone(),
-                    incoming_amount_msat: payload.htlc.amount_msat.msats,
-                    outgoing_amount_msat: payload.onion.forward_msat.msats,
-                    incoming_expiry: htlc_expiry,
+                .send(InterceptPaymentRequest {
+                    payment_hash: payload.htlc.payment_hash,
+                    amount_msat: payload.onion.forward_msat.msats,
+                    expiry: htlc_expiry,
                     short_channel_id,
                     incoming_chan_id,
                     htlc_id: payload.htlc.id,
-                }))
+                })
                 .await
             {
                 Ok(_) => {

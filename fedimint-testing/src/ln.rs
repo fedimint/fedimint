@@ -7,24 +7,23 @@ use async_trait::async_trait;
 use bitcoin30::hashes::{sha256, Hash};
 use bitcoin30::key::KeyPair;
 use bitcoin30::secp256k1::{PublicKey, SecretKey};
-use bitcoin30::Address;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::BoxStream;
-use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
+use fedimint_core::{secp256k1, Amount};
+use fedimint_ln_common::contracts::Preimage;
+use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::PrunedInvoice;
 use fedimint_logging::LOG_TEST;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, DEFAULT_EXPIRY_TIME,
 };
-use ln_gateway::gateway_lnrpc::{
-    self, CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
-    EmptyResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
-    GetRouteHintsResponse, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
-    WithdrawOnchainResponse,
-};
 use ln_gateway::lightning::{
-    ChannelInfo, HtlcResult, ILnRpcClient, LightningRpcError, RouteHtlcStream,
+    ChannelInfo, CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
+    GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse, LightningRpcError,
+    OpenChannelResponse, PayInvoiceResponse, RouteHtlcStream, WithdrawOnchainResponse,
 };
+use ln_gateway::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, WithdrawOnchainPayload};
 use rand::rngs::OsRng;
 use tokio::sync::mpsc;
 use tracing::info;
@@ -120,7 +119,7 @@ impl FakeLightningTest {
 impl ILnRpcClient for FakeLightningTest {
     async fn info(&self) -> Result<GetNodeInfoResponse, LightningRpcError> {
         Ok(GetNodeInfoResponse {
-            pub_key: self.gateway_node_pub_key.serialize().to_vec(),
+            pub_key: self.gateway_node_pub_key,
             alias: "FakeLightningNode".to_string(),
             network: "regtest".to_string(),
             block_height: 0,
@@ -133,7 +132,7 @@ impl ILnRpcClient for FakeLightningTest {
         _num_route_hints: usize,
     ) -> Result<GetRouteHintsResponse, LightningRpcError> {
         Ok(GetRouteHintsResponse {
-            route_hints: vec![gateway_lnrpc::get_route_hints_response::RouteHint { hops: vec![] }],
+            route_hints: vec![RouteHint(vec![])],
         })
     }
 
@@ -157,7 +156,7 @@ impl ILnRpcClient for FakeLightningTest {
         }
 
         Ok(PayInvoiceResponse {
-            preimage: MOCK_INVOICE_PREIMAGE.to_vec(),
+            preimage: Preimage(MOCK_INVOICE_PREIMAGE),
         })
     }
 
@@ -181,7 +180,7 @@ impl ILnRpcClient for FakeLightningTest {
         }
 
         Ok(PayInvoiceResponse {
-            preimage: MOCK_INVOICE_PREIMAGE.to_vec(),
+            preimage: Preimage(MOCK_INVOICE_PREIMAGE),
         })
     }
 
@@ -195,8 +194,8 @@ impl ILnRpcClient for FakeLightningTest {
         // `FakeLightningTest` will never intercept any HTLCs because there is no
         // lightning connection, so instead we just create a stream that blocks
         // until the task group is shutdown.
-        let (_, mut receiver) = mpsc::channel::<HtlcResult>(0);
-        let stream: BoxStream<'a, HtlcResult> = Box::pin(stream! {
+        let (_, mut receiver) = mpsc::channel::<InterceptPaymentRequest>(0);
+        let stream: BoxStream<'a, InterceptPaymentRequest> = Box::pin(stream! {
             shutdown_receiver.await;
             // This block, and `receiver`, exist solely to satisfy the type checker.
             if let Some(htlc_result) = receiver.recv().await {
@@ -208,9 +207,9 @@ impl ILnRpcClient for FakeLightningTest {
 
     async fn complete_htlc(
         &self,
-        _htlc: InterceptHtlcResponse,
-    ) -> Result<EmptyResponse, LightningRpcError> {
-        Ok(EmptyResponse {})
+        _htlc: InterceptPaymentResponse,
+    ) -> Result<(), LightningRpcError> {
+        Ok(())
     }
 
     async fn create_invoice(
@@ -219,21 +218,7 @@ impl ILnRpcClient for FakeLightningTest {
     ) -> Result<CreateInvoiceResponse, LightningRpcError> {
         let ctx = bitcoin30::secp256k1::Secp256k1::new();
 
-        let payment_hash_or = if create_invoice_request.payment_hash.is_empty() {
-            None
-        } else {
-            Some(
-                sha256::Hash::from_slice(&create_invoice_request.payment_hash).map_err(|e| {
-                    LightningRpcError::FailedToGetInvoice {
-                        failure_reason: format!(
-                            "CreateInvoiceRequest.payment_hash is invalid: {e}"
-                        ),
-                    }
-                })?,
-            )
-        };
-
-        let invoice = match payment_hash_or {
+        let invoice = match create_invoice_request.payment_hash {
             Some(payment_hash) => InvoiceBuilder::new(Currency::Regtest)
                 .description(String::new())
                 .payment_hash(payment_hash)
@@ -269,9 +254,7 @@ impl ILnRpcClient for FakeLightningTest {
 
     async fn withdraw_onchain(
         &self,
-        _address: Address,
-        _amount: BitcoinAmountOrAll,
-        _fee_rate_sats_per_vbyte: u64,
+        _payload: WithdrawOnchainPayload,
     ) -> Result<WithdrawOnchainResponse, LightningRpcError> {
         Err(LightningRpcError::FailedToWithdrawOnchain {
             failure_reason: "FakeLightningTest does not support withdrawing funds on-chain"
@@ -281,10 +264,7 @@ impl ILnRpcClient for FakeLightningTest {
 
     async fn open_channel(
         &self,
-        _pubkey: bitcoin30::secp256k1::PublicKey,
-        _host: String,
-        _channel_size_sats: u64,
-        _push_amount_sats: u64,
+        _payload: OpenChannelPayload,
     ) -> Result<OpenChannelResponse, LightningRpcError> {
         Err(LightningRpcError::FailedToOpenChannel {
             failure_reason: "FakeLightningTest does not support opening channels".to_string(),
@@ -293,7 +273,7 @@ impl ILnRpcClient for FakeLightningTest {
 
     async fn close_channels_with_peer(
         &self,
-        _pubkey: bitcoin30::secp256k1::PublicKey,
+        _payload: CloseChannelsWithPeerPayload,
     ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError> {
         Err(LightningRpcError::FailedToCloseChannelsWithPeer {
             failure_reason: "FakeLightningTest does not support closing channels by peer"
@@ -314,7 +294,7 @@ impl ILnRpcClient for FakeLightningTest {
         })
     }
 
-    async fn sync_to_chain(&self, _block_height: u32) -> Result<EmptyResponse, LightningRpcError> {
+    async fn sync_to_chain(&self, _block_height: u32) -> Result<(), LightningRpcError> {
         Err(LightningRpcError::FailedToSyncToChain {
             failure_reason: "FakeLightningTest does not support syncing to chain".to_string(),
         })

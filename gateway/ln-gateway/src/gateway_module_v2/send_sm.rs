@@ -200,13 +200,7 @@ impl SendStateMachine {
             .lnrpc
             .pay(invoice, max_delay, contract.amount - min_contract_amount)
             .await
-            .map(|response| {
-                response
-                    .preimage
-                    .as_slice()
-                    .try_into()
-                    .expect("Preimage is 32 bytes")
-            })
+            .map(|response| response.preimage.0)
             .map_err(|e| Cancelled::LightningRpcError(e.to_string()))
     }
 

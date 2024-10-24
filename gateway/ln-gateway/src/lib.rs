@@ -24,10 +24,6 @@ pub mod rpc;
 pub mod state_machine;
 mod types;
 
-pub mod gateway_lnrpc {
-    tonic::include_proto!("gateway_lnrpc");
-}
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fmt::Display;
@@ -38,7 +34,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Context};
 use bitcoin30::{Address, Network, Txid};
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin_hashes::sha256;
 use clap::Parser;
 use client::GatewayClientBuilder;
 use config::GatewayOpts;
@@ -56,7 +52,7 @@ use fedimint_core::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
-use fedimint_core::db::{apply_migrations_server, Database, DatabaseTransaction, DatabaseValue};
+use fedimint_core::db::{apply_migrations_server, Database, DatabaseTransaction};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::secp256k1::schnorr::Signature;
@@ -81,9 +77,11 @@ use fedimint_wallet_client::{
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
 };
 use futures::stream::StreamExt;
-use gateway_lnrpc::intercept_htlc_response::{Action, Cancel};
-use gateway_lnrpc::{CloseChannelsWithPeerResponse, InterceptHtlcRequest, InterceptHtlcResponse};
-use lightning::{ILnRpcClient, LightningBuilder, LightningRpcError};
+use lightning::{
+    CloseChannelsWithPeerResponse, CreateInvoiceRequest, ILnRpcClient, InterceptPaymentRequest,
+    InterceptPaymentResponse, InvoiceDescription, LightningBuilder, LightningRpcError,
+    PaymentAction,
+};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::{thread_rng, Rng};
 use rpc::{
@@ -101,9 +99,6 @@ use crate::config::LightningModuleMode;
 use crate::db::{get_gatewayd_database_migrations, FederationConfig};
 use crate::envs::FM_GATEWAY_MNEMONIC_ENV;
 use crate::error::{AdminGatewayError, LNv1Error, LNv2Error, PublicGatewayError};
-use crate::gateway_lnrpc::create_invoice_request::Description;
-use crate::gateway_lnrpc::intercept_htlc_response::Forward;
-use crate::gateway_lnrpc::CreateInvoiceRequest;
 use crate::gateway_module_v2::GatewayClientModuleV2;
 use crate::lightning::{GatewayLightningBuilder, LightningContext, LightningMode, RouteHtlcStream};
 use crate::rpc::rpc_server::{hash_password, run_webserver};
@@ -111,7 +106,7 @@ use crate::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
     GatewayBalances, WithdrawPayload,
 };
-use crate::types::PrettyInterceptHtlcRequest;
+use crate::types::PrettyInterceptPaymentRequest;
 
 /// How long a gateway announcement stays valid
 const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
@@ -567,7 +562,7 @@ impl Gateway {
                     };
 
                     let payment_request = match payment_request {
-                        Some(Ok(payment_request)) => payment_request,
+                        Some(payment_request) => payment_request,
                         other => {
                             warn!(
                                 ?other,
@@ -609,16 +604,16 @@ impl Gateway {
     /// a normal lightning node.
     async fn handle_lightning_payment(
         &self,
-        htlc_request: InterceptHtlcRequest,
+        payment_request: InterceptPaymentRequest,
         lightning_context: &LightningContext,
     ) {
         info!(
             "Intercepting lightning payment {}",
-            PrettyInterceptHtlcRequest(&htlc_request)
+            PrettyInterceptPaymentRequest(&payment_request)
         );
 
         if self
-            .try_handle_lightning_payment_lnv2(&htlc_request, lightning_context)
+            .try_handle_lightning_payment_lnv2(&payment_request, lightning_context)
             .await
             .is_ok()
         {
@@ -626,26 +621,23 @@ impl Gateway {
         }
 
         if self
-            .try_handle_lightning_payment_ln_legacy(&htlc_request)
+            .try_handle_lightning_payment_ln_legacy(&payment_request)
             .await
             .is_ok()
         {
             return;
         }
 
-        Self::forward_lightning_payment(htlc_request, lightning_context).await;
+        Self::forward_lightning_payment(payment_request, lightning_context).await;
     }
 
     /// Tries to handle a lightning payment using the LNv2 protocol.
     /// Returns `Ok` if the payment was handled, `Err` otherwise.
     async fn try_handle_lightning_payment_lnv2(
         &self,
-        htlc_request: &InterceptHtlcRequest,
+        htlc_request: &InterceptPaymentRequest,
         lightning_context: &LightningContext,
     ) -> Result<()> {
-        let payment_hash =
-            bitcoin_hashes::sha256::Hash::from_slice(&htlc_request.payment_hash).expect("32 bytes");
-
         // If `payment_hash` has been registered as a LNv2 payment, we try to complete
         // the payment by getting the preimage from the federation
         // using the LNv2 protocol. If the `payment_hash` is not registered,
@@ -653,8 +645,8 @@ impl Gateway {
         // not a Fedimint.
         let (contract, client) = self
             .get_registered_incoming_contract_and_client_v2(
-                PaymentImage::Hash(payment_hash),
-                htlc_request.incoming_amount_msat,
+                PaymentImage::Hash(htlc_request.payment_hash),
+                htlc_request.amount_msat,
             )
             .await?;
 
@@ -662,7 +654,7 @@ impl Gateway {
             .get_first_module::<GatewayClientModuleV2>()
             .expect("Must have client module")
             .relay_incoming_htlc(
-                payment_hash,
+                htlc_request.payment_hash,
                 htlc_request.incoming_chan_id,
                 htlc_request.htlc_id,
                 contract,
@@ -671,11 +663,9 @@ impl Gateway {
         {
             error!("Error relaying incoming lightning payment: {error:?}");
 
-            let outcome = InterceptHtlcResponse {
-                action: Some(Action::Cancel(Cancel {
-                    reason: "Insufficient Liquidity".to_string(),
-                })),
-                payment_hash: payment_hash.to_bytes(),
+            let outcome = InterceptPaymentResponse {
+                action: PaymentAction::Cancel,
+                payment_hash: htlc_request.payment_hash,
                 incoming_chan_id: htlc_request.incoming_chan_id,
                 htlc_id: htlc_request.htlc_id,
             };
@@ -692,7 +682,7 @@ impl Gateway {
     /// Returns `Ok` if the payment was handled, `Err` otherwise.
     async fn try_handle_lightning_payment_ln_legacy(
         &self,
-        htlc_request: &InterceptHtlcRequest,
+        htlc_request: &InterceptPaymentRequest,
     ) -> Result<()> {
         // Check if the payment corresponds to a federation supporting legacy Lightning.
         let Some(federation_index) = htlc_request.short_channel_id else {
@@ -739,11 +729,11 @@ impl Gateway {
     /// node. Only necessary for LNv1, since LNv2 uses hold invoices instead
     /// of HTLC interception for routing incoming payments.
     async fn forward_lightning_payment(
-        htlc_request: InterceptHtlcRequest,
+        htlc_request: InterceptPaymentRequest,
         lightning_context: &LightningContext,
     ) {
-        let outcome = InterceptHtlcResponse {
-            action: Some(Action::Forward(Forward {})),
+        let outcome = InterceptPaymentResponse {
+            action: PaymentAction::Forward,
             payment_hash: htlc_request.payment_hash,
             incoming_chan_id: htlc_request.incoming_chan_id,
             htlc_id: htlc_request.htlc_id,
@@ -967,11 +957,11 @@ impl Gateway {
             &lightning_context
                 .lnrpc
                 .create_invoice(CreateInvoiceRequest {
-                    // Empty payment hash indicates an invoice payable directly to the gateway.
-                    payment_hash: Vec::new(),
+                    payment_hash: None, /* Empty payment hash indicates an invoice payable
+                                         * directly to the gateway. */
                     amount_msat: payload.amount_msats,
                     expiry_secs: payload.expiry_secs.unwrap_or(3600),
-                    description: payload.description.map(Description::Direct),
+                    description: payload.description.map(InvoiceDescription::Direct),
                 })
                 .await?
                 .invoice,
@@ -1011,10 +1001,7 @@ impl Gateway {
             .lnrpc
             .pay(payload.invoice, MAX_DELAY, Amount::from_msats(max_fee))
             .await?;
-
-        Ok(Preimage(
-            res.preimage.try_into().expect("preimage is 32 bytes"),
-        ))
+        Ok(res.preimage)
     }
 
     /// Requests the gateway to pay an outgoing LN invoice on behalf of a
@@ -1417,20 +1404,9 @@ impl Gateway {
 
     /// Instructs the Gateway's Lightning node to open a channel to a peer
     /// specified by `pubkey`.
-    pub async fn handle_open_channel_msg(
-        &self,
-        OpenChannelPayload {
-            pubkey,
-            host,
-            channel_size_sats,
-            push_amount_sats,
-        }: OpenChannelPayload,
-    ) -> AdminResult<Txid> {
+    pub async fn handle_open_channel_msg(&self, payload: OpenChannelPayload) -> AdminResult<Txid> {
         let context = self.get_lightning_context().await?;
-        let res = context
-            .lnrpc
-            .open_channel(pubkey, host, channel_size_sats, push_amount_sats)
-            .await?;
+        let res = context.lnrpc.open_channel(payload).await?;
         Txid::from_str(&res.funding_txid).map_err(|e| {
             AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
                 failure_reason: format!("Received invalid channel funding txid string {e}"),
@@ -1442,10 +1418,10 @@ impl Gateway {
     /// specified by `pubkey`.
     pub async fn handle_close_channels_with_peer_msg(
         &self,
-        CloseChannelsWithPeerPayload { pubkey }: CloseChannelsWithPeerPayload,
+        payload: CloseChannelsWithPeerPayload,
     ) -> AdminResult<CloseChannelsWithPeerResponse> {
         let context = self.get_lightning_context().await?;
-        let response = context.lnrpc.close_channels_with_peer(pubkey).await?;
+        let response = context.lnrpc.close_channels_with_peer(payload).await?;
         Ok(response)
     }
 
@@ -1462,21 +1438,10 @@ impl Gateway {
     /// Withdraws funds from the gateway's lightning node on-chain wallet.
     pub async fn handle_withdraw_onchain_msg(
         &self,
-        WithdrawOnchainPayload {
-            address,
-            amount: amount_sats,
-            fee_rate_sats_per_vbyte,
-        }: WithdrawOnchainPayload,
+        payload: WithdrawOnchainPayload,
     ) -> AdminResult<Txid> {
         let context = self.get_lightning_context().await?;
-        let response = context
-            .lnrpc
-            .withdraw_onchain(
-                address.assume_checked(),
-                amount_sats,
-                fee_rate_sats_per_vbyte,
-            )
-            .await?;
+        let response = context.lnrpc.withdraw_onchain(payload).await?;
         Txid::from_str(&response.txid).map_err(|e| AdminGatewayError::WithdrawError {
             failure_reason: format!("Failed to parse withdrawal TXID: {e}"),
         })
@@ -2119,20 +2084,20 @@ impl Gateway {
             Bolt11InvoiceDescription::Direct(description) => {
                 lnrpc
                     .create_invoice(CreateInvoiceRequest {
-                        payment_hash: payment_hash.to_byte_array().to_vec(),
+                        payment_hash: Some(payment_hash),
                         amount_msat: amount.msats,
                         expiry_secs: expiry_time,
-                        description: Some(Description::Direct(description)),
+                        description: Some(InvoiceDescription::Direct(description)),
                     })
                     .await?
             }
             Bolt11InvoiceDescription::Hash(hash) => {
                 lnrpc
                     .create_invoice(CreateInvoiceRequest {
-                        payment_hash: payment_hash.to_byte_array().to_vec(),
+                        payment_hash: Some(payment_hash),
                         amount_msat: amount.msats,
                         expiry_secs: expiry_time,
-                        description: Some(Description::Hash(hash.to_byte_array().to_vec())),
+                        description: Some(InvoiceDescription::Hash(hash)),
                     })
                     .await?
             }
