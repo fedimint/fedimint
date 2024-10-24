@@ -4,12 +4,16 @@ use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context};
-use bitcoin30::address::NetworkUnchecked;
-use bitcoin30::{secp256k1, Network};
+use bitcoin::address::NetworkUnchecked;
+use bitcoin::{secp256k1, Network};
 use clap::Subcommand;
 use fedimint_bip39::Mnemonic;
 use fedimint_client::backup::Metadata;
 use fedimint_client::ClientHandleArc;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_network, bitcoin32_to_bitcoin30_amount,
+    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_unchecked_address,
+};
 use fedimint_core::config::{ClientModuleConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::Encodable;
@@ -155,7 +159,7 @@ pub enum ClientCmd {
         #[clap(long)]
         amount: BitcoinAmountOrAll,
         #[clap(long)]
-        address: bitcoin30::Address<NetworkUnchecked>,
+        address: bitcoin::Address<NetworkUnchecked>,
     },
     /// Upload the (encrypted) snapshot of mint notes to federation
     Backup {
@@ -340,7 +344,10 @@ pub async fn handle_command(
             warn!("Command deprecated. Use `fedimint-cli module ln invoice` instead.");
             let lightning_module = client.get_first_module::<LightningClientModule>()?;
             let ln_gateway = lightning_module
-                .get_gateway(gateway_id, force_internal)
+                .get_gateway(
+                    gateway_id.map(|pk| bitcoin32_to_bitcoin30_secp256k1_pubkey(&pk)),
+                    force_internal,
+                )
                 .await?;
 
             let lightning_module = client.get_first_module::<LightningClientModule>()?;
@@ -398,7 +405,10 @@ pub async fn handle_command(
             info!("Paying invoice: {bolt11}");
             let lightning_module = client.get_first_module::<LightningClientModule>()?;
             let ln_gateway = lightning_module
-                .get_gateway(gateway_id, force_internal)
+                .get_gateway(
+                    gateway_id.map(|pk| bitcoin32_to_bitcoin30_secp256k1_pubkey(&pk)),
+                    force_internal,
+                )
                 .await?;
 
             let lightning_module = client.get_first_module::<LightningClientModule>()?;
@@ -544,10 +554,14 @@ pub async fn handle_command(
                 // If the amount is "all", then we need to subtract the fees from
                 // the amount we are withdrawing
                 BitcoinAmountOrAll::All => {
-                    let balance =
-                        bitcoin30::Amount::from_sat(client.get_balance().await.msats / 1000);
+                    let balance = bitcoin32_to_bitcoin30_amount(&bitcoin::Amount::from_sat(
+                        client.get_balance().await.msats / 1000,
+                    ));
                     let fees = wallet_module
-                        .get_withdraw_fees(address.clone(), balance)
+                        .get_withdraw_fees(
+                            bitcoin32_to_bitcoin30_unchecked_address(&address),
+                            balance,
+                        )
                         .await?;
                     let amount = balance.checked_sub(fees.amount());
                     if amount.is_none() {
@@ -558,7 +572,10 @@ pub async fn handle_command(
                 BitcoinAmountOrAll::Amount(amount) => (
                     amount,
                     wallet_module
-                        .get_withdraw_fees(address.clone(), amount)
+                        .get_withdraw_fees(
+                            bitcoin32_to_bitcoin30_unchecked_address(&address),
+                            amount,
+                        )
                         .await?,
                 ),
             };
@@ -566,7 +583,14 @@ pub async fn handle_command(
 
             info!("Attempting withdraw with fees: {fees:?}");
 
-            let operation_id = wallet_module.withdraw(address, amount, fees, ()).await?;
+            let operation_id = wallet_module
+                .withdraw(
+                    bitcoin32_to_bitcoin30_unchecked_address(&address),
+                    amount,
+                    fees,
+                    (),
+                )
+                .await?;
 
             let mut updates = wallet_module
                 .subscribe_withdraw_updates(operation_id)
@@ -656,7 +680,7 @@ async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json
         .await;
     Ok(serde_json::to_value(InfoResponse {
         federation_id: client.federation_id(),
-        network: wallet_client.get_network(),
+        network: bitcoin30_to_bitcoin32_network(&wallet_client.get_network()),
         meta: client.config().await.global.meta.clone(),
         total_amount_msat: summary.total_amount(),
         total_num_notes: summary.count_items(),

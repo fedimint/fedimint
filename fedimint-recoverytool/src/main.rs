@@ -7,9 +7,12 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::anyhow;
-use bitcoin30::network::constants::Network;
-use bitcoin30::OutPoint;
+use bitcoin::network::Network;
+use bitcoin::OutPoint;
 use clap::{ArgGroup, Parser, Subcommand};
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_outpoint, bitcoin30_to_bitcoin32_secp256k1_secret_key,
+};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::epoch::ConsensusItem;
@@ -191,7 +194,7 @@ async fn process_and_print_tweak_source(
                     let descriptor = tweak_descriptor(base_descriptor, base_key, &tweak, network);
 
                     ImportableWallet {
-                        outpoint,
+                        outpoint: bitcoin30_to_bitcoin32_outpoint(&outpoint),
                         descriptor,
                         amount_sat: amount,
                     }
@@ -312,10 +315,10 @@ fn tweak_descriptor(
     base_descriptor
         .tweak(tweak, secp256k1::SECP256K1)
         .translate_pk(&mut SecretKeyInjector {
-            secret: bitcoin30::key::PrivateKey {
+            secret: bitcoin::key::PrivateKey {
                 compressed: true,
-                network,
-                inner: secret_key,
+                network: network.into(),
+                inner: bitcoin30_to_bitcoin32_secp256k1_secret_key(&secret_key),
             },
             public: pub_key,
         })
@@ -327,8 +330,8 @@ fn tweak_descriptor(
 struct ImportableWallet {
     outpoint: OutPoint,
     descriptor: Descriptor<Key>,
-    #[serde(with = "bitcoin30::amount::serde::as_sat")]
-    amount_sat: bitcoin30::Amount,
+    #[serde(with = "bitcoin::amount::serde::as_sat")]
+    amount_sat: bitcoin::Amount,
 }
 
 /// A Bitcoin Core importable descriptor
@@ -341,7 +344,7 @@ struct ImportableWalletMin {
 /// know.
 #[derive(Debug)]
 struct SecretKeyInjector {
-    secret: bitcoin30::key::PrivateKey,
+    secret: bitcoin::key::PrivateKey,
     public: CompressedPublicKey,
 }
 

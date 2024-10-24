@@ -90,7 +90,7 @@ use std::time::Duration;
 use anyhow::{anyhow, bail, ensure, format_err, Context};
 use async_stream::{stream, try_stream};
 use backup::ClientBackup;
-use bitcoin30::secp256k1;
+use bitcoin::secp256k1;
 use db::event_log::{
     self, run_event_log_ordering_task, DBTransactionEventLogExt, Event, EventKind, EventLogEntry,
     EventLogId,
@@ -105,6 +105,7 @@ use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
 };
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_pubkey;
 use fedimint_core::config::{
     ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig, ModuleInitRegistry,
 };
@@ -2064,7 +2065,7 @@ impl Client {
                 dbtx.insert_entry(&ClientConfigKey, &new_config).await;
                 *(self.config.write().await) = new_config;
                 guardian_pub_keys
-            };
+            }.into_iter().map(|(peer_id, pubkey)| (peer_id, bitcoin30_to_bitcoin32_secp256k1_pubkey(&pubkey))).collect();
 
             Result::<_, ()>::Ok(guardian_pub_keys)
         }), None).await.expect("Will retry forever")

@@ -8,6 +8,7 @@ use std::time::Duration;
 use anyhow::{bail, format_err, Context};
 use clap::{Parser, Subcommand};
 use fedimint_core::admin_client::ConfigGenParamsRequest;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_network;
 use fedimint_core::config::{
     EmptyGenParams, ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
@@ -314,7 +315,9 @@ impl Fedimintd {
                     local: LightningGenParamsLocal {
                         bitcoin_rpc: bitcoind_rpc.clone(),
                     },
-                    consensus: LightningGenParamsConsensus { network },
+                    consensus: LightningGenParamsConsensus {
+                        network: bitcoin30_to_bitcoin32_network(&network),
+                    },
                 },
             )
             .with_module_kind(MintInit)
@@ -336,7 +339,7 @@ impl Fedimintd {
                         bitcoin_rpc: bitcoind_rpc.clone(),
                     },
                     consensus: WalletGenParamsConsensus {
-                        network,
+                        network: bitcoin30_to_bitcoin32_network(&network),
                         // TODO this is not very elegant, but I'm planning to get rid of it in a
                         // next commit anyway
                         finality_delay,
@@ -358,7 +361,7 @@ impl Fedimintd {
                         consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
                             // TODO: actually make the relative fee configurable
                             fee_consensus: fedimint_lnv2_common::config::FeeConsensus::new(1_000)?,
-                            network,
+                            network: bitcoin30_to_bitcoin32_network(&network),
                         },
                     },
                 )

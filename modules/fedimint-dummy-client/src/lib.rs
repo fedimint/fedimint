@@ -18,6 +18,7 @@ use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::sm::{Context, ModuleNotifier};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::core::{Decoder, ModuleKind, OperationId};
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
@@ -125,7 +126,7 @@ impl ClientModule for DummyClientModule {
                         account: self.key.public_key(),
                     },
                     amount: missing_input_amount,
-                    keys: vec![self.key],
+                    keys: vec![bitcoin30_to_bitcoin32_keypair(&self.key)],
                     state_machines: Arc::new(move |txid, _| {
                         vec![DummyStateMachine::Input(
                             missing_input_amount,
@@ -225,7 +226,7 @@ impl DummyClientModule {
                 account: account_kp.public_key(),
             },
             amount,
-            keys: vec![account_kp],
+            keys: vec![bitcoin30_to_bitcoin32_keypair(&account_kp)],
             state_machines: Arc::new(|_, _| Vec::<DummyStateMachine>::new()),
         };
 

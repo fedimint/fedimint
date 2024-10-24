@@ -4,7 +4,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, Context, Result};
-use bitcoin30::secp256k1;
 use devimint::cmd;
 use devimint::util::{ClnLightningCli, FedimintCli, LnCli};
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};

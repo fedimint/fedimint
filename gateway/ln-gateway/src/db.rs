@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use bitcoin30::Network;
+use bitcoin::Network;
 use bitcoin_hashes::sha256;
 use fedimint_api_client::api::net::Connector;
 use fedimint_core::config::FederationId;

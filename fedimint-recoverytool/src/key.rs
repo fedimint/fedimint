@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 use std::hash::Hasher;
 
+use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_secret_key;
 use fedimint_wallet_server::common::keys::CompressedPublicKey;
 use miniscript::MiniscriptKey;
 
@@ -10,7 +11,7 @@ use miniscript::MiniscriptKey;
 #[derive(Debug, Clone, Copy, Eq)]
 pub enum Key {
     Public(CompressedPublicKey),
-    Private(bitcoin30::key::PrivateKey),
+    Private(bitcoin::key::PrivateKey),
 }
 
 impl PartialOrd for Key {
@@ -47,7 +48,9 @@ impl Key {
         match self {
             Key::Public(pk) => pk,
             Key::Private(sk) => {
-                CompressedPublicKey::new(secp256k1::PublicKey::from_secret_key_global(&sk.inner))
+                CompressedPublicKey::new(secp256k1::PublicKey::from_secret_key_global(
+                    &bitcoin32_to_bitcoin30_secp256k1_secret_key(&sk.inner),
+                ))
             }
         }
     }
@@ -71,8 +74,8 @@ impl MiniscriptKey for Key {
         0
     }
 
-    type Sha256 = bitcoin30::hashes::sha256::Hash;
+    type Sha256 = bitcoin::hashes::sha256::Hash;
     type Hash256 = miniscript::hash256::Hash;
-    type Ripemd160 = bitcoin30::hashes::ripemd160::Hash;
-    type Hash160 = bitcoin30::hashes::hash160::Hash;
+    type Ripemd160 = bitcoin::hashes::ripemd160::Hash;
+    type Hash160 = bitcoin::hashes::hash160::Hash;
 }

@@ -6,6 +6,7 @@ use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, DynState, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
@@ -285,7 +286,7 @@ impl LightningReceiveConfirmedInvoice {
         let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
             input,
             amount: contract.amount,
-            keys: vec![keypair],
+            keys: vec![bitcoin30_to_bitcoin32_keypair(&keypair)],
             // The input of the refund tx is managed by this state machine, so no new state machines
             // need to be created
             state_machines: Arc::new(|_, _| vec![]),

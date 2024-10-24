@@ -10,6 +10,7 @@ use anyhow::{anyhow, bail};
 use async_channel::Receiver;
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, PeerConnectionStatus};
 use fedimint_api_client::query::FilterMap;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_sha256_hash;
 use fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Decodable;
@@ -211,7 +212,7 @@ impl ConsensusEngine {
         loop {
             match self.federation_api.server_config_consensus_hash().await {
                 Ok(consensus_hash) => {
-                    if consensus_hash != our_hash {
+                    if consensus_hash != bitcoin30_to_bitcoin32_sha256_hash(&our_hash) {
                         bail!("Our consensus config doesn't match peers!")
                     }
 

@@ -29,6 +29,7 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_network;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
@@ -527,10 +528,10 @@ impl LightningClientModule {
             return Err(SendPaymentError::InvoiceExpired);
         }
 
-        if self.cfg.network != invoice.currency().into() {
+        if bitcoin32_to_bitcoin30_network(&self.cfg.network) != invoice.currency().into() {
             return Err(SendPaymentError::WrongCurrency {
                 invoice_currency: invoice.currency(),
-                federation_currency: self.cfg.network.into(),
+                federation_currency: bitcoin32_to_bitcoin30_network(&self.cfg.network).into(),
             });
         }
 

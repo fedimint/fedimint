@@ -15,6 +15,7 @@ use bitcoin30::hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::runtime::sleep;
@@ -354,7 +355,7 @@ impl DecryptingPreimageState {
             input: claim_input,
             amount: contract.amount,
             state_machines: Arc::new(|_, _| vec![]),
-            keys: vec![context.redeem_key],
+            keys: vec![bitcoin30_to_bitcoin32_keypair(&context.redeem_key)],
         };
 
         let out_points = global_context
