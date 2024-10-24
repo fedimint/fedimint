@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{bail, Context};
+use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -66,7 +67,7 @@ pub async fn run_api_announcement_sync(client_inner: Arc<Client>) {
                         bail!("Guardian public key not found for peer {}", peer_id);
                     };
 
-                    if !announcement.verify(SECP256K1, guardian_pub_key) {
+                    if !announcement.verify(SECP256K1, &bitcoin32_to_bitcoin30_secp256k1_pubkey(guardian_pub_key)) {
                         bail!("Failed to verify announcement for peer {}", peer_id);
                     }
                 }

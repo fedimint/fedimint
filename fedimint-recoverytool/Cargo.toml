@@ -17,7 +17,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-bitcoin30 = { workspace = true }
+bitcoin = { workspace = true }
 clap = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }

@@ -2050,7 +2050,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "base64 0.22.1",
- "bitcoin 0.30.2",
+ "bitcoin 0.32.3",
  "curve25519-dalek",
  "fedimint-arti-client",
  "fedimint-core",
@@ -2156,7 +2156,7 @@ version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
- "bitcoin 0.30.2",
+ "bitcoin 0.32.3",
  "clap",
  "clap_complete",
  "fedimint-aead",
@@ -2194,7 +2194,7 @@ dependencies = [
  "aquamarine",
  "async-stream",
  "async-trait",
- "bitcoin 0.30.2",
+ "bitcoin 0.32.3",
  "fedimint-aead",
  "fedimint-api-client",
  "fedimint-build",
@@ -2205,6 +2205,7 @@ dependencies = [
  "itertools 0.13.0",
  "rand",
  "reqwest 0.12.8",
+ "secp256k1 0.27.0",
  "serde",
  "serde_json",
  "strum 0.26.3",
@@ -2279,6 +2280,7 @@ dependencies = [
  "parity-scale-codec",
  "rand",
  "secp256k1 0.27.0",
+ "secp256k1 0.29.1",
  "serde",
  "serde_json",
  "serdect",
@@ -2478,7 +2480,7 @@ name = "fedimint-gateway-cli"
 version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
- "bitcoin 0.30.2",
+ "bitcoin 0.32.3",
  "clap",
  "clap_complete",
  "fedimint-build",
@@ -2762,7 +2764,6 @@ name = "fedimint-load-test-tool"
 version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
- "bitcoin 0.30.2",
  "clap",
  "devimint",
  "fedimint-api-client",
@@ -2779,6 +2780,7 @@ dependencies = [
  "jsonrpsee-ws-client",
  "lightning-invoice 0.31.0",
  "rand",
+ "secp256k1 0.27.0",
  "serde",
  "serde_json",
  "tokio",
@@ -2999,7 +3001,7 @@ name = "fedimint-recoverytool"
 version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
- "bitcoin 0.30.2",
+ "bitcoin 0.32.3",
  "clap",
  "fedimint-build",
  "fedimint-core",
