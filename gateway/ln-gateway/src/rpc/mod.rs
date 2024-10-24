@@ -239,11 +239,6 @@ pub struct FederationBalanceInfo {
     pub ecash_balance_msats: Amount,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct SyncToChainPayload {
-    pub block_height: u32,
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MnemonicResponse {
     pub mnemonic: Vec<String>,

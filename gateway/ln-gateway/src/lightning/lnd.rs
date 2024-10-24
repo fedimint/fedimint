@@ -1381,11 +1381,6 @@ impl ILnRpcClient for GatewayLndClient {
                 .msat,
         })
     }
-
-    async fn sync_to_chain(&self, _block_height: u32) -> Result<EmptyResponse, LightningRpcError> {
-        // We don't need to do anything here, as LND automatically syncs to chain.
-        Ok(EmptyResponse {})
-    }
 }
 
 fn route_hints_to_lnd(

@@ -281,9 +281,4 @@ impl ILnRpcClient for NetworkLnRpcClient {
             })?
             .into_inner())
     }
-
-    async fn sync_to_chain(&self, _block_height: u32) -> Result<EmptyResponse, LightningRpcError> {
-        // We don't need to do anything here, as CLN automatically syncs to chain.
-        Ok(EmptyResponse {})
-    }
 }
