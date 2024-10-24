@@ -1,10 +1,9 @@
-use std::sync::Arc;
 use std::time::Duration;
 
 use bitcoin30::key::KeyPair;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, DynState, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -20,7 +19,7 @@ use thiserror::Error;
 use tracing::{debug, error, info};
 
 use crate::api::LnFederationApi;
-use crate::{LightningClientContext, LightningClientStateMachines, ReceivingKey};
+use crate::{LightningClientContext, ReceivingKey};
 
 const RETRY_DELAY: Duration = Duration::from_secs(1);
 
@@ -282,17 +281,19 @@ impl LightningReceiveConfirmedInvoice {
         global_context: DynGlobalClientContext,
     ) -> (TransactionId, Vec<OutPoint>) {
         let input = contract.claim();
-        let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
+        let client_input = ClientInput::<LightningInput> {
             input,
             amount: contract.amount,
             keys: vec![keypair],
-            // The input of the refund tx is managed by this state machine, so no new state machines
-            // need to be created
-            state_machines: Arc::new(|_, _| vec![]),
         };
 
         global_context
-            .claim_input(dbtx, client_input)
+            .claim_inputs(
+                dbtx,
+                // The input of the refund tx is managed by this state machine, so no new state
+                // machines need to be created
+                ClientInputBundle::new_no_sm(vec![client_input]),
+            )
             .await
             .expect("Cannot claim input, additional funding needed")
     }

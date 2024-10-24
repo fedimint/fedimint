@@ -51,8 +51,7 @@ use ln_gateway::state_machine::pay::{
     OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
 };
 use ln_gateway::state_machine::{
-    GatewayClientModule, GatewayClientStateMachines, GatewayExtPayStates, GatewayExtReceiveStates,
-    GatewayMeta, Htlc,
+    GatewayClientModule, GatewayExtPayStates, GatewayExtReceiveStates, GatewayMeta, Htlc,
 };
 use ln_gateway::Gateway;
 use tpe::G1Affine;
@@ -384,9 +383,8 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
             // Bogus preimage
             let preimage = Preimage(rand::random());
             let claim_input = outgoing_contract.claim(preimage);
-            let client_input = ClientInput::<LightningInput, GatewayClientStateMachines> {
+            let client_input = ClientInput::<LightningInput> {
                 input: claim_input,
-                state_machines: Arc::new(|_, _| vec![]),
                 amount: outgoing_contract.amount,
                 keys: vec![gateway_module.redeem_key],
             };

@@ -1,12 +1,11 @@
 use std::cmp;
-use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use bitcoin30::ScriptBuf;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client::module::ClientContext;
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
@@ -28,7 +27,7 @@ use crate::client_db::{
     ClaimedPegInData, ClaimedPegInKey, PegInTweakIndexData, PegInTweakIndexKey,
     PegInTweakIndexPrefix, TweakIdx,
 };
-use crate::{WalletClientModule, WalletClientModuleData, WalletClientStates};
+use crate::{WalletClientModule, WalletClientModuleData};
 
 /// A helper struct meant to combined data from all addresses/records
 /// into a single struct with all actionable data.
@@ -424,15 +423,18 @@ async fn claim_peg_in(
 
         let wallet_input = WalletInput::new_v0(pegin_proof);
 
-        let client_input = ClientInput::<WalletInput, WalletClientStates> {
+        let client_input = ClientInput::<WalletInput> {
             input: wallet_input,
             keys: vec![tweak_key],
             amount,
-            state_machines: Arc::new(|_, _| vec![]),
         };
 
         client_ctx
-            .claim_input(dbtx, client_input, operation_id)
+            .claim_inputs(
+                dbtx,
+                ClientInputBundle::new_no_sm(vec![client_input]),
+                operation_id,
+            )
             .await
             .expect("Cannot claim input, additional funding needed")
     }

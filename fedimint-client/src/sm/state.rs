@@ -252,6 +252,45 @@ pub struct DynState(
     ModuleInstanceId,
 );
 
+impl IState for DynState {
+    fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any)) {
+        (**self).as_any()
+    }
+
+    fn transitions(
+        &self,
+        context: &DynContext,
+        global_context: &DynGlobalClientContext,
+    ) -> Vec<StateTransition<DynState>> {
+        (**self).transitions(context, global_context)
+    }
+
+    fn operation_id(&self) -> OperationId {
+        (**self).operation_id()
+    }
+
+    fn clone(&self, module_instance_id: ModuleInstanceId) -> DynState {
+        (**self).clone(module_instance_id)
+    }
+
+    fn erased_eq_no_instance_id(&self, other: &DynState) -> bool {
+        (**self).erased_eq_no_instance_id(other)
+    }
+
+    fn erased_hash_no_instance_id(&self, hasher: &mut dyn std::hash::Hasher) {
+        (**self).erased_hash_no_instance_id(hasher);
+    }
+}
+
+impl IntoDynInstance for DynState {
+    type DynType = DynState;
+
+    fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
+        assert_eq!(instance_id, self.1);
+        self
+    }
+}
+
 impl std::ops::Deref for DynState {
     type Target = maybe_add_send_sync!(dyn IState + 'static);
 

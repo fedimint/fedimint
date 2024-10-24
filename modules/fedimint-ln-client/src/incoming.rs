@@ -8,12 +8,11 @@
 //!   - `gateway` for receiving payments into the federation
 
 use core::fmt;
-use std::sync::Arc;
 use std::time::Duration;
 
 use bitcoin30::hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -350,15 +349,14 @@ impl DecryptingPreimageState {
     ) -> IncomingStateMachine {
         debug!("Refunding incoming contract {contract:?}");
         let claim_input = contract.claim();
-        let client_input = ClientInput::<LightningInput, IncomingStateMachine> {
+        let client_input = ClientInput::<LightningInput> {
             input: claim_input,
             amount: contract.amount,
-            state_machines: Arc::new(|_, _| vec![]),
             keys: vec![context.redeem_key],
         };
 
         let out_points = global_context
-            .claim_input(dbtx, client_input)
+            .claim_inputs(dbtx, ClientInputBundle::new_no_sm(vec![client_input]))
             .await
             .expect("Cannot claim input, additional funding needed")
             .1;
