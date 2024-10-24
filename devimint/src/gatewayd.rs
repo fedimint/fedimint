@@ -91,6 +91,13 @@ impl Gatewayd {
         Ok(gatewayd)
     }
 
+    pub fn ln_type(&self) -> LightningNodeType {
+        self.ln
+            .as_ref()
+            .expect("Gatewayd has no lightning node type")
+            .name()
+    }
+
     pub async fn terminate(self) -> Result<()> {
         self.process.terminate().await
     }
