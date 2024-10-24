@@ -88,6 +88,7 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, ensure, format_err, Context};
+use api::ClientRawFederationApiExt as _;
 use async_stream::{stream, try_stream};
 use backup::ClientBackup;
 use bitcoin30::secp256k1;
@@ -103,7 +104,8 @@ use db::{
 };
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{
-    ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
+    ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, GlobalFederationApiWithCacheExt,
+    IGlobalFederationApi, WsFederationApi,
 };
 use fedimint_core::config::{
     ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig, ModuleInitRegistry,
@@ -147,7 +149,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 #[cfg(not(target_family = "wasm"))]
 use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
-use tokio::sync::{watch, RwLock};
+use tokio::sync::{broadcast, watch, RwLock};
 use tokio_stream::wrappers::WatchStream;
 use tracing::{debug, error, info, trace, warn};
 use transaction::{ClientInputBundle, ClientInputSM, TxSubmissionStatesSM};
@@ -169,6 +171,8 @@ use crate::transaction::{
     tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder, TxSubmissionContext,
     TxSubmissionStates, TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
+
+pub mod api;
 
 /// Client backup
 pub mod backup;
@@ -325,6 +329,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
         kind: EventKind,
         module: Option<(ModuleKind, ModuleInstanceId)>,
         payload: serde_json::Value,
+        transient: bool,
     );
 
     async fn transaction_update_stream(&self) -> BoxStream<TxSubmissionStatesSM>;
@@ -378,6 +383,7 @@ impl IGlobalClientContext for () {
         _kind: EventKind,
         _module: Option<(ModuleKind, ModuleInstanceId)>,
         _payload: serde_json::Value,
+        _transient: bool,
     ) {
         unimplemented!("fake implementation, only for tests");
     }
@@ -479,6 +485,7 @@ impl DynGlobalClientContext {
             E::KIND,
             E::MODULE.map(|m| (m, dbtx.module_id())),
             serde_json::to_value(&event).expect("Payload serialization can't fail"),
+            <E as Event>::PERSIST,
         )
         .await;
     }
@@ -623,6 +630,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         kind: EventKind,
         module: Option<(ModuleKind, ModuleInstanceId)>,
         payload: serde_json::Value,
+        transient: bool,
     ) {
         self.client
             .log_event_raw_dbtx(
@@ -630,6 +638,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
                 kind,
                 module,
                 serde_json::to_vec(&payload).expect("Serialization can't fail"),
+                transient,
             )
             .await;
     }
@@ -903,6 +912,7 @@ pub struct Client {
     log_ordering_wakeup_tx: watch::Sender<()>,
     /// Receiver for events fired every time (ordered) log event is added.
     log_event_added_rx: watch::Receiver<()>,
+    log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
 }
 
 impl Client {
@@ -2160,6 +2170,7 @@ impl Client {
         kind: EventKind,
         module: Option<(ModuleKind, ModuleInstanceId)>,
         payload: Vec<u8>,
+        transient: bool,
     ) where
         Cap: Send,
     {
@@ -2171,6 +2182,7 @@ impl Client {
             module_kind,
             module_id,
             payload,
+            transient,
         )
         .await;
     }
@@ -2223,6 +2235,11 @@ impl Client {
     {
         dbtx.get_event_log(pos, limit).await
     }
+
+    /// Register to receiver all new transient (unpersisted) events
+    pub fn get_event_log_transient_receiver(&self) -> broadcast::Receiver<EventLogEntry> {
+        self.log_event_added_transient_tx.subscribe()
+    }
 }
 
 #[derive(Deserialize)]
@@ -2274,11 +2291,14 @@ pub struct ClientBuilder {
     meta_service: Arc<MetaService>,
     connector: Connector,
     stopped: bool,
+    log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
 }
 
 impl ClientBuilder {
     fn new(db: Database) -> Self {
         let meta_service = MetaService::new(LegacyMetaSource::default());
+        let (log_event_added_transient_tx, _log_event_added_transient_rx) =
+            broadcast::channel(1024);
         ClientBuilder {
             module_inits: ModuleInitRegistry::new(),
             primary_module_instance: None,
@@ -2287,6 +2307,7 @@ impl ClientBuilder {
             db_no_decoders: db,
             stopped: false,
             meta_service,
+            log_event_added_transient_tx,
         }
     }
 
@@ -2300,6 +2321,7 @@ impl ClientBuilder {
             // non unique
             meta_service: client.meta_service.clone(),
             connector: client.connector,
+            log_event_added_transient_tx: client.log_event_added_transient_tx.clone(),
         }
     }
 
@@ -2604,8 +2626,14 @@ impl ClientBuilder {
         let api_secret = Client::get_api_secret_from_db(&self.db_no_decoders).await;
         let stopped = self.stopped;
 
+        let log_event_added_transient_tx = self.log_event_added_transient_tx.clone();
         let client = self
-            .build_stopped(pre_root_secret, &config, api_secret)
+            .build_stopped(
+                pre_root_secret,
+                &config,
+                api_secret,
+                log_event_added_transient_tx,
+            )
             .await?;
         if !stopped {
             client.as_inner().start_executor().await;
@@ -2621,8 +2649,14 @@ impl ClientBuilder {
         api_secret: Option<String>,
         stopped: bool,
     ) -> anyhow::Result<ClientHandle> {
+        let log_event_added_transient_tx = self.log_event_added_transient_tx.clone();
         let client = self
-            .build_stopped(pre_root_secret, &config, api_secret)
+            .build_stopped(
+                pre_root_secret,
+                &config,
+                api_secret,
+                log_event_added_transient_tx,
+            )
             .await?;
         if !stopped {
             client.as_inner().start_executor().await;
@@ -2638,7 +2672,11 @@ impl ClientBuilder {
         root_secret: DerivableSecret,
         config: &ClientConfig,
         api_secret: Option<String>,
+        log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
     ) -> anyhow::Result<ClientHandle> {
+        let (log_event_added_tx, log_event_added_rx) = watch::channel(());
+        let (log_ordering_wakeup_tx, log_ordering_wakeup_rx) = watch::channel(());
+
         let decoders = self.decoders(config);
         let config = Self::config_decoded(config, &decoders)?;
         let fed_id = config.calculate_federation_id();
@@ -2646,7 +2684,7 @@ impl ClientBuilder {
         let connector = self.connector;
         let peer_urls = get_api_urls(&db, &config).await;
         let api = if let Some(admin_creds) = self.admin_creds.as_ref() {
-            DynGlobalApi::new_admin(
+            WsFederationApi::new_admin(
                 admin_creds.peer_id,
                 peer_urls
                     .into_iter()
@@ -2655,8 +2693,14 @@ impl ClientBuilder {
                 &api_secret,
                 &connector,
             )
+            .with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
+            .with_cache()
+            .into()
         } else {
-            DynGlobalApi::from_endpoints(peer_urls, &api_secret, &connector)
+            WsFederationApi::from_endpoints(peer_urls, &api_secret, &connector)
+                .with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
+                .with_cache()
+                .into()
         };
         let task_group = TaskGroup::new();
 
@@ -2690,9 +2734,6 @@ impl ClientBuilder {
         });
 
         debug!(?common_api_versions, "Completed api version negotiation");
-
-        let (log_event_added_tx, log_event_added_rx) = watch::channel(());
-        let (log_ordering_wakeup_tx, log_ordering_wakeup_rx) = watch::channel(());
 
         let mut module_recoveries: BTreeMap<
             ModuleInstanceId,
@@ -2905,6 +2946,7 @@ impl ClientBuilder {
             module_inits: self.module_inits.clone(),
             log_ordering_wakeup_tx,
             log_event_added_rx,
+            log_event_added_transient_tx: log_event_added_transient_tx.clone(),
             executor,
             api,
             secp_ctx: Secp256k1::new(),
@@ -2934,7 +2976,12 @@ impl ClientBuilder {
 
         client_inner.task_group.spawn_cancellable(
             "event log ordering task",
-            run_event_log_ordering_task(db.clone(), log_ordering_wakeup_rx, log_event_added_tx),
+            run_event_log_ordering_task(
+                db.clone(),
+                log_ordering_wakeup_rx,
+                log_event_added_tx,
+                log_event_added_transient_tx,
+            ),
         );
         let client_arc = ClientHandle::new(client_inner);
 
@@ -3000,6 +3047,11 @@ impl ClientBuilder {
         config: &ClientConfig,
     ) -> DerivableSecret {
         root_secret.federation_key(&config.global.calculate_federation_id())
+    }
+
+    /// Register to receiver all new transient (unpersisted) events
+    pub fn get_event_log_transient_receiver(&self) -> broadcast::Receiver<EventLogEntry> {
+        self.log_event_added_transient_tx.subscribe()
     }
 }
 

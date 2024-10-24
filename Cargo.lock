@@ -2209,6 +2209,7 @@ dependencies = [
  "serde_json",
  "strum 0.26.3",
  "strum_macros 0.26.4",
+ "test-log",
  "thiserror",
  "tokio",
  "tokio-stream",

@@ -39,7 +39,8 @@ use fedimint_logging::LOG_CLIENT_NET_API;
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
 use itertools::Itertools;
-use jsonrpsee_core::client::{ClientT, Error as JsonRpcClientError};
+use jsonrpsee_core::client::ClientT;
+pub use jsonrpsee_core::client::Error as JsonRpcClientError;
 use jsonrpsee_core::DeserializeOwned;
 #[cfg(target_family = "wasm")]
 use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
@@ -57,13 +58,12 @@ use tokio_rustls::{rustls::ClientConfig as TlsClientConfig, TlsConnector};
 use tracing::{debug, instrument, trace};
 
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
-
 mod error;
 mod global_api;
 pub mod net;
 mod peer;
 
-use global_api::GlobalFederationApiWithCache;
+pub use global_api::{GlobalFederationApiWithCache, GlobalFederationApiWithCacheExt};
 use peer::FederationPeer;
 
 pub type PeerResult<T> = Result<T, PeerError>;
@@ -895,6 +895,23 @@ impl WsFederationApi<WsClient> {
         Self::new_with_client(connector, peers, None, api_secret)
     }
 
+    pub fn new_admin(
+        peer: PeerId,
+        url: SafeUrl,
+        api_secret: &Option<String>,
+        connector: &Connector,
+    ) -> Self {
+        WsFederationApi::new(connector, vec![(peer, url)], api_secret).with_self_peer_id(peer)
+    }
+
+    pub fn from_endpoints(
+        peers: impl IntoIterator<Item = (PeerId, SafeUrl)>,
+        api_secret: &Option<String>,
+        connector: &Connector,
+    ) -> Self {
+        WsFederationApi::new(connector, peers, api_secret)
+    }
+
     pub fn with_self_peer_id(self, self_peer_id: PeerId) -> Self {
         Self {
             self_peer_id: Some(self_peer_id),
@@ -1009,8 +1026,6 @@ where
         unreachable!();
     }
 }
-
-impl<C: JsonRpcClient> WsFederationApi<C> {}
 
 /// The status of a server, including how it views its peers
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
