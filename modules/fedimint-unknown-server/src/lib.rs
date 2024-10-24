@@ -131,7 +131,10 @@ impl ServerModuleInit for UnknownInit {
 
     /// DB migrations to move from old to newer versions
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
-        let migrations: BTreeMap<DatabaseVersion, CoreMigrationFn> = BTreeMap::new();
+        let mut migrations: BTreeMap<DatabaseVersion, CoreMigrationFn> = BTreeMap::new();
+        // Unknown module prior to v0.5.0 had a `DATABASE_VERSION` of 1, so we must
+        // insert a no-op migration to ensure that upgrades work.
+        migrations.insert(DatabaseVersion(0), |_| Box::pin(async { Ok(()) }));
         migrations
     }
 }

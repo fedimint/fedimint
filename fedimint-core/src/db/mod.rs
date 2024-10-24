@@ -2276,7 +2276,7 @@ pub async fn apply_migrations(
 
         if current_db_version > target_db_version {
             return Err(anyhow::anyhow!(format!(
-                "On disk database version for module {kind} was higher than the code database version."
+                "On disk database version {current_db_version} for module {kind} was higher than the code database version {target_db_version}."
             )));
         }
 
