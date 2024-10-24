@@ -7,7 +7,7 @@ use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::KeyPair;
 use fedimint_core::{Amount, OutPoint};
-use fedimint_lnv2_client::{LightningClientStateMachines, LightningInvoice};
+use fedimint_lnv2_client::LightningInvoice;
 use fedimint_lnv2_common::contracts::{OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
 use serde::{Deserialize, Serialize};
@@ -228,13 +228,7 @@ impl SendStateMachine {
                 };
 
                 let outpoints = global_context
-                    .claim_inputs(
-                        dbtx,
-                        ClientInputBundle::<_, LightningClientStateMachines>::new(
-                            vec![client_input],
-                            vec![],
-                        ),
-                    )
+                    .claim_inputs(dbtx, ClientInputBundle::new_no_sm(vec![client_input]))
                     .await
                     .expect("Cannot claim input, additional funding needed")
                     .1;

@@ -3,7 +3,7 @@ use std::time::Duration;
 use bitcoin30::hashes::sha256;
 use bitcoin30::secp256k1;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::{ClientInput, ClientInputBundle, ClientInputSM};
+use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
@@ -18,7 +18,7 @@ use secp256k1::KeyPair;
 use tracing::error;
 
 use crate::api::LnFederationApi;
-use crate::{LightningClientContext, LightningClientStateMachines, LightningInvoice};
+use crate::{LightningClientContext, LightningInvoice};
 
 const RETRY_DELAY: Duration = Duration::from_secs(1);
 
@@ -224,11 +224,8 @@ impl SendStateMachine {
                 let outpoints = global_context
                     .claim_inputs(
                         dbtx,
-                        ClientInputBundle::new(
-                            vec![client_input],
-                            // The input of the refund tx is managed by this state machine
-                            Vec::<ClientInputSM<LightningClientStateMachines>>::new(),
-                        ),
+                        // The input of the refund tx is managed by this state machine
+                        ClientInputBundle::new_no_sm(vec![client_input]),
                     )
                     .await
                     .expect("Cannot claim input, additional funding needed")
@@ -284,13 +281,7 @@ impl SendStateMachine {
         };
 
         let outpoints = global_context
-            .claim_inputs(
-                dbtx,
-                ClientInputBundle::<_, LightningClientStateMachines>::new(
-                    vec![client_input],
-                    vec![],
-                ),
-            )
+            .claim_inputs(dbtx, ClientInputBundle::new_no_sm(vec![client_input]))
             .await
             .expect("Cannot claim input, additional funding needed")
             .1;

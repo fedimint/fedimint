@@ -2,7 +2,7 @@ mod mock;
 
 use std::sync::Arc;
 
-use fedimint_client::transaction::{ClientInput, TransactionBuilder};
+use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
 use fedimint_core::core::OperationId;
 use fedimint_core::util::NextOrPending as _;
 use fedimint_core::{sats, Amount};
@@ -216,11 +216,11 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
             OperationId::new_random(),
             "Claiming Outgoing Contract",
             |_, _| (),
-            TransactionBuilder::new().with_input(
+            TransactionBuilder::new().with_inputs(
                 client
                     .get_first_module::<LightningClientModule>()?
                     .client_ctx
-                    .make_client_input(client_input),
+                    .make_client_inputs(ClientInputBundle::new_no_sm(vec![client_input])),
             ),
         )
         .await

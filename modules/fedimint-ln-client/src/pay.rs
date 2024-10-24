@@ -22,7 +22,7 @@ use tracing::{debug, error, warn};
 
 pub use self::lightningpay::LightningPayStates;
 use crate::api::LnFederationApi;
-use crate::{set_payment_result, LightningClientContext, LightningClientStateMachines, PayType};
+use crate::{set_payment_result, LightningClientContext, PayType};
 
 const RETRY_DELAY: Duration = Duration::from_secs(1);
 
@@ -552,12 +552,9 @@ async fn try_refund_outgoing_contract(
     let (txid, out_points) = global_context
         .claim_inputs(
             dbtx,
-            ClientInputBundle::<_, LightningClientStateMachines>::new(
-                vec![refund_client_input],
-                // The input of the refund tx is managed by this state machine, so no new state
-                // machines need to be created
-                vec![],
-            ),
+            // The input of the refund tx is managed by this state machine, so no new state
+            // machines need to be created
+            ClientInputBundle::new_no_sm(vec![refund_client_input]),
         )
         .await
         .expect("Cannot claim input, additional funding needed");

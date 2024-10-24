@@ -8,7 +8,7 @@ use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 use fedimint_mint_common::MintInput;
 use tracing::{debug, warn};
 
-use crate::{MintClientContext, MintClientStateMachines, SpendableNote};
+use crate::{MintClientContext, SpendableNote};
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 // TODO: add retry with valid subset of e-cash notes
@@ -147,12 +147,9 @@ impl MintInputStateCreated {
         let (refund_txid, _) = global_context
             .claim_inputs(
                 dbtx,
-                ClientInputBundle::<_, MintClientStateMachines>::new(
-                    vec![refund_input],
-                    // The input of the refund tx is managed by this state machine, so no new state
-                    // machines need to be created
-                    vec![],
-                ),
+                // The input of the refund tx is managed by this state machine, so no new state
+                // machines need to be created
+                ClientInputBundle::new_no_sm(vec![refund_input]),
             )
             .await
             .expect("Cannot claim input, additional funding needed");

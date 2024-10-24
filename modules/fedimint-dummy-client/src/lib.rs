@@ -234,7 +234,10 @@ impl DummyClientModule {
 
         // Build and send tx to the fed
         // Will output to our primary client module
-        let tx = TransactionBuilder::new().with_input(self.client_ctx.make_client_input(input));
+        let tx = TransactionBuilder::new().with_inputs(
+            self.client_ctx
+                .make_client_inputs(ClientInputBundle::new_no_sm(vec![input])),
+        );
         let outpoint = |txid, _| OutPoint { txid, out_idx: 0 };
         let (_, change) = self
             .client_ctx

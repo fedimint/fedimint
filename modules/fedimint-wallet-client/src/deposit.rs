@@ -17,7 +17,7 @@ use tracing::{debug, instrument, trace, warn};
 
 use crate::api::WalletFederationApi;
 use crate::pegin_monitor::filter_onchain_deposit_outputs;
-use crate::{WalletClientContext, WalletClientStates};
+use crate::WalletClientContext;
 
 const TRANSACTION_STATUS_FETCH_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -283,10 +283,7 @@ pub(crate) async fn transition_btc_tx_confirmed(
     };
 
     let (fm_txid, change) = global_context
-        .claim_inputs(
-            dbtx,
-            ClientInputBundle::<_, WalletClientStates>::new(vec![client_input], vec![]),
-        )
+        .claim_inputs(dbtx, ClientInputBundle::new_no_sm(vec![client_input]))
         .await
         .expect("Cannot claim input, additional funding needed");
 

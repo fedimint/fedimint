@@ -415,34 +415,6 @@ impl DynGlobalClientContext {
             .await
     }
 
-    /// Creates a transaction that with an output of the primary module,
-    /// claiming the given input and transferring its value into the client's
-    /// wallet.
-    ///
-    /// The transactions submission state machine as well as the state
-    /// machines responsible for the generated output are generated
-    /// automatically. The caller is responsible for the input's state machines,
-    /// should there be any required.
-    pub async fn claim_input<I, S>(
-        &self,
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        input: ClientInput<I>,
-        sm: ClientInputSM<S>,
-    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
-    where
-        I: IInput + MaybeSend + MaybeSync + 'static,
-        S: IState + MaybeSend + MaybeSync + 'static,
-    {
-        self.claim_inputs(
-            dbtx,
-            ClientInputBundle {
-                inputs: vec![input],
-                sms: vec![sm],
-            },
-        )
-        .await
-    }
-
     pub async fn claim_inputs<I, S>(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,

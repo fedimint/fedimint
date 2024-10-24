@@ -27,7 +27,7 @@ use crate::client_db::{
     ClaimedPegInData, ClaimedPegInKey, PegInTweakIndexData, PegInTweakIndexKey,
     PegInTweakIndexPrefix, TweakIdx,
 };
-use crate::{WalletClientModule, WalletClientModuleData, WalletClientStates};
+use crate::{WalletClientModule, WalletClientModuleData};
 
 /// A helper struct meant to combined data from all addresses/records
 /// into a single struct with all actionable data.
@@ -432,7 +432,7 @@ async fn claim_peg_in(
         client_ctx
             .claim_inputs(
                 dbtx,
-                ClientInputBundle::<_, WalletClientStates>::new(vec![client_input], vec![]),
+                ClientInputBundle::new_no_sm(vec![client_input]),
                 operation_id,
             )
             .await

@@ -356,10 +356,7 @@ impl DecryptingPreimageState {
         };
 
         let out_points = global_context
-            .claim_inputs(
-                dbtx,
-                ClientInputBundle::<_, IncomingStateMachine>::new(vec![client_input], vec![]),
-            )
+            .claim_inputs(dbtx, ClientInputBundle::new_no_sm(vec![client_input]))
             .await
             .expect("Cannot claim input, additional funding needed")
             .1;

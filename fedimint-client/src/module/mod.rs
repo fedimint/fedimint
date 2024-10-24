@@ -220,20 +220,13 @@ where
         self.make_dyn(output)
     }
 
-    /// Turn a typed [`ClientInput`] into a dyn version
-    pub fn make_client_input<I>(&self, input: ClientInput<I>) -> ClientInput
+    /// Turn a typed [`ClientInputBundle`] into a dyn version
+    pub fn make_client_inputs<I, S>(&self, inputs: ClientInputBundle<I, S>) -> ClientInputBundle
     where
         I: IntoDynInstance<DynType = DynInput> + 'static,
-    {
-        self.make_dyn(input)
-    }
-
-    /// Turn a typed [`ClientInputSM`] into a dyn version
-    pub fn make_client_input_sm<S>(&self, input: ClientInputSM<S>) -> ClientInputSM
-    where
         S: IntoDynInstance<DynType = DynState> + 'static,
     {
-        self.make_dyn(input)
+        self.make_dyn(inputs)
     }
 
     pub fn make_dyn_state<S>(&self, sm: S) -> DynState

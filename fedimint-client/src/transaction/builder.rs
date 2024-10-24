@@ -3,6 +3,7 @@ use std::sync::Arc;
 use bitcoin30::key::KeyPair;
 use bitcoin30::secp256k1;
 use fedimint_core::core::{DynInput, DynOutput, IInput, IntoDynInstance, ModuleInstanceId};
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{Transaction, TransactionSignature};
 use fedimint_core::Amount;
@@ -29,6 +30,44 @@ pub struct ClientInputSM<S = DynState> {
     pub state_machines: StateGenerator<S>,
 }
 
+/// A fake [`sm::Context`] for [`NeverClientStateMachine`]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub enum NeverClientContext {}
+
+impl sm::Context for NeverClientContext {
+    const KIND: Option<fedimint_core::core::ModuleKind> = None;
+}
+
+/// A fake [`sm::State`] that can actually never happen.
+///
+/// Useful as a default for type inference in cases where there are no
+/// state machines involved in [`ClientInputBundle`].
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub enum NeverClientStateMachine {}
+
+impl IntoDynInstance for NeverClientStateMachine {
+    type DynType = DynState;
+
+    fn into_dyn(self, _instance_id: ModuleInstanceId) -> Self::DynType {
+        unreachable!()
+    }
+}
+impl sm::State for NeverClientStateMachine {
+    type ModuleContext = NeverClientContext;
+
+    fn transitions(
+        &self,
+        _context: &Self::ModuleContext,
+        _global_context: &crate::DynGlobalClientContext,
+    ) -> Vec<sm::StateTransition<Self>> {
+        unreachable!()
+    }
+
+    fn operation_id(&self) -> fedimint_core::core::OperationId {
+        unreachable!()
+    }
+}
+
 /// A group of inputs and state machines responsible for driving their state
 ///
 /// These must be kept together as a whole when including in a transaction.
@@ -36,6 +75,19 @@ pub struct ClientInputSM<S = DynState> {
 pub struct ClientInputBundle<I = DynInput, S = DynState> {
     pub(crate) inputs: Vec<ClientInput<I>>,
     pub(crate) sms: Vec<ClientInputSM<S>>,
+}
+
+impl<I> ClientInputBundle<I, NeverClientStateMachine> {
+    /// A version of [`Self::new`] for times where input does not require any
+    /// state machines
+    ///
+    /// This avoids type inference issues of `S`, and saves some typing.
+    pub fn new_no_sm(inputs: Vec<ClientInput<I>>) -> Self {
+        Self {
+            inputs,
+            sms: vec![],
+        }
+    }
 }
 
 impl<I, S> ClientInputBundle<I, S>

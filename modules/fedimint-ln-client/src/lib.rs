@@ -38,7 +38,9 @@ use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
-use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
+use fedimint_client::transaction::{
+    ClientInput, ClientInputBundle, ClientOutput, TransactionBuilder,
+};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -1464,8 +1466,10 @@ impl LightningClientModule {
             keys: vec![key_pair],
         };
 
-        let tx =
-            TransactionBuilder::new().with_input(self.client_ctx.make_client_input(client_input));
+        let tx = TransactionBuilder::new().with_inputs(
+            self.client_ctx
+                .make_client_inputs(ClientInputBundle::new_no_sm(vec![client_input])),
+        );
         let extra_meta = serde_json::to_value(extra_meta).expect("extra_meta is serializable");
         let operation_meta_gen = |_, out_points| LightningOperationMeta {
             variant: LightningOperationMetaVariant::Claim { out_points },

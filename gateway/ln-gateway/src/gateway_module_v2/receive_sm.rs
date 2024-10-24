@@ -16,7 +16,6 @@ use fedimint_core::module::ApiRequestErased;
 use fedimint_core::secp256k1::KeyPair;
 use fedimint_core::task::sleep;
 use fedimint_core::{NumPeersExt, OutPoint, PeerId, TransactionId};
-use fedimint_lnv2_client::LightningClientStateMachines;
 use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_lnv2_common::{
     LightningInput, LightningInputV0, LightningOutputOutcome, LightningOutputOutcomeV0,
@@ -268,11 +267,8 @@ impl ReceiveStateMachine {
         let outpoints = global_context
             .claim_inputs(
                 dbtx,
-                ClientInputBundle::<_, LightningClientStateMachines>::new(
-                    vec![client_input],
-                    // The input of the refund tx is managed by this state machine
-                    vec![],
-                ),
+                // The input of the refund tx is managed by this state machine
+                ClientInputBundle::new_no_sm(vec![client_input]),
             )
             .await
             .expect("Cannot claim input, additional funding needed")

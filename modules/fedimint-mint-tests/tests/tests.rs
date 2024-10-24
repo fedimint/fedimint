@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use bls12_381::G1Affine;
 use fedimint_client::backup::{ClientBackup, Metadata};
-use fedimint_client::transaction::{ClientInput, TransactionBuilder};
+use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
 use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::OperationId;
 use fedimint_core::secp256k1::KeyPair;
@@ -78,11 +78,11 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
             operation_id,
             "Claiming Invalid Ecash Note",
             |_, _| (),
-            TransactionBuilder::new().with_input(
+            TransactionBuilder::new().with_inputs(
                 client
                     .get_first_module::<MintClientModule>()?
                     .client_ctx
-                    .make_client_input(client_input),
+                    .make_client_inputs(ClientInputBundle::new_no_sm(vec![client_input])),
             ),
         )
         .await

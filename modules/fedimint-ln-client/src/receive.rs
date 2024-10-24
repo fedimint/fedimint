@@ -19,7 +19,7 @@ use thiserror::Error;
 use tracing::{debug, error, info};
 
 use crate::api::LnFederationApi;
-use crate::{LightningClientContext, LightningClientStateMachines, ReceivingKey};
+use crate::{LightningClientContext, ReceivingKey};
 
 const RETRY_DELAY: Duration = Duration::from_secs(1);
 
@@ -290,12 +290,9 @@ impl LightningReceiveConfirmedInvoice {
         global_context
             .claim_inputs(
                 dbtx,
-                ClientInputBundle::<_, LightningClientStateMachines>::new(
-                    vec![client_input],
-                    // The input of the refund tx is managed by this state machine, so no new state
-                    // machines need to be created
-                    vec![],
-                ),
+                // The input of the refund tx is managed by this state machine, so no new state
+                // machines need to be created
+                ClientInputBundle::new_no_sm(vec![client_input]),
             )
             .await
             .expect("Cannot claim input, additional funding needed")

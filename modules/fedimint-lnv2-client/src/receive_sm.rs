@@ -10,7 +10,7 @@ use fedimint_lnv2_common::{LightningInput, LightningInputV0};
 use tpe::AggregateDecryptionKey;
 
 use crate::api::LnFederationApi;
-use crate::{LightningClientContext, LightningClientStateMachines};
+use crate::LightningClientContext;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct ReceiveStateMachine {
@@ -118,13 +118,7 @@ impl ReceiveStateMachine {
         };
 
         let out_points = global_context
-            .claim_inputs(
-                dbtx,
-                ClientInputBundle::<_, LightningClientStateMachines>::new(
-                    vec![client_input],
-                    vec![],
-                ),
-            )
+            .claim_inputs(dbtx, ClientInputBundle::new_no_sm(vec![client_input]))
             .await
             .expect("Cannot claim input, additional funding needed")
             .1;
