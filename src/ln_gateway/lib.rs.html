@@ -2174,7 +2174,21 @@
 <a href="#2173" id="2173">2173</a>
 <a href="#2174" id="2174">2174</a>
 <a href="#2175" id="2175">2175</a>
-<a href="#2176" id="2176">2176</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2176" id="2176">2176</a>
+<a href="#2177" id="2177">2177</a>
+<a href="#2178" id="2178">2178</a>
+<a href="#2179" id="2179">2179</a>
+<a href="#2180" id="2180">2180</a>
+<a href="#2181" id="2181">2181</a>
+<a href="#2182" id="2182">2182</a>
+<a href="#2183" id="2183">2183</a>
+<a href="#2184" id="2184">2184</a>
+<a href="#2185" id="2185">2185</a>
+<a href="#2186" id="2186">2186</a>
+<a href="#2187" id="2187">2187</a>
+<a href="#2188" id="2188">2188</a>
+<a href="#2189" id="2189">2189</a>
+<a href="#2190" id="2190">2190</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2212,7 +2226,7 @@
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::anyhow;
+<span class="kw">use </span>anyhow::{anyhow, Context};
 <span class="kw">use </span>bitcoin30::{Address, Network, Txid};
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>clap::Parser;
@@ -2263,10 +2277,11 @@
 <span class="kw">use </span>lightning_invoice::{Bolt11Invoice, RoutingFees};
 <span class="kw">use </span>rand::{thread_rng, Rng};
 <span class="kw">use </span>rpc::{
-    CloseChannelsWithPeerPayload, CreateInvoiceForSelfPayload, FederationInfo, GatewayFedConfig,
-    GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelPayload, PayInvoicePayload,
-    ReceiveEcashPayload, ReceiveEcashResponse, SetConfigurationPayload, SpendEcashPayload,
-    SpendEcashResponse, SyncToChainPayload, WithdrawOnchainPayload, V1_API_ENDPOINT,
+    CloseChannelsWithPeerPayload, CreateInvoiceForOperatorPayload, FederationInfo,
+    GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelPayload,
+    PayInvoiceForOperatorPayload, ReceiveEcashPayload, ReceiveEcashResponse,
+    SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, SyncToChainPayload,
+    WithdrawOnchainPayload, V1_API_ENDPOINT,
 };
 <span class="kw">use </span>state_machine::{GatewayClientModule, GatewayExtPayStates};
 <span class="kw">use </span>tokio::sync::RwLock;
@@ -3128,12 +3143,12 @@
 
     <span class="doccomment">/// Creates an invoice that is directly payable to the gateway's lightning
     /// node.
-    </span><span class="kw">async fn </span>handle_create_invoice_for_self_msg(
+    </span><span class="kw">async fn </span>handle_create_invoice_for_operator_msg(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        payload: CreateInvoiceForSelfPayload,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Bolt11Invoice&gt; {
+        payload: CreateInvoiceForOperatorPayload,
+    ) -&gt; AdminResult&lt;Bolt11Invoice&gt; {
         <span class="kw">let </span>GatewayState::Running { lightning_context } = <span class="self">self</span>.get_state().<span class="kw">await else </span>{
-            <span class="kw">return </span><span class="prelude-val">Err</span>(PublicGatewayError::Lightning(
+            <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::Lightning(
                 LightningRpcError::FailedToConnect,
             ));
         };
@@ -3142,17 +3157,17 @@
             <span class="kw-2">&amp;</span>lightning_context
                 .lnrpc
                 .create_invoice(CreateInvoiceRequest {
-                    payment_hash: Vec::new(), <span class="comment">/* Empty payment hash indicates an invoice payable
-                                               * directly to the gateway. */
-                    </span>amount_msat: payload.amount_msats,
-                    expiry_secs: payload.expiry_secs,
+                    <span class="comment">// Empty payment hash indicates an invoice payable directly to the gateway.
+                    </span>payment_hash: Vec::new(),
+                    amount_msat: payload.amount_msats,
+                    expiry_secs: payload.expiry_secs.unwrap_or(<span class="number">3600</span>),
                     description: payload.description.map(Description::Direct),
                 })
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.invoice,
         )
         .map_err(|e| {
-            PublicGatewayError::Lightning(LightningRpcError::InvalidMetadata {
+            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
                 failure_reason: e.to_string(),
             })
         })
@@ -3160,20 +3175,33 @@
 
     <span class="doccomment">/// Requests the gateway to pay an outgoing LN invoice using its own funds.
     /// Returns the payment hash's preimage on success.
-    </span><span class="kw">async fn </span>handle_pay_invoice_self_msg(
+    </span><span class="kw">async fn </span>handle_pay_invoice_for_operator_msg(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        payload: PayInvoicePayload,
+        payload: PayInvoiceForOperatorPayload,
     ) -&gt; AdminResult&lt;Preimage&gt; {
+        <span class="comment">// Those are the ldk defaults
+        </span><span class="kw">const </span>BASE_FEE: u64 = <span class="number">50</span>;
+        <span class="kw">const </span>FEE_DENOMINATOR: u64 = <span class="number">100</span>;
+        <span class="kw">const </span>MAX_DELAY: u64 = <span class="number">1008</span>;
+
         <span class="kw">let </span>GatewayState::Running { lightning_context } = <span class="self">self</span>.get_state().<span class="kw">await else </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::Lightning(
                 LightningRpcError::FailedToConnect,
             ));
         };
 
+        <span class="kw">let </span>max_fee = BASE_FEE
+            + payload
+                .invoice
+                .amount_milli_satoshis()
+                .context(<span class="string">"Invoice is missing amount"</span>)<span class="question-mark">?
+                </span>.saturating_div(FEE_DENOMINATOR);
+
         <span class="kw">let </span>res = lightning_context
             .lnrpc
-            .pay(payload.invoice, payload.max_delay, payload.max_fee)
+            .pay(payload.invoice, MAX_DELAY, Amount::from_msats(max_fee))
             .<span class="kw">await</span><span class="question-mark">?</span>;
+
         <span class="prelude-val">Ok</span>(Preimage(
             res.preimage.try_into().expect(<span class="string">"preimage is 32 bytes"</span>),
         ))

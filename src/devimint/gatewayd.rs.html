@@ -398,7 +398,23 @@
 <a href="#397" id="397">397</a>
 <a href="#398" id="398">398</a>
 <a href="#399" id="399">399</a>
-<a href="#400" id="400">400</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -408,6 +424,7 @@
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::secp256k1::PublicKey;
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
+<span class="kw">use </span>fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>fedimint_testing::gateway::LightningNodeType;
 <span class="kw">use </span>ln_gateway::envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV;
 <span class="kw">use </span>ln_gateway::lightning::ChannelInfo;
@@ -698,6 +715,21 @@
         <span class="prelude-val">Ok</span>(())
     }
 
+    <span class="kw">pub async fn </span>create_invoice(<span class="kw-2">&amp;</span><span class="self">self</span>, amount_msats: u64) -&gt; <span class="prelude-ty">Result</span>&lt;Bolt11Invoice&gt; {
+        <span class="prelude-val">Ok</span>(Bolt11Invoice::from_str(
+            <span class="kw-2">&amp;</span><span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"lightning"</span>, <span class="string">"create-invoice"</span>, amount_msats)
+                .out_string()
+                .<span class="kw">await</span><span class="question-mark">?</span>,
+        )<span class="question-mark">?</span>)
+    }
+
+    <span class="kw">pub async fn </span>pay_invoice(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: Bolt11Invoice) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"lightning"</span>, <span class="string">"pay-invoice"</span>, invoice.to_string())
+            .run()
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(())
+    }
     <span class="doccomment">/// Open a channel with the gateway's lightning node.
     /// Returns the txid of the funding transaction if the gateway is a new
     /// enough version to return it. Otherwise, returns `None`.

@@ -497,7 +497,28 @@
 <a href="#496" id="496">496</a>
 <a href="#497" id="497">497</a>
 <a href="#498" id="498">498</a>
-<a href="#499" id="499">499</a></pre></div><pre class="rust"><code><span class="kw">use </span>clap::Parser;
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
+<a href="#501" id="501">501</a>
+<a href="#502" id="502">502</a>
+<a href="#503" id="503">503</a>
+<a href="#504" id="504">504</a>
+<a href="#505" id="505">505</a>
+<a href="#506" id="506">506</a>
+<a href="#507" id="507">507</a>
+<a href="#508" id="508">508</a>
+<a href="#509" id="509">509</a>
+<a href="#510" id="510">510</a>
+<a href="#511" id="511">511</a>
+<a href="#512" id="512">512</a>
+<a href="#513" id="513">513</a>
+<a href="#514" id="514">514</a>
+<a href="#515" id="515">515</a>
+<a href="#516" id="516">516</a>
+<a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a>
+<a href="#520" id="520">520</a></pre></div><pre class="rust"><code><span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>devimint::devfed::DevJitFed;
 <span class="kw">use </span>devimint::federation::{Client, Federation};
 <span class="kw">use </span>devimint::util::ProcessManager;
@@ -515,10 +536,6 @@
 <span class="attr">#[derive(Parser)]
 </span><span class="kw">enum </span>TestOpts {
     All,
-    GatewayRegistration,
-    SelfPaymentsRefund,
-    SelfPaymentsSuccess,
-    LightningPayment,
     InterFederation,
 }
 
@@ -547,27 +564,29 @@
 
         <span class="kw">match </span>opts {
             TestOpts::All =&gt; {
+                <span class="kw">let </span>lnd = dev_fed.lnd().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>cln = dev_fed.cln().<span class="kw">await</span><span class="question-mark">?</span>;
+
+                <span class="macro">info!</span>(<span class="string">"Verify HOLD invoices still work, create one now for payment later"</span>);
+
+                <span class="kw">let </span>(preimage, invoice, payment_hash) = lnd.create_hold_invoice(<span class="number">50000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+
                 test_gateway_registration(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
-                test_self_payments_refund(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
+                test_payments_between_gateways(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
+                test_refund_of_circular_payments(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
 
                 pegin_gateways(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
 
-                test_self_payments_success(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
-                test_lightning_payments(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
-            }
-            TestOpts::GatewayRegistration =&gt; {
-                test_gateway_registration(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
-            }
-            TestOpts::SelfPaymentsRefund =&gt; {
-                test_self_payments_refund(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
-            }
-            TestOpts::SelfPaymentsSuccess =&gt; {
-                pegin_gateways(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
-                test_self_payments_success(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
-            }
-            TestOpts::LightningPayment =&gt; {
-                pegin_gateways(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
-                test_lightning_payments(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
+                test_circular_payments(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
+                test_payments_from_client_to_gateways(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
+                test_payments_from_gateways_to_client(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
+
+                <span class="macro">info!</span>(<span class="string">"Testing that CLN pay HOLD invoice and LND can settle HOLD invoice"</span>);
+
+                <span class="macro">try_join!</span>(
+                    cln.pay_bolt11_invoice(invoice),
+                    lnd.settle_hold_invoice(preimage, payment_hash)
+                )<span class="question-mark">?</span>;
             }
             TestOpts::InterFederation =&gt; {
                 pegin_gateways(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -586,7 +605,6 @@
     <span class="kw">let </span>federation = dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>gw_lnd = dev_fed.gw_lnd_registered().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>gw_cln = dev_fed.gw_cln_registered().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>gw_ldk = dev_fed
         .gw_ldk_connected()
         .<span class="kw">await</span><span class="question-mark">?
@@ -595,11 +613,8 @@
 
     <span class="macro">try_join!</span>(
         federation.pegin_gateway(<span class="number">1_000_000</span>, gw_lnd),
-        federation.pegin_gateway(<span class="number">1_000_000</span>, gw_cln),
         federation.pegin_gateway(<span class="number">1_000_000</span>, gw_ldk),
     )<span class="question-mark">?</span>;
-
-    <span class="macro">info!</span>(<span class="string">"Pegging-in gateways successful"</span>);
 
     <span class="prelude-val">Ok</span>(())
 }
@@ -674,13 +689,39 @@
             .is_empty()
     );
 
-    <span class="macro">info!</span>(<span class="string">"Testing gateway registration successful"</span>);
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">async fn </span>test_payments_between_gateways(dev_fed: <span class="kw-2">&amp;</span>DevJitFed) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="macro">info!</span>(<span class="string">"Testing payments between gateways..."</span>);
+
+    <span class="kw">let </span>gw_lnd = dev_fed.gw_lnd().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>gw_ldk = dev_fed
+        .gw_ldk()
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.as_ref()
+        .expect(<span class="string">"Gateways of version 0.5.0 or higher support LDK"</span>);
+
+    <span class="kw">let </span>gateways = [(gw_lnd, <span class="string">"LND"</span>), (gw_ldk, <span class="string">"LDK"</span>)];
+
+    <span class="kw">let </span>gateway_matrix = gateways
+        .iter()
+        .cartesian_product(gateways.iter())
+        .filter(|(a, b)| a.<span class="number">1 </span>!= b.<span class="number">1</span>);
+
+    <span class="kw">for </span>((gw_send, ln_send), (gw_receive, ln_receive)) <span class="kw">in </span>gateway_matrix {
+        <span class="macro">info!</span>(<span class="string">"Testing payment: {ln_send} -&gt; {ln_receive}"</span>);
+
+        <span class="kw">let </span>invoice = gw_receive.create_invoice(<span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        gw_send.pay_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
+    }
 
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">async fn </span>test_self_payments_refund(dev_fed: <span class="kw-2">&amp;</span>DevJitFed) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="macro">info!</span>(<span class="string">"Testing self payments refund..."</span>);
+<span class="kw">async fn </span>test_refund_of_circular_payments(dev_fed: <span class="kw-2">&amp;</span>DevJitFed) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="macro">info!</span>(<span class="string">"Testing refund of circular payments..."</span>);
 
     <span class="kw">let </span>federation = dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -691,31 +732,29 @@
     federation.pegin_client(<span class="number">10_000</span>, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>gw_lnd = dev_fed.gw_lnd_registered().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>gw_cln = dev_fed.gw_cln_registered().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>gw_ldk = dev_fed
         .gw_ldk_connected()
         .<span class="kw">await</span><span class="question-mark">?
         </span>.as_ref()
         .expect(<span class="string">"Gateways of version 0.5.0 or higher support LDK"</span>);
 
-    <span class="kw">let </span>gateways = [(gw_lnd, <span class="string">"LND"</span>), (gw_cln, <span class="string">"CLN"</span>), (gw_ldk, <span class="string">"LDK"</span>)];
+    <span class="kw">let </span>gateways = [(gw_lnd, <span class="string">"LND"</span>), (gw_ldk, <span class="string">"LDK"</span>)];
+
     <span class="kw">let </span>gateway_matrix = gateways.iter().cartesian_product(gateways);
 
     <span class="kw">for </span>((gw_send, ln_send), (gw_receive, ln_receive)) <span class="kw">in </span>gateway_matrix {
-        <span class="macro">info!</span>(<span class="string">"Testing self payment refund: {ln_send} -&gt; {ln_receive}"</span>);
+        <span class="macro">info!</span>(<span class="string">"Testing refund of payment: Client -&gt; {ln_send} -&gt; {ln_receive} -&gt; Client"</span>);
 
         <span class="kw">let </span>invoice = receive(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_receive.addr, <span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>.<span class="number">0</span>;
 
         test_send(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_send.addr, <span class="kw-2">&amp;</span>invoice, FinalSendState::Refunded).<span class="kw">await</span><span class="question-mark">?</span>;
     }
 
-    <span class="macro">info!</span>(<span class="string">"Testing self payments refund successful"</span>);
-
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">async fn </span>test_self_payments_success(dev_fed: <span class="kw-2">&amp;</span>DevJitFed) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="macro">info!</span>(<span class="string">"Testing self payments success..."</span>);
+<span class="kw">async fn </span>test_circular_payments(dev_fed: <span class="kw-2">&amp;</span>DevJitFed) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="macro">info!</span>(<span class="string">"Testing circular payments..."</span>);
 
     <span class="kw">let </span>federation = dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -726,18 +765,18 @@
     federation.pegin_client(<span class="number">10_000</span>, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>gw_lnd = dev_fed.gw_lnd().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>gw_cln = dev_fed.gw_cln().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>gw_ldk = dev_fed
         .gw_ldk()
         .<span class="kw">await</span><span class="question-mark">?
         </span>.as_ref()
         .expect(<span class="string">"Gateways of version 0.5.0 or higher support LDK"</span>);
 
-    <span class="kw">let </span>gateways = [(gw_lnd, <span class="string">"LND"</span>), (gw_cln, <span class="string">"CLN"</span>), (gw_ldk, <span class="string">"LDK"</span>)];
+    <span class="kw">let </span>gateways = [(gw_lnd, <span class="string">"LND"</span>), (gw_ldk, <span class="string">"LDK"</span>)];
+
     <span class="kw">let </span>gateway_matrix = gateways.iter().cartesian_product(gateways);
 
     <span class="kw">for </span>((gw_send, ln_send), (gw_receive, ln_receive)) <span class="kw">in </span>gateway_matrix {
-        <span class="macro">info!</span>(<span class="string">"Testing self payment success: {ln_send} -&gt; {ln_receive}"</span>);
+        <span class="macro">info!</span>(<span class="string">"Testing payment: Client -&gt; {ln_send} -&gt; {ln_receive} -&gt; Client"</span>);
 
         <span class="kw">let </span>(invoice, receive_op) = receive(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_receive.addr, <span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -746,74 +785,79 @@
         await_receive_claimed(<span class="kw-2">&amp;</span>client, receive_op).<span class="kw">await</span><span class="question-mark">?</span>;
     }
 
-    <span class="macro">info!</span>(<span class="string">"Testing self payments success successful"</span>);
-
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">async fn </span>test_lightning_payments(dev_fed: <span class="kw-2">&amp;</span>DevJitFed) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="macro">info!</span>(<span class="string">"Testing lightning payments..."</span>);
+<span class="kw">async fn </span>test_payments_from_client_to_gateways(dev_fed: <span class="kw-2">&amp;</span>DevJitFed) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="macro">info!</span>(<span class="string">"Testing payments from client to gateways..."</span>);
 
     <span class="kw">let </span>federation = dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>client = federation
-        .new_joined_client(<span class="string">"lnv2-lightning-payments-client"</span>)
+        .new_joined_client(<span class="string">"lnv2-self-payments-success-client"</span>)
         .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    federation.pegin_client(<span class="number">10_000</span>, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>gw_lnd = dev_fed.gw_lnd().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>gw_cln = dev_fed.gw_cln().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>gw_ldk = dev_fed
+        .gw_ldk()
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.as_ref()
+        .expect(<span class="string">"Gateways of version 0.5.0 or higher support LDK"</span>);
 
-    <span class="kw">let </span>lnd = dev_fed.lnd().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>cln = dev_fed.cln().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>gateways = [(gw_lnd, <span class="string">"LND"</span>), (gw_ldk, <span class="string">"LDK"</span>)];
 
-    <span class="macro">info!</span>(<span class="string">"Verify HOLD invoices still work, create one now for payment later"</span>);
+    <span class="kw">let </span>gateway_matrix = gateways
+        .iter()
+        .cartesian_product(gateways.iter())
+        .filter(|(a, b)| a.<span class="number">1 </span>!= b.<span class="number">1</span>);
 
-    <span class="kw">let </span>(hold_preimage, hold_invoice, hold_payment_hash) = lnd.create_hold_invoice(<span class="number">50000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">for </span>((gw_send, ln_send), (gw_receive, ln_receive)) <span class="kw">in </span>gateway_matrix {
+        <span class="macro">info!</span>(<span class="string">"Testing payment: Client -&gt; {ln_send} -&gt; {ln_receive}"</span>);
 
-    <span class="macro">info!</span>(<span class="string">"Testing that CLN can pay LND directly"</span>);
+        <span class="kw">let </span>invoice = gw_receive.create_invoice(<span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>(invoice, payment_hash) = lnd.invoice(<span class="number">5000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        test_send(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_send.addr, <span class="kw-2">&amp;</span>invoice, FinalSendState::Success).<span class="kw">await</span><span class="question-mark">?</span>;
+    }
 
-    cln.pay_bolt11_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
-    lnd.wait_bolt11_invoice(payment_hash).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}
 
-    <span class="macro">info!</span>(<span class="string">"Testing that CLN can pay client via LND Gateway"</span>);
+<span class="kw">async fn </span>test_payments_from_gateways_to_client(dev_fed: <span class="kw-2">&amp;</span>DevJitFed) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="macro">info!</span>(<span class="string">"Testing payments from gateways to client..."</span>);
 
-    <span class="kw">let </span>(inv_lnd, receive_op_lnd) = receive(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_lnd.addr, <span class="number">500_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>federation = dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>;
 
-    cln.pay_bolt11_invoice(inv_lnd.to_string()).<span class="kw">await</span><span class="question-mark">?</span>;
-
-    await_receive_claimed(<span class="kw-2">&amp;</span>client, receive_op_lnd).<span class="kw">await</span><span class="question-mark">?</span>;
-
-    <span class="macro">info!</span>(<span class="string">"Testing that LND can pay CLN directly"</span>);
-
-    <span class="kw">let </span>invoice = cln
-        .invoice(
-            <span class="number">5000</span>,
-            <span class="string">"lnd-pay-cln-directly"</span>.to_string(),
-            <span class="string">"lnd-pay-cln-directly"</span>.to_string(),
-        )
+    <span class="kw">let </span>client = federation
+        .new_joined_client(<span class="string">"lnv2-self-payments-success-client"</span>)
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    lnd.pay_bolt11_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
-    cln.wait_any_bolt11_invoice().<span class="kw">await</span><span class="question-mark">?</span>;
+    federation.pegin_client(<span class="number">10_000</span>, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="macro">info!</span>(<span class="string">"Testing that LND can pay client via CLN gateway"</span>);
+    <span class="kw">let </span>gw_lnd = dev_fed.gw_lnd().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>gw_ldk = dev_fed
+        .gw_ldk()
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.as_ref()
+        .expect(<span class="string">"Gateways of version 0.5.0 or higher support LDK"</span>);
 
-    <span class="kw">let </span>(inv_cln, receive_op_cln) = receive(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_cln.addr, <span class="number">750_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>gateways = [(gw_lnd, <span class="string">"LND"</span>), (gw_ldk, <span class="string">"LDK"</span>)];
 
-    lnd.pay_bolt11_invoice(inv_cln.to_string()).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>gateway_matrix = gateways
+        .iter()
+        .cartesian_product(gateways.iter())
+        .filter(|(a, b)| a.<span class="number">1 </span>!= b.<span class="number">1</span>);
 
-    await_receive_claimed(<span class="kw-2">&amp;</span>client, receive_op_cln).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">for </span>((gw_send, ln_send), (gw_receive, ln_receive)) <span class="kw">in </span>gateway_matrix {
+        <span class="macro">info!</span>(<span class="string">"Testing payment: {ln_send} -&gt; {ln_receive} -&gt; Client"</span>);
 
-    <span class="macro">info!</span>(<span class="string">"Testing that CLN pay HOLD invoice and LND can settle HOLD invoice"</span>);
+        <span class="kw">let </span>(invoice, receive_op) = receive(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_receive.addr, <span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="macro">try_join!</span>(
-        cln.pay_bolt11_invoice(hold_invoice),
-        lnd.settle_hold_invoice(hold_preimage, hold_payment_hash)
-    )<span class="question-mark">?</span>;
+        gw_send.pay_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="macro">info!</span>(<span class="string">"Testing lightning payments successful"</span>);
+        await_receive_claimed(<span class="kw-2">&amp;</span>client, receive_op).<span class="kw">await</span><span class="question-mark">?</span>;
+    }
 
     <span class="prelude-val">Ok</span>(())
 }
@@ -822,7 +866,7 @@
     dev_fed: <span class="kw-2">&amp;</span>DevJitFed,
     process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
 ) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="macro">info!</span>(<span class="string">"Testing inter federation..."</span>);
+    <span class="macro">info!</span>(<span class="string">"Testing inter federation payments..."</span>);
     <span class="kw">let </span>send_federation = dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>send_client = send_federation
         .new_joined_client(<span class="string">"lnv2-send-client"</span>)
@@ -880,8 +924,6 @@
         .<span class="kw">await</span><span class="question-mark">?</span>;
         await_receive_claimed(<span class="kw-2">&amp;</span>receive_client, receive_op).<span class="kw">await</span><span class="question-mark">?</span>;
     }
-
-    <span class="macro">info!</span>(<span class="string">"Testing inter federation payments successful"</span>);
 
     <span class="prelude-val">Ok</span>(())
 }

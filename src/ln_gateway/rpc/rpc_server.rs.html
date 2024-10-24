@@ -502,7 +502,11 @@
 <a href="#501" id="501">501</a>
 <a href="#502" id="502">502</a>
 <a href="#503" id="503">503</a>
-<a href="#504" id="504">504</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#504" id="504">504</a>
+<a href="#505" id="505">505</a>
+<a href="#506" id="506">506</a>
+<a href="#507" id="507">507</a>
+<a href="#508" id="508">508</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>axum::extract::Request;
 <span class="kw">use </span>axum::http::{header, StatusCode};
@@ -525,8 +529,8 @@
 };
 <span class="kw">use </span>fedimint_lnv2_client::{CreateBolt11InvoicePayload, SendPaymentPayload};
 <span class="kw">use </span>fedimint_lnv2_common::endpoint_constants::{
-    CREATE_BOLT11_INVOICE_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT,
-    PAY_INVOICE_SELF_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_PAYMENT_ENDPOINT,
+    CREATE_BOLT11_INVOICE_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
+    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_PAYMENT_ENDPOINT,
     WITHDRAW_ONCHAIN_ENDPOINT,
 };
 <span class="kw">use </span>hex::ToHex;
@@ -537,10 +541,10 @@
 
 <span class="kw">use super</span>::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
-    CreateInvoiceForSelfPayload, DepositAddressPayload, GetLnOnchainAddressPayload, InfoPayload,
-    LeaveFedPayload, OpenChannelPayload, PayInvoicePayload, ReceiveEcashPayload,
-    SetConfigurationPayload, SpendEcashPayload, SyncToChainPayload, WithdrawOnchainPayload,
-    WithdrawPayload, V1_API_ENDPOINT,
+    CreateInvoiceForOperatorPayload, DepositAddressPayload, GetLnOnchainAddressPayload,
+    InfoPayload, LeaveFedPayload, OpenChannelPayload, PayInvoiceForOperatorPayload,
+    ReceiveEcashPayload, SetConfigurationPayload, SpendEcashPayload, SyncToChainPayload,
+    WithdrawOnchainPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 <span class="kw">use </span><span class="kw">crate</span>::error::{AdminGatewayError, PublicGatewayError};
 <span class="kw">use </span><span class="kw">crate</span>::rpc::ConfigPayload;
@@ -675,12 +679,7 @@
 ///   clients.
 </span><span class="kw">fn </span>v1_routes(gateway: Arc&lt;Gateway&gt;, task_group: TaskGroup) -&gt; Router {
     <span class="comment">// Public routes on gateway webserver
-    </span><span class="kw">let </span><span class="kw-2">mut </span>public_routes = Router::new()
-        .route(
-            CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT,
-            post(create_invoice_for_self),
-        )
-        .route(RECEIVE_ECASH_ENDPOINT, post(receive_ecash));
+    </span><span class="kw">let </span><span class="kw-2">mut </span>public_routes = Router::new().route(RECEIVE_ECASH_ENDPOINT, post(receive_ecash));
 
     <span class="kw">if </span>gateway.is_running_lnv1() {
         public_routes = public_routes.merge(lnv1_routes());
@@ -698,7 +697,14 @@
         .route(CONNECT_FED_ENDPOINT, post(connect_fed))
         .route(LEAVE_FED_ENDPOINT, post(leave_fed))
         .route(BACKUP_ENDPOINT, post(backup))
-        .route(PAY_INVOICE_SELF_ENDPOINT, post(pay_invoice_self))
+        .route(
+            CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
+            post(create_invoice_for_operator),
+        )
+        .route(
+            PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
+            post(pay_invoice_operator),
+        )
         .route(
             GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
             post(get_ln_onchain_address),
@@ -812,20 +818,22 @@
 }
 
 <span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
-</span><span class="kw">async fn </span>create_invoice_for_self(
+</span><span class="kw">async fn </span>create_invoice_for_operator(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
-    Json(payload): Json&lt;CreateInvoiceForSelfPayload&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, PublicGatewayError&gt; {
-    <span class="kw">let </span>invoice = gateway.handle_create_invoice_for_self_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
+    Json(payload): Json&lt;CreateInvoiceForOperatorPayload&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, AdminGatewayError&gt; {
+    <span class="kw">let </span>invoice = gateway
+        .handle_create_invoice_for_operator_msg(payload)
+        .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(invoice)))
 }
 
 <span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
-</span><span class="kw">async fn </span>pay_invoice_self(
+</span><span class="kw">async fn </span>pay_invoice_operator(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
-    Json(payload): Json&lt;PayInvoicePayload&gt;,
+    Json(payload): Json&lt;PayInvoiceForOperatorPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, AdminGatewayError&gt; {
-    <span class="kw">let </span>preimage = gateway.handle_pay_invoice_self_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>preimage = gateway.handle_pay_invoice_for_operator_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(preimage.<span class="number">0</span>.encode_hex::&lt;String&gt;())))
 }
 

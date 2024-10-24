@@ -253,9 +253,7 @@
 <a href="#252" id="252">252</a>
 <a href="#253" id="253">253</a>
 <a href="#254" id="254">254</a>
-<a href="#255" id="255">255</a>
-<a href="#256" id="256">256</a>
-<a href="#257" id="257">257</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
+<a href="#255" id="255">255</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
 <span class="kw">pub mod </span>rpc_server;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -405,17 +403,15 @@
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
-</span><span class="kw">pub struct </span>CreateInvoiceForSelfPayload {
+</span><span class="kw">pub struct </span>CreateInvoiceForOperatorPayload {
     <span class="kw">pub </span>amount_msats: u64,
-    <span class="kw">pub </span>expiry_secs: u32,
+    <span class="kw">pub </span>expiry_secs: <span class="prelude-ty">Option</span>&lt;u32&gt;,
     <span class="kw">pub </span>description: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
-</span><span class="kw">pub struct </span>PayInvoicePayload {
+</span><span class="kw">pub struct </span>PayInvoiceForOperatorPayload {
     <span class="kw">pub </span>invoice: Bolt11Invoice,
-    <span class="kw">pub </span>max_delay: u64,
-    <span class="kw">pub </span>max_fee: Amount,
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
