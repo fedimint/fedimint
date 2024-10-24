@@ -31,7 +31,7 @@ use fedimint_wallet_client::config::WalletClientConfig;
 use fedimint_wallet_client::WalletClientModule;
 use fedimintd::envs::FM_EXTRA_DKG_META_ENV;
 use fs_lock::FileLock;
-use futures::future::join_all;
+use futures::future::{join_all, try_join_all};
 use rand::Rng;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
@@ -729,7 +729,11 @@ impl Federation {
         Ok(())
     }
 
-    pub async fn pegin_gateway(&self, amount: u64, gw: &super::gatewayd::Gatewayd) -> Result<()> {
+    pub async fn pegin_gateways(
+        &self,
+        amount: u64,
+        gateways: Vec<&super::gatewayd::Gatewayd>,
+    ) -> Result<()> {
         let deposit_fees_msat = self.deposit_fees()?.msats;
         assert_eq!(
             deposit_fees_msat % 1000,
@@ -739,21 +743,27 @@ impl Federation {
         let deposit_fees = deposit_fees_msat / 1000;
         info!(amount, deposit_fees, "Pegging-in gateway funds");
         let fed_id = self.calculate_federation_id();
-        let pegin_addr = gw.get_pegin_addr(&fed_id).await?;
-        self.bitcoind
-            .send_to(pegin_addr, amount + deposit_fees)
-            .await?;
+        for gw in gateways.clone() {
+            let pegin_addr = gw.get_pegin_addr(&fed_id).await?;
+            self.bitcoind
+                .send_to(pegin_addr, amount + deposit_fees)
+                .await?;
+        }
+
         self.bitcoind.mine_blocks(21).await?;
-        poll("gateway pegin", || async {
-            let gateway_balance = cmd!(gw, "balance", "--federation-id={fed_id}")
-                .out_json()
-                .await
-                .map_err(ControlFlow::Continue)?
-                .as_u64()
-                .unwrap();
-            poll_eq!(gateway_balance, amount * 1000)
-        })
+        try_join_all(gateways.into_iter().map(|gw| {
+            poll("gateway pegin", || async {
+                let gateway_balance = cmd!(gw, "balance", "--federation-id={fed_id}")
+                    .out_json()
+                    .await
+                    .map_err(ControlFlow::Continue)?
+                    .as_u64()
+                    .unwrap();
+                poll_eq!(gateway_balance, amount * 1000)
+            })
+        }))
         .await?;
+
         Ok(())
     }
 

@@ -685,7 +685,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         "config-decrypt/encrypt failed"
     );
 
-    fed.pegin_gateway(10_000_000, &gw_cln).await?;
+    fed.pegin_gateways(10_000_000, vec![&gw_cln]).await?;
 
     let fed_id = fed.calculate_federation_id();
     let invite = fed.invite_code()?;
@@ -1588,10 +1588,7 @@ pub async fn lightning_gw_reconnect_test(
     client.use_gateway(&gw_cln).await?;
 
     info!("Pegging-in both gateways");
-    try_join!(
-        fed.pegin_gateway(99_999, &gw_cln),
-        fed.pegin_gateway(99_999, &gw_lnd),
-    )?;
+    fed.pegin_gateways(99_999, vec![&gw_cln, &gw_lnd]).await?;
 
     // Drop other references to CLN and LND so that the test can kill them
     drop(cln);
@@ -2477,9 +2474,10 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
                 let task_group = task_group.clone();
                 async move {
                     let dev_fed = dev_fed(&process_mgr).await?;
-                    let ((), (), faucet) = try_join!(
-                        dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln),
-                        dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd),
+                    let ((), faucet) = try_join!(
+                        dev_fed
+                            .fed
+                            .pegin_gateways(20_000, vec![&dev_fed.gw_cln, &dev_fed.gw_lnd]),
                         async {
                             let faucet = process_mgr
                                 .spawn_daemon("devimint-faucet", cmd!(crate::util::Faucet))

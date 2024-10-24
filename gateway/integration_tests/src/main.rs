@@ -98,7 +98,7 @@ async fn backup_restore_test() -> anyhow::Result<()> {
             };
 
             let fed = dev_fed.fed().await?;
-            fed.pegin_gateway(10_000_000, gw).await?;
+            fed.pegin_gateways(10_000_000, vec![gw]).await?;
             let info = serde_json::from_value::<GatewayInfo>(gw.get_info().await?)?;
             let federation_info = info
                 .federations
@@ -488,7 +488,7 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                 // Peg-in sats to gw for the new fed
                 let pegin_amount = Amount::from_msats(10_000_000);
                 new_fed
-                    .pegin_gateway(pegin_amount.sats_round_down(), gw)
+                    .pegin_gateways(pegin_amount.sats_round_down(), vec![gw])
                     .await?;
 
                 // Verify `info` returns multiple federations
