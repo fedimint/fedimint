@@ -214,7 +214,10 @@
 <a href="#213" id="213">213</a>
 <a href="#214" id="214">214</a>
 <a href="#215" id="215">215</a>
-<a href="#216" id="216">216</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 
@@ -347,7 +350,10 @@
 
     <span class="doccomment">/// DB migrations to move from old to newer versions
     </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt; {
-        <span class="kw">let </span>migrations: BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt; = BTreeMap::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>migrations: BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt; = BTreeMap::new();
+        <span class="comment">// Unknown module prior to v0.5.0 had a `DATABASE_VERSION` of 1, so we must
+        // insert a no-op migration to ensure that upgrades work.
+        </span>migrations.insert(DatabaseVersion(<span class="number">0</span>), |<span class="kw">_</span>| Box::pin(<span class="kw">async </span>{ <span class="prelude-val">Ok</span>(()) }));
         migrations
     }
 }

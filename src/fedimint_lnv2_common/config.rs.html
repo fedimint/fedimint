@@ -275,7 +275,7 @@
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>LightningConfigPrivate {
-    <span class="kw">pub </span>tpe_sk: SecretKeyShare,
+    <span class="kw">pub </span>sk: SecretKeyShare,
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -384,7 +384,7 @@
     config: <span class="kw-2">&amp;</span>fedimint_ln_common::config::LightningConfigPrivate,
 ) -&gt; LightningConfigPrivate {
     LightningConfigPrivate {
-        tpe_sk: SecretKeyShare(config.threshold_sec_key.<span class="number">0 </span>.<span class="number">0 </span>.<span class="number">0</span>),
+        sk: SecretKeyShare(config.threshold_sec_key.<span class="number">0 </span>.<span class="number">0 </span>.<span class="number">0</span>),
     }
 }
 

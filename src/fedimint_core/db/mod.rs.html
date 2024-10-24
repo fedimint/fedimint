@@ -5842,7 +5842,7 @@
 
         <span class="kw">if </span>current_db_version &gt; target_db_version {
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="macro">format!</span>(
-                <span class="string">"On disk database version for module {kind} was higher than the code database version."
+                <span class="string">"On disk database version {current_db_version} for module {kind} was higher than the code database version {target_db_version}."
             </span>)));
         }
 

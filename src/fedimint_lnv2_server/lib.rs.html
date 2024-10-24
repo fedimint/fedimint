@@ -1001,7 +1001,7 @@
                             network: params.consensus.network,
                         },
                         private: LightningConfigPrivate {
-                            tpe_sk: sks[peer.to_usize()],
+                            sk: sks[peer.to_usize()],
                         },
                     }
                     .to_erased(),
@@ -1043,7 +1043,7 @@
                 network: params.consensus.network,
             },
             private: LightningConfigPrivate {
-                tpe_sk: SecretKeyShare(sk),
+                sk: SecretKeyShare(sk),
             },
         };
 
@@ -1054,7 +1054,7 @@
         <span class="kw">let </span>config = config.to_typed::&lt;LightningConfig&gt;()<span class="question-mark">?</span>;
 
         <span class="macro">ensure!</span>(
-            tpe::derive_public_key_share(<span class="kw-2">&amp;</span>config.private.tpe_sk)
+            tpe::derive_public_key_share(<span class="kw-2">&amp;</span>config.private.sk)
                 == <span class="kw-2">*</span>config
                     .consensus
                     .tpe_pks
@@ -1286,7 +1286,7 @@
                     <span class="kw">return </span><span class="prelude-val">Err</span>(LightningOutputError::ContractAlreadyExists);
                 }
 
-                <span class="kw">let </span>dk_share = contract.create_decryption_key_share(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.private.tpe_sk);
+                <span class="kw">let </span>dk_share = contract.create_decryption_key_share(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.private.sk);
 
                 LightningOutputOutcomeV0::Incoming(dk_share)
             }
