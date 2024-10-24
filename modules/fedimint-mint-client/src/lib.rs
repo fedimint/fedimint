@@ -1298,7 +1298,14 @@ impl MintClientModule {
                             user_triggered: true,
                             transaction_id: refund.refund_txid,
                         }),
-                        MintOOBStates::Created(_) | MintOOBStates::CreatedMulti(_) => None,
+                        MintOOBStates::UserRefundMulti(refund) => Some(SpendOOBRefund {
+                            user_triggered: true,
+                            transaction_id: refund.refund_txid,
+                        }),
+                        MintOOBStates::Created(_)
+                        | MintOOBStates::CreatedMulti(_)
+                        | MintOOBStates::RefundedMulti
+                        | MintOOBStates::RefundedMultiFallback(_) => None,
                     }
                 }),
         )
