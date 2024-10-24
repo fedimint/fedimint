@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["GlobalFederationApiWithCache"]};
+window.SIDEBAR_ITEMS = {"struct":["GlobalFederationApiWithCache"],"trait":["GlobalFederationApiWithCacheExt"]};

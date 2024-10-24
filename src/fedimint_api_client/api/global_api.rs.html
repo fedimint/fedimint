@@ -481,7 +481,27 @@
 <a href="#480" id="480">480</a>
 <a href="#481" id="481">481</a>
 <a href="#482" id="482">482</a>
-<a href="#483" id="483">483</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
+<a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
+<a href="#501" id="501">501</a>
+<a href="#502" id="502">502</a>
+<a href="#503" id="503">503</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::num::NonZeroUsize;
 <span class="kw">use </span>std::result;
@@ -532,8 +552,28 @@
 };
 <span class="kw">use </span><span class="kw">crate</span>::query::FilterMapThreshold;
 
+<span class="doccomment">/// Convenience extension trait used for wrapping [`IRawFederationApi`] in
+/// a [`GlobalFederationApiWithCache`]
+</span><span class="kw">pub trait </span>GlobalFederationApiWithCacheExt
+<span class="kw">where
+    </span><span class="self">Self</span>: Sized,
+{
+    <span class="kw">fn </span>with_cache(<span class="self">self</span>) -&gt; GlobalFederationApiWithCache&lt;<span class="self">Self</span>&gt;;
+}
+
+<span class="kw">impl</span>&lt;T&gt; GlobalFederationApiWithCacheExt <span class="kw">for </span>T
+<span class="kw">where
+    </span>T: IRawFederationApi + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
+{
+    <span class="kw">fn </span>with_cache(<span class="self">self</span>) -&gt; GlobalFederationApiWithCache&lt;T&gt; {
+        GlobalFederationApiWithCache::new(<span class="self">self</span>)
+    }
+}
+
 <span class="doccomment">/// [`IGlobalFederationApi`] wrapping some `T: IRawFederationApi` and adding
 /// a tiny bit of caching.
+///
+/// Use [`GlobalFederationApiWithCacheExt::with_cache`] to create.
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>GlobalFederationApiWithCache&lt;T&gt; {
     inner: T,

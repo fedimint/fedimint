@@ -3040,7 +3040,59 @@
 <a href="#3039" id="3039">3039</a>
 <a href="#3040" id="3040">3040</a>
 <a href="#3041" id="3041">3041</a>
-<a href="#3042" id="3042">3042</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#3042" id="3042">3042</a>
+<a href="#3043" id="3043">3043</a>
+<a href="#3044" id="3044">3044</a>
+<a href="#3045" id="3045">3045</a>
+<a href="#3046" id="3046">3046</a>
+<a href="#3047" id="3047">3047</a>
+<a href="#3048" id="3048">3048</a>
+<a href="#3049" id="3049">3049</a>
+<a href="#3050" id="3050">3050</a>
+<a href="#3051" id="3051">3051</a>
+<a href="#3052" id="3052">3052</a>
+<a href="#3053" id="3053">3053</a>
+<a href="#3054" id="3054">3054</a>
+<a href="#3055" id="3055">3055</a>
+<a href="#3056" id="3056">3056</a>
+<a href="#3057" id="3057">3057</a>
+<a href="#3058" id="3058">3058</a>
+<a href="#3059" id="3059">3059</a>
+<a href="#3060" id="3060">3060</a>
+<a href="#3061" id="3061">3061</a>
+<a href="#3062" id="3062">3062</a>
+<a href="#3063" id="3063">3063</a>
+<a href="#3064" id="3064">3064</a>
+<a href="#3065" id="3065">3065</a>
+<a href="#3066" id="3066">3066</a>
+<a href="#3067" id="3067">3067</a>
+<a href="#3068" id="3068">3068</a>
+<a href="#3069" id="3069">3069</a>
+<a href="#3070" id="3070">3070</a>
+<a href="#3071" id="3071">3071</a>
+<a href="#3072" id="3072">3072</a>
+<a href="#3073" id="3073">3073</a>
+<a href="#3074" id="3074">3074</a>
+<a href="#3075" id="3075">3075</a>
+<a href="#3076" id="3076">3076</a>
+<a href="#3077" id="3077">3077</a>
+<a href="#3078" id="3078">3078</a>
+<a href="#3079" id="3079">3079</a>
+<a href="#3080" id="3080">3080</a>
+<a href="#3081" id="3081">3081</a>
+<a href="#3082" id="3082">3082</a>
+<a href="#3083" id="3083">3083</a>
+<a href="#3084" id="3084">3084</a>
+<a href="#3085" id="3085">3085</a>
+<a href="#3086" id="3086">3086</a>
+<a href="#3087" id="3087">3087</a>
+<a href="#3088" id="3088">3088</a>
+<a href="#3089" id="3089">3089</a>
+<a href="#3090" id="3090">3090</a>
+<a href="#3091" id="3091">3091</a>
+<a href="#3092" id="3092">3092</a>
+<a href="#3093" id="3093">3093</a>
+<a href="#3094" id="3094">3094</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
@@ -3130,6 +3182,7 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{anyhow, bail, ensure, format_err, Context};
+<span class="kw">use </span>api::ClientRawFederationApiExt <span class="kw">as _</span>;
 <span class="kw">use </span>async_stream::{stream, try_stream};
 <span class="kw">use </span>backup::ClientBackup;
 <span class="kw">use </span>bitcoin30::secp256k1;
@@ -3145,7 +3198,8 @@
 };
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
 <span class="kw">use </span>fedimint_api_client::api::{
-    ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
+    ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, GlobalFederationApiWithCacheExt,
+    IGlobalFederationApi, WsFederationApi,
 };
 <span class="kw">use </span>fedimint_core::config::{
     ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig, ModuleInitRegistry,
@@ -3189,7 +3243,7 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
 </span><span class="kw">use </span>tokio::runtime::{Handle <span class="kw">as </span>RuntimeHandle, RuntimeFlavor};
-<span class="kw">use </span>tokio::sync::{watch, RwLock};
+<span class="kw">use </span>tokio::sync::{broadcast, watch, RwLock};
 <span class="kw">use </span>tokio_stream::wrappers::WatchStream;
 <span class="kw">use </span>tracing::{debug, error, info, trace, warn};
 <span class="kw">use </span>transaction::{ClientInputBundle, ClientInputSM, TxSubmissionStatesSM};
@@ -3211,6 +3265,8 @@
     tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder, TxSubmissionContext,
     TxSubmissionStates, TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
+
+<span class="kw">pub mod </span>api;
 
 <span class="doccomment">/// Client backup
 </span><span class="kw">pub mod </span>backup;
@@ -3367,6 +3423,7 @@
         kind: EventKind,
         module: <span class="prelude-ty">Option</span>&lt;(ModuleKind, ModuleInstanceId)&gt;,
         payload: serde_json::Value,
+        transient: bool,
     );
 
     <span class="kw">async fn </span>transaction_update_stream(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;TxSubmissionStatesSM&gt;;
@@ -3420,6 +3477,7 @@
         _kind: EventKind,
         _module: <span class="prelude-ty">Option</span>&lt;(ModuleKind, ModuleInstanceId)&gt;,
         _payload: serde_json::Value,
+        _transient: bool,
     ) {
         <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
     }
@@ -3521,6 +3579,7 @@
             E::KIND,
             E::MODULE.map(|m| (m, dbtx.module_id())),
             serde_json::to_value(<span class="kw-2">&amp;</span>event).expect(<span class="string">"Payload serialization can't fail"</span>),
+            &lt;E <span class="kw">as </span>Event&gt;::PERSIST,
         )
         .<span class="kw">await</span>;
     }
@@ -3665,6 +3724,7 @@
         kind: EventKind,
         module: <span class="prelude-ty">Option</span>&lt;(ModuleKind, ModuleInstanceId)&gt;,
         payload: serde_json::Value,
+        transient: bool,
     ) {
         <span class="self">self</span>.client
             .log_event_raw_dbtx(
@@ -3672,6 +3732,7 @@
                 kind,
                 module,
                 serde_json::to_vec(<span class="kw-2">&amp;</span>payload).expect(<span class="string">"Serialization can't fail"</span>),
+                transient,
             )
             .<span class="kw">await</span>;
     }
@@ -3945,6 +4006,7 @@
     </span>log_ordering_wakeup_tx: watch::Sender&lt;()&gt;,
     <span class="doccomment">/// Receiver for events fired every time (ordered) log event is added.
     </span>log_event_added_rx: watch::Receiver&lt;()&gt;,
+    log_event_added_transient_tx: broadcast::Sender&lt;EventLogEntry&gt;,
 }
 
 <span class="kw">impl </span>Client {
@@ -5202,6 +5264,7 @@
         kind: EventKind,
         module: <span class="prelude-ty">Option</span>&lt;(ModuleKind, ModuleInstanceId)&gt;,
         payload: Vec&lt;u8&gt;,
+        transient: bool,
     ) <span class="kw">where
         </span>Cap: Send,
     {
@@ -5213,6 +5276,7 @@
             module_kind,
             module_id,
             payload,
+            transient,
         )
         .<span class="kw">await</span>;
     }
@@ -5265,6 +5329,11 @@
     {
         dbtx.get_event_log(pos, limit).<span class="kw">await
     </span>}
+
+    <span class="doccomment">/// Register to receiver all new transient (unpersisted) events
+    </span><span class="kw">pub fn </span>get_event_log_transient_receiver(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; broadcast::Receiver&lt;EventLogEntry&gt; {
+        <span class="self">self</span>.log_event_added_transient_tx.subscribe()
+    }
 }
 
 <span class="attr">#[derive(Deserialize)]
@@ -5316,11 +5385,14 @@
     meta_service: Arc&lt;MetaService&gt;,
     connector: Connector,
     stopped: bool,
+    log_event_added_transient_tx: broadcast::Sender&lt;EventLogEntry&gt;,
 }
 
 <span class="kw">impl </span>ClientBuilder {
     <span class="kw">fn </span>new(db: Database) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>meta_service = MetaService::new(LegacyMetaSource::default());
+        <span class="kw">let </span>(log_event_added_transient_tx, _log_event_added_transient_rx) =
+            broadcast::channel(<span class="number">1024</span>);
         ClientBuilder {
             module_inits: ModuleInitRegistry::new(),
             primary_module_instance: <span class="prelude-val">None</span>,
@@ -5329,6 +5401,7 @@
             db_no_decoders: db,
             stopped: <span class="bool-val">false</span>,
             meta_service,
+            log_event_added_transient_tx,
         }
     }
 
@@ -5342,6 +5415,7 @@
             <span class="comment">// non unique
             </span>meta_service: client.meta_service.clone(),
             connector: client.connector,
+            log_event_added_transient_tx: client.log_event_added_transient_tx.clone(),
         }
     }
 
@@ -5646,8 +5720,14 @@
         <span class="kw">let </span>api_secret = Client::get_api_secret_from_db(<span class="kw-2">&amp;</span><span class="self">self</span>.db_no_decoders).<span class="kw">await</span>;
         <span class="kw">let </span>stopped = <span class="self">self</span>.stopped;
 
+        <span class="kw">let </span>log_event_added_transient_tx = <span class="self">self</span>.log_event_added_transient_tx.clone();
         <span class="kw">let </span>client = <span class="self">self
-            </span>.build_stopped(pre_root_secret, <span class="kw-2">&amp;</span>config, api_secret)
+            </span>.build_stopped(
+                pre_root_secret,
+                <span class="kw-2">&amp;</span>config,
+                api_secret,
+                log_event_added_transient_tx,
+            )
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>!stopped {
             client.as_inner().start_executor().<span class="kw">await</span>;
@@ -5663,8 +5743,14 @@
         api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
         stopped: bool,
     ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
+        <span class="kw">let </span>log_event_added_transient_tx = <span class="self">self</span>.log_event_added_transient_tx.clone();
         <span class="kw">let </span>client = <span class="self">self
-            </span>.build_stopped(pre_root_secret, <span class="kw-2">&amp;</span>config, api_secret)
+            </span>.build_stopped(
+                pre_root_secret,
+                <span class="kw-2">&amp;</span>config,
+                api_secret,
+                log_event_added_transient_tx,
+            )
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>!stopped {
             client.as_inner().start_executor().<span class="kw">await</span>;
@@ -5680,7 +5766,11 @@
         root_secret: DerivableSecret,
         config: <span class="kw-2">&amp;</span>ClientConfig,
         api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+        log_event_added_transient_tx: broadcast::Sender&lt;EventLogEntry&gt;,
     ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
+        <span class="kw">let </span>(log_event_added_tx, log_event_added_rx) = watch::channel(());
+        <span class="kw">let </span>(log_ordering_wakeup_tx, log_ordering_wakeup_rx) = watch::channel(());
+
         <span class="kw">let </span>decoders = <span class="self">self</span>.decoders(config);
         <span class="kw">let </span>config = <span class="self">Self</span>::config_decoded(config, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
         <span class="kw">let </span>fed_id = config.calculate_federation_id();
@@ -5688,7 +5778,7 @@
         <span class="kw">let </span>connector = <span class="self">self</span>.connector;
         <span class="kw">let </span>peer_urls = get_api_urls(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>config).<span class="kw">await</span>;
         <span class="kw">let </span>api = <span class="kw">if let </span><span class="prelude-val">Some</span>(admin_creds) = <span class="self">self</span>.admin_creds.as_ref() {
-            DynGlobalApi::new_admin(
+            WsFederationApi::new_admin(
                 admin_creds.peer_id,
                 peer_urls
                     .into_iter()
@@ -5697,8 +5787,14 @@
                 <span class="kw-2">&amp;</span>api_secret,
                 <span class="kw-2">&amp;</span>connector,
             )
+            .with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
+            .with_cache()
+            .into()
         } <span class="kw">else </span>{
-            DynGlobalApi::from_endpoints(peer_urls, <span class="kw-2">&amp;</span>api_secret, <span class="kw-2">&amp;</span>connector)
+            WsFederationApi::from_endpoints(peer_urls, <span class="kw-2">&amp;</span>api_secret, <span class="kw-2">&amp;</span>connector)
+                .with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
+                .with_cache()
+                .into()
         };
         <span class="kw">let </span>task_group = TaskGroup::new();
 
@@ -5732,9 +5828,6 @@
         });
 
         <span class="macro">debug!</span>(<span class="question-mark">?</span>common_api_versions, <span class="string">"Completed api version negotiation"</span>);
-
-        <span class="kw">let </span>(log_event_added_tx, log_event_added_rx) = watch::channel(());
-        <span class="kw">let </span>(log_ordering_wakeup_tx, log_ordering_wakeup_rx) = watch::channel(());
 
         <span class="kw">let </span><span class="kw-2">mut </span>module_recoveries: BTreeMap&lt;
             ModuleInstanceId,
@@ -5947,6 +6040,7 @@
             module_inits: <span class="self">self</span>.module_inits.clone(),
             log_ordering_wakeup_tx,
             log_event_added_rx,
+            log_event_added_transient_tx: log_event_added_transient_tx.clone(),
             executor,
             api,
             secp_ctx: Secp256k1::new(),
@@ -5976,7 +6070,12 @@
 
         client_inner.task_group.spawn_cancellable(
             <span class="string">"event log ordering task"</span>,
-            run_event_log_ordering_task(db.clone(), log_ordering_wakeup_rx, log_event_added_tx),
+            run_event_log_ordering_task(
+                db.clone(),
+                log_ordering_wakeup_rx,
+                log_event_added_tx,
+                log_event_added_transient_tx,
+            ),
         );
         <span class="kw">let </span>client_arc = ClientHandle::new(client_inner);
 
@@ -6042,6 +6141,11 @@
         config: <span class="kw-2">&amp;</span>ClientConfig,
     ) -&gt; DerivableSecret {
         root_secret.federation_key(<span class="kw-2">&amp;</span>config.global.calculate_federation_id())
+    }
+
+    <span class="doccomment">/// Register to receiver all new transient (unpersisted) events
+    </span><span class="kw">pub fn </span>get_event_log_transient_receiver(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; broadcast::Receiver&lt;EventLogEntry&gt; {
+        <span class="self">self</span>.log_event_added_transient_tx.subscribe()
     }
 }
 
