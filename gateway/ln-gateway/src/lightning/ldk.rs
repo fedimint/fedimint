@@ -124,17 +124,13 @@ impl GatewayLdkClient {
         // manually syncs the chain.
         if is_env_var_set(FM_IN_DEVIMINT_ENV) {
             let node_clone = node.clone();
-            task_group.spawn("ldk node sync event handler", |handle| async move {
+            task_group.spawn_cancellable("ldk node sync event handler", async move {
                 loop {
-                    if handle.is_shutting_down() {
-                        return;
-                    }
-
                     if let Err(e) = node_clone.sync_wallets() {
                         error!(?e, "Failed to sync LDK Node to chain");
                     }
 
-                    sleep(Duration::from_millis(1)).await;
+                    sleep(Duration::from_millis(500)).await;
                 }
             });
         }
@@ -159,6 +155,9 @@ impl GatewayLdkClient {
         htlc_stream_sender: &Sender<InterceptPaymentRequest>,
         handle: &TaskHandle,
     ) {
+        // We manually check for task termination in case we receive a payment while the
+        // task is shutting down. In that case, we want to finish the payment
+        // before shutting this task down.
         let event = tokio::select! {
             event = node.next_event_async() => {
                 event
@@ -250,7 +249,7 @@ impl ILnRpcClient for GatewayLdkClient {
     async fn info(&self) -> Result<GetNodeInfoResponse, LightningRpcError> {
         let node_status = self.node.status();
 
-        let Some(chain_tip_block_summary) = self
+        let Some(esplora_chain_tip_block_summary) = self
             .esplora_client
             .get_blocks(None)
             .await
@@ -267,17 +266,14 @@ impl ILnRpcClient for GatewayLdkClient {
             });
         };
 
-        let esplora_chain_tip_timestamp = chain_tip_block_summary.time.timestamp;
-        let block_height: u32 = chain_tip_block_summary.time.height;
+        let esplora_chain_tip_block_height = esplora_chain_tip_block_summary.time.height;
+        let ldk_block_height: u32 = node_status.current_best_block.height;
+        let synced_to_chain = esplora_chain_tip_block_height == ldk_block_height;
 
-        let synced_to_chain = node_status
-            .latest_lightning_wallet_sync_timestamp
-            .unwrap_or_default()
-            > esplora_chain_tip_timestamp
-            && node_status
-                .latest_onchain_wallet_sync_timestamp
-                .unwrap_or_default()
-                > esplora_chain_tip_timestamp;
+        assert!(
+            esplora_chain_tip_block_height >= ldk_block_height,
+            "LDK Block Height is in the future"
+        );
 
         Ok(GetNodeInfoResponse {
             pub_key: bitcoin32_to_bitcoin30_secp256k1_pubkey(&self.node.node_id()),
@@ -286,7 +282,7 @@ impl ILnRpcClient for GatewayLdkClient {
                 None => format!("LDK Fedimint Gateway Node {}", self.node.node_id()),
             },
             network: self.node.config().network.to_string(),
-            block_height,
+            block_height: ldk_block_height,
             synced_to_chain,
         })
     }

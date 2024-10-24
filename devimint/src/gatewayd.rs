@@ -404,7 +404,7 @@ impl Gatewayd {
             let gateway_info: GatewayInfo =
                 serde_json::from_value(info).expect("Failed to decode GatewayInfo");
             if let Some(height) = gateway_info.block_height {
-                if height >= target_block_height as u32 && gateway_info.synced_to_chain {
+                if height >= target_block_height as u32 {
                     return Ok(());
                 }
             }

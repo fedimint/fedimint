@@ -160,6 +160,8 @@ const DEFAULT_MODULE_KINDS: [(ModuleInstanceId, &ModuleKind); 2] = [
 ///    Initializing -- gateway needs config --> Configuring
 ///    Configuring -- configuration set --> Connected
 ///    Connected -- load federation clients --> Running
+///    Connected -- not synced to chain --> Syncing
+///    Syncing -- load federation clients --> Running
 ///    Running -- disconnected from lightning node --> Disconnected
 ///    Disconnected -- re-established lightning connection --> Connected
 /// ```
@@ -167,6 +169,7 @@ const DEFAULT_MODULE_KINDS: [(ModuleInstanceId, &ModuleKind); 2] = [
 pub enum GatewayState {
     Initializing,
     Configuring,
+    Syncing,
     Connected,
     Running { lightning_context: LightningContext },
     Disconnected,
@@ -178,6 +181,7 @@ impl Display for GatewayState {
         match self {
             GatewayState::Initializing => write!(f, "Initializing"),
             GatewayState::Configuring => write!(f, "Configuring"),
+            GatewayState::Syncing => write!(f, "Syncing"),
             GatewayState::Connected => write!(f, "Connected"),
             GatewayState::Running { .. } => write!(f, "Running"),
             GatewayState::Disconnected => write!(f, "Disconnected"),
@@ -484,15 +488,20 @@ impl Gateway {
         mut stream: RouteHtlcStream<'a>,
         ln_client: Arc<dyn ILnRpcClient>,
     ) -> ReceivePaymentStreamAction {
-        let (lightning_public_key, lightning_alias, lightning_network) =
+        let (lightning_public_key, lightning_alias, lightning_network, synced_to_chain) =
             match ln_client.parsed_node_info().await {
                 Ok((
                     lightning_public_key,
                     lightning_alias,
                     lightning_network,
                     _block_height,
-                    _synced_to_chain,
-                )) => (lightning_public_key, lightning_alias, lightning_network),
+                    synced_to_chain,
+                )) => (
+                    lightning_public_key,
+                    lightning_alias,
+                    lightning_network,
+                    synced_to_chain,
+                ),
                 Err(e) => {
                     warn!("Failed to retrieve Lightning info: {e:?}");
                     return ReceivePaymentStreamAction::RetryAfterDelay;
@@ -528,6 +537,16 @@ impl Gateway {
             .await
             .expect("Failed to set gateway configuration");
             return ReceivePaymentStreamAction::ImmediatelyRetry;
+        }
+
+        if synced_to_chain {
+            info!("Gateway is already synced to chain");
+        } else {
+            self.set_gateway_state(GatewayState::Syncing).await;
+            if let Err(e) = ln_client.wait_for_chain_sync().await {
+                error!(?e, "Failed to wait for chain sync");
+                return ReceivePaymentStreamAction::RetryAfterDelay;
+            }
         }
 
         let lightning_context = LightningContext {
