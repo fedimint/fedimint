@@ -2,11 +2,13 @@ use std::fmt::Display;
 
 use axum::response::{IntoResponse, Response};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
+use fedimint_core::envs::is_env_var_set;
 use fedimint_core::fmt_utils::OptStacktrace;
 use reqwest::StatusCode;
 use thiserror::Error;
 use tracing::error;
 
+use crate::envs::FM_DEBUG_GATEWAY_ENV;
 use crate::lightning::LightningRpcError;
 use crate::state_machine::pay::OutgoingPaymentError;
 
@@ -33,7 +35,7 @@ impl IntoResponse for PublicGatewayError {
         // the request back to the client to prevent malicious clients from
         // deducing state about the gateway/lightning node.
         error!("{self}");
-        let (error_message, status_code) = match self {
+        let (error_message, status_code) = match &self {
             PublicGatewayError::FederationNotConnected(e) => {
                 (e.to_string(), StatusCode::BAD_REQUEST)
             }
@@ -53,6 +55,12 @@ impl IntoResponse for PublicGatewayError {
                 "LNv2 operation failed, please contact gateway operator".to_string(),
                 StatusCode::INTERNAL_SERVER_ERROR,
             ),
+        };
+
+        let error_message = if is_env_var_set(FM_DEBUG_GATEWAY_ENV) {
+            self.to_string()
+        } else {
+            error_message
         };
 
         Response::builder()
