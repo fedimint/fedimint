@@ -11,7 +11,7 @@ use bitcoin::network::Network;
 use bitcoin::OutPoint;
 use clap::{ArgGroup, Parser, Subcommand};
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_network, bitcoin30_to_bitcoin32_outpoint,
+    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_outpoint,
     bitcoin30_to_bitcoin32_secp256k1_secret_key,
 };
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
@@ -129,7 +129,7 @@ async fn main() -> anyhow::Result<()> {
             .expect("Malformed wallet config");
         let base_descriptor = wallet_cfg.consensus.peg_in_descriptor;
         let base_key = wallet_cfg.private.peg_in_key;
-        let network = bitcoin30_to_bitcoin32_network(&wallet_cfg.consensus.network);
+        let network = wallet_cfg.consensus.network;
 
         (base_descriptor, base_key, network)
     } else if let (Some(descriptor), Some(key)) = (opts.descriptor, opts.key) {

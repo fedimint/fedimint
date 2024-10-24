@@ -7,9 +7,10 @@
 
 use std::hash::Hasher;
 
+use bitcoin::Network;
 use bitcoin30::address::NetworkUnchecked;
 use bitcoin30::psbt::raw::ProprietaryKey;
-use bitcoin30::{Address, Amount, BlockHash, Network, Txid};
+use bitcoin30::{Address, Amount, BlockHash, Txid};
 use config::WalletClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};

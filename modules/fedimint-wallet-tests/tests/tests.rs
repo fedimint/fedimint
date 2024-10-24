@@ -7,7 +7,10 @@ use assert_matches::assert_matches;
 use bitcoin30::secp256k1;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::ClientHandleArc;
-use fedimint_core::bitcoin_migration::checked_address_to_unchecked_address;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_network, bitcoin32_to_bitcoin30_network,
+    checked_address_to_unchecked_address,
+};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
 use fedimint_core::envs::BitcoinRpcConfig;
@@ -631,9 +634,9 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     let wallet_config: WalletConfig = wallet_server_cfg[0].to_typed()?;
     let peg_in_descriptor = wallet_config.consensus.peg_in_descriptor;
 
-    let peg_in_address = peg_in_descriptor
-        .tweak(&pk, secp256k1::SECP256K1)
-        .address(wallet_config.consensus.network)?;
+    let peg_in_address = peg_in_descriptor.tweak(&pk, secp256k1::SECP256K1).address(
+        bitcoin32_to_bitcoin30_network(&wallet_config.consensus.network),
+    )?;
 
     let mut wallet = fedimint_wallet_server::Wallet::new_with_bitcoind(
         wallet_server_cfg[0].to_typed()?,
@@ -979,7 +982,7 @@ fn build_wallet_server_configs(
                 bitcoin_rpc: bitcoin_rpc.clone(),
             },
             consensus: fedimint_wallet_common::config::WalletGenParamsConsensus {
-                network: bitcoin30::Network::Regtest,
+                network: bitcoin30_to_bitcoin32_network(&bitcoin30::Network::Regtest),
                 finality_delay: 10,
                 client_default_bitcoin_rpc: bitcoin_rpc.clone(),
                 fee_consensus: Default::default(),

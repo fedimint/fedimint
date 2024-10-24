@@ -47,6 +47,9 @@ use fedimint_bip39::{Bip39RootSecretStrategy, Language, Mnemonic};
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{Client, ClientHandleArc};
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_network, bitcoin32_to_bitcoin30_network,
+};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -506,7 +509,7 @@ impl Gateway {
                 .await
         };
 
-        if gateway_config.network != lightning_network {
+        if bitcoin32_to_bitcoin30_network(&gateway_config.network) != lightning_network {
             warn!(
                 "Lightning node does not match previously configured gateway network : ({:?})",
                 gateway_config.network
@@ -805,7 +808,7 @@ impl Gateway {
             lightning_alias: Some(lightning_context.lightning_alias.clone()),
             gateway_id: self.gateway_id,
             gateway_state: self.state.read().await.to_string(),
-            network: Some(gateway_config.network),
+            network: Some(bitcoin32_to_bitcoin30_network(&gateway_config.network)),
             block_height: Some(node_info.3),
             synced_to_chain: node_info.4,
             api: self.versioned_api.clone(),
@@ -1159,7 +1162,11 @@ impl Gateway {
         };
 
         if self.is_running_lnv1() {
-            Self::check_lnv1_federation_network(&client, gateway_config.network).await?;
+            Self::check_lnv1_federation_network(
+                &client,
+                bitcoin32_to_bitcoin30_network(&gateway_config.network),
+            )
+            .await?;
             client
                 .get_first_module::<GatewayClientModule>()?
                 .try_register_with_federation(
@@ -1173,7 +1180,11 @@ impl Gateway {
         }
 
         if self.is_running_lnv2() {
-            Self::check_lnv2_federation_network(&client, gateway_config.network).await?;
+            Self::check_lnv2_federation_network(
+                &client,
+                bitcoin32_to_bitcoin30_network(&gateway_config.network),
+            )
+            .await?;
         }
 
         // no need to enter span earlier, because connect-fed has a span
@@ -1311,7 +1322,7 @@ impl Gateway {
                         "Cannot change network while connected to a federation".to_string(),
                     ));
                 }
-                prev_config.network = network;
+                prev_config.network = bitcoin30_to_bitcoin32_network(&network);
             }
 
             if let Some(num_route_hints) = num_route_hints {
@@ -1335,7 +1346,7 @@ impl Gateway {
 
             GatewayConfiguration {
                 hashed_password,
-                network: lightning_network,
+                network: bitcoin30_to_bitcoin32_network(&lightning_network),
                 num_route_hints: DEFAULT_NUM_ROUTE_HINTS,
                 routing_fees: DEFAULT_FEES,
                 password_salt,
@@ -1690,7 +1701,7 @@ impl Gateway {
         let hashed_password = hash_password(password, password_salt);
         let gateway_config = GatewayConfiguration {
             hashed_password,
-            network,
+            network: bitcoin30_to_bitcoin32_network(&network),
             num_route_hints,
             routing_fees: routing_fees.0,
             password_salt,
@@ -1840,7 +1851,7 @@ impl Gateway {
             ))))?;
         let ln_cfg: &LightningClientConfig = cfg.cast()?;
 
-        if ln_cfg.network != network {
+        if bitcoin32_to_bitcoin30_network(&ln_cfg.network) != network {
             error!(
                 "Federation {federation_id} runs on {} but this gateway supports {network}",
                 ln_cfg.network,
@@ -1871,7 +1882,7 @@ impl Gateway {
             ))))?;
         let ln_cfg: &fedimint_lnv2_common::config::LightningClientConfig = cfg.cast()?;
 
-        if ln_cfg.network != network {
+        if bitcoin32_to_bitcoin30_network(&ln_cfg.network) != network {
             error!(
                 "Federation {federation_id} runs on {} but this gateway supports {network}",
                 ln_cfg.network,
