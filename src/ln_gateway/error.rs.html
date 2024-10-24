@@ -142,15 +142,25 @@
 <a href="#141" id="141">141</a>
 <a href="#142" id="142">142</a>
 <a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 
 <span class="kw">use </span>axum::response::{IntoResponse, Response};
 <span class="kw">use </span>fedimint_core::config::{FederationId, FederationIdPrefix};
+<span class="kw">use </span>fedimint_core::envs::is_env_var_set;
 <span class="kw">use </span>fedimint_core::fmt_utils::OptStacktrace;
 <span class="kw">use </span>reqwest::StatusCode;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::error;
 
+<span class="kw">use </span><span class="kw">crate</span>::envs::FM_DEBUG_GATEWAY_ENV;
 <span class="kw">use </span><span class="kw">crate</span>::lightning::LightningRpcError;
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::pay::OutgoingPaymentError;
 
@@ -177,7 +187,7 @@
         // the request back to the client to prevent malicious clients from
         // deducing state about the gateway/lightning node.
         </span><span class="macro">error!</span>(<span class="string">"{self}"</span>);
-        <span class="kw">let </span>(error_message, status_code) = <span class="kw">match </span><span class="self">self </span>{
+        <span class="kw">let </span>(error_message, status_code) = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self </span>{
             PublicGatewayError::FederationNotConnected(e) =&gt; {
                 (e.to_string(), StatusCode::BAD_REQUEST)
             }
@@ -197,6 +207,12 @@
                 <span class="string">"LNv2 operation failed, please contact gateway operator"</span>.to_string(),
                 StatusCode::INTERNAL_SERVER_ERROR,
             ),
+        };
+
+        <span class="kw">let </span>error_message = <span class="kw">if </span>is_env_var_set(FM_DEBUG_GATEWAY_ENV) {
+            <span class="self">self</span>.to_string()
+        } <span class="kw">else </span>{
+            error_message
         };
 
         Response::builder()
