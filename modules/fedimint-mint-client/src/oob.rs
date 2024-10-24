@@ -14,6 +14,19 @@ use crate::input::{
 };
 use crate::{MintClientContext, MintClientStateMachines, SpendableNote};
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub enum MintOOBStatesV1 {
+    /// The e-cash has been taken out of the wallet and we are waiting for the
+    /// recipient to reissue it or the user to trigger a refund.
+    Created(MintOOBStatesCreated),
+    /// The user has triggered a refund.
+    UserRefund(MintOOBStatesUserRefund),
+    /// The timeout of this out-of-band transaction was hit and we attempted to
+    /// refund. This refund *failing* is the expected behavior since the
+    /// recipient is supposed to have already reissued it.
+    TimeoutRefund(MintOOBStatesTimeoutRefund),
+}
+
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine managing e-cash that has been taken out of the wallet for
 /// out-of-band transmission.
@@ -25,15 +38,24 @@ use crate::{MintClientContext, MintClientStateMachines, SpendableNote};
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum MintOOBStates {
+    // Obsoleted, like [`Self::CratedMulti`] but for a single note only.
+    Created(MintOOBStatesCreated),
     /// The e-cash has been taken out of the wallet and we are waiting for the
     /// recipient to reissue it or the user to trigger a refund.
-    Created(MintOOBStatesCreated),
+    CreatedMulti(MintOOBStatesCreatedMulti),
     /// The user has triggered a refund.
+    UserRefundMulti(MintOOBStatesUserRefundMulti),
+    /// The user has triggered a refund (legacy).
     UserRefund(MintOOBStatesUserRefund),
     /// The timeout of this out-of-band transaction was hit and we attempted to
     /// refund. This refund *failing* is the expected behavior since the
     /// recipient is supposed to have already reissued it.
     TimeoutRefund(MintOOBStatesTimeoutRefund),
+    /// Successfully refunded in a single tx after `UserRefundMulti`
+    RefundedMulti,
+    /// Refunding in a single tx after `UserRefundMulti` failed, started bunch
+    /// of refunds per every spendable note
+    RefundedMultiFallback(MintOOBStatesRefundedMultiFallback),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -50,6 +72,20 @@ pub struct MintOOBStatesCreated {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct MintOOBStatesCreatedMulti {
+    pub(crate) spendable_notes: Vec<(Amount, SpendableNote)>,
+    pub(crate) timeout: SystemTime,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct MintOOBStatesUserRefundMulti {
+    /// The txid we are hoping succeeds refunding all notes in one go
+    pub(crate) refund_txid: TransactionId,
+    /// The notes we are going to refund individually if it doesn't
+    pub(crate) spendable_notes: Vec<(Amount, SpendableNote)>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintOOBStatesUserRefund {
     pub(crate) refund_txid: TransactionId,
 }
@@ -57,6 +93,11 @@ pub struct MintOOBStatesUserRefund {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintOOBStatesTimeoutRefund {
     pub(crate) refund_txid: TransactionId,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct MintOOBStatesRefundedMultiFallback {
+    pub(crate) refund_txids: Vec<TransactionId>,
 }
 
 impl State for MintOOBStateMachine {
@@ -71,7 +112,16 @@ impl State for MintOOBStateMachine {
             MintOOBStates::Created(created) => {
                 created.transitions(self.operation_id, context, global_context)
             }
-            MintOOBStates::UserRefund(_) | MintOOBStates::TimeoutRefund(_) => {
+            MintOOBStates::CreatedMulti(created) => {
+                created.transitions(self.operation_id, context, global_context)
+            }
+            MintOOBStates::UserRefundMulti(refund_multi) => {
+                refund_multi.transitions(global_context)
+            }
+            MintOOBStates::UserRefund(_)
+            | MintOOBStates::TimeoutRefund(_)
+            | MintOOBStates::RefundedMulti
+            | MintOOBStates::RefundedMultiFallback(_) => {
                 vec![]
             }
         }
@@ -112,6 +162,55 @@ impl MintOOBStatesCreated {
     }
 }
 
+impl MintOOBStatesCreatedMulti {
+    fn transitions(
+        &self,
+        operation_id: OperationId,
+        context: &MintClientContext,
+        global_context: &DynGlobalClientContext,
+    ) -> Vec<StateTransition<MintOOBStateMachine>> {
+        let user_cancel_gc = global_context.clone();
+        let timeout_cancel_gc = global_context.clone();
+        vec![
+            StateTransition::new(
+                context.await_cancel_oob_payment(operation_id),
+                move |dbtx, (), state| {
+                    Box::pin(transition_user_cancel_multi(
+                        state,
+                        dbtx,
+                        user_cancel_gc.clone(),
+                    ))
+                },
+            ),
+            StateTransition::new(
+                await_timeout_cancel(self.timeout),
+                move |dbtx, (), state| {
+                    Box::pin(transition_timeout_cancel_multi(
+                        state,
+                        dbtx,
+                        timeout_cancel_gc.clone(),
+                    ))
+                },
+            ),
+        ]
+    }
+}
+
+impl MintOOBStatesUserRefundMulti {
+    fn transitions(
+        &self,
+        global_context: &DynGlobalClientContext,
+    ) -> Vec<StateTransition<MintOOBStateMachine>> {
+        let gc = global_context.clone();
+        let gc2 = global_context.clone();
+        let refund_txid = self.refund_txid;
+        vec![StateTransition::new(
+            async move { gc2.await_tx_accepted(refund_txid).await },
+            move |dbtx, res, state| Box::pin(transition_refund_multi(state, res, dbtx, gc.clone())),
+        )]
+    }
+}
+
 async fn transition_user_cancel(
     prev_state: MintOOBStateMachine,
     dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
@@ -133,6 +232,32 @@ async fn transition_user_cancel(
     MintOOBStateMachine {
         operation_id: prev_state.operation_id,
         state: MintOOBStates::UserRefund(MintOOBStatesUserRefund { refund_txid }),
+    }
+}
+
+async fn transition_user_cancel_multi(
+    prev_state: MintOOBStateMachine,
+    dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+    global_context: DynGlobalClientContext,
+) -> MintOOBStateMachine {
+    let spendable_notes = match prev_state.state {
+        MintOOBStates::CreatedMulti(created) => created.spendable_notes,
+        _ => panic!("Invalid previous state: {prev_state:?}"),
+    };
+
+    let refund_txid = try_cancel_oob_spend_multi(
+        dbtx,
+        prev_state.operation_id,
+        spendable_notes.clone(),
+        global_context,
+    )
+    .await;
+    MintOOBStateMachine {
+        operation_id: prev_state.operation_id,
+        state: MintOOBStates::UserRefundMulti(MintOOBStatesUserRefundMulti {
+            refund_txid,
+            spendable_notes,
+        }),
     }
 }
 
@@ -166,6 +291,68 @@ async fn transition_timeout_cancel(
     }
 }
 
+async fn transition_timeout_cancel_multi(
+    prev_state: MintOOBStateMachine,
+    dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+    global_context: DynGlobalClientContext,
+) -> MintOOBStateMachine {
+    let spendable_notes = match prev_state.state {
+        MintOOBStates::CreatedMulti(created) => created.spendable_notes,
+        _ => panic!("Invalid previous state: {prev_state:?}"),
+    };
+
+    let refund_txid = try_cancel_oob_spend_multi(
+        dbtx,
+        prev_state.operation_id,
+        spendable_notes,
+        global_context,
+    )
+    .await;
+    MintOOBStateMachine {
+        operation_id: prev_state.operation_id,
+        state: MintOOBStates::TimeoutRefund(MintOOBStatesTimeoutRefund { refund_txid }),
+    }
+}
+
+async fn transition_refund_multi(
+    prev_state: MintOOBStateMachine,
+    res: anyhow::Result<(), String>,
+    dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+    global_context: DynGlobalClientContext,
+) -> MintOOBStateMachine {
+    let spendable_notes = match prev_state.state {
+        MintOOBStates::UserRefundMulti(refund) => refund.spendable_notes,
+        _ => panic!("Invalid previous state: {prev_state:?}"),
+    };
+
+    if res.is_ok() {
+        return MintOOBStateMachine {
+            operation_id: prev_state.operation_id,
+            state: MintOOBStates::RefundedMulti,
+        };
+    }
+
+    let mut refund_txids = vec![];
+    for spendable_note in spendable_notes {
+        refund_txids.push(
+            try_cancel_oob_spend_multi(
+                dbtx,
+                prev_state.operation_id,
+                vec![spendable_note],
+                global_context.clone(),
+            )
+            .await,
+        );
+    }
+
+    MintOOBStateMachine {
+        operation_id: prev_state.operation_id,
+        state: MintOOBStates::RefundedMultiFallback(MintOOBStatesRefundedMultiFallback {
+            refund_txids,
+        }),
+    }
+}
+
 async fn try_cancel_oob_spend(
     dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
     operation_id: OperationId,
@@ -173,9 +360,24 @@ async fn try_cancel_oob_spend(
     spendable_note: SpendableNote,
     global_context: DynGlobalClientContext,
 ) -> TransactionId {
-    let (inputs, input_sms) = vec![spendable_note]
+    try_cancel_oob_spend_multi(
+        dbtx,
+        operation_id,
+        vec![(amount, spendable_note)],
+        global_context,
+    )
+    .await
+}
+
+async fn try_cancel_oob_spend_multi(
+    dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+    operation_id: OperationId,
+    spendable_notes: Vec<(Amount, SpendableNote)>,
+    global_context: DynGlobalClientContext,
+) -> TransactionId {
+    let (inputs, input_sms) = spendable_notes
         .into_iter()
-        .map(|spendable_note| {
+        .map(|(amount, spendable_note)| {
             (
                 ClientInput {
                     input: MintInput::new_v0(amount, spendable_note.note()),
