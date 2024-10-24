@@ -8,6 +8,7 @@ use esplora_client::Txid;
 use fedimint_core::config::FederationId;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
+use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_testing::gateway::LightningNodeType;
 use ln_gateway::envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV;
 use ln_gateway::lightning::ChannelInfo;
@@ -298,6 +299,21 @@ impl Gatewayd {
         Ok(())
     }
 
+    pub async fn create_invoice(&self, amount_msats: u64) -> Result<Bolt11Invoice> {
+        Ok(Bolt11Invoice::from_str(
+            &cmd!(self, "lightning", "create-invoice", amount_msats)
+                .out_string()
+                .await?,
+        )?)
+    }
+
+    pub async fn pay_invoice(&self, invoice: Bolt11Invoice) -> Result<()> {
+        cmd!(self, "lightning", "pay-invoice", invoice.to_string())
+            .run()
+            .await?;
+
+        Ok(())
+    }
     /// Open a channel with the gateway's lightning node.
     /// Returns the txid of the funding transaction if the gateway is a new
     /// enough version to return it. Otherwise, returns `None`.

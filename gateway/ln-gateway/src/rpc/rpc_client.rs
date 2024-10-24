@@ -11,7 +11,8 @@ use fedimint_ln_common::gateway_endpoint_constants::{
     SYNC_TO_CHAIN_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 use fedimint_lnv2_common::endpoint_constants::{
-    CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT, PAY_INVOICE_SELF_ENDPOINT, WITHDRAW_ONCHAIN_ENDPOINT,
+    CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
+    WITHDRAW_ONCHAIN_ENDPOINT,
 };
 use lightning_invoice::Bolt11Invoice;
 use reqwest::{Method, StatusCode};
@@ -21,9 +22,9 @@ use thiserror::Error;
 
 use super::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConfigPayload, ConnectFedPayload,
-    CreateInvoiceForSelfPayload, DepositAddressPayload, FederationInfo, GatewayBalances,
+    CreateInvoiceForOperatorPayload, DepositAddressPayload, FederationInfo, GatewayBalances,
     GatewayFedConfig, GatewayInfo, GetLnOnchainAddressPayload, LeaveFedPayload, MnemonicResponse,
-    OpenChannelPayload, PayInvoicePayload, ReceiveEcashPayload, ReceiveEcashResponse,
+    OpenChannelPayload, PayInvoiceForOperatorPayload, ReceiveEcashPayload, ReceiveEcashResponse,
     SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, SyncToChainPayload,
     WithdrawOnchainPayload, WithdrawPayload,
 };
@@ -148,19 +149,22 @@ impl GatewayRpcClient {
 
     pub async fn create_invoice_for_self(
         &self,
-        payload: CreateInvoiceForSelfPayload,
+        payload: CreateInvoiceForOperatorPayload,
     ) -> GatewayRpcResult<Bolt11Invoice> {
         let url = self
             .base_url
-            .join(CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT)
+            .join(CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT)
             .expect("invalid base url");
         self.call_post(url, payload).await
     }
 
-    pub async fn pay_invoice(&self, payload: PayInvoicePayload) -> GatewayRpcResult<String> {
+    pub async fn pay_invoice(
+        &self,
+        payload: PayInvoiceForOperatorPayload,
+    ) -> GatewayRpcResult<String> {
         let url = self
             .base_url
-            .join(PAY_INVOICE_SELF_ENDPOINT)
+            .join(PAY_INVOICE_FOR_OPERATOR_ENDPOINT)
             .expect("invalid base url");
         self.call_post(url, payload).await
     }
