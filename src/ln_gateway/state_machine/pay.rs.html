@@ -941,13 +941,12 @@
 <a href="#940" id="940">940</a>
 <a href="#941" id="941">941</a>
 <a href="#942" id="942">942</a>
-<a href="#943" id="943">943</a>
-<a href="#944" id="944">944</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
+<a href="#943" id="943">943</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-<span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput};
+<span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle, ClientOutput};
 <span class="kw">use </span>fedimint_client::{ClientHandleArc, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::OperationId;
@@ -1658,15 +1657,14 @@
     ) -&gt; GatewayPayStateMachine {
         <span class="macro">debug!</span>(<span class="string">"Claiming outgoing contract {contract:?}"</span>);
         <span class="kw">let </span>claim_input = contract.claim(preimage.clone());
-        <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput, GatewayClientStateMachines&gt; {
+        <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput&gt; {
             input: claim_input,
-            state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
             amount: contract.amount,
             keys: <span class="macro">vec!</span>[context.redeem_key],
         };
 
         <span class="kw">let </span>out_points = global_context
-            .claim_input(dbtx, client_input)
+            .claim_inputs(dbtx, ClientInputBundle::new_no_sm(<span class="macro">vec!</span>[client_input]))
             .<span class="kw">await
             </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>)
             .<span class="number">1</span>;

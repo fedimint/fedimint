@@ -386,9 +386,7 @@
 <a href="#385" id="385">385</a>
 <a href="#386" id="386">386</a>
 <a href="#387" id="387">387</a>
-<a href="#388" id="388">388</a>
-<a href="#389" id="389">389</a>
-<a href="#390" id="390">390</a></pre></div><pre class="rust"><code><span class="doccomment">//! # Incoming State Machine
+<a href="#388" id="388">388</a></pre></div><pre class="rust"><code><span class="doccomment">//! # Incoming State Machine
 //!
 //! This shared state machine is used by clients
 //! that want to pay other clients within the federation
@@ -398,12 +396,11 @@
 //!   - `gateway` for receiving payments into the federation
 
 </span><span class="kw">use </span>core::fmt;
-<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin30::hashes::sha256;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-<span class="kw">use </span>fedimint_client::transaction::ClientInput;
+<span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -740,15 +737,14 @@
     ) -&gt; IncomingStateMachine {
         <span class="macro">debug!</span>(<span class="string">"Refunding incoming contract {contract:?}"</span>);
         <span class="kw">let </span>claim_input = contract.claim();
-        <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput, IncomingStateMachine&gt; {
+        <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput&gt; {
             input: claim_input,
             amount: contract.amount,
-            state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
             keys: <span class="macro">vec!</span>[context.redeem_key],
         };
 
         <span class="kw">let </span>out_points = global_context
-            .claim_input(dbtx, client_input)
+            .claim_inputs(dbtx, ClientInputBundle::new_no_sm(<span class="macro">vec!</span>[client_input]))
             .<span class="kw">await
             </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>)
             .<span class="number">1</span>;

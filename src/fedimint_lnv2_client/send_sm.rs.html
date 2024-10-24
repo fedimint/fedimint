@@ -289,14 +289,12 @@
 <a href="#288" id="288">288</a>
 <a href="#289" id="289">289</a>
 <a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a>
-<a href="#292" id="292">292</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::time::Duration;
+<a href="#291" id="291">291</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin30::hashes::sha256;
 <span class="kw">use </span>bitcoin30::secp256k1;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-<span class="kw">use </span>fedimint_client::transaction::ClientInput;
+<span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::OperationId;
@@ -311,7 +309,7 @@
 <span class="kw">use </span>tracing::error;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::LnFederationApi;
-<span class="kw">use crate</span>::{LightningClientContext, LightningClientStateMachines, LightningInvoice};
+<span class="kw">use crate</span>::{LightningClientContext, LightningInvoice};
 
 <span class="kw">const </span>RETRY_DELAY: Duration = Duration::from_secs(<span class="number">1</span>);
 
@@ -505,19 +503,21 @@
         <span class="kw">match </span>gateway_response {
             <span class="prelude-val">Ok</span>(preimage) =&gt; old_state.update(SendSMState::Success(preimage)),
             <span class="prelude-val">Err</span>(signature) =&gt; {
-                <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput, LightningClientStateMachines&gt; {
+                <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput&gt; {
                     input: LightningInput::V0(LightningInputV0::Outgoing(
                         old_state.common.contract.contract_id(),
                         OutgoingWitness::Cancel(signature),
                     )),
                     amount: old_state.common.contract.amount,
                     keys: <span class="macro">vec!</span>[old_state.common.refund_keypair],
-                    <span class="comment">// The input of the refund tx is managed by this state machine
-                    </span>state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
                 };
 
                 <span class="kw">let </span>outpoints = global_context
-                    .claim_input(dbtx, client_input)
+                    .claim_inputs(
+                        dbtx,
+                        <span class="comment">// The input of the refund tx is managed by this state machine
+                        </span>ClientInputBundle::new_no_sm(<span class="macro">vec!</span>[client_input]),
+                    )
                     .<span class="kw">await
                     </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>)
                     .<span class="number">1</span>;
@@ -562,19 +562,17 @@
             <span class="kw">return </span>old_state.update(SendSMState::Success(preimage));
         }
 
-        <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput, LightningClientStateMachines&gt; {
+        <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput&gt; {
             input: LightningInput::V0(LightningInputV0::Outgoing(
                 old_state.common.contract.contract_id(),
                 OutgoingWitness::Refund,
             )),
             amount: old_state.common.contract.amount,
             keys: <span class="macro">vec!</span>[old_state.common.refund_keypair],
-            <span class="comment">// The input of the refund tx is managed by this state machine
-            </span>state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
         };
 
         <span class="kw">let </span>outpoints = global_context
-            .claim_input(dbtx, client_input)
+            .claim_inputs(dbtx, ClientInputBundle::new_no_sm(<span class="macro">vec!</span>[client_input]))
             .<span class="kw">await
             </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>)
             .<span class="number">1</span>;

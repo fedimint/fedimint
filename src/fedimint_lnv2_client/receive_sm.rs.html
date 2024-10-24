@@ -126,14 +126,9 @@
 <a href="#125" id="125">125</a>
 <a href="#126" id="126">126</a>
 <a href="#127" id="127">127</a>
-<a href="#128" id="128">128</a>
-<a href="#129" id="129">129</a>
-<a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
-
-<span class="kw">use </span>bitcoin30::key::KeyPair;
+<a href="#128" id="128">128</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin30::key::KeyPair;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-<span class="kw">use </span>fedimint_client::transaction::ClientInput;
+<span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -143,7 +138,7 @@
 <span class="kw">use </span>tpe::AggregateDecryptionKey;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::LnFederationApi;
-<span class="kw">use crate</span>::{LightningClientContext, LightningClientStateMachines};
+<span class="kw">use </span><span class="kw">crate</span>::LightningClientContext;
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>ReceiveStateMachine {
@@ -241,18 +236,17 @@
             <span class="kw">return </span>old_state.update(ReceiveSMState::Expired);
         }
 
-        <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput, LightningClientStateMachines&gt; {
+        <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput&gt; {
             input: LightningInput::V0(LightningInputV0::Incoming(
                 old_state.common.contract.contract_id(),
                 old_state.common.agg_decryption_key,
             )),
             amount: old_state.common.contract.commitment.amount,
             keys: <span class="macro">vec!</span>[old_state.common.claim_keypair],
-            state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
         };
 
         <span class="kw">let </span>out_points = global_context
-            .claim_input(dbtx, client_input)
+            .claim_inputs(dbtx, ClientInputBundle::new_no_sm(<span class="macro">vec!</span>[client_input]))
             .<span class="kw">await
             </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>)
             .<span class="number">1</span>;

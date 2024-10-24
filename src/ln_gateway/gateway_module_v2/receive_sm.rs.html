@@ -280,14 +280,13 @@
 <a href="#279" id="279">279</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::future::pending;
-<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
 <span class="kw">use </span>fedimint_api_client::query::FilterMapThreshold;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-<span class="kw">use </span>fedimint_client::transaction::ClientInput;
+<span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::{Decoder, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -296,7 +295,6 @@
 <span class="kw">use </span>fedimint_core::secp256k1::KeyPair;
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::{NumPeersExt, OutPoint, PeerId, TransactionId};
-<span class="kw">use </span>fedimint_lnv2_client::LightningClientStateMachines;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::IncomingContract;
 <span class="kw">use </span>fedimint_lnv2_common::{
     LightningInput, LightningInputV0, LightningOutputOutcome, LightningOutputOutcomeV0,
@@ -536,19 +534,21 @@
             <span class="kw">return </span>old_state.update(ReceiveSMState::Success(preimage));
         }
 
-        <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput, LightningClientStateMachines&gt; {
+        <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput&gt; {
             input: LightningInput::V0(LightningInputV0::Incoming(
                 old_state.common.contract.contract_id(),
                 agg_decryption_key,
             )),
             amount: old_state.common.contract.commitment.amount,
             keys: <span class="macro">vec!</span>[old_state.common.refund_keypair],
-            <span class="comment">// The input of the refund tx is managed by this state machine
-            </span>state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
         };
 
         <span class="kw">let </span>outpoints = global_context
-            .claim_input(dbtx, client_input)
+            .claim_inputs(
+                dbtx,
+                <span class="comment">// The input of the refund tx is managed by this state machine
+                </span>ClientInputBundle::new_no_sm(<span class="macro">vec!</span>[client_input]),
+            )
             .<span class="kw">await
             </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>)
             .<span class="number">1</span>;

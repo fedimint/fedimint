@@ -501,15 +501,16 @@
 <a href="#500" id="500">500</a>
 <a href="#501" id="501">501</a>
 <a href="#502" id="502">502</a>
-<a href="#503" id="503">503</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
-<span class="kw">use </span>std::sync::Arc;
+<a href="#503" id="503">503</a>
+<a href="#504" id="504">504</a>
+<a href="#505" id="505">505</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>bitcoin30::ScriptBuf;
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_bitcoind::DynBitcoindRpc;
 <span class="kw">use </span>fedimint_client::module::ClientContext;
-<span class="kw">use </span>fedimint_client::transaction::ClientInput;
+<span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped <span class="kw">as _</span>,
@@ -531,7 +532,7 @@
     ClaimedPegInData, ClaimedPegInKey, PegInTweakIndexData, PegInTweakIndexKey,
     PegInTweakIndexPrefix, TweakIdx,
 };
-<span class="kw">use crate</span>::{WalletClientModule, WalletClientModuleData, WalletClientStates};
+<span class="kw">use crate</span>::{WalletClientModule, WalletClientModuleData};
 
 <span class="doccomment">/// A helper struct meant to combined data from all addresses/records
 /// into a single struct with all actionable data.
@@ -927,15 +928,18 @@
 
         <span class="kw">let </span>wallet_input = WalletInput::new_v0(pegin_proof);
 
-        <span class="kw">let </span>client_input = ClientInput::&lt;WalletInput, WalletClientStates&gt; {
+        <span class="kw">let </span>client_input = ClientInput::&lt;WalletInput&gt; {
             input: wallet_input,
             keys: <span class="macro">vec!</span>[tweak_key],
             amount,
-            state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
         };
 
         client_ctx
-            .claim_input(dbtx, client_input, operation_id)
+            .claim_inputs(
+                dbtx,
+                ClientInputBundle::new_no_sm(<span class="macro">vec!</span>[client_input]),
+                operation_id,
+            )
             .<span class="kw">await
             </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>)
     }

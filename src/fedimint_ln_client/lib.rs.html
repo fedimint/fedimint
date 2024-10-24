@@ -2201,7 +2201,10 @@
 <a href="#2200" id="2200">2200</a>
 <a href="#2201" id="2201">2201</a>
 <a href="#2202" id="2202">2202</a>
-<a href="#2203" id="2203">2203</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2203" id="2203">2203</a>
+<a href="#2204" id="2204">2204</a>
+<a href="#2205" id="2205">2205</a>
+<a href="#2206" id="2206">2206</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2241,7 +2244,9 @@
 <span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
-<span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
+<span class="kw">use </span>fedimint_client::transaction::{
+    ClientInput, ClientInputBundle, ClientOutput, TransactionBuilder,
+};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -3661,15 +3666,16 @@
             .with_context(|| <span class="macro">format!</span>(<span class="string">"No contract found for {contract_id:?}"</span>))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>input = incoming_contract_account.claim();
-        <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput, LightningClientStateMachines&gt; {
+        <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput&gt; {
             input,
             amount: incoming_contract_account.amount,
             keys: <span class="macro">vec!</span>[key_pair],
-            state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
         };
 
-        <span class="kw">let </span>tx =
-            TransactionBuilder::new().with_input(<span class="self">self</span>.client_ctx.make_client_input(client_input));
+        <span class="kw">let </span>tx = TransactionBuilder::new().with_inputs(
+            <span class="self">self</span>.client_ctx
+                .make_client_inputs(ClientInputBundle::new_no_sm(<span class="macro">vec!</span>[client_input])),
+        );
         <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta).expect(<span class="string">"extra_meta is serializable"</span>);
         <span class="kw">let </span>operation_meta_gen = |<span class="kw">_</span>, out_points| LightningOperationMeta {
             variant: LightningOperationMetaVariant::Claim { out_points },

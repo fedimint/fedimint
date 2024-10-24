@@ -3038,7 +3038,9 @@
 <a href="#3037" id="3037">3037</a>
 <a href="#3038" id="3038">3038</a>
 <a href="#3039" id="3039">3039</a>
-<a href="#3040" id="3040">3040</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#3040" id="3040">3040</a>
+<a href="#3041" id="3041">3041</a>
+<a href="#3042" id="3042">3042</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
@@ -3190,7 +3192,7 @@
 <span class="kw">use </span>tokio::sync::{watch, RwLock};
 <span class="kw">use </span>tokio_stream::wrappers::WatchStream;
 <span class="kw">use </span>tracing::{debug, error, info, trace, warn};
-<span class="kw">use </span>transaction::TxSubmissionStatesSM;
+<span class="kw">use </span>transaction::{ClientInputBundle, ClientInputSM, TxSubmissionStatesSM};
 
 <span class="kw">use </span><span class="kw">crate</span>::api_announcements::{get_api_urls, run_api_announcement_sync, ApiAnnouncementPrefix};
 <span class="kw">use </span><span class="kw">crate</span>::api_version_discovery::discover_common_api_versions_set;
@@ -3291,7 +3293,11 @@
     <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"module-recovery-completed"</span>);
 }
 
-<span class="kw">pub type </span>InstancelessDynClientInput = ClientInput&lt;
+<span class="kw">pub type </span>InstancelessDynClientInput = ClientInput&lt;Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IInput + <span class="lifetime">'static</span>)&gt;&gt;;
+<span class="kw">pub type </span>InstancelessDynClientInputSM =
+    ClientInputSM&lt;Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>)&gt;&gt;;
+
+<span class="kw">pub type </span>InstancelessDynClientInputBundle = ClientInputBundle&lt;
     Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IInput + <span class="lifetime">'static</span>)&gt;,
     Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>)&gt;,
 &gt;;
@@ -3329,13 +3335,13 @@
     <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ModuleDecoderRegistry;
 
     <span class="doccomment">/// This function is mostly meant for internal use, you are probably looking
-    /// for [`DynGlobalClientContext::claim_input`].
+    /// for [`DynGlobalClientContext::claim_inputs`].
     /// Returns transaction id of the funding transaction and an optional
     /// `OutPoint` that represents change if change was added.
-    </span><span class="kw">async fn </span>claim_input_dyn(
+    </span><span class="kw">async fn </span>claim_inputs_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-        input: InstancelessDynClientInput,
+        inputs: InstancelessDynClientInputBundle,
     ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt;;
 
     <span class="doccomment">/// This function is mostly meant for internal use, you are probably looking
@@ -3384,10 +3390,10 @@
         <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
     }
 
-    <span class="kw">async fn </span>claim_input_dyn(
+    <span class="kw">async fn </span>claim_inputs_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-        _input: InstancelessDynClientInput,
+        _input: InstancelessDynClientInputBundle,
     ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
         <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
     }
@@ -3451,33 +3457,17 @@
             .<span class="kw">await
     </span>}
 
-    <span class="doccomment">/// Creates a transaction that with an output of the primary module,
-    /// claiming the given input and transferring its value into the client's
-    /// wallet.
-    ///
-    /// The transactions submission state machine as well as the state
-    /// machines responsible for the generated output are generated
-    /// automatically. The caller is responsible for the input's state machines,
-    /// should there be any required.
-    </span><span class="kw">pub async fn </span>claim_input&lt;I, S&gt;(
+    <span class="kw">pub async fn </span>claim_inputs&lt;I, S&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-        input: ClientInput&lt;I, S&gt;,
+        inputs: ClientInputBundle&lt;I, S&gt;,
     ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt;
     <span class="kw">where
         </span>I: IInput + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
         S: IState + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
     {
-        <span class="self">self</span>.claim_input_dyn(
-            dbtx,
-            InstancelessDynClientInput {
-                input: Box::new(input.input),
-                keys: input.keys,
-                amount: input.amount,
-                state_machines: states_to_instanceless_dyn(input.state_machines),
-            },
-        )
-        .<span class="kw">await
+        <span class="self">self</span>.claim_inputs_dyn(dbtx, inputs.into_instanceless())
+            .<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Creates a transaction with the supplied output and funding added by the
@@ -3598,23 +3588,36 @@
         <span class="self">self</span>.client.config().<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>claim_input_dyn(
+    <span class="kw">async fn </span>claim_inputs_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-        input: InstancelessDynClientInput,
+        InstancelessDynClientInputBundle { inputs, sms }: InstancelessDynClientInputBundle,
     ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
-        <span class="kw">let </span>instance_input = ClientInput {
-            input: DynInput::from_parts(<span class="self">self</span>.module_instance_id, input.input),
-            keys: input.keys,
-            amount: input.amount,
-            state_machines: states_add_instance(<span class="self">self</span>.module_instance_id, input.state_machines),
-        };
+        <span class="kw">let </span><span class="kw-2">mut </span>tx_builder = TransactionBuilder::new();
+
+        <span class="kw">for </span>input <span class="kw">in </span>inputs {
+            <span class="kw">let </span>instance_input = ClientInput {
+                input: DynInput::from_parts(<span class="self">self</span>.module_instance_id, input.input),
+                keys: input.keys,
+                amount: input.amount,
+            };
+            tx_builder = tx_builder.with_input(instance_input);
+        }
+        <span class="kw">for </span>input_sm <span class="kw">in </span>sms {
+            <span class="kw">let </span>instance_input_sm = ClientInputSM {
+                state_machines: states_add_instance(
+                    <span class="self">self</span>.module_instance_id,
+                    input_sm.state_machines,
+                ),
+            };
+            tx_builder = tx_builder.with_input_sm(instance_input_sm);
+        }
 
         <span class="self">self</span>.client
             .finalize_and_submit_transaction_inner(
                 <span class="kw-2">&amp;mut </span>dbtx.global_tx().to_ref_nc(),
                 <span class="self">self</span>.operation,
-                TransactionBuilder::new().with_input(instance_input),
+                tx_builder,
             )
             .<span class="kw">await
     </span>}
@@ -4112,7 +4115,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>out_amount = Amount::ZERO;
         <span class="kw">let </span><span class="kw-2">mut </span>fee_amount = Amount::ZERO;
 
-        <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>builder.inputs {
+        <span class="kw">for </span>input <span class="kw">in </span>builder.inputs() {
             <span class="kw">let </span>module = <span class="self">self</span>.get_module(input.input.module_instance_id());
 
             <span class="kw">let </span>item_fee = module.input_fee(input.amount, <span class="kw-2">&amp;</span>input.input).expect(
@@ -4123,7 +4126,7 @@
             fee_amount += item_fee;
         }
 
-        <span class="kw">for </span>output <span class="kw">in </span><span class="kw-2">&amp;</span>builder.outputs {
+        <span class="kw">for </span>output <span class="kw">in </span>builder.outputs() {
             <span class="kw">let </span>module = <span class="self">self</span>.get_module(output.output.module_instance_id());
 
             <span class="kw">let </span>item_fee = module.output_fee(<span class="kw-2">&amp;</span>output.output).expect(
@@ -4193,7 +4196,7 @@
     ) -&gt; anyhow::Result&lt;(Transaction, Vec&lt;DynState&gt;, Range&lt;u64&gt;)&gt; {
         <span class="kw">let </span>(input_amount, output_amount) = <span class="self">self</span>.transaction_builder_balance(<span class="kw-2">&amp;</span>partial_transaction);
 
-        <span class="kw">let </span>(added_inputs, change_outputs) = <span class="self">self
+        <span class="kw">let </span>(added_input_bundle, change_outputs) = <span class="self">self
             </span>.primary_module()
             .create_final_inputs_and_outputs(
                 <span class="self">self</span>.primary_module_instance,
@@ -4208,12 +4211,13 @@
         // in order to balance it. Notice that it may stay empty in case the transaction
         // is already balanced.
         </span><span class="kw">let </span>change_range = Range {
-            start: partial_transaction.outputs.len() <span class="kw">as </span>u64,
-            end: (partial_transaction.outputs.len() + change_outputs.len()) <span class="kw">as </span>u64,
+            start: partial_transaction.outputs().len() <span class="kw">as </span>u64,
+            end: (partial_transaction.outputs().len() + change_outputs.len()) <span class="kw">as </span>u64,
         };
 
-        partial_transaction.inputs.extend(added_inputs);
-        partial_transaction.outputs.extend(change_outputs);
+        partial_transaction = partial_transaction
+            .with_inputs(added_input_bundle)
+            .with_outputs(change_outputs);
 
         <span class="kw">let </span>(input_amount, output_amount) = <span class="self">self</span>.transaction_builder_balance(<span class="kw-2">&amp;</span>partial_transaction);
 

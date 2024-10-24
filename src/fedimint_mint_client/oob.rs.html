@@ -198,11 +198,20 @@
 <a href="#197" id="197">197</a>
 <a href="#198" id="198">198</a>
 <a href="#199" id="199">199</a>
-<a href="#200" id="200">200</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::SystemTime;
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-<span class="kw">use </span>fedimint_client::transaction::ClientInput;
+<span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle, ClientInputSM};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -373,27 +382,36 @@
     spendable_note: SpendableNote,
     global_context: DynGlobalClientContext,
 ) -&gt; TransactionId {
-    <span class="kw">let </span>input = ClientInput {
-        input: MintInput::new_v0(amount, spendable_note.note()),
-        keys: <span class="macro">vec!</span>[spendable_note.spend_key],
-        amount,
-        state_machines: Arc::new(<span class="kw">move </span>|txid, input_idx| {
-            <span class="macro">vec!</span>[MintClientStateMachines::Input(MintInputStateMachine {
-                common: MintInputCommon {
-                    operation_id,
-                    txid,
-                    input_idx,
-                },
-                state: MintInputStates::Created(MintInputStateCreated {
+    <span class="kw">let </span>(inputs, input_sms) = <span class="macro">vec!</span>[spendable_note]
+        .into_iter()
+        .map(|spendable_note| {
+            (
+                ClientInput {
+                    input: MintInput::new_v0(amount, spendable_note.note()),
+                    keys: <span class="macro">vec!</span>[spendable_note.spend_key],
                     amount,
-                    spendable_note,
-                }),
-            })]
-        }),
-    };
+                },
+                ClientInputSM {
+                    state_machines: Arc::new(<span class="kw">move </span>|txid, input_idx| {
+                        <span class="macro">vec!</span>[MintClientStateMachines::Input(MintInputStateMachine {
+                            common: MintInputCommon {
+                                operation_id,
+                                txid,
+                                input_idx,
+                            },
+                            state: MintInputStates::Created(MintInputStateCreated {
+                                amount,
+                                spendable_note,
+                            }),
+                        })]
+                    }),
+                },
+            )
+        })
+        .unzip();
 
     global_context
-        .claim_input(dbtx, input)
+        .claim_inputs(dbtx, ClientInputBundle::new(inputs, input_sms))
         .<span class="kw">await
         </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>)
         .<span class="number">0

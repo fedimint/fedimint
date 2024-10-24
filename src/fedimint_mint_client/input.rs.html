@@ -232,10 +232,8 @@
 <a href="#231" id="231">231</a>
 <a href="#232" id="232">232</a>
 <a href="#233" id="233">233</a>
-<a href="#234" id="234">234</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
-
-<span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-<span class="kw">use </span>fedimint_client::transaction::ClientInput;
+<a href="#234" id="234">234</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
+<span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -244,7 +242,7 @@
 <span class="kw">use </span>fedimint_mint_common::MintInput;
 <span class="kw">use </span>tracing::{debug, warn};
 
-<span class="kw">use crate</span>::{MintClientContext, MintClientStateMachines, SpendableNote};
+<span class="kw">use crate</span>::{MintClientContext, SpendableNote};
 
 <span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
 </span><span class="comment">// TODO: add retry with valid subset of e-cash notes
@@ -374,17 +372,19 @@
             <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Invalid state transition"</span>),
         };
 
-        <span class="kw">let </span>refund_input = ClientInput::&lt;MintInput, MintClientStateMachines&gt; {
+        <span class="kw">let </span>refund_input = ClientInput::&lt;MintInput&gt; {
             input: MintInput::new_v0(amount, spendable_note.note()),
             keys: <span class="macro">vec!</span>[spendable_note.spend_key],
             amount,
-            <span class="comment">// The input of the refund tx is managed by this state machine, so no new state machines
-            // need to be created
-            </span>state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
         };
 
         <span class="kw">let </span>(refund_txid, <span class="kw">_</span>) = global_context
-            .claim_input(dbtx, refund_input)
+            .claim_inputs(
+                dbtx,
+                <span class="comment">// The input of the refund tx is managed by this state machine, so no new state
+                // machines need to be created
+                </span>ClientInputBundle::new_no_sm(<span class="macro">vec!</span>[refund_input]),
+            )
             .<span class="kw">await
             </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>);
 

@@ -396,7 +396,13 @@
 <a href="#395" id="395">395</a>
 <a href="#396" id="396">396</a>
 <a href="#397" id="397">397</a>
-<a href="#398" id="398">398</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -415,7 +421,9 @@
 <span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
 <span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::sm::{Context, ModuleNotifier};
-<span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
+<span class="kw">use </span>fedimint_client::transaction::{
+    ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, TransactionBuilder,
+};
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
@@ -497,7 +505,7 @@
         input_amount: Amount,
         output_amount: Amount,
     ) -&gt; anyhow::Result&lt;(
-        Vec&lt;ClientInput&lt;DummyInput, DummyStateMachine&gt;&gt;,
+        ClientInputBundle&lt;DummyInput, DummyStateMachine&gt;,
         Vec&lt;ClientOutput&lt;DummyOutput, DummyStateMachine&gt;&gt;,
     )&gt; {
         dbtx.ensure_isolated().expect(<span class="string">"must be isolated"</span>);
@@ -524,6 +532,8 @@
                     },
                     amount: missing_input_amount,
                     keys: <span class="macro">vec!</span>[<span class="self">self</span>.key],
+                };
+                <span class="kw">let </span>input_sm = ClientInputSM {
                     state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
                         <span class="macro">vec!</span>[DummyStateMachine::Input(
                             missing_input_amount,
@@ -533,9 +543,9 @@
                     }),
                 };
 
-                <span class="prelude-val">Ok</span>((<span class="macro">vec!</span>[input], Vec::new()))
+                <span class="prelude-val">Ok</span>((ClientInputBundle::new(<span class="macro">vec!</span>[input], <span class="macro">vec!</span>[input_sm]), <span class="macro">vec!</span>[]))
             }
-            Ordering::Equal =&gt; <span class="prelude-val">Ok</span>((Vec::new(), Vec::new())),
+            Ordering::Equal =&gt; <span class="prelude-val">Ok</span>((ClientInputBundle::new(<span class="macro">vec!</span>[], <span class="macro">vec!</span>[]), <span class="macro">vec!</span>[])),
             Ordering::Greater =&gt; {
                 <span class="kw">let </span>missing_output_amount = input_amount - output_amount;
                 <span class="kw">let </span>output = ClientOutput {
@@ -553,7 +563,7 @@
                     }),
                 };
 
-                <span class="prelude-val">Ok</span>((Vec::new(), <span class="macro">vec!</span>[output]))
+                <span class="prelude-val">Ok</span>((ClientInputBundle::new(<span class="macro">vec!</span>[], <span class="macro">vec!</span>[]), <span class="macro">vec!</span>[output]))
             }
         }
     }
@@ -624,12 +634,14 @@
             },
             amount,
             keys: <span class="macro">vec!</span>[account_kp],
-            state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| Vec::&lt;DummyStateMachine&gt;::new()),
         };
 
         <span class="comment">// Build and send tx to the fed
         // Will output to our primary client module
-        </span><span class="kw">let </span>tx = TransactionBuilder::new().with_input(<span class="self">self</span>.client_ctx.make_client_input(input));
+        </span><span class="kw">let </span>tx = TransactionBuilder::new().with_inputs(
+            <span class="self">self</span>.client_ctx
+                .make_client_inputs(ClientInputBundle::new_no_sm(<span class="macro">vec!</span>[input])),
+        );
         <span class="kw">let </span>outpoint = |txid, <span class="kw">_</span>| OutPoint { txid, out_idx: <span class="number">0 </span>};
         <span class="kw">let </span>(<span class="kw">_</span>, change) = <span class="self">self
             </span>.client_ctx

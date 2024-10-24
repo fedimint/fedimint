@@ -440,13 +440,13 @@
 <a href="#439" id="439">439</a>
 <a href="#440" id="440">440</a>
 <a href="#441" id="441">441</a>
-<a href="#442" id="442">442</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::time::Duration;
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin30::key::KeyPair;
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, DynState, State, StateTransition};
-<span class="kw">use </span>fedimint_client::transaction::ClientInput;
+<span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -462,7 +462,7 @@
 <span class="kw">use </span>tracing::{debug, error, info};
 
 <span class="kw">use </span><span class="kw">crate</span>::api::LnFederationApi;
-<span class="kw">use crate</span>::{LightningClientContext, LightningClientStateMachines, ReceivingKey};
+<span class="kw">use crate</span>::{LightningClientContext, ReceivingKey};
 
 <span class="kw">const </span>RETRY_DELAY: Duration = Duration::from_secs(<span class="number">1</span>);
 
@@ -724,17 +724,19 @@
         global_context: DynGlobalClientContext,
     ) -&gt; (TransactionId, Vec&lt;OutPoint&gt;) {
         <span class="kw">let </span>input = contract.claim();
-        <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput, LightningClientStateMachines&gt; {
+        <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput&gt; {
             input,
             amount: contract.amount,
             keys: <span class="macro">vec!</span>[keypair],
-            <span class="comment">// The input of the refund tx is managed by this state machine, so no new state machines
-            // need to be created
-            </span>state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
         };
 
         global_context
-            .claim_input(dbtx, client_input)
+            .claim_inputs(
+                dbtx,
+                <span class="comment">// The input of the refund tx is managed by this state machine, so no new state
+                // machines need to be created
+                </span>ClientInputBundle::new_no_sm(<span class="macro">vec!</span>[client_input]),
+            )
             .<span class="kw">await
             </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>)
     }

@@ -332,14 +332,11 @@
 <a href="#331" id="331">331</a>
 <a href="#332" id="332">332</a>
 <a href="#333" id="333">333</a>
-<a href="#334" id="334">334</a>
-<a href="#335" id="335">335</a>
-<a href="#336" id="336">336</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
-<span class="kw">use </span>std::sync::Arc;
+<a href="#334" id="334">334</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-<span class="kw">use </span>fedimint_client::transaction::ClientInput;
+<span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -354,7 +351,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::api::WalletFederationApi;
 <span class="kw">use </span><span class="kw">crate</span>::pegin_monitor::filter_onchain_deposit_outputs;
-<span class="kw">use crate</span>::{WalletClientContext, WalletClientStates};
+<span class="kw">use </span><span class="kw">crate</span>::WalletClientContext;
 
 <span class="kw">const </span>TRANSACTION_STATUS_FETCH_INTERVAL: Duration = Duration::from_secs(<span class="number">1</span>);
 
@@ -613,15 +610,14 @@
 
     <span class="kw">let </span>wallet_input = WalletInput::new_v0(pegin_proof);
 
-    <span class="kw">let </span>client_input = ClientInput::&lt;WalletInput, WalletClientStates&gt; {
+    <span class="kw">let </span>client_input = ClientInput::&lt;WalletInput&gt; {
         input: wallet_input,
         keys: <span class="macro">vec!</span>[awaiting_confirmation_state.tweak_key],
         amount,
-        state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
     };
 
     <span class="kw">let </span>(fm_txid, change) = global_context
-        .claim_input(dbtx, client_input)
+        .claim_inputs(dbtx, ClientInputBundle::new_no_sm(<span class="macro">vec!</span>[client_input]))
         .<span class="kw">await
         </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>);
 

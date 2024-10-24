@@ -975,7 +975,10 @@
 <a href="#974" id="974">974</a>
 <a href="#975" id="975">975</a>
 <a href="#976" id="976">976</a>
-<a href="#977" id="977">977</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
+<a href="#977" id="977">977</a>
+<a href="#978" id="978">978</a>
+<a href="#979" id="979">979</a>
+<a href="#980" id="980">980</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
@@ -1008,10 +1011,12 @@
 <span class="kw">use </span><span class="kw">crate</span>::module::recovery::{DynModuleBackup, ModuleBackup};
 <span class="kw">use </span><span class="kw">crate</span>::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::sm::{<span class="self">self</span>, ActiveStateMeta, Context, DynContext, DynState, State};
-<span class="kw">use </span><span class="kw">crate</span>::transaction::{ClientInput, ClientOutput, TransactionBuilder};
+<span class="kw">use </span><span class="kw">crate</span>::transaction::{
+    ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, TransactionBuilder,
+};
 <span class="kw">use crate</span>::{
-    oplog, states_add_instance, states_to_instanceless_dyn, AddStateMachinesResult, Client,
-    ClientStrong, ClientWeak, InstancelessDynClientInput, TransactionUpdates,
+    oplog, states_add_instance, AddStateMachinesResult, Client, ClientStrong, ClientWeak,
+    InstancelessDynClientInputBundle, TransactionUpdates,
 };
 
 <span class="kw">pub mod </span>init;
@@ -1195,13 +1200,13 @@
         <span class="self">self</span>.make_dyn(output)
     }
 
-    <span class="doccomment">/// Turn a typed [`ClientInput`] into a dyn version
-    </span><span class="kw">pub fn </span>make_client_input&lt;O, S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, input: ClientInput&lt;O, S&gt;) -&gt; ClientInput
+    <span class="doccomment">/// Turn a typed [`ClientInputBundle`] into a dyn version
+    </span><span class="kw">pub fn </span>make_client_inputs&lt;I, S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, inputs: ClientInputBundle&lt;I, S&gt;) -&gt; ClientInputBundle
     <span class="kw">where
-        </span>O: IntoDynInstance&lt;DynType = DynInput&gt; + <span class="lifetime">'static</span>,
+        </span>I: IntoDynInstance&lt;DynType = DynInput&gt; + <span class="lifetime">'static</span>,
         S: IntoDynInstance&lt;DynType = DynState&gt; + <span class="lifetime">'static</span>,
     {
-        <span class="self">self</span>.make_dyn(input)
+        <span class="self">self</span>.make_dyn(inputs)
     }
 
     <span class="kw">pub fn </span>make_dyn_state&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, sm: S) -&gt; DynState
@@ -1443,48 +1448,52 @@
         operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.global_db(), operation_id, stream_gen)
     }
 
-    <span class="kw">pub async fn </span>claim_input&lt;I, S&gt;(
+    <span class="kw">pub async fn </span>claim_inputs&lt;I, S&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-        input: ClientInput&lt;I, S&gt;,
+        inputs: ClientInputBundle&lt;I, S&gt;,
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt;
     <span class="kw">where
         </span>I: IInput + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
         S: sm::IState + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
     {
-        <span class="self">self</span>.claim_input_dyn(
-            dbtx,
-            InstancelessDynClientInput {
-                input: Box::new(input.input),
-                keys: input.keys,
-                amount: input.amount,
-                state_machines: states_to_instanceless_dyn(input.state_machines),
-            },
-            operation_id,
-        )
-        .<span class="kw">await
+        <span class="self">self</span>.claim_inputs_dyn(dbtx, inputs.into_instanceless(), operation_id)
+            .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>claim_input_dyn(
+    <span class="kw">async fn </span>claim_inputs_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-        input: InstancelessDynClientInput,
+        ClientInputBundle { inputs, sms }: InstancelessDynClientInputBundle,
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
-        <span class="kw">let </span>instance_input = ClientInput {
-            input: DynInput::from_parts(<span class="self">self</span>.module_instance_id, input.input),
-            keys: input.keys,
-            amount: input.amount,
-            state_machines: states_add_instance(<span class="self">self</span>.module_instance_id, input.state_machines),
-        };
+        <span class="kw">let </span><span class="kw-2">mut </span>tx_builder = TransactionBuilder::new();
+
+        <span class="kw">for </span>input <span class="kw">in </span>inputs {
+            <span class="kw">let </span>instance_input = ClientInput {
+                input: DynInput::from_parts(<span class="self">self</span>.module_instance_id, input.input),
+                keys: input.keys,
+                amount: input.amount,
+            };
+            tx_builder = tx_builder.with_input(instance_input);
+        }
+        <span class="kw">for </span>input_sm <span class="kw">in </span>sms {
+            <span class="kw">let </span>instance_input_sm = ClientInputSM {
+                state_machines: states_add_instance(
+                    <span class="self">self</span>.module_instance_id,
+                    input_sm.state_machines,
+                ),
+            };
+            tx_builder = tx_builder.with_input_sm(instance_input_sm);
+        }
 
         <span class="self">self</span>.client
             .get()
             .finalize_and_submit_transaction_inner(
                 <span class="kw-2">&amp;mut </span>dbtx.global_dbtx(<span class="self">self</span>.global_dbtx_access_token),
                 operation_id,
-                TransactionBuilder::new().with_input(instance_input),
+                tx_builder,
             )
             .<span class="kw">await
     </span>}
@@ -1664,7 +1673,7 @@
         _input_amount: Amount,
         _output_amount: Amount,
     ) -&gt; anyhow::Result&lt;(
-        Vec&lt;ClientInput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input, <span class="self">Self</span>::States&gt;&gt;,
+        ClientInputBundle&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input, <span class="self">Self</span>::States&gt;,
         Vec&lt;ClientOutput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output, <span class="self">Self</span>::States&gt;&gt;,
     )&gt; {
         <span class="macro">unimplemented!</span>()
@@ -1792,7 +1801,7 @@
         operation_id: OperationId,
         input_amount: Amount,
         output_amount: Amount,
-    ) -&gt; anyhow::Result&lt;(Vec&lt;ClientInput&gt;, Vec&lt;ClientOutput&gt;)&gt;;
+    ) -&gt; anyhow::Result&lt;(ClientInputBundle, Vec&lt;ClientOutput&gt;)&gt;;
 
     <span class="kw">async fn </span>await_primary_module_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1891,7 +1900,7 @@
         operation_id: OperationId,
         input_amount: Amount,
         output_amount: Amount,
-    ) -&gt; anyhow::Result&lt;(Vec&lt;ClientInput&gt;, Vec&lt;ClientOutput&gt;)&gt; {
+    ) -&gt; anyhow::Result&lt;(ClientInputBundle, Vec&lt;ClientOutput&gt;)&gt; {
         <span class="kw">let </span>(inputs, outputs) = &lt;T <span class="kw">as </span>ClientModule&gt;::create_final_inputs_and_outputs(
             <span class="self">self</span>,
             <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(module_instance).<span class="number">0</span>,
@@ -1901,10 +1910,7 @@
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>inputs = inputs
-            .into_iter()
-            .map(|input| input.into_dyn(module_instance))
-            .collect::&lt;Vec&lt;ClientInput&gt;&gt;();
+        <span class="kw">let </span>inputs = inputs.into_dyn(module_instance);
 
         <span class="kw">let </span>outputs = outputs
             .into_iter()
