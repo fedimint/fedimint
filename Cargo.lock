@@ -3095,7 +3095,7 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.24.1",
  "tokio-util",
- "tower 0.4.13",
+ "tower 0.5.1",
  "tracing",
 ]
 
