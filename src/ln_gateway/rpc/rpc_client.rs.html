@@ -314,8 +314,7 @@
 <a href="#313" id="313">313</a>
 <a href="#314" id="314">314</a>
 <a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin30::address::NetworkUnchecked;
+<a href="#316" id="316">316</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin30::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin30::{Address, Txid};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
@@ -345,8 +344,7 @@
     SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, SyncToChainPayload,
     WithdrawOnchainPayload, WithdrawPayload,
 };
-<span class="kw">use </span><span class="kw">crate</span>::lightning::ChannelInfo;
-<span class="kw">use </span><span class="kw">crate</span>::CloseChannelsWithPeerResponse;
+<span class="kw">use </span><span class="kw">crate</span>::lightning::{ChannelInfo, CloseChannelsWithPeerResponse};
 
 <span class="kw">pub struct </span>GatewayRpcClient {
     <span class="doccomment">/// Base URL to gateway web server

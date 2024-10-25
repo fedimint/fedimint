@@ -300,27 +300,7 @@
 <a href="#299" id="299">299</a>
 <a href="#300" id="300">300</a>
 <a href="#301" id="301">301</a>
-<a href="#302" id="302">302</a>
-<a href="#303" id="303">303</a>
-<a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
-<a href="#318" id="318">318</a>
-<a href="#319" id="319">319</a>
-<a href="#320" id="320">320</a>
-<a href="#321" id="321">321</a>
-<a href="#322" id="322">322</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
+<a href="#302" id="302">302</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -329,24 +309,23 @@
 <span class="kw">use </span>bitcoin30::hashes::{sha256, Hash};
 <span class="kw">use </span>bitcoin30::key::KeyPair;
 <span class="kw">use </span>bitcoin30::secp256k1::{PublicKey, SecretKey};
-<span class="kw">use </span>bitcoin30::Address;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::BoxStream;
-<span class="kw">use </span>fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
+<span class="kw">use </span>fedimint_core::{secp256k1, Amount};
+<span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
+<span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
 <span class="kw">use </span>fedimint_ln_common::PrunedInvoice;
 <span class="kw">use </span>fedimint_logging::LOG_TEST;
 <span class="kw">use </span>lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, DEFAULT_EXPIRY_TIME,
 };
-<span class="kw">use </span>ln_gateway::gateway_lnrpc::{
-    <span class="self">self</span>, CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
-    EmptyResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
-    GetRouteHintsResponse, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
-    WithdrawOnchainResponse,
-};
 <span class="kw">use </span>ln_gateway::lightning::{
-    ChannelInfo, HtlcResult, ILnRpcClient, LightningRpcError, RouteHtlcStream,
+    ChannelInfo, CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
+    GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse, LightningRpcError,
+    OpenChannelResponse, PayInvoiceResponse, RouteHtlcStream, WithdrawOnchainResponse,
 };
+<span class="kw">use </span>ln_gateway::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, WithdrawOnchainPayload};
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>tokio::sync::mpsc;
 <span class="kw">use </span>tracing::info;
@@ -442,7 +421,7 @@
 </span><span class="kw">impl </span>ILnRpcClient <span class="kw">for </span>FakeLightningTest {
     <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse, LightningRpcError&gt; {
         <span class="prelude-val">Ok</span>(GetNodeInfoResponse {
-            pub_key: <span class="self">self</span>.gateway_node_pub_key.serialize().to_vec(),
+            pub_key: <span class="self">self</span>.gateway_node_pub_key,
             alias: <span class="string">"FakeLightningNode"</span>.to_string(),
             network: <span class="string">"regtest"</span>.to_string(),
             block_height: <span class="number">0</span>,
@@ -455,7 +434,7 @@
         _num_route_hints: usize,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, LightningRpcError&gt; {
         <span class="prelude-val">Ok</span>(GetRouteHintsResponse {
-            route_hints: <span class="macro">vec!</span>[gateway_lnrpc::get_route_hints_response::RouteHint { hops: <span class="macro">vec!</span>[] }],
+            route_hints: <span class="macro">vec!</span>[RouteHint(<span class="macro">vec!</span>[])],
         })
     }
 
@@ -479,7 +458,7 @@
         }
 
         <span class="prelude-val">Ok</span>(PayInvoiceResponse {
-            preimage: MOCK_INVOICE_PREIMAGE.to_vec(),
+            preimage: Preimage(MOCK_INVOICE_PREIMAGE),
         })
     }
 
@@ -503,7 +482,7 @@
         }
 
         <span class="prelude-val">Ok</span>(PayInvoiceResponse {
-            preimage: MOCK_INVOICE_PREIMAGE.to_vec(),
+            preimage: Preimage(MOCK_INVOICE_PREIMAGE),
         })
     }
 
@@ -517,8 +496,8 @@
         <span class="comment">// `FakeLightningTest` will never intercept any HTLCs because there is no
         // lightning connection, so instead we just create a stream that blocks
         // until the task group is shutdown.
-        </span><span class="kw">let </span>(<span class="kw">_</span>, <span class="kw-2">mut </span>receiver) = mpsc::channel::&lt;HtlcResult&gt;(<span class="number">0</span>);
-        <span class="kw">let </span>stream: BoxStream&lt;<span class="lifetime">'a</span>, HtlcResult&gt; = Box::pin(<span class="macro">stream!</span> {
+        </span><span class="kw">let </span>(<span class="kw">_</span>, <span class="kw-2">mut </span>receiver) = mpsc::channel::&lt;InterceptPaymentRequest&gt;(<span class="number">0</span>);
+        <span class="kw">let </span>stream: BoxStream&lt;<span class="lifetime">'a</span>, InterceptPaymentRequest&gt; = Box::pin(<span class="macro">stream!</span> {
             shutdown_receiver.<span class="kw">await</span>;
             <span class="comment">// This block, and `receiver`, exist solely to satisfy the type checker.
             </span><span class="kw">if let </span><span class="prelude-val">Some</span>(htlc_result) = receiver.recv().<span class="kw">await </span>{
@@ -530,9 +509,9 @@
 
     <span class="kw">async fn </span>complete_htlc(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _htlc: InterceptHtlcResponse,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
-        <span class="prelude-val">Ok</span>(EmptyResponse {})
+        _htlc: InterceptPaymentResponse,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">async fn </span>create_invoice(
@@ -541,21 +520,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CreateInvoiceResponse, LightningRpcError&gt; {
         <span class="kw">let </span>ctx = bitcoin30::secp256k1::Secp256k1::new();
 
-        <span class="kw">let </span>payment_hash_or = <span class="kw">if </span>create_invoice_request.payment_hash.is_empty() {
-            <span class="prelude-val">None
-        </span>} <span class="kw">else </span>{
-            <span class="prelude-val">Some</span>(
-                sha256::Hash::from_slice(<span class="kw-2">&amp;</span>create_invoice_request.payment_hash).map_err(|e| {
-                    LightningRpcError::FailedToGetInvoice {
-                        failure_reason: <span class="macro">format!</span>(
-                            <span class="string">"CreateInvoiceRequest.payment_hash is invalid: {e}"
-                        </span>),
-                    }
-                })<span class="question-mark">?</span>,
-            )
-        };
-
-        <span class="kw">let </span>invoice = <span class="kw">match </span>payment_hash_or {
+        <span class="kw">let </span>invoice = <span class="kw">match </span>create_invoice_request.payment_hash {
             <span class="prelude-val">Some</span>(payment_hash) =&gt; InvoiceBuilder::new(Currency::Regtest)
                 .description(String::new())
                 .payment_hash(payment_hash)
@@ -591,9 +556,7 @@
 
     <span class="kw">async fn </span>withdraw_onchain(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _address: Address,
-        _amount: BitcoinAmountOrAll,
-        _fee_rate_sats_per_vbyte: u64,
+        _payload: WithdrawOnchainPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;WithdrawOnchainResponse, LightningRpcError&gt; {
         <span class="prelude-val">Err</span>(LightningRpcError::FailedToWithdrawOnchain {
             failure_reason: <span class="string">"FakeLightningTest does not support withdrawing funds on-chain"
@@ -603,10 +566,7 @@
 
     <span class="kw">async fn </span>open_channel(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _pubkey: bitcoin30::secp256k1::PublicKey,
-        _host: String,
-        _channel_size_sats: u64,
-        _push_amount_sats: u64,
+        _payload: OpenChannelPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OpenChannelResponse, LightningRpcError&gt; {
         <span class="prelude-val">Err</span>(LightningRpcError::FailedToOpenChannel {
             failure_reason: <span class="string">"FakeLightningTest does not support opening channels"</span>.to_string(),
@@ -615,7 +575,7 @@
 
     <span class="kw">async fn </span>close_channels_with_peer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _pubkey: bitcoin30::secp256k1::PublicKey,
+        _payload: CloseChannelsWithPeerPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CloseChannelsWithPeerResponse, LightningRpcError&gt; {
         <span class="prelude-val">Err</span>(LightningRpcError::FailedToCloseChannelsWithPeer {
             failure_reason: <span class="string">"FakeLightningTest does not support closing channels by peer"
@@ -636,7 +596,7 @@
         })
     }
 
-    <span class="kw">async fn </span>sync_to_chain(<span class="kw-2">&amp;</span><span class="self">self</span>, _block_height: u32) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
+    <span class="kw">async fn </span>sync_to_chain(<span class="kw-2">&amp;</span><span class="self">self</span>, _block_height: u32) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
         <span class="prelude-val">Err</span>(LightningRpcError::FailedToSyncToChain {
             failure_reason: <span class="string">"FakeLightningTest does not support syncing to chain"</span>.to_string(),
         })

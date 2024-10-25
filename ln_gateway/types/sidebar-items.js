@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["PrettyInterceptHtlcRequest"]};
+window.SIDEBAR_ITEMS = {"struct":["PrettyInterceptPaymentRequest"]};

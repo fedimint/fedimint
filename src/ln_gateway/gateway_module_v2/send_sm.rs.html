@@ -236,13 +236,7 @@
 <a href="#235" id="235">235</a>
 <a href="#236" id="236">236</a>
 <a href="#237" id="237">237</a>
-<a href="#238" id="238">238</a>
-<a href="#239" id="239">239</a>
-<a href="#240" id="240">240</a>
-<a href="#241" id="241">241</a>
-<a href="#242" id="242">242</a>
-<a href="#243" id="243">243</a>
-<a href="#244" id="244">244</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
+<a href="#238" id="238">238</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
@@ -444,13 +438,7 @@
             .lnrpc
             .pay(invoice, max_delay, contract.amount - min_contract_amount)
             .<span class="kw">await
-            </span>.map(|response| {
-                response
-                    .preimage
-                    .as_slice()
-                    .try_into()
-                    .expect(<span class="string">"Preimage is 32 bytes"</span>)
-            })
+            </span>.map(|response| response.preimage.<span class="number">0</span>)
             .map_err(|e| Cancelled::LightningRpcError(e.to_string()))
     }
 

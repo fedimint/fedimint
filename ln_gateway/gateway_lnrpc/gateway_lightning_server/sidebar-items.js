@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["SERVICE_NAME"],"struct":["GatewayLightningServer"],"trait":["GatewayLightning"]};

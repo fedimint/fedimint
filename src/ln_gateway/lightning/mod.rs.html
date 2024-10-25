@@ -351,7 +351,107 @@
 <a href="#350" id="350">350</a>
 <a href="#351" id="351">351</a>
 <a href="#352" id="352">352</a>
-<a href="#353" id="353">353</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>cln;
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>cln;
+<span class="kw">pub mod </span>extension;
 <span class="kw">pub mod </span>ldk;
 <span class="kw">pub mod </span>lnd;
 
@@ -361,7 +461,7 @@
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>bitcoin30::{Address, Network};
+<span class="kw">use </span>bitcoin30::Network;
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>fedimint_bip39::Mnemonic;
 <span class="kw">use </span>fedimint_core::db::Database;
@@ -369,7 +469,7 @@
 <span class="kw">use </span>fedimint_core::secp256k1::PublicKey;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
-<span class="kw">use </span>fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
+<span class="kw">use </span>fedimint_core::{secp256k1, Amount};
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
 <span class="kw">use </span>fedimint_ln_common::PrunedInvoice;
 <span class="kw">use </span>futures::stream::BoxStream;
@@ -383,17 +483,12 @@
     FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_LDK_ESPLORA_SERVER_URL, FM_LDK_NETWORK, FM_LND_MACAROON_ENV,
     FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
-<span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{
-    CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
-    GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    InterceptHtlcRequest, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
-    WithdrawOnchainResponse,
-};
+<span class="kw">use </span><span class="kw">crate</span>::rpc::{CloseChannelsWithPeerPayload, WithdrawOnchainPayload};
+<span class="kw">use crate</span>::{OpenChannelPayload, Preimage};
 
 <span class="kw">pub const </span>MAX_LIGHTNING_RETRIES: u32 = <span class="number">10</span>;
 
-<span class="kw">pub type </span>HtlcResult = std::result::Result&lt;InterceptHtlcRequest, tonic::Status&gt;;
-<span class="kw">pub type </span>RouteHtlcStream&lt;<span class="lifetime">'a</span>&gt; = BoxStream&lt;<span class="lifetime">'a</span>, HtlcResult&gt;;
+<span class="kw">pub type </span>RouteHtlcStream&lt;<span class="lifetime">'a</span>&gt; = BoxStream&lt;<span class="lifetime">'a</span>, InterceptPaymentRequest&gt;;
 
 <span class="attr">#[derive(
     Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash,
@@ -514,10 +609,7 @@
     <span class="doccomment">/// Complete an HTLC that was intercepted by the gateway. Must be called for
     /// all successfully intercepted HTLCs sent to the stream returned by
     /// `route_htlcs`.
-    </span><span class="kw">async fn </span>complete_htlc(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        htlc: InterceptHtlcResponse,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt;;
+    </span><span class="kw">async fn </span>complete_htlc(<span class="kw-2">&amp;</span><span class="self">self</span>, htlc: InterceptPaymentResponse) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt;;
 
     <span class="kw">async fn </span>create_invoice(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -532,33 +624,28 @@
 
     <span class="kw">async fn </span>withdraw_onchain(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        address: Address,
-        amount: BitcoinAmountOrAll,
-        fee_rate_sats_per_vbyte: u64,
+        payload: WithdrawOnchainPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;WithdrawOnchainResponse, LightningRpcError&gt;;
 
     <span class="doccomment">/// Open a channel with a peer lightning node from the gateway's lightning
     /// node.
     </span><span class="kw">async fn </span>open_channel(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pubkey: secp256k1::PublicKey,
-        host: String,
-        channel_size_sats: u64,
-        push_amount_sats: u64,
+        payload: OpenChannelPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OpenChannelResponse, LightningRpcError&gt;;
 
     <span class="doccomment">/// Close all channels with a peer lightning node from the gateway's
     /// lightning node.
     </span><span class="kw">async fn </span>close_channels_with_peer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pubkey: secp256k1::PublicKey,
+        payload: CloseChannelsWithPeerPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CloseChannelsWithPeerResponse, LightningRpcError&gt;;
 
     <span class="kw">async fn </span>list_active_channels(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;ChannelInfo&gt;, LightningRpcError&gt;;
 
     <span class="kw">async fn </span>get_balances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetBalancesResponse, LightningRpcError&gt;;
 
-    <span class="kw">async fn </span>sync_to_chain(<span class="kw-2">&amp;</span><span class="self">self</span>, block_height: u32) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt;;
+    <span class="kw">async fn </span>sync_to_chain(<span class="kw-2">&amp;</span><span class="self">self</span>, block_height: u32) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt;;
 }
 
 <span class="kw">impl dyn </span>ILnRpcClient {
@@ -576,7 +663,7 @@
                 </span>.unwrap_or(GetRouteHintsResponse {
                     route_hints: Vec::new(),
                 });
-        route_hints.try_into().expect(<span class="string">"Could not parse route hints"</span>)
+        route_hints.route_hints
     }
 
     <span class="doccomment">/// Retrieves the basic information about the Gateway's connected Lightning
@@ -591,19 +678,15 @@
             block_height,
             synced_to_chain,
         } = <span class="self">self</span>.info().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>node_pub_key =
-            PublicKey::from_slice(<span class="kw-2">&amp;</span>pub_key).map_err(|e| LightningRpcError::InvalidMetadata {
-                failure_reason: <span class="macro">format!</span>(<span class="string">"Invalid node pubkey {e}"</span>),
-            })<span class="question-mark">?</span>;
         <span class="kw">let </span>network =
             Network::from_str(<span class="kw-2">&amp;</span>network).map_err(|e| LightningRpcError::InvalidMetadata {
                 failure_reason: <span class="macro">format!</span>(<span class="string">"Invalid network {network}: {e}"</span>),
             })<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>((node_pub_key, alias, network, block_height, synced_to_chain))
+        <span class="prelude-val">Ok</span>((pub_key, alias, network, block_height, synced_to_chain))
     }
 }
 
-<span class="attr">#[derive(Serialize, Deserialize, Debug)]
+<span class="attr">#[derive(Serialize, Deserialize, Debug, Clone)]
 </span><span class="kw">pub struct </span>ChannelInfo {
     <span class="kw">pub </span>remote_pubkey: secp256k1::PublicKey,
     <span class="kw">pub </span>channel_size_sats: u64,
@@ -703,5 +786,120 @@
     <span class="kw">fn </span>lightning_mode(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;LightningMode&gt; {
         <span class="prelude-val">Some</span>(<span class="self">self</span>.lightning_mode.clone())
     }
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>GetNodeInfoResponse {
+    <span class="kw">pub </span>pub_key: PublicKey,
+    <span class="kw">pub </span>alias: String,
+    <span class="kw">pub </span>network: String,
+    <span class="kw">pub </span>block_height: u32,
+    <span class="kw">pub </span>synced_to_chain: bool,
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>InterceptPaymentRequest {
+    <span class="kw">pub </span>payment_hash: <span class="kw">crate</span>::sha256::Hash,
+    <span class="kw">pub </span>amount_msat: u64,
+    <span class="kw">pub </span>expiry: u32,
+    <span class="kw">pub </span>incoming_chan_id: u64,
+    <span class="kw">pub </span>short_channel_id: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    <span class="kw">pub </span>htlc_id: u64,
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>InterceptPaymentResponse {
+    <span class="kw">pub </span>incoming_chan_id: u64,
+    <span class="kw">pub </span>htlc_id: u64,
+    <span class="kw">pub </span>payment_hash: <span class="kw">crate</span>::sha256::Hash,
+    <span class="kw">pub </span>action: PaymentAction,
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub enum </span>PaymentAction {
+    Settle(Preimage),
+    Cancel,
+    Forward,
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>GetRouteHintsRequest {
+    <span class="kw">pub </span>num_route_hints: u64,
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>GetRouteHintsResponse {
+    <span class="kw">pub </span>route_hints: Vec&lt;RouteHint&gt;,
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>PayInvoiceRequest {
+    <span class="kw">pub </span>invoice: String,
+    <span class="kw">pub </span>max_delay: u64,
+    <span class="kw">pub </span>max_fee_msat: u64,
+    <span class="kw">pub </span>payment_hash: Vec&lt;u8&gt;,
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>PayInvoiceResponse {
+    <span class="kw">pub </span>preimage: Preimage,
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>PayPrunedInvoiceRequest {
+    <span class="kw">pub </span>pruned_invoice: <span class="prelude-ty">Option</span>&lt;PrunedInvoice&gt;,
+    <span class="kw">pub </span>max_delay: u64,
+    <span class="kw">pub </span>max_fee_msat: Amount,
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>CreateInvoiceRequest {
+    <span class="kw">pub </span>payment_hash: <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::sha256::Hash&gt;,
+    <span class="kw">pub </span>amount_msat: u64,
+    <span class="kw">pub </span>expiry_secs: u32,
+    <span class="kw">pub </span>description: <span class="prelude-ty">Option</span>&lt;InvoiceDescription&gt;,
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub enum </span>InvoiceDescription {
+    Direct(String),
+    Hash(<span class="kw">crate</span>::sha256::Hash),
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>CreateInvoiceResponse {
+    <span class="kw">pub </span>invoice: String,
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>GetLnOnchainAddressResponse {
+    <span class="kw">pub </span>address: String,
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>WithdrawOnchainResponse {
+    <span class="kw">pub </span>txid: String,
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>OpenChannelResponse {
+    <span class="kw">pub </span>funding_txid: String,
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>CloseChannelsWithPeerResponse {
+    <span class="kw">pub </span>num_channels_closed: u32,
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>ListActiveChannelsResponse {
+    <span class="kw">pub </span>channels: Vec&lt;ChannelInfo&gt;,
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>GetBalancesResponse {
+    <span class="kw">pub </span>onchain_balance_sats: u64,
+    <span class="kw">pub </span>lightning_balance_msats: u64,
+    <span class="kw">pub </span>inbound_lightning_liquidity_msats: u64,
 }
 </code></pre></div></section></main></body></html>

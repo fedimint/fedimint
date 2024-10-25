@@ -618,24 +618,14 @@
 <a href="#617" id="617">617</a>
 <a href="#618" id="618">618</a>
 <a href="#619" id="619">619</a>
-<a href="#620" id="620">620</a>
-<a href="#621" id="621">621</a>
-<a href="#622" id="622">622</a>
-<a href="#623" id="623">623</a>
-<a href="#624" id="624">624</a>
-<a href="#625" id="625">625</a>
-<a href="#626" id="626">626</a>
-<a href="#627" id="627">627</a>
-<a href="#628" id="628">628</a>
-<a href="#629" id="629">629</a>
-<a href="#630" id="630">630</a>
-<a href="#631" id="631">631</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
+<a href="#620" id="620">620</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>bitcoin30::{secp256k1, Address, Network, OutPoint};
+<span class="kw">use </span>bitcoin30::{Network, OutPoint};
+<span class="kw">use </span>bitcoin_hashes::Hash;
 <span class="kw">use </span>fedimint_bip39::Mnemonic;
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_address, bitcoin30_to_bitcoin32_invoice, bitcoin30_to_bitcoin32_network,
@@ -645,6 +635,7 @@
 <span class="kw">use </span>fedimint_core::runtime::spawn;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll};
+<span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
 <span class="kw">use </span>ldk_node::config::EsploraSyncConfig;
 <span class="kw">use </span>ldk_node::lightning::ln::msgs::SocketAddress;
 <span class="kw">use </span>ldk_node::lightning::ln::PaymentHash;
@@ -655,18 +646,16 @@
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>tokio::sync::mpsc::Sender;
 <span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
-<span class="kw">use </span>tonic::Status;
 <span class="kw">use </span>tracing::{error, info};
 
 <span class="kw">use super</span>::{ChannelInfo, ILnRpcClient, LightningRpcError, RouteHtlcStream};
-<span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::create_invoice_request::Description;
-<span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::intercept_htlc_response::{Action, Settle};
-<span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{
-    CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
+<span class="kw">use </span><span class="kw">crate</span>::lightning::{
+    CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    InterceptHtlcRequest, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
-    WithdrawOnchainResponse,
+    InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription, OpenChannelResponse,
+    PayInvoiceResponse, PaymentAction, WithdrawOnchainResponse,
 };
+<span class="kw">use </span><span class="kw">crate</span>::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, WithdrawOnchainPayload};
 
 <span class="kw">pub struct </span>GatewayLdkClient {
     <span class="doccomment">/// The underlying lightning node.
@@ -684,8 +673,7 @@
 
     <span class="doccomment">/// The HTLC stream, until it is taken by calling
     /// `ILnRpcClient::route_htlcs`.
-    </span>htlc_stream_receiver_or:
-        <span class="prelude-ty">Option</span>&lt;tokio::sync::mpsc::Receiver&lt;<span class="prelude-ty">Result</span>&lt;InterceptHtlcRequest, Status&gt;&gt;&gt;,
+    </span>htlc_stream_receiver_or: <span class="prelude-ty">Option</span>&lt;tokio::sync::mpsc::Receiver&lt;InterceptPaymentRequest&gt;&gt;,
 }
 
 <span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span>GatewayLdkClient {
@@ -772,7 +760,7 @@
 
     <span class="kw">async fn </span>handle_next_event(
         node: <span class="kw-2">&amp;</span>ldk_node::Node,
-        htlc_stream_sender: <span class="kw-2">&amp;</span>Sender&lt;<span class="prelude-ty">Result</span>&lt;InterceptHtlcRequest, Status&gt;&gt;,
+        htlc_stream_sender: <span class="kw-2">&amp;</span>Sender&lt;InterceptPaymentRequest&gt;,
     ) {
         <span class="kw">if let </span>ldk_node::Event::PaymentClaimable {
             payment_id: <span class="kw">_</span>,
@@ -782,15 +770,14 @@
         } = node.next_event_async().<span class="kw">await
         </span>{
             <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = htlc_stream_sender
-                .send(<span class="prelude-val">Ok</span>(InterceptHtlcRequest {
-                    payment_hash: payment_hash.<span class="number">0</span>.to_vec(),
-                    incoming_amount_msat: claimable_amount_msat,
-                    outgoing_amount_msat: <span class="number">0</span>,
-                    incoming_expiry: claim_deadline.unwrap_or_default(),
+                .send(InterceptPaymentRequest {
+                    payment_hash: Hash::from_slice(<span class="kw-2">&amp;</span>payment_hash.<span class="number">0</span>).expect(<span class="string">"Failed to create Hash"</span>),
+                    amount_msat: claimable_amount_msat,
+                    expiry: claim_deadline.unwrap_or_default(),
                     short_channel_id: <span class="prelude-val">None</span>,
                     incoming_chan_id: <span class="number">0</span>,
                     htlc_id: <span class="number">0</span>,
-                }))
+                })
                 .<span class="kw">await
             </span>{
                 <span class="macro">error!</span>(<span class="question-mark">?</span>e, <span class="string">"Failed send InterceptHtlcRequest to stream"</span>);
@@ -887,7 +874,7 @@
                 &gt; esplora_chain_tip_timestamp;
 
         <span class="prelude-val">Ok</span>(GetNodeInfoResponse {
-            pub_key: <span class="self">self</span>.node.node_id().serialize().to_vec(),
+            pub_key: bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span><span class="self">self</span>.node.node_id()),
             alias: <span class="kw">match </span><span class="self">self</span>.node.node_alias() {
                 <span class="prelude-val">Some</span>(alias) =&gt; alias.to_string(),
                 <span class="prelude-val">None </span>=&gt; <span class="macro">format!</span>(<span class="string">"LDK Fedimint Gateway Node {}"</span>, <span class="self">self</span>.node.node_id()),
@@ -947,7 +934,7 @@
                         } = payment_details.kind
                         {
                             <span class="kw">return </span><span class="prelude-val">Ok</span>(PayInvoiceResponse {
-                                preimage: preimage.<span class="number">0</span>.to_vec(),
+                                preimage: Preimage(preimage.<span class="number">0</span>),
                             });
                         }
                     }
@@ -978,22 +965,15 @@
         <span class="prelude-val">Ok</span>((route_htlc_stream, Arc::new(<span class="kw-2">*</span><span class="self">self</span>)))
     }
 
-    <span class="kw">async fn </span>complete_htlc(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        htlc: InterceptHtlcResponse,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
-        <span class="kw">let </span>InterceptHtlcResponse {
+    <span class="kw">async fn </span>complete_htlc(<span class="kw-2">&amp;</span><span class="self">self</span>, htlc: InterceptPaymentResponse) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
+        <span class="kw">let </span>InterceptPaymentResponse {
             action,
             payment_hash,
             incoming_chan_id: <span class="kw">_</span>,
             htlc_id: <span class="kw">_</span>,
         } = htlc;
 
-        <span class="kw">let </span>ph = PaymentHash(payment_hash.clone().try_into().map_err(|<span class="kw">_</span>| {
-            LightningRpcError::FailedToCompleteHtlc {
-                failure_reason: <span class="string">"Failed to parse payment hash"</span>.to_string(),
-            }
-        })<span class="question-mark">?</span>);
+        <span class="kw">let </span>ph = PaymentHash(<span class="kw-2">*</span>payment_hash.clone().as_byte_array());
 
         <span class="comment">// TODO: Get the actual amount from the LDK node. Probably makes the
         // most sense to pipe it through the `InterceptHtlcResponse` struct.
@@ -1004,15 +984,13 @@
 
         <span class="kw">let </span>ph_hex_str = hex::encode(payment_hash);
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(Action::Settle(Settle { preimage })) = action {
+        <span class="kw">if let </span>PaymentAction::Settle(preimage) = action {
             <span class="self">self</span>.node
                 .bolt11_payment()
                 .claim_for_hash(
                     ph,
                     claimable_amount_msat,
-                    bitcoin30_to_bitcoin32_payment_preimage(<span class="kw-2">&amp;</span>PaymentPreimage(
-                        preimage.try_into().unwrap(),
-                    )),
+                    bitcoin30_to_bitcoin32_payment_preimage(<span class="kw-2">&amp;</span>PaymentPreimage(preimage.<span class="number">0</span>)),
                 )
                 .map_err(|<span class="kw">_</span>| LightningRpcError::FailedToCompleteHtlc {
                     failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to claim LDK payment with hash {ph_hex_str}"</span>),
@@ -1024,31 +1002,28 @@
                     failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to unwind LDK payment with hash {ph_hex_str}"</span>),
                 }
             })<span class="question-mark">?</span>;
-        };
+        }
 
-        <span class="kw">return </span><span class="prelude-val">Ok</span>(EmptyResponse {});
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
     }
 
     <span class="kw">async fn </span>create_invoice(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         create_invoice_request: CreateInvoiceRequest,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CreateInvoiceResponse, LightningRpcError&gt; {
-        <span class="kw">let </span>payment_hash_or = <span class="kw">if </span>create_invoice_request.payment_hash.is_empty() {
+        <span class="kw">let </span>payment_hash_or = <span class="kw">if let </span><span class="prelude-val">Some</span>(payment_hash) = create_invoice_request.payment_hash {
+            <span class="kw">let </span>ph = PaymentHash(<span class="kw-2">*</span>payment_hash.as_byte_array());
+            <span class="prelude-val">Some</span>(ph)
+        } <span class="kw">else </span>{
             <span class="prelude-val">None
-        </span>} <span class="kw">else </span>{
-            <span class="prelude-val">Some</span>(PaymentHash(create_invoice_request.payment_hash.try_into().map_err(
-                |<span class="kw">_</span>| LightningRpcError::FailedToGetInvoice {
-                    failure_reason: <span class="string">"Failed to convert Vec&lt;u8&gt; to [u8; 32] (this probably means that LDK received an invalid payment hash)"</span>.to_string(),
-                },
-            )<span class="question-mark">?</span>))
-        };
+        </span>};
 
         <span class="comment">// Currently `ldk-node` only supports direct descriptions.
         // See https://github.com/lightningdevkit/ldk-node/issues/325.
         // TODO: Once the above issue is resolved, we should support
         // description hashes as well.
         </span><span class="kw">let </span>description_str = <span class="kw">match </span>create_invoice_request.description {
-            <span class="prelude-val">Some</span>(Description::Direct(desc)) =&gt; desc,
+            <span class="prelude-val">Some</span>(InvoiceDescription::Direct(desc)) =&gt; desc,
             <span class="kw">_ </span>=&gt; String::new(),
         };
 
@@ -1090,21 +1065,22 @@
 
     <span class="kw">async fn </span>withdraw_onchain(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        address: Address,
-        amount: BitcoinAmountOrAll,
-        <span class="comment">// TODO: Respect this fee rate once `ldk-node` supports setting a custom fee rate.
-        // This work is planned to be in `ldk-node` v0.4 and is tracked here:
-        // https://github.com/lightningdevkit/ldk-node/issues/176
-        </span>_fee_rate_sats_per_vbyte: u64,
+        WithdrawOnchainPayload {
+            address,
+            amount,
+            <span class="comment">// TODO: Respect this fee rate once `ldk-node` supports setting a custom fee rate.
+            // This work is planned to be in `ldk-node` v0.4 and is tracked here:
+            // https://github.com/lightningdevkit/ldk-node/issues/176
+            </span>fee_rate_sats_per_vbyte: <span class="kw">_</span>,
+        }: WithdrawOnchainPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;WithdrawOnchainResponse, LightningRpcError&gt; {
         <span class="kw">let </span>onchain = <span class="self">self</span>.node.onchain_payment();
 
         <span class="kw">let </span>txid = <span class="kw">match </span>amount {
-            BitcoinAmountOrAll::All =&gt; {
-                onchain.send_all_to_address(<span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_address(<span class="kw-2">&amp;</span>address))
-            }
+            BitcoinAmountOrAll::All =&gt; onchain
+                .send_all_to_address(<span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_address(<span class="kw-2">&amp;</span>address.assume_checked())),
             BitcoinAmountOrAll::Amount(amount_sats) =&gt; onchain.send_to_address(
-                <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_address(<span class="kw-2">&amp;</span>address),
+                <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_address(<span class="kw-2">&amp;</span>address.assume_checked()),
                 amount_sats.to_sat(),
             ),
         }
@@ -1119,10 +1095,12 @@
 
     <span class="kw">async fn </span>open_channel(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pubkey: secp256k1::PublicKey,
-        host: String,
-        channel_size_sats: u64,
-        push_amount_sats: u64,
+        OpenChannelPayload {
+            pubkey,
+            host,
+            channel_size_sats,
+            push_amount_sats,
+        }: OpenChannelPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OpenChannelResponse, LightningRpcError&gt; {
         <span class="kw">let </span>push_amount_msats_or = <span class="kw">if </span>push_amount_sats == <span class="number">0 </span>{
             <span class="prelude-val">None
@@ -1173,7 +1151,7 @@
 
     <span class="kw">async fn </span>close_channels_with_peer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pubkey: secp256k1::PublicKey,
+        CloseChannelsWithPeerPayload { pubkey }: CloseChannelsWithPeerPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CloseChannelsWithPeerResponse, LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>num_channels_closed = <span class="number">0</span>;
 
@@ -1242,7 +1220,7 @@
         })
     }
 
-    <span class="kw">async fn </span>sync_to_chain(<span class="kw-2">&amp;</span><span class="self">self</span>, block_height: u32) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
+    <span class="kw">async fn </span>sync_to_chain(<span class="kw-2">&amp;</span><span class="self">self</span>, block_height: u32) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
         <span class="kw">loop </span>{
             <span class="self">self</span>.node
                 .sync_wallets()
@@ -1257,7 +1235,7 @@
             }
         }
 
-        <span class="prelude-val">Ok</span>(EmptyResponse {})
+        <span class="prelude-val">Ok</span>(())
     }
 }
 </code></pre></div></section></main></body></html>

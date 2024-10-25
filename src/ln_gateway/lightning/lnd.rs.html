@@ -1467,19 +1467,7 @@
 <a href="#1466" id="1466">1466</a>
 <a href="#1467" id="1467">1467</a>
 <a href="#1468" id="1468">1468</a>
-<a href="#1469" id="1469">1469</a>
-<a href="#1470" id="1470">1470</a>
-<a href="#1471" id="1471">1471</a>
-<a href="#1472" id="1472">1472</a>
-<a href="#1473" id="1473">1473</a>
-<a href="#1474" id="1474">1474</a>
-<a href="#1475" id="1475">1475</a>
-<a href="#1476" id="1476">1476</a>
-<a href="#1477" id="1477">1477</a>
-<a href="#1478" id="1478">1478</a>
-<a href="#1479" id="1479">1479</a>
-<a href="#1480" id="1480">1480</a>
-<a href="#1481" id="1481">1481</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
+<a href="#1469" id="1469">1469</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -1487,18 +1475,18 @@
 
 <span class="kw">use </span>anyhow::ensure;
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>bitcoin30::Address;
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
+<span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
+<span class="kw">use </span>fedimint_ln_common::route_hints::{RouteHint, RouteHintHop};
 <span class="kw">use </span>fedimint_ln_common::PrunedInvoice;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::PaymentImage;
 <span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>tokio::sync::{mpsc, RwLock};
 <span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
-<span class="kw">use </span>tonic::Status;
 <span class="kw">use </span>tonic_lnd::invoicesrpc::lookup_invoice_msg::InvoiceRef;
 <span class="kw">use </span>tonic_lnd::invoicesrpc::{
     AddHoldInvoiceRequest, CancelInvoiceMsg, LookupInvoiceMsg, SettleInvoiceMsg,
@@ -1524,17 +1512,15 @@
 
 <span class="kw">use super</span>::{ChannelInfo, ILnRpcClient, LightningRpcError, RouteHtlcStream, MAX_LIGHTNING_RETRIES};
 <span class="kw">use </span><span class="kw">crate</span>::db::GatewayDbtxNcExt;
-<span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::create_invoice_request::Description;
-<span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
-<span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
-<span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{
-    CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
+<span class="kw">use </span><span class="kw">crate</span>::lightning::{
+    CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    InterceptHtlcRequest, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
-    WithdrawOnchainResponse,
+    InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription, OpenChannelResponse,
+    PayInvoiceResponse, PaymentAction, WithdrawOnchainResponse,
 };
+<span class="kw">use </span><span class="kw">crate</span>::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, WithdrawOnchainPayload};
 
-<span class="kw">type </span>HtlcSubscriptionSender = mpsc::Sender&lt;<span class="prelude-ty">Result</span>&lt;InterceptHtlcRequest, Status&gt;&gt;;
+<span class="kw">type </span>HtlcSubscriptionSender = mpsc::Sender&lt;InterceptPaymentRequest&gt;;
 
 <span class="kw">const </span>LND_PAYMENT_TIMEOUT_SECONDS: i32 = <span class="number">180</span>;
 
@@ -1657,19 +1643,19 @@
                 );
 
                 <span class="kw">if </span>hold.state() == InvoiceState::Accepted {
-                    <span class="kw">let </span>intercept = InterceptHtlcRequest {
-                        payment_hash: hold.r_hash.clone(),
-                        incoming_amount_msat: hold.amt_paid_msat <span class="kw">as </span>u64,
+                    <span class="kw">let </span>intercept = InterceptPaymentRequest {
+                        payment_hash: Hash::from_slice(<span class="kw-2">&amp;</span>hold.r_hash.clone())
+                            .expect(<span class="string">"Failed to convert to Hash"</span>),
+                        amount_msat: hold.amt_paid_msat <span class="kw">as </span>u64,
                         <span class="comment">// The rest of the fields are not used in LNv2 and can be removed once LNv1
                         // support is over
-                        </span>outgoing_amount_msat: hold.amt_paid_msat <span class="kw">as </span>u64,
-                        incoming_expiry: hold.expiry <span class="kw">as </span>u32,
+                        </span>expiry: hold.expiry <span class="kw">as </span>u32,
                         short_channel_id: <span class="prelude-val">Some</span>(<span class="number">0</span>),
                         incoming_chan_id: <span class="number">0</span>,
                         htlc_id: <span class="number">0</span>,
                     };
 
-                    <span class="kw">match </span>gateway_sender.send(<span class="prelude-val">Ok</span>(intercept)).<span class="kw">await </span>{
+                    <span class="kw">match </span>gateway_sender.send(intercept).<span class="kw">await </span>{
                         <span class="prelude-val">Ok</span>(()) =&gt; {}
                         <span class="prelude-val">Err</span>(e) =&gt; {
                             <span class="macro">error!</span>(
@@ -1903,17 +1889,16 @@
                     <span class="kw">let </span>incoming_circuit_key = htlc.incoming_circuit_key.unwrap();
 
                     <span class="comment">// Forward all HTLCs to gatewayd, gatewayd will filter them based on scid
-                    </span><span class="kw">let </span>intercept = InterceptHtlcRequest {
-                        payment_hash: htlc.payment_hash,
-                        incoming_amount_msat: htlc.incoming_amount_msat,
-                        outgoing_amount_msat: htlc.outgoing_amount_msat,
-                        incoming_expiry: htlc.incoming_expiry,
+                    </span><span class="kw">let </span>intercept = InterceptPaymentRequest {
+                        payment_hash: Hash::from_slice(<span class="kw-2">&amp;</span>htlc.payment_hash).expect(<span class="string">"Failed to convert payment Hash"</span>),
+                        amount_msat: htlc.outgoing_amount_msat,
+                        expiry: htlc.incoming_expiry,
                         short_channel_id: <span class="prelude-val">Some</span>(htlc.outgoing_requested_chan_id),
                         incoming_chan_id: incoming_circuit_key.chan_id,
                         htlc_id: incoming_circuit_key.htlc_id,
                     };
 
-                    <span class="kw">match </span>gateway_sender.send(<span class="prelude-val">Ok</span>(intercept)).<span class="kw">await </span>{
+                    <span class="kw">match </span>gateway_sender.send(intercept).<span class="kw">await </span>{
                         <span class="prelude-val">Ok</span>(()) =&gt; {}
                         <span class="prelude-val">Err</span>(e) =&gt; {
                             <span class="macro">error!</span>(<span class="string">"Failed to send HTLC to gatewayd for processing: {:?}"</span>, e);
@@ -2032,7 +2017,7 @@
     </span><span class="kw">async fn </span>settle_hold_invoice(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payment_hash: Vec&lt;u8&gt;,
-        preimage: Vec&lt;u8&gt;,
+        preimage: Preimage,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>invoice = client
@@ -2061,7 +2046,9 @@
 
         client
             .invoices()
-            .settle_invoice(SettleInvoiceMsg { preimage })
+            .settle_invoice(SettleInvoiceMsg {
+                preimage: preimage.<span class="number">0</span>.to_vec(),
+            })
             .<span class="kw">await
             </span>.map_err(|e| {
                 <span class="macro">error!</span>(
@@ -2163,7 +2150,7 @@
         .to_string();
 
         <span class="kw">return </span><span class="prelude-val">Ok</span>(GetNodeInfoResponse {
-            pub_key: pub_key.serialize().to_vec(),
+            pub_key,
             alias: info.alias,
             network,
             block_height: info.block_height,
@@ -2212,10 +2199,8 @@
             <span class="kw">let </span><span class="prelude-val">Some</span>(policy) = info.node1_policy.clone() <span class="kw">else </span>{
                 <span class="kw">continue</span>;
             };
-            <span class="kw">let </span>src_node_id = PublicKey::from_str(<span class="kw-2">&amp;</span>chan.remote_pubkey)
-                .unwrap()
-                .serialize()
-                .to_vec();
+            <span class="kw">let </span>src_node_id =
+                PublicKey::from_str(<span class="kw-2">&amp;</span>chan.remote_pubkey).expect(<span class="string">"Failed to parse pubkey"</span>);
             <span class="kw">let </span>short_channel_id = chan.chan_id;
             <span class="kw">let </span>base_msat = policy.fee_base_msat <span class="kw">as </span>u32;
             <span class="kw">let </span>proportional_millionths = policy.fee_rate_milli_msat <span class="kw">as </span>u32;
@@ -2228,13 +2213,11 @@
                 short_channel_id,
                 base_msat,
                 proportional_millionths,
-                cltv_expiry_delta,
+                cltv_expiry_delta: cltv_expiry_delta <span class="kw">as </span>u16,
                 htlc_minimum_msat,
                 htlc_maximum_msat,
             };
-            route_hints.push(RouteHint {
-                hops: <span class="macro">vec!</span>[route_hint_hop],
-            });
+            route_hints.push(RouteHint(<span class="macro">vec!</span>[route_hint_hop]));
         }
 
         <span class="prelude-val">Ok</span>(GetRouteHintsResponse { route_hints })
@@ -2401,7 +2384,9 @@
                 }
             }
         };
-        <span class="prelude-val">Ok</span>(PayInvoiceResponse { preimage })
+        <span class="prelude-val">Ok</span>(PayInvoiceResponse {
+            preimage: Preimage(preimage.try_into().expect(<span class="string">"Failed to create preimage"</span>)),
+        })
     }
 
     <span class="doccomment">/// Returns true if the lightning backend supports payments without full
@@ -2418,7 +2403,7 @@
 
         <span class="comment">// Channel to send intercepted htlc to the gateway for processing
         </span><span class="kw">let </span>(gateway_sender, gateway_receiver) =
-            mpsc::channel::&lt;<span class="prelude-ty">Result</span>&lt;InterceptHtlcRequest, tonic::Status&gt;&gt;(CHANNEL_SIZE);
+            mpsc::channel::&lt;InterceptPaymentRequest&gt;(CHANNEL_SIZE);
 
         <span class="kw">let </span>(lnd_sender, lnd_rx) = mpsc::channel::&lt;ForwardHtlcInterceptResponse&gt;(CHANNEL_SIZE);
 
@@ -2440,11 +2425,8 @@
         <span class="prelude-val">Ok</span>((Box::pin(ReceiverStream::new(gateway_receiver)), new_client))
     }
 
-    <span class="kw">async fn </span>complete_htlc(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        htlc: InterceptHtlcResponse,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
-        <span class="kw">let </span>InterceptHtlcResponse {
+    <span class="kw">async fn </span>complete_htlc(<span class="kw-2">&amp;</span><span class="self">self</span>, htlc: InterceptPaymentResponse) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
+        <span class="kw">let </span>InterceptPaymentResponse {
             action,
             payment_hash,
             incoming_chan_id,
@@ -2452,36 +2434,29 @@
         } = htlc;
 
         <span class="kw">let </span>(action, preimage) = <span class="kw">match </span>action {
-            <span class="prelude-val">Some</span>(Action::Settle(Settle { preimage })) =&gt; {
-                (ResolveHoldForwardAction::Settle, preimage)
-            }
-            <span class="prelude-val">Some</span>(Action::Forward(Forward {})) =&gt; (ResolveHoldForwardAction::Resume, <span class="macro">vec!</span>[]),
-            <span class="prelude-val">Some</span>(Action::Cancel(Cancel { reason: <span class="kw">_ </span>})) | <span class="prelude-val">None </span>=&gt; {
-                (ResolveHoldForwardAction::Fail, <span class="macro">vec!</span>[])
-            }
+            PaymentAction::Settle(preimage) =&gt; (ResolveHoldForwardAction::Settle, preimage),
+            PaymentAction::Cancel =&gt; (ResolveHoldForwardAction::Resume, Preimage([<span class="number">0</span>; <span class="number">32</span>])),
+            PaymentAction::Forward =&gt; (ResolveHoldForwardAction::Fail, Preimage([<span class="number">0</span>; <span class="number">32</span>])),
         };
 
         <span class="comment">// First check if this completion request corresponds to a HOLD LNv2 invoice
         </span><span class="kw">match </span>action {
             ResolveHoldForwardAction::Settle =&gt; {
                 <span class="kw">if let </span><span class="prelude-val">Ok</span>(()) = <span class="self">self
-                    </span>.settle_hold_invoice(payment_hash.clone(), preimage.clone())
+                    </span>.settle_hold_invoice(payment_hash.to_byte_array().to_vec(), preimage.clone())
                     .<span class="kw">await
                 </span>{
-                    <span class="macro">info!</span>(
-                        <span class="string">"Successfully settled HOLD invoice {}"</span>,
-                        PrettyPaymentHash(<span class="kw-2">&amp;</span>payment_hash)
-                    );
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(EmptyResponse {});
+                    <span class="macro">info!</span>(<span class="string">"Successfully settled HOLD invoice {}"</span>, payment_hash);
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                 }
             }
             <span class="kw">_ </span>=&gt; {
-                <span class="kw">if let </span><span class="prelude-val">Ok</span>(()) = <span class="self">self</span>.cancel_hold_invoice(payment_hash.clone()).<span class="kw">await </span>{
-                    <span class="macro">info!</span>(
-                        <span class="string">"Successfully canceled HOLD invoice {}"</span>,
-                        PrettyPaymentHash(<span class="kw-2">&amp;</span>payment_hash)
-                    );
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(EmptyResponse {});
+                <span class="kw">if let </span><span class="prelude-val">Ok</span>(()) = <span class="self">self
+                    </span>.cancel_hold_invoice(payment_hash.to_byte_array().to_vec())
+                    .<span class="kw">await
+                </span>{
+                    <span class="macro">info!</span>(<span class="string">"Successfully canceled HOLD invoice {}"</span>, payment_hash);
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                 }
             }
         }
@@ -2494,13 +2469,13 @@
                     htlc_id,
                 }),
                 action: action.into(),
-                preimage,
+                preimage: preimage.<span class="number">0</span>.to_vec(),
                 failure_message: <span class="macro">vec!</span>[],
                 failure_code: FailureCode::TemporaryChannelFailure.into(),
             };
 
             <span class="self">Self</span>::send_lnd_response(lnd_sender, response).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(EmptyResponse {});
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
 
         <span class="macro">error!</span>(<span class="string">"Gatewayd has not started to route HTLCs"</span>);
@@ -2516,28 +2491,23 @@
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>description = create_invoice_request
             .description
-            .unwrap_or(Description::Direct(String::new()));
+            .unwrap_or(InvoiceDescription::Direct(String::new()));
 
-        <span class="kw">if </span>create_invoice_request.payment_hash.is_empty() {
+        <span class="kw">if </span>create_invoice_request.payment_hash.is_none() {
             <span class="kw">let </span>invoice = <span class="kw">match </span>description {
-                Description::Direct(description) =&gt; Invoice {
+                InvoiceDescription::Direct(description) =&gt; Invoice {
                     memo: description,
                     value_msat: create_invoice_request.amount_msat <span class="kw">as </span>i64,
                     expiry: i64::from(create_invoice_request.expiry_secs),
                     ..Default::default()
                 },
-                Description::Hash(desc_hash) =&gt; Invoice {
-                    description_hash: desc_hash,
+                InvoiceDescription::Hash(desc_hash) =&gt; Invoice {
+                    description_hash: desc_hash.to_byte_array().to_vec(),
                     value_msat: create_invoice_request.amount_msat <span class="kw">as </span>i64,
                     expiry: i64::from(create_invoice_request.expiry_secs),
                     ..Default::default()
                 },
             };
-
-            <span class="self">self</span>.payment_hashes
-                .write()
-                .<span class="kw">await
-                </span>.insert(create_invoice_request.payment_hash);
 
             <span class="kw">let </span>add_invoice_response =
                 client.lightning().add_invoice(invoice).<span class="kw">await</span>.map_err(|e| {
@@ -2549,27 +2519,29 @@
             <span class="kw">let </span>invoice = add_invoice_response.into_inner().payment_request;
             <span class="prelude-val">Ok</span>(CreateInvoiceResponse { invoice })
         } <span class="kw">else </span>{
+            <span class="kw">let </span>payment_hash = create_invoice_request
+                .payment_hash
+                .expect(<span class="string">"Already checked payment hash"</span>)
+                .to_byte_array()
+                .to_vec();
             <span class="kw">let </span>hold_invoice_request = <span class="kw">match </span>description {
-                Description::Direct(description) =&gt; AddHoldInvoiceRequest {
+                InvoiceDescription::Direct(description) =&gt; AddHoldInvoiceRequest {
                     memo: description,
-                    hash: create_invoice_request.payment_hash.clone(),
+                    hash: payment_hash.clone(),
                     value_msat: create_invoice_request.amount_msat <span class="kw">as </span>i64,
                     expiry: i64::from(create_invoice_request.expiry_secs),
                     ..Default::default()
                 },
-                Description::Hash(desc_hash) =&gt; AddHoldInvoiceRequest {
-                    description_hash: desc_hash,
-                    hash: create_invoice_request.payment_hash.clone(),
+                InvoiceDescription::Hash(desc_hash) =&gt; AddHoldInvoiceRequest {
+                    description_hash: desc_hash.to_byte_array().to_vec(),
+                    hash: payment_hash.clone(),
                     value_msat: create_invoice_request.amount_msat <span class="kw">as </span>i64,
                     expiry: i64::from(create_invoice_request.expiry_secs),
                     ..Default::default()
                 },
             };
 
-            <span class="self">self</span>.payment_hashes
-                .write()
-                .<span class="kw">await
-                </span>.insert(create_invoice_request.payment_hash);
+            <span class="self">self</span>.payment_hashes.write().<span class="kw">await</span>.insert(payment_hash);
 
             <span class="kw">let </span>hold_invoice_response = client
                 .invoices()
@@ -2609,14 +2581,16 @@
 
     <span class="kw">async fn </span>withdraw_onchain(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        address: Address,
-        amount: BitcoinAmountOrAll,
-        fee_rate_sats_per_vbyte: u64,
+        WithdrawOnchainPayload {
+            address,
+            amount,
+            fee_rate_sats_per_vbyte,
+        }: WithdrawOnchainPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;WithdrawOnchainResponse, LightningRpcError&gt; {
         <span class="attr">#[allow(deprecated)]
         </span><span class="kw">let </span>request = <span class="kw">match </span>amount {
             BitcoinAmountOrAll::All =&gt; SendCoinsRequest {
-                addr: address.to_string(),
+                addr: address.assume_checked().to_string(),
                 amount: <span class="number">0</span>,
                 target_conf: <span class="number">0</span>,
                 sat_per_vbyte: fee_rate_sats_per_vbyte,
@@ -2627,7 +2601,7 @@
                 spend_unconfirmed: <span class="bool-val">true</span>,
             },
             BitcoinAmountOrAll::Amount(amount) =&gt; SendCoinsRequest {
-                addr: address.to_string(),
+                addr: address.assume_checked().to_string(),
                 amount: amount.to_sat() <span class="kw">as </span>i64,
                 target_conf: <span class="number">0</span>,
                 sat_per_vbyte: fee_rate_sats_per_vbyte,
@@ -2651,10 +2625,12 @@
 
     <span class="kw">async fn </span>open_channel(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pubkey: PublicKey,
-        host: String,
-        channel_size_sats: u64,
-        push_amount_sats: u64,
+        OpenChannelPayload {
+            pubkey,
+            host,
+            channel_size_sats,
+            push_amount_sats,
+        }: OpenChannelPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OpenChannelResponse, LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -2705,7 +2681,7 @@
 
     <span class="kw">async fn </span>close_channels_with_peer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pubkey: PublicKey,
+        CloseChannelsWithPeerPayload { pubkey }: CloseChannelsWithPeerPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CloseChannelsWithPeerResponse, LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -2863,9 +2839,9 @@
         })
     }
 
-    <span class="kw">async fn </span>sync_to_chain(<span class="kw-2">&amp;</span><span class="self">self</span>, _block_height: u32) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
+    <span class="kw">async fn </span>sync_to_chain(<span class="kw-2">&amp;</span><span class="self">self</span>, _block_height: u32) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
         <span class="comment">// We don't need to do anything here, as LND automatically syncs to chain.
-        </span><span class="prelude-val">Ok</span>(EmptyResponse {})
+        </span><span class="prelude-val">Ok</span>(())
     }
 }
 

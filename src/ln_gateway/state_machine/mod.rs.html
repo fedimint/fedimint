@@ -820,8 +820,7 @@
 <a href="#819" id="819">819</a>
 <a href="#820" id="820">820</a>
 <a href="#821" id="821">821</a>
-<a href="#822" id="822">822</a>
-<a href="#823" id="823">823</a></pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
+<a href="#822" id="822">822</a></pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -877,8 +876,7 @@
     GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates,
     OutgoingPaymentError,
 };
-<span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::InterceptHtlcRequest;
-<span class="kw">use </span><span class="kw">crate</span>::lightning::LightningContext;
+<span class="kw">use </span><span class="kw">crate</span>::lightning::{InterceptPaymentRequest, LightningContext};
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::complete::{
     GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState,
 };
@@ -1608,15 +1606,15 @@
     </span><span class="kw">pub </span>htlc_id: u64,
 }
 
-<span class="kw">impl </span>TryFrom&lt;InterceptHtlcRequest&gt; <span class="kw">for </span>Htlc {
+<span class="kw">impl </span>TryFrom&lt;InterceptPaymentRequest&gt; <span class="kw">for </span>Htlc {
     <span class="kw">type </span>Error = anyhow::Error;
 
-    <span class="kw">fn </span>try_from(s: InterceptHtlcRequest) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
+    <span class="kw">fn </span>try_from(s: InterceptPaymentRequest) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-            payment_hash: sha256::Hash::from_slice(<span class="kw-2">&amp;</span>s.payment_hash)<span class="question-mark">?</span>,
-            incoming_amount_msat: Amount::from_msats(s.incoming_amount_msat),
-            outgoing_amount_msat: Amount::from_msats(s.outgoing_amount_msat),
-            incoming_expiry: s.incoming_expiry,
+            payment_hash: s.payment_hash,
+            incoming_amount_msat: Amount::from_msats(s.amount_msat),
+            outgoing_amount_msat: Amount::from_msats(s.amount_msat),
+            incoming_expiry: s.expiry,
             short_channel_id: s.short_channel_id,
             incoming_chan_id: s.incoming_chan_id,
             htlc_id: s.htlc_id,

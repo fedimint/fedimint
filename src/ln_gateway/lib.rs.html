@@ -2153,42 +2153,7 @@
 <a href="#2152" id="2152">2152</a>
 <a href="#2153" id="2153">2153</a>
 <a href="#2154" id="2154">2154</a>
-<a href="#2155" id="2155">2155</a>
-<a href="#2156" id="2156">2156</a>
-<a href="#2157" id="2157">2157</a>
-<a href="#2158" id="2158">2158</a>
-<a href="#2159" id="2159">2159</a>
-<a href="#2160" id="2160">2160</a>
-<a href="#2161" id="2161">2161</a>
-<a href="#2162" id="2162">2162</a>
-<a href="#2163" id="2163">2163</a>
-<a href="#2164" id="2164">2164</a>
-<a href="#2165" id="2165">2165</a>
-<a href="#2166" id="2166">2166</a>
-<a href="#2167" id="2167">2167</a>
-<a href="#2168" id="2168">2168</a>
-<a href="#2169" id="2169">2169</a>
-<a href="#2170" id="2170">2170</a>
-<a href="#2171" id="2171">2171</a>
-<a href="#2172" id="2172">2172</a>
-<a href="#2173" id="2173">2173</a>
-<a href="#2174" id="2174">2174</a>
-<a href="#2175" id="2175">2175</a>
-<a href="#2176" id="2176">2176</a>
-<a href="#2177" id="2177">2177</a>
-<a href="#2178" id="2178">2178</a>
-<a href="#2179" id="2179">2179</a>
-<a href="#2180" id="2180">2180</a>
-<a href="#2181" id="2181">2181</a>
-<a href="#2182" id="2182">2182</a>
-<a href="#2183" id="2183">2183</a>
-<a href="#2184" id="2184">2184</a>
-<a href="#2185" id="2185">2185</a>
-<a href="#2186" id="2186">2186</a>
-<a href="#2187" id="2187">2187</a>
-<a href="#2188" id="2188">2188</a>
-<a href="#2189" id="2189">2189</a>
-<a href="#2190" id="2190">2190</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2155" id="2155">2155</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2214,10 +2179,6 @@
 <span class="kw">pub mod </span>state_machine;
 <span class="kw">mod </span>types;
 
-<span class="kw">pub mod </span>gateway_lnrpc {
-    <span class="macro">tonic::include_proto!</span>(<span class="string">"gateway_lnrpc"</span>);
-}
-
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::fmt::Display;
@@ -2228,7 +2189,7 @@
 
 <span class="kw">use </span>anyhow::{anyhow, Context};
 <span class="kw">use </span>bitcoin30::{Address, Network, Txid};
-<span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
+<span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>client::GatewayClientBuilder;
 <span class="kw">use </span>config::GatewayOpts;
@@ -2246,7 +2207,7 @@
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
-<span class="kw">use </span>fedimint_core::db::{apply_migrations_server, Database, DatabaseTransaction, DatabaseValue};
+<span class="kw">use </span>fedimint_core::db::{apply_migrations_server, Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
 <span class="kw">use </span>fedimint_core::secp256k1::schnorr::Signature;
@@ -2271,9 +2232,11 @@
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
 };
 <span class="kw">use </span>futures::stream::StreamExt;
-<span class="kw">use </span>gateway_lnrpc::intercept_htlc_response::{Action, Cancel};
-<span class="kw">use </span>gateway_lnrpc::{CloseChannelsWithPeerResponse, InterceptHtlcRequest, InterceptHtlcResponse};
-<span class="kw">use </span>lightning::{ILnRpcClient, LightningBuilder, LightningRpcError};
+<span class="kw">use </span>lightning::{
+    CloseChannelsWithPeerResponse, CreateInvoiceRequest, ILnRpcClient, InterceptPaymentRequest,
+    InterceptPaymentResponse, InvoiceDescription, LightningBuilder, LightningRpcError,
+    PaymentAction,
+};
 <span class="kw">use </span>lightning_invoice::{Bolt11Invoice, RoutingFees};
 <span class="kw">use </span>rand::{thread_rng, Rng};
 <span class="kw">use </span>rpc::{
@@ -2291,9 +2254,6 @@
 <span class="kw">use </span><span class="kw">crate</span>::db::{get_gatewayd_database_migrations, FederationConfig};
 <span class="kw">use </span><span class="kw">crate</span>::envs::FM_GATEWAY_MNEMONIC_ENV;
 <span class="kw">use </span><span class="kw">crate</span>::error::{AdminGatewayError, LNv1Error, LNv2Error, PublicGatewayError};
-<span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::create_invoice_request::Description;
-<span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::intercept_htlc_response::Forward;
-<span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::CreateInvoiceRequest;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::GatewayClientModuleV2;
 <span class="kw">use </span><span class="kw">crate</span>::lightning::{GatewayLightningBuilder, LightningContext, LightningMode, RouteHtlcStream};
 <span class="kw">use </span><span class="kw">crate</span>::rpc::rpc_server::{hash_password, run_webserver};
@@ -2301,7 +2261,7 @@
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
     GatewayBalances, WithdrawPayload,
 };
-<span class="kw">use </span><span class="kw">crate</span>::types::PrettyInterceptHtlcRequest;
+<span class="kw">use </span><span class="kw">crate</span>::types::PrettyInterceptPaymentRequest;
 
 <span class="doccomment">/// How long a gateway announcement stays valid
 </span><span class="kw">const </span>GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(<span class="number">600</span>);
@@ -2757,7 +2717,7 @@
                     };
 
                     <span class="kw">let </span>payment_request = <span class="kw">match </span>payment_request {
-                        <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(payment_request)) =&gt; payment_request,
+                        <span class="prelude-val">Some</span>(payment_request) =&gt; payment_request,
                         other =&gt; {
                             <span class="macro">warn!</span>(
                                 <span class="question-mark">?</span>other,
@@ -2799,16 +2759,16 @@
     /// a normal lightning node.
     </span><span class="kw">async fn </span>handle_lightning_payment(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        htlc_request: InterceptHtlcRequest,
+        payment_request: InterceptPaymentRequest,
         lightning_context: <span class="kw-2">&amp;</span>LightningContext,
     ) {
         <span class="macro">info!</span>(
             <span class="string">"Intercepting lightning payment {}"</span>,
-            PrettyInterceptHtlcRequest(<span class="kw-2">&amp;</span>htlc_request)
+            PrettyInterceptPaymentRequest(<span class="kw-2">&amp;</span>payment_request)
         );
 
         <span class="kw">if </span><span class="self">self
-            </span>.try_handle_lightning_payment_lnv2(<span class="kw-2">&amp;</span>htlc_request, lightning_context)
+            </span>.try_handle_lightning_payment_lnv2(<span class="kw-2">&amp;</span>payment_request, lightning_context)
             .<span class="kw">await
             </span>.is_ok()
         {
@@ -2816,26 +2776,23 @@
         }
 
         <span class="kw">if </span><span class="self">self
-            </span>.try_handle_lightning_payment_ln_legacy(<span class="kw-2">&amp;</span>htlc_request)
+            </span>.try_handle_lightning_payment_ln_legacy(<span class="kw-2">&amp;</span>payment_request)
             .<span class="kw">await
             </span>.is_ok()
         {
             <span class="kw">return</span>;
         }
 
-        <span class="self">Self</span>::forward_lightning_payment(htlc_request, lightning_context).<span class="kw">await</span>;
+        <span class="self">Self</span>::forward_lightning_payment(payment_request, lightning_context).<span class="kw">await</span>;
     }
 
     <span class="doccomment">/// Tries to handle a lightning payment using the LNv2 protocol.
     /// Returns `Ok` if the payment was handled, `Err` otherwise.
     </span><span class="kw">async fn </span>try_handle_lightning_payment_lnv2(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        htlc_request: <span class="kw-2">&amp;</span>InterceptHtlcRequest,
+        htlc_request: <span class="kw-2">&amp;</span>InterceptPaymentRequest,
         lightning_context: <span class="kw-2">&amp;</span>LightningContext,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>payment_hash =
-            bitcoin_hashes::sha256::Hash::from_slice(<span class="kw-2">&amp;</span>htlc_request.payment_hash).expect(<span class="string">"32 bytes"</span>);
-
         <span class="comment">// If `payment_hash` has been registered as a LNv2 payment, we try to complete
         // the payment by getting the preimage from the federation
         // using the LNv2 protocol. If the `payment_hash` is not registered,
@@ -2843,8 +2800,8 @@
         // not a Fedimint.
         </span><span class="kw">let </span>(contract, client) = <span class="self">self
             </span>.get_registered_incoming_contract_and_client_v2(
-                PaymentImage::Hash(payment_hash),
-                htlc_request.incoming_amount_msat,
+                PaymentImage::Hash(htlc_request.payment_hash),
+                htlc_request.amount_msat,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -2852,7 +2809,7 @@
             .get_first_module::&lt;GatewayClientModuleV2&gt;()
             .expect(<span class="string">"Must have client module"</span>)
             .relay_incoming_htlc(
-                payment_hash,
+                htlc_request.payment_hash,
                 htlc_request.incoming_chan_id,
                 htlc_request.htlc_id,
                 contract,
@@ -2861,11 +2818,9 @@
         </span>{
             <span class="macro">error!</span>(<span class="string">"Error relaying incoming lightning payment: {error:?}"</span>);
 
-            <span class="kw">let </span>outcome = InterceptHtlcResponse {
-                action: <span class="prelude-val">Some</span>(Action::Cancel(Cancel {
-                    reason: <span class="string">"Insufficient Liquidity"</span>.to_string(),
-                })),
-                payment_hash: payment_hash.to_bytes(),
+            <span class="kw">let </span>outcome = InterceptPaymentResponse {
+                action: PaymentAction::Cancel,
+                payment_hash: htlc_request.payment_hash,
                 incoming_chan_id: htlc_request.incoming_chan_id,
                 htlc_id: htlc_request.htlc_id,
             };
@@ -2882,7 +2837,7 @@
     /// Returns `Ok` if the payment was handled, `Err` otherwise.
     </span><span class="kw">async fn </span>try_handle_lightning_payment_ln_legacy(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        htlc_request: <span class="kw-2">&amp;</span>InterceptHtlcRequest,
+        htlc_request: <span class="kw-2">&amp;</span>InterceptPaymentRequest,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="comment">// Check if the payment corresponds to a federation supporting legacy Lightning.
         </span><span class="kw">let </span><span class="prelude-val">Some</span>(federation_index) = htlc_request.short_channel_id <span class="kw">else </span>{
@@ -2929,11 +2884,11 @@
     /// node. Only necessary for LNv1, since LNv2 uses hold invoices instead
     /// of HTLC interception for routing incoming payments.
     </span><span class="kw">async fn </span>forward_lightning_payment(
-        htlc_request: InterceptHtlcRequest,
+        htlc_request: InterceptPaymentRequest,
         lightning_context: <span class="kw-2">&amp;</span>LightningContext,
     ) {
-        <span class="kw">let </span>outcome = InterceptHtlcResponse {
-            action: <span class="prelude-val">Some</span>(Action::Forward(Forward {})),
+        <span class="kw">let </span>outcome = InterceptPaymentResponse {
+            action: PaymentAction::Forward,
             payment_hash: htlc_request.payment_hash,
             incoming_chan_id: htlc_request.incoming_chan_id,
             htlc_id: htlc_request.htlc_id,
@@ -3157,11 +3112,11 @@
             <span class="kw-2">&amp;</span>lightning_context
                 .lnrpc
                 .create_invoice(CreateInvoiceRequest {
-                    <span class="comment">// Empty payment hash indicates an invoice payable directly to the gateway.
-                    </span>payment_hash: Vec::new(),
-                    amount_msat: payload.amount_msats,
+                    payment_hash: <span class="prelude-val">None</span>, <span class="comment">/* Empty payment hash indicates an invoice payable
+                                         * directly to the gateway. */
+                    </span>amount_msat: payload.amount_msats,
                     expiry_secs: payload.expiry_secs.unwrap_or(<span class="number">3600</span>),
-                    description: payload.description.map(Description::Direct),
+                    description: payload.description.map(InvoiceDescription::Direct),
                 })
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.invoice,
@@ -3201,10 +3156,7 @@
             .lnrpc
             .pay(payload.invoice, MAX_DELAY, Amount::from_msats(max_fee))
             .<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(Preimage(
-            res.preimage.try_into().expect(<span class="string">"preimage is 32 bytes"</span>),
-        ))
+        <span class="prelude-val">Ok</span>(res.preimage)
     }
 
     <span class="doccomment">/// Requests the gateway to pay an outgoing LN invoice on behalf of a
@@ -3607,20 +3559,9 @@
 
     <span class="doccomment">/// Instructs the Gateway's Lightning node to open a channel to a peer
     /// specified by `pubkey`.
-    </span><span class="kw">pub async fn </span>handle_open_channel_msg(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        OpenChannelPayload {
-            pubkey,
-            host,
-            channel_size_sats,
-            push_amount_sats,
-        }: OpenChannelPayload,
-    ) -&gt; AdminResult&lt;Txid&gt; {
+    </span><span class="kw">pub async fn </span>handle_open_channel_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: OpenChannelPayload) -&gt; AdminResult&lt;Txid&gt; {
         <span class="kw">let </span>context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>res = context
-            .lnrpc
-            .open_channel(pubkey, host, channel_size_sats, push_amount_sats)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>res = context.lnrpc.open_channel(payload).<span class="kw">await</span><span class="question-mark">?</span>;
         Txid::from_str(<span class="kw-2">&amp;</span>res.funding_txid).map_err(|e| {
             AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
                 failure_reason: <span class="macro">format!</span>(<span class="string">"Received invalid channel funding txid string {e}"</span>),
@@ -3632,10 +3573,10 @@
     /// specified by `pubkey`.
     </span><span class="kw">pub async fn </span>handle_close_channels_with_peer_msg(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        CloseChannelsWithPeerPayload { pubkey }: CloseChannelsWithPeerPayload,
+        payload: CloseChannelsWithPeerPayload,
     ) -&gt; AdminResult&lt;CloseChannelsWithPeerResponse&gt; {
         <span class="kw">let </span>context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>response = context.lnrpc.close_channels_with_peer(pubkey).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>response = context.lnrpc.close_channels_with_peer(payload).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(response)
     }
 
@@ -3652,21 +3593,10 @@
     <span class="doccomment">/// Withdraws funds from the gateway's lightning node on-chain wallet.
     </span><span class="kw">pub async fn </span>handle_withdraw_onchain_msg(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        WithdrawOnchainPayload {
-            address,
-            amount: amount_sats,
-            fee_rate_sats_per_vbyte,
-        }: WithdrawOnchainPayload,
+        payload: WithdrawOnchainPayload,
     ) -&gt; AdminResult&lt;Txid&gt; {
         <span class="kw">let </span>context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>response = context
-            .lnrpc
-            .withdraw_onchain(
-                address.assume_checked(),
-                amount_sats,
-                fee_rate_sats_per_vbyte,
-            )
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>response = context.lnrpc.withdraw_onchain(payload).<span class="kw">await</span><span class="question-mark">?</span>;
         Txid::from_str(<span class="kw-2">&amp;</span>response.txid).map_err(|e| AdminGatewayError::WithdrawError {
             failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to parse withdrawal TXID: {e}"</span>),
         })
@@ -4309,20 +4239,20 @@
             Bolt11InvoiceDescription::Direct(description) =&gt; {
                 lnrpc
                     .create_invoice(CreateInvoiceRequest {
-                        payment_hash: payment_hash.to_byte_array().to_vec(),
+                        payment_hash: <span class="prelude-val">Some</span>(payment_hash),
                         amount_msat: amount.msats,
                         expiry_secs: expiry_time,
-                        description: <span class="prelude-val">Some</span>(Description::Direct(description)),
+                        description: <span class="prelude-val">Some</span>(InvoiceDescription::Direct(description)),
                     })
                     .<span class="kw">await</span><span class="question-mark">?
             </span>}
             Bolt11InvoiceDescription::Hash(hash) =&gt; {
                 lnrpc
                     .create_invoice(CreateInvoiceRequest {
-                        payment_hash: payment_hash.to_byte_array().to_vec(),
+                        payment_hash: <span class="prelude-val">Some</span>(payment_hash),
                         amount_msat: amount.msats,
                         expiry_secs: expiry_time,
-                        description: <span class="prelude-val">Some</span>(Description::Hash(hash.to_byte_array().to_vec())),
+                        description: <span class="prelude-val">Some</span>(InvoiceDescription::Hash(hash)),
                     })
                     .<span class="kw">await</span><span class="question-mark">?
             </span>}

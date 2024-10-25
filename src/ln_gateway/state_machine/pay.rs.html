@@ -936,12 +936,7 @@
 <a href="#935" id="935">935</a>
 <a href="#936" id="936">936</a>
 <a href="#937" id="937">937</a>
-<a href="#938" id="938">938</a>
-<a href="#939" id="939">939</a>
-<a href="#940" id="940">940</a>
-<a href="#941" id="941">941</a>
-<a href="#942" id="942">942</a>
-<a href="#943" id="943">943</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
+<a href="#938" id="938">938</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin_hashes::sha256;
@@ -967,8 +962,7 @@
 
 <span class="kw">use super</span>::{GatewayClientContext, GatewayClientStateMachines, GatewayExtReceiveStates};
 <span class="kw">use </span><span class="kw">crate</span>::db::GatewayDbtxNcExt;
-<span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::PayInvoiceResponse;
-<span class="kw">use </span><span class="kw">crate</span>::lightning::LightningRpcError;
+<span class="kw">use </span><span class="kw">crate</span>::lightning::{LightningRpcError, PayInvoiceResponse};
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayClientModule;
 <span class="kw">use crate</span>::{GatewayState, RoutingFees};
 
@@ -1387,14 +1381,10 @@
         <span class="kw">match </span>payment_result {
             <span class="prelude-val">Ok</span>(PayInvoiceResponse { preimage, .. }) =&gt; {
                 <span class="macro">debug!</span>(<span class="string">"Preimage received for contract {contract:?}"</span>);
-                <span class="kw">let </span>slice: [u8; <span class="number">32</span>] = preimage.try_into().expect(<span class="string">"Failed to parse preimage"</span>);
                 GatewayPayStateMachine {
                     common,
                     state: GatewayPayStates::ClaimOutgoingContract(Box::new(
-                        GatewayPayClaimOutgoingContract {
-                            contract,
-                            preimage: Preimage(slice),
-                        },
+                        GatewayPayClaimOutgoingContract { contract, preimage },
                     )),
                 }
             }

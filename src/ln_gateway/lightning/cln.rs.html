@@ -287,31 +287,42 @@
 <a href="#286" id="286">286</a>
 <a href="#287" id="287">287</a>
 <a href="#288" id="288">288</a>
-<a href="#289" id="289">289</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>bitcoin30::Address;
-<span class="kw">use </span>fedimint_core::encoding::Encodable;
-<span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
-<span class="kw">use </span>fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
+<span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>fedimint_ln_common::PrunedInvoice;
-<span class="kw">use </span>tonic::transport::{Channel, Endpoint};
-<span class="kw">use </span>tonic::Request;
+<span class="kw">use </span>futures::stream::StreamExt;
+<span class="kw">use </span>reqwest::Method;
+<span class="kw">use </span>serde::de::DeserializeOwned;
+<span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>tracing::info;
 
 <span class="kw">use super</span>::{ChannelInfo, ILnRpcClient, LightningRpcError, RouteHtlcStream};
-<span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::gateway_lightning_client::GatewayLightningClient;
-<span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{
-    <span class="self">self</span>, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
-    CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetBalancesResponse,
-    GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
-    InterceptHtlcResponse, OpenChannelRequest, OpenChannelResponse, PayInvoiceResponse,
-    PayPrunedInvoiceRequest, WithdrawOnchainRequest, WithdrawOnchainResponse,
+<span class="kw">use </span><span class="kw">crate</span>::lightning::extension::{
+    CLN_CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CLN_COMPLETE_PAYMENT_ENDPOINT,
+    CLN_CREATE_INVOICE_ENDPOINT, CLN_GET_BALANCES_ENDPOINT, CLN_INFO_ENDPOINT,
+    CLN_LIST_ACTIVE_CHANNELS_ENDPOINT, CLN_LN_ONCHAIN_ADDRESS_ENDPOINT, CLN_OPEN_CHANNEL_ENDPOINT,
+    CLN_PAY_PRUNED_INVOICE_ENDPOINT, CLN_ROUTE_HINTS_ENDPOINT, CLN_ROUTE_HTLCS_ENDPOINT,
+    CLN_WITHDRAW_ONCHAIN_ENDPOINT,
 };
-<span class="kw">use </span><span class="kw">crate</span>::lightning::MAX_LIGHTNING_RETRIES;
+<span class="kw">use </span><span class="kw">crate</span>::lightning::{
+    CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
+    GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest,
+    GetRouteHintsResponse, InterceptPaymentRequest, InterceptPaymentResponse,
+    ListActiveChannelsResponse, OpenChannelResponse, PayInvoiceResponse, PayPrunedInvoiceRequest,
+    WithdrawOnchainResponse,
+};
+<span class="kw">use </span><span class="kw">crate</span>::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, WithdrawOnchainPayload};
 
 <span class="doccomment">/// An `ILnRpcClient` that wraps around `GatewayLightningClient` for
 /// convenience, and makes real RPC requests over the wire to a remote lightning
@@ -320,6 +331,7 @@
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>NetworkLnRpcClient {
     connection_url: SafeUrl,
+    client: reqwest::Client,
 }
 
 <span class="kw">impl </span>NetworkLnRpcClient {
@@ -330,59 +342,72 @@
         );
         NetworkLnRpcClient {
             connection_url: url,
+            client: reqwest::Client::new(),
         }
     }
 
-    <span class="kw">async fn </span>connect(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayLightningClient&lt;Channel&gt;, LightningRpcError&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>retries = <span class="number">0</span>;
-        <span class="kw">let </span>client = <span class="kw">loop </span>{
-            <span class="kw">if </span>retries &gt;= MAX_LIGHTNING_RETRIES {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedToConnect);
-            }
+    <span class="kw">async fn </span>call&lt;P: Serialize, T: DeserializeOwned&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        method: Method,
+        url: SafeUrl,
+        payload: <span class="prelude-ty">Option</span>&lt;P&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;T, reqwest::Error&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>builder = <span class="self">self</span>.client.request(method, url.clone().to_unsafe());
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(payload) = payload {
+            builder = builder
+                .json(<span class="kw-2">&amp;</span>payload)
+                .header(reqwest::header::CONTENT_TYPE, <span class="string">"application/json"</span>);
+        }
 
-            retries += <span class="number">1</span>;
+        <span class="kw">let </span>response = builder.send().<span class="kw">await</span><span class="question-mark">?</span>;
+        response.json::&lt;T&gt;().<span class="kw">await
+    </span>}
 
-            <span class="kw">if let </span><span class="prelude-val">Ok</span>(endpoint) = Endpoint::from_shared(<span class="self">self</span>.connection_url.to_string()) {
-                <span class="kw">if let </span><span class="prelude-val">Ok</span>(client) = GatewayLightningClient::connect(endpoint.clone()).<span class="kw">await </span>{
-                    <span class="kw">break </span>client;
-                }
-            }
+    <span class="kw">async fn </span>call_get&lt;T: DeserializeOwned&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, url: SafeUrl) -&gt; <span class="prelude-ty">Result</span>&lt;T, reqwest::Error&gt; {
+        <span class="self">self</span>.call(Method::GET, url, <span class="prelude-val">None</span>::&lt;()&gt;).<span class="kw">await
+    </span>}
 
-            <span class="macro">tracing::debug!</span>(<span class="string">"Couldn't connect to CLN extension, retrying in 1 second..."</span>);
-            sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
-        };
-
-        <span class="prelude-val">Ok</span>(client)
-    }
+    <span class="kw">async fn </span>call_post&lt;P: Serialize, T: DeserializeOwned&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        url: SafeUrl,
+        payload: P,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;T, reqwest::Error&gt; {
+        <span class="self">self</span>.call(Method::POST, url, <span class="prelude-val">Some</span>(payload)).<span class="kw">await
+    </span>}
 }
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ILnRpcClient <span class="kw">for </span>NetworkLnRpcClient {
     <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse, LightningRpcError&gt; {
-        <span class="kw">let </span>req = Request::new(EmptyRequest {});
-        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>res = client.get_node_info(req).<span class="kw">await</span>.map_err(|status| {
-            LightningRpcError::FailedToGetNodeInfo {
-                failure_reason: status.message().to_string(),
-            }
-        })<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(res.into_inner())
+        <span class="kw">let </span>url = <span class="self">self
+            </span>.connection_url
+            .join(CLN_INFO_ENDPOINT)
+            .expect(<span class="string">"invalid base url"</span>);
+        <span class="self">self</span>.call_get(url)
+            .<span class="kw">await
+            </span>.map_err(|e| LightningRpcError::FailedToGetNodeInfo {
+                failure_reason: e.to_string(),
+            })
     }
 
     <span class="kw">async fn </span>routehints(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         num_route_hints: usize,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, LightningRpcError&gt; {
-        <span class="kw">let </span>req = Request::new(GetRouteHintsRequest {
-            num_route_hints: num_route_hints <span class="kw">as </span>u64,
-        });
-        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>res = client.get_route_hints(req).<span class="kw">await</span>.map_err(|status| {
-            LightningRpcError::FailedToGetRouteHints {
-                failure_reason: status.message().to_string(),
-            }
-        })<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(res.into_inner())
+        <span class="kw">let </span>url = <span class="self">self
+            </span>.connection_url
+            .join(CLN_ROUTE_HINTS_ENDPOINT)
+            .expect(<span class="string">"invalid base url"</span>);
+        <span class="self">self</span>.call_post(
+            url,
+            GetRouteHintsRequest {
+                num_route_hints: num_route_hints <span class="kw">as </span>u64,
+            },
+        )
+        .<span class="kw">await
+        </span>.map_err(|e| LightningRpcError::FailedToGetRouteHints {
+            failure_reason: e.to_string(),
+        })
     }
 
     <span class="kw">async fn </span>pay_private(
@@ -391,25 +416,22 @@
         max_delay: u64,
         max_fee: Amount,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, LightningRpcError&gt; {
-        <span class="kw">let </span>req = Request::new(PayPrunedInvoiceRequest {
-            pruned_invoice: <span class="prelude-val">Some</span>(gateway_lnrpc::PrunedInvoice {
-                amount_msat: invoice.amount.msats,
-                destination: invoice.destination.consensus_encode_to_vec(),
-                destination_features: invoice.destination_features,
-                payment_hash: invoice.payment_hash.consensus_encode_to_vec(),
-                payment_secret: invoice.payment_secret.to_vec(),
-                min_final_cltv_delta: invoice.min_final_cltv_delta,
-            }),
-            max_delay,
-            max_fee_msat: max_fee.msats,
-        });
-        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>res = client.pay_pruned_invoice(req).<span class="kw">await</span>.map_err(|status| {
-            LightningRpcError::FailedPayment {
-                failure_reason: status.message().to_string(),
-            }
-        })<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(res.into_inner())
+        <span class="kw">let </span>url = <span class="self">self
+            </span>.connection_url
+            .join(CLN_PAY_PRUNED_INVOICE_ENDPOINT)
+            .expect(<span class="string">"invalid base url"</span>);
+        <span class="self">self</span>.call_post(
+            url,
+            PayPrunedInvoiceRequest {
+                pruned_invoice: <span class="prelude-val">Some</span>(invoice),
+                max_delay,
+                max_fee_msat: max_fee,
+            },
+        )
+        .<span class="kw">await
+        </span>.map_err(|e| LightningRpcError::FailedPayment {
+            failure_reason: e.to_string(),
+        })
     }
 
     <span class="kw">fn </span>supports_private_payments(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
@@ -420,160 +442,150 @@
         <span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;,
         _task_group: <span class="kw-2">&amp;</span>TaskGroup,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">'a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), LightningRpcError&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>res = client
-            .route_htlcs(EmptyRequest {})
-            .<span class="kw">await
-            </span>.map_err(|status| LightningRpcError::FailedToRouteHtlcs {
-                failure_reason: status.message().to_string(),
-            })<span class="question-mark">?</span>;
+        <span class="kw">let </span>url = <span class="self">self
+            </span>.connection_url
+            .join(CLN_ROUTE_HTLCS_ENDPOINT)
+            .expect(<span class="string">"invalid base url"</span>);
+        <span class="kw">let </span>response = reqwest::get(url.to_unsafe()).<span class="kw">await</span>.map_err(|e| {
+            LightningRpcError::FailedToRouteHtlcs {
+                failure_reason: e.to_string(),
+            }
+        })<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>stream = response.bytes_stream().filter_map(|item| <span class="kw">async </span>{
+            <span class="kw">match </span>item {
+                <span class="prelude-val">Ok</span>(bytes) =&gt; {
+                    <span class="kw">let </span>request = serde_json::from_slice::&lt;InterceptPaymentRequest&gt;(<span class="kw-2">&amp;</span>bytes)
+                        .expect(<span class="string">"Failed to deserialize InterceptPaymentRequest"</span>);
+                    <span class="prelude-val">Some</span>(request)
+                }
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    <span class="macro">tracing::error!</span>(<span class="question-mark">?</span>e, <span class="string">"Error receiving JSON over stream"</span>);
+                    <span class="prelude-val">None
+                </span>}
+            }
+        });
+
         <span class="prelude-val">Ok</span>((
-            Box::pin(res.into_inner()),
+            Box::pin(stream),
             Arc::new(<span class="self">Self</span>::new(<span class="self">self</span>.connection_url.clone())),
         ))
     }
 
-    <span class="kw">async fn </span>complete_htlc(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        htlc: InterceptHtlcResponse,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>res = client.complete_htlc(htlc).<span class="kw">await</span>.map_err(|status| {
-            LightningRpcError::FailedToCompleteHtlc {
-                failure_reason: status.message().to_string(),
-            }
-        })<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(res.into_inner())
+    <span class="kw">async fn </span>complete_htlc(<span class="kw-2">&amp;</span><span class="self">self</span>, htlc: InterceptPaymentResponse) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
+        <span class="kw">let </span>url = <span class="self">self
+            </span>.connection_url
+            .join(CLN_COMPLETE_PAYMENT_ENDPOINT)
+            .expect(<span class="string">"invalid base url"</span>);
+        <span class="self">self</span>.call_post(url, htlc)
+            .<span class="kw">await
+            </span>.map_err(|e| LightningRpcError::FailedToCompleteHtlc {
+                failure_reason: e.to_string(),
+            })
     }
 
     <span class="kw">async fn </span>create_invoice(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         create_invoice_request: CreateInvoiceRequest,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CreateInvoiceResponse, LightningRpcError&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>res = client
-            .create_invoice(create_invoice_request)
+        <span class="kw">let </span>url = <span class="self">self
+            </span>.connection_url
+            .join(CLN_CREATE_INVOICE_ENDPOINT)
+            .expect(<span class="string">"invalid base url"</span>);
+        <span class="self">self</span>.call_post(url, create_invoice_request)
             .<span class="kw">await
-            </span>.map_err(|status| LightningRpcError::FailedToGetInvoice {
-                failure_reason: status.message().to_string(),
-            })<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(res.into_inner())
+            </span>.map_err(|e| LightningRpcError::FailedToGetInvoice {
+                failure_reason: e.to_string(),
+            })
     }
 
     <span class="kw">async fn </span>get_ln_onchain_address(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;GetLnOnchainAddressResponse, LightningRpcError&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>res = client
-            .get_ln_onchain_address(EmptyRequest {})
+        <span class="kw">let </span>url = <span class="self">self
+            </span>.connection_url
+            .join(CLN_LN_ONCHAIN_ADDRESS_ENDPOINT)
+            .expect(<span class="string">"invalid base url"</span>);
+        <span class="self">self</span>.call_get(url)
             .<span class="kw">await
-            </span>.map_err(|status| LightningRpcError::FailedToGetLnOnchainAddress {
-                failure_reason: status.message().to_string(),
-            })<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(res.into_inner())
+            </span>.map_err(|e| LightningRpcError::FailedToGetLnOnchainAddress {
+                failure_reason: e.to_string(),
+            })
     }
 
     <span class="kw">async fn </span>withdraw_onchain(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        address: Address,
-        amount: BitcoinAmountOrAll,
-        fee_rate_sats_per_vbyte: u64,
+        payload: WithdrawOnchainPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;WithdrawOnchainResponse, LightningRpcError&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>res = client
-            .withdraw_onchain(WithdrawOnchainRequest {
-                address: address.to_string(),
-                amount_sats: <span class="kw">match </span>amount {
-                    <span class="comment">// This leaves the field empty, which is interpreted as "all funds".
-                    </span>BitcoinAmountOrAll::All =&gt; <span class="prelude-val">None</span>,
-                    BitcoinAmountOrAll::Amount(amount) =&gt; <span class="prelude-val">Some</span>(amount.to_sat()),
-                },
-                fee_rate_sats_per_vbyte,
-            })
+        <span class="kw">let </span>url = <span class="self">self
+            </span>.connection_url
+            .join(CLN_WITHDRAW_ONCHAIN_ENDPOINT)
+            .expect(<span class="string">"invalid base url"</span>);
+        <span class="self">self</span>.call_post(url, payload)
             .<span class="kw">await
-            </span>.map_err(|status| LightningRpcError::FailedToWithdrawOnchain {
-                failure_reason: status.message().to_string(),
-            })<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(res.into_inner())
+            </span>.map_err(|e| LightningRpcError::FailedToWithdrawOnchain {
+                failure_reason: e.to_string(),
+            })
     }
 
     <span class="kw">async fn </span>open_channel(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pubkey: secp256k1::PublicKey,
-        host: String,
-        channel_size_sats: u64,
-        push_amount_sats: u64,
+        payload: OpenChannelPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OpenChannelResponse, LightningRpcError&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">let </span>res = client
-            .open_channel(OpenChannelRequest {
-                pubkey: pubkey.serialize().to_vec(),
-                host,
-                channel_size_sats,
-                push_amount_sats,
-            })
+        <span class="kw">let </span>url = <span class="self">self
+            </span>.connection_url
+            .join(CLN_OPEN_CHANNEL_ENDPOINT)
+            .expect(<span class="string">"invalid base url"</span>);
+        <span class="self">self</span>.call_post(url, payload)
             .<span class="kw">await
-            </span>.map_err(|status| LightningRpcError::FailedToOpenChannel {
-                failure_reason: status.message().to_string(),
-            })<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(res.into_inner())
+            </span>.map_err(|e| LightningRpcError::FailedToOpenChannel {
+                failure_reason: e.to_string(),
+            })
     }
 
     <span class="kw">async fn </span>close_channels_with_peer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pubkey: secp256k1::PublicKey,
+        payload: CloseChannelsWithPeerPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CloseChannelsWithPeerResponse, LightningRpcError&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>res = client
-            .close_channels_with_peer(CloseChannelsWithPeerRequest {
-                pubkey: pubkey.serialize().to_vec(),
-            })
-            .<span class="kw">await
-            </span>.map_err(|status| LightningRpcError::FailedToCloseChannelsWithPeer {
-                failure_reason: status.message().to_string(),
-            })<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(res.into_inner())
+        <span class="kw">let </span>url = <span class="self">self
+            </span>.connection_url
+            .join(CLN_CLOSE_CHANNELS_WITH_PEER_ENDPOINT)
+            .expect(<span class="string">"invalid base url"</span>);
+        <span class="self">self</span>.call_post(url, payload).<span class="kw">await</span>.map_err(|e| {
+            LightningRpcError::FailedToCloseChannelsWithPeer {
+                failure_reason: e.to_string(),
+            }
+        })
     }
 
     <span class="kw">async fn </span>list_active_channels(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;ChannelInfo&gt;, LightningRpcError&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>res = client
-            .list_active_channels(EmptyRequest {})
-            .<span class="kw">await
-            </span>.map_err(|status| LightningRpcError::FailedToListActiveChannels {
-                failure_reason: status.message().to_string(),
-            })<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(res
-            .into_inner()
-            .channels
-            .into_iter()
-            .map(|channel| ChannelInfo {
-                remote_pubkey: secp256k1::PublicKey::from_slice(<span class="kw-2">&amp;</span>channel.remote_pubkey)
-                    .expect(<span class="string">"Lightning node returned invalid remote channel pubkey"</span>),
-                channel_size_sats: channel.channel_size_sats,
-                outbound_liquidity_sats: channel.outbound_liquidity_sats,
-                inbound_liquidity_sats: channel.inbound_liquidity_sats,
-                short_channel_id: channel.short_channel_id,
-            })
-            .collect())
+        <span class="kw">let </span>url = <span class="self">self
+            </span>.connection_url
+            .join(CLN_LIST_ACTIVE_CHANNELS_ENDPOINT)
+            .expect(<span class="string">"invalid base url"</span>);
+        <span class="kw">let </span>response: ListActiveChannelsResponse = <span class="self">self</span>.call_get(url).<span class="kw">await</span>.map_err(|e| {
+            LightningRpcError::FailedToListActiveChannels {
+                failure_reason: e.to_string(),
+            }
+        })<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(response.channels)
     }
 
     <span class="kw">async fn </span>get_balances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetBalancesResponse, LightningRpcError&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(client
-            .get_balances(EmptyRequest {})
+        <span class="kw">let </span>url = <span class="self">self
+            </span>.connection_url
+            .join(CLN_GET_BALANCES_ENDPOINT)
+            .expect(<span class="string">"invalid base url"</span>);
+        <span class="self">self</span>.call_get(url)
             .<span class="kw">await
-            </span>.map_err(|status| LightningRpcError::FailedToGetBalances {
-                failure_reason: status.message().to_string(),
-            })<span class="question-mark">?
-            </span>.into_inner())
+            </span>.map_err(|e| LightningRpcError::FailedToGetBalances {
+                failure_reason: e.to_string(),
+            })
     }
 
-    <span class="kw">async fn </span>sync_to_chain(<span class="kw-2">&amp;</span><span class="self">self</span>, _block_height: u32) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
+    <span class="kw">async fn </span>sync_to_chain(<span class="kw-2">&amp;</span><span class="self">self</span>, _block_height: u32) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
         <span class="comment">// We don't need to do anything here, as CLN automatically syncs to chain.
-        </span><span class="prelude-val">Ok</span>(EmptyResponse {})
+        </span><span class="prelude-val">Ok</span>(())
     }
 }
 </code></pre></div></section></main></body></html>

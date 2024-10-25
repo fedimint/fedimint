@@ -1,9 +1,0 @@
-(function() {
-    var implementors = Object.fromEntries([["gateway_cln_extension",[["impl <a class=\"trait\" href=\"ln_gateway/gateway_lnrpc/gateway_lightning_server/trait.GatewayLightning.html\" title=\"trait ln_gateway::gateway_lnrpc::gateway_lightning_server::GatewayLightning\">GatewayLightning</a> for <a class=\"struct\" href=\"gateway_cln_extension/struct.ClnRpcService.html\" title=\"struct gateway_cln_extension::ClnRpcService\">ClnRpcService</a>"]]]]);
-    if (window.register_implementors) {
-        window.register_implementors(implementors);
-    } else {
-        window.pending_implementors = implementors;
-    }
-})()
-//{"start":57,"fragment_lengths":[402]}
