@@ -50,89 +50,74 @@ pub fn checked_address_to_unchecked_address(
 pub fn bitcoin30_to_bitcoin32_invoice(
     invoice: &lightning_invoice::Bolt11Invoice,
 ) -> lightning_invoice32::Bolt11Invoice {
-    bincode::deserialize(
-        &bincode::serialize(&invoice).expect("Failed to serialize bitcoin30 invoice"),
-    )
-    .expect("Failed to convert bitcoin30 invoice to bitcoin32 invoice")
+    lightning_invoice32::Bolt11Invoice::from_str(&invoice.to_string())
+        .expect("Failed to convert bitcoin30 invoice to bitcoin32 invoice")
 }
 
 pub fn bitcoin30_to_bitcoin32_keypair(
     keypair: &bitcoin30::secp256k1::KeyPair,
 ) -> bitcoin::secp256k1::Keypair {
-    bincode::deserialize(
-        &bincode::serialize(&keypair).expect("Failed to serialize bitcoin30 keypair"),
+    bitcoin::secp256k1::Keypair::from_secret_key(
+        bitcoin::secp256k1::SECP256K1,
+        &bitcoin30_to_bitcoin32_secp256k1_secret_key(&keypair.secret_key()),
     )
-    .expect("Failed to convert bitcoin30 keypair to bitcoin32 keypair")
 }
 
 pub fn bitcoin32_to_bitcoin30_keypair(
     keypair: &bitcoin::secp256k1::Keypair,
 ) -> bitcoin30::secp256k1::KeyPair {
-    bincode::deserialize(
-        &bincode::serialize(&keypair).expect("Failed to serialize bitcoin32 keypair"),
+    bitcoin30::secp256k1::KeyPair::from_secret_key(
+        bitcoin30::secp256k1::SECP256K1,
+        &bitcoin32_to_bitcoin30_secp256k1_secret_key(&keypair.secret_key()),
     )
-    .expect("Failed to convert bitcoin32 keypair to bitcoin30 keypair")
 }
 
 pub fn bitcoin30_to_bitcoin32_secp256k1_secret_key(
     secret_key: &bitcoin30::secp256k1::SecretKey,
 ) -> bitcoin::secp256k1::SecretKey {
-    bincode::deserialize(
-        &bincode::serialize(&secret_key)
-            .expect("Failed to serialize bitcoin30 secp256k1 secret key"),
+    bitcoin::secp256k1::SecretKey::from_slice(secret_key.as_ref()).expect(
+        "Failed to convert bitcoin30 secp256k1 secret key to bitcoin32 secp256k1 secret key",
     )
-    .expect("Failed to convert bitcoin30 secp256k1 secret key to bitcoin32 secp256k1 secret key")
 }
 
 pub fn bitcoin32_to_bitcoin30_secp256k1_secret_key(
     secret_key: &bitcoin::secp256k1::SecretKey,
 ) -> bitcoin30::secp256k1::SecretKey {
-    bincode::deserialize(
-        &bincode::serialize(&secret_key)
-            .expect("Failed to serialize bitcoin32 secp256k1 secret key"),
+    bitcoin30::secp256k1::SecretKey::from_slice(secret_key.as_ref()).expect(
+        "Failed to convert bitcoin32 secp256k1 secret key to bitcoin30 secp256k1 secret key",
     )
-    .expect("Failed to convert bitcoin32 secp256k1 secret key to bitcoin30 secp256k1 secret key")
 }
 
 pub fn bitcoin30_to_bitcoin32_secp256k1_pubkey(
     pubkey: &bitcoin30::secp256k1::PublicKey,
 ) -> bitcoin::secp256k1::PublicKey {
-    bincode::deserialize(
-        &bincode::serialize(&pubkey).expect("Failed to serialize bitcoin30 secp256k1 pubkey"),
-    )
-    .expect("Failed to convert bitcoin30 secp256k1 pubkey to bitcoin32 secp256k1 pubkey")
+    bitcoin::secp256k1::PublicKey::from_slice(&pubkey.serialize())
+        .expect("Failed to convert bitcoin30 secp256k1 pubkey to bitcoin32 secp256k1 pubkey")
 }
 
 pub fn bitcoin32_to_bitcoin30_secp256k1_pubkey(
     pubkey: &bitcoin::secp256k1::PublicKey,
 ) -> bitcoin30::secp256k1::PublicKey {
-    bincode::deserialize(
-        &bincode::serialize(&pubkey).expect("Failed to serialize bitcoin32 secp256k1 pubkey"),
-    )
-    .expect("Failed to convert bitcoin32 secp256k1 pubkey to bitcoin30 secp256k1 pubkey")
+    bitcoin30::secp256k1::PublicKey::from_slice(&pubkey.serialize())
+        .expect("Failed to convert bitcoin32 secp256k1 pubkey to bitcoin30 secp256k1 pubkey")
 }
 
 pub fn bitcoin30_to_bitcoin32_address(address: &bitcoin30::Address) -> bitcoin::Address {
     // The bitcoin crate only allows for deserializing an address as unchecked.
     // However, we can safely call `assume_checked()` since the input address is
     // checked.
-    bincode::deserialize::<bitcoin::Address<bitcoin::address::NetworkUnchecked>>(
-        &bincode::serialize(address).expect("Failed to serialize bitcoin30 address"),
-    )
-    .expect("Failed to convert bitcoin30 address to bitcoin32 address")
-    .assume_checked()
+    bitcoin::Address::from_str(&address.to_string())
+        .expect("Failed to convert bitcoin30 address to bitcoin32 address")
+        .assume_checked()
 }
 
 pub fn bitcoin32_to_bitcoin30_unchecked_address(
     address: &bitcoin::Address<bitcoin::address::NetworkUnchecked>,
 ) -> bitcoin30::Address<bitcoin30::address::NetworkUnchecked> {
-    // The bitcoin crate only allows for deserializing an address as unchecked.
-    // However, we can safely call `assume_checked()` since the input address is
-    // checked.
-    bincode::deserialize(
-        &bincode::serialize(address).expect("Failed to serialize bitcoin32 address"),
-    )
-    .expect("Failed to convert bitcoin32 address to bitcoin30 address")
+    // The bitcoin crate only implements `ToString` for checked addresses.
+    // However, this is fine since we're returning an unchecked address.
+    bitcoin30::Address::from_str(&address.assume_checked_ref().to_string())
+        .expect("Failed to convert bitcoin32 address to bitcoin30 address")
 }
 
 pub fn bitcoin30_to_bitcoin32_amount(amount: &bitcoin30::Amount) -> bitcoin::Amount {
@@ -144,17 +129,23 @@ pub fn bitcoin32_to_bitcoin30_amount(amount: &bitcoin::Amount) -> bitcoin30::Amo
 }
 
 pub fn bitcoin30_to_bitcoin32_network(network: &bitcoin30::Network) -> bitcoin::Network {
-    bincode::deserialize(
-        &bincode::serialize(network).expect("Failed to serialize bitcoin30 network"),
-    )
-    .expect("Failed to convert bitcoin30 network to bitcoin32 network")
+    match *network {
+        bitcoin30::Network::Bitcoin => bitcoin::Network::Bitcoin,
+        bitcoin30::Network::Testnet => bitcoin::Network::Testnet,
+        bitcoin30::Network::Signet => bitcoin::Network::Signet,
+        bitcoin30::Network::Regtest => bitcoin::Network::Regtest,
+        _ => panic!("There are no other enum cases, this should never be hit."),
+    }
 }
 
 pub fn bitcoin32_to_bitcoin30_network(network: &bitcoin::Network) -> bitcoin30::Network {
-    bincode::deserialize(
-        &bincode::serialize(network).expect("Failed to serialize bitcoin32 network"),
-    )
-    .expect("Failed to convert bitcoin32 network to bitcoin30 network")
+    match *network {
+        bitcoin::Network::Bitcoin => bitcoin30::Network::Bitcoin,
+        bitcoin::Network::Testnet => bitcoin30::Network::Testnet,
+        bitcoin::Network::Signet => bitcoin30::Network::Signet,
+        bitcoin::Network::Regtest => bitcoin30::Network::Regtest,
+        _ => panic!("There are no other enum cases, this should never be hit."),
+    }
 }
 
 fn bitcoin30_to_bitcoin32_txid(txid: &bitcoin30::Txid) -> bitcoin::Txid {
@@ -190,19 +181,14 @@ pub fn bitcoin30_to_bitcoin32_payment_preimage(
 pub fn bitcoin30_to_bitcoin32_sha256_hash(
     hash: &bitcoin30::hashes::sha256::Hash,
 ) -> bitcoin::hashes::sha256::Hash {
-    bincode::deserialize(
-        &bincode::serialize(&hash).expect("Failed to serialize bitcoin30 sha256 hash"),
-    )
-    .expect("Failed to convert bitcoin30 sha256 hash to bitcoin32 sha256 hash")
+    *bitcoin::hashes::sha256::Hash::from_bytes_ref(hash.as_ref())
 }
 
 pub fn bitcoin32_to_bitcoin30_schnorr_signature(
     signature: &bitcoin::secp256k1::schnorr::Signature,
 ) -> bitcoin30::secp256k1::schnorr::Signature {
-    bincode::deserialize(
-        &bincode::serialize(&signature).expect("Failed to serialize bitcoin32 schnorr signature"),
-    )
-    .expect("Failed to convert bitcoin32 schnorr signature to bitcoin30 schnorr signature")
+    bitcoin30::secp256k1::schnorr::Signature::from_slice(signature.as_ref())
+        .expect("Failed to convert bitcoin32 schnorr signature to bitcoin30 schnorr signature")
 }
 
 #[cfg(test)]
