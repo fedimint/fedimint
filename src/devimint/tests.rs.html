@@ -2558,9 +2558,7 @@
 <a href="#2557" id="2557">2557</a>
 <a href="#2558" id="2558">2558</a>
 <a href="#2559" id="2559">2559</a>
-<a href="#2560" id="2560">2560</a>
-<a href="#2561" id="2561">2561</a>
-<a href="#2562" id="2562">2562</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
+<a href="#2560" id="2560">2560</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -3247,7 +3245,7 @@
         <span class="string">"config-decrypt/encrypt failed"
     </span>);
 
-    fed.pegin_gateway(<span class="number">10_000_000</span>, <span class="kw-2">&amp;</span>gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
+    fed.pegin_gateways(<span class="number">10_000_000</span>, <span class="macro">vec!</span>[<span class="kw-2">&amp;</span>gw_cln]).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>fed_id = fed.calculate_federation_id();
     <span class="kw">let </span>invite = fed.invite_code()<span class="question-mark">?</span>;
@@ -4150,10 +4148,7 @@
     client.use_gateway(<span class="kw-2">&amp;</span>gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="macro">info!</span>(<span class="string">"Pegging-in both gateways"</span>);
-    <span class="macro">try_join!</span>(
-        fed.pegin_gateway(<span class="number">99_999</span>, <span class="kw-2">&amp;</span>gw_cln),
-        fed.pegin_gateway(<span class="number">99_999</span>, <span class="kw-2">&amp;</span>gw_lnd),
-    )<span class="question-mark">?</span>;
+    fed.pegin_gateways(<span class="number">99_999</span>, <span class="macro">vec!</span>[<span class="kw-2">&amp;</span>gw_cln, <span class="kw-2">&amp;</span>gw_lnd]).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="comment">// Drop other references to CLN and LND so that the test can kill them
     </span>drop(cln);
@@ -5039,9 +5034,10 @@
                 <span class="kw">let </span>task_group = task_group.clone();
                 <span class="kw">async move </span>{
                     <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-                    <span class="kw">let </span>((), (), faucet) = <span class="macro">try_join!</span>(
-                        dev_fed.fed.pegin_gateway(<span class="number">20_000</span>, <span class="kw-2">&amp;</span>dev_fed.gw_cln),
-                        dev_fed.fed.pegin_gateway(<span class="number">20_000</span>, <span class="kw-2">&amp;</span>dev_fed.gw_lnd),
+                    <span class="kw">let </span>((), faucet) = <span class="macro">try_join!</span>(
+                        dev_fed
+                            .fed
+                            .pegin_gateways(<span class="number">20_000</span>, <span class="macro">vec!</span>[<span class="kw-2">&amp;</span>dev_fed.gw_cln, <span class="kw-2">&amp;</span>dev_fed.gw_lnd]),
                         <span class="kw">async </span>{
                             <span class="kw">let </span>faucet = process_mgr
                                 .spawn_daemon(<span class="string">"devimint-faucet"</span>, <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::Faucet))

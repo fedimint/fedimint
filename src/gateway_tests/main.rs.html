@@ -669,7 +669,7 @@
             </span>};
 
             <span class="kw">let </span>fed = dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>;
-            fed.pegin_gateway(<span class="number">10_000_000</span>, gw).<span class="kw">await</span><span class="question-mark">?</span>;
+            fed.pegin_gateways(<span class="number">10_000_000</span>, <span class="macro">vec!</span>[gw]).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>info = serde_json::from_value::&lt;GatewayInfo&gt;(gw.get_info().<span class="kw">await</span><span class="question-mark">?</span>)<span class="question-mark">?</span>;
             <span class="kw">let </span>federation_info = info
                 .federations
@@ -1059,7 +1059,7 @@
                 <span class="comment">// Peg-in sats to gw for the new fed
                 </span><span class="kw">let </span>pegin_amount = Amount::from_msats(<span class="number">10_000_000</span>);
                 new_fed
-                    .pegin_gateway(pegin_amount.sats_round_down(), gw)
+                    .pegin_gateways(pegin_amount.sats_round_down(), <span class="macro">vec!</span>[gw])
                     .<span class="kw">await</span><span class="question-mark">?</span>;
 
                 <span class="comment">// Verify `info` returns multiple federations

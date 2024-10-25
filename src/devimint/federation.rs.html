@@ -1350,7 +1350,17 @@
 <a href="#1349" id="1349">1349</a>
 <a href="#1350" id="1350">1350</a>
 <a href="#1351" id="1351">1351</a>
-<a href="#1352" id="1352">1352</a></pre></div><pre class="rust"><code><span class="kw">mod </span>config;
+<a href="#1352" id="1352">1352</a>
+<a href="#1353" id="1353">1353</a>
+<a href="#1354" id="1354">1354</a>
+<a href="#1355" id="1355">1355</a>
+<a href="#1356" id="1356">1356</a>
+<a href="#1357" id="1357">1357</a>
+<a href="#1358" id="1358">1358</a>
+<a href="#1359" id="1359">1359</a>
+<a href="#1360" id="1360">1360</a>
+<a href="#1361" id="1361">1361</a>
+<a href="#1362" id="1362">1362</a></pre></div><pre class="rust"><code><span class="kw">mod </span>config;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -1383,7 +1393,7 @@
 <span class="kw">use </span>fedimint_wallet_client::WalletClientModule;
 <span class="kw">use </span>fedimintd::envs::FM_EXTRA_DKG_META_ENV;
 <span class="kw">use </span>fs_lock::FileLock;
-<span class="kw">use </span>futures::future::join_all;
+<span class="kw">use </span>futures::future::{join_all, try_join_all};
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>tokio::task::JoinSet;
 <span class="kw">use </span>tokio::time::Instant;
@@ -2081,7 +2091,11 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>pegin_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: u64, gw: <span class="kw-2">&amp;</span><span class="kw">super</span>::gatewayd::Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">pub async fn </span>pegin_gateways(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        amount: u64,
+        gateways: Vec&lt;<span class="kw-2">&amp;</span><span class="kw">super</span>::gatewayd::Gatewayd&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>deposit_fees_msat = <span class="self">self</span>.deposit_fees()<span class="question-mark">?</span>.msats;
         <span class="macro">assert_eq!</span>(
             deposit_fees_msat % <span class="number">1000</span>,
@@ -2091,21 +2105,27 @@
         <span class="kw">let </span>deposit_fees = deposit_fees_msat / <span class="number">1000</span>;
         <span class="macro">info!</span>(amount, deposit_fees, <span class="string">"Pegging-in gateway funds"</span>);
         <span class="kw">let </span>fed_id = <span class="self">self</span>.calculate_federation_id();
-        <span class="kw">let </span>pegin_addr = gw.get_pegin_addr(<span class="kw-2">&amp;</span>fed_id).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="self">self</span>.bitcoind
-            .send_to(pegin_addr, amount + deposit_fees)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">for </span>gw <span class="kw">in </span>gateways.clone() {
+            <span class="kw">let </span>pegin_addr = gw.get_pegin_addr(<span class="kw-2">&amp;</span>fed_id).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="self">self</span>.bitcoind
+                .send_to(pegin_addr, amount + deposit_fees)
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+
         <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">21</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        poll(<span class="string">"gateway pegin"</span>, || <span class="kw">async </span>{
-            <span class="kw">let </span>gateway_balance = <span class="macro">cmd!</span>(gw, <span class="string">"balance"</span>, <span class="string">"--federation-id={fed_id}"</span>)
-                .out_json()
-                .<span class="kw">await
-                </span>.map_err(ControlFlow::Continue)<span class="question-mark">?
-                </span>.as_u64()
-                .unwrap();
-            <span class="macro">poll_eq!</span>(gateway_balance, amount * <span class="number">1000</span>)
-        })
+        try_join_all(gateways.into_iter().map(|gw| {
+            poll(<span class="string">"gateway pegin"</span>, || <span class="kw">async </span>{
+                <span class="kw">let </span>gateway_balance = <span class="macro">cmd!</span>(gw, <span class="string">"balance"</span>, <span class="string">"--federation-id={fed_id}"</span>)
+                    .out_json()
+                    .<span class="kw">await
+                    </span>.map_err(ControlFlow::Continue)<span class="question-mark">?
+                    </span>.as_u64()
+                    .unwrap();
+                <span class="macro">poll_eq!</span>(gateway_balance, amount * <span class="number">1000</span>)
+            })
+        }))
         .<span class="kw">await</span><span class="question-mark">?</span>;
+
         <span class="prelude-val">Ok</span>(())
     }
 

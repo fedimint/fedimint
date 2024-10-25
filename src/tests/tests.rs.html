@@ -515,10 +515,7 @@
 <a href="#514" id="514">514</a>
 <a href="#515" id="515">515</a>
 <a href="#516" id="516">516</a>
-<a href="#517" id="517">517</a>
-<a href="#518" id="518">518</a>
-<a href="#519" id="519">519</a>
-<a href="#520" id="520">520</a></pre></div><pre class="rust"><code><span class="kw">use </span>clap::Parser;
+<a href="#517" id="517">517</a></pre></div><pre class="rust"><code><span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>devimint::devfed::DevJitFed;
 <span class="kw">use </span>devimint::federation::{Client, Federation};
 <span class="kw">use </span>devimint::util::ProcessManager;
@@ -611,10 +608,9 @@
         </span>.as_ref()
         .expect(<span class="string">"Gateways of version 0.5.0 or higher support LDK"</span>);
 
-    <span class="macro">try_join!</span>(
-        federation.pegin_gateway(<span class="number">1_000_000</span>, gw_lnd),
-        federation.pegin_gateway(<span class="number">1_000_000</span>, gw_ldk),
-    )<span class="question-mark">?</span>;
+    federation
+        .pegin_gateways(<span class="number">1_000_000</span>, <span class="macro">vec!</span>[gw_lnd, gw_ldk])
+        .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(())
 }
@@ -898,11 +894,9 @@
     gw_ldk.connect_fed(<span class="kw-2">&amp;</span>receive_federation).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="comment">// pegin gateways for new federation
-    </span><span class="macro">try_join!</span>(
-        receive_federation.pegin_gateway(<span class="number">1_000_000</span>, gw_cln),
-        receive_federation.pegin_gateway(<span class="number">1_000_000</span>, gw_lnd),
-        receive_federation.pegin_gateway(<span class="number">1_000_000</span>, gw_ldk),
-    )<span class="question-mark">?</span>;
+    </span>receive_federation
+        .pegin_gateways(<span class="number">1_000_000</span>, <span class="macro">vec!</span>[gw_cln, gw_lnd, gw_ldk])
+        .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>receive_client = receive_federation
         .new_joined_client(<span class="string">"lnv2-receive-client"</span>)
