@@ -1,0 +1,13 @@
+pub const CLN_INFO_ENDPOINT: &str = "/cln_info";
+pub const CLN_ROUTE_HINTS_ENDPOINT: &str = "/cln_route_hints";
+pub const CLN_PAY_INVOICE_ENDPOINT: &str = "/cln_pay_invoice";
+pub const CLN_PAY_PRUNED_INVOICE_ENDPOINT: &str = "/cln_pay_pruned_invoice";
+pub const CLN_COMPLETE_PAYMENT_ENDPOINT: &str = "/cln_complete_payment";
+pub const CLN_CREATE_INVOICE_ENDPOINT: &str = "/cln_create_invoice";
+pub const CLN_ROUTE_HTLCS_ENDPOINT: &str = "/cln_route_htlcs";
+pub const CLN_LN_ONCHAIN_ADDRESS_ENDPOINT: &str = "/cln_ln_onchain_address";
+pub const CLN_WITHDRAW_ONCHAIN_ENDPOINT: &str = "/cln_withdraw_onchain";
+pub const CLN_OPEN_CHANNEL_ENDPOINT: &str = "/cln_open_channel";
+pub const CLN_CLOSE_CHANNELS_WITH_PEER_ENDPOINT: &str = "/cln_close_channels_with_peer";
+pub const CLN_LIST_ACTIVE_CHANNELS_ENDPOINT: &str = "/cln_list_active_channels";
+pub const CLN_GET_BALANCES_ENDPOINT: &str = "/cln_get_balances";

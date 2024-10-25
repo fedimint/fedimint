@@ -28,8 +28,7 @@ use super::{
     SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, SyncToChainPayload,
     WithdrawOnchainPayload, WithdrawPayload,
 };
-use crate::lightning::ChannelInfo;
-use crate::CloseChannelsWithPeerResponse;
+use crate::lightning::{ChannelInfo, CloseChannelsWithPeerResponse};
 
 pub struct GatewayRpcClient {
     /// Base URL to gateway web server
