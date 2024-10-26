@@ -40,7 +40,7 @@ hyper = { workspace = true }
 itertools = { workspace = true }
 jsonrpsee = { version = "0.24.7", features = ["server"] }
 parity-scale-codec = "3.6.12"
-pin-project = "1.1.6"
+pin-project = "1.1.7"
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = "1.10.0"
