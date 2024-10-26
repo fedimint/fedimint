@@ -17,7 +17,7 @@ use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::model;
 use cln_rpc::model::requests::SendpayRoute;
 use cln_rpc::model::responses::ListpeerchannelsChannels;
-use cln_rpc::primitives::{AmountOrAll, ShortChannelId};
+use cln_rpc::primitives::{AmountOrAll, ChannelState, ShortChannelId};
 use fedimint_core::secp256k1::{PublicKey, SecretKey};
 use fedimint_core::task::timeout;
 use fedimint_core::util::handle_version_hash_command;
@@ -824,6 +824,11 @@ async fn cln_get_balances(
             _ => unreachable!("Unexpected response from ListFunds"),
         })?;
 
+    let channels = channels
+        .iter()
+        .filter(|chan| chan.connected && matches!(chan.state, ChannelState::CHANNELD_NORMAL))
+        .collect::<Vec<_>>();
+
     let total_receivable_msat = cln_service
         .rpc_client()
         .await?
@@ -840,7 +845,7 @@ async fn cln_get_balances(
                     matches!(
                         channel.state,
                         model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
-                    )
+                    ) && channel.peer_connected
                 })
                 .filter_map(|channel| channel.receivable_msat.map(|value| value.msat()))
                 .sum::<u64>(), // Sum the receivable_msat values directly
