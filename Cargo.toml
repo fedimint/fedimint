@@ -83,7 +83,7 @@ keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
 name = "fedimint"
 
 [workspace.dependencies]
-anyhow = "1.0.90"
+anyhow = "1.0.91"
 aquamarine = "0.5.0"
 assert_matches = "1.5.0"
 async-stream = "0.3.6"
@@ -170,17 +170,17 @@ reqwest = { version = "0.12.8", features = [
 ring = "0.17.8"
 secp256k1 = { version = "0.27.0", default-features = false }
 semver = "1.0.23"
-serde = { version = "1.0.210", features = ["derive"] }
+serde = { version = "1.0.213", features = ["derive"] }
 serdect = "0.2.0"
 serde-big-array = "0.5.1"
-serde_json = "1.0.131"
+serde_json = "1.0.132"
 sha3 = "0.10.8"
 strum = "0.26"
 strum_macros = "0.26"
 subtle = "2.6.1"
 test-log = { version = "0.2", features = ["trace"], default-features = false }
 tbs = { package = "fedimint-tbs", path = "./crypto/tbs", version = "=0.5.0-alpha" }
-thiserror = "1.0.64"
+thiserror = "1.0.65"
 threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
 tokio = "1.40.0"
 tokio-rustls = "0.24.1"
