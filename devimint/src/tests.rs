@@ -2075,7 +2075,6 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     info!("Recovering using utxos method");
     let output = cmd!(
         crate::util::Recoverytool,
-        "--readonly",
         "--cfg",
         "{data_dir}/fedimintd-default-0",
         "utxos",
@@ -2141,7 +2140,6 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
 
     let outputs = cmd!(
         crate::util::Recoverytool,
-        "--readonly",
         "--cfg",
         "{data_dir}/fedimintd-default-0",
         "epochs",
