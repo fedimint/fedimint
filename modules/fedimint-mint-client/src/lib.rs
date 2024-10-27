@@ -856,8 +856,8 @@ impl ClientModule for MintClientModule {
                         yield serde_json::to_value(state)?;
                     }
                 }
-                "spend_notes" => {
-                    let req: SpendNotesRequest = serde_json::from_value(request)?;
+                "spend_notes_expert" => {
+                    let req: SpendNotesExpertRequest = serde_json::from_value(request)?;
                     let result = self.spend_notes(req.min_amount, req.try_cancel_after, req.include_invite, req.extra_meta).await?;
                     yield serde_json::to_value(result)?;
                 }
@@ -903,8 +903,10 @@ struct SubscribeReissueExternalNotesRequest {
     operation_id: OperationId,
 }
 
+/// Caution: if no notes of the correct denomination are available the next
+/// bigger note will be selected
 #[derive(Deserialize)]
-struct SpendNotesRequest {
+struct SpendNotesExpertRequest {
     min_amount: Amount,
     try_cancel_after: Duration,
     include_invite: bool,
