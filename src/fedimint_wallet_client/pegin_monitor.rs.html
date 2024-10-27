@@ -503,7 +503,8 @@
 <a href="#502" id="502">502</a>
 <a href="#503" id="503">503</a>
 <a href="#504" id="504">504</a>
-<a href="#505" id="505">505</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
+<a href="#505" id="505">505</a>
+<a href="#506" id="506">506</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>bitcoin30::ScriptBuf;
@@ -511,6 +512,7 @@
 <span class="kw">use </span>fedimint_bitcoind::DynBitcoindRpc;
 <span class="kw">use </span>fedimint_client::module::ClientContext;
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped <span class="kw">as _</span>,
@@ -930,7 +932,7 @@
 
         <span class="kw">let </span>client_input = ClientInput::&lt;WalletInput&gt; {
             input: wallet_input,
-            keys: <span class="macro">vec!</span>[tweak_key],
+            keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>tweak_key)],
             amount,
         };
 

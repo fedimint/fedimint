@@ -2611,7 +2611,8 @@
 <a href="#2610" id="2610">2610</a>
 <a href="#2611" id="2611">2611</a>
 <a href="#2612" id="2612">2612</a>
-<a href="#2613" id="2613">2613</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2613" id="2613">2613</a>
+<a href="#2614" id="2614">2614</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2662,6 +2663,7 @@
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, TransactionBuilder,
 };
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 <span class="kw">use </span>fedimint_core::config::{FederationId, FederationIdPrefix};
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
@@ -3843,7 +3845,7 @@
 
             inputs.push(ClientInput {
                 input: MintInput::new_v0(amount, note),
-                keys: <span class="macro">vec!</span>[spendable_note.spend_key],
+                keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>spendable_note.spend_key)],
                 amount,
             });
 

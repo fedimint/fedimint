@@ -207,10 +207,22 @@
 <a href="#206" id="206">206</a>
 <a href="#207" id="207">207</a>
 <a href="#208" id="208">208</a>
-<a href="#209" id="209">209</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>bitcoin30::address::NetworkUnchecked;
+<span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>clap::Subcommand;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_unchecked_address,
+};
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
 <span class="kw">use </span>fedimint_core::BitcoinAmountOrAll;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
@@ -249,7 +261,7 @@
     </span>OpenChannel {
         <span class="doccomment">/// The public key of the node to open a channel with
         </span><span class="attr">#[clap(long)]
-        </span>pubkey: bitcoin30::secp256k1::PublicKey,
+        </span>pubkey: bitcoin::secp256k1::PublicKey,
 
         <span class="attr">#[clap(long)]
         </span>host: String,
@@ -267,7 +279,7 @@
     </span>CloseChannelsWithPeer {
         <span class="comment">// The public key of the node to close channels with
         </span><span class="attr">#[clap(long)]
-        </span>pubkey: bitcoin30::secp256k1::PublicKey,
+        </span>pubkey: bitcoin::secp256k1::PublicKey,
     },
     <span class="doccomment">/// List active channels.
     </span>ListActiveChannels,
@@ -276,7 +288,7 @@
     </span>WithdrawOnchain {
         <span class="doccomment">/// The address to withdraw funds to.
         </span><span class="attr">#[clap(long)]
-        </span>address: bitcoin30::Address&lt;NetworkUnchecked&gt;,
+        </span>address: bitcoin::Address&lt;NetworkUnchecked&gt;,
 
         <span class="doccomment">/// The amount to withdraw.
         /// Can be "all" to withdraw all funds, an amount + unit (e.g. "1000
@@ -345,6 +357,8 @@
                 channel_size_sats,
                 push_amount_sats,
             } =&gt; {
+                <span class="kw">let </span>pubkey = bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>pubkey);
+
                 <span class="kw">let </span>funding_txid = create_client()
                     .open_channel(OpenChannelPayload {
                         pubkey,
@@ -356,6 +370,8 @@
                 <span class="macro">println!</span>(<span class="string">"{funding_txid}"</span>);
             }
             <span class="self">Self</span>::CloseChannelsWithPeer { pubkey } =&gt; {
+                <span class="kw">let </span>pubkey = bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>pubkey);
+
                 <span class="kw">let </span>response = create_client()
                     .close_channels_with_peer(CloseChannelsWithPeerPayload { pubkey })
                     .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -370,6 +386,8 @@
                 amount,
                 fee_rate_sats_per_vbyte,
             } =&gt; {
+                <span class="kw">let </span>address = bitcoin32_to_bitcoin30_unchecked_address(<span class="kw-2">&amp;</span>address);
+
                 <span class="kw">let </span>response = create_client()
                     .withdraw_onchain(WithdrawOnchainPayload {
                         address,

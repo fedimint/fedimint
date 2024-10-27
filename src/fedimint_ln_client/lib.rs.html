@@ -2204,7 +2204,20 @@
 <a href="#2203" id="2203">2203</a>
 <a href="#2204" id="2204">2204</a>
 <a href="#2205" id="2205">2205</a>
-<a href="#2206" id="2206">2206</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2206" id="2206">2206</a>
+<a href="#2207" id="2207">2207</a>
+<a href="#2208" id="2208">2208</a>
+<a href="#2209" id="2209">2209</a>
+<a href="#2210" id="2210">2210</a>
+<a href="#2211" id="2211">2211</a>
+<a href="#2212" id="2212">2212</a>
+<a href="#2213" id="2213">2213</a>
+<a href="#2214" id="2214">2214</a>
+<a href="#2215" id="2215">2215</a>
+<a href="#2216" id="2216">2216</a>
+<a href="#2217" id="2217">2217</a>
+<a href="#2218" id="2218">2218</a>
+<a href="#2219" id="2219">2219</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2248,6 +2261,9 @@
     ClientInput, ClientInputBundle, ClientOutput, TransactionBuilder,
 };
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
@@ -3324,7 +3340,13 @@
 
         <span class="kw">let </span>markers = <span class="self">self</span>.client_ctx.get_internal_payment_markers()<span class="question-mark">?</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>is_internal_payment = invoice_has_internal_payment_markers(<span class="kw-2">&amp;</span>invoice, markers);
+        <span class="kw">let </span><span class="kw-2">mut </span>is_internal_payment = invoice_has_internal_payment_markers(
+            <span class="kw-2">&amp;</span>invoice,
+            (
+                bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>markers.<span class="number">0</span>),
+                markers.<span class="number">1</span>,
+            ),
+        );
         <span class="kw">if </span>!is_internal_payment {
             <span class="kw">let </span>gateways = dbtx
                 .find_by_prefix(<span class="kw-2">&amp;</span>LightningGatewayKeyPrefix)
@@ -3669,7 +3691,7 @@
         <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput&gt; {
             input,
             amount: incoming_contract_account.amount,
-            keys: <span class="macro">vec!</span>[key_pair],
+            keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>key_pair)],
         };
 
         <span class="kw">let </span>tx = TransactionBuilder::new().with_inputs(
@@ -3782,7 +3804,11 @@
         } <span class="kw">else </span>{
             <span class="comment">// If no gateway is provided, this is assumed to be an internal payment.
             </span><span class="kw">let </span>markers = <span class="self">self</span>.client_ctx.get_internal_payment_markers()<span class="question-mark">?</span>;
-            (markers.<span class="number">0</span>, markers.<span class="number">1</span>, <span class="macro">vec!</span>[])
+            (
+                bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>markers.<span class="number">0</span>),
+                markers.<span class="number">1</span>,
+                <span class="macro">vec!</span>[],
+            )
         };
 
         <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_LN, <span class="question-mark">?</span>gateway_id, %amount, <span class="string">"Selected LN gateway for invoice generation"</span>);

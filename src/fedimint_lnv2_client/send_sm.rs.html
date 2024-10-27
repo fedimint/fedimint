@@ -289,13 +289,19 @@
 <a href="#288" id="288">288</a>
 <a href="#289" id="289">289</a>
 <a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin30::hashes::sha256;
 <span class="kw">use </span>bitcoin30::secp256k1;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -509,7 +515,9 @@
                         OutgoingWitness::Cancel(signature),
                     )),
                     amount: old_state.common.contract.amount,
-                    keys: <span class="macro">vec!</span>[old_state.common.refund_keypair],
+                    keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin32_keypair(
+                        <span class="kw-2">&amp;</span>old_state.common.refund_keypair,
+                    )],
                 };
 
                 <span class="kw">let </span>outpoints = global_context
@@ -568,7 +576,9 @@
                 OutgoingWitness::Refund,
             )),
             amount: old_state.common.contract.amount,
-            keys: <span class="macro">vec!</span>[old_state.common.refund_keypair],
+            keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin32_keypair(
+                <span class="kw-2">&amp;</span>old_state.common.refund_keypair,
+            )],
         };
 
         <span class="kw">let </span>outpoints = global_context

@@ -1520,10 +1520,10 @@
     /// other LN senders will know that they cannot pay the invoice.
     </span><span class="kw">pub fn </span>to_fake_ln_pub_key(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        secp: <span class="kw-2">&amp;</span>secp256k1::Secp256k1&lt;secp256k1::All&gt;,
-    ) -&gt; anyhow::Result&lt;secp256k1::PublicKey&gt; {
-        <span class="kw">let </span>sk = secp256k1::SecretKey::from_slice(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>.to_byte_array())<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(secp256k1::PublicKey::from_secret_key(secp, <span class="kw-2">&amp;</span>sk))
+        secp: <span class="kw-2">&amp;</span>bitcoin::secp256k1::Secp256k1&lt;bitcoin::secp256k1::All&gt;,
+    ) -&gt; anyhow::Result&lt;bitcoin::secp256k1::PublicKey&gt; {
+        <span class="kw">let </span>sk = bitcoin::secp256k1::SecretKey::from_slice(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>.to_byte_array())<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(bitcoin::secp256k1::PublicKey::from_secret_key(secp, <span class="kw-2">&amp;</span>sk))
     }
 }
 

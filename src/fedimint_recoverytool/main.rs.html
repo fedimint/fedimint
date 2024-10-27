@@ -378,7 +378,11 @@
 <a href="#377" id="377">377</a>
 <a href="#378" id="378">378</a>
 <a href="#379" id="379">379</a>
-<a href="#380" id="380">380</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 
 </span><span class="kw">mod </span>envs;
 <span class="kw">mod </span>key;
@@ -387,9 +391,13 @@
 <span class="kw">use </span>std::path::{Path, PathBuf};
 
 <span class="kw">use </span>anyhow::anyhow;
-<span class="kw">use </span>bitcoin30::network::constants::Network;
-<span class="kw">use </span>bitcoin30::OutPoint;
+<span class="kw">use </span>bitcoin::network::Network;
+<span class="kw">use </span>bitcoin::OutPoint;
 <span class="kw">use </span>clap::{ArgGroup, Parser, Subcommand};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_network, bitcoin30_to_bitcoin32_outpoint,
+    bitcoin30_to_bitcoin32_secp256k1_secret_key,
+};
 <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
@@ -505,7 +513,7 @@
             .expect(<span class="string">"Malformed wallet config"</span>);
         <span class="kw">let </span>base_descriptor = wallet_cfg.consensus.peg_in_descriptor;
         <span class="kw">let </span>base_key = wallet_cfg.private.peg_in_key;
-        <span class="kw">let </span>network = wallet_cfg.consensus.network;
+        <span class="kw">let </span>network = bitcoin30_to_bitcoin32_network(<span class="kw-2">&amp;</span>wallet_cfg.consensus.network);
 
         (base_descriptor, base_key, network)
     } <span class="kw">else if let </span>(<span class="prelude-val">Some</span>(descriptor), <span class="prelude-val">Some</span>(key)) = (opts.descriptor, opts.key) {
@@ -552,9 +560,9 @@
                     <span class="kw">let </span>descriptor = tweak_descriptor(base_descriptor, base_key, <span class="kw-2">&amp;</span>tweak, network);
 
                     ImportableWallet {
-                        outpoint,
+                        outpoint: bitcoin30_to_bitcoin32_outpoint(<span class="kw-2">&amp;</span>outpoint),
                         descriptor,
-                        amount_sat: amount,
+                        amount_sat: bitcoin30_to_bitcoin32_amount(<span class="kw-2">&amp;</span>amount),
                     }
                 })
                 .collect()
@@ -673,10 +681,10 @@
     base_descriptor
         .tweak(tweak, secp256k1::SECP256K1)
         .translate_pk(<span class="kw-2">&amp;mut </span>SecretKeyInjector {
-            secret: bitcoin30::key::PrivateKey {
+            secret: bitcoin::key::PrivateKey {
                 compressed: <span class="bool-val">true</span>,
-                network,
-                inner: secret_key,
+                network: network.into(),
+                inner: bitcoin30_to_bitcoin32_secp256k1_secret_key(<span class="kw-2">&amp;</span>secret_key),
             },
             public: pub_key,
         })
@@ -688,8 +696,8 @@
 </span><span class="kw">struct </span>ImportableWallet {
     outpoint: OutPoint,
     descriptor: Descriptor&lt;Key&gt;,
-    <span class="attr">#[serde(with = <span class="string">"bitcoin30::amount::serde::as_sat"</span>)]
-    </span>amount_sat: bitcoin30::Amount,
+    <span class="attr">#[serde(with = <span class="string">"bitcoin::amount::serde::as_sat"</span>)]
+    </span>amount_sat: bitcoin::Amount,
 }
 
 <span class="doccomment">/// A Bitcoin Core importable descriptor
@@ -702,7 +710,7 @@
 /// know.
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">struct </span>SecretKeyInjector {
-    secret: bitcoin30::key::PrivateKey,
+    secret: bitcoin::key::PrivateKey,
     public: CompressedPublicKey,
 }
 

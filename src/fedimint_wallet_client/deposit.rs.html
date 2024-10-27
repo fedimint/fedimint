@@ -332,12 +332,16 @@
 <a href="#331" id="331">331</a>
 <a href="#332" id="332">332</a>
 <a href="#333" id="333">333</a>
-<a href="#334" id="334">334</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
@@ -612,7 +616,9 @@
 
     <span class="kw">let </span>client_input = ClientInput::&lt;WalletInput&gt; {
         input: wallet_input,
-        keys: <span class="macro">vec!</span>[awaiting_confirmation_state.tweak_key],
+        keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin32_keypair(
+            <span class="kw-2">&amp;</span>awaiting_confirmation_state.tweak_key,
+        )],
         amount,
     };
 

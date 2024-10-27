@@ -402,7 +402,8 @@
 <a href="#401" id="401">401</a>
 <a href="#402" id="402">402</a>
 <a href="#403" id="403">403</a>
-<a href="#404" id="404">404</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -424,6 +425,7 @@
 <span class="kw">use </span>fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, TransactionBuilder,
 };
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
@@ -531,7 +533,7 @@
                         account: <span class="self">self</span>.key.public_key(),
                     },
                     amount: missing_input_amount,
-                    keys: <span class="macro">vec!</span>[<span class="self">self</span>.key],
+                    keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span><span class="self">self</span>.key)],
                 };
                 <span class="kw">let </span>input_sm = ClientInputSM {
                     state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
@@ -633,7 +635,7 @@
                 account: account_kp.public_key(),
             },
             amount,
-            keys: <span class="macro">vec!</span>[account_kp],
+            keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>account_kp)],
         };
 
         <span class="comment">// Build and send tx to the fed

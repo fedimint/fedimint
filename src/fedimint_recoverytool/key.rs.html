@@ -76,10 +76,14 @@
 <a href="#75" id="75">75</a>
 <a href="#76" id="76">76</a>
 <a href="#77" id="77">77</a>
-<a href="#78" id="78">78</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::Ordering;
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::hash::Hasher;
 
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_secret_key;
 <span class="kw">use </span>fedimint_wallet_server::common::keys::CompressedPublicKey;
 <span class="kw">use </span>miniscript::MiniscriptKey;
 
@@ -88,7 +92,7 @@
 </span><span class="attr">#[derive(Debug, Clone, Copy, Eq)]
 </span><span class="kw">pub enum </span>Key {
     Public(CompressedPublicKey),
-    Private(bitcoin30::key::PrivateKey),
+    Private(bitcoin::key::PrivateKey),
 }
 
 <span class="kw">impl </span>PartialOrd <span class="kw">for </span>Key {
@@ -125,7 +129,9 @@
         <span class="kw">match </span><span class="self">self </span>{
             Key::Public(pk) =&gt; pk,
             Key::Private(sk) =&gt; {
-                CompressedPublicKey::new(secp256k1::PublicKey::from_secret_key_global(<span class="kw-2">&amp;</span>sk.inner))
+                CompressedPublicKey::new(secp256k1::PublicKey::from_secret_key_global(
+                    <span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_secp256k1_secret_key(<span class="kw-2">&amp;</span>sk.inner),
+                ))
             }
         }
     }
@@ -149,9 +155,9 @@
         <span class="number">0
     </span>}
 
-    <span class="kw">type </span>Sha256 = bitcoin30::hashes::sha256::Hash;
+    <span class="kw">type </span>Sha256 = bitcoin::hashes::sha256::Hash;
     <span class="kw">type </span>Hash256 = miniscript::hash256::Hash;
-    <span class="kw">type </span>Ripemd160 = bitcoin30::hashes::ripemd160::Hash;
-    <span class="kw">type </span>Hash160 = bitcoin30::hashes::hash160::Hash;
+    <span class="kw">type </span>Ripemd160 = bitcoin::hashes::ripemd160::Hash;
+    <span class="kw">type </span>Hash160 = bitcoin::hashes::hash160::Hash;
 }
 </code></pre></div></section></main></body></html>

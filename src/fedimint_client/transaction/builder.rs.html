@@ -335,10 +335,14 @@
 <a href="#334" id="334">334</a>
 <a href="#335" id="335">335</a>
 <a href="#336" id="336">336</a>
-<a href="#337" id="337">337</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
-<span class="kw">use </span>bitcoin30::key::KeyPair;
-<span class="kw">use </span>bitcoin30::secp256k1;
+<span class="kw">use </span>bitcoin::key::Keypair;
+<span class="kw">use </span>bitcoin::secp256k1;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_schnorr_signature;
 <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput, IInput, IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
@@ -358,7 +362,7 @@
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>ClientInput&lt;I = DynInput&gt; {
     <span class="kw">pub </span>input: I,
-    <span class="kw">pub </span>keys: Vec&lt;KeyPair&gt;,
+    <span class="kw">pub </span>keys: Vec&lt;Keypair&gt;,
     <span class="kw">pub </span>amount: Amount,
 }
 
@@ -631,12 +635,14 @@
         <span class="kw">let </span>nonce: [u8; <span class="number">8</span>] = rng.gen();
 
         <span class="kw">let </span>txid = Transaction::tx_hash_from_parts(<span class="kw-2">&amp;</span>inputs, <span class="kw-2">&amp;</span>outputs, nonce);
-        <span class="kw">let </span>msg = secp256k1::Message::from_slice(<span class="kw-2">&amp;</span>txid[..]).expect(<span class="string">"txid has right length"</span>);
+        <span class="kw">let </span>msg = secp256k1::Message::from_digest_slice(<span class="kw-2">&amp;</span>txid[..]).expect(<span class="string">"txid has right length"</span>);
 
         <span class="kw">let </span>signatures = input_keys
             .into_iter()
             .flatten()
-            .map(|keypair| secp_ctx.sign_schnorr(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>keypair))
+            .map(|keypair| {
+                bitcoin32_to_bitcoin30_schnorr_signature(<span class="kw-2">&amp;</span>secp_ctx.sign_schnorr(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>keypair))
+            })
             .collect();
 
         <span class="kw">let </span>transaction = Transaction {
