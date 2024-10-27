@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -11,7 +12,9 @@ use fedimint_core::envs::is_env_var_set;
 use fedimint_core::task::{block_in_place, TaskGroup, TaskHandle};
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::contracts::Preimage;
+use futures::lock::Mutex;
 use ldk_node::config::EsploraSyncConfig;
+use ldk_node::lightning::events::PaymentFailureReason;
 use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::ln::PaymentHash;
 use ldk_node::lightning::routing::gossip::NodeAlias;
@@ -32,6 +35,20 @@ use crate::lightning::{
 };
 use crate::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, SendOnchainPayload};
 
+/// A collection of payment subscriptions, indexed by payment hash.
+/// Each payment hash maps to a list of oneshot `Sender`s that should be
+/// consumed when the payment completes, allowing for multiple subscribers to
+/// the same payment.
+type PaymentSubscriptions = BTreeMap<
+    bitcoin::hashes::sha256::Hash,
+    Vec<tokio::sync::oneshot::Sender<PaymentSubscriptionOutcome>>,
+>;
+
+enum PaymentSubscriptionOutcome {
+    Success(Preimage),
+    Failure(PaymentFailureReason),
+}
+
 pub struct GatewayLdkClient {
     /// The underlying lightning node.
     node: Arc<ldk_node::Node>,
@@ -44,6 +61,17 @@ pub struct GatewayLdkClient {
     /// The HTLC stream, until it is taken by calling
     /// `ILnRpcClient::route_htlcs`.
     htlc_stream_receiver_or: Option<tokio::sync::mpsc::Receiver<InterceptPaymentRequest>>,
+
+    /// The set of outgoing payments, by payment hash, that are currently
+    /// awaiting completion. This is used to allow `Self::handle_next_event()`
+    /// to notify `Self::pay()` when a payment completes.
+    ///
+    /// Note: Since this field is needed to process `PaymentSuccessful` and
+    /// `PaymentFailed` events from the LDK node, locking it will block all
+    /// event processing, including `PaymentClaimable` events, which are needed
+    /// to process inbound federation payments. Do not lock this field for
+    /// long periods of time.
+    payment_subscriptions: Arc<Mutex<PaymentSubscriptions>>,
 }
 
 impl std::fmt::Debug for GatewayLdkClient {
@@ -114,10 +142,19 @@ impl GatewayLdkClient {
         let (htlc_stream_sender, htlc_stream_receiver) = tokio::sync::mpsc::channel(1024);
         let task_group = TaskGroup::new();
 
+        let payment_subscriptions = Arc::new(Mutex::new(PaymentSubscriptions::new()));
+
         let node_clone = node.clone();
+        let payment_subscriptions_clone = payment_subscriptions.clone();
         task_group.spawn("ldk lightning node event handler", |handle| async move {
             loop {
-                Self::handle_next_event(&node_clone, &htlc_stream_sender, &handle).await;
+                Self::handle_next_event(
+                    &node_clone,
+                    &htlc_stream_sender,
+                    &handle,
+                    &payment_subscriptions_clone,
+                )
+                .await;
             }
         });
 
@@ -126,6 +163,7 @@ impl GatewayLdkClient {
             esplora_client: esplora_client::Builder::new(esplora_server_url).build_async()?,
             task_group,
             htlc_stream_receiver_or: Some(htlc_stream_receiver),
+            payment_subscriptions,
         })
     }
 
@@ -133,6 +171,7 @@ impl GatewayLdkClient {
         node: &ldk_node::Node,
         htlc_stream_sender: &Sender<InterceptPaymentRequest>,
         handle: &TaskHandle,
+        payment_subscriptions: &Arc<Mutex<PaymentSubscriptions>>,
     ) {
         // We manually check for task termination in case we receive a payment while the
         // task is shutting down. In that case, we want to finish the payment
@@ -146,26 +185,72 @@ impl GatewayLdkClient {
             }
         };
 
-        if let ldk_node::Event::PaymentClaimable {
-            payment_id: _,
-            payment_hash,
-            claimable_amount_msat,
-            claim_deadline,
-        } = event
-        {
-            if let Err(e) = htlc_stream_sender
-                .send(InterceptPaymentRequest {
-                    payment_hash: Hash::from_slice(&payment_hash.0).expect("Failed to create Hash"),
-                    amount_msat: claimable_amount_msat,
-                    expiry: claim_deadline.unwrap_or_default(),
-                    short_channel_id: None,
-                    incoming_chan_id: 0,
-                    htlc_id: 0,
-                })
-                .await
-            {
-                error!(?e, "Failed send InterceptHtlcRequest to stream");
+        match event {
+            ldk_node::Event::PaymentClaimable {
+                payment_id: _,
+                payment_hash,
+                claimable_amount_msat,
+                claim_deadline,
+            } => {
+                if let Err(e) = htlc_stream_sender
+                    .send(InterceptPaymentRequest {
+                        payment_hash: Hash::from_slice(&payment_hash.0)
+                            .expect("Failed to create Hash"),
+                        amount_msat: claimable_amount_msat,
+                        expiry: claim_deadline.unwrap_or_default(),
+                        short_channel_id: None,
+                        incoming_chan_id: 0,
+                        htlc_id: 0,
+                    })
+                    .await
+                {
+                    error!(?e, "Failed send InterceptHtlcRequest to stream");
+                }
             }
+            ldk_node::Event::PaymentSuccessful {
+                payment_id,
+                payment_hash,
+                ..
+            } => {
+                if let Some(payment_outcome_senders) = payment_subscriptions.lock().await.remove(
+                    &bitcoin::hashes::sha256::Hash::from_byte_array(payment_hash.0),
+                ) {
+                    let payment_id =
+                        payment_id.expect("Can only be `None` in ldk-node v0.2.1 and prior");
+
+                    if let PaymentKind::Bolt11 { preimage, .. } =
+                        node.payment(&payment_id).expect("`payment_id` should always be valid since we received it from an `ldk_node` event").kind
+                    {
+                        let preimage = preimage.expect("Preimage should always exist for successful payments");
+
+                        for payment_outcome_sender in payment_outcome_senders {
+                            // Tell the receiver that the payment was successful if they are listening.
+                            // If the receiver is not listening, it's fine to drop the message.
+                            let _ = payment_outcome_sender
+                                    .send(PaymentSubscriptionOutcome::Success(Preimage(preimage.0)));
+                        }
+                    }
+                }
+            }
+            ldk_node::Event::PaymentFailed {
+                payment_hash: Some(payment_hash),
+                reason,
+                ..
+            } => {
+                if let Some(payment_outcome_senders) = payment_subscriptions.lock().await.remove(
+                    &bitcoin::hashes::sha256::Hash::from_byte_array(payment_hash.0),
+                ) {
+                    let reason = reason.expect("Can only be `None` in ldk-node v0.2.1 and prior");
+
+                    for payment_outcome_sender in payment_outcome_senders {
+                        // Tell the receiver that the payment failed if they are listening.
+                        // If the receiver is not listening, it's fine to drop the message.
+                        let _ = payment_outcome_sender
+                            .send(PaymentSubscriptionOutcome::Failure(reason));
+                    }
+                }
+            }
+            _ => {}
         }
 
         // The `PaymentClaimable` event is the only event type that we are interested
@@ -207,6 +292,105 @@ impl GatewayLdkClient {
             u64::from(output_index),
         )
         .map_err(|e| anyhow::anyhow!("Failed to convert to short channel ID: {e:?}"))
+    }
+
+    /// Idempotently pays an invoice.
+    ///
+    /// Idempotency here means that, for a given invoice, only one payment
+    /// attempt will be made. If a payment was already attempted, the result of
+    /// the previous attempt will be returned.
+    ///
+    /// A return value of `None` indicates that the payment is in-flight and the
+    /// result should be fetched from the node's event queue once the payment is
+    /// complete.
+    ///
+    /// A return value of `Some(Ok(_))` indicates that the payment was
+    /// successful. Subsequent calls to this function for the same invoice
+    /// will always return `Some(Ok(_))`.
+    ///
+    /// A return value of `Some(Err(_))` indicates that the payment failed.
+    /// Subsequent calls to this function for the same invoice will always
+    /// return `Some(Err(_))`.
+    ///
+    /// Note: This function is _not_ async because `ldk_node::Node` does not
+    /// expose an async API for paying invoices. This is why we must return
+    /// `None` if the payment is in-flight, and the caller must check the
+    /// node's event queue for the result of the payment.
+    fn pay_idempotent(
+        node: &ldk_node::Node,
+        invoice: &Bolt11Invoice,
+        max_delay: u64,
+        max_fee: Amount,
+    ) -> Option<Result<PayInvoiceResponse, LightningRpcError>> {
+        // Check if a payment has already been started for this invoice. This could
+        // happen if the gateway was stopped after the payment was initiated but before
+        // it was completed.
+        let mut payment_details_iter = node
+            .list_payments_with_filter(|payment| {
+                if let PaymentKind::Bolt11 { hash, .. } = payment.kind {
+                    hash.0 == invoice.payment_hash().to_byte_array()
+                } else {
+                    false
+                }
+            })
+            .into_iter();
+
+        assert!(
+            payment_details_iter.len() <= 1,
+            "Multiple payments found for the same invoice"
+        );
+
+        let payment_details_or = payment_details_iter.next();
+
+        // If a previous payment attempt was found. Return the result of the payment.
+        if let Some(payment_details) = payment_details_or {
+            return match payment_details.status {
+                // The previous payment attempt is still in-flight.
+                PaymentStatus::Pending => None,
+
+                // The previous payment attempt succeeded.
+                PaymentStatus::Succeeded => {
+                    if let PaymentKind::Bolt11 {
+                        preimage: Some(preimage),
+                        ..
+                    } = payment_details.kind
+                    {
+                        Some(Ok(PayInvoiceResponse {
+                            preimage: Preimage(preimage.0),
+                        }))
+                    } else {
+                        None
+                    }
+                }
+
+                // The previous payment attempt failed.
+                PaymentStatus::Failed => Some(Err(LightningRpcError::FailedPayment {
+                    failure_reason: "LDK payment failed".to_string(),
+                })),
+            };
+        }
+
+        // No previous payment attempt was found. Start a new payment attempt.
+        let payment_result = node.bolt11_payment().send(
+            invoice,
+            Some(SendingParameters {
+                max_total_routing_fee_msat: Some(Some(max_fee.msats)),
+                max_total_cltv_expiry_delta: Some(max_delay as u32),
+                max_path_count: None,
+                max_channel_saturation_power_of_half: None,
+            }),
+        );
+
+        // If the payment failed to initialize, return an error.
+        if let Err(err) = payment_result {
+            return Some(Err(LightningRpcError::FailedPayment {
+                failure_reason: format!("LDK payment failed to initialize: {err:?}"),
+            }));
+        }
+
+        // The payment was successfully initiated.
+        // Return `None` to indicate that it's in-flight.
+        None
     }
 }
 
@@ -290,50 +474,44 @@ impl ILnRpcClient for GatewayLdkClient {
         max_delay: u64,
         max_fee: Amount,
     ) -> Result<PayInvoiceResponse, LightningRpcError> {
-        let payment_id = match self.node.bolt11_payment().send(
-            &invoice,
-            Some(SendingParameters {
-                max_total_routing_fee_msat: Some(Some(max_fee.msats)),
-                max_total_cltv_expiry_delta: Some(max_delay as u32),
-                max_path_count: None,
-                max_channel_saturation_power_of_half: None,
-            }),
-        ) {
-            Ok(payment_id) => payment_id,
-            Err(e) => {
-                return Err(LightningRpcError::FailedPayment {
-                    failure_reason: format!("LDK payment failed to initialize: {e:?}"),
-                });
-            }
-        };
+        // Lock the payment subscriptions before calling `pay_idempotent()`.
+        // This prevents payment events from being processed while we call
+        // `pay_idempotent()`. Without this, we could miss the payment event between
+        // calling `pay_idempotent` and subscribing to the payment event, resulting in
+        // the new payment subscription hanging until the gateway is restarted.
+        let mut payment_subscriptions = self.payment_subscriptions.lock().await;
 
-        // TODO: Find a way to avoid looping/polling to know when a payment is
-        // completed. `ldk-node` provides `PaymentSuccessful` and `PaymentFailed`
-        // events, but interacting with the node event queue here isn't
-        // straightforward.
-        loop {
-            if let Some(payment_details) = self.node.payment(&payment_id) {
-                match payment_details.status {
-                    PaymentStatus::Pending => {}
-                    PaymentStatus::Succeeded => {
-                        if let PaymentKind::Bolt11 {
-                            preimage: Some(preimage),
-                            ..
-                        } = payment_details.kind
-                        {
-                            return Ok(PayInvoiceResponse {
-                                preimage: Preimage(preimage.0),
-                            });
-                        }
-                    }
-                    PaymentStatus::Failed => {
-                        return Err(LightningRpcError::FailedPayment {
-                            failure_reason: "LDK payment failed".to_string(),
-                        });
-                    }
-                }
+        // If `pay_idempotent()` returns `Some`, the payment has already been completed
+        // from a previous call, so we can return the result immediately.
+        if let Some(response) = Self::pay_idempotent(&self.node, &invoice, max_delay, max_fee) {
+            return response;
+        }
+
+        // Subscribe to the `PaymentSuccessful`/`PaymentFailed` events for this invoice.
+        let (payment_subscription_sender, payment_subscription_receiver) =
+            tokio::sync::oneshot::channel();
+        payment_subscriptions
+            .entry(*invoice.payment_hash())
+            .or_default()
+            .push(payment_subscription_sender);
+
+        // Drop our lock on the payment subscriptions so that
+        // `payment_subscription_receiver` doesn't deadlock against the node event
+        // handler loop.
+        drop(payment_subscriptions);
+
+        match payment_subscription_receiver.await {
+            Ok(PaymentSubscriptionOutcome::Success(preimage)) => {
+                Ok(PayInvoiceResponse { preimage })
             }
-            fedimint_core::runtime::sleep(Duration::from_millis(100)).await;
+            Ok(PaymentSubscriptionOutcome::Failure(failure_reason)) => {
+                Err(LightningRpcError::FailedPayment {
+                    failure_reason: format!("LDK payment failed: {failure_reason:?}"),
+                })
+            }
+            Err(err) => Err(LightningRpcError::FailedPayment {
+                failure_reason: format!("LDK payment failed: {err:?}"),
+            }),
         }
     }
 
