@@ -1,6 +1,7 @@
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, TransactionId};
@@ -140,7 +141,7 @@ impl MintInputStateCreated {
 
         let refund_input = ClientInput::<MintInput> {
             input: MintInput::new_v0(amount, spendable_note.note()),
-            keys: vec![spendable_note.spend_key],
+            keys: vec![bitcoin30_to_bitcoin32_keypair(&spendable_note.spend_key)],
             amount,
         };
 

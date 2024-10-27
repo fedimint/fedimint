@@ -26,7 +26,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-bitcoin30 = { workspace = true }
+bitcoin = { workspace = true }
 clap = { workspace = true }
 clap_complete = "4.5.35"
 fedimint-aead = { workspace = true }

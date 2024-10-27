@@ -49,6 +49,7 @@ use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, TransactionBuilder,
 };
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
@@ -1230,7 +1231,7 @@ impl MintClientModule {
 
             inputs.push(ClientInput {
                 input: MintInput::new_v0(amount, note),
-                keys: vec![spendable_note.spend_key],
+                keys: vec![bitcoin30_to_bitcoin32_keypair(&spendable_note.spend_key)],
                 amount,
             });
 

@@ -3,6 +3,7 @@ use std::fmt;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::KeyPair;
@@ -218,7 +219,9 @@ impl SendStateMachine {
                         OutgoingWitness::Claim(preimage),
                     )),
                     amount: old_state.common.contract.amount,
-                    keys: vec![old_state.common.claim_keypair],
+                    keys: vec![bitcoin30_to_bitcoin32_keypair(
+                        &old_state.common.claim_keypair,
+                    )],
                 };
 
                 let outpoints = global_context

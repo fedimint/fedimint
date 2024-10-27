@@ -4,6 +4,7 @@ use bitcoin30::hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -546,7 +547,7 @@ async fn try_refund_outgoing_contract(
     let refund_client_input = ClientInput::<LightningInput> {
         input: refund_input,
         amount: contract_data.contract_account.amount,
-        keys: vec![refund_key],
+        keys: vec![bitcoin30_to_bitcoin32_keypair(&refund_key)],
     };
 
     let (txid, out_points) = global_context

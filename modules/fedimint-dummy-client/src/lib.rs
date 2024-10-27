@@ -20,6 +20,7 @@ use fedimint_client::sm::{Context, ModuleNotifier};
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, TransactionBuilder,
 };
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::core::{Decoder, ModuleKind, OperationId};
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
@@ -127,7 +128,7 @@ impl ClientModule for DummyClientModule {
                         account: self.key.public_key(),
                     },
                     amount: missing_input_amount,
-                    keys: vec![self.key],
+                    keys: vec![bitcoin30_to_bitcoin32_keypair(&self.key)],
                 };
                 let input_sm = ClientInputSM {
                     state_machines: Arc::new(move |txid, _| {
@@ -229,7 +230,7 @@ impl DummyClientModule {
                 account: account_kp.public_key(),
             },
             amount,
-            keys: vec![account_kp],
+            keys: vec![bitcoin30_to_bitcoin32_keypair(&account_kp)],
         };
 
         // Build and send tx to the fed

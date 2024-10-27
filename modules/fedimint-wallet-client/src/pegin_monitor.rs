@@ -6,6 +6,7 @@ use fedimint_api_client::api::DynModuleApi;
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client::module::ClientContext;
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
@@ -425,7 +426,7 @@ async fn claim_peg_in(
 
         let client_input = ClientInput::<WalletInput> {
             input: wallet_input,
-            keys: vec![tweak_key],
+            keys: vec![bitcoin30_to_bitcoin32_keypair(&tweak_key)],
             amount,
         };
 

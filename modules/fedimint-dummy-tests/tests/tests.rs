@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use anyhow::bail;
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::config::ClientModuleConfig;
 use fedimint_core::core::{IntoDynInstance, ModuleKind, OperationId};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::module::ModuleConsensusVersion;
-use fedimint_core::secp256k1::Secp256k1;
+use fedimint_core::secp256k1_29::Secp256k1;
 use fedimint_core::{sats, Amount, OutPoint};
 use fedimint_dummy_client::states::DummyStateMachine;
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
@@ -92,7 +93,7 @@ async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Resul
             account: account_kp.public_key(),
         },
         amount: sats(1000),
-        keys: vec![account_kp],
+        keys: vec![bitcoin30_to_bitcoin32_keypair(&account_kp)],
     };
 
     let tx = TransactionBuilder::new().with_input(input.into_dyn(dummy.id));
