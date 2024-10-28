@@ -232,11 +232,9 @@
 <a href="#231" id="231">231</a>
 <a href="#232" id="232">232</a>
 <a href="#233" id="233">233</a>
-<a href="#234" id="234">234</a>
-<a href="#235" id="235">235</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
+<a href="#234" id="234">234</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
@@ -376,7 +374,7 @@
 
         <span class="kw">let </span>refund_input = ClientInput::&lt;MintInput&gt; {
             input: MintInput::new_v0(amount, spendable_note.note()),
-            keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>spendable_note.spend_key)],
+            keys: <span class="macro">vec!</span>[spendable_note.spend_key],
             amount,
         };
 

@@ -2219,7 +2219,12 @@
 <a href="#2218" id="2218">2218</a>
 <a href="#2219" id="2219">2219</a>
 <a href="#2220" id="2220">2220</a>
-<a href="#2221" id="2221">2221</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2221" id="2221">2221</a>
+<a href="#2222" id="2222">2222</a>
+<a href="#2223" id="2223">2223</a>
+<a href="#2224" id="2224">2224</a>
+<a href="#2225" id="2225">2225</a>
+<a href="#2226" id="2226">2226</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2274,6 +2279,7 @@
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
+<span class="kw">use </span>fedimint_core::secp256k1_29::Keypair;
 <span class="kw">use </span>fedimint_core::task::{timeout, MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::util::update_merge::UpdateMerge;
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry, BoxStream};
@@ -2367,7 +2373,7 @@
 </span><span class="kw">pub enum </span>ReceivingKey {
     <span class="doccomment">/// The keypair used to receive payments for ourselves, we will use this to
     /// sweep to our own ecash wallet on success
-    </span>Personal(KeyPair),
+    </span>Personal(Keypair),
     <span class="doccomment">/// A public key of another user, the lightning payment will be locked to
     /// this key for them to claim on success
     </span>External(PublicKey),
@@ -2377,7 +2383,9 @@
     <span class="doccomment">/// The public key of the receiving key
     </span><span class="kw">pub fn </span>public_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PublicKey {
         <span class="kw">match </span><span class="self">self </span>{
-            ReceivingKey::Personal(keypair) =&gt; keypair.public_key(),
+            ReceivingKey::Personal(keypair) =&gt; {
+                bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>keypair.public_key())
+            }
             ReceivingKey::External(public_key) =&gt; <span class="kw-2">*</span>public_key,
         }
     }
@@ -2946,7 +2954,7 @@
         };
 
         <span class="kw">let </span>outgoing_payment = OutgoingContractData {
-            recovery_key: user_sk,
+            recovery_key: bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>user_sk),
             contract_account: OutgoingContractAccount {
                 amount: contract_amount,
                 contract: contract.clone(),
@@ -3728,8 +3736,10 @@
         extra_meta: M,
         gateway: <span class="prelude-ty">Option</span>&lt;LightningGateway&gt;,
     ) -&gt; anyhow::Result&lt;(OperationId, Bolt11Invoice, [u8; <span class="number">32</span>])&gt; {
-        <span class="kw">let </span>receiving_key =
-            ReceivingKey::Personal(KeyPair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;mut </span>rand::rngs::OsRng));
+        <span class="kw">let </span>receiving_key = ReceivingKey::Personal(bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>KeyPair::new(
+            <span class="kw-2">&amp;</span><span class="self">self</span>.secp,
+            <span class="kw-2">&amp;mut </span>rand::rngs::OsRng,
+        )));
         <span class="self">self</span>.create_bolt11_invoice_internal(
             amount,
             description,

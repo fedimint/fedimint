@@ -196,19 +196,19 @@
     }
 }
 
-<span class="kw">impl </span>Encodable <span class="kw">for </span>bitcoin30::key::KeyPair {
+<span class="kw">impl </span>Encodable <span class="kw">for </span>bitcoin::key::Keypair {
     <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="self">self</span>.secret_bytes().consensus_encode(writer)
     }
 }
 
-<span class="kw">impl </span>Decodable <span class="kw">for </span>bitcoin30::key::KeyPair {
+<span class="kw">impl </span>Decodable <span class="kw">for </span>bitcoin::key::Keypair {
     <span class="kw">fn </span>consensus_decode&lt;D: Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span>sec_bytes = &lt;[u8; <span class="number">32</span>]&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>;
-        <span class="self">Self</span>::from_seckey_slice(secp256k1::global::SECP256K1, <span class="kw-2">&amp;</span>sec_bytes) <span class="comment">// FIXME: evaluate security risk of global ctx
+        <span class="self">Self</span>::from_seckey_slice(bitcoin::secp256k1::global::SECP256K1, <span class="kw-2">&amp;</span>sec_bytes) <span class="comment">// FIXME: evaluate security risk of global ctx
             </span>.map_err(DecodeError::from_err)
     }
 }

@@ -388,7 +388,13 @@
 <a href="#387" id="387">387</a>
 <a href="#388" id="388">388</a>
 <a href="#389" id="389">389</a>
-<a href="#390" id="390">390</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::hash;
 <span class="kw">use </span>std::time::Duration;
 
@@ -398,11 +404,15 @@
 <span class="kw">use </span>fedimint_client::module::ClientContext;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+};
 <span class="kw">use </span>fedimint_core::core::{Decoder, OperationId};
 <span class="kw">use </span>fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
-<span class="kw">use </span>fedimint_core::secp256k1::{KeyPair, Secp256k1, Signing};
+<span class="kw">use </span>fedimint_core::secp256k1::{Secp256k1, Signing};
+<span class="kw">use </span>fedimint_core::secp256k1_29::Keypair;
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered};
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
@@ -729,7 +739,7 @@
 </span><span class="kw">pub struct </span>NoteIssuanceRequest {
     <span class="doccomment">/// Spend key from which the note nonce (corresponding public key) is
     /// derived
-    </span>spend_key: KeyPair,
+    </span>spend_key: Keypair,
     <span class="doccomment">/// Key to unblind the blind signature supplied by the mint for this note
     </span>blinding_key: BlindingKey,
 }
@@ -754,7 +764,7 @@
         <span class="kw">let </span>blinded_nonce = blind_message(nonce.to_message(), blinding_key);
 
         <span class="kw">let </span>cr = NoteIssuanceRequest {
-            spend_key,
+            spend_key: bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>spend_key),
             blinding_key,
         };
 
@@ -763,7 +773,9 @@
 
     <span class="doccomment">/// Return nonce of the e-cash note being requested
     </span><span class="kw">pub fn </span>nonce(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Nonce {
-        Nonce(<span class="self">self</span>.spend_key.public_key())
+        Nonce(bitcoin32_to_bitcoin30_secp256k1_pubkey(
+            <span class="kw-2">&amp;</span><span class="self">self</span>.spend_key.public_key(),
+        ))
     }
 
     <span class="kw">pub fn </span>blinded_message(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BlindedMessage {

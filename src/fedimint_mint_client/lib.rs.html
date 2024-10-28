@@ -2659,7 +2659,15 @@
 <a href="#2658" id="2658">2658</a>
 <a href="#2659" id="2659">2659</a>
 <a href="#2660" id="2660">2660</a>
-<a href="#2661" id="2661">2661</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2661" id="2661">2661</a>
+<a href="#2662" id="2662">2662</a>
+<a href="#2663" id="2663">2663</a>
+<a href="#2664" id="2664">2664</a>
+<a href="#2665" id="2665">2665</a>
+<a href="#2666" id="2666">2666</a>
+<a href="#2667" id="2667">2667</a>
+<a href="#2668" id="2668">2668</a>
+<a href="#2669" id="2669">2669</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2710,7 +2718,7 @@
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, TransactionBuilder,
 };
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 <span class="kw">use </span>fedimint_core::config::{FederationId, FederationIdPrefix};
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
@@ -2723,7 +2731,8 @@
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-<span class="kw">use </span>fedimint_core::secp256k1::{All, KeyPair, Secp256k1};
+<span class="kw">use </span>fedimint_core::secp256k1::{All, Secp256k1};
+<span class="kw">use </span>fedimint_core::secp256k1_29::Keypair;
 <span class="kw">use </span>fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, PeerId, Tiered,
@@ -3051,7 +3060,7 @@
 </span><span class="kw">pub struct </span>OOBNoteV2 {
     <span class="kw">pub </span>amount: Amount,
     <span class="kw">pub </span>sig: Signature,
-    <span class="kw">pub </span>key: KeyPair,
+    <span class="kw">pub </span>key: Keypair,
 }
 
 <span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encodable, Decodable)]
@@ -3919,7 +3928,7 @@
 
             inputs.push(ClientInput {
                 input: MintInput::new_v0(amount, note),
-                keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>spendable_note.spend_key)],
+                keys: <span class="macro">vec!</span>[spendable_note.spend_key],
                 amount,
             });
 
@@ -4368,7 +4377,9 @@
                 <span class="macro">bail!</span>(<span class="string">"Note {idx} has an invalid federation signature"</span>);
             }
 
-            <span class="kw">let </span>expected_nonce = Nonce(snote.spend_key.public_key());
+            <span class="kw">let </span>expected_nonce = Nonce(bitcoin32_to_bitcoin30_secp256k1_pubkey(
+                <span class="kw-2">&amp;</span>snote.spend_key.public_key(),
+            ));
             <span class="kw">if </span>note.nonce != expected_nonce {
                 <span class="macro">bail!</span>(<span class="string">"Note {idx} cannot be spent using the supplied spend key"</span>);
             }
@@ -4771,7 +4782,7 @@
 </span><span class="attr">#[derive(Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>SpendableNote {
     <span class="kw">pub </span>signature: tbs::Signature,
-    <span class="kw">pub </span>spend_key: KeyPair,
+    <span class="kw">pub </span>spend_key: Keypair,
 }
 
 <span class="kw">impl </span>fmt::Debug <span class="kw">for </span>SpendableNote {
@@ -4791,7 +4802,9 @@
 
 <span class="kw">impl </span>SpendableNote {
     <span class="kw">pub fn </span>nonce(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Nonce {
-        Nonce(<span class="self">self</span>.spend_key.public_key())
+        Nonce(bitcoin32_to_bitcoin30_secp256k1_pubkey(
+            <span class="kw-2">&amp;</span><span class="self">self</span>.spend_key.public_key(),
+        ))
     }
 
     <span class="kw">fn </span>note(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Note {
@@ -4830,7 +4843,7 @@
     // verifying they serialize and decode the same.
     </span><span class="attr">#[serde(serialize_with = <span class="string">"serdect::array::serialize_hex_lower_or_bin"</span>)]
     </span><span class="kw">pub </span>signature: [u8; <span class="number">48</span>],
-    <span class="kw">pub </span>spend_key: KeyPair,
+    <span class="kw">pub </span>spend_key: Keypair,
 }
 
 <span class="kw">impl </span>fmt::Display <span class="kw">for </span>SpendableNoteUndecoded {
@@ -4851,7 +4864,9 @@
 
 <span class="kw">impl </span>SpendableNoteUndecoded {
     <span class="kw">fn </span>nonce(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Nonce {
-        Nonce(<span class="self">self</span>.spend_key.public_key())
+        Nonce(bitcoin32_to_bitcoin30_secp256k1_pubkey(
+            <span class="kw-2">&amp;</span><span class="self">self</span>.spend_key.public_key(),
+        ))
     }
 
     <span class="kw">pub fn </span>decode(<span class="self">self</span>) -&gt; anyhow::Result&lt;SpendableNote&gt; {
@@ -4986,6 +5001,7 @@
     <span class="kw">use </span>std::str::FromStr;
 
     <span class="kw">use </span>bitcoin_hashes::Hash;
+    <span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
     <span class="kw">use </span>fedimint_core::config::FederationId;
     <span class="kw">use </span>fedimint_core::encoding::Decodable;
     <span class="kw">use </span>fedimint_core::invite_code::{InviteCode, InviteCodeV2};
@@ -5245,7 +5261,7 @@
             notes: iter::repeat(OOBNoteV2 {
                 amount: Amount::from_msats(<span class="number">1</span>),
                 sig: Signature(bls12_381::G1Affine::generator()),
-                key: SecretKey::new(<span class="kw-2">&amp;mut </span>OsRng).keypair(SECP256K1),
+                key: bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>SecretKey::new(<span class="kw-2">&amp;mut </span>OsRng).keypair(SECP256K1)),
             })
             .take(NUMBER_OF_NOTES)
             .collect(),

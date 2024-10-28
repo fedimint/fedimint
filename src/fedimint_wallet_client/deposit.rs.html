@@ -335,15 +335,21 @@
 <a href="#334" id="334">334</a>
 <a href="#335" id="335">335</a>
 <a href="#336" id="336">336</a>
-<a href="#337" id="337">337</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin32_to_bitcoin30_keypair, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+};
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::secp256k1_29::Keypair;
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
@@ -391,7 +397,7 @@
                     StateTransition::new(
                         await_created_btc_transaction_submitted(
                             context.clone(),
-                            created_state.tweak_key,
+                            bitcoin32_to_bitcoin30_keypair(<span class="kw-2">&amp;</span>created_state.tweak_key),
                         ),
                         |_db, (btc_tx, out_idx), old_state| {
                             Box::pin(<span class="kw">async move </span>{ transition_tx_seen(old_state, btc_tx, out_idx) })
@@ -606,7 +612,9 @@
         txout_proof,
         awaiting_confirmation_state.btc_transaction,
         awaiting_confirmation_state.out_idx,
-        awaiting_confirmation_state.tweak_key.public_key(),
+        bitcoin32_to_bitcoin30_secp256k1_pubkey(
+            <span class="kw-2">&amp;</span>awaiting_confirmation_state.tweak_key.public_key(),
+        ),
     )
     .expect(<span class="string">"TODO: handle API returning faulty proofs"</span>);
 
@@ -616,9 +624,7 @@
 
     <span class="kw">let </span>client_input = ClientInput::&lt;WalletInput&gt; {
         input: wallet_input,
-        keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin32_keypair(
-            <span class="kw-2">&amp;</span>awaiting_confirmation_state.tweak_key,
-        )],
+        keys: <span class="macro">vec!</span>[awaiting_confirmation_state.tweak_key],
         amount,
     };
 
@@ -646,7 +652,7 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>CreatedDepositState {
-    <span class="kw">pub</span>(<span class="kw">crate</span>) tweak_key: KeyPair,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) tweak_key: Keypair,
     <span class="kw">pub</span>(<span class="kw">crate</span>) timeout_at: SystemTime,
 }
 
@@ -655,7 +661,7 @@
     <span class="doccomment">/// Key pair of which the public was used to tweak the federation's wallet
     /// descriptor. The secret key is later used to sign the fedimint claim
     /// transaction.
-    </span>tweak_key: KeyPair,
+    </span>tweak_key: Keypair,
     <span class="doccomment">/// The bitcoin transaction is saved as soon as we see it so the transaction
     /// can be re-transmitted if it's evicted from the mempool.
     </span><span class="kw">pub</span>(<span class="kw">crate</span>) btc_transaction: bitcoin30::Transaction,

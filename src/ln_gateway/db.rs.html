@@ -569,17 +569,38 @@
 <a href="#568" id="568">568</a>
 <a href="#569" id="569">569</a>
 <a href="#570" id="570">570</a>
-<a href="#571" id="571">571</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+<a href="#585" id="585">585</a>
+<a href="#586" id="586">586</a>
+<a href="#587" id="587">587</a>
+<a href="#588" id="588">588</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_keypair,
+};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::db::{
     CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
+<span class="kw">use </span>fedimint_core::secp256k1_29::Keypair;
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1, Amount};
 <span class="kw">use </span>fedimint_ln_common::serde_routing_fees;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
@@ -690,23 +711,32 @@
     }
 
     <span class="kw">async fn </span>load_gateway_keypair(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;KeyPair&gt; {
-        <span class="self">self</span>.get_value(<span class="kw-2">&amp;</span>GatewayPublicKey).<span class="kw">await
-    </span>}
-
-    <span class="kw">async fn </span>load_gateway_keypair_assert_exists(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; KeyPair {
         <span class="self">self</span>.get_value(<span class="kw-2">&amp;</span>GatewayPublicKey)
             .<span class="kw">await
-            </span>.expect(<span class="string">"Gateway keypair does not exist"</span>)
+            </span>.map(|kp| bitcoin32_to_bitcoin30_keypair(<span class="kw-2">&amp;</span>kp))
+    }
+
+    <span class="kw">async fn </span>load_gateway_keypair_assert_exists(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; KeyPair {
+        bitcoin32_to_bitcoin30_keypair(
+            <span class="kw-2">&amp;</span><span class="self">self
+                </span>.get_value(<span class="kw-2">&amp;</span>GatewayPublicKey)
+                .<span class="kw">await
+                </span>.expect(<span class="string">"Gateway keypair does not exist"</span>),
+        )
     }
 
     <span class="kw">async fn </span>load_or_create_gateway_keypair(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; KeyPair {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(key_pair) = <span class="self">self</span>.get_value(<span class="kw-2">&amp;</span>GatewayPublicKey).<span class="kw">await </span>{
-            key_pair
+            bitcoin32_to_bitcoin30_keypair(<span class="kw-2">&amp;</span>key_pair)
         } <span class="kw">else </span>{
             <span class="kw">let </span>context = Secp256k1::new();
             <span class="kw">let </span>(secret_key, _public_key) = context.generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
             <span class="kw">let </span>key_pair = KeyPair::from_secret_key(<span class="kw-2">&amp;</span>context, <span class="kw-2">&amp;</span>secret_key);
-            <span class="self">self</span>.insert_new_entry(<span class="kw-2">&amp;</span>GatewayPublicKey, <span class="kw-2">&amp;</span>key_pair).<span class="kw">await</span>;
+            <span class="self">self</span>.insert_new_entry(
+                <span class="kw-2">&amp;</span>GatewayPublicKey,
+                <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>key_pair),
+            )
+            .<span class="kw">await</span>;
             key_pair
         }
     }
@@ -883,7 +913,7 @@
 
 <span class="macro">impl_db_record!</span>(
     key = GatewayPublicKey,
-    value = KeyPair,
+    value = Keypair,
     db_prefix = DbKeyPrefix::GatewayPublicKey,
 );
 
@@ -1054,7 +1084,11 @@
         <span class="kw">let </span>context = secp256k1::Secp256k1::new();
         <span class="kw">let </span>(secret, <span class="kw">_</span>) = context.generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>key_pair = secp256k1::KeyPair::from_secret_key(<span class="kw-2">&amp;</span>context, <span class="kw-2">&amp;</span>secret);
-        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>GatewayPublicKey, <span class="kw-2">&amp;</span>key_pair).<span class="kw">await</span>;
+        dbtx.insert_new_entry(
+            <span class="kw-2">&amp;</span>GatewayPublicKey,
+            <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>key_pair),
+        )
+        .<span class="kw">await</span>;
 
         <span class="kw">let </span>gateway_configuration = GatewayConfigurationV0 {
             password: <span class="string">"EXAMPLE"</span>.to_string(),
