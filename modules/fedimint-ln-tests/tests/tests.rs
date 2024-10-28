@@ -606,6 +606,7 @@ mod fedimint_migration_tests {
     use anyhow::ensure;
     use bitcoin_hashes::{sha256, Hash};
     use fedimint_client::module::init::DynClientModuleInit;
+    use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
     use fedimint_core::config::FederationId;
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
@@ -889,7 +890,9 @@ mod fedimint_migration_tests {
             invoice
                 .consensus_encode(&mut submitted_offer_variant)
                 .expect("Invoice is encodable");
-            let receiving_key = ReceivingKey::Personal(KeyPair::new_global(&mut OsRng));
+            let receiving_key = ReceivingKey::Personal(bitcoin30_to_bitcoin32_keypair(
+                &KeyPair::new_global(&mut OsRng),
+            ));
             receiving_key
                 .consensus_encode(&mut submitted_offer_variant)
                 .expect("ReceivingKey is encodable");
@@ -909,7 +912,7 @@ mod fedimint_migration_tests {
                 .consensus_encode(&mut submitted_offer_variant)
                 .expect("Invoice is encodable");
             let keypair = KeyPair::new_global(&mut OsRng);
-            keypair
+            bitcoin30_to_bitcoin32_keypair(&keypair)
                 .consensus_encode(&mut submitted_offer_variant)
                 .expect("Keypair is encodable");
 
@@ -924,7 +927,7 @@ mod fedimint_migration_tests {
                 .consensus_encode(&mut confirmed_variant)
                 .expect("Invoice is encodable");
             let keypair = KeyPair::new_global(&mut OsRng);
-            keypair
+            bitcoin30_to_bitcoin32_keypair(&keypair)
                 .consensus_encode(&mut confirmed_variant)
                 .expect("Keypair is encodable");
             confirmed_variant
@@ -945,7 +948,7 @@ mod fedimint_migration_tests {
             contract: outgoing_contract.clone(),
         };
         let contract = OutgoingContractData {
-            recovery_key: KeyPair::from_secret_key(&secp, &sk),
+            recovery_key: bitcoin30_to_bitcoin32_keypair(&KeyPair::from_secret_key(&secp, &sk)),
             contract_account: outgoing_account,
         };
         let ln_common = LightningPayCommon {

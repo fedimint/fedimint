@@ -29,7 +29,9 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_network;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_network,
+};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
@@ -600,7 +602,7 @@ impl LightningClientModule {
                         gateway_api: gateway_api_clone.clone(),
                         contract: contract_clone.clone(),
                         invoice: LightningInvoice::Bolt11(invoice_clone.clone()),
-                        refund_keypair,
+                        refund_keypair: bitcoin30_to_bitcoin32_keypair(&refund_keypair),
                     },
                     state: SendSMState::Funding,
                 })]
@@ -890,7 +892,7 @@ impl LightningClientModule {
             common: ReceiveSMCommon {
                 operation_id,
                 contract: contract.clone(),
-                claim_keypair,
+                claim_keypair: bitcoin30_to_bitcoin32_keypair(&claim_keypair),
                 agg_decryption_key,
             },
             state: ReceiveSMState::Pending,

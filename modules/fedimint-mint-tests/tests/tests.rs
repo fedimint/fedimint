@@ -384,6 +384,7 @@ mod fedimint_migration_tests {
     use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
     use fedimint_client::module::init::recovery::{RecoveryFromHistory, RecoveryFromHistoryCommon};
     use fedimint_client::module::init::DynClientModuleInit;
+    use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
@@ -498,7 +499,7 @@ mod fedimint_migration_tests {
 
         let spendable_note = SpendableNote {
             signature: sig,
-            spend_key: keypair,
+            spend_key: bitcoin30_to_bitcoin32_keypair(&keypair),
         };
 
         dbtx.insert_new_entry(
