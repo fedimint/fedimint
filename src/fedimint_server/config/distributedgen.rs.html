@@ -676,16 +676,22 @@
 <a href="#675" id="675">675</a>
 <a href="#676" id="676">676</a>
 <a href="#677" id="677">677</a>
-<a href="#678" id="678">678</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::io::Write;
 
 <span class="kw">use </span>anyhow::{ensure, format_err};
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>bitcoin30::secp256k1;
+<span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>bitcoin_hashes::sha256::{Hash <span class="kw">as </span>Sha256, HashEngine};
 <span class="kw">use </span>bls12_381::Scalar;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+};
 <span class="kw">use </span>fedimint_core::config::{
     DkgError, DkgGroup, DkgMessage, DkgPeerMsg, DkgResult, ISupportedDkgMessage,
 };
@@ -1220,7 +1226,7 @@
             .send(
                 <span class="kw-2">&amp;</span><span class="self">self</span>.peers,
                 (<span class="self">self</span>.module_instance_id, dkg_key.clone()),
-                DkgPeerMsg::PublicKey(key),
+                DkgPeerMsg::PublicKey(bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>key)),
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1232,7 +1238,7 @@
                 .<span class="kw">await</span><span class="question-mark">?
             </span>{
                 (peer, DkgPeerMsg::PublicKey(key)) =&gt; {
-                    peer_peg_in_keys.insert(peer, key);
+                    peer_peg_in_keys.insert(peer, bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>key));
                 }
                 (peer, msg) =&gt; {
                     <span class="kw">return </span><span class="prelude-val">Err</span>(
