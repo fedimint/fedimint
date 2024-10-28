@@ -456,7 +456,7 @@ pub enum ReissueExternalNotesState {
 }
 
 /// The high-level state of a raw e-cash spend operation started with
-/// [`MintClientModule::spend_notes`].
+/// [`MintClientModule::spend_notes_with_selector`].
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum SpendOOBState {
     /// The e-cash has been selected and given to the caller
@@ -869,7 +869,13 @@ impl ClientModule for MintClientModule {
                 }
                 "spend_notes_expert" => {
                     let req: SpendNotesExpertRequest = serde_json::from_value(request)?;
-                    let result = self.spend_notes(req.min_amount, req.try_cancel_after, req.include_invite, req.extra_meta).await?;
+                    let result = self.spend_notes_with_selector(
+                        &SelectNotesWithAtleastAmount,
+                        req.min_amount,
+                        req.try_cancel_after,
+                        req.include_invite,
+                        req.extra_meta
+                    ).await?;
                     yield serde_json::to_value(result)?;
                 }
                 "validate_notes" => {
@@ -1567,6 +1573,10 @@ impl MintClientModule {
     /// should be chosen such that the recipient (who is potentially offline at
     /// the time of receiving the e-cash notes) had a reasonable timeframe to
     /// come online and reissue the notes themselves.
+    #[deprecated(
+        since = "0.5.0",
+        note = "Use `spend_notes_with_selector` instead, with `SelectNotesWithAtleastAmount` to maintain the same behavior"
+    )]
     pub async fn spend_notes<M: Serialize + Send>(
         &self,
         min_amount: Amount,
@@ -1584,7 +1594,21 @@ impl MintClientModule {
         .await
     }
 
-    /// Same as `spend_notes` but allows different to select notes to be used.
+    /// Fetches and removes notes from the wallet to be sent to the recipient
+    /// out of band. The not selection algorithm is determined by
+    /// `note_selector`. See the [`NotesSelector`] trait for available
+    /// implementations.
+    ///
+    /// These spends can be canceled by calling
+    /// [`MintClientModule::try_cancel_spend_notes`] as long
+    /// as the recipient hasn't reissued the e-cash notes themselves yet.
+    ///
+    /// The client will also automatically attempt to cancel the operation after
+    /// `try_cancel_after` time has passed. This is a safety mechanism to avoid
+    /// users forgetting about failed out-of-band transactions. The timeout
+    /// should be chosen such that the recipient (who is potentially offline at
+    /// the time of receiving the e-cash notes) had a reasonable timeframe to
+    /// come online and reissue the notes themselves.
     pub async fn spend_notes_with_selector<M: Serialize + Send>(
         &self,
         notes_selector: &impl NotesSelector,
@@ -1692,9 +1716,9 @@ impl MintClientModule {
     }
 
     /// Try to cancel a spend operation started with
-    /// [`MintClientModule::spend_notes`]. If the e-cash notes have already been
-    /// spent this operation will fail which can be observed using
-    /// [`MintClientModule::subscribe_spend_notes`].
+    /// [`MintClientModule::spend_notes_with_selector`]. If the e-cash notes
+    /// have already been spent this operation will fail which can be
+    /// observed using [`MintClientModule::subscribe_spend_notes`].
     pub async fn try_cancel_spend_notes(&self, operation_id: OperationId) {
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
         dbtx.insert_entry(&CancelledOOBSpendKey(operation_id), &())
@@ -1705,7 +1729,7 @@ impl MintClientModule {
     }
 
     /// Subscribe to updates on the progress of a raw e-cash spend operation
-    /// started with [`MintClientModule::spend_notes`].
+    /// started with [`MintClientModule::spend_notes_with_selector`].
     pub async fn subscribe_spend_notes(
         &self,
         operation_id: OperationId,
@@ -1833,6 +1857,8 @@ pub struct SpendOOBRefund {
     pub transaction_id: TransactionId,
 }
 
+/// Defines a strategy for selecting e-cash notes given a specific target amount
+/// and fee per note transaction input.
 #[apply(async_trait_maybe_send!)]
 pub trait NotesSelector<Note = SpendableNoteUndecoded>: Send + Sync {
     /// Select notes from stream for requested_amount.

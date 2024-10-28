@@ -117,7 +117,9 @@ mod tests {
     };
     use fedimint_ln_common::lightning_invoice::{Bolt11InvoiceDescription, Description};
     use fedimint_ln_common::LightningGateway;
-    use fedimint_mint_client::{MintClientModule, ReissueExternalNotesState, SpendOOBState};
+    use fedimint_mint_client::{
+        MintClientModule, ReissueExternalNotesState, SelectNotesWithAtleastAmount, SpendOOBState,
+    };
     use futures::StreamExt;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -262,7 +264,13 @@ mod tests {
     ) -> Result<(), anyhow::Error> {
         let mint = client.get_first_module::<MintClientModule>()?;
         let (_, notes) = mint
-            .spend_notes(Amount::from_sats(11), Duration::from_secs(10000), false, ())
+            .spend_notes_with_selector(
+                &SelectNotesWithAtleastAmount,
+                Amount::from_sats(11),
+                Duration::from_secs(10000),
+                false,
+                (),
+            )
             .await?;
         let operation_id = mint.reissue_external_notes(notes, ()).await?;
         let mut updates = mint
@@ -291,7 +299,13 @@ mod tests {
         let mint = client.get_first_module::<MintClientModule>()?;
         'retry: loop {
             let (operation_id, notes) = mint
-                .spend_notes(amount, Duration::from_secs(10000), false, ())
+                .spend_notes_with_selector(
+                    &SelectNotesWithAtleastAmount,
+                    amount,
+                    Duration::from_secs(10000),
+                    false,
+                    (),
+                )
                 .await?;
             if notes.total_amount() == amount {
                 return Ok(());

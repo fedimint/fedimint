@@ -15,7 +15,8 @@ use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_logging::LOG_TEST;
 use fedimint_mint_client::{
-    MintClientInit, MintClientModule, Note, OOBNotes, ReissueExternalNotesState, SpendOOBState,
+    MintClientInit, MintClientModule, Note, OOBNotes, ReissueExternalNotesState,
+    SelectNotesWithAtleastAmount, SpendOOBState,
 };
 use fedimint_mint_common::config::{FeeConsensus, MintGenParams, MintGenParamsConsensus};
 use fedimint_mint_common::{MintInput, MintInputV0, Nonce};
@@ -113,7 +114,7 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
     let client2_mint = client2.get_first_module::<MintClientModule>()?;
     info!("### SPEND NOTES");
     let (op, notes) = client1_mint
-        .spend_notes(sats(750), TIMEOUT, false, ())
+        .spend_notes_with_selector(&SelectNotesWithAtleastAmount, sats(750), TIMEOUT, false, ())
         .await?;
     let sub1 = &mut client1_mint.subscribe_spend_notes(op).await?.into_stream();
     assert_eq!(sub1.ok().await?, SpendOOBState::Created);
@@ -165,7 +166,13 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
                 info!("Starting spend {num_spend}");
                 let client1_mint = task_client1.get_first_module::<MintClientModule>().unwrap();
                 let (op, notes) = client1_mint
-                    .spend_notes(sats(30), ECASH_TIMEOUT, false, ())
+                    .spend_notes_with_selector(
+                        &SelectNotesWithAtleastAmount,
+                        sats(30),
+                        ECASH_TIMEOUT,
+                        false,
+                        (),
+                    )
                     .await
                     .unwrap();
                 let sub1 = &mut client1_mint
@@ -290,7 +297,7 @@ async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
     // Spend from client1 to client2
     let mint_module = client.get_first_module::<MintClientModule>()?;
     let (op, _) = mint_module
-        .spend_notes(sats(750), TIMEOUT, false, ())
+        .spend_notes_with_selector(&SelectNotesWithAtleastAmount, sats(750), TIMEOUT, false, ())
         .await?;
     let sub1 = &mut mint_module.subscribe_spend_notes(op).await?.into_stream();
     assert_eq!(sub1.ok().await?, SpendOOBState::Created);
@@ -327,7 +334,13 @@ async fn error_zero_value_oob_spend() -> anyhow::Result<()> {
     // Spend from client1 to client2
     let err_msg = client1
         .get_first_module::<MintClientModule>()?
-        .spend_notes(Amount::ZERO, TIMEOUT, false, ())
+        .spend_notes_with_selector(
+            &SelectNotesWithAtleastAmount,
+            Amount::ZERO,
+            TIMEOUT,
+            false,
+            (),
+        )
         .await
         .expect_err("Zero-amount spends should be forbidden")
         .to_string();
