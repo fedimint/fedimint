@@ -1,4 +1,4 @@
-use bitcoin30::address::NetworkUnchecked;
+use bitcoin::address::NetworkUnchecked;
 use clap::Subcommand;
 use fedimint_core::bitcoin_migration::{
     bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_unchecked_address,

@@ -14,6 +14,7 @@ use clap::Subcommand;
 use fedimint_bip39::Mnemonic;
 use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::envs::is_env_var_set;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::{backoff_util, retry, SafeUrl};
@@ -24,13 +25,13 @@ use futures::stream::BoxStream;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use self::cln::NetworkLnRpcClient;
 use self::lnd::GatewayLndClient;
 use crate::envs::{
-    FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_LDK_ESPLORA_SERVER_URL, FM_LDK_NETWORK, FM_LND_MACAROON_ENV,
-    FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
+    FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV, FM_LDK_ESPLORA_SERVER_URL,
+    FM_LDK_NETWORK, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
 use crate::rpc::{CloseChannelsWithPeerPayload, WithdrawOnchainPayload};
 use crate::{OpenChannelPayload, Preimage};
@@ -234,6 +235,11 @@ impl dyn ILnRpcClient {
 
     /// Waits for the Lightning node to be synced to the Bitcoin blockchain.
     pub async fn wait_for_chain_sync(&self) -> std::result::Result<(), LightningRpcError> {
+        if is_env_var_set(FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV) {
+            debug!("Skip waiting for gateway to sync to chain");
+            return Ok(());
+        }
+
         retry(
             "Wait for chain sync",
             backoff_util::background_backoff(),
