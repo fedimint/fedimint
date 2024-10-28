@@ -99,9 +99,12 @@ mod fedimint_migration_tests {
     use std::str::FromStr;
 
     use anyhow::ensure;
-    use bitcoin30::key::KeyPair;
-    use bitcoin30::secp256k1;
+    use bitcoin::key::Keypair;
+    use bitcoin::secp256k1;
     use bitcoin_hashes::Hash;
+    use fedimint_core::bitcoin_migration::{
+        bitcoin32_to_bitcoin30_schnorr_signature, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+    };
     use fedimint_core::core::{DynInput, DynOutput};
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
@@ -151,9 +154,9 @@ mod fedimint_migration_tests {
 
         let (sk, _) = secp256k1::generate_keypair(&mut OsRng);
         let secp = secp256k1::Secp256k1::new();
-        let key_pair = KeyPair::from_secret_key(&secp, &sk);
+        let key_pair = Keypair::from_secret_key(&secp, &sk);
         let schnorr = secp.sign_schnorr_with_rng(
-            &Message::from_slice(&BYTE_32).unwrap(),
+            &Message::from_digest_slice(&BYTE_32).unwrap(),
             &key_pair,
             &mut thread_rng(),
         );
@@ -162,18 +165,20 @@ mod fedimint_migration_tests {
                 0,
                 DummyInput {
                     amount: Amount::ZERO,
-                    account: key_pair.public_key(),
+                    account: bitcoin32_to_bitcoin30_secp256k1_pubkey(&key_pair.public_key()),
                 },
             )],
             outputs: vec![DynOutput::from_typed(
                 0,
                 DummyOutput {
                     amount: Amount::ZERO,
-                    account: key_pair.public_key(),
+                    account: bitcoin32_to_bitcoin30_secp256k1_pubkey(&key_pair.public_key()),
                 },
             )],
             nonce: [0x42; 8],
-            signatures: TransactionSignature::NaiveMultisig(vec![schnorr]),
+            signatures: TransactionSignature::NaiveMultisig(vec![
+                bitcoin32_to_bitcoin30_schnorr_signature(&schnorr),
+            ]),
         };
 
         let module_ids = transaction
@@ -212,7 +217,9 @@ mod fedimint_migration_tests {
                     api_url: "wss://foo.bar".parse().expect("valid url"),
                     nonce: 0,
                 },
-                signature: bitcoin30::secp256k1::schnorr::Signature::from_slice(&[42; 64]).unwrap(),
+                signature: bitcoin32_to_bitcoin30_schnorr_signature(
+                    &secp256k1::schnorr::Signature::from_slice(&[42; 64]).unwrap(),
+                ),
             },
         )
         .await;

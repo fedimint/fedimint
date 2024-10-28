@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use bitcoin30::secp256k1;
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};

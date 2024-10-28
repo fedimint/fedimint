@@ -34,8 +34,9 @@ use common::{
 };
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_network, bitcoin32_to_bitcoin30_amount,
-    bitcoin32_to_bitcoin30_network,
+    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_network,
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_amount,
+    bitcoin32_to_bitcoin30_network, bitcoin32_to_bitcoin30_secp256k1_pubkey,
 };
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -298,10 +299,20 @@ impl ServerModuleInit for WalletInit {
         let (sk, pk) = secp.generate_keypair(&mut OsRng);
         let our_key = CompressedPublicKey { key: pk };
         let peer_peg_in_keys: BTreeMap<PeerId, CompressedPublicKey> = peers
-            .exchange_pubkeys("wallet".to_string(), our_key.key)
+            .exchange_pubkeys(
+                "wallet".to_string(),
+                bitcoin30_to_bitcoin32_secp256k1_pubkey(&our_key.key),
+            )
             .await?
             .into_iter()
-            .map(|(k, key)| (k, CompressedPublicKey { key }))
+            .map(|(k, key)| {
+                (
+                    k,
+                    CompressedPublicKey {
+                        key: bitcoin32_to_bitcoin30_secp256k1_pubkey(&key),
+                    },
+                )
+            })
             .collect();
 
         let wallet_cfg = WalletConfig::new(
