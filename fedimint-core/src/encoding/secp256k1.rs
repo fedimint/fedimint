@@ -71,19 +71,19 @@ impl Decodable for secp256k1::schnorr::Signature {
     }
 }
 
-impl Encodable for bitcoin30::key::KeyPair {
+impl Encodable for bitcoin::key::Keypair {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
         self.secret_bytes().consensus_encode(writer)
     }
 }
 
-impl Decodable for bitcoin30::key::KeyPair {
+impl Decodable for bitcoin::key::Keypair {
     fn consensus_decode<D: Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let sec_bytes = <[u8; 32]>::consensus_decode(d, modules)?;
-        Self::from_seckey_slice(secp256k1::global::SECP256K1, &sec_bytes) // FIXME: evaluate security risk of global ctx
+        Self::from_seckey_slice(bitcoin::secp256k1::global::SECP256K1, &sec_bytes) // FIXME: evaluate security risk of global ctx
             .map_err(DecodeError::from_err)
     }
 }

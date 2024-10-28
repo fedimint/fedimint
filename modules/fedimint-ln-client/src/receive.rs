@@ -5,9 +5,12 @@ use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, DynState, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_keypair,
+};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::secp256k1_29::Keypair;
 use fedimint_core::task::sleep;
 use fedimint_core::{OutPoint, TransactionId};
 use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
@@ -93,7 +96,7 @@ impl IntoDynInstance for LightningReceiveStateMachine {
 pub struct LightningReceiveSubmittedOfferV0 {
     pub offer_txid: TransactionId,
     pub invoice: Bolt11Invoice,
-    pub payment_keypair: KeyPair,
+    pub payment_keypair: Keypair,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -248,9 +251,13 @@ impl LightningReceiveConfirmedInvoice {
             Ok(contract) => {
                 match receiving_key {
                     ReceivingKey::Personal(keypair) => {
-                        let (txid, out_points) =
-                            Self::claim_incoming_contract(dbtx, contract, keypair, global_context)
-                                .await;
+                        let (txid, out_points) = Self::claim_incoming_contract(
+                            dbtx,
+                            contract,
+                            bitcoin32_to_bitcoin30_keypair(&keypair),
+                            global_context,
+                        )
+                        .await;
                         LightningReceiveStateMachine {
                             operation_id: old_state.operation_id,
                             state: LightningReceiveStates::Funded(LightningReceiveFunded {

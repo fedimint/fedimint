@@ -9,12 +9,11 @@ use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::secp256k1::KeyPair;
+use fedimint_core::secp256k1_29::Keypair;
 use fedimint_core::task::sleep;
 use fedimint_core::{NumPeersExt, OutPoint, PeerId, TransactionId};
 use fedimint_lnv2_common::contracts::IncomingContract;
@@ -58,7 +57,7 @@ pub struct ReceiveSMCommon {
     pub operation_id: OperationId,
     pub contract: IncomingContract,
     pub out_point: OutPoint,
-    pub refund_keypair: KeyPair,
+    pub refund_keypair: Keypair,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -262,9 +261,7 @@ impl ReceiveStateMachine {
                 agg_decryption_key,
             )),
             amount: old_state.common.contract.commitment.amount,
-            keys: vec![bitcoin30_to_bitcoin32_keypair(
-                &old_state.common.refund_keypair,
-            )],
+            keys: vec![old_state.common.refund_keypair],
         };
 
         let outpoints = global_context

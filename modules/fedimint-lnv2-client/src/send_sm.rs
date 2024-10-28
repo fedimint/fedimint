@@ -5,10 +5,11 @@ use bitcoin30::secp256k1;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
+use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_keypair;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::secp256k1_29::Keypair;
 use fedimint_core::task::sleep;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{OutPoint, TransactionId};
@@ -45,7 +46,7 @@ pub struct SendSMCommon {
     pub gateway_api: SafeUrl,
     pub contract: OutgoingContract,
     pub invoice: LightningInvoice,
-    pub refund_keypair: KeyPair,
+    pub refund_keypair: Keypair,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -100,7 +101,7 @@ impl State for SendStateMachine {
                             context.federation_id,
                             self.common.contract.clone(),
                             self.common.invoice.clone(),
-                            self.common.refund_keypair,
+                            bitcoin32_to_bitcoin30_keypair(&self.common.refund_keypair),
                             context.clone(),
                         ),
                         move |dbtx, response, old_state| {
@@ -219,9 +220,7 @@ impl SendStateMachine {
                         OutgoingWitness::Cancel(signature),
                     )),
                     amount: old_state.common.contract.amount,
-                    keys: vec![bitcoin30_to_bitcoin32_keypair(
-                        &old_state.common.refund_keypair,
-                    )],
+                    keys: vec![old_state.common.refund_keypair],
                 };
 
                 let outpoints = global_context
@@ -280,9 +279,7 @@ impl SendStateMachine {
                 OutgoingWitness::Refund,
             )),
             amount: old_state.common.contract.amount,
-            keys: vec![bitcoin30_to_bitcoin32_keypair(
-                &old_state.common.refund_keypair,
-            )],
+            keys: vec![old_state.common.refund_keypair],
         };
 
         let outpoints = global_context

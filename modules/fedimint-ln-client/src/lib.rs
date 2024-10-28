@@ -53,6 +53,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
+use fedimint_core::secp256k1_29::Keypair;
 use fedimint_core::task::{timeout, MaybeSend, MaybeSync};
 use fedimint_core::util::update_merge::UpdateMerge;
 use fedimint_core::util::{backoff_util, retry, BoxStream};
@@ -146,7 +147,7 @@ impl PayType {
 pub enum ReceivingKey {
     /// The keypair used to receive payments for ourselves, we will use this to
     /// sweep to our own ecash wallet on success
-    Personal(KeyPair),
+    Personal(Keypair),
     /// A public key of another user, the lightning payment will be locked to
     /// this key for them to claim on success
     External(PublicKey),
@@ -156,7 +157,9 @@ impl ReceivingKey {
     /// The public key of the receiving key
     pub fn public_key(&self) -> PublicKey {
         match self {
-            ReceivingKey::Personal(keypair) => keypair.public_key(),
+            ReceivingKey::Personal(keypair) => {
+                bitcoin32_to_bitcoin30_secp256k1_pubkey(&keypair.public_key())
+            }
             ReceivingKey::External(public_key) => *public_key,
         }
     }
@@ -725,7 +728,7 @@ impl LightningClientModule {
         };
 
         let outgoing_payment = OutgoingContractData {
-            recovery_key: user_sk,
+            recovery_key: bitcoin30_to_bitcoin32_keypair(&user_sk),
             contract_account: OutgoingContractAccount {
                 amount: contract_amount,
                 contract: contract.clone(),
@@ -1507,8 +1510,10 @@ impl LightningClientModule {
         extra_meta: M,
         gateway: Option<LightningGateway>,
     ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
-        let receiving_key =
-            ReceivingKey::Personal(KeyPair::new(&self.secp, &mut rand::rngs::OsRng));
+        let receiving_key = ReceivingKey::Personal(bitcoin30_to_bitcoin32_keypair(&KeyPair::new(
+            &self.secp,
+            &mut rand::rngs::OsRng,
+        )));
         self.create_bolt11_invoice_internal(
             amount,
             description,

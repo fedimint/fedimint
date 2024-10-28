@@ -16,6 +16,7 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::DatabaseTransaction;
@@ -303,7 +304,7 @@ impl GatewayClientModuleV2 {
                 max_delay,
                 min_contract_amount,
                 invoice: payload.invoice,
-                claim_keypair: self.keypair,
+                claim_keypair: bitcoin30_to_bitcoin32_keypair(&self.keypair),
             },
             state: SendSMState::Sending,
         });
@@ -383,7 +384,7 @@ impl GatewayClientModuleV2 {
                             operation_id,
                             contract: contract.clone(),
                             out_point: OutPoint { txid, out_idx },
-                            refund_keypair,
+                            refund_keypair: bitcoin30_to_bitcoin32_keypair(&refund_keypair),
                         },
                         state: ReceiveSMState::Funding,
                     }),
@@ -436,7 +437,7 @@ impl GatewayClientModuleV2 {
                         operation_id,
                         contract: contract.clone(),
                         out_point: OutPoint { txid, out_idx },
-                        refund_keypair,
+                        refund_keypair: bitcoin30_to_bitcoin32_keypair(&refund_keypair),
                     },
                     state: ReceiveSMState::Funding,
                 })]

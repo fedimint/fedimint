@@ -1,10 +1,9 @@
-use bitcoin30::key::KeyPair;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::secp256k1_29::Keypair;
 use fedimint_core::OutPoint;
 use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0};
@@ -32,7 +31,7 @@ impl ReceiveStateMachine {
 pub struct ReceiveSMCommon {
     pub operation_id: OperationId,
     pub contract: IncomingContract,
-    pub claim_keypair: KeyPair,
+    pub claim_keypair: Keypair,
     pub agg_decryption_key: AggregateDecryptionKey,
 }
 
@@ -115,9 +114,7 @@ impl ReceiveStateMachine {
                 old_state.common.agg_decryption_key,
             )),
             amount: old_state.common.contract.commitment.amount,
-            keys: vec![bitcoin30_to_bitcoin32_keypair(
-                &old_state.common.claim_keypair,
-            )],
+            keys: vec![old_state.common.claim_keypair],
         };
 
         let out_points = global_context
