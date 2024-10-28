@@ -79,6 +79,8 @@ pub(crate) fn get_v1_migrated_state(
     let decoders = ModuleDecoderRegistry::default();
     let dummy_sm_variant = u16::consensus_decode(cursor, &decoders)?;
 
+    // We are only migrating the type of one of the variants, so we do nothing on
+    // other discriminants.
     if dummy_sm_variant != 5 {
         return Ok(None);
     }

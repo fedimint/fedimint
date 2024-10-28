@@ -57,6 +57,12 @@ pub enum MintOOBStates {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct MintOOBStateMachineV1 {
+    pub(crate) operation_id: OperationId,
+    pub(crate) state: MintOOBStatesV1,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintOOBStateMachine {
     pub(crate) operation_id: OperationId,
     pub(crate) state: MintOOBStates,
