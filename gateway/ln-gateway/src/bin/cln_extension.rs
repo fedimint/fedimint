@@ -13,7 +13,8 @@ use axum::{Extension, Json, Router};
 use bitcoin30::secp256k1;
 use bitcoin_hashes::sha256;
 use clap::Parser;
-use cln_plugin::{options, Builder, Plugin};
+use cln_plugin::options::{self, StringConfigOption};
+use cln_plugin::{Builder, Plugin};
 use cln_rpc::model;
 use cln_rpc::model::requests::SendpayRoute;
 use cln_rpc::model::responses::ListpeerchannelsChannels;
@@ -64,11 +65,18 @@ const ROUTE_RISK_FACTOR: u64 = 10;
 // Error code for a failure along a payment route: https://docs.corelightning.org/reference/lightning-waitsendpay
 const FAILURE_ALONG_ROUTE: i32 = 204;
 
+const FM_CLN_EXTENSION_LISTEN_ADDRESS_CLI_ARG: &str = "fm-gateway-listen";
+const FM_CLN_EXTENSION_LISTEN_ADDRESS_CONFIG_OPTION: StringConfigOption =
+    options::ConfigOption::new_str_no_default(
+        FM_CLN_EXTENSION_LISTEN_ADDRESS_CLI_ARG,
+        "fedimint gateway CLN extension listen address",
+    );
+
 #[derive(Parser)]
 #[command(version)]
 struct ClnExtensionOpts {
     /// Gateway CLN extension service listen address
-    #[arg(long = "fm-gateway-listen", env = FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV)]
+    #[arg(long = FM_CLN_EXTENSION_LISTEN_ADDRESS_CLI_ARG, env = FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV)]
     fm_gateway_listen: Option<SocketAddr>,
 }
 
@@ -909,14 +917,7 @@ impl ClnRpcService {
         let interceptor = Arc::new(ClnHtlcInterceptor::new());
 
         if let Some(plugin) = Builder::new(stdin(), stdout())
-            .option(options::ConfigOption::new(
-                "fm-gateway-listen",
-                // Set an invalid default address in the extension to force the extension plugin
-                // user to supply a valid address via an environment variable or
-                // cln plugin config option.
-                options::Value::OptString,
-                "fedimint gateway CLN extension listen address",
-            ))
+            .option(FM_CLN_EXTENSION_LISTEN_ADDRESS_CONFIG_OPTION)
             .hook(
                 "htlc_accepted",
                 |plugin: Plugin<Arc<ClnHtlcInterceptor>>, value: serde_json::Value| async move {
@@ -947,14 +948,14 @@ impl ClnRpcService {
             let fm_gateway_listen = match extension_opts.fm_gateway_listen {
                 Some(addr) => addr,
                 None => {
-                    let listen_val = plugin.option("fm-gateway-listen")
-                        .expect("Gateway CLN extension is missing a listen address configuration.
-                        You can set it via FM_CLN_EXTENSION_LISTEN_ADDRESS env variable, or by adding
-                        a --fm-gateway-listen config option to the CLN plugin.");
-                    let listen = listen_val.as_str()
-                        .expect("fm-gateway-listen isn't a string");
+                    #[allow(clippy::expect_fun_call)]
+                    let listen = plugin.option(&FM_CLN_EXTENSION_LISTEN_ADDRESS_CONFIG_OPTION).ok().flatten()
+                        .expect(&format!("Gateway CLN extension is missing a listen address configuration.
+                            You can set it via FM_CLN_EXTENSION_LISTEN_ADDRESS env variable, or by adding
+                            a --{FM_CLN_EXTENSION_LISTEN_ADDRESS_CLI_ARG} config option to the CLN plugin."));
 
-                    SocketAddr::from_str(listen).expect("invalid fm-gateway-listen address")
+                    #[allow(clippy::expect_fun_call)]
+                    SocketAddr::from_str(&listen).expect(&format!("invalid {FM_CLN_EXTENSION_LISTEN_ADDRESS_CLI_ARG} address"))
                 }
             };
 
