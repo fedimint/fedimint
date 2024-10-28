@@ -72,7 +72,7 @@ pub fn attach_default_module_init_params(
                     bitcoin_rpc: bitcoin_rpc.clone(),
                 },
                 consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
-                    fee_consensus: fedimint_lnv2_common::config::FeeConsensus::default(),
+                    fee_consensus: fedimint_core::fee_consensus::FeeConsensus::default(),
                     network,
                 },
             },

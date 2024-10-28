@@ -357,7 +357,7 @@ impl Fedimintd {
                         },
                         consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
                             // TODO: actually make the relative fee configurable
-                            fee_consensus: fedimint_lnv2_common::config::FeeConsensus::new(1_000)?,
+                            fee_consensus: fedimint_core::fee_consensus::FeeConsensus::new(1_000)?,
                             network,
                         },
                     },

@@ -297,10 +297,11 @@ impl PaymentFee {
     }
 
     fn absolute_fee(&self, msats: u64) -> u64 {
-        self.base.msats
-            + msats
-                .saturating_mul(self.parts_per_million)
-                .saturating_div(1_000_000)
+        msats
+            .saturating_mul(self.parts_per_million)
+            .saturating_div(1_000_000)
+            .checked_add(self.base.msats)
+            .expect("The division creates sufficient headroom to add the base fee")
     }
 }
 
