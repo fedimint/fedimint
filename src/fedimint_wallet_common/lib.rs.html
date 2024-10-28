@@ -468,7 +468,15 @@
 <a href="#467" id="467">467</a>
 <a href="#468" id="468">468</a>
 <a href="#469" id="469">469</a>
-<a href="#470" id="470">470</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -477,10 +485,14 @@
 
 </span><span class="kw">use </span>std::hash::Hasher;
 
+<span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>bitcoin30::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin30::psbt::raw::ProprietaryKey;
-<span class="kw">use </span>bitcoin30::{Address, Amount, BlockHash, Network, Txid};
+<span class="kw">use </span>bitcoin30::{Address, Amount, BlockHash, Txid};
 <span class="kw">use </span>config::WalletClientConfig;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_amount, bitcoin32_to_bitcoin30_amount,
+};
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
@@ -569,16 +581,16 @@
 </span><span class="kw">pub struct </span>SpendableUTXO {
     <span class="attr">#[serde(with = <span class="string">"::fedimint_core::encoding::as_hex"</span>)]
     </span><span class="kw">pub </span>tweak: [u8; <span class="number">33</span>],
-    <span class="attr">#[serde(with = <span class="string">"bitcoin30::amount::serde::as_sat"</span>)]
-    </span><span class="kw">pub </span>amount: bitcoin30::Amount,
+    <span class="attr">#[serde(with = <span class="string">"bitcoin::amount::serde::as_sat"</span>)]
+    </span><span class="kw">pub </span>amount: bitcoin::Amount,
 }
 
 <span class="doccomment">/// A transaction output, either unspent or consumed
 </span><span class="attr">#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>TxOutputSummary {
     <span class="kw">pub </span>outpoint: bitcoin30::OutPoint,
-    <span class="attr">#[serde(with = <span class="string">"bitcoin30::amount::serde::as_sat"</span>)]
-    </span><span class="kw">pub </span>amount: bitcoin30::Amount,
+    <span class="attr">#[serde(with = <span class="string">"bitcoin::amount::serde::as_sat"</span>)]
+    </span><span class="kw">pub </span>amount: bitcoin::Amount,
 }
 
 <span class="doccomment">/// Summary of the coins within the wallet.
@@ -609,7 +621,9 @@
 
 <span class="kw">impl </span>WalletSummary {
     <span class="kw">fn </span>sum&lt;<span class="lifetime">'a</span>&gt;(txos: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">'a </span>TxOutputSummary&gt;) -&gt; Amount {
-        txos.fold(Amount::ZERO, |acc, txo| txo.amount + acc)
+        txos.fold(Amount::ZERO, |acc, txo| {
+            bitcoin32_to_bitcoin30_amount(<span class="kw-2">&amp;</span>txo.amount) + acc
+        })
     }
 
     <span class="doccomment">/// Total amount of all spendable UTXOs
@@ -707,8 +721,8 @@
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>PegOut {
     <span class="kw">pub </span>recipient: bitcoin30::Address&lt;NetworkUnchecked&gt;,
-    <span class="attr">#[serde(with = <span class="string">"bitcoin30::amount::serde::as_sat"</span>)]
-    </span><span class="kw">pub </span>amount: bitcoin30::Amount,
+    <span class="attr">#[serde(with = <span class="string">"bitcoin::amount::serde::as_sat"</span>)]
+    </span><span class="kw">pub </span>amount: bitcoin::Amount,
     <span class="kw">pub </span>fees: PegOutFees,
 }
 
@@ -785,7 +799,7 @@
     ) -&gt; WalletOutput {
         WalletOutput::V0(WalletOutputV0::PegOut(PegOut {
             recipient,
-            amount,
+            amount: bitcoin30_to_bitcoin32_amount(<span class="kw-2">&amp;</span>amount),
             fees,
         }))
     }
@@ -812,7 +826,9 @@
 <span class="kw">impl </span>WalletOutputV0 {
     <span class="kw">pub fn </span>amount(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
         <span class="kw">match </span><span class="self">self </span>{
-            WalletOutputV0::PegOut(pegout) =&gt; pegout.amount + pegout.fees.amount(),
+            WalletOutputV0::PegOut(pegout) =&gt; {
+                bitcoin32_to_bitcoin30_amount(<span class="kw-2">&amp;</span>pegout.amount) + pegout.fees.amount()
+            }
             WalletOutputV0::Rbf(rbf) =&gt; rbf.fees.amount(),
         }
     }

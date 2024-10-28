@@ -258,26 +258,26 @@
         .expect(<span class="string">"Failed to convert bitcoin30 psbt to bitcoin29 psbt"</span>)
 }
 
-<span class="kw">pub fn </span>bitcoin29_to_bitcoin30_network_magic(magic: u32) -&gt; bitcoin30::network::Magic {
-    <span class="comment">// Invert the byte order when converting from v0.29 to v0.30.
-    // See the following bitcoin v0.29 and v0.30 code:
+<span class="kw">pub fn </span>bitcoin29_to_bitcoin32_network_magic(magic: u32) -&gt; bitcoin::p2p::Magic {
+    <span class="comment">// Invert the byte order when converting from v0.32 to v0.29.
+    // See the following bitcoin v0.29 and v0.32 code:
     // https://docs.rs/bitcoin/0.29.2/src/bitcoin/network/constants.rs.html#81-84
-    // https://docs.rs/bitcoin/0.30.2/src/bitcoin/network/constants.rs.html#251-258
+    // https://docs.rs/bitcoin/0.32.2/src/bitcoin/p2p/mod.rs.html#216-223
     </span><span class="kw">let </span>bytes = [
         (magic &amp; <span class="number">0xFF</span>) <span class="kw">as </span>u8,
         ((magic &gt;&gt; <span class="number">8</span>) &amp; <span class="number">0xFF</span>) <span class="kw">as </span>u8,
         ((magic &gt;&gt; <span class="number">16</span>) &amp; <span class="number">0xFF</span>) <span class="kw">as </span>u8,
         ((magic &gt;&gt; <span class="number">24</span>) &amp; <span class="number">0xFF</span>) <span class="kw">as </span>u8,
     ];
-    bitcoin30::network::Magic::from_bytes(bytes)
+    bitcoin::p2p::Magic::from_bytes(bytes)
 }
 
-<span class="kw">pub fn </span>bitcoin30_to_bitcoin29_network_magic(magic: <span class="kw-2">&amp;</span>bitcoin30::network::Magic) -&gt; u32 {
+<span class="kw">pub fn </span>bitcoin32_to_bitcoin29_network_magic(magic: <span class="kw-2">&amp;</span>bitcoin::p2p::Magic) -&gt; u32 {
     <span class="kw">let </span>bytes = magic.to_bytes();
-    <span class="comment">// Invert the byte order when converting from v0.30 to v0.29.
-    // See the following bitcoin v0.29 and v0.30 code:
+    <span class="comment">// Invert the byte order when converting from v0.32 to v0.29.
+    // See the following bitcoin v0.29 and v0.32 code:
     // https://docs.rs/bitcoin/0.29.2/src/bitcoin/network/constants.rs.html#81-84
-    // https://docs.rs/bitcoin/0.30.2/src/bitcoin/network/constants.rs.html#251-258
+    // https://docs.rs/bitcoin/0.32.2/src/bitcoin/p2p/mod.rs.html#216-223
     </span>(u32::from(bytes[<span class="number">3</span>]) &lt;&lt; <span class="number">24</span>)
         | (u32::from(bytes[<span class="number">2</span>]) &lt;&lt; <span class="number">16</span>)
         | (u32::from(bytes[<span class="number">1</span>]) &lt;&lt; <span class="number">8</span>)
@@ -442,46 +442,46 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_network_magic_conversions() {
         <span class="kw">let </span>bitcoin29_mainnet_magic: u32 = bitcoin29::network::constants::Network::Bitcoin.magic();
-        <span class="kw">let </span>bitcoin30_mainnet_magic = bitcoin30::network::constants::Network::Bitcoin.magic();
+        <span class="kw">let </span>bitcoin32_mainnet_magic = bitcoin::network::Network::Bitcoin.magic();
         <span class="macro">assert_eq!</span>(
-            bitcoin29_to_bitcoin30_network_magic(bitcoin29_mainnet_magic),
-            bitcoin30_mainnet_magic
+            bitcoin29_to_bitcoin32_network_magic(bitcoin29_mainnet_magic),
+            bitcoin32_mainnet_magic
         );
         <span class="macro">assert_eq!</span>(
-            bitcoin30_to_bitcoin29_network_magic(<span class="kw-2">&amp;</span>bitcoin30_mainnet_magic),
+            bitcoin32_to_bitcoin29_network_magic(<span class="kw-2">&amp;</span>bitcoin32_mainnet_magic),
             bitcoin29_mainnet_magic
         );
 
         <span class="kw">let </span>bitcoin29_testnet_magic: u32 = bitcoin29::network::constants::Network::Testnet.magic();
-        <span class="kw">let </span>bitcoin30_testnet_magic = bitcoin30::network::constants::Network::Testnet.magic();
+        <span class="kw">let </span>bitcoin32_testnet_magic = bitcoin::network::Network::Testnet.magic();
         <span class="macro">assert_eq!</span>(
-            bitcoin29_to_bitcoin30_network_magic(bitcoin29_testnet_magic),
-            bitcoin30_testnet_magic
+            bitcoin29_to_bitcoin32_network_magic(bitcoin29_testnet_magic),
+            bitcoin32_testnet_magic
         );
         <span class="macro">assert_eq!</span>(
-            bitcoin30_to_bitcoin29_network_magic(<span class="kw-2">&amp;</span>bitcoin30_testnet_magic),
+            bitcoin32_to_bitcoin29_network_magic(<span class="kw-2">&amp;</span>bitcoin32_testnet_magic),
             bitcoin29_testnet_magic
         );
 
         <span class="kw">let </span>bitcoin29_signet_magic: u32 = bitcoin29::network::constants::Network::Signet.magic();
-        <span class="kw">let </span>bitcoin30_signet_magic = bitcoin30::network::constants::Network::Signet.magic();
+        <span class="kw">let </span>bitcoin32_signet_magic = bitcoin::network::Network::Signet.magic();
         <span class="macro">assert_eq!</span>(
-            bitcoin29_to_bitcoin30_network_magic(bitcoin29_signet_magic),
-            bitcoin30_signet_magic
+            bitcoin29_to_bitcoin32_network_magic(bitcoin29_signet_magic),
+            bitcoin32_signet_magic
         );
         <span class="macro">assert_eq!</span>(
-            bitcoin30_to_bitcoin29_network_magic(<span class="kw-2">&amp;</span>bitcoin30_signet_magic),
+            bitcoin32_to_bitcoin29_network_magic(<span class="kw-2">&amp;</span>bitcoin32_signet_magic),
             bitcoin29_signet_magic
         );
 
         <span class="kw">let </span>bitcoin29_regtest_magic: u32 = bitcoin29::network::constants::Network::Regtest.magic();
-        <span class="kw">let </span>bitcoin30_regtest_magic = bitcoin30::network::constants::Network::Regtest.magic();
+        <span class="kw">let </span>bitcoin32_regtest_magic = bitcoin::network::Network::Regtest.magic();
         <span class="macro">assert_eq!</span>(
-            bitcoin29_to_bitcoin30_network_magic(bitcoin29_regtest_magic),
-            bitcoin30_regtest_magic
+            bitcoin29_to_bitcoin32_network_magic(bitcoin29_regtest_magic),
+            bitcoin32_regtest_magic
         );
         <span class="macro">assert_eq!</span>(
-            bitcoin30_to_bitcoin29_network_magic(<span class="kw-2">&amp;</span>bitcoin30_regtest_magic),
+            bitcoin32_to_bitcoin29_network_magic(<span class="kw-2">&amp;</span>bitcoin32_regtest_magic),
             bitcoin29_regtest_magic
         );
     }

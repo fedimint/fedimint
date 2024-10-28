@@ -585,7 +585,10 @@
 <a href="#584" id="584">584</a>
 <a href="#585" id="585">585</a>
 <a href="#586" id="586">586</a>
-<a href="#587" id="587">587</a></pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
+<a href="#587" id="587">587</a>
+<a href="#588" id="588">588</a>
+<a href="#589" id="589">589</a>
+<a href="#590" id="590">590</a></pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -595,6 +598,7 @@
 <span class="kw">use </span>anyhow::{bail, format_err, Context};
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::admin_client::ConfigGenParamsRequest;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_network;
 <span class="kw">use </span>fedimint_core::config::{
     EmptyGenParams, ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
@@ -901,7 +905,9 @@
                     local: LightningGenParamsLocal {
                         bitcoin_rpc: bitcoind_rpc.clone(),
                     },
-                    consensus: LightningGenParamsConsensus { network },
+                    consensus: LightningGenParamsConsensus {
+                        network: bitcoin30_to_bitcoin32_network(<span class="kw-2">&amp;</span>network),
+                    },
                 },
             )
             .with_module_kind(MintInit)
@@ -923,7 +929,7 @@
                         bitcoin_rpc: bitcoind_rpc.clone(),
                     },
                     consensus: WalletGenParamsConsensus {
-                        network,
+                        network: bitcoin30_to_bitcoin32_network(<span class="kw-2">&amp;</span>network),
                         <span class="comment">// TODO this is not very elegant, but I'm planning to get rid of it in a
                         // next commit anyway
                         </span>finality_delay,
@@ -945,7 +951,7 @@
                         consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
                             <span class="comment">// TODO: actually make the relative fee configurable
                             </span>fee_consensus: fedimint_core::fee_consensus::FeeConsensus::new(<span class="number">1_000</span>)<span class="question-mark">?</span>,
-                            network,
+                            network: bitcoin30_to_bitcoin32_network(<span class="kw-2">&amp;</span>network),
                         },
                     },
                 )
