@@ -19,7 +19,9 @@ use fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LnPayState, OutgoingLightningPayment,
 };
 use fedimint_ln_common::LightningGateway;
-use fedimint_mint_client::{MintClientInit, MintClientModule, MintCommonInit, OOBNotes};
+use fedimint_mint_client::{
+    MintClientInit, MintClientModule, MintCommonInit, OOBNotes, SelectNotesWithAtleastAmount,
+};
 use fedimint_wallet_client::WalletClientInit;
 use futures::StreamExt;
 use lightning_invoice::Bolt11Invoice;
@@ -90,7 +92,13 @@ pub async fn do_spend_notes(
 ) -> anyhow::Result<(OperationId, OOBNotes)> {
     let mint = &mint.get_first_module::<MintClientModule>()?;
     let (operation_id, oob_notes) = mint
-        .spend_notes(amount, Duration::from_secs(600), false, ())
+        .spend_notes_with_selector(
+            &SelectNotesWithAtleastAmount,
+            amount,
+            Duration::from_secs(600),
+            false,
+            (),
+        )
         .await?;
     let mut updates = mint
         .subscribe_spend_notes(operation_id)
