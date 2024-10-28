@@ -1340,7 +1340,8 @@
 <a href="#1339" id="1339">1339</a>
 <a href="#1340" id="1340">1340</a>
 <a href="#1341" id="1341">1341</a>
-<a href="#1342" id="1342">1342</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<a href="#1342" id="1342">1342</a>
+<a href="#1343" id="1343">1343</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -1355,7 +1356,8 @@
 <span class="kw">use </span>bitcoin30::secp256k1;
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>clap::Parser;
-<span class="kw">use </span>cln_plugin::{options, Builder, Plugin};
+<span class="kw">use </span>cln_plugin::options::{<span class="self">self</span>, StringConfigOption};
+<span class="kw">use </span>cln_plugin::{Builder, Plugin};
 <span class="kw">use </span>cln_rpc::model;
 <span class="kw">use </span>cln_rpc::model::requests::SendpayRoute;
 <span class="kw">use </span>cln_rpc::model::responses::ListpeerchannelsChannels;
@@ -1406,11 +1408,18 @@
 <span class="comment">// Error code for a failure along a payment route: https://docs.corelightning.org/reference/lightning-waitsendpay
 </span><span class="kw">const </span>FAILURE_ALONG_ROUTE: i32 = <span class="number">204</span>;
 
+<span class="kw">const </span>FM_CLN_EXTENSION_LISTEN_ADDRESS_CLI_ARG: <span class="kw-2">&amp;</span>str = <span class="string">"fm-gateway-listen"</span>;
+<span class="kw">const </span>FM_CLN_EXTENSION_LISTEN_ADDRESS_CONFIG_OPTION: StringConfigOption =
+    options::ConfigOption::new_str_no_default(
+        FM_CLN_EXTENSION_LISTEN_ADDRESS_CLI_ARG,
+        <span class="string">"fedimint gateway CLN extension listen address"</span>,
+    );
+
 <span class="attr">#[derive(Parser)]
 #[command(version)]
 </span><span class="kw">struct </span>ClnExtensionOpts {
     <span class="doccomment">/// Gateway CLN extension service listen address
-    </span><span class="attr">#[arg(long = <span class="string">"fm-gateway-listen"</span>, env = FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV)]
+    </span><span class="attr">#[arg(long = FM_CLN_EXTENSION_LISTEN_ADDRESS_CLI_ARG, env = FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV)]
     </span>fm_gateway_listen: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
 }
 
@@ -2251,14 +2260,7 @@
         <span class="kw">let </span>interceptor = Arc::new(ClnHtlcInterceptor::new());
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(plugin) = Builder::new(stdin(), stdout())
-            .option(options::ConfigOption::new(
-                <span class="string">"fm-gateway-listen"</span>,
-                <span class="comment">// Set an invalid default address in the extension to force the extension plugin
-                // user to supply a valid address via an environment variable or
-                // cln plugin config option.
-                </span>options::Value::OptString,
-                <span class="string">"fedimint gateway CLN extension listen address"</span>,
-            ))
+            .option(FM_CLN_EXTENSION_LISTEN_ADDRESS_CONFIG_OPTION)
             .hook(
                 <span class="string">"htlc_accepted"</span>,
                 |plugin: Plugin&lt;Arc&lt;ClnHtlcInterceptor&gt;&gt;, value: serde_json::Value| <span class="kw">async move </span>{
@@ -2289,14 +2291,14 @@
             </span><span class="kw">let </span>fm_gateway_listen = <span class="kw">match </span>extension_opts.fm_gateway_listen {
                 <span class="prelude-val">Some</span>(addr) =&gt; addr,
                 <span class="prelude-val">None </span>=&gt; {
-                    <span class="kw">let </span>listen_val = plugin.option(<span class="string">"fm-gateway-listen"</span>)
-                        .expect(<span class="string">"Gateway CLN extension is missing a listen address configuration.
-                        You can set it via FM_CLN_EXTENSION_LISTEN_ADDRESS env variable, or by adding
-                        a --fm-gateway-listen config option to the CLN plugin."</span>);
-                    <span class="kw">let </span>listen = listen_val.as_str()
-                        .expect(<span class="string">"fm-gateway-listen isn't a string"</span>);
+                    <span class="attr">#[allow(clippy::expect_fun_call)]
+                    </span><span class="kw">let </span>listen = plugin.option(<span class="kw-2">&amp;</span>FM_CLN_EXTENSION_LISTEN_ADDRESS_CONFIG_OPTION).ok().flatten()
+                        .expect(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Gateway CLN extension is missing a listen address configuration.
+                            You can set it via FM_CLN_EXTENSION_LISTEN_ADDRESS env variable, or by adding
+                            a --{FM_CLN_EXTENSION_LISTEN_ADDRESS_CLI_ARG} config option to the CLN plugin."</span>));
 
-                    SocketAddr::from_str(listen).expect(<span class="string">"invalid fm-gateway-listen address"</span>)
+                    <span class="attr">#[allow(clippy::expect_fun_call)]
+                    </span>SocketAddr::from_str(<span class="kw-2">&amp;</span>listen).expect(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"invalid {FM_CLN_EXTENSION_LISTEN_ADDRESS_CLI_ARG} address"</span>))
                 }
             };
 
