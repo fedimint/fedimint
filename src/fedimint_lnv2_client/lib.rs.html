@@ -1123,7 +1123,8 @@
 <a href="#1122" id="1122">1122</a>
 <a href="#1123" id="1123">1123</a>
 <a href="#1124" id="1124">1124</a>
-<a href="#1125" id="1125">1125</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1125" id="1125">1125</a>
+<a href="#1126" id="1126">1126</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -1422,10 +1423,11 @@
     }
 
     <span class="kw">fn </span>absolute_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, msats: u64) -&gt; u64 {
-        <span class="self">self</span>.base.msats
-            + msats
-                .saturating_mul(<span class="self">self</span>.parts_per_million)
-                .saturating_div(<span class="number">1_000_000</span>)
+        msats
+            .saturating_mul(<span class="self">self</span>.parts_per_million)
+            .saturating_div(<span class="number">1_000_000</span>)
+            .checked_add(<span class="self">self</span>.base.msats)
+            .expect(<span class="string">"The division creates sufficient headroom to add the base fee"</span>)
     }
 }
 
