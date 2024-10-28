@@ -1356,17 +1356,30 @@ impl ILnRpcClient for GatewayLndClient {
                 failure_reason: format!("Failed to get lightning balance {e:?}"),
             })?
             .into_inner();
+        let total_outbound = channel_balance_response.local_balance.unwrap_or_default();
+        let unsettled_outbound = channel_balance_response
+            .unsettled_local_balance
+            .unwrap_or_default();
+        let pending_outbound = channel_balance_response
+            .pending_open_local_balance
+            .unwrap_or_default();
+        let lightning_balance_msats =
+            total_outbound.msat - unsettled_outbound.msat - pending_outbound.msat;
+
+        let total_inbound = channel_balance_response.remote_balance.unwrap_or_default();
+        let unsettled_inbound = channel_balance_response
+            .unsettled_remote_balance
+            .unwrap_or_default();
+        let pending_inbound = channel_balance_response
+            .pending_open_remote_balance
+            .unwrap_or_default();
+        let inbound_lightning_liquidity_msats =
+            total_inbound.msat - unsettled_inbound.msat - pending_inbound.msat;
 
         Ok(GetBalancesResponse {
             onchain_balance_sats: wallet_balance_response.total_balance as u64,
-            lightning_balance_msats: channel_balance_response
-                .local_balance
-                .unwrap_or_default()
-                .msat,
-            inbound_lightning_liquidity_msats: channel_balance_response
-                .remote_balance
-                .unwrap_or_default()
-                .msat,
+            lightning_balance_msats,
+            inbound_lightning_liquidity_msats,
         })
     }
 
