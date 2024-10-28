@@ -1467,7 +1467,20 @@
 <a href="#1466" id="1466">1466</a>
 <a href="#1467" id="1467">1467</a>
 <a href="#1468" id="1468">1468</a>
-<a href="#1469" id="1469">1469</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
+<a href="#1469" id="1469">1469</a>
+<a href="#1470" id="1470">1470</a>
+<a href="#1471" id="1471">1471</a>
+<a href="#1472" id="1472">1472</a>
+<a href="#1473" id="1473">1473</a>
+<a href="#1474" id="1474">1474</a>
+<a href="#1475" id="1475">1475</a>
+<a href="#1476" id="1476">1476</a>
+<a href="#1477" id="1477">1477</a>
+<a href="#1478" id="1478">1478</a>
+<a href="#1479" id="1479">1479</a>
+<a href="#1480" id="1480">1480</a>
+<a href="#1481" id="1481">1481</a>
+<a href="#1482" id="1482">1482</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -2825,17 +2838,30 @@
                 failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to get lightning balance {e:?}"</span>),
             })<span class="question-mark">?
             </span>.into_inner();
+        <span class="kw">let </span>total_outbound = channel_balance_response.local_balance.unwrap_or_default();
+        <span class="kw">let </span>unsettled_outbound = channel_balance_response
+            .unsettled_local_balance
+            .unwrap_or_default();
+        <span class="kw">let </span>pending_outbound = channel_balance_response
+            .pending_open_local_balance
+            .unwrap_or_default();
+        <span class="kw">let </span>lightning_balance_msats =
+            total_outbound.msat - unsettled_outbound.msat - pending_outbound.msat;
+
+        <span class="kw">let </span>total_inbound = channel_balance_response.remote_balance.unwrap_or_default();
+        <span class="kw">let </span>unsettled_inbound = channel_balance_response
+            .unsettled_remote_balance
+            .unwrap_or_default();
+        <span class="kw">let </span>pending_inbound = channel_balance_response
+            .pending_open_remote_balance
+            .unwrap_or_default();
+        <span class="kw">let </span>inbound_lightning_liquidity_msats =
+            total_inbound.msat - unsettled_inbound.msat - pending_inbound.msat;
 
         <span class="prelude-val">Ok</span>(GetBalancesResponse {
             onchain_balance_sats: wallet_balance_response.total_balance <span class="kw">as </span>u64,
-            lightning_balance_msats: channel_balance_response
-                .local_balance
-                .unwrap_or_default()
-                .msat,
-            inbound_lightning_liquidity_msats: channel_balance_response
-                .remote_balance
-                .unwrap_or_default()
-                .msat,
+            lightning_balance_msats,
+            inbound_lightning_liquidity_msats,
         })
     }
 

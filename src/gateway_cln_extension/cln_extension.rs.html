@@ -1341,7 +1341,12 @@
 <a href="#1340" id="1340">1340</a>
 <a href="#1341" id="1341">1341</a>
 <a href="#1342" id="1342">1342</a>
-<a href="#1343" id="1343">1343</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<a href="#1343" id="1343">1343</a>
+<a href="#1344" id="1344">1344</a>
+<a href="#1345" id="1345">1345</a>
+<a href="#1346" id="1346">1346</a>
+<a href="#1347" id="1347">1347</a>
+<a href="#1348" id="1348">1348</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -1361,7 +1366,7 @@
 <span class="kw">use </span>cln_rpc::model;
 <span class="kw">use </span>cln_rpc::model::requests::SendpayRoute;
 <span class="kw">use </span>cln_rpc::model::responses::ListpeerchannelsChannels;
-<span class="kw">use </span>cln_rpc::primitives::{AmountOrAll, ShortChannelId};
+<span class="kw">use </span>cln_rpc::primitives::{AmountOrAll, ChannelState, ShortChannelId};
 <span class="kw">use </span>fedimint_core::secp256k1::{PublicKey, SecretKey};
 <span class="kw">use </span>fedimint_core::task::timeout;
 <span class="kw">use </span>fedimint_core::util::handle_version_hash_command;
@@ -2175,6 +2180,11 @@
             <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">"Unexpected response from ListFunds"</span>),
         })<span class="question-mark">?</span>;
 
+    <span class="kw">let </span>channels = channels
+        .iter()
+        .filter(|chan| chan.connected &amp;&amp; <span class="macro">matches!</span>(chan.state, ChannelState::CHANNELD_NORMAL))
+        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+
     <span class="kw">let </span>total_receivable_msat = cln_service
         .rpc_client()
         .<span class="kw">await</span><span class="question-mark">?
@@ -2191,7 +2201,7 @@
                     <span class="macro">matches!</span>(
                         channel.state,
                         model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
-                    )
+                    ) &amp;&amp; channel.peer_connected
                 })
                 .filter_map(|channel| channel.receivable_msat.map(|value| value.msat()))
                 .sum::&lt;u64&gt;(), <span class="comment">// Sum the receivable_msat values directly
