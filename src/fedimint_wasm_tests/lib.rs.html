@@ -340,7 +340,21 @@
 <a href="#339" id="339">339</a>
 <a href="#340" id="340">340</a>
 <a href="#341" id="341">341</a>
-<a href="#342" id="342">342</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 
 </span><span class="kw">use </span>std::sync::Arc;
 
@@ -459,7 +473,9 @@
     };
     <span class="kw">use </span>fedimint_ln_common::lightning_invoice::{Bolt11InvoiceDescription, Description};
     <span class="kw">use </span>fedimint_ln_common::LightningGateway;
-    <span class="kw">use </span>fedimint_mint_client::{MintClientModule, ReissueExternalNotesState, SpendOOBState};
+    <span class="kw">use </span>fedimint_mint_client::{
+        MintClientModule, ReissueExternalNotesState, SelectNotesWithAtleastAmount, SpendOOBState,
+    };
     <span class="kw">use </span>futures::StreamExt;
     <span class="kw">use </span>wasm_bindgen_test::wasm_bindgen_test;
 
@@ -604,7 +620,13 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
         <span class="kw">let </span>mint = client.get_first_module::&lt;MintClientModule&gt;()<span class="question-mark">?</span>;
         <span class="kw">let </span>(<span class="kw">_</span>, notes) = mint
-            .spend_notes(Amount::from_sats(<span class="number">11</span>), Duration::from_secs(<span class="number">10000</span>), <span class="bool-val">false</span>, ())
+            .spend_notes_with_selector(
+                <span class="kw-2">&amp;</span>SelectNotesWithAtleastAmount,
+                Amount::from_sats(<span class="number">11</span>),
+                Duration::from_secs(<span class="number">10000</span>),
+                <span class="bool-val">false</span>,
+                (),
+            )
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>operation_id = mint.reissue_external_notes(notes, ()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>updates = mint
@@ -633,7 +655,13 @@
         <span class="kw">let </span>mint = client.get_first_module::&lt;MintClientModule&gt;()<span class="question-mark">?</span>;
         <span class="lifetime">'retry</span>: <span class="kw">loop </span>{
             <span class="kw">let </span>(operation_id, notes) = mint
-                .spend_notes(amount, Duration::from_secs(<span class="number">10000</span>), <span class="bool-val">false</span>, ())
+                .spend_notes_with_selector(
+                    <span class="kw-2">&amp;</span>SelectNotesWithAtleastAmount,
+                    amount,
+                    Duration::from_secs(<span class="number">10000</span>),
+                    <span class="bool-val">false</span>,
+                    (),
+                )
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">if </span>notes.total_amount() == amount {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());

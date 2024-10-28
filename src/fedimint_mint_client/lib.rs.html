@@ -2612,7 +2612,54 @@
 <a href="#2611" id="2611">2611</a>
 <a href="#2612" id="2612">2612</a>
 <a href="#2613" id="2613">2613</a>
-<a href="#2614" id="2614">2614</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2614" id="2614">2614</a>
+<a href="#2615" id="2615">2615</a>
+<a href="#2616" id="2616">2616</a>
+<a href="#2617" id="2617">2617</a>
+<a href="#2618" id="2618">2618</a>
+<a href="#2619" id="2619">2619</a>
+<a href="#2620" id="2620">2620</a>
+<a href="#2621" id="2621">2621</a>
+<a href="#2622" id="2622">2622</a>
+<a href="#2623" id="2623">2623</a>
+<a href="#2624" id="2624">2624</a>
+<a href="#2625" id="2625">2625</a>
+<a href="#2626" id="2626">2626</a>
+<a href="#2627" id="2627">2627</a>
+<a href="#2628" id="2628">2628</a>
+<a href="#2629" id="2629">2629</a>
+<a href="#2630" id="2630">2630</a>
+<a href="#2631" id="2631">2631</a>
+<a href="#2632" id="2632">2632</a>
+<a href="#2633" id="2633">2633</a>
+<a href="#2634" id="2634">2634</a>
+<a href="#2635" id="2635">2635</a>
+<a href="#2636" id="2636">2636</a>
+<a href="#2637" id="2637">2637</a>
+<a href="#2638" id="2638">2638</a>
+<a href="#2639" id="2639">2639</a>
+<a href="#2640" id="2640">2640</a>
+<a href="#2641" id="2641">2641</a>
+<a href="#2642" id="2642">2642</a>
+<a href="#2643" id="2643">2643</a>
+<a href="#2644" id="2644">2644</a>
+<a href="#2645" id="2645">2645</a>
+<a href="#2646" id="2646">2646</a>
+<a href="#2647" id="2647">2647</a>
+<a href="#2648" id="2648">2648</a>
+<a href="#2649" id="2649">2649</a>
+<a href="#2650" id="2650">2650</a>
+<a href="#2651" id="2651">2651</a>
+<a href="#2652" id="2652">2652</a>
+<a href="#2653" id="2653">2653</a>
+<a href="#2654" id="2654">2654</a>
+<a href="#2655" id="2655">2655</a>
+<a href="#2656" id="2656">2656</a>
+<a href="#2657" id="2657">2657</a>
+<a href="#2658" id="2658">2658</a>
+<a href="#2659" id="2659">2659</a>
+<a href="#2660" id="2660">2660</a>
+<a href="#2661" id="2661">2661</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -3071,7 +3118,7 @@
 }
 
 <span class="doccomment">/// The high-level state of a raw e-cash spend operation started with
-/// [`MintClientModule::spend_notes`].
+/// [`MintClientModule::spend_notes_with_selector`].
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>SpendOOBState {
     <span class="doccomment">/// The e-cash has been selected and given to the caller
@@ -3473,7 +3520,24 @@
                 }
                 <span class="string">"spend_notes" </span>=&gt; {
                     <span class="kw">let </span>req: SpendNotesRequest = serde_json::from_value(request)<span class="question-mark">?</span>;
-                    <span class="kw">let </span>result = <span class="self">self</span>.spend_notes(req.min_amount, req.try_cancel_after, req.include_invite, req.extra_meta).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">let </span>result = <span class="self">self</span>.spend_notes_with_selector(
+                        <span class="kw-2">&amp;</span>SelectNotesWithExactAmount,
+                        req.amount,
+                        req.try_cancel_after,
+                        req.include_invite,
+                        req.extra_meta
+                    ).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">yield </span>serde_json::to_value(result)<span class="question-mark">?</span>;
+                }
+                <span class="string">"spend_notes_expert" </span>=&gt; {
+                    <span class="kw">let </span>req: SpendNotesExpertRequest = serde_json::from_value(request)<span class="question-mark">?</span>;
+                    <span class="kw">let </span>result = <span class="self">self</span>.spend_notes_with_selector(
+                        <span class="kw-2">&amp;</span>SelectNotesWithAtleastAmount,
+                        req.min_amount,
+                        req.try_cancel_after,
+                        req.include_invite,
+                        req.extra_meta
+                    ).<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="kw">yield </span>serde_json::to_value(result)<span class="question-mark">?</span>;
                 }
                 <span class="string">"validate_notes" </span>=&gt; {
@@ -3518,9 +3582,19 @@
     operation_id: OperationId,
 }
 
+<span class="doccomment">/// Caution: if no notes of the correct denomination are available the next
+/// bigger note will be selected. You might want to use `spend_notes` instead.
+</span><span class="attr">#[derive(Deserialize)]
+</span><span class="kw">struct </span>SpendNotesExpertRequest {
+    min_amount: Amount,
+    try_cancel_after: Duration,
+    include_invite: bool,
+    extra_meta: serde_json::Value,
+}
+
 <span class="attr">#[derive(Deserialize)]
 </span><span class="kw">struct </span>SpendNotesRequest {
-    min_amount: Amount,
+    amount: Amount,
     try_cancel_after: Duration,
     include_invite: bool,
     extra_meta: serde_json::Value,
@@ -4161,6 +4235,10 @@
     /// should be chosen such that the recipient (who is potentially offline at
     /// the time of receiving the e-cash notes) had a reasonable timeframe to
     /// come online and reissue the notes themselves.
+    </span><span class="attr">#[deprecated(
+        since = <span class="string">"0.5.0"</span>,
+        note = <span class="string">"Use `spend_notes_with_selector` instead, with `SelectNotesWithAtleastAmount` to maintain the same behavior"
+    </span>)]
     </span><span class="kw">pub async fn </span>spend_notes&lt;M: Serialize + Send&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         min_amount: Amount,
@@ -4178,7 +4256,21 @@
         .<span class="kw">await
     </span>}
 
-    <span class="doccomment">/// Same as `spend_notes` but allows different to select notes to be used.
+    <span class="doccomment">/// Fetches and removes notes from the wallet to be sent to the recipient
+    /// out of band. The not selection algorithm is determined by
+    /// `note_selector`. See the [`NotesSelector`] trait for available
+    /// implementations.
+    ///
+    /// These spends can be canceled by calling
+    /// [`MintClientModule::try_cancel_spend_notes`] as long
+    /// as the recipient hasn't reissued the e-cash notes themselves yet.
+    ///
+    /// The client will also automatically attempt to cancel the operation after
+    /// `try_cancel_after` time has passed. This is a safety mechanism to avoid
+    /// users forgetting about failed out-of-band transactions. The timeout
+    /// should be chosen such that the recipient (who is potentially offline at
+    /// the time of receiving the e-cash notes) had a reasonable timeframe to
+    /// come online and reissue the notes themselves.
     </span><span class="kw">pub async fn </span>spend_notes_with_selector&lt;M: Serialize + Send&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         notes_selector: <span class="kw-2">&amp;</span><span class="kw">impl </span>NotesSelector,
@@ -4286,9 +4378,9 @@
     }
 
     <span class="doccomment">/// Try to cancel a spend operation started with
-    /// [`MintClientModule::spend_notes`]. If the e-cash notes have already been
-    /// spent this operation will fail which can be observed using
-    /// [`MintClientModule::subscribe_spend_notes`].
+    /// [`MintClientModule::spend_notes_with_selector`]. If the e-cash notes
+    /// have already been spent this operation will fail which can be
+    /// observed using [`MintClientModule::subscribe_spend_notes`].
     </span><span class="kw">pub async fn </span>try_cancel_spend_notes(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.client_ctx.module_db().begin_transaction().<span class="kw">await</span>;
         dbtx.insert_entry(<span class="kw-2">&amp;</span>CancelledOOBSpendKey(operation_id), <span class="kw-2">&amp;</span>())
@@ -4299,7 +4391,7 @@
     }
 
     <span class="doccomment">/// Subscribe to updates on the progress of a raw e-cash spend operation
-    /// started with [`MintClientModule::spend_notes`].
+    /// started with [`MintClientModule::spend_notes_with_selector`].
     </span><span class="kw">pub async fn </span>subscribe_spend_notes(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
@@ -4427,7 +4519,9 @@
     <span class="kw">pub </span>transaction_id: TransactionId,
 }
 
-<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+<span class="doccomment">/// Defines a strategy for selecting e-cash notes given a specific target amount
+/// and fee per note transaction input.
+</span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>NotesSelector&lt;Note = SpendableNoteUndecoded&gt;: Send + Sync {
     <span class="doccomment">/// Select notes from stream for requested_amount.
     /// The stream must produce items in non- decreasing order of amount.
