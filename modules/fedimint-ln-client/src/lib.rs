@@ -43,7 +43,8 @@ use fedimint_client::transaction::{
 };
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_network,
+    bitcoin32_to_bitcoin30_secp256k1_pubkey,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -678,7 +679,8 @@ impl LightningClientModule {
         ClientOutput<LightningOutputV0, LightningClientStateMachines>,
         ContractId,
     )> {
-        let federation_currency: Currency = self.cfg.network.into();
+        let federation_currency: Currency =
+            bitcoin32_to_bitcoin30_network(&self.cfg.network).into();
         let invoice_currency = invoice.currency();
         ensure!(
             federation_currency == invoice_currency,
@@ -1603,7 +1605,7 @@ impl LightningClientModule {
             src_node_id,
             short_channel_id,
             &route_hints,
-            self.cfg.network,
+            bitcoin32_to_bitcoin30_network(&self.cfg.network),
         )?;
 
         let tx = TransactionBuilder::new().with_output(self.client_ctx.make_client_output(output));

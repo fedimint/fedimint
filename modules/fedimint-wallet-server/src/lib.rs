@@ -33,6 +33,10 @@ use common::{
     DEPRECATED_RBF_ERROR, FEERATE_MULTIPLIER,
 };
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_network, bitcoin32_to_bitcoin30_amount,
+    bitcoin32_to_bitcoin30_network,
+};
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -524,7 +528,7 @@ impl ServerModule for Wallet {
                 &UTXOKey(input.outpoint()),
                 &SpendableUTXO {
                     tweak: input.tweak_contract_key().serialize(),
-                    amount: bitcoin30::Amount::from_sat(input.tx_output().value),
+                    amount: bitcoin::Amount::from_sat(input.tx_output().value),
                 },
             )
             .await
@@ -571,7 +575,12 @@ impl ServerModule for Wallet {
 
         let fee_rate = self.consensus_fee_rate(dbtx).await;
 
-        StatelessWallet::validate_tx(&tx, output, fee_rate, self.cfg.consensus.network)?;
+        StatelessWallet::validate_tx(
+            &tx,
+            output,
+            fee_rate,
+            bitcoin32_to_bitcoin30_network(&self.cfg.consensus.network),
+        )?;
 
         self.offline_wallet().sign_psbt(&mut tx.psbt);
 
@@ -826,10 +835,12 @@ impl Wallet {
 
         let bitcoind_rpc = bitcoind;
 
-        let bitcoind_net = bitcoind_rpc
-            .get_network()
-            .await
-            .map_err(|e| WalletCreationError::RpcError(e.to_string()))?;
+        let bitcoind_net = bitcoin30_to_bitcoin32_network(
+            &bitcoind_rpc
+                .get_network()
+                .await
+                .map_err(|e| WalletCreationError::RpcError(e.to_string()))?,
+        );
         if bitcoind_net != cfg.consensus.network {
             return Err(WalletCreationError::WrongNetwork(
                 cfg.consensus.network,
@@ -1100,7 +1111,7 @@ impl Wallet {
                     }),
                     &SpendableUTXO {
                         tweak: pending_tx.tweak,
-                        amount: bitcoin30::Amount::from_sat(output.value),
+                        amount: bitcoin::Amount::from_sat(output.value),
                     },
                 )
                 .await;
@@ -1162,7 +1173,7 @@ impl Wallet {
     ) -> Result<UnsignedTransaction, WalletOutputError> {
         match output {
             WalletOutputV0::PegOut(peg_out) => self.offline_wallet().create_tx(
-                peg_out.amount,
+                bitcoin32_to_bitcoin30_amount(&peg_out.amount),
                 peg_out.recipient.clone().assume_checked().script_pubkey(),
                 vec![],
                 self.available_utxos(dbtx).await,
@@ -1177,7 +1188,7 @@ impl Wallet {
                     .ok_or(WalletOutputError::RbfTransactionIdNotFound)?;
 
                 self.offline_wallet().create_tx(
-                    tx.peg_out_amount,
+                    bitcoin32_to_bitcoin30_amount(&tx.peg_out_amount),
                     tx.destination,
                     tx.selected_utxos,
                     self.available_utxos(dbtx).await,
@@ -1230,12 +1241,12 @@ impl Wallet {
 
                 peg_out_txos.push(TxOutputSummary {
                     outpoint: bitcoin30::OutPoint { txid, vout: 0 },
-                    amount: bitcoin30::Amount::from_sat(peg_out_output.value),
+                    amount: bitcoin::Amount::from_sat(peg_out_output.value),
                 });
 
                 change_utxos.push(TxOutputSummary {
                     outpoint: bitcoin30::OutPoint { txid, vout: 1 },
-                    amount: bitcoin30::Amount::from_sat(change_output.value),
+                    amount: bitcoin::Amount::from_sat(change_output.value),
                 });
             }
 
@@ -1436,14 +1447,14 @@ impl<'a> StatelessWallet<'a> {
         if let WalletOutputV0::PegOut(peg_out) = output {
             if !peg_out.recipient.is_valid_for_network(network) {
                 return Err(WalletOutputError::WrongNetwork(
-                    network,
-                    peg_out.recipient.network,
+                    bitcoin30_to_bitcoin32_network(&network),
+                    bitcoin30_to_bitcoin32_network(&peg_out.recipient.network),
                 ));
             }
         }
 
         // Validate the tx amount is over the dust limit
-        if tx.peg_out_amount < tx.destination.dust_value() {
+        if tx.peg_out_amount < bitcoin30_to_bitcoin32_amount(&tx.destination.dust_value()) {
             return Err(WalletOutputError::PegOutUnderDustLimit);
         }
 
@@ -1542,7 +1553,7 @@ impl<'a> StatelessWallet<'a> {
         while total_selected_value < peg_out_amount + change_script.dust_value() + fees {
             match included_utxos.pop() {
                 Some((utxo_key, utxo)) => {
-                    total_selected_value += utxo.amount;
+                    total_selected_value += bitcoin32_to_bitcoin30_amount(&utxo.amount);
                     total_weight += max_input_weight;
                     fees = fee_rate.calculate_fee(total_weight);
                     selected_utxos.push((utxo_key, utxo));
@@ -1652,14 +1663,14 @@ impl<'a> StatelessWallet<'a> {
         Ok(UnsignedTransaction {
             psbt,
             signatures: vec![],
-            change,
+            change: bitcoin30_to_bitcoin32_amount(&change),
             fees: PegOutFees {
                 fee_rate,
                 total_weight,
             },
             destination,
             selected_utxos,
-            peg_out_amount,
+            peg_out_amount: bitcoin30_to_bitcoin32_amount(&peg_out_amount),
             rbf,
         })
     }
@@ -1768,11 +1779,11 @@ pub fn nonce_from_idx(nonce_idx: u64) -> [u8; 33] {
 pub struct PendingTransaction {
     pub tx: Transaction,
     pub tweak: [u8; 33],
-    pub change: bitcoin30::Amount,
+    pub change: bitcoin::Amount,
     pub destination: ScriptBuf,
     pub fees: PegOutFees,
     pub selected_utxos: Vec<(UTXOKey, SpendableUTXO)>,
-    pub peg_out_amount: bitcoin30::Amount,
+    pub peg_out_amount: bitcoin::Amount,
     pub rbf: Option<Rbf>,
 }
 
@@ -1798,11 +1809,11 @@ impl Serialize for PendingTransaction {
 pub struct UnsignedTransaction {
     pub psbt: PartiallySignedTransaction,
     pub signatures: Vec<(PeerId, PegOutSignatureItem)>,
-    pub change: bitcoin30::Amount,
+    pub change: bitcoin::Amount,
     pub fees: PegOutFees,
     pub destination: ScriptBuf,
     pub selected_utxos: Vec<(UTXOKey, SpendableUTXO)>,
-    pub peg_out_amount: bitcoin30::Amount,
+    pub peg_out_amount: bitcoin::Amount,
     pub rbf: Option<Rbf>,
 }
 
@@ -1827,8 +1838,9 @@ mod tests {
 
     use std::str::FromStr;
 
-    use bitcoin30::Network::{Bitcoin, Testnet};
-    use bitcoin30::{Address, Amount, Network, OutPoint, Txid};
+    use bitcoin::Network::{Bitcoin, Testnet};
+    use bitcoin30::{Address, Amount, OutPoint, Txid};
+    use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_network;
     use fedimint_core::{BitcoinHash, Feerate};
     use fedimint_wallet_common::{PegOut, PegOutFees, Rbf, WalletOutputV0};
     use miniscript::descriptor::Wsh;
@@ -1863,7 +1875,7 @@ mod tests {
 
         let spendable = SpendableUTXO {
             tweak: [0; 33],
-            amount: Amount::from_sat(3000),
+            amount: bitcoin::Amount::from_sat(3000),
         };
 
         let recipient = Address::from_str("32iVBEu4dxkUQk9dJbZUiBiQdmypcEyJRf").unwrap();
@@ -1900,21 +1912,40 @@ mod tests {
             .expect("is ok");
 
         // peg out weight is incorrectly set to 0
-        let res =
-            StatelessWallet::validate_tx(&tx, &rbf(fee.sats_per_kvb, 0), fee, Network::Bitcoin);
+        let res = StatelessWallet::validate_tx(
+            &tx,
+            &rbf(fee.sats_per_kvb, 0),
+            fee,
+            bitcoin32_to_bitcoin30_network(&Bitcoin),
+        );
         assert_eq!(res, Err(WalletOutputError::TxWeightIncorrect(0, weight)));
 
         // fee rate set below min relay fee to 0
-        let res = StatelessWallet::validate_tx(&tx, &rbf(0, weight), fee, Bitcoin);
+        let res = StatelessWallet::validate_tx(
+            &tx,
+            &rbf(0, weight),
+            fee,
+            bitcoin32_to_bitcoin30_network(&Bitcoin),
+        );
         assert_eq!(res, Err(WalletOutputError::BelowMinRelayFee));
 
         // fees are okay
-        let res = StatelessWallet::validate_tx(&tx, &rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
+        let res = StatelessWallet::validate_tx(
+            &tx,
+            &rbf(fee.sats_per_kvb, weight),
+            fee,
+            bitcoin32_to_bitcoin30_network(&Bitcoin),
+        );
         assert_eq!(res, Ok(()));
 
         // tx has fee below consensus
         tx.fees = PegOutFees::new(0, weight);
-        let res = StatelessWallet::validate_tx(&tx, &rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
+        let res = StatelessWallet::validate_tx(
+            &tx,
+            &rbf(fee.sats_per_kvb, weight),
+            fee,
+            bitcoin32_to_bitcoin30_network(&Bitcoin),
+        );
         assert_eq!(
             res,
             Err(WalletOutputError::PegOutFeeBelowConsensus(
@@ -1924,17 +1955,27 @@ mod tests {
         );
 
         // tx has peg-out amount under dust limit
-        tx.peg_out_amount = Amount::ZERO;
-        let res = StatelessWallet::validate_tx(&tx, &rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
+        tx.peg_out_amount = bitcoin::Amount::ZERO;
+        let res = StatelessWallet::validate_tx(
+            &tx,
+            &rbf(fee.sats_per_kvb, weight),
+            fee,
+            bitcoin32_to_bitcoin30_network(&Bitcoin),
+        );
         assert_eq!(res, Err(WalletOutputError::PegOutUnderDustLimit));
 
         // tx is invalid for network
         let output = WalletOutputV0::PegOut(PegOut {
             recipient,
-            amount: Amount::from_sat(1000),
+            amount: bitcoin::Amount::from_sat(1000),
             fees: PegOutFees::new(100, weight),
         });
-        let res = StatelessWallet::validate_tx(&tx, &output, fee, Testnet);
+        let res = StatelessWallet::validate_tx(
+            &tx,
+            &output,
+            fee,
+            bitcoin32_to_bitcoin30_network(&Testnet),
+        );
         assert_eq!(res, Err(WalletOutputError::WrongNetwork(Testnet, Bitcoin)));
     }
 

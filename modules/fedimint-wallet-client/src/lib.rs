@@ -42,6 +42,7 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_network;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
@@ -332,7 +333,7 @@ impl WalletClientModuleData {
             .cfg
             .peg_in_descriptor
             .tweak(&public_tweak_key, secp256k1::SECP256K1)
-            .address(self.cfg.network)
+            .address(bitcoin32_to_bitcoin30_network(&self.cfg.network))
             .unwrap();
 
         // TODO: make hash?
@@ -500,7 +501,7 @@ impl WalletClientModule {
     }
 
     pub fn get_network(&self) -> Network {
-        self.cfg().network
+        bitcoin32_to_bitcoin30_network(&self.cfg().network)
     }
 
     pub fn get_fee_consensus(&self) -> FeeConsensus {
@@ -545,7 +546,10 @@ impl WalletClientModule {
         address: bitcoin30::Address<NetworkUnchecked>,
         amount: bitcoin30::Amount,
     ) -> anyhow::Result<PegOutFees> {
-        check_address(&address, self.cfg().network)?;
+        check_address(
+            &address,
+            bitcoin32_to_bitcoin30_network(&self.cfg().network),
+        )?;
 
         self.module_api
             .fetch_peg_out_fees(&address.assume_checked(), amount)
@@ -565,7 +569,10 @@ impl WalletClientModule {
         amount: bitcoin30::Amount,
         fees: PegOutFees,
     ) -> anyhow::Result<ClientOutput<WalletOutput, WalletClientStates>> {
-        check_address(&address, self.cfg().network)?;
+        check_address(
+            &address,
+            bitcoin32_to_bitcoin30_network(&self.cfg().network),
+        )?;
 
         let output = WalletOutput::new_v0_peg_out(address, amount, fees);
 

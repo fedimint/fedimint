@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use anyhow::Context;
-pub use bitcoin30::Network;
+pub use bitcoin::Network;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::BitcoinRpcConfig;
