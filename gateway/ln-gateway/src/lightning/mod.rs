@@ -161,6 +161,9 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// `route_htlcs`.
     async fn complete_htlc(&self, htlc: InterceptPaymentResponse) -> Result<(), LightningRpcError>;
 
+    /// Requests the lightning node to create an invoice. Payment hash of
+    /// `CreateInvoiceRequest` determines if the invoice is intended to be
+    /// an ecash payment or a direct payment to this lightning node.
     async fn create_invoice(
         &self,
         create_invoice_request: CreateInvoiceRequest,
@@ -172,6 +175,7 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         &self,
     ) -> Result<GetLnOnchainAddressResponse, LightningRpcError>;
 
+    /// Execute an onchain transaction using the lightning node's wallet.
     async fn withdraw_onchain(
         &self,
         payload: WithdrawOnchainPayload,
@@ -191,8 +195,11 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         payload: CloseChannelsWithPeerPayload,
     ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError>;
 
+    /// List the lightning node's active channels with peers.
     async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError>;
 
+    /// Returns a summary of the lightning node's balance, including the onchain
+    /// wallet, outbound liquidity, and inbound liquidity.
     async fn get_balances(&self) -> Result<GetBalancesResponse, LightningRpcError>;
 }
 
