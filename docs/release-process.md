@@ -41,5 +41,5 @@ To create a new signed tag, run
 ```
 git tag -a -s <tag> && git push <upstream> <tag>
 ex:
-git tag -a -s 0.5.0-rc.0 && git push upstream 0.5.0-rc.0
+git tag -a -s v0.5.0-rc.0 && git push upstream v0.5.0-rc.0
 ```
