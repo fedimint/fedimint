@@ -7,6 +7,7 @@ use std::time::Duration;
 use anyhow::{anyhow, bail, Context, Result};
 use bitcoincore_rpc::bitcoin::{Address, BlockHash};
 use bitcoincore_rpc::bitcoincore_rpc_json::{GetBalancesResult, GetBlockchainInfoResult};
+use bitcoincore_rpc::jsonrpc::error::RpcError;
 use bitcoincore_rpc::RpcApi;
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::ClnRpc;
@@ -17,6 +18,7 @@ use fedimint_core::util::write_overwrite_async;
 use fedimint_core::BitcoinHash;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing::gateway::LightningNodeType;
+use futures::StreamExt;
 use hex::ToHex;
 use itertools::Itertools;
 use ln_gateway::envs::FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV;
@@ -240,11 +242,91 @@ impl Bitcoind {
         Ok(proof.encode_hex())
     }
 
-    pub async fn get_raw_transaction(&self, txid: bitcoin30::Txid) -> Result<String> {
+    /// Poll a transaction by its txid until it is found in the mempool or in a
+    /// block.
+    pub async fn poll_get_transaction(&self, txid: bitcoin30::Txid) -> anyhow::Result<String> {
+        poll("Waiting for transaction in mempool", || async {
+            match self
+                .get_transaction(txid)
+                .await
+                .context("getrawtransaction")
+            {
+                Ok(Some(tx)) => Ok(tx),
+                Ok(None) => Err(ControlFlow::Continue(anyhow::anyhow!(
+                    "Transaction not found yet"
+                ))),
+                Err(err) => Err(ControlFlow::Break(err)),
+            }
+        })
+        .await
+    }
+
+    /// Get a transaction by its txid. Checks the mempool and all blocks.
+    async fn get_transaction(&self, txid: bitcoin30::Txid) -> Result<Option<String>> {
+        // Check the mempool.
+        match self.get_raw_transaction(txid, None).await {
+            // The RPC succeeded, and the transaction was not found in the mempool. Continue to
+            // check blocks.
+            Ok(None) => {}
+            // The RPC failed, or the transaction was found in the mempool. Return the result.
+            other => return other,
+        };
+
+        let block_height = self.get_block_count().await? - 1;
+
+        // Check each block for the tx, starting at the chain tip.
+        // Buffer the requests to avoid spamming bitcoind.
+        // We're doing this after checking the mempool since the tx should
+        // usually be in the mempool, and we don't want to needlessly hit
+        // the bitcoind with block requests.
+        let mut buffered_tx_stream = futures::stream::iter((0..block_height).rev())
+            .map(|height| async move {
+                let block_hash = self.get_block_hash(height).await?;
+                self.get_raw_transaction(txid, Some(block_hash)).await
+            })
+            .buffered(32);
+
+        while let Some(tx_or) = buffered_tx_stream.next().await {
+            match tx_or {
+                // The RPC succeeded, and the transaction was not found in the block. Continue to
+                // the next block.
+                Ok(None) => continue,
+                // The RPC failed, or the transaction was found in the block. Return the result.
+                other => return other,
+            };
+        }
+
+        // The transaction was not found in the mempool or any block.
+        Ok(None)
+    }
+
+    async fn get_raw_transaction(
+        &self,
+        txid: bitcoin30::Txid,
+        block_hash: Option<BlockHash>,
+    ) -> Result<Option<String>> {
         let client = self.client.clone();
-        let tx = spawn_blocking(move || client.get_raw_transaction(&txid, None)).await??;
+        let tx_or =
+            spawn_blocking(move || client.get_raw_transaction(&txid, block_hash.as_ref())).await?;
+
+        let tx = match tx_or {
+            Ok(tx) => tx,
+            // `getrawtransaction` returns a JSON-RPC error with code -5 if the command
+            // reaches bitcoind but is not found. See here:
+            // https://github.com/bitcoin/bitcoin/blob/25dacae9c7feb31308271e2fd5a127c1fc230c2f/src/rpc/rawtransaction.cpp#L360-L376
+            // https://github.com/bitcoin/bitcoin/blob/25dacae9c7feb31308271e2fd5a127c1fc230c2f/src/rpc/protocol.h#L42
+            Err(bitcoincore_rpc::Error::JsonRpc(bitcoincore_rpc::jsonrpc::Error::Rpc(
+                RpcError { code: -5, .. },
+            ))) => return Ok(None),
+            Err(err) => return Err(err.into()),
+        };
         let bytes = tx.consensus_encode_to_vec();
-        Ok(bytes.encode_hex())
+        Ok(Some(bytes.encode_hex()))
+    }
+
+    async fn get_block_hash(&self, height: u64) -> Result<BlockHash> {
+        let client = self.client.clone();
+        Ok(spawn_blocking(move || client.get_block_hash(height)).await??)
     }
 
     pub async fn get_new_address(&self) -> Result<Address> {
@@ -956,16 +1038,7 @@ pub async fn open_channels_between_gateways(
     let mut is_missing_any_txids = false;
     for txid_or in &channel_funding_txids {
         if let Some(txid) = txid_or {
-            loop {
-                // Bitcoind's getrawtransaction RPC call will return an error if the transaction
-                // is not known.
-                if bitcoind.get_raw_transaction(*txid).await.is_ok() {
-                    break;
-                }
-
-                // Wait for a bit, then restart the check.
-                fedimint_core::runtime::sleep(Duration::from_millis(100)).await;
-            }
+            bitcoind.poll_get_transaction(*txid).await?;
         } else {
             is_missing_any_txids = true;
         }

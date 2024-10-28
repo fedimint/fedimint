@@ -1084,16 +1084,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let txid: Txid = withdraw_res["txid"].as_str().unwrap().parse().unwrap();
     let fees_sat = withdraw_res["fees_sat"].as_u64().unwrap();
 
-    let tx_hex = poll("Waiting for transaction in mempool", || async {
-        // TODO: distinguish errors from not found
-        bitcoind
-            .get_raw_transaction(txid)
-            .await
-            .context("getrawtransaction")
-            .map_err(ControlFlow::Continue)
-    })
-    .await
-    .expect("cannot fail, gets stuck");
+    let tx_hex = bitcoind.poll_get_transaction(txid).await?;
 
     let tx =
         bitcoin30::Transaction::consensus_decode_hex(&tx_hex, &ModuleRegistry::default()).unwrap();
@@ -2029,15 +2020,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
             .expect("withdrawal should contain txid string")
             .parse()
             .expect("txid should be parsable");
-        let tx_hex = poll("Waiting for transaction in mempool", || async {
-            bitcoind
-                .get_raw_transaction(txid)
-                .await
-                .context("getrawtransaction")
-                .map_err(ControlFlow::Continue)
-        })
-        .await
-        .expect("withdrawal tx failed to reach mempool");
+        let tx_hex = bitcoind.poll_get_transaction(txid).await?;
 
         let tx = bitcoin30::Transaction::consensus_decode_hex(&tx_hex, &ModuleRegistry::default())?;
         assert_eq!(tx.input.len(), 1);
