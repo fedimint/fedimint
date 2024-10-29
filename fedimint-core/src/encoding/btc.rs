@@ -39,6 +39,14 @@ macro_rules! impl_encode_decode_bridge_bitcoin30 {
     };
 }
 
+struct SimpleBitcoinRead<R: std::io::Read>(R);
+
+impl<R: std::io::Read> bitcoin_io::Read for SimpleBitcoinRead<R> {
+    fn read(&mut self, buf: &mut [u8]) -> bitcoin_io::Result<usize> {
+        self.0.read(buf).map_err(bitcoin_io::Error::from)
+    }
+}
+
 macro_rules! impl_encode_decode_bridge {
     ($btc_type:ty) => {
         impl crate::encoding::Encodable for $btc_type {
@@ -54,14 +62,12 @@ macro_rules! impl_encode_decode_bridge {
         }
 
         impl crate::encoding::Decodable for $btc_type {
-            fn consensus_decode_from_finite_reader<D: std::io::Read>(
+            fn consensus_decode<D: std::io::Read>(
                 d: &mut D,
                 _modules: &$crate::module::registry::ModuleDecoderRegistry,
             ) -> Result<Self, crate::encoding::DecodeError> {
-                bitcoin::consensus::Decodable::consensus_decode_from_finite_reader(
-                    &mut std::io::BufReader::new(d),
-                )
-                .map_err(crate::encoding::DecodeError::from_err)
+                bitcoin::consensus::Decodable::consensus_decode(&mut SimpleBitcoinRead(d))
+                    .map_err(crate::encoding::DecodeError::from_err)
             }
         }
     };

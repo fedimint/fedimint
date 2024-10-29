@@ -617,7 +617,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e553c45ffed860aa7e0c6998c3a827fcdc039a2df76307563208ecfcae2f750"
 dependencies = [
  "bdk_core",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "miniscript 12.2.0",
  "serde",
 ]
@@ -628,7 +628,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c0b45300422611971b0bbe84b04d18e38e81a056a66860c9dd3434f6d0f5396"
 dependencies = [
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "hashbrown 0.9.1",
  "serde",
 ]
@@ -653,7 +653,7 @@ checksum = "5aeb48cd8e0a15d0bf7351fc8c30e44c474be01f4f98eb29f20ab59b645bd29c"
 dependencies = [
  "bdk_chain",
  "bip39",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "miniscript 12.2.0",
  "rand_core",
  "serde",
@@ -707,7 +707,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebe7a7f5928d264879d5b65eb18a72ea1890c57f22d62ee2eba93f207a6a020b"
 dependencies = [
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "percent-encoding-rfc3986",
 ]
 
@@ -758,9 +758,9 @@ dependencies = [
 
 [[package]]
 name = "bitcoin"
-version = "0.32.3"
+version = "0.32.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0032b0e8ead7074cda7fc4f034409607e3f03a6f71d66ade8a307f79b4d99e73"
+checksum = "788902099d47c8682efe6a7afb01c8d58b9794ba66c06affd81c3d6b560743eb"
 dependencies = [
  "base58ck",
  "base64 0.21.7",
@@ -1964,7 +1964,7 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b546e91283ebfc56337de34e0cf814e3ad98083afde593b8e58495ee5355d0e"
 dependencies = [
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "hex-conservative 0.2.1",
  "log",
  "reqwest 0.11.27",
@@ -2049,7 +2049,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "base64 0.22.1",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "curve25519-dalek",
  "fedimint-arti-client",
  "fedimint-core",
@@ -2155,7 +2155,7 @@ version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "clap",
  "clap_complete",
  "fedimint-aead",
@@ -2193,7 +2193,7 @@ dependencies = [
  "aquamarine",
  "async-stream",
  "async-trait",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "fedimint-aead",
  "fedimint-api-client",
  "fedimint-build",
@@ -2254,7 +2254,8 @@ dependencies = [
  "bincode",
  "bitcoin 0.29.2",
  "bitcoin 0.30.2",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
+ "bitcoin-io",
  "bitcoin_hashes 0.12.0",
  "bitvec",
  "bls12_381",
@@ -2480,7 +2481,7 @@ name = "fedimint-gateway-cli"
 version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "clap",
  "clap_complete",
  "fedimint-build",
@@ -2539,7 +2540,7 @@ version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
  "bitcoin 0.30.2",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "bitcoin_hashes 0.12.0",
  "fedimint-client",
  "fedimint-core",
@@ -2566,7 +2567,7 @@ dependencies = [
  "axum 0.7.7",
  "axum-macros",
  "bitcoin 0.30.2",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "bitcoin_hashes 0.12.0",
  "clap",
  "cln-plugin",
@@ -2705,7 +2706,7 @@ version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
  "bitcoin 0.30.2",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "bitcoin_hashes 0.12.0",
  "fedimint-core",
  "fedimint-ln-common",
@@ -3005,7 +3006,7 @@ name = "fedimint-recoverytool"
 version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "clap",
  "fedimint-build",
  "fedimint-core",
@@ -3047,7 +3048,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "bincode",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "bitcoin_hashes 0.12.0",
  "bitcoincore-rpc",
  "bls12_381",
@@ -3292,7 +3293,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "bitcoin 0.30.2",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "clap",
  "erased-serde",
  "fedimint-api-client",
@@ -3318,7 +3319,7 @@ version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
  "bitcoin 0.30.2",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "fedimint-core",
  "hex",
  "impl-tools",
@@ -3337,7 +3338,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bitcoin 0.30.2",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "erased-serde",
  "fedimint-bitcoind",
  "fedimint-core",
@@ -3364,7 +3365,7 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "bitcoin 0.30.2",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "bitcoincore-rpc",
  "devimint",
  "fedimint-client",
@@ -4646,7 +4647,7 @@ dependencies = [
  "bdk_wallet",
  "bip21",
  "bip39",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "chrono",
  "esplora-client 0.9.0",
  "libc",
@@ -4758,7 +4759,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "767f388e50251da71f95a3737d6db32c9729f9de6427a54fa92bb994d04d793f"
 dependencies = [
  "bech32 0.9.1",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "lightning-invoice 0.32.0",
  "lightning-types",
 ]
@@ -4769,7 +4770,7 @@ version = "0.0.125"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4734caab73611a2c725f15392565150e4f5a531dd1f239365d01311f7de65d2d"
 dependencies = [
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "lightning 0.0.125",
  "lightning-rapid-gossip-sync",
 ]
@@ -4780,7 +4781,7 @@ version = "0.0.125"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea041135bad736b075ad1123ef0a4793e78da8041386aa7887779fc5c540b94b"
 dependencies = [
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "chunked_transfer",
  "lightning 0.0.125",
  "serde_json",
@@ -4807,7 +4808,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90ab9f6ea77e20e3129235e62a2e6bd64ed932363df104e864ee65ccffb54a8f"
 dependencies = [
  "bech32 0.9.1",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "lightning-types",
  "serde",
 ]
@@ -4818,7 +4819,7 @@ version = "0.1.0-alpha.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "175cff5d30b8d3f94ae9772b59f9ca576b1927a6ab60dd773e8c4e0593cd4e95"
 dependencies = [
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "chrono",
  "lightning 0.0.125",
  "lightning-invoice 0.32.0",
@@ -4833,7 +4834,7 @@ version = "0.0.125"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af2847a19f892f32b9ab5075af25c70370b4cc5842b4f5b53c57092e52a49498"
 dependencies = [
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "lightning 0.0.125",
  "tokio",
 ]
@@ -4844,7 +4845,7 @@ version = "0.0.125"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d06283d41eb8e6d4af883cd602d91ab0c5f9e0c9a6be1c944b10e6f47176f20"
 dependencies = [
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "lightning 0.0.125",
  "windows-sys 0.48.0",
 ]
@@ -4855,7 +4856,7 @@ version = "0.0.125"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92185313db1075495e5efa3dd6a3b5d4dee63e1496059f58cf65074994718f05"
 dependencies = [
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "lightning 0.0.125",
 ]
 
@@ -4866,7 +4867,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f023cb8dcd9c8b83b9b0c673ed6ca2e9afb57791119d3fa3224db2787b717e"
 dependencies = [
  "bdk-macros",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "esplora-client 0.9.0",
  "futures",
  "lightning 0.0.125",
@@ -4879,7 +4880,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1083b8d9137000edf3bfcb1ff011c0d25e0cdd2feb98cc21d6765e64a494148f"
 dependencies = [
  "bech32 0.9.1",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "hex-conservative 0.2.1",
 ]
 
@@ -4899,7 +4900,7 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "bech32 0.11.0",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "cbc",
  "email_address",
  "reqwest 0.12.8",
@@ -5040,7 +5041,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "add2d4aee30e4291ce5cffa3a322e441ff4d4bc57b38c8d9bf0e94faa50ab626"
 dependencies = [
  "bech32 0.11.0",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "serde",
 ]
 
@@ -8490,7 +8491,7 @@ checksum = "d787f7640ceae8caef95434f1b14936402b73e18d34868b052a502a5d5085490"
 dependencies = [
  "async-trait",
  "base64 0.21.7",
- "bitcoin 0.32.3",
+ "bitcoin 0.32.4",
  "bitcoin_hashes 0.14.0",
  "prost 0.11.9",
  "prost-build 0.11.9",
