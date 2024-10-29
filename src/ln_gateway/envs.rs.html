@@ -50,56 +50,110 @@
 <a href="#49" id="49">49</a>
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
-<a href="#52" id="52">52</a></pre></div><pre class="rust"><code><span class="comment">// Env variable to TODO
-</span><span class="kw">pub const </span>FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_CLN_EXTENSION_LISTEN_ADDRESS"</span>;
-
-<span class="comment">// Env variable to TODO
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a></pre></div><pre class="rust"><code><span class="doccomment">/// Environment variable that specifies the directory of the gateway's database.
 </span><span class="kw">pub const </span>FM_GATEWAY_DATA_DIR_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_DATA_DIR"</span>;
 
-<span class="comment">// Env variable to TODO
+<span class="doccomment">/// Environment variable that specifies the address the gateway's HTTP server
+/// should listen on.
 </span><span class="kw">pub const </span>FM_GATEWAY_LISTEN_ADDR_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_LISTEN_ADDR"</span>;
 
-<span class="comment">// Env variable to TODO
+<span class="doccomment">/// Environment variable that specifies the URL that clients can use to make
+/// requests to the gateway.
 </span><span class="kw">pub const </span>FM_GATEWAY_API_ADDR_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_API_ADDR"</span>;
 
-<span class="comment">// Env variable to TODO
+<span class="doccomment">/// Environment variable that specifies the password. This is only applied if
+/// there is no password set, otherwise it is ignored.
 </span><span class="kw">pub const </span>FM_GATEWAY_PASSWORD_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_PASSWORD"</span>;
 
-<span class="comment">// Env variable to TODO
+<span class="doccomment">/// Environment variable that specifies that Bitcoin network that the gateway
+/// should use. Must match the network of the Lightning node.
 </span><span class="kw">pub const </span>FM_GATEWAY_NETWORK_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_NETWORK"</span>;
 
-<span class="comment">// Env variable to TODO
+<span class="doccomment">/// Environment variable that specifies the default routing fees the gateway
+/// takes for outgoing and incoming payments. Only applied to newly joined
+/// federations.
 </span><span class="kw">pub const </span>FM_DEFAULT_GATEWAY_FEES_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_DEFAULT_GATEWAY_FEES"</span>;
 
-<span class="comment">// Env variable to TODO
+<span class="doccomment">/// Environment variable that instructs the gateway how many route hints to
+/// include in LNv1 invoices.
 </span><span class="kw">pub const </span>FM_NUMBER_OF_ROUTE_HINTS_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_NUMBER_OF_ROUTE_HINTS"</span>;
 
-<span class="comment">// Env variable to TODO
+<span class="doccomment">/// Environment variable that specifies the URL to connect to LND. Necessary for
+/// LND configuration.
 </span><span class="kw">pub const </span>FM_LND_RPC_ADDR_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LND_RPC_ADDR"</span>;
 
-<span class="comment">// Env variable to TODO
+<span class="doccomment">/// Environment variable that specifies the location of LND's TLS certificate.
+/// Necessary for LND configuration.
 </span><span class="kw">pub const </span>FM_LND_TLS_CERT_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LND_TLS_CERT"</span>;
 
-<span class="comment">// Env variable to TODO
+<span class="doccomment">/// Environment variable that specifies the location of LND's macaroon.
+/// Necessary for LND configuration.
 </span><span class="kw">pub const </span>FM_LND_MACAROON_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LND_MACAROON"</span>;
 
-<span class="comment">// Env variable to TODO
-</span><span class="kw">pub const </span>FM_GATEWAY_LIGHTNING_ADDR_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_LIGHTNING_ADDR"</span>;
-
-<span class="comment">// Env variable to TODO
+<span class="doccomment">/// Environment variable that specifies the URL of an Esplora server. Necessary
+/// for LDK configuration.
 </span><span class="kw">pub const </span>FM_LDK_ESPLORA_SERVER_URL: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LDK_ESPLORA_SERVER_URL"</span>;
 
-<span class="comment">// Env variable to TODO
+<span class="doccomment">/// Environment variable that specifies the Bitcoin network that the LDK Node
+/// should use. Must match `FM_GATEWAY_NETWORK`. Necessary for LDK
+/// configuration.
 </span><span class="kw">pub const </span>FM_LDK_NETWORK: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LDK_NETWORK"</span>;
 
-<span class="comment">// Env variable to TODO
+<span class="doccomment">/// Environment variable the specifies the port that the LDK Node should use.
+/// Necessary for LDK configuration.
 </span><span class="kw">pub const </span>FM_PORT_LDK: <span class="kw-2">&amp;</span>str = <span class="string">"FM_PORT_LDK"</span>;
 
-<span class="kw">pub const </span>FM_GATEWAY_MNEMONIC_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_MNEMONIC"</span>;
+<span class="doccomment">/// Environment variable that specifies the address that the Core Lightning
+/// extension should listen on. Will be removed in v0.6
+</span><span class="kw">pub const </span>FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_CLN_EXTENSION_LISTEN_ADDRESS"</span>;
 
-<span class="kw">pub const </span>FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_LIGHTNING_MODULE_MODE"</span>;
+<span class="doccomment">/// Environment variable that specifies the URL that the gateway can use to
+/// connect to the Core Lightning extension. Will be removed in v0.6.
+</span><span class="kw">pub const </span>FM_GATEWAY_LIGHTNING_ADDR_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_LIGHTNING_ADDR"</span>;
 
-<span class="kw">pub const </span>FM_DEBUG_GATEWAY_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_DEBUG_GATEWAY"</span>;
+<span class="doccomment">/// Environment variable that specifies the mnemonic that the gateway should use
+/// for ecash and the LDK Node should use for onchain funds. If not set, a
+/// mnemonic will be generated. This environment variable can be used for
+/// recovering from an existing mnemonic.
+</span><span class="kw">pub const </span>FM_GATEWAY_MNEMONIC_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_MNEMONIC"</span>;
+
+<span class="doccomment">/// Environment variable that specifies the "module mode" the gateway should run
+/// in. Options are "LNv1", "LNv2", or "All". It is not recommended to run "All"
+/// in production so that clients are not able to use the same gateway to create
+/// LNv1 and LNv2 invoices.
+</span><span class="kw">pub const </span>FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_LIGHTNING_MODULE_MODE"</span>;
+
+<span class="doccomment">/// Environment variable that instructs the gateway to run in "debug mode",
+/// which allows errors to return to clients without redacting private
+/// information.
+</span><span class="kw">pub const </span>FM_DEBUG_GATEWAY_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_DEBUG_GATEWAY"</span>;
 
 <span class="kw">pub const </span>FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_SKIP_WAIT_FOR_SYNC"</span>;
 </code></pre></div></section></main></body></html>

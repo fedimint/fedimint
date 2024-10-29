@@ -2173,7 +2173,12 @@
 <a href="#2172" id="2172">2172</a>
 <a href="#2173" id="2173">2173</a>
 <a href="#2174" id="2174">2174</a>
-<a href="#2175" id="2175">2175</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2175" id="2175">2175</a>
+<a href="#2176" id="2176">2176</a>
+<a href="#2177" id="2177">2177</a>
+<a href="#2178" id="2178">2178</a>
+<a href="#2179" id="2179">2179</a>
+<a href="#2180" id="2180">2180</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2404,7 +2409,8 @@
     <span class="doccomment">/// The socket the gateway listens on.
     </span>listen: SocketAddr,
 
-    lightning_module_mode: LightningModuleMode,
+    <span class="doccomment">/// The "module mode" of the gateway. Options are LNv1, LNv2, or All.
+    </span>lightning_module_mode: LightningModuleMode,
 }
 
 <span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span>Gateway {
@@ -3783,7 +3789,9 @@
         <span class="prelude-val">Ok</span>(ReceiveEcashResponse { amount })
     }
 
-    <span class="kw">pub async fn </span>handle_shutdown_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, task_group: TaskGroup) -&gt; AdminResult&lt;()&gt; {
+    <span class="doccomment">/// Instructs the gateway to shutdown, but only after all incoming payments
+    /// have been handlded.
+    </span><span class="kw">pub async fn </span>handle_shutdown_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, task_group: TaskGroup) -&gt; AdminResult&lt;()&gt; {
         <span class="comment">// Take the write lock on the state so that no additional payments are processed
         </span><span class="kw">let </span><span class="kw-2">mut </span>state_guard = <span class="self">self</span>.state.write().<span class="kw">await</span>;
         <span class="kw">if let </span>GatewayState::Running { lightning_context } = state_guard.clone() {
@@ -4338,12 +4346,14 @@
         <span class="prelude-val">Ok</span>((registered_incoming_contract.contract, client))
     }
 
-    <span class="kw">fn </span>is_running_lnv2(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+    <span class="doccomment">/// Helper function for determining if the gateway supports LNv2.
+    </span><span class="kw">fn </span>is_running_lnv2(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="self">self</span>.lightning_module_mode == LightningModuleMode::LNv2
             || <span class="self">self</span>.lightning_module_mode == LightningModuleMode::All
     }
 
-    <span class="kw">fn </span>is_running_lnv1(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+    <span class="doccomment">/// Helper function for determining if the gateway supports LNv1.
+    </span><span class="kw">fn </span>is_running_lnv1(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="self">self</span>.lightning_module_mode == LightningModuleMode::LNv1
             || <span class="self">self</span>.lightning_module_mode == LightningModuleMode::All
     }
