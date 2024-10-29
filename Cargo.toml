@@ -13,10 +13,12 @@ members = [
     "fedimint-build",
     "fedimint-cli",
     "fedimint-client",
+    "fedimint-client-rpc",
     "fedimint-client-wasm",
     "fedimint-core",
     "fedimint-dbtool",
     "fedimint-derive",
+    "fedimint-indexeddb",
     "fedimint-load-test-tool",
     "fedimint-logging",
     "fedimint-metrics",
@@ -115,6 +117,7 @@ fedimint-bip39 = { path = "./fedimint-bip39", version = "=0.5.0-alpha" }
 fedimint-bitcoind = { path = "./fedimint-bitcoind", version = "=0.5.0-alpha" }
 fedimint-build = { path = "./fedimint-build", version = "=0.5.0-alpha" }
 fedimint-client = { path = "./fedimint-client", version = "=0.5.0-alpha" }
+fedimint-client-rpc = { path = "./fedimint-client-rpc", version = "=0.5.0-alpha" }
 fedimint-core = { path = "./fedimint-core", version = "=0.5.0-alpha" }
 fedimint-derive = { path = "./fedimint-derive", version = "=0.5.0-alpha" }
 fedimint-derive-secret = { path = "./crypto/derive-secret", version = "=0.5.0-alpha" }
@@ -138,6 +141,7 @@ fedimint-mint-common = { path = "./modules/fedimint-mint-common", version = "=0.
 fedimint-mint-server = { path = "./modules/fedimint-mint-server", version = "=0.5.0-alpha" }
 fedimint-portalloc = { path = "utils/portalloc", version = "=0.5.0-alpha" }
 fedimint-rocksdb = { path = "./fedimint-rocksdb", version = "=0.5.0-alpha" }
+fedimint-indexeddb = { path = "./fedimint-indexeddb", version = "=0.5.0-alpha" }
 fedimint-server = { path = "./fedimint-server", version = "=0.5.0-alpha" }
 fedimint-testing = { path = "./fedimint-testing", version = "=0.5.0-alpha" }
 fedimint-testing-core = { path = "./fedimint-testing-core", version = "=0.5.0-alpha" }
