@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use std::{env, ffi};
 
 use anyhow::{anyhow, bail, Context, Result};
-use bitcoin30::Txid;
+use bitcoin::Txid;
 use clap::Subcommand;
 use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_tx;
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
