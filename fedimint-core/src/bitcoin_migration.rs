@@ -191,6 +191,14 @@ pub fn bitcoin32_to_bitcoin30_schnorr_signature(
         .expect("Failed to convert bitcoin32 schnorr signature to bitcoin30 schnorr signature")
 }
 
+pub fn bitcoin30_to_bitcoin32_script_buf(script: &bitcoin30::ScriptBuf) -> bitcoin::ScriptBuf {
+    bitcoin::ScriptBuf::from(script.as_bytes().to_vec())
+}
+
+pub fn bitcoin32_to_bitcoin30_script_buf(script: &bitcoin::ScriptBuf) -> bitcoin30::ScriptBuf {
+    bitcoin30::ScriptBuf::from(script.as_bytes().to_vec())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

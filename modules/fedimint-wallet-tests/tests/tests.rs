@@ -1019,7 +1019,8 @@ mod fedimint_migration_tests {
     };
     use fedimint_client::module::init::DynClientModuleInit;
     use fedimint_core::bitcoin_migration::{
-        bitcoin30_to_bitcoin32_txid, bitcoin32_to_bitcoin30_outpoint,
+        bitcoin30_to_bitcoin32_script_buf, bitcoin30_to_bitcoin32_txid,
+        bitcoin32_to_bitcoin30_outpoint,
     };
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
@@ -1157,7 +1158,7 @@ mod fedimint_migration_tests {
                 fee_rate: Feerate { sats_per_kvb: 1000 },
                 total_weight: 40000,
             },
-            destination: destination.clone(),
+            destination: bitcoin30_to_bitcoin32_script_buf(&destination),
             selected_utxos: selected_utxos.clone(),
             peg_out_amount: Amount::from_sat(10000),
             rbf: None,
@@ -1172,7 +1173,7 @@ mod fedimint_migration_tests {
             tx: transaction,
             tweak: BYTE_33,
             change: Amount::from_sat(0),
-            destination,
+            destination: bitcoin30_to_bitcoin32_script_buf(&destination),
             fees: PegOutFees {
                 fee_rate: Feerate { sats_per_kvb: 1000 },
                 total_weight: 40000,

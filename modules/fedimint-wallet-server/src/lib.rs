@@ -35,8 +35,9 @@ use common::{
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_network, bitcoin30_to_bitcoin32_outpoint,
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin30_to_bitcoin32_txid,
-    bitcoin32_to_bitcoin30_amount, bitcoin32_to_bitcoin30_network, bitcoin32_to_bitcoin30_outpoint,
+    bitcoin30_to_bitcoin32_script_buf, bitcoin30_to_bitcoin32_secp256k1_pubkey,
+    bitcoin30_to_bitcoin32_txid, bitcoin32_to_bitcoin30_amount, bitcoin32_to_bitcoin30_network,
+    bitcoin32_to_bitcoin30_outpoint, bitcoin32_to_bitcoin30_script_buf,
     bitcoin32_to_bitcoin30_secp256k1_pubkey,
 };
 use fedimint_core::config::{
@@ -1204,7 +1205,7 @@ impl Wallet {
 
                 self.offline_wallet().create_tx(
                     bitcoin32_to_bitcoin30_amount(&tx.peg_out_amount),
-                    tx.destination,
+                    bitcoin32_to_bitcoin30_script_buf(&tx.destination),
                     tx.selected_utxos,
                     self.available_utxos(dbtx).await,
                     tx.fees.fee_rate,
@@ -1469,7 +1470,7 @@ impl<'a> StatelessWallet<'a> {
         }
 
         // Validate the tx amount is over the dust limit
-        if tx.peg_out_amount < bitcoin30_to_bitcoin32_amount(&tx.destination.dust_value()) {
+        if tx.peg_out_amount < tx.destination.minimal_non_dust() {
             return Err(WalletOutputError::PegOutUnderDustLimit);
         }
 
@@ -1512,6 +1513,8 @@ impl<'a> StatelessWallet<'a> {
     // * `change_tweak`: How the federation can recognize it's change UTXO
     // * `rbf`: If this is an RBF transaction
     #[allow(clippy::too_many_arguments)]
+    // TODO(#5200): Remove this clippy once the bitcoin v0.32 migration is complete.
+    #[allow(clippy::needless_pass_by_value)]
     fn create_tx(
         &self,
         peg_out_amount: bitcoin30::Amount,
@@ -1683,7 +1686,7 @@ impl<'a> StatelessWallet<'a> {
                 fee_rate,
                 total_weight,
             },
-            destination,
+            destination: bitcoin30_to_bitcoin32_script_buf(&destination),
             selected_utxos,
             peg_out_amount: bitcoin30_to_bitcoin32_amount(&peg_out_amount),
             rbf,
@@ -1795,7 +1798,7 @@ pub struct PendingTransaction {
     pub tx: Transaction,
     pub tweak: [u8; 33],
     pub change: bitcoin::Amount,
-    pub destination: ScriptBuf,
+    pub destination: bitcoin::ScriptBuf,
     pub fees: PegOutFees,
     pub selected_utxos: Vec<(UTXOKey, SpendableUTXO)>,
     pub peg_out_amount: bitcoin::Amount,
@@ -1826,7 +1829,7 @@ pub struct UnsignedTransaction {
     pub signatures: Vec<(PeerId, PegOutSignatureItem)>,
     pub change: bitcoin::Amount,
     pub fees: PegOutFees,
-    pub destination: ScriptBuf,
+    pub destination: bitcoin::ScriptBuf,
     pub selected_utxos: Vec<(UTXOKey, SpendableUTXO)>,
     pub peg_out_amount: bitcoin::Amount,
     pub rbf: Option<Rbf>,
