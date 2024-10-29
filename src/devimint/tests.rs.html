@@ -2854,7 +2854,7 @@
 
             <span class="kw">let </span>start_time = Instant::now();
             <span class="kw">if </span><span class="kw-2">*</span>VERSION_0_3_0_ALPHA &lt;= fedimint_cli_version {
-                <span class="kw">let </span>restore_client = Client::create(<span class="string">"restore"</span>)<span class="question-mark">?</span>;
+                <span class="kw">let </span>restore_client = Client::create(<span class="string">"restore"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="macro">cmd!</span>(
                     restore_client,
                     <span class="string">"restore"</span>,
@@ -3972,7 +3972,7 @@
     // which is a larger refactor.
     </span>{
         <span class="kw">let </span>post_balance = <span class="kw">if </span>fedimint_cli_version &gt;= <span class="kw-2">*</span>VERSION_0_3_0_ALPHA {
-            <span class="kw">let </span>client = Client::create(<span class="string">"restore-without-backup"</span>)<span class="question-mark">?</span>;
+            <span class="kw">let </span>client = Client::create(<span class="string">"restore-without-backup"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let _ </span>= <span class="macro">cmd!</span>(
                 client,
                 <span class="string">"restore"</span>,
@@ -4021,7 +4021,7 @@
     </span>{
         <span class="kw">if </span>fedimint_cli_version &gt;= <span class="kw-2">*</span>VERSION_0_3_0_ALPHA {
             <span class="kw">let _ </span>= <span class="macro">cmd!</span>(reference_client, <span class="string">"backup"</span>,).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>client = Client::create(<span class="string">"restore-with-backup"</span>)<span class="question-mark">?</span>;
+            <span class="kw">let </span>client = Client::create(<span class="string">"restore-with-backup"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
             {
                 <span class="kw">let _ </span>= <span class="macro">cmd!</span>(
@@ -4051,7 +4051,7 @@
             fed.pegin_client(EXTRA_PEGIN_SATS, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
 
             {
-                <span class="kw">let </span>client = Client::create(<span class="string">"restore-with-backup-again"</span>)<span class="question-mark">?</span>;
+                <span class="kw">let </span>client = Client::create(<span class="string">"restore-with-backup-again"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">let _ </span>= <span class="macro">cmd!</span>(
                     client,
                     <span class="string">"restore"</span>,

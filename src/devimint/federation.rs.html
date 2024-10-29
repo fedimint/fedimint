@@ -1357,10 +1357,7 @@
 <a href="#1356" id="1356">1356</a>
 <a href="#1357" id="1357">1357</a>
 <a href="#1358" id="1358">1358</a>
-<a href="#1359" id="1359">1359</a>
-<a href="#1360" id="1360">1360</a>
-<a href="#1361" id="1361">1361</a>
-<a href="#1362" id="1362">1362</a></pre></div><pre class="rust"><code><span class="kw">mod </span>config;
+<a href="#1359" id="1359">1359</a></pre></div><pre class="rust"><code><span class="kw">mod </span>config;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -1395,7 +1392,7 @@
 <span class="kw">use </span>fs_lock::FileLock;
 <span class="kw">use </span>futures::future::{join_all, try_join_all};
 <span class="kw">use </span>rand::Rng;
-<span class="kw">use </span>tokio::task::JoinSet;
+<span class="kw">use </span>tokio::task::{spawn_blocking, JoinSet};
 <span class="kw">use </span>tokio::time::Instant;
 <span class="kw">use </span>tracing::{debug, info};
 
@@ -1465,9 +1462,10 @@
     }
 
     <span class="doccomment">/// Create a [`Client`] that starts with a fresh state.
-    </span><span class="kw">pub fn </span>create(name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
-        block_in_place(|| {
-            <span class="kw">let </span>_lock = <span class="self">Self</span>::client_name_lock(name);
+    </span><span class="kw">pub async fn </span>create(name: <span class="kw">impl </span>ToString) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
+        <span class="kw">let </span>name = name.to_string();
+        spawn_blocking(<span class="kw">move </span>|| {
+            <span class="kw">let </span>_lock = <span class="self">Self</span>::client_name_lock(<span class="kw-2">&amp;</span>name);
             <span class="kw">for </span>i <span class="kw">in </span><span class="number">0u64</span>.. {
                 <span class="kw">let </span>client = <span class="self">Self </span>{
                     name: <span class="macro">format!</span>(<span class="string">"{name}-{i}"</span>),
@@ -1480,7 +1478,8 @@
             }
             <span class="macro">unreachable!</span>()
         })
-    }
+        .<span class="kw">await</span><span class="question-mark">?
+    </span>}
 
     <span class="doccomment">/// Open or create a [`Client`] that starts with a fresh state.
     </span><span class="kw">pub fn </span>open_or_create(name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
@@ -1547,8 +1546,8 @@
 
     <span class="doccomment">/// Create a [`Client`] that starts with a state that is a copy of
     /// of another one.
-    </span><span class="kw">pub async fn </span>new_forked(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
-        <span class="kw">let </span>new = Client::create(name)<span class="question-mark">?</span>;
+    </span><span class="kw">pub async fn </span>new_forked(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw">impl </span>ToString) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
+        <span class="kw">let </span>new = Client::create(name).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="macro">cmd!</span>(
             <span class="string">"cp"</span>,
@@ -1838,14 +1837,9 @@
             </span>.context(<span class="string">"Internal client joining Federation"</span>)
     }
 
-    <span class="doccomment">/// Fork the built-in client of `Federation` and give it a name
-    </span><span class="kw">pub async fn </span>fork_client(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
-        Client::new_forked(<span class="self">self</span>.internal_client().<span class="kw">await</span><span class="question-mark">?</span>, name).<span class="kw">await
-    </span>}
-
     <span class="doccomment">/// New [`Client`] that already joined `self`
-    </span><span class="kw">pub async fn </span>new_joined_client(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
-        <span class="kw">let </span>client = Client::create(name)<span class="question-mark">?</span>;
+    </span><span class="kw">pub async fn </span>new_joined_client(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw">impl </span>ToString) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
+        <span class="kw">let </span>client = Client::create(name).<span class="kw">await</span><span class="question-mark">?</span>;
         client.join_federation(<span class="self">self</span>.invite_code()<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(client)
     }
