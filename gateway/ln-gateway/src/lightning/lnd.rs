@@ -1382,11 +1382,6 @@ impl ILnRpcClient for GatewayLndClient {
             inbound_lightning_liquidity_msats,
         })
     }
-
-    async fn sync_to_chain(&self, _block_height: u32) -> Result<(), LightningRpcError> {
-        // We don't need to do anything here, as LND automatically syncs to chain.
-        Ok(())
-    }
 }
 
 fn route_hints_to_lnd(

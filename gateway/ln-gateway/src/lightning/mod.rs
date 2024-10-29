@@ -14,9 +14,10 @@ use clap::Subcommand;
 use fedimint_bip39::Mnemonic;
 use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::envs::is_env_var_set;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{backoff_util, retry, SafeUrl};
 use fedimint_core::{secp256k1, Amount};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::PrunedInvoice;
@@ -24,12 +25,13 @@ use futures::stream::BoxStream;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tracing::{debug, info, warn};
 
 use self::cln::NetworkLnRpcClient;
 use self::lnd::GatewayLndClient;
 use crate::envs::{
-    FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_LDK_ESPLORA_SERVER_URL, FM_LDK_NETWORK, FM_LND_MACAROON_ENV,
-    FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
+    FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV, FM_LDK_ESPLORA_SERVER_URL,
+    FM_LDK_NETWORK, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
 use crate::rpc::{CloseChannelsWithPeerPayload, WithdrawOnchainPayload};
 use crate::{OpenChannelPayload, Preimage};
@@ -192,8 +194,6 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError>;
 
     async fn get_balances(&self) -> Result<GetBalancesResponse, LightningRpcError>;
-
-    async fn sync_to_chain(&self, block_height: u32) -> Result<(), LightningRpcError>;
 }
 
 impl dyn ILnRpcClient {
@@ -231,6 +231,36 @@ impl dyn ILnRpcClient {
                 failure_reason: format!("Invalid network {network}: {e}"),
             })?;
         Ok((pub_key, alias, network, block_height, synced_to_chain))
+    }
+
+    /// Waits for the Lightning node to be synced to the Bitcoin blockchain.
+    pub async fn wait_for_chain_sync(&self) -> std::result::Result<(), LightningRpcError> {
+        if is_env_var_set(FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV) {
+            debug!("Skip waiting for gateway to sync to chain");
+            return Ok(());
+        }
+
+        retry(
+            "Wait for chain sync",
+            backoff_util::background_backoff(),
+            || async {
+                let info = self.info().await?;
+                let block_height = info.block_height;
+                if info.synced_to_chain {
+                    Ok(())
+                } else {
+                    warn!(?block_height, "Lightning node is not synced yet");
+                    Err(anyhow::anyhow!("Not synced yet"))
+                }
+            },
+        )
+        .await
+        .map_err(|e| LightningRpcError::FailedToSyncToChain {
+            failure_reason: format!("Failed to sync to chain: {e:?}"),
+        })?;
+
+        info!("Gateway successfully synced with the chain");
+        Ok(())
     }
 }
 

@@ -12,7 +12,7 @@ use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_testing::gateway::LightningNodeType;
 use ln_gateway::envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV;
 use ln_gateway::lightning::ChannelInfo;
-use ln_gateway::rpc::{MnemonicResponse, V1_API_ENDPOINT};
+use ln_gateway::rpc::{GatewayInfo, MnemonicResponse, V1_API_ENDPOINT};
 use tracing::info;
 
 use crate::envs::{FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV};
@@ -242,9 +242,14 @@ impl Gatewayd {
         let federation_id = fed.calculate_federation_id();
         let invite_code = fed.invite_code()?;
         info!("Recovering {federation_id}...");
-        cmd!(self, "connect-fed", invite_code.clone(), "--recover=true")
-            .run()
-            .await?;
+        poll("gateway connect-fed --recover=true", || async {
+            cmd!(self, "connect-fed", invite_code.clone(), "--recover=true")
+                .run()
+                .await
+                .map_err(ControlFlow::Continue)?;
+            Ok(())
+        })
+        .await?;
         Ok(())
     }
 
@@ -398,24 +403,19 @@ impl Gatewayd {
         Ok(channels)
     }
 
-    pub async fn wait_for_chain_sync(&self, bitcoind: &Bitcoind) -> Result<()> {
-        poll("lightning node block processing", || async {
-            let block_height = bitcoind
-                .get_block_count()
-                .await
-                .map_err(ControlFlow::Continue)?
-                - 1;
-            cmd!(
-                self,
-                "lightning",
-                "wait-for-chain-sync",
-                "--block-height",
-                block_height
-            )
-            .run()
-            .await
-            .map_err(ControlFlow::Continue)?;
-            Ok(())
+    pub async fn wait_for_block_height(&self, target_block_height: u64) -> Result<()> {
+        poll("waiting for block height", || async {
+            let info = self.get_info().await.map_err(ControlFlow::Continue)?;
+            let gateway_info: GatewayInfo =
+                serde_json::from_value(info).expect("Failed to decode GatewayInfo");
+            if let Some(height) = gateway_info.block_height {
+                if height >= target_block_height as u32 {
+                    return Ok(());
+                }
+            }
+            Err(ControlFlow::Continue(anyhow::anyhow!(
+                "Not synced to block"
+            )))
         })
         .await?;
         Ok(())
