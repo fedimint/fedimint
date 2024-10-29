@@ -229,6 +229,7 @@ pub struct Gateway {
     /// The socket the gateway listens on.
     listen: SocketAddr,
 
+    /// The "module mode" of the gateway. Options are LNv1, LNv2, or All.
     lightning_module_mode: LightningModuleMode,
 }
 
@@ -1608,6 +1609,8 @@ impl Gateway {
         Ok(ReceiveEcashResponse { amount })
     }
 
+    /// Instructs the gateway to shutdown, but only after all incoming payments
+    /// have been handlded.
     pub async fn handle_shutdown_msg(&self, task_group: TaskGroup) -> AdminResult<()> {
         // Take the write lock on the state so that no additional payments are processed
         let mut state_guard = self.state.write().await;
@@ -2163,11 +2166,13 @@ impl Gateway {
         Ok((registered_incoming_contract.contract, client))
     }
 
+    /// Helper function for determining if the gateway supports LNv2.
     fn is_running_lnv2(&self) -> bool {
         self.lightning_module_mode == LightningModuleMode::LNv2
             || self.lightning_module_mode == LightningModuleMode::All
     }
 
+    /// Helper function for determining if the gateway supports LNv1.
     fn is_running_lnv1(&self) -> bool {
         self.lightning_module_mode == LightningModuleMode::LNv1
             || self.lightning_module_mode == LightningModuleMode::All
