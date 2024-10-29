@@ -260,9 +260,9 @@ pub struct RoutingInfo {
 impl RoutingInfo {
     pub fn send_parameters(&self, invoice: &Bolt11Invoice) -> (PaymentFee, u64) {
         if invoice.recover_payee_pub_key() == self.lightning_public_key {
-            (self.send_fee_minimum.clone(), self.expiration_delta_minimum)
+            (self.send_fee_minimum, self.expiration_delta_minimum)
         } else {
-            (self.send_fee_default.clone(), self.expiration_delta_default)
+            (self.send_fee_default, self.expiration_delta_default)
         }
     }
 }

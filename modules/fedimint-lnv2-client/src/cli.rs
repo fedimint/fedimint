@@ -20,6 +20,8 @@ enum Opts {
         invoice: Bolt11Invoice,
         #[arg(long)]
         gateway: Option<SafeUrl>,
+        #[clap(long, default_value_t = false)]
+        force: bool,
     },
     /// Await the final state of the send operation.
     AwaitSend { operation_id: OperationId },
@@ -63,7 +65,11 @@ pub(crate) async fn handle_cli_command(
     let opts = Opts::parse_from(iter::once(&ffi::OsString::from("lnv2")).chain(args.iter()));
 
     let value = match opts {
-        Opts::Send { gateway, invoice } => {
+        Opts::Send {
+            gateway,
+            invoice,
+            force,
+        } => {
             let (gateway_api, routing_info) = match gateway {
                 Some(gateway_api) => (
                     gateway_api.clone(),
@@ -78,29 +84,33 @@ pub(crate) async fn handle_cli_command(
                     .await
                     .map_err(|e| anyhow::anyhow!("Failed to select gateway: {e:?}"))?,
             };
-            let (send_fee, expiration_delta) = routing_info.send_parameters(&invoice);
-            let invoice_amount = invoice
-                .amount_milli_satoshis()
-                .ok_or(anyhow::anyhow!("Invoice does not have amount"))?;
-            let total = send_fee.add_to(invoice_amount);
-            let absolute_fee = total.msats - invoice_amount;
-            let parameters = serde_json::json! {
-                {
-                    "invoice_amount (msats)": invoice_amount,
-                    "base_fee (msats)": send_fee.base.msats,
-                    "parts_per_million (msats)": send_fee.parts_per_million,
-                    "absolute_fee (msats)": absolute_fee,
-                    "total (msats)": total.msats,
-                    "expiration_delta (blocks)": expiration_delta,
-                }
-            };
 
-            println!("{}", serde_json::to_string_pretty(&parameters)?);
-            println!("Approve payment? y/n");
-            let mut approval = String::new();
-            stdin().read_line(&mut approval)?;
-            if approval.to_lowercase().starts_with("n") {
-                return Err(anyhow::anyhow!("Cancelled"));
+            if !force {
+                let (send_fee, expiration_delta) = routing_info.send_parameters(&invoice);
+                let invoice_amount = invoice
+                    .amount_milli_satoshis()
+                    .ok_or(anyhow::anyhow!("Invoice does not have amount"))?;
+                let total = send_fee.add_to(invoice_amount);
+                let absolute_fee = total.msats - invoice_amount;
+                let parameters = serde_json::json! {
+                    {
+                        "gateway": gateway_api.to_string(),
+                        "invoice_amount (msats)": invoice_amount,
+                        "base_fee (msats)": send_fee.base.msats,
+                        "parts_per_million (msats)": send_fee.parts_per_million,
+                        "absolute_fee (msats)": absolute_fee,
+                        "total (msats)": total.msats,
+                        "expiration_delta (blocks)": expiration_delta,
+                    }
+                };
+
+                println!("{}", serde_json::to_string_pretty(&parameters)?);
+                println!("Approve payment? y/n");
+                let mut approval = String::new();
+                stdin().read_line(&mut approval)?;
+                if approval.to_lowercase().starts_with('n') {
+                    return Err(anyhow::anyhow!("Cancelled"));
+                }
             }
 
             json(

@@ -307,6 +307,7 @@ async fn test_send(
             "lnv2",
             "send",
             invoice.to_string(),
+            "--force",
             "--gateway",
             gateway
         )
