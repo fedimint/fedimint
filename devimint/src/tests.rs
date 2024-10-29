@@ -8,6 +8,7 @@ use std::{env, ffi};
 use anyhow::{anyhow, bail, Context, Result};
 use bitcoin30::Txid;
 use clap::Subcommand;
+use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_tx;
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::envs::is_env_var_set;
@@ -1076,8 +1077,10 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     let tx_hex = bitcoind.poll_get_transaction(txid).await?;
 
-    let tx =
-        bitcoin30::Transaction::consensus_decode_hex(&tx_hex, &ModuleRegistry::default()).unwrap();
+    let tx = bitcoin32_to_bitcoin30_tx(&bitcoin::Transaction::consensus_decode_hex(
+        &tx_hex,
+        &ModuleRegistry::default(),
+    )?);
     assert!(tx
         .output
         .iter()
@@ -2020,7 +2023,10 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
             .expect("txid should be parsable");
         let tx_hex = bitcoind.poll_get_transaction(txid).await?;
 
-        let tx = bitcoin30::Transaction::consensus_decode_hex(&tx_hex, &ModuleRegistry::default())?;
+        let tx = bitcoin32_to_bitcoin30_tx(&bitcoin::Transaction::consensus_decode_hex(
+            &tx_hex,
+            &ModuleRegistry::default(),
+        )?);
         assert_eq!(tx.input.len(), 1);
         assert_eq!(tx.output.len(), 2);
 

@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_script_buf;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use tracing::debug;
@@ -28,13 +29,13 @@ pub struct ConsensusPegInTweakIdxesUsedTracker {
     used_tweak_idxes: BTreeSet<TweakIdx>,
     /// All the pubkey scripts we are looking for in the federation history, to
     /// detect previous successful peg-ins.
-    pending_pubkey_scripts: BTreeMap<bitcoin30::ScriptBuf, TweakIdx>,
+    pending_pubkey_scripts: BTreeMap<bitcoin::ScriptBuf, TweakIdx>,
     /// Next tweak idx to add to `pending_pubkey_scripts`
     next_pending_tweak_idx: TweakIdx,
 
     /// Collection of recent scripts from federation history that do not belong
     /// to us
-    decoys: VecDeque<bitcoin30::ScriptBuf>,
+    decoys: VecDeque<bitcoin::ScriptBuf>,
     // To avoid updating `decoys` for the whole recovery, which might be a lot of extra updates
     // most of which will be thrown away, ignore script pubkeys from before this `session_idx`
     decoy_session_threshold: u64,
@@ -81,8 +82,10 @@ impl ConsensusPegInTweakIdxesUsedTracker {
         let (script, _address, _tweak_key, _operation_id) =
             data.derive_peg_in_script(self.next_pending_tweak_idx);
 
-        self.pending_pubkey_scripts
-            .insert(script, self.next_pending_tweak_idx);
+        self.pending_pubkey_scripts.insert(
+            bitcoin30_to_bitcoin32_script_buf(&script),
+            self.next_pending_tweak_idx,
+        );
         self.next_pending_tweak_idx = self.next_pending_tweak_idx.next();
     }
 
@@ -99,7 +102,7 @@ impl ConsensusPegInTweakIdxesUsedTracker {
     pub(crate) fn handle_script(
         &mut self,
         data: &WalletClientModuleData,
-        script: &bitcoin30::ScriptBuf,
+        script: &bitcoin::ScriptBuf,
         session_idx: u64,
     ) {
         if let Some(tweak_idx) = self.pending_pubkey_scripts.get(script).copied() {
@@ -117,7 +120,7 @@ impl ConsensusPegInTweakIdxesUsedTracker {
     }
 
     /// Write a someone-elses used deposit address to use a decoy
-    fn push_decoy(&mut self, script: &bitcoin30::ScriptBuf) {
+    fn push_decoy(&mut self, script: &bitcoin::ScriptBuf) {
         self.decoys.push_front(script.clone());
         if 50 < self.decoys.len() {
             self.decoys.pop_back();
@@ -125,7 +128,7 @@ impl ConsensusPegInTweakIdxesUsedTracker {
     }
 
     /// Pop a someone-elses used deposit address to use a decoy
-    pub(crate) fn pop_decoy(&mut self) -> Option<bitcoin30::ScriptBuf> {
+    pub(crate) fn pop_decoy(&mut self) -> Option<bitcoin::ScriptBuf> {
         self.decoys.pop_front()
     }
 }

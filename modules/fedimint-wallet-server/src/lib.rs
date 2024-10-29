@@ -16,6 +16,7 @@ use std::convert::Infallible;
 use std::time::Duration;
 
 use anyhow::{bail, ensure, format_err, Context};
+use bitcoin::ScriptBuf;
 use bitcoin30::absolute::LockTime;
 use bitcoin30::address::NetworkUnchecked;
 use bitcoin30::ecdsa::Signature as EcdsaSig;
@@ -24,7 +25,7 @@ use bitcoin30::policy::DEFAULT_MIN_RELAY_TX_FEE;
 use bitcoin30::psbt::{Input, PartiallySignedTransaction};
 use bitcoin30::secp256k1::{All, Secp256k1, Verification};
 use bitcoin30::sighash::{EcdsaSighashType, SighashCache};
-use bitcoin30::{Address, BlockHash, Network, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid};
+use bitcoin30::{Address, BlockHash, Network, Sequence, Transaction, TxIn, TxOut, Txid};
 use common::config::WalletConfigConsensus;
 use common::{
     proprietary_tweak_key, PegOutFees, PegOutSignatureItem, ProcessPegOutSigError, SpendableUTXO,
@@ -34,9 +35,14 @@ use common::{
 };
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_network,
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_amount,
-    bitcoin32_to_bitcoin30_network, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_block_hash,
+    bitcoin30_to_bitcoin32_network, bitcoin30_to_bitcoin32_outpoint,
+    bitcoin30_to_bitcoin32_script_buf, bitcoin30_to_bitcoin32_secp256k1_pubkey,
+    bitcoin30_to_bitcoin32_tx, bitcoin30_to_bitcoin32_txid, bitcoin32_to_bitcoin30_amount,
+    bitcoin32_to_bitcoin30_network, bitcoin32_to_bitcoin30_outpoint,
+    bitcoin32_to_bitcoin30_script_buf, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+    bitcoin32_to_bitcoin30_tx, bitcoin32_to_bitcoin30_txid,
+    bitcoin32_to_bitcoin30_unchecked_address,
 };
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -526,7 +532,7 @@ impl ServerModule for Wallet {
 
         if !self.block_is_known(dbtx, input.proof_block()).await {
             return Err(WalletInputError::UnknownPegInProofBlock(
-                input.proof_block(),
+                bitcoin30_to_bitcoin32_block_hash(&input.proof_block()),
             ));
         }
 
@@ -536,7 +542,7 @@ impl ServerModule for Wallet {
 
         if dbtx
             .insert_entry(
-                &UTXOKey(input.outpoint()),
+                &UTXOKey(bitcoin30_to_bitcoin32_outpoint(&input.outpoint())),
                 &SpendableUTXO {
                     tweak: input.tweak_contract_key().serialize(),
                     amount: bitcoin::Amount::from_sat(input.tx_output().value),
@@ -630,7 +636,10 @@ impl ServerModule for Wallet {
 
         // Delete used UTXOs
         for input in &tx.psbt.unsigned_tx.input {
-            dbtx.remove_entry(&UTXOKey(input.previous_output)).await;
+            dbtx.remove_entry(&UTXOKey(bitcoin30_to_bitcoin32_outpoint(
+                &input.previous_output,
+            )))
+            .await;
         }
 
         dbtx.insert_new_entry(&UnsignedTransactionKey(txid), &tx)
@@ -721,7 +730,7 @@ impl ServerModule for Wallet {
 
                     let tx = module.offline_wallet().create_tx(
                         bitcoin30::Amount::from_sat(sats),
-                        address.assume_checked().script_pubkey(),
+                        bitcoin30_to_bitcoin32_script_buf(&address.assume_checked().script_pubkey()),
                         vec![],
                         module.available_utxos(&mut context.dbtx().into_nc()).await,
                         feerate,
@@ -961,7 +970,7 @@ impl Wallet {
         let tx = unsigned.psbt.clone().extract_tx();
 
         Ok(PendingTransaction {
-            tx,
+            tx: bitcoin30_to_bitcoin32_tx(&tx),
             tweak: change_tweak,
             change: unsigned.change,
             destination: unsigned.destination,
@@ -1094,7 +1103,11 @@ impl Wallet {
                 }
             }
 
-            dbtx.insert_new_entry(&BlockHashKey(block_hash), &()).await;
+            dbtx.insert_new_entry(
+                &BlockHashKey(bitcoin30_to_bitcoin32_block_hash(&block_hash)),
+                &(),
+            )
+            .await;
         }
     }
 
@@ -1114,15 +1127,15 @@ impl Wallet {
             .tweak(&pending_tx.tweak, &self.secp)
             .script_pubkey();
         for (idx, output) in pending_tx.tx.output.iter().enumerate() {
-            if output.script_pubkey == script_pk {
+            if output.script_pubkey == bitcoin30_to_bitcoin32_script_buf(&script_pk) {
                 dbtx.insert_entry(
-                    &UTXOKey(bitcoin30::OutPoint {
-                        txid: pending_tx.tx.txid(),
+                    &UTXOKey(bitcoin::OutPoint {
+                        txid: pending_tx.tx.compute_txid(),
                         vout: idx as u32,
                     }),
                     &SpendableUTXO {
                         tweak: pending_tx.tweak,
-                        amount: bitcoin::Amount::from_sat(output.value),
+                        amount: output.value,
                     },
                 )
                 .await;
@@ -1146,9 +1159,11 @@ impl Wallet {
         // We need to search and remove all `PendingTransactions` invalidated by RBF
         let mut pending_to_remove = vec![pending_tx.clone()];
         while let Some(removed) = pending_to_remove.pop() {
-            all_transactions.remove(&removed.tx.txid());
-            dbtx.remove_entry(&PendingTransactionKey(removed.tx.txid()))
-                .await;
+            all_transactions.remove(&bitcoin32_to_bitcoin30_txid(&removed.tx.compute_txid()));
+            dbtx.remove_entry(&PendingTransactionKey(bitcoin32_to_bitcoin30_txid(
+                &removed.tx.compute_txid(),
+            )))
+            .await;
 
             // Search for tx that this `removed` has as RBF
             if let Some(rbf) = &removed.rbf {
@@ -1160,7 +1175,7 @@ impl Wallet {
             // Search for tx that wanted to RBF the `removed` one
             for tx in all_transactions.values() {
                 if let Some(rbf) = &tx.rbf {
-                    if rbf.txid == removed.tx.txid() {
+                    if rbf.txid == bitcoin32_to_bitcoin30_txid(&removed.tx.compute_txid()) {
                         pending_to_remove.push(tx.clone());
                     }
                 }
@@ -1173,7 +1188,11 @@ impl Wallet {
         dbtx: &mut DatabaseTransaction<'_>,
         block_hash: BlockHash,
     ) -> bool {
-        dbtx.get_value(&BlockHashKey(block_hash)).await.is_some()
+        dbtx.get_value(&BlockHashKey(bitcoin30_to_bitcoin32_block_hash(
+            &block_hash,
+        )))
+        .await
+        .is_some()
     }
 
     async fn create_peg_out_tx(
@@ -1239,7 +1258,7 @@ impl Wallet {
             let mut change_utxos: Vec<TxOutputSummary> = Vec::new();
 
             for tx in transactions {
-                let txid = tx.txid();
+                let txid = bitcoin30_to_bitcoin32_txid(&tx.txid());
 
                 // to identify outputs for the peg_out (idx = 0) and change (idx = 1), we lean
                 // on how the wallet constructs the transaction
@@ -1251,12 +1270,12 @@ impl Wallet {
                 let change_output = tx.output.last().expect("tx must contain change output");
 
                 peg_out_txos.push(TxOutputSummary {
-                    outpoint: bitcoin30::OutPoint { txid, vout: 0 },
+                    outpoint: bitcoin::OutPoint { txid, vout: 0 },
                     amount: bitcoin::Amount::from_sat(peg_out_output.value),
                 });
 
                 change_utxos.push(TxOutputSummary {
-                    outpoint: bitcoin30::OutPoint { txid, vout: 1 },
+                    outpoint: bitcoin::OutPoint { txid, vout: 1 },
                     amount: bitcoin::Amount::from_sat(change_output.value),
                 });
             }
@@ -1293,8 +1312,12 @@ impl Wallet {
         let (unsigned_peg_out_txos, unsigned_change_utxos) =
             partition_peg_out_and_change(unsigned_transactions);
 
-        let (unconfirmed_peg_out_txos, unconfirmed_change_utxos) =
-            partition_peg_out_and_change(unconfirmed_transactions);
+        let (unconfirmed_peg_out_txos, unconfirmed_change_utxos) = partition_peg_out_and_change(
+            unconfirmed_transactions
+                .into_iter()
+                .map(|tx| bitcoin32_to_bitcoin30_tx(&tx))
+                .collect(),
+        );
 
         WalletSummary {
             spendable_utxos,
@@ -1427,15 +1450,15 @@ pub async fn broadcast_pending_tx(mut dbtx: DatabaseTransaction<'_>, rpc: &DynBi
     );
 
     for PendingTransaction { tx, .. } in pending_tx {
-        if !rbf_txids.contains(&tx.txid()) {
+        if !rbf_txids.contains(&bitcoin32_to_bitcoin30_txid(&tx.compute_txid())) {
             debug!(
-                tx = %tx.txid(),
+                tx = %tx.compute_txid(),
                 weight = tx.weight().to_wu(),
                 output = ?tx.output,
                 "Broadcasting peg-out",
             );
             trace!(transaction = ?tx);
-            rpc.submit_transaction(tx).await;
+            rpc.submit_transaction(bitcoin32_to_bitcoin30_tx(&tx)).await;
         }
     }
 }
@@ -1456,16 +1479,21 @@ impl<'a> StatelessWallet<'a> {
         network: Network,
     ) -> Result<(), WalletOutputError> {
         if let WalletOutputV0::PegOut(peg_out) = output {
-            if !peg_out.recipient.is_valid_for_network(network) {
+            if !peg_out
+                .recipient
+                .is_valid_for_network(bitcoin30_to_bitcoin32_network(&network))
+            {
                 return Err(WalletOutputError::WrongNetwork(
                     bitcoin30_to_bitcoin32_network(&network),
-                    bitcoin30_to_bitcoin32_network(&peg_out.recipient.network),
+                    bitcoin30_to_bitcoin32_network(
+                        &bitcoin32_to_bitcoin30_unchecked_address(&peg_out.recipient).network,
+                    ),
                 ));
             }
         }
 
         // Validate the tx amount is over the dust limit
-        if tx.peg_out_amount < bitcoin30_to_bitcoin32_amount(&tx.destination.dust_value()) {
+        if tx.peg_out_amount < tx.destination.minimal_non_dust() {
             return Err(WalletOutputError::PegOutUnderDustLimit);
         }
 
@@ -1561,7 +1589,11 @@ impl<'a> StatelessWallet<'a> {
         let mut selected_utxos: Vec<(UTXOKey, SpendableUTXO)> = vec![];
         let mut fees = fee_rate.calculate_fee(total_weight);
 
-        while total_selected_value < peg_out_amount + change_script.dust_value() + fees {
+        while total_selected_value
+            < peg_out_amount
+                + bitcoin32_to_bitcoin30_amount(&change_script.minimal_non_dust())
+                + fees
+        {
             match included_utxos.pop() {
                 Some((utxo_key, utxo)) => {
                     total_selected_value += bitcoin32_to_bitcoin30_amount(&utxo.amount);
@@ -1579,11 +1611,11 @@ impl<'a> StatelessWallet<'a> {
         let output: Vec<TxOut> = vec![
             TxOut {
                 value: peg_out_amount.to_sat(),
-                script_pubkey: destination.clone(),
+                script_pubkey: bitcoin32_to_bitcoin30_script_buf(&destination.clone()),
             },
             TxOut {
                 value: change.to_sat(),
-                script_pubkey: change_script,
+                script_pubkey: bitcoin32_to_bitcoin30_script_buf(&change_script),
             },
         ];
         let mut change_out = bitcoin30::psbt::Output::default();
@@ -1608,7 +1640,7 @@ impl<'a> StatelessWallet<'a> {
             input: selected_utxos
                 .iter()
                 .map(|(utxo_key, _utxo)| TxIn {
-                    previous_output: utxo_key.0,
+                    previous_output: bitcoin32_to_bitcoin30_outpoint(&utxo_key.0),
                     script_sig: Default::default(),
                     sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
                     witness: bitcoin30::Witness::new(),
@@ -1772,7 +1804,7 @@ impl<'a> StatelessWallet<'a> {
             })
             .expect("can't fail");
 
-        descriptor.script_pubkey()
+        bitcoin30_to_bitcoin32_script_buf(&descriptor.script_pubkey())
     }
 }
 
@@ -1788,7 +1820,7 @@ pub fn nonce_from_idx(nonce_idx: u64) -> [u8; 33] {
 /// A peg-out tx that is ready to be broadcast with a tweak for the change UTXO
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct PendingTransaction {
-    pub tx: Transaction,
+    pub tx: bitcoin::Transaction,
     pub tweak: [u8; 33],
     pub change: bitcoin::Amount,
     pub destination: ScriptBuf,
@@ -1850,8 +1882,12 @@ mod tests {
     use std::str::FromStr;
 
     use bitcoin::Network::{Bitcoin, Testnet};
-    use bitcoin30::{Address, Amount, OutPoint, Txid};
-    use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_network;
+    use bitcoin::OutPoint;
+    use bitcoin30::{Address, Amount, Txid};
+    use fedimint_core::bitcoin_migration::{
+        bitcoin30_to_bitcoin32_script_buf, bitcoin30_to_bitcoin32_unchecked_address,
+        bitcoin32_to_bitcoin30_network,
+    };
     use fedimint_core::{BitcoinHash, Feerate};
     use fedimint_wallet_common::{PegOut, PegOutFees, Rbf, WalletOutputV0};
     use miniscript::descriptor::Wsh;
@@ -1900,7 +1936,7 @@ mod tests {
         // spendable sats = 3000 - 219 - 330 = 2451
         let tx = wallet.create_tx(
             Amount::from_sat(2452),
-            recipient.clone().assume_checked().script_pubkey(),
+            bitcoin30_to_bitcoin32_script_buf(&recipient.clone().assume_checked().script_pubkey()),
             vec![],
             vec![(UTXOKey(OutPoint::null()), spendable.clone())],
             fee,
@@ -1913,7 +1949,9 @@ mod tests {
         let mut tx = wallet
             .create_tx(
                 Amount::from_sat(1000),
-                recipient.clone().assume_checked().script_pubkey(),
+                bitcoin30_to_bitcoin32_script_buf(
+                    &recipient.clone().assume_checked().script_pubkey(),
+                ),
                 vec![],
                 vec![(UTXOKey(OutPoint::null()), spendable)],
                 fee,
@@ -1977,7 +2015,7 @@ mod tests {
 
         // tx is invalid for network
         let output = WalletOutputV0::PegOut(PegOut {
-            recipient,
+            recipient: bitcoin30_to_bitcoin32_unchecked_address(&recipient),
             amount: bitcoin::Amount::from_sat(1000),
             fees: PegOutFees::new(100, weight),
         });

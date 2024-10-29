@@ -5,7 +5,8 @@ use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::bitcoin_migration::{
-    bitcoin32_to_bitcoin30_keypair, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+    bitcoin30_to_bitcoin32_tx, bitcoin32_to_bitcoin30_keypair,
+    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_txid,
 };
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -60,7 +61,7 @@ impl State for DepositStateMachine {
                             bitcoin32_to_bitcoin30_keypair(&created_state.tweak_key),
                         ),
                         |_db, (btc_tx, out_idx), old_state| {
-                            Box::pin(async move { transition_tx_seen(old_state, btc_tx, out_idx) })
+                            Box::pin(async move { transition_tx_seen(old_state, &btc_tx, out_idx) })
                         },
                     ),
                     StateTransition::new(
@@ -148,7 +149,7 @@ async fn await_created_btc_transaction_submitted(
 
 fn transition_tx_seen(
     old_state: DepositStateMachine,
-    btc_transaction: bitcoin30::Transaction,
+    btc_transaction: &bitcoin30::Transaction,
     out_idx: u32,
 ) -> DepositStateMachine {
     let DepositStateMachine {
@@ -161,7 +162,7 @@ fn transition_tx_seen(
             operation_id,
             state: DepositStates::WaitingForConfirmations(WaitingForConfirmationsDepositState {
                 tweak_key: created_state.tweak_key,
-                btc_transaction,
+                btc_transaction: bitcoin30_to_bitcoin32_tx(btc_transaction),
                 out_idx,
             }),
         },
@@ -212,7 +213,9 @@ async fn await_btc_transaction_confirmed(
 
         let confirmation_block_count = match context
             .rpc
-            .get_tx_block_height(&waiting_state.btc_transaction.txid())
+            .get_tx_block_height(&bitcoin32_to_bitcoin30_txid(
+                &waiting_state.btc_transaction.compute_txid(),
+            ))
             .await
         {
             Ok(Some(confirmation_height)) => Some(confirmation_height + 1),
@@ -240,7 +243,9 @@ async fn await_btc_transaction_confirmed(
         // Get txout proof
         let txout_proof = match context
             .rpc
-            .get_txout_proof(waiting_state.btc_transaction.txid())
+            .get_txout_proof(bitcoin32_to_bitcoin30_txid(
+                &waiting_state.btc_transaction.compute_txid(),
+            ))
             .await
         {
             Ok(txout_proof) => txout_proof,
@@ -324,7 +329,7 @@ pub struct WaitingForConfirmationsDepositState {
     tweak_key: Keypair,
     /// The bitcoin transaction is saved as soon as we see it so the transaction
     /// can be re-transmitted if it's evicted from the mempool.
-    pub(crate) btc_transaction: bitcoin30::Transaction,
+    pub(crate) btc_transaction: bitcoin::Transaction,
     /// Index of the deposit output
     pub(crate) out_idx: u32,
 }

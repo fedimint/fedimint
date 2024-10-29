@@ -6,7 +6,9 @@ use fedimint_api_client::api::DynModuleApi;
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client::module::ClientContext;
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_keypair, bitcoin30_to_bitcoin32_outpoint, bitcoin30_to_bitcoin32_tx,
+};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
@@ -197,7 +199,7 @@ async fn check_and_claim_idx_pegins(
                             let peg_in_tweak_index_data = PegInTweakIndexData {
                                 next_check_time,
                                 last_check_time: Some(now),
-                                claimed: [due_val.claimed.clone(), claimed_now].concat(),
+                                claimed: [due_val.claimed.clone(), claimed_now.into_iter().map(|outpoint| bitcoin30_to_bitcoin32_outpoint(&outpoint)).collect()].concat(),
                                 ..due_val
                             };
                             trace!(
@@ -340,7 +342,7 @@ async fn check_idx_pegins(
 
         let claimed_peg_in_key = ClaimedPegInKey {
             peg_in_index: tweak_idx,
-            btc_out_point: outpoint,
+            btc_out_point: bitcoin30_to_bitcoin32_outpoint(&outpoint),
         };
 
         if db
@@ -414,7 +416,7 @@ async fn claim_peg_in(
     ) -> (fedimint_core::TransactionId, Vec<fedimint_core::OutPoint>) {
         let pegin_proof = PegInProof::new(
             txout_proof,
-            btc_transaction.clone(),
+            bitcoin30_to_bitcoin32_tx(btc_transaction),
             out_idx,
             tweak_key.public_key(),
         )
@@ -463,7 +465,7 @@ async fn claim_peg_in(
                     dbtx.insert_entry(
                         &ClaimedPegInKey {
                             peg_in_index: tweak_idx,
-                            btc_out_point: out_point,
+                            btc_out_point: bitcoin30_to_bitcoin32_outpoint(&out_point),
                         },
                         &ClaimedPegInData { claim_txid, change },
                     )

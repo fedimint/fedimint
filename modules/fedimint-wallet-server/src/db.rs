@@ -1,4 +1,5 @@
-use bitcoin30::{BlockHash, Txid};
+use bitcoin::BlockHash;
+use bitcoin30::Txid;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
 use secp256k1::ecdsa::Signature;
@@ -41,7 +42,7 @@ impl_db_record!(
 impl_db_lookup!(key = BlockHashKey, query_prefix = BlockHashKeyPrefix);
 
 #[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize)]
-pub struct UTXOKey(pub bitcoin30::OutPoint);
+pub struct UTXOKey(pub bitcoin::OutPoint);
 
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct UTXOPrefixKey;

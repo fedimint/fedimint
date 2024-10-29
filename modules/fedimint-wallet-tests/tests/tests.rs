@@ -8,8 +8,9 @@ use bitcoin30::secp256k1;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::ClientHandleArc;
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_network, bitcoin32_to_bitcoin30_network,
-    checked_address_to_unchecked_address,
+    bitcoin30_checked_address_to_unchecked_address, bitcoin30_to_bitcoin32_network,
+    bitcoin30_to_bitcoin32_outpoint, bitcoin30_to_bitcoin32_tx, bitcoin30_to_bitcoin32_txid,
+    bitcoin32_to_bitcoin30_network,
 };
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
@@ -266,7 +267,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
 
     info!("Peg-in finished for test on_chain_peg_in_and_peg_out_happy_case");
     // Peg-out test, requires block to recognize change UTXOs
-    let address = checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
+    let address = bitcoin30_checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
     let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
     let fees = wallet_module
         .get_withdraw_fees(address.clone(), peg_out)
@@ -400,7 +401,7 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
 
     info!("Peg-in finished for test peg_out_fail_refund");
     // Peg-out test, requires block to recognize change UTXOs
-    let address = checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
+    let address = bitcoin30_checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
     let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
 
     // Set invalid fees
@@ -447,7 +448,7 @@ async fn rbf_withdrawals_are_rejected() -> anyhow::Result<()> {
     let (mut balance_sub, _) = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
 
     info!("Peg-in finished for test rbf_withdrawals_are_rejected");
-    let address = checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
+    let address = bitcoin30_checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
     let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
     let wallet_module = client.get_first_module::<WalletClientModule>()?;
     let fees = wallet_module
@@ -547,7 +548,7 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     let (mut balance_sub, _) = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
 
     info!("Peg-in finished for test peg_outs_must_wait_for_available_utxos");
-    let address = checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
+    let address = bitcoin30_checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
     let peg_out1 = PEG_OUT_AMOUNT_SATS;
     let wallet_module = client.get_first_module::<WalletClientModule>()?;
     let fees1 = wallet_module
@@ -574,7 +575,7 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     // Note: important to use a different address, otherwise txid
     // of the peg-out transaction might be the same.
     // See: https://github.com/fedimint/fedimint/issues/3604
-    let address = checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
+    let address = bitcoin30_checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
     let peg_out2 = PEG_OUT_AMOUNT_SATS;
     let fees2 = wallet_module
         .get_withdraw_fees(address.clone(), bsats(peg_out2))
@@ -683,7 +684,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
         .context("expected to find peg-in output")?;
     let input = fedimint_wallet_common::WalletInput::new_v0(PegInProof::new(
         proof,
-        transaction,
+        bitcoin30_to_bitcoin32_tx(&transaction),
         output_index.try_into()?,
         pk,
     )?);
@@ -769,8 +770,8 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
                 // utxo is always index 0
                 if output.value == expected_peg_in_amount {
                     Some(TxOutputSummary {
-                        outpoint: bitcoin30::OutPoint {
-                            txid: tx.txid(),
+                        outpoint: bitcoin::OutPoint {
+                            txid: bitcoin30_to_bitcoin32_txid(&tx.txid()),
                             vout: idx as u32,
                         },
                         amount: bitcoin::Amount::from_sat(output.value),
@@ -804,7 +805,7 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
     // generate a peg-out, verifying the summary:
     //   - while the tx is pending in the mempool
     //   - after the tx is mined and finalized
-    let address = checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
+    let address = bitcoin30_checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
     let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
     let fees = wallet_module
         .get_withdraw_fees(address.clone(), peg_out)
@@ -849,7 +850,7 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
         // TxOutputSummary
         let consumed_utxo = expected_available_utxos
             .iter()
-            .find(|utxo| utxo.outpoint == input.previous_output)
+            .find(|utxo| utxo.outpoint == bitcoin30_to_bitcoin32_outpoint(&input.previous_output))
             .expect("wallet should have consumed spendable UTXO")
             .to_owned();
 
@@ -857,7 +858,10 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
     }
 
     let expected_pending_peg_out_txo = TxOutputSummary {
-        outpoint: bitcoin30::OutPoint { txid, vout: 0 },
+        outpoint: bitcoin::OutPoint {
+            txid: bitcoin30_to_bitcoin32_txid(&txid),
+            vout: 0,
+        },
         amount: bitcoin::Amount::from_sat(
             mempool_tx
                 .output
@@ -868,7 +872,10 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
     };
 
     let expected_pending_change_utxo = TxOutputSummary {
-        outpoint: bitcoin30::OutPoint { txid, vout: 1 },
+        outpoint: bitcoin::OutPoint {
+            txid: bitcoin30_to_bitcoin32_txid(&txid),
+            vout: 1,
+        },
         amount: bitcoin::Amount::from_sat(
             mempool_tx
                 .output
@@ -1004,19 +1011,21 @@ fn build_wallet_server_configs(
 #[cfg(test)]
 mod fedimint_migration_tests {
     use anyhow::ensure;
-    use bitcoin::Amount;
+    use bitcoin::hashes::Hash;
+    use bitcoin::{Amount, BlockHash};
     use bitcoin30::absolute::LockTime;
-    use bitcoin30::hashes::Hash;
     use bitcoin30::psbt::{Input, PartiallySignedTransaction};
-    use bitcoin30::{
-        secp256k1, BlockHash, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, WPubkeyHash,
-    };
+    use bitcoin30::{secp256k1, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, WPubkeyHash};
     use fedimint_client::module::init::DynClientModuleInit;
+    use fedimint_core::bitcoin_migration::{
+        bitcoin30_to_bitcoin32_script_buf, bitcoin30_to_bitcoin32_tx, bitcoin30_to_bitcoin32_txid,
+        bitcoin32_to_bitcoin30_outpoint,
+    };
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
     use fedimint_core::module::DynServerModuleInit;
-    use fedimint_core::{Feerate, OutPoint, PeerId, TransactionId};
+    use fedimint_core::{BitcoinHash, Feerate, OutPoint, PeerId, TransactionId};
     use fedimint_logging::TracingSetup;
     use fedimint_testing::db::{
         snapshot_db_migrations, snapshot_db_migrations_client, validate_migrations_client,
@@ -1059,8 +1068,8 @@ mod fedimint_migration_tests {
         dbtx.insert_new_entry(&BlockHashKey(BlockHash::from_byte_array(BYTE_32)), &())
             .await;
 
-        let utxo = UTXOKey(bitcoin30::OutPoint {
-            txid: Txid::from_byte_array(BYTE_32),
+        let utxo = UTXOKey(bitcoin::OutPoint {
+            txid: bitcoin30_to_bitcoin32_txid(&Txid::from_byte_array(BYTE_32)),
             vout: 0,
         });
         let spendable_utxo = SpendableUTXO {
@@ -1095,7 +1104,7 @@ mod fedimint_migration_tests {
             version: 2,
             lock_time: LockTime::ZERO,
             input: vec![TxIn {
-                previous_output: utxo.0,
+                previous_output: bitcoin32_to_bitcoin30_outpoint(&utxo.0),
                 script_sig: Default::default(),
                 sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
                 witness: bitcoin30::Witness::new(),
@@ -1148,7 +1157,7 @@ mod fedimint_migration_tests {
                 fee_rate: Feerate { sats_per_kvb: 1000 },
                 total_weight: 40000,
             },
-            destination: destination.clone(),
+            destination: bitcoin30_to_bitcoin32_script_buf(&destination),
             selected_utxos: selected_utxos.clone(),
             peg_out_amount: Amount::from_sat(10000),
             rbf: None,
@@ -1160,10 +1169,10 @@ mod fedimint_migration_tests {
         let pending_transaction_key = PendingTransactionKey(Txid::from_byte_array(BYTE_32));
 
         let pending_tx = PendingTransaction {
-            tx: transaction,
+            tx: bitcoin30_to_bitcoin32_tx(&transaction),
             tweak: BYTE_33,
             change: Amount::from_sat(0),
-            destination,
+            destination: bitcoin30_to_bitcoin32_script_buf(&destination),
             fees: PegOutFees {
                 fee_rate: Feerate { sats_per_kvb: 1000 },
                 total_weight: 40000,

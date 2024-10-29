@@ -7,10 +7,10 @@
 
 use std::hash::Hasher;
 
-use bitcoin::Network;
-use bitcoin30::address::NetworkUnchecked;
+use bitcoin::address::NetworkUnchecked;
+use bitcoin::{Address, BlockHash, Network};
 use bitcoin30::psbt::raw::ProprietaryKey;
-use bitcoin30::{Address, Amount, BlockHash, Txid};
+use bitcoin30::{Amount, Txid};
 use config::WalletClientConfig;
 use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_amount, bitcoin32_to_bitcoin30_amount,
@@ -110,7 +110,7 @@ pub struct SpendableUTXO {
 /// A transaction output, either unspent or consumed
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct TxOutputSummary {
-    pub outpoint: bitcoin30::OutPoint,
+    pub outpoint: bitcoin::OutPoint,
     #[serde(with = "bitcoin::amount::serde::as_sat")]
     pub amount: bitcoin::Amount,
 }
@@ -242,7 +242,7 @@ impl PegOutFees {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct PegOut {
-    pub recipient: bitcoin30::Address<NetworkUnchecked>,
+    pub recipient: Address<NetworkUnchecked>,
     #[serde(with = "bitcoin::amount::serde::as_sat")]
     pub amount: bitcoin::Amount,
     pub fees: PegOutFees,

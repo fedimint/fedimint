@@ -105,7 +105,7 @@ pub struct PegInTweakIndexData {
     pub creation_time: SystemTime,
     pub last_check_time: Option<SystemTime>,
     pub next_check_time: Option<SystemTime>,
-    pub claimed: Vec<bitcoin30::OutPoint>,
+    pub claimed: Vec<bitcoin::OutPoint>,
 }
 
 impl_db_record!(
@@ -122,7 +122,7 @@ impl_db_lookup!(
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct ClaimedPegInKey {
     pub peg_in_index: TweakIdx,
-    pub btc_out_point: bitcoin30::OutPoint,
+    pub btc_out_point: bitcoin::OutPoint,
 }
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
