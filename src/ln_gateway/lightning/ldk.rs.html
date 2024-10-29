@@ -623,7 +623,11 @@
 <a href="#622" id="622">622</a>
 <a href="#623" id="623">623</a>
 <a href="#624" id="624">624</a>
-<a href="#625" id="625">625</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
+<a href="#627" id="627">627</a>
+<a href="#628" id="628">628</a>
+<a href="#629" id="629">629</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -637,8 +641,8 @@
     bitcoin30_to_bitcoin32_payment_preimage, bitcoin30_to_bitcoin32_secp256k1_pubkey,
     bitcoin32_to_bitcoin30_outpoint, bitcoin32_to_bitcoin30_secp256k1_pubkey,
 };
-<span class="kw">use </span>fedimint_core::runtime::spawn;
-<span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::envs::{is_env_var_set, FM_IN_DEVIMINT_ENV};
+<span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll};
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
 <span class="kw">use </span>ldk_node::config::EsploraSyncConfig;
@@ -669,12 +673,7 @@
     <span class="doccomment">/// The client for querying data about the blockchain.
     </span>esplora_client: esplora_client::AsyncClient,
 
-    <span class="doccomment">/// A handle to the task that processes incoming events from the lightning
-    /// node. Responsible for sending incoming HTLCs to the caller of
-    /// `route_htlcs`.
-    /// TODO: This should be a shutdown sender instead, and we can discard the
-    /// handle.
-    </span>event_handler_task_handle: tokio::task::JoinHandle&lt;()&gt;,
+    task_group: TaskGroup,
 
     <span class="doccomment">/// The HTLC stream, until it is taken by calling
     /// `ILnRpcClient::route_htlcs`.
@@ -747,18 +746,35 @@
         })<span class="question-mark">?</span>;
 
         <span class="kw">let </span>(htlc_stream_sender, htlc_stream_receiver) = tokio::sync::mpsc::channel(<span class="number">1024</span>);
+        <span class="kw">let </span>task_group = TaskGroup::new();
+
+        <span class="comment">// LDK Node will sync the wallet's chain automatically in the background, but in
+        // devimint we want this to sync faster, so we spawn a thread that
+        // manually syncs the chain.
+        </span><span class="kw">if </span>is_env_var_set(FM_IN_DEVIMINT_ENV) {
+            <span class="kw">let </span>node_clone = node.clone();
+            task_group.spawn_cancellable(<span class="string">"ldk node sync event handler"</span>, <span class="kw">async move </span>{
+                <span class="kw">loop </span>{
+                    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = node_clone.sync_wallets() {
+                        <span class="macro">error!</span>(<span class="question-mark">?</span>e, <span class="string">"Failed to sync LDK Node to chain"</span>);
+                    }
+
+                    sleep(Duration::from_millis(<span class="number">500</span>)).<span class="kw">await</span>;
+                }
+            });
+        }
 
         <span class="kw">let </span>node_clone = node.clone();
-        <span class="kw">let </span>event_handler_task_handle = spawn(<span class="string">"ldk lightning node event handler"</span>, <span class="kw">async move </span>{
+        task_group.spawn(<span class="string">"ldk lightning node event handler"</span>, |handle| <span class="kw">async move </span>{
             <span class="kw">loop </span>{
-                <span class="self">Self</span>::handle_next_event(<span class="kw-2">&amp;</span>node_clone, <span class="kw-2">&amp;</span>htlc_stream_sender).<span class="kw">await</span>;
+                <span class="self">Self</span>::handle_next_event(<span class="kw-2">&amp;</span>node_clone, <span class="kw-2">&amp;</span>htlc_stream_sender, <span class="kw-2">&amp;</span>handle).<span class="kw">await</span>;
             }
         });
 
         <span class="prelude-val">Ok</span>(GatewayLdkClient {
             node,
             esplora_client: esplora_client::Builder::new(esplora_server_url).build_async()<span class="question-mark">?</span>,
-            event_handler_task_handle,
+            task_group,
             htlc_stream_receiver_or: <span class="prelude-val">Some</span>(htlc_stream_receiver),
         })
     }
@@ -766,14 +782,27 @@
     <span class="kw">async fn </span>handle_next_event(
         node: <span class="kw-2">&amp;</span>ldk_node::Node,
         htlc_stream_sender: <span class="kw-2">&amp;</span>Sender&lt;InterceptPaymentRequest&gt;,
+        handle: <span class="kw-2">&amp;</span>TaskHandle,
     ) {
+        <span class="comment">// We manually check for task termination in case we receive a payment while the
+        // task is shutting down. In that case, we want to finish the payment
+        // before shutting this task down.
+        </span><span class="kw">let </span>event = <span class="macro">tokio::select!</span> {
+            event = node.next_event_async() =&gt; {
+                event
+            }
+            () = handle.make_shutdown_rx() =&gt; {
+                <span class="kw">return</span>;
+            }
+        };
+
         <span class="kw">if let </span>ldk_node::Event::PaymentClaimable {
             payment_id: <span class="kw">_</span>,
             payment_hash,
             claimable_amount_msat,
             claim_deadline,
-        } = node.next_event_async().<span class="kw">await
-        </span>{
+        } = event
+        {
             <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = htlc_stream_sender
                 .send(InterceptPaymentRequest {
                     payment_hash: Hash::from_slice(<span class="kw-2">&amp;</span>payment_hash.<span class="number">0</span>).expect(<span class="string">"Failed to create Hash"</span>),
@@ -833,7 +862,7 @@
 
 <span class="kw">impl </span>Drop <span class="kw">for </span>GatewayLdkClient {
     <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="self">self</span>.event_handler_task_handle.abort();
+        <span class="self">self</span>.task_group.shutdown();
 
         <span class="macro">info!</span>(<span class="string">"Stopping LDK Node..."</span>);
         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.node.stop() {
@@ -849,7 +878,7 @@
     <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse, LightningRpcError&gt; {
         <span class="kw">let </span>node_status = <span class="self">self</span>.node.status();
 
-        <span class="kw">let </span><span class="prelude-val">Some</span>(chain_tip_block_summary) = <span class="self">self
+        <span class="kw">let </span><span class="prelude-val">Some</span>(esplora_chain_tip_block_summary) = <span class="self">self
             </span>.esplora_client
             .get_blocks(<span class="prelude-val">None</span>)
             .<span class="kw">await
@@ -866,17 +895,14 @@
             });
         };
 
-        <span class="kw">let </span>esplora_chain_tip_timestamp = chain_tip_block_summary.time.timestamp;
-        <span class="kw">let </span>block_height: u32 = chain_tip_block_summary.time.height;
+        <span class="kw">let </span>esplora_chain_tip_block_height = esplora_chain_tip_block_summary.time.height;
+        <span class="kw">let </span>ldk_block_height: u32 = node_status.current_best_block.height;
+        <span class="kw">let </span>synced_to_chain = esplora_chain_tip_block_height == ldk_block_height;
 
-        <span class="kw">let </span>synced_to_chain = node_status
-            .latest_lightning_wallet_sync_timestamp
-            .unwrap_or_default()
-            &gt; esplora_chain_tip_timestamp
-            &amp;&amp; node_status
-                .latest_onchain_wallet_sync_timestamp
-                .unwrap_or_default()
-                &gt; esplora_chain_tip_timestamp;
+        <span class="macro">assert!</span>(
+            esplora_chain_tip_block_height &gt;= ldk_block_height,
+            <span class="string">"LDK Block Height is in the future"
+        </span>);
 
         <span class="prelude-val">Ok</span>(GetNodeInfoResponse {
             pub_key: bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span><span class="self">self</span>.node.node_id()),
@@ -885,7 +911,7 @@
                 <span class="prelude-val">None </span>=&gt; <span class="macro">format!</span>(<span class="string">"LDK Fedimint Gateway Node {}"</span>, <span class="self">self</span>.node.node_id()),
             },
             network: <span class="self">self</span>.node.config().network.to_string(),
-            block_height,
+            block_height: ldk_block_height,
             synced_to_chain,
         })
     }
@@ -1228,24 +1254,6 @@
             lightning_balance_msats: balances.total_lightning_balance_sats * <span class="number">1000</span>,
             inbound_lightning_liquidity_msats: total_inbound_liquidity_balance_msat,
         })
-    }
-
-    <span class="kw">async fn </span>sync_to_chain(<span class="kw-2">&amp;</span><span class="self">self</span>, block_height: u32) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
-        <span class="kw">loop </span>{
-            <span class="self">self</span>.node
-                .sync_wallets()
-                .map_err(|e| LightningRpcError::FailedToSyncToChain {
-                    failure_reason: e.to_string(),
-                })<span class="question-mark">?</span>;
-
-            <span class="kw">if </span><span class="self">self</span>.node.status().current_best_block.height &lt; block_height {
-                fedimint_core::runtime::sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
-            } <span class="kw">else </span>{
-                <span class="kw">break</span>;
-            }
-        }
-
-        <span class="prelude-val">Ok</span>(())
     }
 }
 </code></pre></div></section></main></body></html>

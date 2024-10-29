@@ -306,15 +306,7 @@
 <a href="#305" id="305">305</a>
 <a href="#306" id="306">306</a>
 <a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin30::address::NetworkUnchecked;
+<a href="#308" id="308">308</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin30::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin30::{Address, Txid};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
@@ -324,7 +316,7 @@
     GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
     LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT,
     RECEIVE_ECASH_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
-    SYNC_TO_CHAIN_ENDPOINT, WITHDRAW_ENDPOINT,
+    WITHDRAW_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_lnv2_common::endpoint_constants::{
     CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
@@ -341,8 +333,8 @@
     CreateInvoiceForOperatorPayload, DepositAddressPayload, FederationInfo, GatewayBalances,
     GatewayFedConfig, GatewayInfo, GetLnOnchainAddressPayload, LeaveFedPayload, MnemonicResponse,
     OpenChannelPayload, PayInvoiceForOperatorPayload, ReceiveEcashPayload, ReceiveEcashResponse,
-    SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, SyncToChainPayload,
-    WithdrawOnchainPayload, WithdrawPayload,
+    SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, WithdrawOnchainPayload,
+    WithdrawPayload,
 };
 <span class="kw">use </span><span class="kw">crate</span>::lightning::{ChannelInfo, CloseChannelsWithPeerResponse};
 
@@ -561,14 +553,6 @@
             .join(GET_BALANCES_ENDPOINT)
             .expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_get(url).<span class="kw">await
-    </span>}
-
-    <span class="kw">pub async fn </span>sync_to_chain(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: SyncToChainPayload) -&gt; GatewayRpcResult&lt;()&gt; {
-        <span class="kw">let </span>url = <span class="self">self
-            </span>.base_url
-            .join(SYNC_TO_CHAIN_ENDPOINT)
-            .expect(<span class="string">"invalid base url"</span>);
-        <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>get_mnemonic(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; GatewayRpcResult&lt;MnemonicResponse&gt; {

@@ -234,7 +234,8 @@
 <a href="#233" id="233">233</a>
 <a href="#234" id="234">234</a>
 <a href="#235" id="235">235</a>
-<a href="#236" id="236">236</a></pre></div><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a></pre></div><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
 
 </span><span class="kw">use </span>std::path::{Path, PathBuf};
 <span class="kw">use </span>std::str::FromStr <span class="kw">as _</span>;
@@ -406,6 +407,7 @@
 
          <span class="comment">// Enable to us to make an unbounded number of payments
         </span>FM_DEFAULT_GATEWAY_FEES: String = <span class="string">"0,0"</span>; env: <span class="string">"FM_DEFAULT_GATEWAY_FEES"</span>;
+        FM_GATEWAY_SKIP_WAIT_FOR_SYNC: String = <span class="string">"1"</span>; env: <span class="string">"FM_GATEWAY_SKIP_WAIT_FOR_SYNC"</span>;
 
         FM_CLN_EXTENSION_LISTEN_ADDRESS: String = <span class="macro">f!</span>(<span class="string">"0.0.0.0:{FM_PORT_CLN_EXTENSION}"</span>); env: <span class="string">"FM_CLN_EXTENSION_LISTEN_ADDRESS"</span>;
         FM_GATEWAY_LIGHTNING_ADDR: String = <span class="macro">f!</span>(<span class="string">"http://localhost:{FM_PORT_CLN_EXTENSION}"</span>); env: <span class="string">"FM_GATEWAY_LIGHTNING_ADDR"</span>;

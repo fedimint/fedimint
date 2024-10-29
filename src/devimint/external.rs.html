@@ -1266,7 +1266,10 @@
 <a href="#1265" id="1265">1265</a>
 <a href="#1266" id="1266">1266</a>
 <a href="#1267" id="1267">1267</a>
-<a href="#1268" id="1268">1268</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
+<a href="#1268" id="1268">1268</a>
+<a href="#1269" id="1269">1269</a>
+<a href="#1270" id="1270">1270</a>
+<a href="#1271" id="1271">1271</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -2223,11 +2226,12 @@
     bitcoind: <span class="kw-2">&amp;</span>Bitcoind,
     gateways: <span class="kw-2">&amp;</span>[NamedGateway&lt;<span class="lifetime">'_</span>&gt;],
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Syncing gateway lightning nodes to chain tip..."</span>);
+    <span class="kw">let </span>block_height = bitcoind.get_block_count().<span class="kw">await</span><span class="question-mark">? </span>- <span class="number">1</span>;
+    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_height, <span class="string">"Syncing gateway lightning nodes to block height..."</span>);
     futures::future::try_join_all(
         gateways
             .iter()
-            .map(|(gw, _gw_name)| gw.wait_for_chain_sync(bitcoind)),
+            .map(|(gw, _gw_name)| gw.wait_for_block_height(block_height)),
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -2239,11 +2243,12 @@
 
     bitcoind.mine_blocks(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Syncing gateway lightning nodes to chain tip..."</span>);
+    <span class="kw">let </span>block_height = bitcoind.get_block_count().<span class="kw">await</span><span class="question-mark">? </span>- <span class="number">1</span>;
+    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_height, <span class="string">"Syncing gateway lightning nodes to block height..."</span>);
     futures::future::try_join_all(
         gateways
             .iter()
-            .map(|(gw, _gw_name)| gw.wait_for_chain_sync(bitcoind)),
+            .map(|(gw, _gw_name)| gw.wait_for_block_height(block_height)),
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -2321,11 +2326,12 @@
 
     bitcoind.mine_blocks(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Syncing gateway lightning nodes to chain tip..."</span>);
+    <span class="kw">let </span>block_height = bitcoind.get_block_count().<span class="kw">await</span><span class="question-mark">? </span>- <span class="number">1</span>;
+    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_height, <span class="string">"Syncing gateway lightning nodes to block height..."</span>);
     futures::future::try_join_all(
         gateways
             .iter()
-            .map(|(gw, _gw_name)| gw.wait_for_chain_sync(bitcoind)),
+            .map(|(gw, _gw_name)| gw.wait_for_block_height(block_height)),
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
 

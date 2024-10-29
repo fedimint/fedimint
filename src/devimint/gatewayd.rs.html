@@ -435,7 +435,7 @@
 <span class="kw">use </span>fedimint_testing::gateway::LightningNodeType;
 <span class="kw">use </span>ln_gateway::envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV;
 <span class="kw">use </span>ln_gateway::lightning::ChannelInfo;
-<span class="kw">use </span>ln_gateway::rpc::{MnemonicResponse, V1_API_ENDPOINT};
+<span class="kw">use </span>ln_gateway::rpc::{GatewayInfo, MnemonicResponse, V1_API_ENDPOINT};
 <span class="kw">use </span>tracing::info;
 
 <span class="kw">use </span><span class="kw">crate</span>::envs::{FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV};
@@ -665,9 +665,14 @@
         <span class="kw">let </span>federation_id = fed.calculate_federation_id();
         <span class="kw">let </span>invite_code = fed.invite_code()<span class="question-mark">?</span>;
         <span class="macro">info!</span>(<span class="string">"Recovering {federation_id}..."</span>);
-        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"connect-fed"</span>, invite_code.clone(), <span class="string">"--recover=true"</span>)
-            .run()
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        poll(<span class="string">"gateway connect-fed --recover=true"</span>, || <span class="kw">async </span>{
+            <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"connect-fed"</span>, invite_code.clone(), <span class="string">"--recover=true"</span>)
+                .run()
+                .<span class="kw">await
+                </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>(())
+        })
+        .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -821,24 +826,19 @@
         <span class="prelude-val">Ok</span>(channels)
     }
 
-    <span class="kw">pub async fn </span>wait_for_chain_sync(<span class="kw-2">&amp;</span><span class="self">self</span>, bitcoind: <span class="kw-2">&amp;</span>Bitcoind) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        poll(<span class="string">"lightning node block processing"</span>, || <span class="kw">async </span>{
-            <span class="kw">let </span>block_height = bitcoind
-                .get_block_count()
-                .<span class="kw">await
-                </span>.map_err(ControlFlow::Continue)<span class="question-mark">?
-                </span>- <span class="number">1</span>;
-            <span class="macro">cmd!</span>(
-                <span class="self">self</span>,
-                <span class="string">"lightning"</span>,
-                <span class="string">"wait-for-chain-sync"</span>,
-                <span class="string">"--block-height"</span>,
-                block_height
-            )
-            .run()
-            .<span class="kw">await
-            </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
-            <span class="prelude-val">Ok</span>(())
+    <span class="kw">pub async fn </span>wait_for_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, target_block_height: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        poll(<span class="string">"waiting for block height"</span>, || <span class="kw">async </span>{
+            <span class="kw">let </span>info = <span class="self">self</span>.get_info().<span class="kw">await</span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
+            <span class="kw">let </span>gateway_info: GatewayInfo =
+                serde_json::from_value(info).expect(<span class="string">"Failed to decode GatewayInfo"</span>);
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(height) = gateway_info.block_height {
+                <span class="kw">if </span>height &gt;= target_block_height <span class="kw">as </span>u32 {
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+                }
+            }
+            <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow::anyhow!</span>(
+                <span class="string">"Not synced to block"
+            </span>)))
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())

@@ -1475,12 +1475,7 @@
 <a href="#1474" id="1474">1474</a>
 <a href="#1475" id="1475">1475</a>
 <a href="#1476" id="1476">1476</a>
-<a href="#1477" id="1477">1477</a>
-<a href="#1478" id="1478">1478</a>
-<a href="#1479" id="1479">1479</a>
-<a href="#1480" id="1480">1480</a>
-<a href="#1481" id="1481">1481</a>
-<a href="#1482" id="1482">1482</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
+<a href="#1477" id="1477">1477</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -2863,11 +2858,6 @@
             lightning_balance_msats,
             inbound_lightning_liquidity_msats,
         })
-    }
-
-    <span class="kw">async fn </span>sync_to_chain(<span class="kw-2">&amp;</span><span class="self">self</span>, _block_height: u32) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
-        <span class="comment">// We don't need to do anything here, as LND automatically syncs to chain.
-        </span><span class="prelude-val">Ok</span>(())
     }
 }
 

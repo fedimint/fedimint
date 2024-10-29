@@ -288,12 +288,7 @@
 <a href="#287" id="287">287</a>
 <a href="#288" id="288">288</a>
 <a href="#289" id="289">289</a>
-<a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a>
-<a href="#292" id="292">292</a>
-<a href="#293" id="293">293</a>
-<a href="#294" id="294">294</a>
-<a href="#295" id="295">295</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
+<a href="#290" id="290">290</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>async_trait::async_trait;
@@ -581,11 +576,6 @@
             </span>.map_err(|e| LightningRpcError::FailedToGetBalances {
                 failure_reason: e.to_string(),
             })
-    }
-
-    <span class="kw">async fn </span>sync_to_chain(<span class="kw-2">&amp;</span><span class="self">self</span>, _block_height: u32) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
-        <span class="comment">// We don't need to do anything here, as CLN automatically syncs to chain.
-        </span><span class="prelude-val">Ok</span>(())
     }
 }
 </code></pre></div></section></main></body></html>
