@@ -63,7 +63,26 @@ pub(crate) async fn handle_cli_command(
 
     let value = match opts {
         Opts::Send { gateway, invoice } => {
-            json(lightning.send(invoice, gateway, Value::Null).await?)
+            let (gateway_api, routing_info) = match gateway {
+                Some(gateway_api) => (
+                    gateway_api.clone(),
+                    lightning
+                        .routing_info(&gateway_api)
+                        .await
+                        .map_err(|e| anyhow::anyhow!("Could not connect to gateway: {e:?}"))?
+                        .ok_or(anyhow::anyhow!("Federation does not exist"))?,
+                ),
+                None => lightning
+                    .select_gateway(Some(invoice.clone()))
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to select gateway: {e:?}"))?,
+            };
+
+            json(
+                lightning
+                    .send(invoice, gateway_api, routing_info, Value::Null)
+                    .await?,
+            )
         }
         Opts::AwaitSend { operation_id } => json(lightning.await_send(operation_id).await?),
         Opts::Receive { amount, gateway } => json(

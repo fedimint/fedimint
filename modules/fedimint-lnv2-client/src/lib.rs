@@ -228,7 +228,7 @@ pub enum LightningInvoice {
     Bolt11(Bolt11Invoice),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct RoutingInfo {
     /// The public key of the gateways lightning node. Since this key signs the
     /// gateways invoices the senders client uses it to differentiate between a
@@ -267,7 +267,7 @@ impl RoutingInfo {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Hash, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Hash, Serialize, Deserialize)]
 pub struct PaymentFee {
     pub base: Amount,
     pub parts_per_million: u64,
@@ -504,7 +504,7 @@ impl LightningClientModule {
         Err(SelectGatewayError::FailedToFetchRoutingInfo)
     }
 
-    async fn routing_info(
+    pub async fn routing_info(
         &self,
         gateway: &SafeUrl,
     ) -> Result<Option<RoutingInfo>, GatewayConnectionError> {
@@ -518,7 +518,8 @@ impl LightningClientModule {
     pub async fn send(
         &self,
         invoice: Bolt11Invoice,
-        gateway: Option<SafeUrl>,
+        gateway_api: SafeUrl,
+        routing_info: RoutingInfo,
         custom_meta: Value,
     ) -> Result<OperationId, SendPaymentError> {
         let amount = invoice
@@ -543,20 +544,6 @@ impl LightningClientModule {
         let refund_keypair = SecretKey::from_slice(&ephemeral_tweak)
             .expect("32 bytes, within curve order")
             .keypair(secp256k1::SECP256K1);
-
-        let (gateway_api, routing_info) = match gateway {
-            Some(gateway_api) => (
-                gateway_api.clone(),
-                self.routing_info(&gateway_api)
-                    .await
-                    .map_err(SendPaymentError::GatewayConnectionError)?
-                    .ok_or(SendPaymentError::UnknownFederation)?,
-            ),
-            None => self
-                .select_gateway(Some(invoice.clone()))
-                .await
-                .map_err(SendPaymentError::FailedToSelectGateway)?,
-        };
 
         let (send_fee, expiration_delta) = routing_info.send_parameters(&invoice);
 

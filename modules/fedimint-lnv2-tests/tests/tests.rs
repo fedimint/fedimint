@@ -42,6 +42,7 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
     let client = fed.new_client().await;
+    let lnv2 = client.get_first_module::<LightningClientModule>()?;
 
     // Print money for client
     let (op, outpoint) = client
@@ -53,17 +54,28 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
 
     let gateway_api = mock::gateway();
     let invoice = mock::payable_invoice();
+    let routing_info = lnv2
+        .routing_info(&gateway_api)
+        .await?
+        .expect("Could not retrieve routing info");
 
-    let operation_id = client
-        .get_first_module::<LightningClientModule>()?
-        .send(invoice.clone(), Some(gateway_api.clone()), Value::Null)
+    let operation_id = lnv2
+        .send(
+            invoice.clone(),
+            gateway_api.clone(),
+            routing_info,
+            Value::Null,
+        )
         .await?;
 
     assert_eq!(
-        client
-            .get_first_module::<LightningClientModule>()?
-            .send(invoice.clone(), Some(gateway_api.clone()), Value::Null)
-            .await,
+        lnv2.send(
+            invoice.clone(),
+            gateway_api.clone(),
+            routing_info,
+            Value::Null
+        )
+        .await,
         Err(SendPaymentError::PendingPreviousPayment(operation_id)),
     );
 
@@ -78,9 +90,7 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
     assert_eq!(sub.ok().await?, SendState::Success);
 
     assert_eq!(
-        client
-            .get_first_module::<LightningClientModule>()?
-            .send(invoice, Some(gateway_api), Value::Null)
+        lnv2.send(invoice, gateway_api, routing_info, Value::Null)
             .await,
         Err(SendPaymentError::SuccessfulPreviousPayment(operation_id)),
     );
@@ -93,6 +103,7 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
     let client = fed.new_client().await;
+    let lnv2 = client.get_first_module::<LightningClientModule>()?;
 
     // Print money for client
     let (op, outpoint) = client
@@ -101,21 +112,21 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
         .await?;
 
     client.await_primary_module_output(op, outpoint).await?;
+    let routing_info = lnv2
+        .routing_info(&mock::gateway())
+        .await?
+        .expect("Could not get routing info");
 
-    let op = client
-        .get_first_module::<LightningClientModule>()?
+    let op = lnv2
         .send(
             mock::unpayable_invoice(),
-            Some(mock::gateway()),
+            mock::gateway(),
+            routing_info,
             Value::Null,
         )
         .await?;
 
-    let mut sub = client
-        .get_first_module::<LightningClientModule>()?
-        .subscribe_send(op)
-        .await?
-        .into_stream();
+    let mut sub = lnv2.subscribe_send(op).await?.into_stream();
 
     assert_eq!(sub.ok().await?, SendState::Funding);
     assert_eq!(sub.ok().await?, SendState::Funded);
@@ -130,6 +141,7 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
     let client = fed.new_client().await;
+    let lnv2 = client.get_first_module::<LightningClientModule>()?;
 
     // Print money for client
     let (op, outpoint) = client
@@ -139,16 +151,21 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
 
     client.await_primary_module_output(op, outpoint).await?;
 
-    let op = client
-        .get_first_module::<LightningClientModule>()?
-        .send(mock::crash_invoice(), Some(mock::gateway()), Value::Null)
+    let routing_info = lnv2
+        .routing_info(&mock::gateway())
+        .await?
+        .expect("Could not get routing info");
+
+    let op = lnv2
+        .send(
+            mock::crash_invoice(),
+            mock::gateway(),
+            routing_info,
+            Value::Null,
+        )
         .await?;
 
-    let mut sub = client
-        .get_first_module::<LightningClientModule>()?
-        .subscribe_send(op)
-        .await?
-        .into_stream();
+    let mut sub = lnv2.subscribe_send(op).await?.into_stream();
 
     assert_eq!(sub.ok().await?, SendState::Funding);
     assert_eq!(sub.ok().await?, SendState::Funded);
@@ -169,6 +186,7 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
     let client = fed.new_client().await;
+    let lnv2 = client.get_first_module::<LightningClientModule>()?;
 
     // Print money for client
     let (op, outpoint) = client
@@ -178,9 +196,18 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
 
     client.await_primary_module_output(op, outpoint).await?;
 
-    let op = client
-        .get_first_module::<LightningClientModule>()?
-        .send(mock::crash_invoice(), Some(mock::gateway()), Value::Null)
+    let routing_info = lnv2
+        .routing_info(&mock::gateway())
+        .await?
+        .expect("Could not get routing info");
+
+    let op = lnv2
+        .send(
+            mock::crash_invoice(),
+            mock::gateway(),
+            routing_info,
+            Value::Null,
+        )
         .await?;
 
     let mut sub = client
@@ -267,17 +294,22 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
     let client = fed.new_client().await;
+    let lnv2 = client.get_first_module::<LightningClientModule>()?;
+
+    let routing_info = lnv2
+        .routing_info(&mock::gateway())
+        .await?
+        .expect("Could not get routing info");
 
     assert_eq!(
-        client
-            .get_first_module::<LightningClientModule>()?
-            .send(
-                mock::signet_bolt_11_invoice(),
-                Some(mock::gateway()),
-                Value::Null
-            )
-            .await
-            .expect_err("send did not fail due to incorrect Currency"),
+        lnv2.send(
+            mock::signet_bolt_11_invoice(),
+            mock::gateway(),
+            routing_info,
+            Value::Null
+        )
+        .await
+        .expect_err("send did not fail due to incorrect Currency"),
         SendPaymentError::WrongCurrency {
             invoice_currency: lightning_invoice::Currency::Signet,
             federation_currency: lightning_invoice::Currency::Regtest
