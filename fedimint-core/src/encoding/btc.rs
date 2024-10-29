@@ -62,12 +62,14 @@ macro_rules! impl_encode_decode_bridge {
         }
 
         impl crate::encoding::Decodable for $btc_type {
-            fn consensus_decode<D: std::io::Read>(
+            fn consensus_decode_from_finite_reader<D: std::io::Read>(
                 d: &mut D,
                 _modules: &$crate::module::registry::ModuleDecoderRegistry,
             ) -> Result<Self, crate::encoding::DecodeError> {
-                bitcoin::consensus::Decodable::consensus_decode(&mut SimpleBitcoinRead(d))
-                    .map_err(crate::encoding::DecodeError::from_err)
+                bitcoin::consensus::Decodable::consensus_decode_from_finite_reader(
+                    &mut SimpleBitcoinRead(d),
+                )
+                .map_err(crate::encoding::DecodeError::from_err)
             }
         }
     };
