@@ -110,7 +110,7 @@ pub struct SpendableUTXO {
 /// A transaction output, either unspent or consumed
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct TxOutputSummary {
-    pub outpoint: bitcoin30::OutPoint,
+    pub outpoint: bitcoin::OutPoint,
     #[serde(with = "bitcoin::amount::serde::as_sat")]
     pub amount: bitcoin::Amount,
 }

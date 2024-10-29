@@ -8,8 +8,8 @@ use bitcoin30::secp256k1;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::ClientHandleArc;
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_network, bitcoin32_to_bitcoin30_network,
-    checked_address_to_unchecked_address,
+    bitcoin30_to_bitcoin32_network, bitcoin30_to_bitcoin32_outpoint, bitcoin30_to_bitcoin32_txid,
+    bitcoin32_to_bitcoin30_network, checked_address_to_unchecked_address,
 };
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
@@ -769,8 +769,8 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
                 // utxo is always index 0
                 if output.value == expected_peg_in_amount {
                     Some(TxOutputSummary {
-                        outpoint: bitcoin30::OutPoint {
-                            txid: tx.txid(),
+                        outpoint: bitcoin::OutPoint {
+                            txid: bitcoin30_to_bitcoin32_txid(&tx.txid()),
                             vout: idx as u32,
                         },
                         amount: bitcoin::Amount::from_sat(output.value),
@@ -849,7 +849,7 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
         // TxOutputSummary
         let consumed_utxo = expected_available_utxos
             .iter()
-            .find(|utxo| utxo.outpoint == input.previous_output)
+            .find(|utxo| utxo.outpoint == bitcoin30_to_bitcoin32_outpoint(&input.previous_output))
             .expect("wallet should have consumed spendable UTXO")
             .to_owned();
 
@@ -857,7 +857,10 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
     }
 
     let expected_pending_peg_out_txo = TxOutputSummary {
-        outpoint: bitcoin30::OutPoint { txid, vout: 0 },
+        outpoint: bitcoin::OutPoint {
+            txid: bitcoin30_to_bitcoin32_txid(&txid),
+            vout: 0,
+        },
         amount: bitcoin::Amount::from_sat(
             mempool_tx
                 .output
@@ -868,7 +871,10 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
     };
 
     let expected_pending_change_utxo = TxOutputSummary {
-        outpoint: bitcoin30::OutPoint { txid, vout: 1 },
+        outpoint: bitcoin::OutPoint {
+            txid: bitcoin30_to_bitcoin32_txid(&txid),
+            vout: 1,
+        },
         amount: bitcoin::Amount::from_sat(
             mempool_tx
                 .output
@@ -1012,6 +1018,9 @@ mod fedimint_migration_tests {
         secp256k1, BlockHash, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, WPubkeyHash,
     };
     use fedimint_client::module::init::DynClientModuleInit;
+    use fedimint_core::bitcoin_migration::{
+        bitcoin30_to_bitcoin32_txid, bitcoin32_to_bitcoin30_outpoint,
+    };
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
@@ -1059,8 +1068,8 @@ mod fedimint_migration_tests {
         dbtx.insert_new_entry(&BlockHashKey(BlockHash::from_byte_array(BYTE_32)), &())
             .await;
 
-        let utxo = UTXOKey(bitcoin30::OutPoint {
-            txid: Txid::from_byte_array(BYTE_32),
+        let utxo = UTXOKey(bitcoin::OutPoint {
+            txid: bitcoin30_to_bitcoin32_txid(&Txid::from_byte_array(BYTE_32)),
             vout: 0,
         });
         let spendable_utxo = SpendableUTXO {
@@ -1095,7 +1104,7 @@ mod fedimint_migration_tests {
             version: 2,
             lock_time: LockTime::ZERO,
             input: vec![TxIn {
-                previous_output: utxo.0,
+                previous_output: bitcoin32_to_bitcoin30_outpoint(&utxo.0),
                 script_sig: Default::default(),
                 sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
                 witness: bitcoin30::Witness::new(),

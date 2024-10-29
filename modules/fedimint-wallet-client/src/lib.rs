@@ -42,7 +42,9 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_network;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_outpoint, bitcoin32_to_bitcoin30_network,
+};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
@@ -797,7 +799,7 @@ impl WalletClientModule {
 
                 let claim_data = stream_cient_ctx.module_db().wait_key_exists(&ClaimedPegInKey {
                     peg_in_index: tweak_idx,
-                    btc_out_point,
+                    btc_out_point: bitcoin30_to_bitcoin32_outpoint(&btc_out_point),
                 }).await;
 
                 yield DepositStateV2::Confirmed {
@@ -855,7 +857,7 @@ impl WalletClientModule {
         dbtx: &mut DatabaseTransaction<'_>,
         tweak_idx: TweakIdx,
     ) -> Vec<(
-        bitcoin30::OutPoint,
+        bitcoin::OutPoint,
         TransactionId,
         Vec<fedimint_core::OutPoint>,
     )> {

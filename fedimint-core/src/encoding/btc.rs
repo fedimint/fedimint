@@ -15,7 +15,8 @@ use crate::bitcoin_migration::{
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
 
-macro_rules! impl_encode_decode_bridge {
+// TODO(#5200): Remove this macro once the bitcoin v0.32 migration is complete.
+macro_rules! impl_encode_decode_bridge_bitcoin30 {
     ($btc_type:ty) => {
         impl crate::encoding::Encodable for $btc_type {
             fn consensus_encode<W: std::io::Write>(
@@ -38,12 +39,40 @@ macro_rules! impl_encode_decode_bridge {
     };
 }
 
-impl_encode_decode_bridge!(bitcoin30::block::Header);
-impl_encode_decode_bridge!(bitcoin30::BlockHash);
-impl_encode_decode_bridge!(bitcoin30::OutPoint);
-impl_encode_decode_bridge!(bitcoin30::ScriptBuf);
-impl_encode_decode_bridge!(bitcoin30::Transaction);
-impl_encode_decode_bridge!(bitcoin30::merkle_tree::PartialMerkleTree);
+macro_rules! impl_encode_decode_bridge {
+    ($btc_type:ty) => {
+        impl crate::encoding::Encodable for $btc_type {
+            fn consensus_encode<W: std::io::Write>(
+                &self,
+                writer: &mut W,
+            ) -> Result<usize, std::io::Error> {
+                Ok(bitcoin::consensus::Encodable::consensus_encode(
+                    self,
+                    &mut std::io::BufWriter::new(writer),
+                )?)
+            }
+        }
+
+        impl crate::encoding::Decodable for $btc_type {
+            fn consensus_decode_from_finite_reader<D: std::io::Read>(
+                d: &mut D,
+                _modules: &$crate::module::registry::ModuleDecoderRegistry,
+            ) -> Result<Self, crate::encoding::DecodeError> {
+                bitcoin::consensus::Decodable::consensus_decode_from_finite_reader(
+                    &mut std::io::BufReader::new(d),
+                )
+                .map_err(crate::encoding::DecodeError::from_err)
+            }
+        }
+    };
+}
+
+impl_encode_decode_bridge_bitcoin30!(bitcoin30::block::Header);
+impl_encode_decode_bridge_bitcoin30!(bitcoin30::BlockHash);
+impl_encode_decode_bridge!(bitcoin::OutPoint);
+impl_encode_decode_bridge_bitcoin30!(bitcoin30::ScriptBuf);
+impl_encode_decode_bridge_bitcoin30!(bitcoin30::Transaction);
+impl_encode_decode_bridge_bitcoin30!(bitcoin30::merkle_tree::PartialMerkleTree);
 
 impl crate::encoding::Encodable for bitcoin30::psbt::PartiallySignedTransaction {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {

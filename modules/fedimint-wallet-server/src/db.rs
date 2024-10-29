@@ -41,7 +41,7 @@ impl_db_record!(
 impl_db_lookup!(key = BlockHashKey, query_prefix = BlockHashKeyPrefix);
 
 #[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize)]
-pub struct UTXOKey(pub bitcoin30::OutPoint);
+pub struct UTXOKey(pub bitcoin::OutPoint);
 
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct UTXOPrefixKey;

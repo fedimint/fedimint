@@ -34,9 +34,10 @@ use common::{
 };
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_network,
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_amount,
-    bitcoin32_to_bitcoin30_network, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_network, bitcoin30_to_bitcoin32_outpoint,
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin30_to_bitcoin32_txid,
+    bitcoin32_to_bitcoin30_amount, bitcoin32_to_bitcoin30_network, bitcoin32_to_bitcoin30_outpoint,
+    bitcoin32_to_bitcoin30_secp256k1_pubkey,
 };
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -536,7 +537,7 @@ impl ServerModule for Wallet {
 
         if dbtx
             .insert_entry(
-                &UTXOKey(input.outpoint()),
+                &UTXOKey(bitcoin30_to_bitcoin32_outpoint(&input.outpoint())),
                 &SpendableUTXO {
                     tweak: input.tweak_contract_key().serialize(),
                     amount: bitcoin::Amount::from_sat(input.tx_output().value),
@@ -630,7 +631,10 @@ impl ServerModule for Wallet {
 
         // Delete used UTXOs
         for input in &tx.psbt.unsigned_tx.input {
-            dbtx.remove_entry(&UTXOKey(input.previous_output)).await;
+            dbtx.remove_entry(&UTXOKey(bitcoin30_to_bitcoin32_outpoint(
+                &input.previous_output,
+            )))
+            .await;
         }
 
         dbtx.insert_new_entry(&UnsignedTransactionKey(txid), &tx)
@@ -1116,8 +1120,8 @@ impl Wallet {
         for (idx, output) in pending_tx.tx.output.iter().enumerate() {
             if output.script_pubkey == script_pk {
                 dbtx.insert_entry(
-                    &UTXOKey(bitcoin30::OutPoint {
-                        txid: pending_tx.tx.txid(),
+                    &UTXOKey(bitcoin::OutPoint {
+                        txid: bitcoin30_to_bitcoin32_txid(&pending_tx.tx.txid()),
                         vout: idx as u32,
                     }),
                     &SpendableUTXO {
@@ -1239,7 +1243,7 @@ impl Wallet {
             let mut change_utxos: Vec<TxOutputSummary> = Vec::new();
 
             for tx in transactions {
-                let txid = tx.txid();
+                let txid = bitcoin30_to_bitcoin32_txid(&tx.txid());
 
                 // to identify outputs for the peg_out (idx = 0) and change (idx = 1), we lean
                 // on how the wallet constructs the transaction
@@ -1251,12 +1255,12 @@ impl Wallet {
                 let change_output = tx.output.last().expect("tx must contain change output");
 
                 peg_out_txos.push(TxOutputSummary {
-                    outpoint: bitcoin30::OutPoint { txid, vout: 0 },
+                    outpoint: bitcoin::OutPoint { txid, vout: 0 },
                     amount: bitcoin::Amount::from_sat(peg_out_output.value),
                 });
 
                 change_utxos.push(TxOutputSummary {
-                    outpoint: bitcoin30::OutPoint { txid, vout: 1 },
+                    outpoint: bitcoin::OutPoint { txid, vout: 1 },
                     amount: bitcoin::Amount::from_sat(change_output.value),
                 });
             }
@@ -1608,7 +1612,7 @@ impl<'a> StatelessWallet<'a> {
             input: selected_utxos
                 .iter()
                 .map(|(utxo_key, _utxo)| TxIn {
-                    previous_output: utxo_key.0,
+                    previous_output: bitcoin32_to_bitcoin30_outpoint(&utxo_key.0),
                     script_sig: Default::default(),
                     sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
                     witness: bitcoin30::Witness::new(),
@@ -1850,7 +1854,8 @@ mod tests {
     use std::str::FromStr;
 
     use bitcoin::Network::{Bitcoin, Testnet};
-    use bitcoin30::{Address, Amount, OutPoint, Txid};
+    use bitcoin::OutPoint;
+    use bitcoin30::{Address, Amount, Txid};
     use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_network;
     use fedimint_core::{BitcoinHash, Feerate};
     use fedimint_wallet_common::{PegOut, PegOutFees, Rbf, WalletOutputV0};

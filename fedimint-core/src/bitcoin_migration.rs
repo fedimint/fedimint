@@ -148,7 +148,7 @@ pub fn bitcoin32_to_bitcoin30_network(network: &bitcoin::Network) -> bitcoin30::
     }
 }
 
-fn bitcoin30_to_bitcoin32_txid(txid: &bitcoin30::Txid) -> bitcoin::Txid {
+pub fn bitcoin30_to_bitcoin32_txid(txid: &bitcoin30::Txid) -> bitcoin::Txid {
     bitcoin::Txid::from_str(&txid.to_string())
         .expect("Failed to convert bitcoin30 txid to bitcoin32 txid")
 }
