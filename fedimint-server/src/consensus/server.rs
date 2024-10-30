@@ -468,6 +468,9 @@ impl ConsensusServer {
         // items from the current session from index zero
         let mut item_index = 0;
 
+        let mut request_signed_session_outcome =
+            Box::pin(async { self.request_signed_session_outcome(session_index).await });
+
         // We build a session outcome out of the ordered batches until either we have
         // processed batches_per_session_outcome of batches or a threshold signed
         // session outcome is obtained from our peers
@@ -491,7 +494,7 @@ impl ConsensusServer {
                         num_batches += 1;
                     }
                 },
-                signed_session_outcome = self.request_signed_session_outcome(session_index) => {
+                signed_session_outcome = &mut request_signed_session_outcome => {
                     let pending_accepted_items = self.pending_accepted_items().await;
 
                     // this panics if we have more accepted items than the signed session outcome
@@ -546,9 +549,12 @@ impl ConsensusServer {
                         }
                     }
                 }
-                signed_session_outcome = self.request_signed_session_outcome(session_index) => {
-                    // We check that the session outcome we have created agrees with the federations consensus
-                    assert!(header == signed_session_outcome.session_outcome.header(session_index));
+                signed_session_outcome = &mut request_signed_session_outcome => {
+                    assert_eq!(
+                        header,
+                        signed_session_outcome.session_outcome.header(session_index),
+                        "Consensus Failure: header disagrees with federation consensus"
+                    );
 
                     return Ok(signed_session_outcome);
                 }
@@ -783,11 +789,6 @@ impl ConsensusServer {
         let federation_api = WsFederationApi::new(self.api_endpoints.clone());
 
         loop {
-            // We only want to initiate the request if we have not ordered a unit in a
-            // while. This indicates that we have fallen behind and our peers
-            // have already switched sessions without us
-            sleep(Duration::from_secs(5)).await;
-
             let result = federation_api
                 .request_with_strategy(
                     FilterMap::new(filter_map.clone(), total_peers),
