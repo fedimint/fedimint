@@ -40,7 +40,9 @@ use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
-use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
+use fedimint_client::transaction::{
+    ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
+};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_outpoint, bitcoin30_to_bitcoin32_unchecked_address,
@@ -571,7 +573,7 @@ impl WalletClientModule {
         address: &bitcoin30::Address<NetworkUnchecked>,
         amount: bitcoin30::Amount,
         fees: PegOutFees,
-    ) -> anyhow::Result<ClientOutput<WalletOutput, WalletClientStates>> {
+    ) -> anyhow::Result<ClientOutputBundle<WalletOutput, WalletClientStates>> {
         check_address(address, bitcoin32_to_bitcoin30_network(&self.cfg().network))?;
 
         let output = WalletOutput::new_v0_peg_out(
@@ -591,18 +593,19 @@ impl WalletClientModule {
             })]
         };
 
-        Ok(ClientOutput::<WalletOutput, WalletClientStates> {
-            output,
-            amount,
-            state_machines: Arc::new(sm_gen),
-        })
+        Ok(ClientOutputBundle::new(
+            vec![ClientOutput::<WalletOutput> { output, amount }],
+            vec![ClientOutputSM::<WalletClientStates> {
+                state_machines: Arc::new(sm_gen),
+            }],
+        ))
     }
 
     pub fn create_rbf_withdraw_output(
         &self,
         operation_id: OperationId,
         rbf: &Rbf,
-    ) -> anyhow::Result<ClientOutput<WalletOutput, WalletClientStates>> {
+    ) -> anyhow::Result<ClientOutputBundle<WalletOutput, WalletClientStates>> {
         let output = WalletOutput::new_v0_rbf(rbf.fees, rbf.txid);
 
         let amount = output.maybe_v0_ref().expect("v0 output").amount().into();
@@ -616,11 +619,12 @@ impl WalletClientModule {
             })]
         };
 
-        Ok(ClientOutput::<WalletOutput, WalletClientStates> {
-            output,
-            amount,
-            state_machines: Arc::new(sm_gen),
-        })
+        Ok(ClientOutputBundle::new(
+            vec![ClientOutput::<WalletOutput> { output, amount }],
+            vec![ClientOutputSM::<WalletClientStates> {
+                state_machines: Arc::new(sm_gen),
+            }],
+        ))
     }
 
     /// Allocates a deposit address that is controlled by the federation.
@@ -1010,7 +1014,7 @@ impl WalletClientModule {
             let withdraw_output =
                 self.create_withdraw_output(operation_id, &address, amount, fee)?;
             let tx_builder = TransactionBuilder::new()
-                .with_output(self.client_ctx.make_client_output(withdraw_output));
+                .with_outputs(self.client_ctx.make_client_outputs(withdraw_output));
 
             let extra_meta =
                 serde_json::to_value(extra_meta).expect("Failed to serialize extra meta");
@@ -1052,7 +1056,7 @@ impl WalletClientModule {
 
         let withdraw_output = self.create_rbf_withdraw_output(operation_id, &rbf)?;
         let tx_builder = TransactionBuilder::new()
-            .with_output(self.client_ctx.make_client_output(withdraw_output));
+            .with_outputs(self.client_ctx.make_client_outputs(withdraw_output));
 
         let extra_meta = serde_json::to_value(extra_meta).expect("Failed to serialize extra meta");
         self.client_ctx

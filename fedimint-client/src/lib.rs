@@ -153,7 +153,9 @@ use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
 use tokio::sync::{broadcast, watch, RwLock};
 use tokio_stream::wrappers::WatchStream;
 use tracing::{debug, error, info, trace, warn};
-use transaction::{ClientInputBundle, ClientInputSM, TxSubmissionStatesSM};
+use transaction::{
+    ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputSM, TxSubmissionStatesSM,
+};
 
 use crate::api_announcements::{get_api_urls, run_api_announcement_sync, ApiAnnouncementPrefix};
 use crate::api_version_discovery::discover_common_api_versions_set;
@@ -169,8 +171,8 @@ use crate::sm::executor::{
 };
 use crate::sm::{ClientSMDatabaseTransaction, DynState, Executor, IState, Notifier, State};
 use crate::transaction::{
-    tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder, TxSubmissionContext,
-    TxSubmissionStates, TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+    tx_submission_sm_decoder, ClientInput, ClientOutputBundle, TransactionBuilder,
+    TxSubmissionContext, TxSubmissionStates, TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
 
 pub mod api;
@@ -257,6 +259,7 @@ impl Event for ModuleRecoveryCompleted {
 }
 
 pub type InstancelessDynClientInput = ClientInput<Box<maybe_add_send_sync!(dyn IInput + 'static)>>;
+
 pub type InstancelessDynClientInputSM =
     ClientInputSM<Box<maybe_add_send_sync!(dyn IState + 'static)>>;
 
@@ -265,7 +268,12 @@ pub type InstancelessDynClientInputBundle = ClientInputBundle<
     Box<maybe_add_send_sync!(dyn IState + 'static)>,
 >;
 
-pub type InstancelessDynClientOutput = ClientOutput<
+pub type InstancelessDynClientOutput =
+    ClientOutput<Box<maybe_add_send_sync!(dyn IOutput + 'static)>>;
+
+pub type InstancelessDynClientOutputSM =
+    ClientOutputSM<Box<maybe_add_send_sync!(dyn IState + 'static)>>;
+pub type InstancelessDynClientOutputBundle = ClientOutputBundle<
     Box<maybe_add_send_sync!(dyn IOutput + 'static)>,
     Box<maybe_add_send_sync!(dyn IState + 'static)>,
 >;
@@ -314,7 +322,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
     async fn fund_output_dyn(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        output: InstancelessDynClientOutput,
+        outputs: InstancelessDynClientOutputBundle,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>;
 
     /// Adds a state machine to the executor.
@@ -365,7 +373,7 @@ impl IGlobalClientContext for () {
     async fn fund_output_dyn(
         &self,
         _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        _output: InstancelessDynClientOutput,
+        _outputs: InstancelessDynClientOutputBundle,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
         unimplemented!("fake implementation, only for tests");
     }
@@ -446,21 +454,14 @@ impl DynGlobalClientContext {
     pub async fn fund_output<O, S>(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        output: ClientOutput<O, S>,
+        outputs: ClientOutputBundle<O, S>,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
     where
         O: IOutput + MaybeSend + MaybeSync + 'static,
         S: IState + MaybeSend + MaybeSync + 'static,
     {
-        self.fund_output_dyn(
-            dbtx,
-            InstancelessDynClientOutput {
-                output: Box::new(output.output),
-                amount: output.amount,
-                state_machines: states_to_instanceless_dyn(output.state_machines),
-            },
-        )
-        .await
+        self.fund_output_dyn(dbtx, outputs.into_instanceless())
+            .await
     }
 
     /// Allows adding state machines from inside a transition to the executor.
@@ -591,19 +592,30 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
     async fn fund_output_dyn(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        output: InstancelessDynClientOutput,
+        InstancelessDynClientOutputBundle { outputs, sms }: InstancelessDynClientOutputBundle,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
-        let instance_output = ClientOutput {
-            output: DynOutput::from_parts(self.module_instance_id, output.output),
-            amount: output.amount,
-            state_machines: states_add_instance(self.module_instance_id, output.state_machines),
-        };
+        let mut tx_builder = TransactionBuilder::new();
+
+        for output in outputs {
+            let instance_output = ClientOutput {
+                output: DynOutput::from_parts(self.module_instance_id, output.output),
+                amount: output.amount,
+            };
+            tx_builder = tx_builder.with_output(instance_output);
+        }
+
+        for sm in sms {
+            let instance_output_sm = ClientOutputSM {
+                state_machines: states_add_instance(self.module_instance_id, sm.state_machines),
+            };
+            tx_builder = tx_builder.with_output_sm(instance_output_sm);
+        }
 
         self.client
             .finalize_and_submit_transaction_inner(
                 &mut dbtx.global_tx().to_ref_nc(),
                 self.operation,
-                TransactionBuilder::new().with_output(instance_output),
+                tx_builder,
             )
             .await
     }
@@ -1181,7 +1193,7 @@ impl Client {
         // is already balanced.
         let change_range = Range {
             start: partial_transaction.outputs().len() as u64,
-            end: (partial_transaction.outputs().len() + change_outputs.len()) as u64,
+            end: (partial_transaction.outputs().len() + change_outputs.outputs.len()) as u64,
         };
 
         partial_transaction = partial_transaction

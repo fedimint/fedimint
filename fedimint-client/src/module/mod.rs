@@ -32,7 +32,7 @@ use crate::module::recovery::{DynModuleBackup, ModuleBackup};
 use crate::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use crate::sm::{self, ActiveStateMeta, Context, DynContext, DynState, State};
 use crate::transaction::{
-    ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, TransactionBuilder,
+    ClientInput, ClientInputBundle, ClientInputSM, ClientOutputBundle, TransactionBuilder,
 };
 use crate::{
     oplog, states_add_instance, AddStateMachinesResult, Client, ClientStrong, ClientWeak,
@@ -211,8 +211,8 @@ where
         typed.into_dyn(self.module_instance_id)
     }
 
-    /// Turn a typed [`ClientOutput`] into a dyn version
-    pub fn make_client_output<O, S>(&self, output: ClientOutput<O, S>) -> ClientOutput
+    /// Turn a typed [`ClientOutputBundle`] into a dyn version
+    pub fn make_client_outputs<O, S>(&self, output: ClientOutputBundle<O, S>) -> ClientOutputBundle
     where
         O: IntoDynInstance<DynType = DynOutput> + 'static,
         S: IntoDynInstance<DynType = DynState> + 'static,
@@ -694,7 +694,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         _output_amount: Amount,
     ) -> anyhow::Result<(
         ClientInputBundle<<Self::Common as ModuleCommon>::Input, Self::States>,
-        Vec<ClientOutput<<Self::Common as ModuleCommon>::Output, Self::States>>,
+        ClientOutputBundle<<Self::Common as ModuleCommon>::Output, Self::States>,
     )> {
         unimplemented!()
     }
@@ -821,7 +821,7 @@ pub trait IClientModule: Debug {
         operation_id: OperationId,
         input_amount: Amount,
         output_amount: Amount,
-    ) -> anyhow::Result<(ClientInputBundle, Vec<ClientOutput>)>;
+    ) -> anyhow::Result<(ClientInputBundle, ClientOutputBundle)>;
 
     async fn await_primary_module_output(
         &self,
@@ -920,7 +920,7 @@ where
         operation_id: OperationId,
         input_amount: Amount,
         output_amount: Amount,
-    ) -> anyhow::Result<(ClientInputBundle, Vec<ClientOutput>)> {
+    ) -> anyhow::Result<(ClientInputBundle, ClientOutputBundle)> {
         let (inputs, outputs) = <T as ClientModule>::create_final_inputs_and_outputs(
             self,
             &mut dbtx.to_ref_with_prefix_module_id(module_instance).0,
@@ -932,10 +932,7 @@ where
 
         let inputs = inputs.into_dyn(module_instance);
 
-        let outputs = outputs
-            .into_iter()
-            .map(|output| output.into_dyn(module_instance))
-            .collect::<Vec<ClientOutput>>();
+        let outputs = outputs.into_dyn(module_instance);
 
         Ok((inputs, outputs))
     }

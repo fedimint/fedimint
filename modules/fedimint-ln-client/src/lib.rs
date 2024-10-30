@@ -39,7 +39,8 @@ use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{
-    ClientInput, ClientInputBundle, ClientOutput, TransactionBuilder,
+    ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, ClientOutputSM,
+    TransactionBuilder,
 };
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
@@ -679,7 +680,8 @@ impl LightningClientModule {
         fed_id: FederationId,
         mut rng: impl RngCore + CryptoRng + 'a,
     ) -> anyhow::Result<(
-        ClientOutput<LightningOutputV0, LightningClientStateMachines>,
+        ClientOutput<LightningOutputV0>,
+        ClientOutputSM<LightningClientStateMachines>,
         ContractId,
     )> {
         let federation_currency: Currency =
@@ -767,6 +769,8 @@ impl LightningClientModule {
             ClientOutput {
                 output: ln_output,
                 amount: contract_amount,
+            },
+            ClientOutputSM {
                 state_machines: sm_gen,
             },
             contract_id,
@@ -781,7 +785,8 @@ impl LightningClientModule {
         operation_id: OperationId,
         invoice: Bolt11Invoice,
     ) -> anyhow::Result<(
-        ClientOutput<LightningOutputV0, LightningClientStateMachines>,
+        ClientOutput<LightningOutputV0>,
+        ClientOutputSM<LightningClientStateMachines>,
         ContractId,
     )> {
         let payment_hash = invoice.payment_hash();
@@ -801,9 +806,12 @@ impl LightningClientModule {
         )
         .await?;
 
-        let client_output = ClientOutput::<LightningOutputV0, LightningClientStateMachines> {
+        let client_output = ClientOutput::<LightningOutputV0> {
             output: incoming_output,
             amount,
+        };
+
+        let client_output_sm = ClientOutputSM::<LightningClientStateMachines> {
             state_machines: Arc::new(move |txid, _| {
                 vec![LightningClientStateMachines::InternalPay(
                     IncomingStateMachine {
@@ -818,7 +826,7 @@ impl LightningClientModule {
             }),
         };
 
-        Ok((client_output, contract_id))
+        Ok((client_output, client_output_sm, contract_id))
     }
 
     /// Returns a bool indicating if it was an external receive
@@ -875,7 +883,7 @@ impl LightningClientModule {
     ) -> anyhow::Result<(
         OperationId,
         Bolt11Invoice,
-        ClientOutput<LightningOutput, LightningClientStateMachines>,
+        ClientOutputBundle<LightningOutput, LightningClientStateMachines>,
         [u8; 32],
     )> {
         let preimage_key: [u8; 33] = receiving_key.public_key().serialize();
@@ -965,11 +973,15 @@ impl LightningClientModule {
         Ok((
             operation_id,
             invoice,
-            ClientOutput {
-                output: ln_output,
-                amount: Amount::ZERO,
-                state_machines: sm_gen,
-            },
+            ClientOutputBundle::new(
+                vec![ClientOutput {
+                    output: ln_output,
+                    amount: Amount::ZERO,
+                }],
+                vec![ClientOutputSM {
+                    state_machines: sm_gen,
+                }],
+            ),
             preimage.into_32(),
         ))
     }
@@ -1143,14 +1155,19 @@ impl LightningClientModule {
             is_internal_payment = invoice_routes_back_to_federation(&invoice, gateways);
         }
 
-        let (pay_type, client_output, contract_id) = if is_internal_payment {
-            let (output, contract_id) = self
+        let (pay_type, client_output, client_output_sm, contract_id) = if is_internal_payment {
+            let (output, output_sm, contract_id) = self
                 .create_incoming_output(operation_id, invoice.clone())
                 .await?;
-            (PayType::Internal(operation_id), output, contract_id)
+            (
+                PayType::Internal(operation_id),
+                output,
+                output_sm,
+                contract_id,
+            )
         } else {
             let gateway = maybe_gateway.context(PayBolt11InvoiceError::NoLnGatewayAvailable)?;
-            let (output, contract_id) = self
+            let (output, output_sm, contract_id) = self
                 .create_outgoing_output(
                     operation_id,
                     invoice.clone(),
@@ -1163,7 +1180,12 @@ impl LightningClientModule {
                     rand::rngs::OsRng,
                 )
                 .await?;
-            (PayType::Lightning(operation_id), output, contract_id)
+            (
+                PayType::Lightning(operation_id),
+                output,
+                output_sm,
+                contract_id,
+            )
         };
 
         // Verify that no other outgoing contract exists or the value is empty
@@ -1191,13 +1213,15 @@ impl LightningClientModule {
             _ => unreachable!("User client will only create contract outputs on spend"),
         };
 
-        let output = self.client_ctx.make_client_output(ClientOutput {
-            output: LightningOutput::V0(client_output.output),
-            amount: client_output.amount,
-            state_machines: client_output.state_machines,
-        });
+        let output = self.client_ctx.make_client_outputs(ClientOutputBundle::new(
+            vec![ClientOutput {
+                output: LightningOutput::V0(client_output.output),
+                amount: client_output.amount,
+            }],
+            vec![client_output_sm],
+        ));
 
-        let tx = TransactionBuilder::new().with_output(output);
+        let tx = TransactionBuilder::new().with_outputs(output);
         let extra_meta =
             serde_json::to_value(extra_meta).context("Failed to serialize extra meta")?;
         let operation_meta_gen = |txid, change| LightningOperationMeta {
@@ -1613,7 +1637,8 @@ impl LightningClientModule {
             bitcoin32_to_bitcoin30_network(&self.cfg.network),
         )?;
 
-        let tx = TransactionBuilder::new().with_output(self.client_ctx.make_client_output(output));
+        let tx =
+            TransactionBuilder::new().with_outputs(self.client_ctx.make_client_outputs(output));
         let extra_meta = serde_json::to_value(extra_meta).expect("extra_meta is serializable");
         let operation_meta_gen = |txid, _| LightningOperationMeta {
             variant: LightningOperationMetaVariant::Receive {

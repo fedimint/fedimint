@@ -27,7 +27,9 @@ use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
-use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
+use fedimint_client::transaction::{
+    ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
+};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_network,
@@ -591,9 +593,11 @@ impl LightningClientModule {
         let gateway_api_clone = gateway_api.clone();
         let invoice_clone = invoice.clone();
 
-        let client_output = ClientOutput::<LightningOutput, LightningClientStateMachines> {
+        let client_output = ClientOutput::<LightningOutput> {
             output: LightningOutput::V0(LightningOutputV0::Outgoing(contract.clone())),
             amount: contract.amount,
+        };
+        let client_output_sm = ClientOutputSM::<LightningClientStateMachines> {
             state_machines: Arc::new(move |funding_txid, _| {
                 vec![LightningClientStateMachines::Send(SendStateMachine {
                     common: SendSMCommon {
@@ -609,8 +613,11 @@ impl LightningClientModule {
             }),
         };
 
-        let client_output = self.client_ctx.make_client_output(client_output);
-        let transaction = TransactionBuilder::new().with_output(client_output);
+        let client_output = self.client_ctx.make_client_outputs(ClientOutputBundle::new(
+            vec![client_output],
+            vec![client_output_sm],
+        ));
+        let transaction = TransactionBuilder::new().with_outputs(client_output);
 
         self.client_ctx
             .finalize_and_submit_transaction(

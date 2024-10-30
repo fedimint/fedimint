@@ -3,7 +3,9 @@ use std::sync::Arc;
 use bitcoin::key::Keypair;
 use bitcoin::secp256k1;
 use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_schnorr_signature;
-use fedimint_core::core::{DynInput, DynOutput, IInput, IntoDynInstance, ModuleInstanceId};
+use fedimint_core::core::{
+    DynInput, DynOutput, IInput, IOutput, IntoDynInstance, ModuleInstanceId,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{Transaction, TransactionSignature};
@@ -16,7 +18,8 @@ use crate::module::StateGenerator;
 use crate::sm::{self, DynState};
 use crate::{
     states_to_instanceless_dyn, InstancelessDynClientInput, InstancelessDynClientInputBundle,
-    InstancelessDynClientInputSM,
+    InstancelessDynClientInputSM, InstancelessDynClientOutput, InstancelessDynClientOutputBundle,
+    InstancelessDynClientOutputSM,
 };
 
 #[derive(Clone)]
@@ -135,6 +138,7 @@ where
         }
     }
 }
+
 impl<I> IntoDynInstance for ClientInput<I>
 where
     I: IntoDynInstance<DynType = DynInput> + 'static,
@@ -188,16 +192,106 @@ where
 }
 
 #[derive(Clone)]
-pub struct ClientOutput<O = DynOutput, S = DynState> {
+pub struct ClientOutputBundle<O = DynOutput, S = DynState> {
+    pub(crate) outputs: Vec<ClientOutput<O>>,
+    pub(crate) sms: Vec<ClientOutputSM<S>>,
+}
+
+#[derive(Clone)]
+pub struct ClientOutput<O = DynOutput> {
     pub output: O,
     pub amount: Amount,
+}
+
+#[derive(Clone)]
+pub struct ClientOutputSM<S = DynState> {
     pub state_machines: StateGenerator<S>,
 }
 
-impl<O, S> IntoDynInstance for ClientOutput<O, S>
+impl<O> ClientOutputBundle<O, NeverClientStateMachine> {
+    /// A version of [`Self::new`] for times where output does not require any
+    /// state machines
+    ///
+    /// This avoids type inference issues of `S`, and saves some typing.
+    pub fn new_no_sm(outputs: Vec<ClientOutput<O>>) -> Self {
+        Self {
+            outputs,
+            sms: vec![],
+        }
+    }
+}
+
+impl<O, S> ClientOutputBundle<O, S>
 where
-    O: IntoDynInstance<DynType = DynOutput> + 'static,
+    O: IOutput + MaybeSend + MaybeSync + 'static,
+    S: sm::IState + MaybeSend + MaybeSync + 'static,
+{
+    pub fn new(outputs: Vec<ClientOutput<O>>, sms: Vec<ClientOutputSM<S>>) -> Self {
+        Self { outputs, sms }
+    }
+
+    pub fn outputs(&self) -> &[ClientOutput<O>] {
+        &self.outputs
+    }
+
+    pub fn sms(&self) -> &[ClientOutputSM<S>] {
+        &self.sms
+    }
+
+    pub fn with(mut self, other: Self) -> Self {
+        self.outputs.extend(other.outputs);
+        self.sms.extend(other.sms);
+        self
+    }
+
+    pub fn into_instanceless(self) -> InstancelessDynClientOutputBundle {
+        InstancelessDynClientOutputBundle {
+            outputs: self
+                .outputs
+                .into_iter()
+                .map(|output| InstancelessDynClientOutput {
+                    output: Box::new(output.output),
+                    amount: output.amount,
+                })
+                .collect(),
+            sms: self
+                .sms
+                .into_iter()
+                .map(|output_sm| InstancelessDynClientOutputSM {
+                    state_machines: states_to_instanceless_dyn(output_sm.state_machines),
+                })
+                .collect(),
+        }
+    }
+}
+
+impl<I, S> IntoDynInstance for ClientOutputBundle<I, S>
+where
+    I: IntoDynInstance<DynType = DynOutput> + 'static,
     S: IntoDynInstance<DynType = DynState> + 'static,
+{
+    type DynType = ClientOutputBundle;
+
+    fn into_dyn(self, module_instance_id: ModuleInstanceId) -> ClientOutputBundle {
+        ClientOutputBundle {
+            outputs: self
+                .outputs
+                .into_iter()
+                .map(|output| output.into_dyn(module_instance_id))
+                .collect::<Vec<ClientOutput>>(),
+
+            sms: self
+                .sms
+                .into_iter()
+                .map(|output_sm| output_sm.into_dyn(module_instance_id))
+                .collect::<Vec<ClientOutputSM>>(),
+        }
+    }
+}
+
+impl<I> IntoDynInstance for ClientOutput<I>
+where
+    I: IntoDynInstance<DynType = DynOutput> + 'static,
 {
     type DynType = ClientOutput;
 
@@ -205,6 +299,18 @@ where
         ClientOutput {
             output: self.output.into_dyn(module_instance_id),
             amount: self.amount,
+        }
+    }
+}
+
+impl<S> IntoDynInstance for ClientOutputSM<S>
+where
+    S: IntoDynInstance<DynType = DynState> + 'static,
+{
+    type DynType = ClientOutputSM;
+
+    fn into_dyn(self, module_instance_id: ModuleInstanceId) -> ClientOutputSM {
+        ClientOutputSM {
             state_machines: state_gen_to_dyn(self.state_machines, module_instance_id),
         }
     }
@@ -215,6 +321,7 @@ pub struct TransactionBuilder {
     inputs: Vec<ClientInput>,
     input_sms: Vec<ClientInputSM>,
     outputs: Vec<ClientOutput>,
+    output_sms: Vec<ClientOutputSM>,
 }
 
 impl TransactionBuilder {
@@ -240,30 +347,25 @@ impl TransactionBuilder {
         self
     }
 
+    pub fn with_output(mut self, output: ClientOutput) -> Self {
+        self.outputs.push(output);
+        self
+    }
+
+    pub fn with_output_sm(mut self, output: ClientOutputSM) -> Self {
+        self.output_sms.push(output);
+        self
+    }
+
     pub fn with_inputs(mut self, inputs: ClientInputBundle) -> Self {
         self.inputs.extend(inputs.inputs);
         self.input_sms.extend(inputs.sms);
         self
     }
 
-    pub fn with_output(mut self, output: ClientOutput) -> Self {
-        self.outputs.push(output);
-        self
-    }
-
-    pub fn with_input_sms(mut self, input_sms: Vec<ClientInputSM>) -> Self {
-        for input_sm in input_sms {
-            self.input_sms.push(input_sm);
-        }
-
-        self
-    }
-
-    pub fn with_outputs(mut self, outputs: Vec<ClientOutput>) -> Self {
-        for output in outputs {
-            self.outputs.push(output);
-        }
-
+    pub fn with_outputs(mut self, outputs: ClientOutputBundle) -> Self {
+        self.outputs.extend(outputs.outputs);
+        self.output_sms.extend(outputs.sms);
         self
     }
 
@@ -286,11 +388,17 @@ impl TransactionBuilder {
             .map(|input_sm| (input_sm.state_machines))
             .collect();
 
-        let (outputs, output_states): (Vec<_>, Vec<_>) = self
+        let outputs: Vec<_> = self
             .outputs
             .into_iter()
-            .map(|output| (output.output, output.state_machines))
-            .unzip();
+            .map(|output| output.output)
+            .collect();
+
+        let output_sms: Vec<_> = self
+            .output_sms
+            .into_iter()
+            .map(|output_sm| (output_sm.state_machines))
+            .collect();
 
         let nonce: [u8; 8] = rng.gen();
 
@@ -315,7 +423,7 @@ impl TransactionBuilder {
         let states = input_sms
             .into_iter()
             .enumerate()
-            .chain(output_states.into_iter().enumerate())
+            .chain(output_sms.into_iter().enumerate())
             .flat_map(|(idx, state_gen)| state_gen(txid, idx as u64))
             .collect::<Vec<_>>();
 
