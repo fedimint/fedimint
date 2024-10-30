@@ -126,6 +126,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_multi_one() {
+        let notifs = Notifications::new();
+        let key1 = 1;
+        let sub1 = notifs.register(key1);
+        let sub2 = notifs.register(key1);
+        let sub3 = notifs.register(key1);
+        let sub4 = notifs.register(key1);
+        notifs.notify(key1);
+        assert!(
+            future_returns_shortly(sub1).await.is_some(),
+            "should notify"
+        );
+        assert!(
+            future_returns_shortly(sub2).await.is_some(),
+            "should notify"
+        );
+        assert!(
+            future_returns_shortly(sub3).await.is_some(),
+            "should notify"
+        );
+        assert!(
+            future_returns_shortly(sub4).await.is_some(),
+            "should notify"
+        );
+    }
+
+    #[tokio::test]
     async fn test_multi() {
         let notifs = Notifications::new();
         let key1 = 1;
