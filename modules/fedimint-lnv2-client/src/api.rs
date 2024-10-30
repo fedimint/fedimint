@@ -44,13 +44,17 @@ pub trait LnFederationApi {
         contract_id: &ContractId,
     ) -> FederationResult<Option<u64>>;
 
-    async fn gateways(&self) -> FederationResult<Vec<SafeUrl>>;
+    async fn get_registered_gateways(&self) -> FederationResult<Vec<SafeUrl>>;
 
     async fn gateways_from_peer(&self, peer: PeerId) -> PeerResult<Vec<SafeUrl>>;
 
-    async fn add_gateway(&self, auth: ApiAuth, gateway: SafeUrl) -> FederationResult<bool>;
+    async fn register_gateway(&self, auth: ApiAuth, gateway: SafeUrl) -> FederationResult<bool>;
 
-    async fn remove_gateway(&self, auth: ApiAuth, gateway: SafeUrl) -> FederationResult<bool>;
+    async fn remove_registered_gateway(
+        &self,
+        auth: ApiAuth,
+        gateway: SafeUrl,
+    ) -> FederationResult<bool>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -111,7 +115,7 @@ where
         .await
     }
 
-    async fn gateways(&self) -> FederationResult<Vec<SafeUrl>> {
+    async fn get_registered_gateways(&self) -> FederationResult<Vec<SafeUrl>> {
         let gateways: BTreeMap<PeerId, Vec<SafeUrl>> = self
             .request_with_strategy(
                 FilterMapThreshold::new(
@@ -157,7 +161,7 @@ where
         Ok(gateways)
     }
 
-    async fn add_gateway(&self, auth: ApiAuth, gateway: SafeUrl) -> FederationResult<bool> {
+    async fn register_gateway(&self, auth: ApiAuth, gateway: SafeUrl) -> FederationResult<bool> {
         let is_new_entry: bool = self
             .request_admin(ADD_GATEWAY_ENDPOINT, ApiRequestErased::new(gateway), auth)
             .await?;
@@ -165,7 +169,11 @@ where
         Ok(is_new_entry)
     }
 
-    async fn remove_gateway(&self, auth: ApiAuth, gateway: SafeUrl) -> FederationResult<bool> {
+    async fn remove_registered_gateway(
+        &self,
+        auth: ApiAuth,
+        gateway: SafeUrl,
+    ) -> FederationResult<bool> {
         let entry_existed: bool = self
             .request_admin(
                 REMOVE_GATEWAY_ENDPOINT,

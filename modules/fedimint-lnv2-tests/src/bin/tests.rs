@@ -1,7 +1,7 @@
 use devimint::devfed::DevJitFed;
 use devimint::federation::Client;
 use devimint::version_constants::VERSION_0_5_0_ALPHA;
-use devimint::{cmd, util};
+use devimint::{cmd, util, Gatewayd};
 use fedimint_core::core::OperationId;
 use fedimint_core::util::SafeUrl;
 use fedimint_lnv2_client::{FinalReceiveState, FinalSendState};
@@ -72,8 +72,23 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     let gateway = SafeUrl::parse(&gw_ldk.addr).expect("LDK gateway address is invalid url");
 
+    // Manually add the gateway to the client
+    add_gateway(&client, gw_ldk).await?;
+
+    assert_eq!(
+        cmd!(client, "module", "lnv2", "gateway", "list")
+            .out_json()
+            .await?
+            .as_array()
+            .expect("JSON Value is not an array")
+            .len(),
+        1
+    );
+
+    delete_gateway(&client, gw_ldk).await?;
+
     for peer in 0..dev_fed.fed().await?.members.len() {
-        assert!(add_gateway(&client, peer, &gateway.to_string()).await?);
+        assert!(register_gateway(&client, peer, &gateway.to_string()).await?);
     }
 
     assert_eq!(
@@ -236,7 +251,44 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn add_gateway(client: &Client, peer: usize, gateway: &String) -> anyhow::Result<bool> {
+async fn add_gateway(client: &Client, gateway: &Gatewayd) -> anyhow::Result<bool> {
+    let pubkey = gateway.lightning_pubkey().await?;
+    let url = gateway.addr.clone();
+    cmd!(
+        client,
+        "module",
+        "lnv2",
+        "gateway",
+        "add",
+        "--gateway-key",
+        pubkey,
+        "--gateway",
+        url
+    )
+    .out_json()
+    .await?
+    .as_bool()
+    .ok_or(anyhow::anyhow!("JSON Value is not a boolean"))
+}
+
+async fn delete_gateway(client: &Client, gateway: &Gatewayd) -> anyhow::Result<bool> {
+    let url = gateway.addr.clone();
+    cmd!(
+        client,
+        "module",
+        "lnv2",
+        "gateway",
+        "delete",
+        "--gateway",
+        url
+    )
+    .out_json()
+    .await?
+    .as_bool()
+    .ok_or(anyhow::anyhow!("JSON Value is not a boolean"))
+}
+
+async fn register_gateway(client: &Client, peer: usize, gateway: &String) -> anyhow::Result<bool> {
     cmd!(
         client,
         "--our-id",
@@ -246,7 +298,7 @@ async fn add_gateway(client: &Client, peer: usize, gateway: &String) -> anyhow::
         "module",
         "lnv2",
         "gateway",
-        "add",
+        "register",
         gateway
     )
     .out_json()

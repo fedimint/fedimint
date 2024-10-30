@@ -11,7 +11,7 @@ mod db;
 mod receive_sm;
 mod send_sm;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -19,7 +19,7 @@ use api::{GatewayConnection, RealGatewayConnection};
 use async_stream::stream;
 use bitcoin30::hashes::{sha256, Hash};
 use bitcoin30::secp256k1;
-use db::GatewayKey;
+use db::{GatewayKey, GatewayPrefix};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
@@ -450,7 +450,7 @@ impl LightningClientModule {
     /// Client integrators are expected to call this function in a spawned task.
     pub async fn update_gateway_map(&self) -> ! {
         loop {
-            if let Ok(gateways) = self.module_api.gateways().await {
+            if let Ok(gateways) = self.module_api.get_registered_gateways().await {
                 let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
                 for gateway in gateways {
@@ -467,13 +467,62 @@ impl LightningClientModule {
         }
     }
 
+    pub async fn add_gateway(&self, gateway_key: PublicKey, gateway: SafeUrl) -> bool {
+        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        let new_entry = dbtx
+            .insert_entry(&GatewayKey(gateway_key), &gateway)
+            .await
+            .is_none();
+        dbtx.commit_tx().await;
+        new_entry
+    }
+
+    pub async fn delete_gateway(&self, gateway: SafeUrl) -> bool {
+        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        let gateways = dbtx
+            .find_by_prefix(&GatewayPrefix)
+            .await
+            .collect::<Vec<_>>()
+            .await;
+        let mut deleted = false;
+        for (key, url) in gateways {
+            if url == gateway {
+                deleted = dbtx.remove_entry(&key).await.is_some();
+            }
+        }
+
+        dbtx.commit_tx().await;
+        deleted
+    }
+
+    pub async fn list_all_gateways(&self) -> Result<Vec<SafeUrl>, SelectGatewayError> {
+        let gateways = self
+            .module_api
+            .get_registered_gateways()
+            .await
+            .map_err(|e| SelectGatewayError::FederationError(e.to_string()))?;
+        let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+        let gateways_in_db = dbtx
+            .find_by_prefix(&GatewayPrefix)
+            .await
+            .map(|(_, url)| url)
+            .collect::<Vec<_>>()
+            .await;
+        Ok(gateways
+            .into_iter()
+            .chain(gateways_in_db)
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>())
+    }
+
     async fn select_gateway(
         &self,
         invoice: Option<Bolt11Invoice>,
     ) -> Result<(SafeUrl, RoutingInfo), SelectGatewayError> {
         let gateways = self
             .module_api
-            .gateways()
+            .get_registered_gateways()
             .await
             .map_err(|e| SelectGatewayError::FederationError(e.to_string()))?;
 
@@ -489,7 +538,6 @@ impl LightningClientModule {
                 .await
                 .get_value(&GatewayKey(invoice.recover_payee_pub_key()))
                 .await
-                .filter(|gateway| gateways.contains(gateway))
             {
                 if let Ok(Some(routing_info)) = self.routing_info(&gateway).await {
                     return Ok((gateway, routing_info));

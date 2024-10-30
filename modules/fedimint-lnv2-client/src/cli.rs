@@ -1,5 +1,6 @@
 use std::{ffi, iter};
 
+use bitcoin30::secp256k1::PublicKey;
 use clap::{Parser, Subcommand};
 use fedimint_core::core::OperationId;
 use fedimint_core::util::SafeUrl;
@@ -49,8 +50,21 @@ enum GatewayOpts {
         #[arg(long)]
         peer: Option<PeerId>,
     },
-    /// Add a vetted gateway.
-    Add { gateway: SafeUrl },
+    /// Manually add a gateway to the client's cache
+    Add {
+        #[arg(long)]
+        gateway_key: PublicKey,
+
+        #[arg(long)]
+        gateway: SafeUrl,
+    },
+    /// Manually delete a gateway from the client's cache
+    Delete {
+        #[arg(long)]
+        gateway: SafeUrl,
+    },
+    /// Register a vetted gateway.
+    Register { gateway: SafeUrl },
     /// Remove a vetted gateway.
     Remove { gateway: SafeUrl },
 }
@@ -79,18 +93,23 @@ pub(crate) async fn handle_cli_command(
         ),
         Opts::AwaitReceive { operation_id } => json(lightning.await_receive(operation_id).await?),
         Opts::Gateway(gateway_opts) => match gateway_opts {
+            GatewayOpts::Add {
+                gateway_key,
+                gateway,
+            } => json(lightning.add_gateway(gateway_key, gateway).await),
+            GatewayOpts::Delete { gateway } => json(lightning.delete_gateway(gateway).await),
             GatewayOpts::Select { invoice } => json(lightning.select_gateway(invoice).await?.0),
             GatewayOpts::List { peer } => match peer {
                 Some(peer) => json(lightning.module_api.gateways_from_peer(peer).await?),
-                None => json(lightning.module_api.gateways().await?),
+                None => json(lightning.list_all_gateways().await?),
             },
-            GatewayOpts::Add { gateway } => {
+            GatewayOpts::Register { gateway } => {
                 let auth = lightning
                     .admin_auth
                     .clone()
                     .ok_or(anyhow::anyhow!("Admin auth not set"))?;
 
-                json(lightning.module_api.add_gateway(auth, gateway).await?)
+                json(lightning.module_api.register_gateway(auth, gateway).await?)
             }
             GatewayOpts::Remove { gateway } => {
                 let auth = lightning
@@ -98,7 +117,12 @@ pub(crate) async fn handle_cli_command(
                     .clone()
                     .ok_or(anyhow::anyhow!("Admin auth not set"))?;
 
-                json(lightning.module_api.remove_gateway(auth, gateway).await?)
+                json(
+                    lightning
+                        .module_api
+                        .remove_registered_gateway(auth, gateway)
+                        .await?,
+                )
             }
         },
     };
