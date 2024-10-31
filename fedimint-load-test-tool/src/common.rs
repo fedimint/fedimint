@@ -370,9 +370,7 @@ pub async fn remint_denomination(
                 denomination,
             )
             .await
-            .into_iter()
-            .map(|output| output.into_dyn(mint_client.id))
-            .collect();
+            .into_dyn(mint_client.id);
 
         tx = tx.with_outputs(outputs);
     }

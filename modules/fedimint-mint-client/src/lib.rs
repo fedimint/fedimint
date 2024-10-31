@@ -46,7 +46,8 @@ use fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{
-    ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, TransactionBuilder,
+    ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
+    ClientOutputSM, TransactionBuilder,
 };
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
@@ -747,7 +748,7 @@ impl ClientModule for MintClientModule {
         mut output_amount: Amount,
     ) -> anyhow::Result<(
         ClientInputBundle<MintInput, MintClientStateMachines>,
-        Vec<ClientOutput<MintOutput, MintClientStateMachines>>,
+        ClientOutputBundle<MintOutput, MintClientStateMachines>,
     )> {
         let consolidation_inputs = self.consolidate_notes(dbtx, operation_id).await?;
 
@@ -1049,9 +1050,9 @@ impl MintClientModule {
         operation_id: OperationId,
         notes_per_denomination: u16,
         exact_amount: Amount,
-    ) -> Vec<ClientOutput<MintOutput, MintClientStateMachines>> {
+    ) -> ClientOutputBundle<MintOutput, MintClientStateMachines> {
         if exact_amount == Amount::ZERO {
-            return Vec::new();
+            return ClientOutputBundle::new(vec![], vec![]);
         }
 
         let denominations = represent_amount(
@@ -1062,6 +1063,7 @@ impl MintClientModule {
         );
 
         let mut outputs = Vec::new();
+        let mut output_sms = Vec::new();
 
         for (amount, num) in denominations.iter() {
             for _ in 0..num {
@@ -1088,6 +1090,8 @@ impl MintClientModule {
                 outputs.push(ClientOutput {
                     output: MintOutput::new_v0(amount, blind_nonce),
                     amount,
+                });
+                output_sms.push(ClientOutputSM {
                     state_machines: state_generator,
                 });
             }
@@ -1095,7 +1099,7 @@ impl MintClientModule {
 
         assert!(!outputs.is_empty());
 
-        outputs
+        ClientOutputBundle::new(outputs, output_sms)
     }
 
     /// Returns the number of held e-cash notes per denomination

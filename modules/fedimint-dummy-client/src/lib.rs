@@ -18,7 +18,8 @@ use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::sm::{Context, ModuleNotifier};
 use fedimint_client::transaction::{
-    ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, TransactionBuilder,
+    ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
+    ClientOutputSM, TransactionBuilder,
 };
 use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::core::{Decoder, ModuleKind, OperationId};
@@ -103,7 +104,7 @@ impl ClientModule for DummyClientModule {
         output_amount: Amount,
     ) -> anyhow::Result<(
         ClientInputBundle<DummyInput, DummyStateMachine>,
-        Vec<ClientOutput<DummyOutput, DummyStateMachine>>,
+        ClientOutputBundle<DummyOutput, DummyStateMachine>,
     )> {
         dbtx.ensure_isolated().expect("must be isolated");
 
@@ -140,9 +141,15 @@ impl ClientModule for DummyClientModule {
                     }),
                 };
 
-                Ok((ClientInputBundle::new(vec![input], vec![input_sm]), vec![]))
+                Ok((
+                    ClientInputBundle::new(vec![input], vec![input_sm]),
+                    ClientOutputBundle::new(vec![], vec![]),
+                ))
             }
-            Ordering::Equal => Ok((ClientInputBundle::new(vec![], vec![]), vec![])),
+            Ordering::Equal => Ok((
+                ClientInputBundle::new(vec![], vec![]),
+                ClientOutputBundle::new(vec![], vec![]),
+            )),
             Ordering::Greater => {
                 let missing_output_amount = input_amount - output_amount;
                 let output = ClientOutput {
@@ -151,6 +158,9 @@ impl ClientModule for DummyClientModule {
                         account: self.key.public_key(),
                     },
                     amount: missing_output_amount,
+                };
+
+                let output_sm = ClientOutputSM {
                     state_machines: Arc::new(move |txid, _| {
                         vec![DummyStateMachine::Output(
                             missing_output_amount,
@@ -160,7 +170,10 @@ impl ClientModule for DummyClientModule {
                     }),
                 };
 
-                Ok((ClientInputBundle::new(vec![], vec![]), vec![output]))
+                Ok((
+                    ClientInputBundle::new(vec![], vec![]),
+                    ClientOutputBundle::new(vec![output], vec![output_sm]),
+                ))
             }
         }
     }
@@ -276,11 +289,13 @@ impl DummyClientModule {
         let output = ClientOutput {
             output: DummyOutput { amount, account },
             amount,
-            state_machines: Arc::new(|_, _| Vec::<DummyStateMachine>::new()),
         };
 
         // Build and send tx to the fed
-        let tx = TransactionBuilder::new().with_output(self.client_ctx.make_client_output(output));
+        let tx = TransactionBuilder::new().with_outputs(
+            self.client_ctx
+                .make_client_outputs(ClientOutputBundle::new_no_sm(vec![output])),
+        );
 
         let outpoint = |txid, _| OutPoint { txid, out_idx: 0 };
         let (txid, _) = self

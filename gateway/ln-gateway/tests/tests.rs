@@ -8,7 +8,9 @@ use std::time::Duration;
 
 use assert_matches::assert_matches;
 use bitcoin_hashes::{sha256, Hash};
-use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
+use fedimint_client::transaction::{
+    ClientInput, ClientOutput, ClientOutputBundle, TransactionBuilder,
+};
 use fedimint_client::ClientHandleArc;
 use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::config::FederationId;
@@ -24,9 +26,9 @@ use fedimint_dummy_server::DummyInit;
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_client::{
-    LightningClientInit, LightningClientModule, LightningClientStateMachines,
-    LightningOperationMeta, LightningOperationMetaVariant, LnPayState, LnReceiveState,
-    MockGatewayConnection, OutgoingLightningPayment, PayType,
+    LightningClientInit, LightningClientModule, LightningOperationMeta,
+    LightningOperationMetaVariant, LnPayState, LnReceiveState, MockGatewayConnection,
+    OutgoingLightningPayment, PayType,
 };
 use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
@@ -652,18 +654,16 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
                 ),
                 expiry_time: None,
             });
-            // The client's receive state machine can be empty because the gateway should
-            // not fund this contract
-            let state_machines = Arc::new(|_txid: TransactionId, _input_idx: u64| {
-                Vec::<LightningClientStateMachines>::new()
-            });
             let client_output = ClientOutput {
                 output: ln_output,
                 amount: Amount::ZERO,
-                state_machines,
             };
-            let tx = TransactionBuilder::new()
-                .with_output(client_output.into_dyn(user_lightning_module.id));
+            // The client's receive state machine can be empty because the gateway should
+            // not fund this contract
+            let tx = TransactionBuilder::new().with_outputs(
+                ClientOutputBundle::new_no_sm(vec![client_output])
+                    .into_dyn(user_lightning_module.id),
+            );
             let operation_meta_gen = |txid, _| LightningOperationMeta {
                 variant: LightningOperationMetaVariant::Receive {
                     out_point: OutPoint { txid, out_idx: 0 },

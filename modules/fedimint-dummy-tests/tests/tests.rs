@@ -1,7 +1,7 @@
-use std::sync::Arc;
-
 use anyhow::bail;
-use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
+use fedimint_client::transaction::{
+    ClientInput, ClientOutput, ClientOutputBundle, TransactionBuilder,
+};
 use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::config::ClientModuleConfig;
 use fedimint_core::core::{IntoDynInstance, ModuleKind, OperationId};
@@ -9,7 +9,6 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::secp256k1_29::Secp256k1;
 use fedimint_core::{sats, Amount, OutPoint};
-use fedimint_dummy_client::states::DummyStateMachine;
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::{DummyClientConfig, DummyGenParams};
 use fedimint_dummy_common::{broken_fed_key_pair, DummyInput, DummyOutput, KIND};
@@ -124,9 +123,9 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
             account: dummy_module.account(),
         },
         amount: sats(1000),
-        state_machines: Arc::new(|_, _| Vec::<DummyStateMachine>::new()),
     };
-    let tx = TransactionBuilder::new().with_output(output.into_dyn(dummy_module.id));
+    let tx = TransactionBuilder::new()
+        .with_outputs(ClientOutputBundle::new_no_sm(vec![output]).into_dyn(dummy_module.id));
     let (tx, _) = tx.build(&Secp256k1::new(), rand::thread_rng());
     let result = client.api().submit_transaction(tx).await;
     match result {

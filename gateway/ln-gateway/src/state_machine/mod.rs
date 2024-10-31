@@ -19,7 +19,9 @@ use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State};
-use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
+use fedimint_client::transaction::{
+    ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
+};
 use fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlobalClientContext};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction};
@@ -265,7 +267,8 @@ impl GatewayClientModule {
         (
             OperationId,
             Amount,
-            ClientOutput<LightningOutputV0, GatewayClientStateMachines>,
+            ClientOutput<LightningOutputV0>,
+            ClientOutputSM<GatewayClientStateMachines>,
         ),
         IncomingSmError,
     > {
@@ -278,9 +281,11 @@ impl GatewayClientModule {
         )
         .await?;
 
-        let client_output = ClientOutput::<LightningOutputV0, GatewayClientStateMachines> {
+        let client_output = ClientOutput::<LightningOutputV0> {
             output: incoming_output,
             amount,
+        };
+        let client_output_sm = ClientOutputSM::<GatewayClientStateMachines> {
             state_machines: Arc::new(move |txid, _| {
                 vec![
                     GatewayClientStateMachines::Receive(IncomingStateMachine {
@@ -303,7 +308,7 @@ impl GatewayClientModule {
                 ]
             }),
         };
-        Ok((operation_id, amount, client_output))
+        Ok((operation_id, amount, client_output, client_output_sm))
     }
 
     async fn create_funding_incoming_contract_output_from_swap(
@@ -312,7 +317,8 @@ impl GatewayClientModule {
     ) -> Result<
         (
             OperationId,
-            ClientOutput<LightningOutputV0, GatewayClientStateMachines>,
+            ClientOutput<LightningOutputV0>,
+            ClientOutputSM<GatewayClientStateMachines>,
         ),
         IncomingSmError,
     > {
@@ -326,9 +332,11 @@ impl GatewayClientModule {
         )
         .await?;
 
-        let client_output = ClientOutput::<LightningOutputV0, GatewayClientStateMachines> {
+        let client_output = ClientOutput::<LightningOutputV0> {
             output: incoming_output,
             amount,
+        };
+        let client_output_sm = ClientOutputSM::<GatewayClientStateMachines> {
             state_machines: Arc::new(move |txid, _| {
                 vec![GatewayClientStateMachines::Receive(IncomingStateMachine {
                     common: IncomingSmCommon {
@@ -340,7 +348,7 @@ impl GatewayClientModule {
                 })]
             }),
         };
-        Ok((operation_id, client_output))
+        Ok((operation_id, client_output, client_output_sm))
     }
 
     /// Register gateway with federation
@@ -424,17 +432,18 @@ impl GatewayClientModule {
     /// Attempt fulfill HTLC by buying preimage from the federation
     pub async fn gateway_handle_intercepted_htlc(&self, htlc: Htlc) -> anyhow::Result<OperationId> {
         debug!("Handling intercepted HTLC {htlc:?}");
-        let (operation_id, amount, client_output) = self
+        let (operation_id, amount, client_output, client_output_sm) = self
             .create_funding_incoming_contract_output_from_htlc(htlc.clone())
             .await?;
 
         let output = ClientOutput {
             output: LightningOutput::V0(client_output.output),
             amount,
-            state_machines: client_output.state_machines,
         };
 
-        let tx = TransactionBuilder::new().with_output(self.client_ctx.make_client_output(output));
+        let tx = TransactionBuilder::new().with_outputs(self.client_ctx.make_client_outputs(
+            ClientOutputBundle::new(vec![output], vec![client_output_sm]),
+        ));
         let operation_meta_gen = |_: TransactionId, _: Vec<OutPoint>| GatewayMeta::Receive;
         self.client_ctx
             .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
@@ -451,16 +460,16 @@ impl GatewayClientModule {
         swap_params: SwapParameters,
     ) -> anyhow::Result<OperationId> {
         debug!("Handling direct swap {swap_params:?}");
-        let (operation_id, client_output) = self
+        let (operation_id, client_output, client_output_sm) = self
             .create_funding_incoming_contract_output_from_swap(swap_params.clone())
             .await?;
 
-        let tx = TransactionBuilder::new().with_output(self.client_ctx.make_client_output(
-            ClientOutput {
-                output: LightningOutput::V0(client_output.output),
-                amount: client_output.amount,
-                state_machines: client_output.state_machines,
-            },
+        let output = ClientOutput {
+            output: LightningOutput::V0(client_output.output),
+            amount: client_output.amount,
+        };
+        let tx = TransactionBuilder::new().with_outputs(self.client_ctx.make_client_outputs(
+            ClientOutputBundle::new(vec![output], vec![client_output_sm]),
         ));
         let operation_meta_gen = |_: TransactionId, _: Vec<OutPoint>| GatewayMeta::Receive;
         self.client_ctx

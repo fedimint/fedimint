@@ -14,7 +14,9 @@ use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
-use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
+use fedimint_client::transaction::{
+    ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
+};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::config::FederationId;
@@ -374,9 +376,11 @@ impl GatewayClientModuleV2 {
 
         let refund_keypair = self.keypair;
 
-        let client_output = ClientOutput::<LightningOutput, GatewayClientStateMachinesV2> {
+        let client_output = ClientOutput::<LightningOutput> {
             output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
             amount: contract.commitment.amount,
+        };
+        let client_output_sm = ClientOutputSM::<GatewayClientStateMachinesV2> {
             state_machines: Arc::new(move |txid, out_idx| {
                 vec![
                     GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
@@ -401,8 +405,11 @@ impl GatewayClientModuleV2 {
             }),
         };
 
-        let client_output = self.client_ctx.make_client_output(client_output);
-        let transaction = TransactionBuilder::new().with_output(client_output);
+        let client_output = self.client_ctx.make_client_outputs(ClientOutputBundle::new(
+            vec![client_output],
+            vec![client_output_sm],
+        ));
+        let transaction = TransactionBuilder::new().with_outputs(client_output);
 
         self.client_ctx
             .finalize_and_submit_transaction(
@@ -428,9 +435,11 @@ impl GatewayClientModuleV2 {
 
         let refund_keypair = self.keypair;
 
-        let client_output = ClientOutput::<LightningOutput, GatewayClientStateMachinesV2> {
+        let client_output = ClientOutput::<LightningOutput> {
             output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
             amount: contract.commitment.amount,
+        };
+        let client_output_sm = ClientOutputSM::<GatewayClientStateMachinesV2> {
             state_machines: Arc::new(move |txid, out_idx| {
                 vec![GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                     common: ReceiveSMCommon {
@@ -444,8 +453,12 @@ impl GatewayClientModuleV2 {
             }),
         };
 
-        let client_output = self.client_ctx.make_client_output(client_output);
-        let transaction = TransactionBuilder::new().with_output(client_output);
+        let client_output = self.client_ctx.make_client_outputs(ClientOutputBundle::new(
+            vec![client_output],
+            vec![client_output_sm],
+        ));
+
+        let transaction = TransactionBuilder::new().with_outputs(client_output);
 
         self.client_ctx
             .finalize_and_submit_transaction(

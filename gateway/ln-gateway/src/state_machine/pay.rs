@@ -1,9 +1,10 @@
 use std::fmt::{self, Display};
-use std::sync::Arc;
 
 use bitcoin_hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::{ClientInput, ClientInputBundle, ClientOutput};
+use fedimint_client::transaction::{
+    ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle,
+};
 use fedimint_client::{ClientHandleArc, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::config::FederationId;
@@ -23,7 +24,7 @@ use thiserror::Error;
 use tokio_stream::StreamExt;
 use tracing::{debug, error, info, warn, Instrument};
 
-use super::{GatewayClientContext, GatewayClientStateMachines, GatewayExtReceiveStates};
+use super::{GatewayClientContext, GatewayExtReceiveStates};
 use crate::db::GatewayDbtxNcExt;
 use crate::lightning::{LightningRpcError, PayInvoiceResponse};
 use crate::state_machine::GatewayClientModule;
@@ -904,13 +905,15 @@ impl GatewayPayCancelContract {
             contract.contract.contract_id(),
             cancel_signature,
         );
-        let client_output = ClientOutput::<LightningOutput, GatewayClientStateMachines> {
+        let client_output = ClientOutput::<LightningOutput> {
             output: cancel_output,
             amount: Amount::ZERO,
-            state_machines: Arc::new(|_, _| vec![]),
         };
 
-        match global_context.fund_output(dbtx, client_output).await {
+        match global_context
+            .fund_output(dbtx, ClientOutputBundle::new_no_sm(vec![client_output]))
+            .await
+        {
             Ok((txid, _)) => {
                 info!("Canceled outgoing contract {contract:?} with txid {txid:?}");
                 GatewayPayStateMachine {
