@@ -8,9 +8,10 @@ use hex::{FromHex, ToHex};
 use miniscript::{Descriptor, MiniscriptKey};
 
 use crate::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_psbt, bitcoin29_to_bitcoin32_network_magic, bitcoin30_to_bitcoin29_psbt,
+    bitcoin29_to_bitcoin32_network_magic, bitcoin29_to_bitcoin32_psbt,
     bitcoin30_to_bitcoin32_network, bitcoin32_checked_address_to_unchecked_address,
-    bitcoin32_to_bitcoin29_network_magic, bitcoin32_to_bitcoin30_address,
+    bitcoin32_to_bitcoin29_network_magic, bitcoin32_to_bitcoin29_psbt,
+    bitcoin32_to_bitcoin30_address,
 };
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
@@ -61,30 +62,33 @@ impl_encode_decode_bridge!(bitcoin::ScriptBuf);
 impl_encode_decode_bridge!(bitcoin::Transaction);
 impl_encode_decode_bridge!(bitcoin::merkle_tree::PartialMerkleTree);
 
-impl crate::encoding::Encodable for bitcoin30::psbt::PartiallySignedTransaction {
+impl crate::encoding::Encodable for bitcoin::psbt::Psbt {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         bitcoin29::consensus::Encodable::consensus_encode(
-            &bitcoin30_to_bitcoin29_psbt(self),
+            &bitcoin32_to_bitcoin29_psbt(self),
             writer,
         )
     }
 }
 
-impl crate::encoding::Decodable for bitcoin30::psbt::PartiallySignedTransaction {
+impl crate::encoding::Decodable for bitcoin::psbt::Psbt {
     fn consensus_decode_from_finite_reader<D: std::io::Read>(
         d: &mut D,
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, crate::encoding::DecodeError> {
-        Ok(bitcoin29_to_bitcoin30_psbt(
+        Ok(bitcoin29_to_bitcoin32_psbt(
             &bitcoin29::consensus::Decodable::consensus_decode_from_finite_reader(d)
                 .map_err(crate::encoding::DecodeError::from_err)?,
         ))
     }
 }
 
-impl crate::encoding::Encodable for bitcoin30::Txid {
+impl crate::encoding::Encodable for bitcoin::Txid {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        bitcoin30::consensus::Encodable::consensus_encode(self, writer)
+        Ok(bitcoin::consensus::Encodable::consensus_encode(
+            self,
+            &mut std::io::BufWriter::new(writer),
+        )?)
     }
 
     fn consensus_encode_to_hex(&self) -> String {
@@ -99,13 +103,16 @@ impl crate::encoding::Encodable for bitcoin30::Txid {
         bytes.encode_hex()
     }
 }
-impl crate::encoding::Decodable for bitcoin30::Txid {
+
+impl crate::encoding::Decodable for bitcoin::Txid {
     fn consensus_decode_from_finite_reader<D: std::io::Read>(
         d: &mut D,
         _modules: &::fedimint_core::module::registry::ModuleDecoderRegistry,
     ) -> Result<Self, crate::encoding::DecodeError> {
-        bitcoin30::consensus::Decodable::consensus_decode_from_finite_reader(d)
-            .map_err(crate::encoding::DecodeError::from_err)
+        bitcoin::consensus::Decodable::consensus_decode_from_finite_reader(&mut SimpleBitcoinRead(
+            d,
+        ))
+        .map_err(crate::encoding::DecodeError::from_err)
     }
 
     fn consensus_decode_hex(

@@ -48,7 +48,9 @@ use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_network, bitcoin32_to_bitcoin30_network,
+    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_network,
+    bitcoin30_to_bitcoin32_unchecked_address, bitcoin32_to_bitcoin30_address,
+    bitcoin32_to_bitcoin30_network, bitcoin32_to_bitcoin30_txid,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{
@@ -893,7 +895,7 @@ impl Gateway {
             .expect("Must have client module")
             .allocate_deposit_address_expert_only(())
             .await?;
-        Ok(address)
+        Ok(bitcoin32_to_bitcoin30_address(&address))
     }
 
     /// Returns a Bitcoin TXID from a peg-out transaction for a specific
@@ -906,6 +908,7 @@ impl Gateway {
         } = payload;
         let client = self.select_client(federation_id).await?;
         let wallet_module = client.value().get_first_module::<WalletClientModule>()?;
+        let address = bitcoin30_to_bitcoin32_unchecked_address(&address);
 
         // TODO: Fees should probably be passed in as a parameter
         let (amount, fees) = match amount {
@@ -913,7 +916,7 @@ impl Gateway {
             // the amount we are withdrawing
             BitcoinAmountOrAll::All => {
                 let balance =
-                    bitcoin30::Amount::from_sat(client.value().get_balance().await.msats / 1000);
+                    bitcoin::Amount::from_sat(client.value().get_balance().await.msats / 1000);
                 let fees = wallet_module
                     .get_withdraw_fees(address.clone(), balance)
                     .await?;
@@ -928,9 +931,9 @@ impl Gateway {
                 (withdraw_amount.unwrap(), fees)
             }
             BitcoinAmountOrAll::Amount(amount) => (
-                amount,
+                bitcoin30_to_bitcoin32_amount(&amount),
                 wallet_module
-                    .get_withdraw_fees(address.clone(), amount)
+                    .get_withdraw_fees(address.clone(), bitcoin30_to_bitcoin32_amount(&amount))
                     .await?,
             ),
         };
@@ -950,7 +953,7 @@ impl Gateway {
                         "Sent {amount} funds to address {}",
                         address.assume_checked()
                     );
-                    return Ok(txid);
+                    return Ok(bitcoin32_to_bitcoin30_txid(&txid));
                 }
                 WithdrawState::Failed(e) => {
                     return Err(AdminGatewayError::WithdrawError { failure_reason: e });

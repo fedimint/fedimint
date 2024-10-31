@@ -1,6 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_script_buf;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use tracing::debug;
@@ -82,10 +81,8 @@ impl ConsensusPegInTweakIdxesUsedTracker {
         let (script, _address, _tweak_key, _operation_id) =
             data.derive_peg_in_script(self.next_pending_tweak_idx);
 
-        self.pending_pubkey_scripts.insert(
-            bitcoin30_to_bitcoin32_script_buf(&script),
-            self.next_pending_tweak_idx,
-        );
+        self.pending_pubkey_scripts
+            .insert(script, self.next_pending_tweak_idx);
         self.next_pending_tweak_idx = self.next_pending_tweak_idx.next();
     }
 

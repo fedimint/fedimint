@@ -5,6 +5,7 @@ use fedimint_core::module::SerdeModuleEncoding;
 use fedimint_core::{Amount, TransactionId};
 use thiserror::Error;
 
+use crate::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_pubkey;
 use crate::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 use crate::core::{DynInputError, DynOutputError};
 
@@ -103,7 +104,7 @@ impl Transaction {
                     tx: self.consensus_encode_to_hex(),
                     hash: self.tx_hash().consensus_encode_to_hex(),
                     sig: signature.consensus_encode_to_hex(),
-                    key: pk.consensus_encode_to_hex(),
+                    key: bitcoin30_to_bitcoin32_secp256k1_pubkey(pk).consensus_encode_to_hex(),
                 });
             }
         }

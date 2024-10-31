@@ -4,18 +4,18 @@ use bitcoin::consensus::{Decodable, Encodable};
 use bitcoin30::consensus::{Decodable as Bitcoin30Decodable, Encodable as Bitcoin30Encodable};
 use bitcoin_hashes::Hash;
 
-pub fn bitcoin29_to_bitcoin30_psbt(
+pub fn bitcoin29_to_bitcoin32_psbt(
     psbt: &bitcoin29::util::psbt::PartiallySignedTransaction,
-) -> bitcoin30::psbt::PartiallySignedTransaction {
+) -> bitcoin::psbt::Psbt {
     bincode::deserialize(&bincode::serialize(psbt).expect("Failed to serialize bitcoin29 psbt"))
-        .expect("Failed to convert bitcoin29 psbt to bitcoin30 psbt")
+        .expect("Failed to convert bitcoin29 psbt to bitcoin32 psbt")
 }
 
-pub fn bitcoin30_to_bitcoin29_psbt(
-    psbt: &bitcoin30::psbt::PartiallySignedTransaction,
+pub fn bitcoin32_to_bitcoin29_psbt(
+    psbt: &bitcoin::psbt::Psbt,
 ) -> bitcoin29::util::psbt::PartiallySignedTransaction {
-    bincode::deserialize(&bincode::serialize(psbt).expect("Failed to serialize bitcoin30 psbt"))
-        .expect("Failed to convert bitcoin30 psbt to bitcoin29 psbt")
+    bincode::deserialize(&bincode::serialize(psbt).expect("Failed to serialize bitcoin32 psbt"))
+        .expect("Failed to convert bitcoin32 psbt to bitcoin29 psbt")
 }
 
 pub fn bitcoin29_to_bitcoin32_network_magic(magic: u32) -> bitcoin::p2p::Magic {

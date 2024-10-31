@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use bitcoin30::{Address, Transaction, Txid};
 use bitcoincore_rpc::{Client, RpcApi};
 use fedimint_bitcoind::DynBitcoindRpc;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_amount;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{block_in_place, sleep_in_test};
@@ -128,10 +129,13 @@ impl BitcoinTest for RealBitcoinTestNoLock {
     }
     async fn mine_block_and_get_received(&self, address: &Address) -> Amount {
         self.mine_blocks(1).await;
-        self.client
-            .get_received_by_address(address, None)
-            .expect(Self::ERROR)
-            .into()
+        bitcoin30_to_bitcoin32_amount(
+            &self
+                .client
+                .get_received_by_address(address, None)
+                .expect(Self::ERROR),
+        )
+        .into()
     }
 
     async fn get_new_address(&self) -> Address {
@@ -144,7 +148,7 @@ impl BitcoinTest for RealBitcoinTestNoLock {
     async fn get_mempool_tx_fee(&self, txid: &Txid) -> Amount {
         loop {
             if let Ok(tx) = self.client.get_mempool_entry(txid) {
-                return tx.fees.base.into();
+                return bitcoin30_to_bitcoin32_amount(&tx.fees.base).into();
             }
 
             sleep_in_test("could not get mempool tx fee", Duration::from_millis(100)).await;

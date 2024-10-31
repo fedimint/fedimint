@@ -18,6 +18,7 @@ use fedimint_bitcoind::{
     register_bitcoind, DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory,
     Result as BitcoinRpcResult,
 };
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_amount;
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::{sleep_in_test, TaskHandle};
 use fedimint_core::txoproof::TxOutProof;
@@ -212,7 +213,10 @@ impl BitcoinTest for FakeBitcoinTest {
             }],
             inner.blocks.len() as u32,
         );
-        inner.addresses.insert(transaction.txid(), amount.into());
+        inner.addresses.insert(
+            transaction.txid(),
+            bitcoin30_to_bitcoin32_amount(&amount).into(),
+        );
 
         inner.pending.push(transaction.clone());
         let merkle_proof = FakeBitcoinTest::pending_merkle_tree(&inner.pending);

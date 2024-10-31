@@ -103,6 +103,7 @@ pub trait Encodable {
         self.consensus_encode(&mut io::sink())
             .expect("encoding to bytes can't fail for io reasons")
     }
+
     /// Generate a SHA256 hash of the consensus encoding using the default hash
     /// engine for `H`.
     ///
@@ -1163,6 +1164,7 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
+    use crate::bitcoin_migration::bitcoin30_to_bitcoin32_txid;
     use crate::db::DatabaseValue;
     use crate::encoding::{Decodable, Encodable};
 
@@ -1476,7 +1478,7 @@ mod tests {
         )
         .unwrap();
         test_roundtrip_expected(
-            &txid,
+            &bitcoin30_to_bitcoin32_txid(&txid),
             &[
                 154, 192, 239, 210, 168, 79, 183, 215, 157, 7, 201, 237, 22, 132, 133, 30, 74, 48,
                 206, 233, 21, 231, 57, 225, 198, 140, 229, 35, 47, 237, 247, 81,
