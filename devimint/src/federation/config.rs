@@ -59,7 +59,9 @@ pub fn attach_default_module_init_params(
                     // TODO this is not very elegant, but I'm planning to get rid of it in a next
                     // commit anyway
                     finality_delay,
-                    client_default_bitcoin_rpc: default_esplora_server(network),
+                    client_default_bitcoin_rpc: default_esplora_server(
+                        bitcoin30_to_bitcoin32_network(&network),
+                    ),
                     fee_consensus: fedimint_wallet_client::config::FeeConsensus::default(),
                 },
             },
