@@ -104,7 +104,9 @@
 <a href="#103" id="103">103</a>
 <a href="#104" id="104">104</a>
 <a href="#105" id="105">105</a>
-<a href="#106" id="106">106</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>bitcoin::Transaction;
@@ -112,7 +114,7 @@
 <span class="kw">use </span>bitcoincore_rpc::bitcoin::Txid;
 <span class="kw">use </span>devimint::cmd;
 <span class="kw">use </span>devimint::federation::Client;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_tx;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{bitcoin30_to_bitcoin32_txid, bitcoin32_to_bitcoin30_tx};
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>tokio::try_join;
 
@@ -147,7 +149,9 @@
 
     <span class="comment">// Verify federation broadcasts withdrawal tx
     </span><span class="kw">let </span>txid: Txid = withdraw_res[<span class="string">"txid"</span>].as_str().unwrap().parse().unwrap();
-    <span class="kw">let </span>tx_hex = bitcoind.poll_get_transaction(txid).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>tx_hex = bitcoind
+        .poll_get_transaction(bitcoin30_to_bitcoin32_txid(<span class="kw-2">&amp;</span>txid))
+        .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>parsed_address = Address::from_str(<span class="kw-2">&amp;</span>deposit_address)<span class="question-mark">?</span>;
     <span class="kw">let </span>tx = bitcoin32_to_bitcoin30_tx(<span class="kw-2">&amp;</span>Transaction::consensus_decode_hex(

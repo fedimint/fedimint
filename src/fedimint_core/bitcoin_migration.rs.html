@@ -461,7 +461,13 @@
 <a href="#460" id="460">460</a>
 <a href="#461" id="461">461</a>
 <a href="#462" id="462">462</a>
-<a href="#463" id="463">463</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>bitcoin::consensus::{Decodable, Encodable};
 <span class="kw">use </span>bitcoin30::consensus::{Decodable <span class="kw">as </span>Bitcoin30Decodable, Encodable <span class="kw">as </span>Bitcoin30Encodable};
@@ -852,6 +858,12 @@
     hash: <span class="kw-2">&amp;</span>bitcoin30::hashes::sha256::Hash,
 ) -&gt; bitcoin::hashes::sha256::Hash {
     <span class="kw-2">*</span>bitcoin::hashes::sha256::Hash::from_bytes_ref(hash.as_ref())
+}
+
+<span class="kw">pub fn </span>bitcoin32_to_bitcoin30_sha256_hash(
+    hash: <span class="kw-2">&amp;</span>bitcoin::hashes::sha256::Hash,
+) -&gt; bitcoin30::hashes::sha256::Hash {
+    bitcoin30::hashes::sha256::Hash::from_slice(hash.as_ref()).expect(<span class="string">"Invalid hash length"</span>)
 }
 
 <span class="kw">fn </span>bitcoin30_to_bitcoin32_sha256d_hash(
