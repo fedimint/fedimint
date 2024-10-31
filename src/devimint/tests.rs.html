@@ -2537,7 +2537,13 @@
 <a href="#2536" id="2536">2536</a>
 <a href="#2537" id="2537">2537</a>
 <a href="#2538" id="2538">2538</a>
-<a href="#2539" id="2539">2539</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
+<a href="#2539" id="2539">2539</a>
+<a href="#2540" id="2540">2540</a>
+<a href="#2541" id="2541">2541</a>
+<a href="#2542" id="2542">2542</a>
+<a href="#2543" id="2543">2543</a>
+<a href="#2544" id="2544">2544</a>
+<a href="#2545" id="2545">2545</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -2547,6 +2553,7 @@
 <span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>bitcoin30::Txid;
 <span class="kw">use </span>clap::Subcommand;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_tx;
 <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::envs::is_env_var_set;
@@ -3615,8 +3622,10 @@
 
     <span class="kw">let </span>tx_hex = bitcoind.poll_get_transaction(txid).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>tx =
-        bitcoin30::Transaction::consensus_decode_hex(<span class="kw-2">&amp;</span>tx_hex, <span class="kw-2">&amp;</span>ModuleRegistry::default()).unwrap();
+    <span class="kw">let </span>tx = bitcoin32_to_bitcoin30_tx(<span class="kw-2">&amp;</span>bitcoin::Transaction::consensus_decode_hex(
+        <span class="kw-2">&amp;</span>tx_hex,
+        <span class="kw-2">&amp;</span>ModuleRegistry::default(),
+    )<span class="question-mark">?</span>);
     <span class="macro">assert!</span>(tx
         .output
         .iter()
@@ -4559,7 +4568,10 @@
             .expect(<span class="string">"txid should be parsable"</span>);
         <span class="kw">let </span>tx_hex = bitcoind.poll_get_transaction(txid).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>tx = bitcoin30::Transaction::consensus_decode_hex(<span class="kw-2">&amp;</span>tx_hex, <span class="kw-2">&amp;</span>ModuleRegistry::default())<span class="question-mark">?</span>;
+        <span class="kw">let </span>tx = bitcoin32_to_bitcoin30_tx(<span class="kw-2">&amp;</span>bitcoin::Transaction::consensus_decode_hex(
+            <span class="kw-2">&amp;</span>tx_hex,
+            <span class="kw-2">&amp;</span>ModuleRegistry::default(),
+        )<span class="question-mark">?</span>);
         <span class="macro">assert_eq!</span>(tx.input.len(), <span class="number">1</span>);
         <span class="macro">assert_eq!</span>(tx.output.len(), <span class="number">2</span>);
 

@@ -130,24 +130,42 @@
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::io::Cursor;
 
-<span class="kw">use </span>bitcoin30::block::Header <span class="kw">as </span>BlockHeader;
-<span class="kw">use </span>bitcoin30::merkle_tree::PartialMerkleTree;
+<span class="kw">use </span>bitcoin::block::Header <span class="kw">as </span>BlockHeader;
+<span class="kw">use </span>bitcoin::merkle_tree::PartialMerkleTree;
+<span class="kw">use </span>bitcoin30::block::Header <span class="kw">as </span>BlockHeader30;
+<span class="kw">use </span>bitcoin30::consensus::Encodable <span class="kw">as </span>Encodable30;
+<span class="kw">use </span>bitcoin30::merkle_tree::PartialMerkleTree <span class="kw">as </span>PartialMerkleTree30;
 <span class="kw">use </span>bitcoin30::{BlockHash, Txid};
 <span class="kw">use </span>hex::{FromHex, ToHex};
 <span class="kw">use </span>serde::de::Error;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+<span class="kw">use </span><span class="kw">crate</span>::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_block_header, bitcoin32_to_bitcoin30_block_header,
+    bitcoin32_to_bitcoin30_partial_merkle_tree,
+};
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
 
 <span class="attr">#[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>TxOutProof {
-    <span class="kw">pub </span>block_header: BlockHeader,
-    <span class="kw">pub </span>merkle_proof: PartialMerkleTree,
+    <span class="kw">pub </span>block_header: BlockHeader30,
+    <span class="kw">pub </span>merkle_proof: PartialMerkleTree30,
 }
 
 <span class="kw">impl </span>TxOutProof {
@@ -174,8 +192,11 @@
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>block_header = BlockHeader::consensus_decode(d, modules)<span class="question-mark">?</span>;
-        <span class="kw">let </span>merkle_proof = PartialMerkleTree::consensus_decode(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>block_header =
+            bitcoin32_to_bitcoin30_block_header(<span class="kw-2">&amp;</span>BlockHeader::consensus_decode(d, modules)<span class="question-mark">?</span>);
+        <span class="kw">let </span>merkle_proof = bitcoin32_to_bitcoin30_partial_merkle_tree(
+            <span class="kw-2">&amp;</span>PartialMerkleTree::consensus_decode(d, modules)<span class="question-mark">?</span>,
+        );
 
         <span class="kw">let </span><span class="kw-2">mut </span>transactions = Vec::new();
         <span class="kw">let </span><span class="kw-2">mut </span>indices = Vec::new();
@@ -200,7 +221,8 @@
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>written = <span class="number">0</span>;
 
-        written += <span class="self">self</span>.block_header.consensus_encode(writer)<span class="question-mark">?</span>;
+        written +=
+            bitcoin30_to_bitcoin32_block_header(<span class="kw-2">&amp;</span><span class="self">self</span>.block_header).consensus_encode(writer)<span class="question-mark">?</span>;
         written += <span class="self">self</span>.merkle_proof.consensus_encode(writer)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(written)

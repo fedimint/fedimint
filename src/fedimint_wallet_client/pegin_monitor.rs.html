@@ -504,7 +504,9 @@
 <a href="#503" id="503">503</a>
 <a href="#504" id="504">504</a>
 <a href="#505" id="505">505</a>
-<a href="#506" id="506">506</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
+<a href="#506" id="506">506</a>
+<a href="#507" id="507">507</a>
+<a href="#508" id="508">508</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>bitcoin30::ScriptBuf;
@@ -512,7 +514,9 @@
 <span class="kw">use </span>fedimint_bitcoind::DynBitcoindRpc;
 <span class="kw">use </span>fedimint_client::module::ClientContext;
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_keypair, bitcoin30_to_bitcoin32_outpoint, bitcoin30_to_bitcoin32_tx,
+};
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped <span class="kw">as _</span>,
@@ -703,7 +707,7 @@
                             <span class="kw">let </span>peg_in_tweak_index_data = PegInTweakIndexData {
                                 next_check_time,
                                 last_check_time: <span class="prelude-val">Some</span>(now),
-                                claimed: [due_val.claimed.clone(), claimed_now].concat(),
+                                claimed: [due_val.claimed.clone(), claimed_now.into_iter().map(|outpoint| bitcoin30_to_bitcoin32_outpoint(<span class="kw-2">&amp;</span>outpoint)).collect()].concat(),
                                 ..due_val
                             };
                             <span class="macro">trace!</span>(
@@ -846,7 +850,7 @@
 
         <span class="kw">let </span>claimed_peg_in_key = ClaimedPegInKey {
             peg_in_index: tweak_idx,
-            btc_out_point: outpoint,
+            btc_out_point: bitcoin30_to_bitcoin32_outpoint(<span class="kw-2">&amp;</span>outpoint),
         };
 
         <span class="kw">if </span>db
@@ -920,7 +924,7 @@
     ) -&gt; (fedimint_core::TransactionId, Vec&lt;fedimint_core::OutPoint&gt;) {
         <span class="kw">let </span>pegin_proof = PegInProof::new(
             txout_proof,
-            btc_transaction.clone(),
+            bitcoin30_to_bitcoin32_tx(btc_transaction),
             out_idx,
             tweak_key.public_key(),
         )
@@ -969,7 +973,7 @@
                     dbtx.insert_entry(
                         <span class="kw-2">&amp;</span>ClaimedPegInKey {
                             peg_in_index: tweak_idx,
-                            btc_out_point: out_point,
+                            btc_out_point: bitcoin30_to_bitcoin32_outpoint(<span class="kw-2">&amp;</span>out_point),
                         },
                         <span class="kw-2">&amp;</span>ClaimedPegInData { claim_txid, change },
                     )

@@ -485,10 +485,10 @@
 
 </span><span class="kw">use </span>std::hash::Hasher;
 
-<span class="kw">use </span>bitcoin::Network;
-<span class="kw">use </span>bitcoin30::address::NetworkUnchecked;
+<span class="kw">use </span>bitcoin::address::NetworkUnchecked;
+<span class="kw">use </span>bitcoin::{Address, BlockHash, Network};
 <span class="kw">use </span>bitcoin30::psbt::raw::ProprietaryKey;
-<span class="kw">use </span>bitcoin30::{Address, Amount, BlockHash, Txid};
+<span class="kw">use </span>bitcoin30::{Amount, Txid};
 <span class="kw">use </span>config::WalletClientConfig;
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_amount, bitcoin32_to_bitcoin30_amount,
@@ -588,7 +588,7 @@
 <span class="doccomment">/// A transaction output, either unspent or consumed
 </span><span class="attr">#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>TxOutputSummary {
-    <span class="kw">pub </span>outpoint: bitcoin30::OutPoint,
+    <span class="kw">pub </span>outpoint: bitcoin::OutPoint,
     <span class="attr">#[serde(with = <span class="string">"bitcoin::amount::serde::as_sat"</span>)]
     </span><span class="kw">pub </span>amount: bitcoin::Amount,
 }
@@ -720,7 +720,7 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>PegOut {
-    <span class="kw">pub </span>recipient: bitcoin30::Address&lt;NetworkUnchecked&gt;,
+    <span class="kw">pub </span>recipient: Address&lt;NetworkUnchecked&gt;,
     <span class="attr">#[serde(with = <span class="string">"bitcoin::amount::serde::as_sat"</span>)]
     </span><span class="kw">pub </span>amount: bitcoin::Amount,
     <span class="kw">pub </span>fees: PegOutFees,

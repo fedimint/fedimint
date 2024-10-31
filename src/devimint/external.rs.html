@@ -1269,7 +1269,8 @@
 <a href="#1268" id="1268">1268</a>
 <a href="#1269" id="1269">1269</a>
 <a href="#1270" id="1270">1270</a>
-<a href="#1271" id="1271">1271</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
+<a href="#1271" id="1271">1271</a>
+<a href="#1272" id="1272">1272</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -1282,6 +1283,7 @@
 <span class="kw">use </span>bitcoincore_rpc::RpcApi;
 <span class="kw">use </span>cln_rpc::primitives::{Amount <span class="kw">as </span>ClnRpcAmount, AmountOrAny};
 <span class="kw">use </span>cln_rpc::ClnRpc;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_tx;
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 <span class="kw">use </span>fedimint_core::task::{block_in_place, block_on, sleep, timeout};
@@ -1591,7 +1593,7 @@
             ))) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
             <span class="prelude-val">Err</span>(err) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(err.into()),
         };
-        <span class="kw">let </span>bytes = tx.consensus_encode_to_vec();
+        <span class="kw">let </span>bytes = bitcoin30_to_bitcoin32_tx(<span class="kw-2">&amp;</span>tx).consensus_encode_to_vec();
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(bytes.encode_hex()))
     }
 

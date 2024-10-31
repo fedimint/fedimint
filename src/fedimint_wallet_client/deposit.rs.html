@@ -338,14 +338,20 @@
 <a href="#337" id="337">337</a>
 <a href="#338" id="338">338</a>
 <a href="#339" id="339">339</a>
-<a href="#340" id="340">340</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin32_to_bitcoin30_keypair, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+    bitcoin30_to_bitcoin32_tx, bitcoin32_to_bitcoin30_keypair,
+    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_txid,
 };
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -400,7 +406,7 @@
                             bitcoin32_to_bitcoin30_keypair(<span class="kw-2">&amp;</span>created_state.tweak_key),
                         ),
                         |_db, (btc_tx, out_idx), old_state| {
-                            Box::pin(<span class="kw">async move </span>{ transition_tx_seen(old_state, btc_tx, out_idx) })
+                            Box::pin(<span class="kw">async move </span>{ transition_tx_seen(old_state, <span class="kw-2">&amp;</span>btc_tx, out_idx) })
                         },
                     ),
                     StateTransition::new(
@@ -488,7 +494,7 @@
 
 <span class="kw">fn </span>transition_tx_seen(
     old_state: DepositStateMachine,
-    btc_transaction: bitcoin30::Transaction,
+    btc_transaction: <span class="kw-2">&amp;</span>bitcoin30::Transaction,
     out_idx: u32,
 ) -&gt; DepositStateMachine {
     <span class="kw">let </span>DepositStateMachine {
@@ -501,7 +507,7 @@
             operation_id,
             state: DepositStates::WaitingForConfirmations(WaitingForConfirmationsDepositState {
                 tweak_key: created_state.tweak_key,
-                btc_transaction,
+                btc_transaction: bitcoin30_to_bitcoin32_tx(btc_transaction),
                 out_idx,
             }),
         },
@@ -552,7 +558,9 @@
 
         <span class="kw">let </span>confirmation_block_count = <span class="kw">match </span>context
             .rpc
-            .get_tx_block_height(<span class="kw-2">&amp;</span>waiting_state.btc_transaction.txid())
+            .get_tx_block_height(<span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_txid(
+                <span class="kw-2">&amp;</span>waiting_state.btc_transaction.compute_txid(),
+            ))
             .<span class="kw">await
         </span>{
             <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(confirmation_height)) =&gt; <span class="prelude-val">Some</span>(confirmation_height + <span class="number">1</span>),
@@ -580,7 +588,9 @@
         <span class="comment">// Get txout proof
         </span><span class="kw">let </span>txout_proof = <span class="kw">match </span>context
             .rpc
-            .get_txout_proof(waiting_state.btc_transaction.txid())
+            .get_txout_proof(bitcoin32_to_bitcoin30_txid(
+                <span class="kw-2">&amp;</span>waiting_state.btc_transaction.compute_txid(),
+            ))
             .<span class="kw">await
         </span>{
             <span class="prelude-val">Ok</span>(txout_proof) =&gt; txout_proof,
@@ -664,7 +674,7 @@
     </span>tweak_key: Keypair,
     <span class="doccomment">/// The bitcoin transaction is saved as soon as we see it so the transaction
     /// can be re-transmitted if it's evicted from the mempool.
-    </span><span class="kw">pub</span>(<span class="kw">crate</span>) btc_transaction: bitcoin30::Transaction,
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) btc_transaction: bitcoin::Transaction,
     <span class="doccomment">/// Index of the deposit output
     </span><span class="kw">pub</span>(<span class="kw">crate</span>) out_idx: u32,
 }

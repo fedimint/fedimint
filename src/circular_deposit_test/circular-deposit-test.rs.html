@@ -99,13 +99,20 @@
 <a href="#98" id="98">98</a>
 <a href="#99" id="99">99</a>
 <a href="#100" id="100">100</a>
-<a href="#101" id="101">101</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>bitcoin::Transaction;
 <span class="kw">use </span>bitcoincore_rpc::bitcoin::address::Address;
-<span class="kw">use </span>bitcoincore_rpc::bitcoin::{Transaction, Txid};
+<span class="kw">use </span>bitcoincore_rpc::bitcoin::Txid;
 <span class="kw">use </span>devimint::cmd;
 <span class="kw">use </span>devimint::federation::Client;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_tx;
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>tokio::try_join;
 
@@ -143,7 +150,10 @@
     <span class="kw">let </span>tx_hex = bitcoind.poll_get_transaction(txid).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>parsed_address = Address::from_str(<span class="kw-2">&amp;</span>deposit_address)<span class="question-mark">?</span>;
-    <span class="kw">let </span>tx = Transaction::consensus_decode_hex(<span class="kw-2">&amp;</span>tx_hex, <span class="kw-2">&amp;</span>Default::default()).unwrap();
+    <span class="kw">let </span>tx = bitcoin32_to_bitcoin30_tx(<span class="kw-2">&amp;</span>Transaction::consensus_decode_hex(
+        <span class="kw-2">&amp;</span>tx_hex,
+        <span class="kw-2">&amp;</span>Default::default(),
+    )<span class="question-mark">?</span>);
     <span class="macro">assert!</span>(tx.output.iter().any(|o| o.script_pubkey
         == parsed_address.clone().assume_checked().script_pubkey()
         &amp;&amp; o.value == withdrawal_amount_sats));

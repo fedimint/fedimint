@@ -1362,7 +1362,11 @@
 <a href="#1361" id="1361">1361</a>
 <a href="#1362" id="1362">1362</a>
 <a href="#1363" id="1363">1363</a>
-<a href="#1364" id="1364">1364</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1364" id="1364">1364</a>
+<a href="#1365" id="1365">1365</a>
+<a href="#1366" id="1366">1366</a>
+<a href="#1367" id="1367">1367</a>
+<a href="#1368" id="1368">1368</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1406,7 +1410,10 @@
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_network;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_outpoint, bitcoin30_to_bitcoin32_unchecked_address,
+    bitcoin32_to_bitcoin30_network,
+};
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
@@ -1929,16 +1936,17 @@
     <span class="kw">pub fn </span>create_withdraw_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-        address: bitcoin30::Address&lt;NetworkUnchecked&gt;,
+        address: <span class="kw-2">&amp;</span>bitcoin30::Address&lt;NetworkUnchecked&gt;,
         amount: bitcoin30::Amount,
         fees: PegOutFees,
     ) -&gt; anyhow::Result&lt;ClientOutput&lt;WalletOutput, WalletClientStates&gt;&gt; {
-        check_address(
-            <span class="kw-2">&amp;</span>address,
-            bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg().network),
-        )<span class="question-mark">?</span>;
+        check_address(address, bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg().network))<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>output = WalletOutput::new_v0_peg_out(address, amount, fees);
+        <span class="kw">let </span>output = WalletOutput::new_v0_peg_out(
+            bitcoin30_to_bitcoin32_unchecked_address(address),
+            amount,
+            fees,
+        );
 
         <span class="kw">let </span>amount = output.maybe_v0_ref().expect(<span class="string">"v0 output"</span>).amount().into();
 
@@ -2161,7 +2169,7 @@
 
                 <span class="kw">let </span>claim_data = stream_cient_ctx.module_db().wait_key_exists(<span class="kw-2">&amp;</span>ClaimedPegInKey {
                     peg_in_index: tweak_idx,
-                    btc_out_point,
+                    btc_out_point: bitcoin30_to_bitcoin32_outpoint(<span class="kw-2">&amp;</span>btc_out_point),
                 }).<span class="kw">await</span>;
 
                 <span class="kw">yield </span>DepositStateV2::Confirmed {
@@ -2219,7 +2227,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         tweak_idx: TweakIdx,
     ) -&gt; Vec&lt;(
-        bitcoin30::OutPoint,
+        bitcoin::OutPoint,
         TransactionId,
         Vec&lt;fedimint_core::OutPoint&gt;,
     )&gt; {
@@ -2368,7 +2376,7 @@
             <span class="kw">let </span>operation_id = OperationId(thread_rng().gen());
 
             <span class="kw">let </span>withdraw_output =
-                <span class="self">self</span>.create_withdraw_output(operation_id, address.clone(), amount, fee)<span class="question-mark">?</span>;
+                <span class="self">self</span>.create_withdraw_output(operation_id, <span class="kw-2">&amp;</span>address, amount, fee)<span class="question-mark">?</span>;
             <span class="kw">let </span>tx_builder = TransactionBuilder::new()
                 .with_output(<span class="self">self</span>.client_ctx.make_client_output(withdraw_output));
 
