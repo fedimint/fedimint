@@ -937,12 +937,16 @@
 <a href="#936" id="936">936</a>
 <a href="#937" id="937">937</a>
 <a href="#938" id="938">938</a>
-<a href="#939" id="939">939</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
-<span class="kw">use </span>std::sync::Arc;
+<a href="#939" id="939">939</a>
+<a href="#940" id="940">940</a>
+<a href="#941" id="941">941</a>
+<a href="#942" id="942">942</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-<span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle, ClientOutput};
+<span class="kw">use </span>fedimint_client::transaction::{
+    ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle,
+};
 <span class="kw">use </span>fedimint_client::{ClientHandleArc, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 <span class="kw">use </span>fedimint_core::config::FederationId;
@@ -962,7 +966,7 @@
 <span class="kw">use </span>tokio_stream::StreamExt;
 <span class="kw">use </span>tracing::{debug, error, info, warn, Instrument};
 
-<span class="kw">use super</span>::{GatewayClientContext, GatewayClientStateMachines, GatewayExtReceiveStates};
+<span class="kw">use super</span>::{GatewayClientContext, GatewayExtReceiveStates};
 <span class="kw">use </span><span class="kw">crate</span>::db::GatewayDbtxNcExt;
 <span class="kw">use </span><span class="kw">crate</span>::lightning::{LightningRpcError, PayInvoiceResponse};
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayClientModule;
@@ -1843,13 +1847,15 @@
             contract.contract.contract_id(),
             cancel_signature,
         );
-        <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutput, GatewayClientStateMachines&gt; {
+        <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutput&gt; {
             output: cancel_output,
             amount: Amount::ZERO,
-            state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
         };
 
-        <span class="kw">match </span>global_context.fund_output(dbtx, client_output).<span class="kw">await </span>{
+        <span class="kw">match </span>global_context
+            .fund_output(dbtx, ClientOutputBundle::new_no_sm(<span class="macro">vec!</span>[client_output]))
+            .<span class="kw">await
+        </span>{
             <span class="prelude-val">Ok</span>((txid, <span class="kw">_</span>)) =&gt; {
                 <span class="macro">info!</span>(<span class="string">"Canceled outgoing contract {contract:?} with txid {txid:?}"</span>);
                 GatewayPayStateMachine {

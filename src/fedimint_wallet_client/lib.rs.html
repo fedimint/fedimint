@@ -1366,7 +1366,11 @@
 <a href="#1365" id="1365">1365</a>
 <a href="#1366" id="1366">1366</a>
 <a href="#1367" id="1367">1367</a>
-<a href="#1368" id="1368">1368</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1368" id="1368">1368</a>
+<a href="#1369" id="1369">1369</a>
+<a href="#1370" id="1370">1370</a>
+<a href="#1371" id="1371">1371</a>
+<a href="#1372" id="1372">1372</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1408,7 +1412,9 @@
 <span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
-<span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
+<span class="kw">use </span>fedimint_client::transaction::{
+    ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
+};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_outpoint, bitcoin30_to_bitcoin32_unchecked_address,
@@ -1939,7 +1945,7 @@
         address: <span class="kw-2">&amp;</span>bitcoin30::Address&lt;NetworkUnchecked&gt;,
         amount: bitcoin30::Amount,
         fees: PegOutFees,
-    ) -&gt; anyhow::Result&lt;ClientOutput&lt;WalletOutput, WalletClientStates&gt;&gt; {
+    ) -&gt; anyhow::Result&lt;ClientOutputBundle&lt;WalletOutput, WalletClientStates&gt;&gt; {
         check_address(address, bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg().network))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>output = WalletOutput::new_v0_peg_out(
@@ -1959,18 +1965,19 @@
             })]
         };
 
-        <span class="prelude-val">Ok</span>(ClientOutput::&lt;WalletOutput, WalletClientStates&gt; {
-            output,
-            amount,
-            state_machines: Arc::new(sm_gen),
-        })
+        <span class="prelude-val">Ok</span>(ClientOutputBundle::new(
+            <span class="macro">vec!</span>[ClientOutput::&lt;WalletOutput&gt; { output, amount }],
+            <span class="macro">vec!</span>[ClientOutputSM::&lt;WalletClientStates&gt; {
+                state_machines: Arc::new(sm_gen),
+            }],
+        ))
     }
 
     <span class="kw">pub fn </span>create_rbf_withdraw_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         rbf: <span class="kw-2">&amp;</span>Rbf,
-    ) -&gt; anyhow::Result&lt;ClientOutput&lt;WalletOutput, WalletClientStates&gt;&gt; {
+    ) -&gt; anyhow::Result&lt;ClientOutputBundle&lt;WalletOutput, WalletClientStates&gt;&gt; {
         <span class="kw">let </span>output = WalletOutput::new_v0_rbf(rbf.fees, rbf.txid);
 
         <span class="kw">let </span>amount = output.maybe_v0_ref().expect(<span class="string">"v0 output"</span>).amount().into();
@@ -1984,11 +1991,12 @@
             })]
         };
 
-        <span class="prelude-val">Ok</span>(ClientOutput::&lt;WalletOutput, WalletClientStates&gt; {
-            output,
-            amount,
-            state_machines: Arc::new(sm_gen),
-        })
+        <span class="prelude-val">Ok</span>(ClientOutputBundle::new(
+            <span class="macro">vec!</span>[ClientOutput::&lt;WalletOutput&gt; { output, amount }],
+            <span class="macro">vec!</span>[ClientOutputSM::&lt;WalletClientStates&gt; {
+                state_machines: Arc::new(sm_gen),
+            }],
+        ))
     }
 
     <span class="doccomment">/// Allocates a deposit address that is controlled by the federation.
@@ -2378,7 +2386,7 @@
             <span class="kw">let </span>withdraw_output =
                 <span class="self">self</span>.create_withdraw_output(operation_id, <span class="kw-2">&amp;</span>address, amount, fee)<span class="question-mark">?</span>;
             <span class="kw">let </span>tx_builder = TransactionBuilder::new()
-                .with_output(<span class="self">self</span>.client_ctx.make_client_output(withdraw_output));
+                .with_outputs(<span class="self">self</span>.client_ctx.make_client_outputs(withdraw_output));
 
             <span class="kw">let </span>extra_meta =
                 serde_json::to_value(extra_meta).expect(<span class="string">"Failed to serialize extra meta"</span>);
@@ -2420,7 +2428,7 @@
 
         <span class="kw">let </span>withdraw_output = <span class="self">self</span>.create_rbf_withdraw_output(operation_id, <span class="kw-2">&amp;</span>rbf)<span class="question-mark">?</span>;
         <span class="kw">let </span>tx_builder = TransactionBuilder::new()
-            .with_output(<span class="self">self</span>.client_ctx.make_client_output(withdraw_output));
+            .with_outputs(<span class="self">self</span>.client_ctx.make_client_outputs(withdraw_output));
 
         <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta).expect(<span class="string">"Failed to serialize extra meta"</span>);
         <span class="self">self</span>.client_ctx

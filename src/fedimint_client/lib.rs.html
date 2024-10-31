@@ -3093,7 +3093,19 @@
 <a href="#3092" id="3092">3092</a>
 <a href="#3093" id="3093">3093</a>
 <a href="#3094" id="3094">3094</a>
-<a href="#3095" id="3095">3095</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#3095" id="3095">3095</a>
+<a href="#3096" id="3096">3096</a>
+<a href="#3097" id="3097">3097</a>
+<a href="#3098" id="3098">3098</a>
+<a href="#3099" id="3099">3099</a>
+<a href="#3100" id="3100">3100</a>
+<a href="#3101" id="3101">3101</a>
+<a href="#3102" id="3102">3102</a>
+<a href="#3103" id="3103">3103</a>
+<a href="#3104" id="3104">3104</a>
+<a href="#3105" id="3105">3105</a>
+<a href="#3106" id="3106">3106</a>
+<a href="#3107" id="3107">3107</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
@@ -3248,7 +3260,9 @@
 <span class="kw">use </span>tokio::sync::{broadcast, watch, RwLock};
 <span class="kw">use </span>tokio_stream::wrappers::WatchStream;
 <span class="kw">use </span>tracing::{debug, error, info, trace, warn};
-<span class="kw">use </span>transaction::{ClientInputBundle, ClientInputSM, TxSubmissionStatesSM};
+<span class="kw">use </span>transaction::{
+    ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputSM, TxSubmissionStatesSM,
+};
 
 <span class="kw">use </span><span class="kw">crate</span>::api_announcements::{get_api_urls, run_api_announcement_sync, ApiAnnouncementPrefix};
 <span class="kw">use </span><span class="kw">crate</span>::api_version_discovery::discover_common_api_versions_set;
@@ -3264,8 +3278,8 @@
 };
 <span class="kw">use </span><span class="kw">crate</span>::sm::{ClientSMDatabaseTransaction, DynState, Executor, IState, Notifier, State};
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{
-    tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder, TxSubmissionContext,
-    TxSubmissionStates, TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+    tx_submission_sm_decoder, ClientInput, ClientOutputBundle, TransactionBuilder,
+    TxSubmissionContext, TxSubmissionStates, TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
 
 <span class="kw">pub mod </span>api;
@@ -3352,6 +3366,7 @@
 }
 
 <span class="kw">pub type </span>InstancelessDynClientInput = ClientInput&lt;Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IInput + <span class="lifetime">'static</span>)&gt;&gt;;
+
 <span class="kw">pub type </span>InstancelessDynClientInputSM =
     ClientInputSM&lt;Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>)&gt;&gt;;
 
@@ -3360,7 +3375,12 @@
     Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>)&gt;,
 &gt;;
 
-<span class="kw">pub type </span>InstancelessDynClientOutput = ClientOutput&lt;
+<span class="kw">pub type </span>InstancelessDynClientOutput =
+    ClientOutput&lt;Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IOutput + <span class="lifetime">'static</span>)&gt;&gt;;
+
+<span class="kw">pub type </span>InstancelessDynClientOutputSM =
+    ClientOutputSM&lt;Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>)&gt;&gt;;
+<span class="kw">pub type </span>InstancelessDynClientOutputBundle = ClientOutputBundle&lt;
     Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IOutput + <span class="lifetime">'static</span>)&gt;,
     Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>)&gt;,
 &gt;;
@@ -3409,7 +3429,7 @@
     </span><span class="kw">async fn </span>fund_output_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-        output: InstancelessDynClientOutput,
+        outputs: InstancelessDynClientOutputBundle,
     ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt;;
 
     <span class="doccomment">/// Adds a state machine to the executor.
@@ -3460,7 +3480,7 @@
     <span class="kw">async fn </span>fund_output_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-        _output: InstancelessDynClientOutput,
+        _outputs: InstancelessDynClientOutputBundle,
     ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
         <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
     }
@@ -3541,21 +3561,14 @@
     </span><span class="kw">pub async fn </span>fund_output&lt;O, S&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-        output: ClientOutput&lt;O, S&gt;,
+        outputs: ClientOutputBundle&lt;O, S&gt;,
     ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt;
     <span class="kw">where
         </span>O: IOutput + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
         S: IState + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
     {
-        <span class="self">self</span>.fund_output_dyn(
-            dbtx,
-            InstancelessDynClientOutput {
-                output: Box::new(output.output),
-                amount: output.amount,
-                state_machines: states_to_instanceless_dyn(output.state_machines),
-            },
-        )
-        .<span class="kw">await
+        <span class="self">self</span>.fund_output_dyn(dbtx, outputs.into_instanceless())
+            .<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Allows adding state machines from inside a transition to the executor.
@@ -3686,19 +3699,30 @@
     <span class="kw">async fn </span>fund_output_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-        output: InstancelessDynClientOutput,
+        InstancelessDynClientOutputBundle { outputs, sms }: InstancelessDynClientOutputBundle,
     ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
-        <span class="kw">let </span>instance_output = ClientOutput {
-            output: DynOutput::from_parts(<span class="self">self</span>.module_instance_id, output.output),
-            amount: output.amount,
-            state_machines: states_add_instance(<span class="self">self</span>.module_instance_id, output.state_machines),
-        };
+        <span class="kw">let </span><span class="kw-2">mut </span>tx_builder = TransactionBuilder::new();
+
+        <span class="kw">for </span>output <span class="kw">in </span>outputs {
+            <span class="kw">let </span>instance_output = ClientOutput {
+                output: DynOutput::from_parts(<span class="self">self</span>.module_instance_id, output.output),
+                amount: output.amount,
+            };
+            tx_builder = tx_builder.with_output(instance_output);
+        }
+
+        <span class="kw">for </span>sm <span class="kw">in </span>sms {
+            <span class="kw">let </span>instance_output_sm = ClientOutputSM {
+                state_machines: states_add_instance(<span class="self">self</span>.module_instance_id, sm.state_machines),
+            };
+            tx_builder = tx_builder.with_output_sm(instance_output_sm);
+        }
 
         <span class="self">self</span>.client
             .finalize_and_submit_transaction_inner(
                 <span class="kw-2">&amp;mut </span>dbtx.global_tx().to_ref_nc(),
                 <span class="self">self</span>.operation,
-                TransactionBuilder::new().with_output(instance_output),
+                tx_builder,
             )
             .<span class="kw">await
     </span>}
@@ -4276,7 +4300,7 @@
         // is already balanced.
         </span><span class="kw">let </span>change_range = Range {
             start: partial_transaction.outputs().len() <span class="kw">as </span>u64,
-            end: (partial_transaction.outputs().len() + change_outputs.len()) <span class="kw">as </span>u64,
+            end: (partial_transaction.outputs().len() + change_outputs.outputs.len()) <span class="kw">as </span>u64,
         };
 
         partial_transaction = partial_transaction

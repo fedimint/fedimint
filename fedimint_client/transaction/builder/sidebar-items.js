@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["NeverClientContext","NeverClientStateMachine"],"fn":["state_gen_to_dyn"],"struct":["ClientInput","ClientInputBundle","ClientInputSM","ClientOutput","TransactionBuilder"]};
+window.SIDEBAR_ITEMS = {"enum":["NeverClientContext","NeverClientStateMachine"],"fn":["state_gen_to_dyn"],"struct":["ClientInput","ClientInputBundle","ClientInputSM","ClientOutput","ClientOutputBundle","ClientOutputSM","TransactionBuilder"]};

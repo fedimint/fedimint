@@ -975,10 +975,7 @@
 <a href="#974" id="974">974</a>
 <a href="#975" id="975">975</a>
 <a href="#976" id="976">976</a>
-<a href="#977" id="977">977</a>
-<a href="#978" id="978">978</a>
-<a href="#979" id="979">979</a>
-<a href="#980" id="980">980</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
+<a href="#977" id="977">977</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
@@ -1012,7 +1009,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::sm::{<span class="self">self</span>, ActiveStateMeta, Context, DynContext, DynState, State};
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{
-    ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, TransactionBuilder,
+    ClientInput, ClientInputBundle, ClientInputSM, ClientOutputBundle, TransactionBuilder,
 };
 <span class="kw">use crate</span>::{
     oplog, states_add_instance, AddStateMachinesResult, Client, ClientStrong, ClientWeak,
@@ -1191,8 +1188,8 @@
         typed.into_dyn(<span class="self">self</span>.module_instance_id)
     }
 
-    <span class="doccomment">/// Turn a typed [`ClientOutput`] into a dyn version
-    </span><span class="kw">pub fn </span>make_client_output&lt;O, S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, output: ClientOutput&lt;O, S&gt;) -&gt; ClientOutput
+    <span class="doccomment">/// Turn a typed [`ClientOutputBundle`] into a dyn version
+    </span><span class="kw">pub fn </span>make_client_outputs&lt;O, S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, output: ClientOutputBundle&lt;O, S&gt;) -&gt; ClientOutputBundle
     <span class="kw">where
         </span>O: IntoDynInstance&lt;DynType = DynOutput&gt; + <span class="lifetime">'static</span>,
         S: IntoDynInstance&lt;DynType = DynState&gt; + <span class="lifetime">'static</span>,
@@ -1674,7 +1671,7 @@
         _output_amount: Amount,
     ) -&gt; anyhow::Result&lt;(
         ClientInputBundle&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input, <span class="self">Self</span>::States&gt;,
-        Vec&lt;ClientOutput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output, <span class="self">Self</span>::States&gt;&gt;,
+        ClientOutputBundle&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output, <span class="self">Self</span>::States&gt;,
     )&gt; {
         <span class="macro">unimplemented!</span>()
     }
@@ -1801,7 +1798,7 @@
         operation_id: OperationId,
         input_amount: Amount,
         output_amount: Amount,
-    ) -&gt; anyhow::Result&lt;(ClientInputBundle, Vec&lt;ClientOutput&gt;)&gt;;
+    ) -&gt; anyhow::Result&lt;(ClientInputBundle, ClientOutputBundle)&gt;;
 
     <span class="kw">async fn </span>await_primary_module_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1900,7 +1897,7 @@
         operation_id: OperationId,
         input_amount: Amount,
         output_amount: Amount,
-    ) -&gt; anyhow::Result&lt;(ClientInputBundle, Vec&lt;ClientOutput&gt;)&gt; {
+    ) -&gt; anyhow::Result&lt;(ClientInputBundle, ClientOutputBundle)&gt; {
         <span class="kw">let </span>(inputs, outputs) = &lt;T <span class="kw">as </span>ClientModule&gt;::create_final_inputs_and_outputs(
             <span class="self">self</span>,
             <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(module_instance).<span class="number">0</span>,
@@ -1912,10 +1909,7 @@
 
         <span class="kw">let </span>inputs = inputs.into_dyn(module_instance);
 
-        <span class="kw">let </span>outputs = outputs
-            .into_iter()
-            .map(|output| output.into_dyn(module_instance))
-            .collect::&lt;Vec&lt;ClientOutput&gt;&gt;();
+        <span class="kw">let </span>outputs = outputs.into_dyn(module_instance);
 
         <span class="prelude-val">Ok</span>((inputs, outputs))
     }

@@ -820,7 +820,16 @@
 <a href="#819" id="819">819</a>
 <a href="#820" id="820">820</a>
 <a href="#821" id="821">821</a>
-<a href="#822" id="822">822</a></pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a></pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -841,7 +850,9 @@
 <span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State};
-<span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
+<span class="kw">use </span>fedimint_client::transaction::{
+    ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
+};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, DatabaseTransaction};
@@ -1087,7 +1098,8 @@
         (
             OperationId,
             Amount,
-            ClientOutput&lt;LightningOutputV0, GatewayClientStateMachines&gt;,
+            ClientOutput&lt;LightningOutputV0&gt;,
+            ClientOutputSM&lt;GatewayClientStateMachines&gt;,
         ),
         IncomingSmError,
     &gt; {
@@ -1100,9 +1112,11 @@
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutputV0, GatewayClientStateMachines&gt; {
+        <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutputV0&gt; {
             output: incoming_output,
             amount,
+        };
+        <span class="kw">let </span>client_output_sm = ClientOutputSM::&lt;GatewayClientStateMachines&gt; {
             state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
                 <span class="macro">vec!</span>[
                     GatewayClientStateMachines::Receive(IncomingStateMachine {
@@ -1125,7 +1139,7 @@
                 ]
             }),
         };
-        <span class="prelude-val">Ok</span>((operation_id, amount, client_output))
+        <span class="prelude-val">Ok</span>((operation_id, amount, client_output, client_output_sm))
     }
 
     <span class="kw">async fn </span>create_funding_incoming_contract_output_from_swap(
@@ -1134,7 +1148,8 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;
         (
             OperationId,
-            ClientOutput&lt;LightningOutputV0, GatewayClientStateMachines&gt;,
+            ClientOutput&lt;LightningOutputV0&gt;,
+            ClientOutputSM&lt;GatewayClientStateMachines&gt;,
         ),
         IncomingSmError,
     &gt; {
@@ -1148,9 +1163,11 @@
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutputV0, GatewayClientStateMachines&gt; {
+        <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutputV0&gt; {
             output: incoming_output,
             amount,
+        };
+        <span class="kw">let </span>client_output_sm = ClientOutputSM::&lt;GatewayClientStateMachines&gt; {
             state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
                 <span class="macro">vec!</span>[GatewayClientStateMachines::Receive(IncomingStateMachine {
                     common: IncomingSmCommon {
@@ -1162,7 +1179,7 @@
                 })]
             }),
         };
-        <span class="prelude-val">Ok</span>((operation_id, client_output))
+        <span class="prelude-val">Ok</span>((operation_id, client_output, client_output_sm))
     }
 
     <span class="doccomment">/// Register gateway with federation
@@ -1246,17 +1263,18 @@
     <span class="doccomment">/// Attempt fulfill HTLC by buying preimage from the federation
     </span><span class="kw">pub async fn </span>gateway_handle_intercepted_htlc(<span class="kw-2">&amp;</span><span class="self">self</span>, htlc: Htlc) -&gt; anyhow::Result&lt;OperationId&gt; {
         <span class="macro">debug!</span>(<span class="string">"Handling intercepted HTLC {htlc:?}"</span>);
-        <span class="kw">let </span>(operation_id, amount, client_output) = <span class="self">self
+        <span class="kw">let </span>(operation_id, amount, client_output, client_output_sm) = <span class="self">self
             </span>.create_funding_incoming_contract_output_from_htlc(htlc.clone())
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>output = ClientOutput {
             output: LightningOutput::V0(client_output.output),
             amount,
-            state_machines: client_output.state_machines,
         };
 
-        <span class="kw">let </span>tx = TransactionBuilder::new().with_output(<span class="self">self</span>.client_ctx.make_client_output(output));
+        <span class="kw">let </span>tx = TransactionBuilder::new().with_outputs(<span class="self">self</span>.client_ctx.make_client_outputs(
+            ClientOutputBundle::new(<span class="macro">vec!</span>[output], <span class="macro">vec!</span>[client_output_sm]),
+        ));
         <span class="kw">let </span>operation_meta_gen = |<span class="kw">_</span>: TransactionId, <span class="kw">_</span>: Vec&lt;OutPoint&gt;| GatewayMeta::Receive;
         <span class="self">self</span>.client_ctx
             .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
@@ -1273,16 +1291,16 @@
         swap_params: SwapParameters,
     ) -&gt; anyhow::Result&lt;OperationId&gt; {
         <span class="macro">debug!</span>(<span class="string">"Handling direct swap {swap_params:?}"</span>);
-        <span class="kw">let </span>(operation_id, client_output) = <span class="self">self
+        <span class="kw">let </span>(operation_id, client_output, client_output_sm) = <span class="self">self
             </span>.create_funding_incoming_contract_output_from_swap(swap_params.clone())
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>tx = TransactionBuilder::new().with_output(<span class="self">self</span>.client_ctx.make_client_output(
-            ClientOutput {
-                output: LightningOutput::V0(client_output.output),
-                amount: client_output.amount,
-                state_machines: client_output.state_machines,
-            },
+        <span class="kw">let </span>output = ClientOutput {
+            output: LightningOutput::V0(client_output.output),
+            amount: client_output.amount,
+        };
+        <span class="kw">let </span>tx = TransactionBuilder::new().with_outputs(<span class="self">self</span>.client_ctx.make_client_outputs(
+            ClientOutputBundle::new(<span class="macro">vec!</span>[output], <span class="macro">vec!</span>[client_output_sm]),
         ));
         <span class="kw">let </span>operation_meta_gen = |<span class="kw">_</span>: TransactionId, <span class="kw">_</span>: Vec&lt;OutPoint&gt;| GatewayMeta::Receive;
         <span class="self">self</span>.client_ctx

@@ -2667,7 +2667,11 @@
 <a href="#2666" id="2666">2666</a>
 <a href="#2667" id="2667">2667</a>
 <a href="#2668" id="2668">2668</a>
-<a href="#2669" id="2669">2669</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2669" id="2669">2669</a>
+<a href="#2670" id="2670">2670</a>
+<a href="#2671" id="2671">2671</a>
+<a href="#2672" id="2672">2672</a>
+<a href="#2673" id="2673">2673</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2715,7 +2719,8 @@
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{
-    ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, TransactionBuilder,
+    ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
+    ClientOutputSM, TransactionBuilder,
 };
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
@@ -3416,7 +3421,7 @@
         <span class="kw-2">mut </span>output_amount: Amount,
     ) -&gt; anyhow::Result&lt;(
         ClientInputBundle&lt;MintInput, MintClientStateMachines&gt;,
-        Vec&lt;ClientOutput&lt;MintOutput, MintClientStateMachines&gt;&gt;,
+        ClientOutputBundle&lt;MintOutput, MintClientStateMachines&gt;,
     )&gt; {
         <span class="kw">let </span>consolidation_inputs = <span class="self">self</span>.consolidate_notes(dbtx, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -3718,9 +3723,9 @@
         operation_id: OperationId,
         notes_per_denomination: u16,
         exact_amount: Amount,
-    ) -&gt; Vec&lt;ClientOutput&lt;MintOutput, MintClientStateMachines&gt;&gt; {
+    ) -&gt; ClientOutputBundle&lt;MintOutput, MintClientStateMachines&gt; {
         <span class="kw">if </span>exact_amount == Amount::ZERO {
-            <span class="kw">return </span>Vec::new();
+            <span class="kw">return </span>ClientOutputBundle::new(<span class="macro">vec!</span>[], <span class="macro">vec!</span>[]);
         }
 
         <span class="kw">let </span>denominations = represent_amount(
@@ -3731,6 +3736,7 @@
         );
 
         <span class="kw">let </span><span class="kw-2">mut </span>outputs = Vec::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>output_sms = Vec::new();
 
         <span class="kw">for </span>(amount, num) <span class="kw">in </span>denominations.iter() {
             <span class="kw">for _ in </span><span class="number">0</span>..num {
@@ -3757,6 +3763,8 @@
                 outputs.push(ClientOutput {
                     output: MintOutput::new_v0(amount, blind_nonce),
                     amount,
+                });
+                output_sms.push(ClientOutputSM {
                     state_machines: state_generator,
                 });
             }
@@ -3764,7 +3772,7 @@
 
         <span class="macro">assert!</span>(!outputs.is_empty());
 
-        outputs
+        ClientOutputBundle::new(outputs, output_sms)
     }
 
     <span class="doccomment">/// Returns the number of held e-cash notes per denomination

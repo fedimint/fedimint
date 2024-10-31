@@ -2224,7 +2224,32 @@
 <a href="#2223" id="2223">2223</a>
 <a href="#2224" id="2224">2224</a>
 <a href="#2225" id="2225">2225</a>
-<a href="#2226" id="2226">2226</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2226" id="2226">2226</a>
+<a href="#2227" id="2227">2227</a>
+<a href="#2228" id="2228">2228</a>
+<a href="#2229" id="2229">2229</a>
+<a href="#2230" id="2230">2230</a>
+<a href="#2231" id="2231">2231</a>
+<a href="#2232" id="2232">2232</a>
+<a href="#2233" id="2233">2233</a>
+<a href="#2234" id="2234">2234</a>
+<a href="#2235" id="2235">2235</a>
+<a href="#2236" id="2236">2236</a>
+<a href="#2237" id="2237">2237</a>
+<a href="#2238" id="2238">2238</a>
+<a href="#2239" id="2239">2239</a>
+<a href="#2240" id="2240">2240</a>
+<a href="#2241" id="2241">2241</a>
+<a href="#2242" id="2242">2242</a>
+<a href="#2243" id="2243">2243</a>
+<a href="#2244" id="2244">2244</a>
+<a href="#2245" id="2245">2245</a>
+<a href="#2246" id="2246">2246</a>
+<a href="#2247" id="2247">2247</a>
+<a href="#2248" id="2248">2248</a>
+<a href="#2249" id="2249">2249</a>
+<a href="#2250" id="2250">2250</a>
+<a href="#2251" id="2251">2251</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2265,7 +2290,8 @@
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{
-    ClientInput, ClientInputBundle, ClientOutput, TransactionBuilder,
+    ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, ClientOutputSM,
+    TransactionBuilder,
 };
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
@@ -2905,7 +2931,8 @@
         fed_id: FederationId,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">'a</span>,
     ) -&gt; anyhow::Result&lt;(
-        ClientOutput&lt;LightningOutputV0, LightningClientStateMachines&gt;,
+        ClientOutput&lt;LightningOutputV0&gt;,
+        ClientOutputSM&lt;LightningClientStateMachines&gt;,
         ContractId,
     )&gt; {
         <span class="kw">let </span>federation_currency: Currency =
@@ -2993,6 +3020,8 @@
             ClientOutput {
                 output: ln_output,
                 amount: contract_amount,
+            },
+            ClientOutputSM {
                 state_machines: sm_gen,
             },
             contract_id,
@@ -3007,7 +3036,8 @@
         operation_id: OperationId,
         invoice: Bolt11Invoice,
     ) -&gt; anyhow::Result&lt;(
-        ClientOutput&lt;LightningOutputV0, LightningClientStateMachines&gt;,
+        ClientOutput&lt;LightningOutputV0&gt;,
+        ClientOutputSM&lt;LightningClientStateMachines&gt;,
         ContractId,
     )&gt; {
         <span class="kw">let </span>payment_hash = invoice.payment_hash();
@@ -3027,9 +3057,12 @@
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutputV0, LightningClientStateMachines&gt; {
+        <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutputV0&gt; {
             output: incoming_output,
             amount,
+        };
+
+        <span class="kw">let </span>client_output_sm = ClientOutputSM::&lt;LightningClientStateMachines&gt; {
             state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
                 <span class="macro">vec!</span>[LightningClientStateMachines::InternalPay(
                     IncomingStateMachine {
@@ -3044,7 +3077,7 @@
             }),
         };
 
-        <span class="prelude-val">Ok</span>((client_output, contract_id))
+        <span class="prelude-val">Ok</span>((client_output, client_output_sm, contract_id))
     }
 
     <span class="doccomment">/// Returns a bool indicating if it was an external receive
@@ -3101,7 +3134,7 @@
     ) -&gt; anyhow::Result&lt;(
         OperationId,
         Bolt11Invoice,
-        ClientOutput&lt;LightningOutput, LightningClientStateMachines&gt;,
+        ClientOutputBundle&lt;LightningOutput, LightningClientStateMachines&gt;,
         [u8; <span class="number">32</span>],
     )&gt; {
         <span class="kw">let </span>preimage_key: [u8; <span class="number">33</span>] = receiving_key.public_key().serialize();
@@ -3191,11 +3224,15 @@
         <span class="prelude-val">Ok</span>((
             operation_id,
             invoice,
-            ClientOutput {
-                output: ln_output,
-                amount: Amount::ZERO,
-                state_machines: sm_gen,
-            },
+            ClientOutputBundle::new(
+                <span class="macro">vec!</span>[ClientOutput {
+                    output: ln_output,
+                    amount: Amount::ZERO,
+                }],
+                <span class="macro">vec!</span>[ClientOutputSM {
+                    state_machines: sm_gen,
+                }],
+            ),
             preimage.into_32(),
         ))
     }
@@ -3369,14 +3406,19 @@
             is_internal_payment = invoice_routes_back_to_federation(<span class="kw-2">&amp;</span>invoice, gateways);
         }
 
-        <span class="kw">let </span>(pay_type, client_output, contract_id) = <span class="kw">if </span>is_internal_payment {
-            <span class="kw">let </span>(output, contract_id) = <span class="self">self
+        <span class="kw">let </span>(pay_type, client_output, client_output_sm, contract_id) = <span class="kw">if </span>is_internal_payment {
+            <span class="kw">let </span>(output, output_sm, contract_id) = <span class="self">self
                 </span>.create_incoming_output(operation_id, invoice.clone())
                 .<span class="kw">await</span><span class="question-mark">?</span>;
-            (PayType::Internal(operation_id), output, contract_id)
+            (
+                PayType::Internal(operation_id),
+                output,
+                output_sm,
+                contract_id,
+            )
         } <span class="kw">else </span>{
             <span class="kw">let </span>gateway = maybe_gateway.context(PayBolt11InvoiceError::NoLnGatewayAvailable)<span class="question-mark">?</span>;
-            <span class="kw">let </span>(output, contract_id) = <span class="self">self
+            <span class="kw">let </span>(output, output_sm, contract_id) = <span class="self">self
                 </span>.create_outgoing_output(
                     operation_id,
                     invoice.clone(),
@@ -3389,7 +3431,12 @@
                     rand::rngs::OsRng,
                 )
                 .<span class="kw">await</span><span class="question-mark">?</span>;
-            (PayType::Lightning(operation_id), output, contract_id)
+            (
+                PayType::Lightning(operation_id),
+                output,
+                output_sm,
+                contract_id,
+            )
         };
 
         <span class="comment">// Verify that no other outgoing contract exists or the value is empty
@@ -3417,13 +3464,15 @@
             <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">"User client will only create contract outputs on spend"</span>),
         };
 
-        <span class="kw">let </span>output = <span class="self">self</span>.client_ctx.make_client_output(ClientOutput {
-            output: LightningOutput::V0(client_output.output),
-            amount: client_output.amount,
-            state_machines: client_output.state_machines,
-        });
+        <span class="kw">let </span>output = <span class="self">self</span>.client_ctx.make_client_outputs(ClientOutputBundle::new(
+            <span class="macro">vec!</span>[ClientOutput {
+                output: LightningOutput::V0(client_output.output),
+                amount: client_output.amount,
+            }],
+            <span class="macro">vec!</span>[client_output_sm],
+        ));
 
-        <span class="kw">let </span>tx = TransactionBuilder::new().with_output(output);
+        <span class="kw">let </span>tx = TransactionBuilder::new().with_outputs(output);
         <span class="kw">let </span>extra_meta =
             serde_json::to_value(extra_meta).context(<span class="string">"Failed to serialize extra meta"</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>operation_meta_gen = |txid, change| LightningOperationMeta {
@@ -3839,7 +3888,8 @@
             bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.network),
         )<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>tx = TransactionBuilder::new().with_output(<span class="self">self</span>.client_ctx.make_client_output(output));
+        <span class="kw">let </span>tx =
+            TransactionBuilder::new().with_outputs(<span class="self">self</span>.client_ctx.make_client_outputs(output));
         <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta).expect(<span class="string">"extra_meta is serializable"</span>);
         <span class="kw">let </span>operation_meta_gen = |txid, <span class="kw">_</span>| LightningOperationMeta {
             variant: LightningOperationMetaVariant::Receive {

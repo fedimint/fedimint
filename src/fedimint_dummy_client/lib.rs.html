@@ -403,7 +403,22 @@
 <a href="#402" id="402">402</a>
 <a href="#403" id="403">403</a>
 <a href="#404" id="404">404</a>
-<a href="#405" id="405">405</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -423,7 +438,8 @@
 <span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::sm::{Context, ModuleNotifier};
 <span class="kw">use </span>fedimint_client::transaction::{
-    ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, TransactionBuilder,
+    ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
+    ClientOutputSM, TransactionBuilder,
 };
 <span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleKind, OperationId};
@@ -508,7 +524,7 @@
         output_amount: Amount,
     ) -&gt; anyhow::Result&lt;(
         ClientInputBundle&lt;DummyInput, DummyStateMachine&gt;,
-        Vec&lt;ClientOutput&lt;DummyOutput, DummyStateMachine&gt;&gt;,
+        ClientOutputBundle&lt;DummyOutput, DummyStateMachine&gt;,
     )&gt; {
         dbtx.ensure_isolated().expect(<span class="string">"must be isolated"</span>);
 
@@ -545,9 +561,15 @@
                     }),
                 };
 
-                <span class="prelude-val">Ok</span>((ClientInputBundle::new(<span class="macro">vec!</span>[input], <span class="macro">vec!</span>[input_sm]), <span class="macro">vec!</span>[]))
+                <span class="prelude-val">Ok</span>((
+                    ClientInputBundle::new(<span class="macro">vec!</span>[input], <span class="macro">vec!</span>[input_sm]),
+                    ClientOutputBundle::new(<span class="macro">vec!</span>[], <span class="macro">vec!</span>[]),
+                ))
             }
-            Ordering::Equal =&gt; <span class="prelude-val">Ok</span>((ClientInputBundle::new(<span class="macro">vec!</span>[], <span class="macro">vec!</span>[]), <span class="macro">vec!</span>[])),
+            Ordering::Equal =&gt; <span class="prelude-val">Ok</span>((
+                ClientInputBundle::new(<span class="macro">vec!</span>[], <span class="macro">vec!</span>[]),
+                ClientOutputBundle::new(<span class="macro">vec!</span>[], <span class="macro">vec!</span>[]),
+            )),
             Ordering::Greater =&gt; {
                 <span class="kw">let </span>missing_output_amount = input_amount - output_amount;
                 <span class="kw">let </span>output = ClientOutput {
@@ -556,6 +578,9 @@
                         account: <span class="self">self</span>.key.public_key(),
                     },
                     amount: missing_output_amount,
+                };
+
+                <span class="kw">let </span>output_sm = ClientOutputSM {
                     state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
                         <span class="macro">vec!</span>[DummyStateMachine::Output(
                             missing_output_amount,
@@ -565,7 +590,10 @@
                     }),
                 };
 
-                <span class="prelude-val">Ok</span>((ClientInputBundle::new(<span class="macro">vec!</span>[], <span class="macro">vec!</span>[]), <span class="macro">vec!</span>[output]))
+                <span class="prelude-val">Ok</span>((
+                    ClientInputBundle::new(<span class="macro">vec!</span>[], <span class="macro">vec!</span>[]),
+                    ClientOutputBundle::new(<span class="macro">vec!</span>[output], <span class="macro">vec!</span>[output_sm]),
+                ))
             }
         }
     }
@@ -681,11 +709,13 @@
         </span><span class="kw">let </span>output = ClientOutput {
             output: DummyOutput { amount, account },
             amount,
-            state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| Vec::&lt;DummyStateMachine&gt;::new()),
         };
 
         <span class="comment">// Build and send tx to the fed
-        </span><span class="kw">let </span>tx = TransactionBuilder::new().with_output(<span class="self">self</span>.client_ctx.make_client_output(output));
+        </span><span class="kw">let </span>tx = TransactionBuilder::new().with_outputs(
+            <span class="self">self</span>.client_ctx
+                .make_client_outputs(ClientOutputBundle::new_no_sm(<span class="macro">vec!</span>[output])),
+        );
 
         <span class="kw">let </span>outpoint = |txid, <span class="kw">_</span>| OutPoint { txid, out_idx: <span class="number">0 </span>};
         <span class="kw">let </span>(txid, <span class="kw">_</span>) = <span class="self">self
