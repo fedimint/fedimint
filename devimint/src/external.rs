@@ -5,13 +5,19 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, Context, Result};
+use bitcoin::hashes::Hash;
 use bitcoincore_rpc::bitcoin::{Address, BlockHash};
 use bitcoincore_rpc::bitcoincore_rpc_json::{GetBalancesResult, GetBlockchainInfoResult};
 use bitcoincore_rpc::jsonrpc::error::RpcError;
 use bitcoincore_rpc::RpcApi;
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::ClnRpc;
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_tx;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin30_to_bitcoin32_tx,
+    bitcoin30_to_bitcoin32_txid, bitcoin32_to_bitcoin30_address, bitcoin32_to_bitcoin30_amount,
+    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_sha256_hash,
+    bitcoin32_to_bitcoin30_txid,
+};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_core::task::{block_in_place, block_on, sleep, timeout};
@@ -223,29 +229,36 @@ impl Bitcoind {
         Ok(())
     }
 
-    pub async fn send_to(&self, addr: String, amount: u64) -> Result<bitcoin30::Txid> {
+    pub async fn send_to(&self, addr: String, amount: u64) -> Result<bitcoin::Txid> {
         debug!(target: LOG_DEVIMINT, amount, addr, "Sending funds from bitcoind");
-        let amount = bitcoin30::Amount::from_sat(amount);
+        let amount = bitcoin::Amount::from_sat(amount);
         let tx = self
             .wallet_client()
             .await?
             .send_to_address(
-                bitcoin30::Address::from_str(&addr)?.assume_checked(),
+                bitcoin32_to_bitcoin30_address(
+                    &bitcoin::Address::from_str(&addr)?.assume_checked(),
+                ),
                 amount,
             )
             .await?;
         Ok(tx)
     }
 
-    pub async fn get_txout_proof(&self, txid: bitcoin30::Txid) -> Result<String> {
+    pub async fn get_txout_proof(&self, txid: bitcoin::Txid) -> Result<String> {
         let client = self.wallet_client().await?.clone();
-        let proof = spawn_blocking(move || client.client.get_tx_out_proof(&[txid], None)).await??;
+        let proof = spawn_blocking(move || {
+            client
+                .client
+                .get_tx_out_proof(&[bitcoin32_to_bitcoin30_txid(&txid)], None)
+        })
+        .await??;
         Ok(proof.encode_hex())
     }
 
     /// Poll a transaction by its txid until it is found in the mempool or in a
     /// block.
-    pub async fn poll_get_transaction(&self, txid: bitcoin30::Txid) -> anyhow::Result<String> {
+    pub async fn poll_get_transaction(&self, txid: bitcoin::Txid) -> anyhow::Result<String> {
         poll("Waiting for transaction in mempool", || async {
             match self
                 .get_transaction(txid)
@@ -263,7 +276,7 @@ impl Bitcoind {
     }
 
     /// Get a transaction by its txid. Checks the mempool and all blocks.
-    async fn get_transaction(&self, txid: bitcoin30::Txid) -> Result<Option<String>> {
+    async fn get_transaction(&self, txid: bitcoin::Txid) -> Result<Option<String>> {
         // Check the mempool.
         match self.get_raw_transaction(txid, None).await {
             // The RPC succeeded, and the transaction was not found in the mempool. Continue to
@@ -303,12 +316,14 @@ impl Bitcoind {
 
     async fn get_raw_transaction(
         &self,
-        txid: bitcoin30::Txid,
+        txid: bitcoin::Txid,
         block_hash: Option<BlockHash>,
     ) -> Result<Option<String>> {
         let client = self.client.clone();
-        let tx_or =
-            spawn_blocking(move || client.get_raw_transaction(&txid, block_hash.as_ref())).await?;
+        let tx_or = spawn_blocking(move || {
+            client.get_raw_transaction(&bitcoin32_to_bitcoin30_txid(&txid), block_hash.as_ref())
+        })
+        .await?;
 
         let tx = match tx_or {
             Ok(tx) => tx,
@@ -358,15 +373,24 @@ impl Bitcoind {
     pub async fn send_to_address(
         &self,
         addr: Address,
-        amount: bitcoin30::Amount,
-    ) -> anyhow::Result<bitcoin30::Txid> {
+        amount: bitcoin::Amount,
+    ) -> anyhow::Result<bitcoin::Txid> {
         let client = self.wallet_client().await?.clone();
-        Ok(spawn_blocking(move || {
-            client
-                .client
-                .send_to_address(&addr, amount, None, None, None, None, None, None)
-        })
-        .await??)
+        Ok(bitcoin30_to_bitcoin32_txid(
+            &spawn_blocking(move || {
+                client.client.send_to_address(
+                    &addr,
+                    bitcoin32_to_bitcoin30_amount(&amount),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+            })
+            .await??,
+        ))
     }
 
     pub(crate) async fn get_balances(&self) -> anyhow::Result<GetBalancesResult> {
@@ -774,9 +798,9 @@ impl Lnd {
     ) -> anyhow::Result<([u8; 32], String, cln_rpc::primitives::Sha256)> {
         let preimage = rand::random::<[u8; 32]>();
         let hash = {
-            let mut engine = bitcoin30::hashes::sha256::Hash::engine();
-            bitcoin30::hashes::HashEngine::input(&mut engine, &preimage);
-            bitcoin30::hashes::sha256::Hash::from_engine(engine)
+            let mut engine = bitcoin::hashes::sha256::Hash::engine();
+            bitcoin::hashes::HashEngine::input(&mut engine, &preimage);
+            bitcoin::hashes::sha256::Hash::from_engine(engine)
         };
         let hold_request = self
             .invoices_client_lock()
@@ -789,7 +813,11 @@ impl Lnd {
             .await?
             .into_inner();
         let payment_request = hold_request.payment_request;
-        Ok((preimage, payment_request, hash))
+        Ok((
+            preimage,
+            payment_request,
+            bitcoin32_to_bitcoin30_sha256_hash(&hash),
+        ))
     }
 
     pub async fn settle_hold_invoice(
@@ -1041,7 +1069,9 @@ pub async fn open_channels_between_gateways(
     let mut is_missing_any_txids = false;
     for txid_or in &channel_funding_txids {
         if let Some(txid) = txid_or {
-            bitcoind.poll_get_transaction(*txid).await?;
+            bitcoind
+                .poll_get_transaction(bitcoin30_to_bitcoin32_txid(txid))
+                .await?;
         } else {
             is_missing_any_txids = true;
         }
@@ -1069,8 +1099,16 @@ pub async fn open_channels_between_gateways(
         let gw_a_node_pubkey = gw_a.lightning_pubkey().await?;
         let gw_b_node_pubkey = gw_b.lightning_pubkey().await?;
 
-        wait_for_ready_channel_on_gateway_with_counterparty(gw_b, gw_a_node_pubkey).await?;
-        wait_for_ready_channel_on_gateway_with_counterparty(gw_a, gw_b_node_pubkey).await?;
+        wait_for_ready_channel_on_gateway_with_counterparty(
+            gw_b,
+            bitcoin30_to_bitcoin32_secp256k1_pubkey(&gw_a_node_pubkey),
+        )
+        .await?;
+        wait_for_ready_channel_on_gateway_with_counterparty(
+            gw_a,
+            bitcoin30_to_bitcoin32_secp256k1_pubkey(&gw_b_node_pubkey),
+        )
+        .await?;
     }
 
     Ok(())
@@ -1078,7 +1116,7 @@ pub async fn open_channels_between_gateways(
 
 async fn wait_for_ready_channel_on_gateway_with_counterparty(
     gw: &Gatewayd,
-    counterparty_lightning_node_pubkey: bitcoin30::secp256k1::PublicKey,
+    counterparty_lightning_node_pubkey: bitcoin::secp256k1::PublicKey,
 ) -> anyhow::Result<()> {
     poll("Wait for channel update", || async {
         let channels = gw
@@ -1087,10 +1125,10 @@ async fn wait_for_ready_channel_on_gateway_with_counterparty(
             .context("list channels")
             .map_err(ControlFlow::Break)?;
 
-        if channels
-            .iter()
-            .any(|channel| channel.remote_pubkey == counterparty_lightning_node_pubkey)
-        {
+        if channels.iter().any(|channel| {
+            channel.remote_pubkey
+                == bitcoin32_to_bitcoin30_secp256k1_pubkey(&counterparty_lightning_node_pubkey)
+        }) {
             return Ok(());
         }
 

@@ -391,6 +391,12 @@ pub fn bitcoin30_to_bitcoin32_sha256_hash(
     *bitcoin::hashes::sha256::Hash::from_bytes_ref(hash.as_ref())
 }
 
+pub fn bitcoin32_to_bitcoin30_sha256_hash(
+    hash: &bitcoin::hashes::sha256::Hash,
+) -> bitcoin30::hashes::sha256::Hash {
+    bitcoin30::hashes::sha256::Hash::from_slice(hash.as_ref()).expect("Invalid hash length")
+}
+
 fn bitcoin30_to_bitcoin32_sha256d_hash(
     hash: &bitcoin30::hashes::sha256d::Hash,
 ) -> bitcoin::hashes::sha256d::Hash {

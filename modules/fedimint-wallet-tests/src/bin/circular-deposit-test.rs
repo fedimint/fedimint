@@ -6,7 +6,7 @@ use bitcoincore_rpc::bitcoin::address::Address;
 use bitcoincore_rpc::bitcoin::Txid;
 use devimint::cmd;
 use devimint::federation::Client;
-use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_tx;
+use fedimint_core::bitcoin_migration::{bitcoin30_to_bitcoin32_txid, bitcoin32_to_bitcoin30_tx};
 use fedimint_core::encoding::Decodable;
 use tokio::try_join;
 
@@ -41,7 +41,9 @@ async fn assert_withdrawal(
 
     // Verify federation broadcasts withdrawal tx
     let txid: Txid = withdraw_res["txid"].as_str().unwrap().parse().unwrap();
-    let tx_hex = bitcoind.poll_get_transaction(txid).await?;
+    let tx_hex = bitcoind
+        .poll_get_transaction(bitcoin30_to_bitcoin32_txid(&txid))
+        .await?;
 
     let parsed_address = Address::from_str(&deposit_address)?;
     let tx = bitcoin32_to_bitcoin30_tx(&Transaction::consensus_decode_hex(
