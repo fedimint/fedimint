@@ -744,7 +744,7 @@ impl LightningClientModule {
         };
 
         let contract_id = contract.contract_id();
-        let sm_gen = Arc::new(move |funding_txid: TransactionId, _input_idx: u64| {
+        let sm_gen = Arc::new(move |funding_txid: TransactionId, _| {
             vec![LightningClientStateMachines::LightningPay(
                 LightningPayStateMachine {
                     common: LightningPayCommon {
@@ -957,7 +957,7 @@ impl LightningClientModule {
         let operation_id = OperationId(invoice.payment_hash().to_byte_array());
 
         let sm_invoice = invoice.clone();
-        let sm_gen = Arc::new(move |txid: TransactionId, _input_idx: u64| {
+        let sm_gen = Arc::new(move |txid: TransactionId, _| {
             vec![LightningClientStateMachines::Receive(
                 LightningReceiveStateMachine {
                     operation_id,

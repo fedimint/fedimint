@@ -26,6 +26,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::io::Read;
+use std::ops::RangeInclusive;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -759,45 +760,40 @@ impl ClientModule for MintClientModule {
         ClientInputBundle<MintInput, MintClientStateMachines>,
         ClientOutputBundle<MintOutput, MintClientStateMachines>,
     )> {
-        let consolidation_inputs = self.consolidate_notes(dbtx, operation_id).await?;
+        let consolidation_inputs = self.consolidate_notes(dbtx).await?;
 
         input_amount += consolidation_inputs
-            .inputs()
             .iter()
-            .map(|input| input.amount)
+            .map(|input| input.0.amount)
             .sum();
 
         output_amount += consolidation_inputs
-            .inputs()
             .iter()
-            .map(|input| self.cfg.fee_consensus.fee(input.amount))
+            .map(|input| self.cfg.fee_consensus.fee(input.0.amount))
             .sum();
 
         let additional_inputs = self
-            .create_sufficient_input(
-                dbtx,
-                operation_id,
-                output_amount.saturating_sub(input_amount),
-            )
+            .create_sufficient_input(dbtx, output_amount.saturating_sub(input_amount))
             .await?;
 
-        input_amount += additional_inputs
-            .inputs()
-            .iter()
-            .map(|input| input.amount)
-            .sum();
+        input_amount += additional_inputs.iter().map(|input| input.0.amount).sum();
 
         output_amount += additional_inputs
-            .inputs()
             .iter()
-            .map(|input| self.cfg.fee_consensus.fee(input.amount))
+            .map(|input| self.cfg.fee_consensus.fee(input.0.amount))
             .sum();
 
         let outputs = self
             .create_output(dbtx, operation_id, 2, input_amount - output_amount)
             .await;
 
-        Ok((consolidation_inputs.with(additional_inputs), outputs))
+        Ok((
+            create_bundle_for_inputs(
+                [consolidation_inputs, additional_inputs].concat(),
+                operation_id,
+            ),
+            outputs,
+        ))
     }
 
     async fn await_primary_module_output(
@@ -982,11 +978,10 @@ impl MintClientModule {
     async fn create_sufficient_input(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        operation_id: OperationId,
         min_amount: Amount,
-    ) -> anyhow::Result<ClientInputBundle<MintInput, MintClientStateMachines>> {
+    ) -> anyhow::Result<Vec<(ClientInput<MintInput>, SpendableNote)>> {
         if min_amount == Amount::ZERO {
-            return Ok(ClientInputBundle::new(vec![], vec![]));
+            return Ok(vec![]);
         }
 
         let selected_notes = Self::select_notes(
@@ -1002,10 +997,9 @@ impl MintClientModule {
             MintClientModule::delete_spendable_note(&self.client_ctx, dbtx, amount, note).await;
         }
 
-        let inputs = self.create_input_from_notes(operation_id, selected_notes)?;
+        let inputs = self.create_input_from_notes(selected_notes)?;
 
-        assert!(!inputs.inputs().is_empty());
-        assert!(!inputs.sms().is_empty());
+        assert!(!inputs.is_empty());
 
         Ok(inputs)
     }
@@ -1073,24 +1067,11 @@ impl MintClientModule {
         );
 
         let mut outputs = Vec::new();
-        let mut output_sms = Vec::new();
+        let mut output_states = Vec::new();
 
         for (amount, num) in denominations.iter() {
             for _ in 0..num {
                 let (issuance_request, blind_nonce) = self.new_ecash_note(amount, dbtx).await;
-
-                let state_generator = Arc::new(move |txid, out_idx| {
-                    vec![MintClientStateMachines::Output(MintOutputStateMachine {
-                        common: MintOutputCommon {
-                            operation_id,
-                            out_point: OutPoint { txid, out_idx },
-                        },
-                        state: MintOutputStates::Created(MintOutputStatesCreated {
-                            amount,
-                            issuance_request,
-                        }),
-                    })]
-                });
 
                 debug!(
                     %amount,
@@ -1101,13 +1082,39 @@ impl MintClientModule {
                     output: MintOutput::new_v0(amount, blind_nonce),
                     amount,
                 });
-                output_sms.push(ClientOutputSM {
-                    state_machines: state_generator,
+
+                output_states.push(MintOutputStatesCreated {
+                    amount,
+                    issuance_request,
                 });
             }
         }
 
-        ClientOutputBundle::new(outputs, output_sms)
+        let state_generator = Arc::new(move |txid, out_idxs: RangeInclusive<u64>| {
+            out_idxs
+                .clone()
+                .flat_map(|out_idx| {
+                    let output_i = (out_idx - out_idxs.clone().start()) as usize;
+                    let output_state = output_states.get(output_i).copied().unwrap();
+                    vec![MintClientStateMachines::Output(MintOutputStateMachine {
+                        common: MintOutputCommon {
+                            operation_id,
+                            out_point: OutPoint { txid, out_idx },
+                        },
+                        state: MintOutputStates::Created(output_state),
+                    })]
+                })
+                .collect()
+        });
+
+        assert!(!outputs.is_empty());
+
+        ClientOutputBundle::new(
+            outputs,
+            vec![ClientOutputSM {
+                state_machines: state_generator,
+            }],
+        )
     }
 
     /// Returns the number of held e-cash notes per denomination
@@ -1169,8 +1176,7 @@ impl MintClientModule {
     pub async fn consolidate_notes(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        operation_id: OperationId,
-    ) -> anyhow::Result<ClientInputBundle<MintInput, MintClientStateMachines>> {
+    ) -> anyhow::Result<Vec<(ClientInput<MintInput>, SpendableNote)>> {
         /// At how many notes of the same denomination should we try to
         /// consolidate
         const MAX_NOTES_PER_TIER_TRIGGER: usize = 8;
@@ -1192,7 +1198,7 @@ impl MintClientModule {
             .any(|(_, count)| MAX_NOTES_PER_TIER_TRIGGER < count);
 
         if !should_consolidate {
-            return Ok(ClientInputBundle::new(vec![], vec![]));
+            return Ok(vec![]);
         }
 
         let mut max_count = MAX_NOTES_TO_CONSOLIDATE_IN_TX;
@@ -1229,18 +1235,16 @@ impl MintClientModule {
             selected_notes_decoded.push((amount, spendable_note_decoded));
         }
 
-        self.create_input_from_notes(operation_id, selected_notes_decoded.into_iter().collect())
+        self.create_input_from_notes(selected_notes_decoded.into_iter().collect())
     }
 
     /// Create a mint input from external, potentially untrusted notes
     #[allow(clippy::type_complexity)]
     pub fn create_input_from_notes(
         &self,
-        operation_id: OperationId,
         notes: TieredMulti<SpendableNote>,
-    ) -> anyhow::Result<ClientInputBundle<MintInput, MintClientStateMachines>> {
-        let mut inputs = Vec::new();
-        let mut input_sms = Vec::new();
+    ) -> anyhow::Result<Vec<(ClientInput<MintInput>, SpendableNote)>> {
+        let mut inputs_and_notes = Vec::new();
 
         for (amount, spendable_note) in notes.into_iter_items() {
             let key = self
@@ -1255,32 +1259,17 @@ impl MintClientModule {
                 bail!("Invalid note");
             }
 
-            let sm_gen = Arc::new(move |txid, input_idx| {
-                vec![MintClientStateMachines::Input(MintInputStateMachine {
-                    common: MintInputCommon {
-                        operation_id,
-                        txid,
-                        input_idx,
-                    },
-                    state: MintInputStates::Created(MintInputStateCreated {
-                        amount,
-                        spendable_note,
-                    }),
-                })]
-            });
-
-            inputs.push(ClientInput {
-                input: MintInput::new_v0(amount, note),
-                keys: vec![spendable_note.spend_key],
-                amount,
-            });
-
-            input_sms.push(ClientInputSM {
-                state_machines: sm_gen,
-            });
+            inputs_and_notes.push((
+                ClientInput {
+                    input: MintInput::new_v0(amount, note),
+                    keys: vec![spendable_note.spend_key],
+                    amount,
+                },
+                spendable_note,
+            ));
         }
 
-        Ok(ClientInputBundle::new(inputs, input_sms))
+        Ok(inputs_and_notes)
     }
 
     async fn spend_notes_oob(
@@ -1475,9 +1464,12 @@ impl MintClientModule {
         );
 
         let amount = notes.total_amount();
-        let mint_inputs = self.create_input_from_notes(operation_id, notes)?;
+        let mint_inputs = self.create_input_from_notes(notes)?;
 
-        let tx = TransactionBuilder::new().with_inputs(self.client_ctx.make_dyn(mint_inputs));
+        let tx = TransactionBuilder::new().with_inputs(
+            self.client_ctx
+                .make_dyn(create_bundle_for_inputs(mint_inputs, operation_id)),
+        );
 
         let extra_meta = serde_json::to_value(extra_meta)
             .expect("MintClientModule::reissue_external_notes extra_meta is serializable");
@@ -2358,6 +2350,47 @@ pub fn represent_amount<K>(
     assert!(represented + fee_consensus.fee(Amount::from_msats(1)).msats >= amount.msats);
 
     denominations
+}
+
+pub(crate) fn create_bundle_for_inputs(
+    inputs_and_notes: Vec<(ClientInput<MintInput>, SpendableNote)>,
+    operation_id: OperationId,
+) -> ClientInputBundle<MintInput, MintClientStateMachines> {
+    let mut inputs = Vec::new();
+    let mut input_states = Vec::new();
+
+    for (input, spendable_note) in inputs_and_notes {
+        input_states.push(MintInputStateCreated {
+            amount: input.amount,
+            spendable_note,
+        });
+        inputs.push(input);
+    }
+
+    let input_sm = Arc::new(move |txid, input_idxs: RangeInclusive<u64>| {
+        input_idxs
+            .clone()
+            .flat_map(|input_idx| {
+                let input_i = (input_idx - input_idxs.clone().start()) as usize;
+                let input_state = input_states.get(input_i).cloned().unwrap();
+                vec![MintClientStateMachines::Input(MintInputStateMachine {
+                    common: MintInputCommon {
+                        operation_id,
+                        txid,
+                        input_idx,
+                    },
+                    state: MintInputStates::Created(input_state),
+                })]
+            })
+            .collect()
+    });
+
+    ClientInputBundle::new(
+        inputs,
+        vec![ClientInputSM {
+            state_machines: input_sm,
+        }],
+    )
 }
 
 #[cfg(test)]

@@ -33,7 +33,7 @@ pub enum MintInputStates {
     RefundSuccess(MintInputStateRefundSuccess),
 }
 
-#[derive(Debug, Copy, Clone, Eq, Hash, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq, Decodable, Encodable)]
 pub struct MintInputCommon {
     pub(crate) operation_id: OperationId,
     pub(crate) txid: TransactionId,
@@ -85,7 +85,7 @@ impl MintInputStateCreated {
     ) -> Vec<StateTransition<MintInputStateMachine>> {
         let global_context = global_context.clone();
         vec![StateTransition::new(
-            Self::await_success(*common, global_context.clone()),
+            Self::await_success(common.clone(), global_context.clone()),
             move |dbtx, result, old_state| {
                 Box::pin(Self::transition_success(
                     result,

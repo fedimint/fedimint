@@ -111,7 +111,8 @@ use fedimint_core::config::{
     ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig, ModuleInitRegistry,
 };
 use fedimint_core::core::{
-    DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId,
+    DynInput, DynOutput, IInput, IOutput, IntoDynInstance as _, ModuleInstanceId, ModuleKind,
+    OperationId,
 };
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseKey, DatabaseRecord, DatabaseTransaction,
@@ -495,8 +496,8 @@ impl DynGlobalClientContext {
 fn states_to_instanceless_dyn<S: IState + MaybeSend + MaybeSync + 'static>(
     state_gen: StateGenerator<S>,
 ) -> StateGenerator<Box<maybe_add_send_sync!(dyn IState + 'static)>> {
-    Arc::new(move |txid, out_idx| {
-        let states: Vec<S> = state_gen(txid, out_idx);
+    Arc::new(move |txid, out_idxs| {
+        let states: Vec<S> = state_gen(txid, out_idxs);
         states
             .into_iter()
             .map(|state| box_up_state(state))
@@ -557,27 +558,10 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
     async fn claim_inputs_dyn(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        InstancelessDynClientInputBundle { inputs, sms }: InstancelessDynClientInputBundle,
+        inputs: InstancelessDynClientInputBundle,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
-        let mut tx_builder = TransactionBuilder::new();
-
-        for input in inputs {
-            let instance_input = ClientInput {
-                input: DynInput::from_parts(self.module_instance_id, input.input),
-                keys: input.keys,
-                amount: input.amount,
-            };
-            tx_builder = tx_builder.with_input(instance_input);
-        }
-        for input_sm in sms {
-            let instance_input_sm = ClientInputSM {
-                state_machines: states_add_instance(
-                    self.module_instance_id,
-                    input_sm.state_machines,
-                ),
-            };
-            tx_builder = tx_builder.with_input_sm(instance_input_sm);
-        }
+        let tx_builder =
+            TransactionBuilder::new().with_inputs(inputs.into_dyn(self.module_instance_id));
 
         self.client
             .finalize_and_submit_transaction_inner(
@@ -591,24 +575,10 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
     async fn fund_output_dyn(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        InstancelessDynClientOutputBundle { outputs, sms }: InstancelessDynClientOutputBundle,
+        outputs: InstancelessDynClientOutputBundle,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
-        let mut tx_builder = TransactionBuilder::new();
-
-        for output in outputs {
-            let instance_output = ClientOutput {
-                output: DynOutput::from_parts(self.module_instance_id, output.output),
-                amount: output.amount,
-            };
-            tx_builder = tx_builder.with_output(instance_output);
-        }
-
-        for sm in sms {
-            let instance_output_sm = ClientOutputSM {
-                state_machines: states_add_instance(self.module_instance_id, sm.state_machines),
-            };
-            tx_builder = tx_builder.with_output_sm(instance_output_sm);
-        }
+        let tx_builder =
+            TransactionBuilder::new().with_outputs(outputs.into_dyn(self.module_instance_id));
 
         self.client
             .finalize_and_submit_transaction_inner(
@@ -1195,8 +1165,8 @@ impl Client {
         // in order to balance it. Notice that it may stay empty in case the transaction
         // is already balanced.
         let change_range = Range {
-            start: partial_transaction.outputs().len() as u64,
-            end: (partial_transaction.outputs().len() + change_outputs.outputs.len()) as u64,
+            start: partial_transaction.outputs().count() as u64,
+            end: (partial_transaction.outputs().count() + change_outputs.outputs.len()) as u64,
         };
 
         partial_transaction = partial_transaction

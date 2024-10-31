@@ -1,6 +1,6 @@
 use anyhow::bail;
 use fedimint_client::transaction::{
-    ClientInput, ClientOutput, ClientOutputBundle, TransactionBuilder,
+    ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
 use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_secp256k1_pubkey,
@@ -97,7 +97,8 @@ async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Resul
         keys: vec![bitcoin30_to_bitcoin32_keypair(&account_kp)],
     };
 
-    let tx = TransactionBuilder::new().with_input(input.into_dyn(dummy.id));
+    let tx = TransactionBuilder::new()
+        .with_inputs(ClientInputBundle::new_no_sm(vec![input]).into_dyn(dummy.id));
     let outpoint = |txid, _| OutPoint { txid, out_idx: 0 };
     client
         .finalize_and_submit_transaction(op_id, KIND.as_str(), outpoint, tx)

@@ -9,7 +9,7 @@ use std::time::Duration;
 use assert_matches::assert_matches;
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_client::transaction::{
-    ClientInput, ClientOutput, ClientOutputBundle, TransactionBuilder,
+    ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
 use fedimint_client::ClientHandleArc;
 use fedimint_core::bitcoin_migration::{
@@ -397,7 +397,9 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
                 keys: vec![bitcoin30_to_bitcoin32_keypair(&gateway_module.redeem_key)],
             };
 
-            let tx = TransactionBuilder::new().with_input(client_input.into_dyn(gateway_module.id));
+            let tx = TransactionBuilder::new().with_inputs(
+                ClientInputBundle::new_no_sm(vec![client_input]).into_dyn(gateway_module.id),
+            );
             let operation_meta_gen = |_: TransactionId, _: Vec<OutPoint>| GatewayMeta::Pay {};
             let operation_id = OperationId(invoice.payment_hash().to_byte_array());
             let (txid, _) = gateway_client

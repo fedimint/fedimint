@@ -21,6 +21,7 @@ mod withdraw;
 
 use std::collections::BTreeMap;
 use std::future;
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -574,7 +575,9 @@ impl WalletClientModule {
 
         let amount = output.maybe_v0_ref().expect("v0 output").amount().into();
 
-        let sm_gen = move |txid, out_idx| {
+        let sm_gen = move |txid, out_idxs: RangeInclusive<u64>| {
+            assert_eq!(out_idxs.clone().count(), 1);
+            let out_idx = *out_idxs.start();
             vec![WalletClientStates::Withdraw(WithdrawStateMachine {
                 operation_id,
                 state: WithdrawStates::Created(CreatedWithdrawState {
@@ -600,7 +603,9 @@ impl WalletClientModule {
 
         let amount = output.maybe_v0_ref().expect("v0 output").amount().into();
 
-        let sm_gen = move |txid, out_idx| {
+        let sm_gen = move |txid, out_idxs: RangeInclusive<u64>| {
+            assert_eq!(out_idxs.clone().count(), 1);
+            let out_idx = *out_idxs.start();
             vec![WalletClientStates::Withdraw(WithdrawStateMachine {
                 operation_id,
                 state: WithdrawStates::Created(CreatedWithdrawState {
