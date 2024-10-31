@@ -659,7 +659,7 @@ fn states_add_instance(
     })
 }
 
-/// User handle to [`Client`]
+/// User handle to the [`Client`] instance
 ///
 /// On the drop of [`ClientHandle`] the client will be shut-down, and resources
 /// it used freed.
@@ -667,12 +667,13 @@ fn states_add_instance(
 /// Notably it [`ops::Deref`]s to the [`Client`] where most
 /// methods live.
 ///
-/// Put this in an Arc to clone it.
+/// Put this in an Arc to clone it (see [`ClientHandleArc`]).
 #[derive(Debug)]
 pub struct ClientHandle {
     inner: Option<Arc<Client>>,
 }
 
+/// An alias for a reference counted [`ClientHandle`]
 pub type ClientHandleArc = Arc<ClientHandle>;
 
 impl ClientHandle {
@@ -876,9 +877,12 @@ where
 
 /// Main client type
 ///
-/// A handle and API to interacting with a single Federation.
+/// A handle and API to interacting with a single federation. End user
+/// applications that want to support interacting with multiple federations at
+/// the same time, will need to instantiate and manage multiple instances of
+/// this struct.
 ///
-/// Under the hood managing service tasks, state machines,
+/// Under the hood it is starting and managing service tasks, state machines,
 /// database and other resources required.
 ///
 /// This type is shared externally and internally, and
