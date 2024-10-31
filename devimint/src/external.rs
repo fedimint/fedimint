@@ -11,6 +11,7 @@ use bitcoincore_rpc::jsonrpc::error::RpcError;
 use bitcoincore_rpc::RpcApi;
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::ClnRpc;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_tx;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_core::task::{block_in_place, block_on, sleep, timeout};
@@ -320,7 +321,7 @@ impl Bitcoind {
             ))) => return Ok(None),
             Err(err) => return Err(err.into()),
         };
-        let bytes = tx.consensus_encode_to_vec();
+        let bytes = bitcoin30_to_bitcoin32_tx(&tx).consensus_encode_to_vec();
         Ok(Some(bytes.encode_hex()))
     }
 

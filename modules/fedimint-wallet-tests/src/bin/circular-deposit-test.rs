@@ -1,10 +1,12 @@
 use std::str::FromStr;
 
 use anyhow::Result;
+use bitcoin::Transaction;
 use bitcoincore_rpc::bitcoin::address::Address;
-use bitcoincore_rpc::bitcoin::{Transaction, Txid};
+use bitcoincore_rpc::bitcoin::Txid;
 use devimint::cmd;
 use devimint::federation::Client;
+use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_tx;
 use fedimint_core::encoding::Decodable;
 use tokio::try_join;
 
@@ -42,7 +44,10 @@ async fn assert_withdrawal(
     let tx_hex = bitcoind.poll_get_transaction(txid).await?;
 
     let parsed_address = Address::from_str(&deposit_address)?;
-    let tx = Transaction::consensus_decode_hex(&tx_hex, &Default::default()).unwrap();
+    let tx = bitcoin32_to_bitcoin30_tx(&Transaction::consensus_decode_hex(
+        &tx_hex,
+        &Default::default(),
+    )?);
     assert!(tx.output.iter().any(|o| o.script_pubkey
         == parsed_address.clone().assume_checked().script_pubkey()
         && o.value == withdrawal_amount_sats));

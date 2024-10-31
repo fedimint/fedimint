@@ -2,7 +2,11 @@ use std::convert::Infallible;
 use std::hash::Hash;
 
 use anyhow::format_err;
-use bitcoin30::{BlockHash, OutPoint, Transaction};
+use bitcoin::{Amount, Transaction};
+use bitcoin30::{BlockHash, OutPoint};
+use fedimint_core::bitcoin_migration::{
+    bitcoin32_to_bitcoin30_script_buf, bitcoin32_to_bitcoin30_txid, bitcoin_32_to_bitcoin30_txout,
+};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::txoproof::TxOutProof;
@@ -65,7 +69,7 @@ impl PegInProof {
         tweak_contract_key: secp256k1::PublicKey,
     ) -> Result<PegInProof, PegInProofError> {
         // TODO: remove redundancy with serde validation
-        if !txout_proof.contains_tx(transaction.txid()) {
+        if !txout_proof.contains_tx(bitcoin32_to_bitcoin30_txid(&transaction.compute_txid())) {
             return Err(PegInProofError::TransactionNotInProof);
         }
 
@@ -103,7 +107,7 @@ impl PegInProof {
             .get(self.output_idx as usize)
             .expect("output_idx in-rangeness is an invariant guaranteed by constructors");
 
-        if txo.script_pubkey != script {
+        if bitcoin32_to_bitcoin30_script_buf(&txo.script_pubkey) != script {
             return Err(PegInProofError::ScriptDoesNotMatch);
         }
 
@@ -119,19 +123,24 @@ impl PegInProof {
     }
 
     pub fn identity(&self) -> (secp256k1::PublicKey, bitcoin30::Txid) {
-        (self.tweak_contract_key, self.transaction.txid())
+        (
+            self.tweak_contract_key,
+            bitcoin32_to_bitcoin30_txid(&self.transaction.compute_txid()),
+        )
     }
 
-    pub fn tx_output(&self) -> &bitcoin30::TxOut {
-        self.transaction
-            .output
-            .get(self.output_idx as usize)
-            .expect("output_idx in-rangeness is an invariant guaranteed by constructors")
+    pub fn tx_output(&self) -> bitcoin30::TxOut {
+        bitcoin_32_to_bitcoin30_txout(
+            self.transaction
+                .output
+                .get(self.output_idx as usize)
+                .expect("output_idx in-rangeness is an invariant guaranteed by constructors"),
+        )
     }
 
     pub fn outpoint(&self) -> bitcoin30::OutPoint {
         OutPoint {
-            txid: self.transaction.txid(),
+            txid: bitcoin32_to_bitcoin30_txid(&self.transaction.compute_txid()),
             vout: self.output_idx,
         }
     }
@@ -170,7 +179,9 @@ impl Tweakable for Descriptor<CompressedPublicKey> {
 }
 
 fn validate_peg_in_proof(proof: &PegInProof) -> Result<(), anyhow::Error> {
-    if !proof.txout_proof.contains_tx(proof.transaction.txid()) {
+    if !proof.txout_proof.contains_tx(bitcoin32_to_bitcoin30_txid(
+        &proof.transaction.compute_txid(),
+    )) {
         return Err(format_err!("Supplied transaction is not included in proof",));
     }
 
@@ -180,7 +191,7 @@ fn validate_peg_in_proof(proof: &PegInProof) -> Result<(), anyhow::Error> {
 
     match proof.transaction.output.get(proof.output_idx as usize) {
         Some(txo) => {
-            if txo.value > 2_100_000_000_000_000 {
+            if txo.value > Amount::MAX_MONEY {
                 return Err(format_err!("Txout amount out of range"));
             }
         }
