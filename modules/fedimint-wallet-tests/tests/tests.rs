@@ -12,8 +12,8 @@ use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_network, bitcoin30_to_bitcoin32_outpoint,
     bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin30_to_bitcoin32_tx,
     bitcoin30_to_bitcoin32_txid, bitcoin30_to_bitcoin32_unchecked_address,
-    bitcoin32_to_bitcoin30_address, bitcoin32_to_bitcoin30_amount, bitcoin32_to_bitcoin30_network,
-    bitcoin32_to_bitcoin30_txid,
+    bitcoin32_to_bitcoin30_address, bitcoin32_to_bitcoin30_amount,
+    bitcoin32_to_bitcoin30_block_hash, bitcoin32_to_bitcoin30_network, bitcoin32_to_bitcoin30_txid,
 };
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
@@ -153,9 +153,11 @@ async fn sanity_check_bitcoin_blocks() -> anyhow::Result<()> {
         bitcoin.get_tx_block_height(&tx.txid()).await,
         Some(expected_transaction_height),
     );
-    let expected_transaction_block_hash = dyn_bitcoin_rpc
-        .get_block_hash(expected_transaction_height)
-        .await?;
+    let expected_transaction_block_hash = bitcoin32_to_bitcoin30_block_hash(
+        &dyn_bitcoin_rpc
+            .get_block_hash(expected_transaction_height)
+            .await?,
+    );
     assert_eq!(proof.block(), expected_transaction_block_hash);
 
     Ok(())

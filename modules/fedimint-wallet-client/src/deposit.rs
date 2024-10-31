@@ -4,9 +4,7 @@ use std::time::{Duration, SystemTime};
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_script_buf, bitcoin30_to_bitcoin32_tx, bitcoin32_to_bitcoin30_txid,
-};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_script_buf;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1_29::Keypair;
@@ -103,10 +101,12 @@ async fn await_created_btc_transaction_submitted(
     context: WalletClientContext,
     tweak: Keypair,
 ) -> (bitcoin::Transaction, u32) {
-    let script = context
-        .wallet_descriptor
-        .tweak(&tweak.public_key(), &context.secp)
-        .script_pubkey();
+    let script = bitcoin30_to_bitcoin32_script_buf(
+        &context
+            .wallet_descriptor
+            .tweak(&tweak.public_key(), &context.secp)
+            .script_pubkey(),
+    );
     loop {
         match context.rpc.watch_script_history(&script).await {
             Ok(()) => break,
@@ -128,11 +128,8 @@ async fn await_created_btc_transaction_submitted(
                     warn!("More than one transaction was sent to deposit address, only considering the first one");
                 }
 
-                if let Some((transaction, out_idx)) = filter_onchain_deposit_outputs(
-                    received.iter().map(bitcoin30_to_bitcoin32_tx),
-                    &bitcoin30_to_bitcoin32_script_buf(&script),
-                )
-                .next()
+                if let Some((transaction, out_idx)) =
+                    filter_onchain_deposit_outputs(received.into_iter(), &script).next()
                 {
                     return (transaction, out_idx);
                 }
@@ -214,9 +211,7 @@ async fn await_btc_transaction_confirmed(
 
         let confirmation_block_count = match context
             .rpc
-            .get_tx_block_height(&bitcoin32_to_bitcoin30_txid(
-                &waiting_state.btc_transaction.compute_txid(),
-            ))
+            .get_tx_block_height(&waiting_state.btc_transaction.compute_txid())
             .await
         {
             Ok(Some(confirmation_height)) => Some(confirmation_height + 1),
@@ -244,9 +239,7 @@ async fn await_btc_transaction_confirmed(
         // Get txout proof
         let txout_proof = match context
             .rpc
-            .get_txout_proof(bitcoin32_to_bitcoin30_txid(
-                &waiting_state.btc_transaction.compute_txid(),
-            ))
+            .get_txout_proof(waiting_state.btc_transaction.compute_txid())
             .await
         {
             Ok(txout_proof) => txout_proof,
