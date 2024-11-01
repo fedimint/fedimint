@@ -8,8 +8,8 @@ use std::time::Duration;
 
 use anyhow::ensure;
 use async_stream::stream;
-use bitcoin30::key::Secp256k1;
-use bitcoin30::secp256k1::All;
+use bitcoin::key::Secp256k1;
+use bitcoin::secp256k1::All;
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::derivable_secret::ChildId;
@@ -146,7 +146,7 @@ impl ClientModuleInit for GatewayClientInit {
             redeem_key: args
                 .module_root_secret()
                 .child_key(ChildId(0))
-                .to_secp_key(&Secp256k1::new()),
+                .to_secp_key(&fedimint_core::secp256k1::Secp256k1::new()),
             module_api: args.module_api().clone(),
             timelock_delta: self.timelock_delta,
             federation_index: self.federation_index,

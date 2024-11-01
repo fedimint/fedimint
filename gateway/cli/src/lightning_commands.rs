@@ -1,8 +1,6 @@
 use bitcoin::address::NetworkUnchecked;
 use clap::Subcommand;
-use fedimint_core::bitcoin_migration::{
-    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_unchecked_address,
-};
+use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 use fedimint_core::BitcoinAmountOrAll;
 use lightning_invoice::Bolt11Invoice;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
@@ -148,8 +146,6 @@ impl LightningCommands {
                 amount,
                 fee_rate_sats_per_vbyte,
             } => {
-                let address = bitcoin32_to_bitcoin30_unchecked_address(&address);
-
                 let response = create_client()
                     .withdraw_onchain(WithdrawOnchainPayload {
                         address,
