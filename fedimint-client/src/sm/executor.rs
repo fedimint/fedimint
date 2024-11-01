@@ -22,7 +22,7 @@ use fedimint_logging::LOG_CLIENT_REACTOR;
 use futures::future::{self, select_all};
 use futures::stream::{FuturesUnordered, StreamExt};
 use tokio::select;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, info, trace, warn, Instrument};
 
 use super::state::StateTransitionFunction;
@@ -59,7 +59,7 @@ pub struct Executor {
 
 struct ExecutorInner {
     db: Database,
-    state: Mutex<ExecutorState>,
+    state: std::sync::RwLock<ExecutorState>,
     module_contexts: BTreeMap<ModuleInstanceId, DynContext>,
     valid_module_ids: BTreeSet<ModuleInstanceId>,
     notifier: Notifier,
@@ -231,8 +231,8 @@ impl Executor {
                 let context = self
                     .inner
                     .state
-                    .lock()
-                    .await
+                    .read()
+                    .unwrap()
                     .gen_context(&state)
                     .expect("executor should be running at this point");
 
@@ -342,9 +342,13 @@ impl Executor {
     ///
     /// ## Panics
     /// If called more than once.
-    pub async fn start_executor(&self, context_gen: ContextGen) {
-        let Some((shutdown_receiver, sm_update_rx)) =
-            self.inner.state.lock().await.start(context_gen.clone())
+    pub fn start_executor(&self, context_gen: ContextGen) {
+        let Some((shutdown_receiver, sm_update_rx)) = self
+            .inner
+            .state
+            .write()
+            .expect("locking can't fail")
+            .start(context_gen.clone())
         else {
             panic!("start_executor was called previously");
         };
@@ -812,10 +816,7 @@ impl ExecutorInner {
 impl ExecutorInner {
     /// See [`Executor::stop_executor`].
     fn stop_executor(&self) -> Option<()> {
-        let mut state = self
-            .state
-            .try_lock()
-            .expect("Only locked during startup, no collisions should be possible");
+        let mut state = self.state.write().expect("Locking can't fail");
 
         state.stop()
     }
@@ -866,7 +867,7 @@ impl ExecutorBuilder {
 
         let inner = Arc::new(ExecutorInner {
             db,
-            state: Mutex::new(ExecutorState::Unstarted { sm_update_rx }),
+            state: std::sync::RwLock::new(ExecutorState::Unstarted { sm_update_rx }),
             module_contexts: self.module_contexts,
             valid_module_ids: self.valid_module_ids,
             notifier,
@@ -1354,7 +1355,7 @@ mod tests {
         const KIND: Option<ModuleKind> = None;
     }
 
-    async fn get_executor() -> (Executor, Sender<u64>, Database) {
+    fn get_executor() -> (Executor, Sender<u64>, Database) {
         let (broadcast, _) = tokio::sync::broadcast::channel(10);
 
         let mut decoder_builder = Decoder::builder();
@@ -1374,9 +1375,7 @@ mod tests {
         );
         let executor =
             executor_builder.build(db.clone(), Notifier::new(db.clone()), TaskGroup::new());
-        executor
-            .start_executor(Arc::new(|_, _| DynGlobalClientContext::new_fake()))
-            .await;
+        executor.start_executor(Arc::new(|_, _| DynGlobalClientContext::new_fake()));
 
         info!("Initialized test executor");
         (executor, broadcast, db)
@@ -1388,7 +1387,7 @@ mod tests {
         const MOCK_INSTANCE_1: ModuleInstanceId = 42;
         const MOCK_INSTANCE_2: ModuleInstanceId = 21;
 
-        let (executor, sender, _db) = get_executor().await;
+        let (executor, sender, _db) = get_executor();
         executor
             .add_state_machines(vec![DynState::from_typed(
                 MOCK_INSTANCE_1,

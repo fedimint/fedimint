@@ -699,8 +699,8 @@ impl ClientHandle {
         self.inner.as_ref().expect("Inner always set")
     }
 
-    pub async fn start_executor(&self) {
-        self.as_inner().start_executor().await;
+    pub fn start_executor(&self) {
+        self.as_inner().start_executor();
     }
 
     /// Shutdown the client.
@@ -1032,12 +1032,12 @@ impl Client {
         Self::get_config_from_db(db).await.is_some()
     }
 
-    pub async fn start_executor(self: &Arc<Self>) {
+    pub fn start_executor(self: &Arc<Self>) {
         debug!(
             "Starting fedimint client executor (version: {})",
             fedimint_build_code_version_env!()
         );
-        self.executor.start_executor(self.context_gen()).await;
+        self.executor.start_executor(self.context_gen());
     }
 
     pub fn federation_id(&self) -> FederationId {
@@ -2652,7 +2652,7 @@ impl ClientBuilder {
             )
             .await?;
         if !stopped {
-            client.as_inner().start_executor().await;
+            client.as_inner().start_executor();
         }
         Ok(client)
     }
@@ -2675,7 +2675,7 @@ impl ClientBuilder {
             )
             .await?;
         if !stopped {
-            client.as_inner().start_executor().await;
+            client.as_inner().start_executor();
         }
 
         Ok(client)
