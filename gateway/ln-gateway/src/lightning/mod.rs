@@ -94,16 +94,34 @@ pub struct LightningContext {
 /// being used.
 #[async_trait]
 pub trait ILnRpcClient: Debug + Send + Sync {
-    /// Get the public key and alias of the lightning node
+    /// Returns high-level info about the lightning node.
     async fn info(&self) -> Result<GetNodeInfoResponse, LightningRpcError>;
 
-    /// Get route hints to the lightning node
+    /// Returns route hints to the lightning node.
+    ///
+    /// Note: This is only used for inbound LNv1 payments and will be removed
+    /// when we switch to LNv2.
     async fn routehints(
         &self,
         num_route_hints: usize,
     ) -> Result<GetRouteHintsResponse, LightningRpcError>;
 
-    /// Attempt to pay an invoice using the lightning node
+    /// Attempts to pay an invoice using the lightning node, waiting for the
+    /// payment to complete and returning the preimage.
+    ///
+    /// Caller restrictions:
+    /// May be called multiple times for the same invoice, but _should_ be done
+    /// with all the same parameters. This is because the payment may be
+    /// in-flight from a previous call, in which case fee or delay limits cannot
+    /// be changed and will be ignored.
+    ///
+    /// Implementor restrictions:
+    /// This _must_ be idempotent for a given invoice, since it is called by
+    /// state machines. In more detail, when called for a given invoice:
+    /// * If the payment is already in-flight, wait for that payment to complete
+    ///   as if it were the first call.
+    /// * If the payment has already been attempted and failed, retry.
+    /// * If the payment has already succeeded, return a success response.
     async fn pay(
         &self,
         invoice: Bolt11Invoice,
@@ -120,9 +138,15 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         .await
     }
 
-    /// Attempt to pay an invoice using the lightning node using a
-    /// [`PrunedInvoice`], increasing the user's privacy by not sending the
-    /// invoice description to the gateway.
+    /// Attempts to pay an invoice using the lightning node, waiting for the
+    /// payment to complete and returning the preimage.
+    ///
+    /// This is more private than [`ILnRpcClient::pay`], as it does not require
+    /// the invoice description. If this is implemented,
+    /// [`ILnRpcClient::supports_private_payments`] must return true.
+    ///
+    /// Note: This is only used for outbound LNv1 payments and will be removed
+    /// when we switch to LNv2.
     async fn pay_private(
         &self,
         _invoice: PrunedInvoice,
@@ -135,8 +159,8 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     }
 
     /// Returns true if the lightning backend supports payments without full
-    /// invoices. If this returns true, then [`ILnRpcClient::pay_private`] has
-    /// to be implemented.
+    /// invoices. If this returns true, [`ILnRpcClient::pay_private`] must
+    /// be implemented.
     fn supports_private_payments(&self) -> bool {
         false
     }
@@ -156,46 +180,46 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         task_group: &TaskGroup,
     ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), LightningRpcError>;
 
-    /// Complete an HTLC that was intercepted by the gateway. Must be called for
-    /// all successfully intercepted HTLCs sent to the stream returned by
-    /// `route_htlcs`.
+    /// Completes an HTLC that was intercepted by the gateway. Must be called
+    /// for all successfully intercepted HTLCs sent to the stream returned
+    /// by `route_htlcs`.
     async fn complete_htlc(&self, htlc: InterceptPaymentResponse) -> Result<(), LightningRpcError>;
 
-    /// Requests the lightning node to create an invoice. Payment hash of
-    /// `CreateInvoiceRequest` determines if the invoice is intended to be
-    /// an ecash payment or a direct payment to this lightning node.
+    /// Requests the lightning node to create an invoice. The presence of a
+    /// payment hash in the `CreateInvoiceRequest` determines if the invoice is
+    /// intended to be an ecash payment or a direct payment to this lightning
+    /// node.
     async fn create_invoice(
         &self,
         create_invoice_request: CreateInvoiceRequest,
     ) -> Result<CreateInvoiceResponse, LightningRpcError>;
 
-    /// Get a funding address belonging to the gateway's lightning node
+    /// Gets a funding address belonging to the lightning node's on-chain
     /// wallet.
     async fn get_ln_onchain_address(
         &self,
     ) -> Result<GetLnOnchainAddressResponse, LightningRpcError>;
 
-    /// Execute an onchain transaction using the lightning node's wallet.
+    /// Executes an onchain transaction using the lightning node's on-chain
+    /// wallet.
     async fn withdraw_onchain(
         &self,
         payload: WithdrawOnchainPayload,
     ) -> Result<WithdrawOnchainResponse, LightningRpcError>;
 
-    /// Open a channel with a peer lightning node from the gateway's lightning
-    /// node.
+    /// Opens a channel with a peer lightning node.
     async fn open_channel(
         &self,
         payload: OpenChannelPayload,
     ) -> Result<OpenChannelResponse, LightningRpcError>;
 
-    /// Close all channels with a peer lightning node from the gateway's
-    /// lightning node.
+    /// Closes all channels with a peer lightning node.
     async fn close_channels_with_peer(
         &self,
         payload: CloseChannelsWithPeerPayload,
     ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError>;
 
-    /// List the lightning node's active channels with peers.
+    /// Lists the lightning node's active channels with all peers.
     async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError>;
 
     /// Returns a summary of the lightning node's balance, including the onchain
