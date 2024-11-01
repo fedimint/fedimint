@@ -1,14 +1,12 @@
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Txid};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::Amount;
 use fedimint_ln_common::gateway_endpoint_constants::{
-    ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
-    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT,
-    GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
-    LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT,
-    RECEIVE_ECASH_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
-    WITHDRAW_ENDPOINT,
+    ADDRESS_ENDPOINT, BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
+    CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
+    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
+    MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, RECEIVE_ECASH_ENDPOINT, SET_CONFIGURATION_ENDPOINT,
+    SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 use fedimint_lnv2_common::endpoint_constants::{
     CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
@@ -21,7 +19,7 @@ use serde::Serialize;
 use thiserror::Error;
 
 use super::{
-    BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConfigPayload, ConnectFedPayload,
+    BackupPayload, CloseChannelsWithPeerPayload, ConfigPayload, ConnectFedPayload,
     CreateInvoiceForOperatorPayload, DepositAddressPayload, FederationInfo, GatewayBalances,
     GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelPayload,
     PayInvoiceForOperatorPayload, ReceiveEcashPayload, ReceiveEcashResponse,
@@ -74,14 +72,6 @@ impl GatewayRpcClient {
         let url = self
             .base_url
             .join(CONFIGURATION_ENDPOINT)
-            .expect("invalid base url");
-        self.call_post(url, payload).await
-    }
-
-    pub async fn get_balance(&self, payload: BalancePayload) -> GatewayRpcResult<Amount> {
-        let url = self
-            .base_url
-            .join(BALANCE_ENDPOINT)
             .expect("invalid base url");
         self.call_post(url, payload).await
     }

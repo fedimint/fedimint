@@ -4,7 +4,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::fedimint_build_code_version_env;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
-    BalancePayload, ConfigPayload, ConnectFedPayload, FederationRoutingFees, LeaveFedPayload,
+    ConfigPayload, ConnectFedPayload, FederationRoutingFees, LeaveFedPayload,
     SetConfigurationPayload,
 };
 
@@ -48,11 +48,6 @@ pub enum GeneralCommands {
     Config {
         #[clap(long)]
         federation_id: Option<FederationId>,
-    },
-    /// Check gateway's e-cash balance on the specified federation.
-    Balance {
-        #[clap(long)]
-        federation_id: FederationId,
     },
     /// Get the total on-chain, lightning, and eCash balances of the gateway.
     GetBalances,
@@ -126,13 +121,6 @@ impl GeneralCommands {
             Self::Config { federation_id } => {
                 let response = create_client()
                     .get_config(ConfigPayload { federation_id })
-                    .await?;
-
-                print_response(response);
-            }
-            Self::Balance { federation_id } => {
-                let response = create_client()
-                    .get_balance(BalancePayload { federation_id })
                     .await?;
 
                 print_response(response);

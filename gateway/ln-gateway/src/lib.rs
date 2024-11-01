@@ -93,7 +93,7 @@ use rpc::{
     GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelPayload,
     PayInvoiceForOperatorPayload, ReceiveEcashPayload, ReceiveEcashResponse,
     SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, WithdrawOnchainPayload,
-    V1_API_ENDPOINT,
+    WithdrawResponse, V1_API_ENDPOINT,
 };
 use state_machine::{GatewayClientModule, GatewayExtPayStates};
 use tokio::sync::RwLock;
@@ -107,8 +107,8 @@ use crate::gateway_module_v2::GatewayClientModuleV2;
 use crate::lightning::{GatewayLightningBuilder, LightningContext, LightningMode, RouteHtlcStream};
 use crate::rpc::rpc_server::{hash_password, run_webserver};
 use crate::rpc::{
-    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
-    GatewayBalances, WithdrawPayload, WithdrawResponse,
+    BackupPayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
+    GatewayBalances, WithdrawPayload,
 };
 use crate::types::PrettyInterceptPaymentRequest;
 
@@ -869,18 +869,6 @@ impl Gateway {
         };
 
         Ok(GatewayFedConfig { federations })
-    }
-
-    /// Returns the balance of the requested federation that the Gateway is
-    /// connected to.
-    pub async fn handle_balance_msg(&self, payload: BalancePayload) -> AdminResult<Amount> {
-        // no need for instrument, it is done on api layer
-        Ok(self
-            .select_client(payload.federation_id)
-            .await?
-            .value()
-            .get_balance()
-            .await)
     }
 
     /// Returns a Bitcoin deposit on-chain address for pegging in Bitcoin for a

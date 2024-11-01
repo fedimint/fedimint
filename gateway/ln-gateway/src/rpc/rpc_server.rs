@@ -11,12 +11,12 @@ use fedimint_core::config::FederationId;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::TaskGroup;
 use fedimint_ln_common::gateway_endpoint_constants::{
-    ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
-    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT,
-    GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_GATEWAY_ID_ENDPOINT,
-    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
-    MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT, RECEIVE_ECASH_ENDPOINT,
-    SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, WITHDRAW_ENDPOINT,
+    ADDRESS_ENDPOINT, BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
+    CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
+    GET_GATEWAY_ID_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT,
+    LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT,
+    RECEIVE_ECASH_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
+    WITHDRAW_ENDPOINT,
 };
 use fedimint_lnv2_common::endpoint_constants::{
     CREATE_BOLT11_INVOICE_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
@@ -31,7 +31,7 @@ use tower_http::cors::CorsLayer;
 use tracing::{error, info, instrument};
 
 use super::{
-    BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
+    BackupPayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
     CreateInvoiceForOperatorPayload, DepositAddressPayload, InfoPayload, LeaveFedPayload,
     OpenChannelPayload, PayInvoiceForOperatorPayload, ReceiveEcashPayload, SetConfigurationPayload,
     SpendEcashPayload, WithdrawOnchainPayload, WithdrawPayload, V1_API_ENDPOINT,
@@ -181,7 +181,6 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
 
     // Authenticated, public routes used for gateway administration
     let always_authenticated_routes = Router::new()
-        .route(BALANCE_ENDPOINT, post(balance))
         .route(ADDRESS_ENDPOINT, post(address))
         .route(WITHDRAW_ENDPOINT, post(withdraw))
         .route(CONNECT_FED_ENDPOINT, post(connect_fed))
@@ -271,16 +270,6 @@ async fn configuration(
         .handle_get_federation_config(payload.federation_id)
         .await?;
     Ok(Json(json!(gateway_fed_config)))
-}
-
-/// Display gateway ecash note balance
-#[instrument(skip_all, err, fields(?payload))]
-async fn balance(
-    Extension(gateway): Extension<Arc<Gateway>>,
-    Json(payload): Json<BalancePayload>,
-) -> Result<impl IntoResponse, AdminGatewayError> {
-    let amount = gateway.handle_balance_msg(payload).await?;
-    Ok(Json(json!(amount)))
 }
 
 /// Generate deposit address
