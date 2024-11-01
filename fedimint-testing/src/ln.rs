@@ -309,8 +309,10 @@ impl ILnRpcClient for FakeLightningTest {
     }
 
     async fn get_balances(&self) -> Result<GetBalancesResponse, LightningRpcError> {
-        Err(LightningRpcError::FailedToGetBalances {
-            failure_reason: "FakeLightningTest does not support getting balances".to_string(),
+        Ok(GetBalancesResponse {
+            onchain_balance_sats: 0,
+            lightning_balance_msats: 0,
+            inbound_lightning_liquidity_msats: 0,
         })
     }
 }
