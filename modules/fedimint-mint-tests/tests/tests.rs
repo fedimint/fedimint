@@ -7,6 +7,7 @@ use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBu
 use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::OperationId;
+use fedimint_core::fee_consensus::FeeConsensus;
 use fedimint_core::secp256k1::KeyPair;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending;
@@ -19,7 +20,7 @@ use fedimint_mint_client::{
     MintClientInit, MintClientModule, Note, OOBNotes, ReissueExternalNotesState,
     SelectNotesWithAtleastAmount, SpendOOBState,
 };
-use fedimint_mint_common::config::{FeeConsensus, MintGenParams, MintGenParamsConsensus};
+use fedimint_mint_common::config::{MintGenParams, MintGenParamsConsensus};
 use fedimint_mint_common::{MintInput, MintInputV0, Nonce};
 use fedimint_mint_server::MintInit;
 use fedimint_testing::fixtures::{Fixtures, TIMEOUT};
@@ -27,20 +28,14 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
-const EXPECTED_MAXIMUM_FEE: Amount = Amount::from_sats(50);
+const EXPECTED_MAXIMUM_FEE: Amount = Amount::from_sats(20);
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(
         MintClientInit,
         MintInit,
         MintGenParams {
-            consensus: MintGenParamsConsensus::new(
-                2,
-                FeeConsensus {
-                    note_issuance_abs: Amount::ZERO,
-                    note_spend_abs: Amount::from_sats(1),
-                },
-            ),
+            consensus: MintGenParamsConsensus::new(2, FeeConsensus::zero()),
             local: EmptyGenParams {},
         },
     );

@@ -143,7 +143,11 @@ impl ClientModule for GatewayClientModuleV2 {
         Some(self.cfg.fee_consensus.fee(amount))
     }
 
-    fn output_fee(&self, output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
+    fn output_fee(
+        &self,
+        _amount: Amount,
+        output: &<Self::Common as ModuleCommon>::Output,
+    ) -> Option<Amount> {
         let amount = match output.ensure_v0_ref().ok()? {
             LightningOutputV0::Outgoing(contract) => contract.amount,
             LightningOutputV0::Incoming(contract) => contract.commitment.amount,

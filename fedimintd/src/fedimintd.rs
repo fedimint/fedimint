@@ -327,7 +327,9 @@ impl Fedimintd {
                     local: EmptyGenParams::default(),
                     consensus: MintGenParamsConsensus::new(
                         2,
-                        fedimint_mint_server::common::config::FeeConsensus::default(),
+                        // TODO: wait for clients to support the relative fees and set them to
+                        // non-zero in 0.6
+                        fedimint_core::fee_consensus::FeeConsensus::zero(),
                     ),
                 },
             )
@@ -360,7 +362,9 @@ impl Fedimintd {
                         },
                         consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
                             // TODO: actually make the relative fee configurable
-                            fee_consensus: fedimint_core::fee_consensus::FeeConsensus::new(1_000)?,
+                            fee_consensus: fedimint_core::fee_consensus::FeeConsensus::new_lnv2(
+                                1_000,
+                            )?,
                             network: bitcoin30_to_bitcoin32_network(&network),
                         },
                     },

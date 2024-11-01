@@ -1114,7 +1114,7 @@ impl Client {
         for output in builder.outputs() {
             let module = self.get_module(output.output.module_instance_id());
 
-            let item_fee = module.output_fee(&output.output).expect(
+            let item_fee = module.output_fee(output.amount, &output.output).expect(
                 "We only build transactions with output versions that are supported by the module",
             );
 
@@ -1206,7 +1206,7 @@ impl Client {
 
         let (input_amount, output_amount) = self.transaction_builder_balance(&partial_transaction);
 
-        assert_eq!(input_amount, output_amount, "Transaction is not balanced");
+        assert!(input_amount >= output_amount, "Transaction is underfunded");
 
         let (tx, states) = partial_transaction.build(&self.secp_ctx, thread_rng());
 

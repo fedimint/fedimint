@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::fee_consensus::FeeConsensus;
 use fedimint_core::module::serde_json;
 use fedimint_core::{plugin_types_trait_impl_config, Amount, PeerId, Tiered};
 use serde::{Deserialize, Serialize};
@@ -51,6 +52,7 @@ impl MintGenParamsConsensus {
     }
 }
 
+/*
 impl Default for MintGenParams {
     fn default() -> Self {
         MintGenParams {
@@ -59,6 +61,7 @@ impl Default for MintGenParams {
         }
     }
 }
+*/
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MintConfig {
@@ -117,18 +120,3 @@ plugin_types_trait_impl_config!(
     MintConfigConsensus,
     MintClientConfig
 );
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct FeeConsensus {
-    pub note_issuance_abs: fedimint_core::Amount,
-    pub note_spend_abs: fedimint_core::Amount,
-}
-
-impl Default for FeeConsensus {
-    fn default() -> Self {
-        Self {
-            note_issuance_abs: fedimint_core::Amount::ZERO,
-            note_spend_abs: fedimint_core::Amount::ZERO,
-        }
-    }
-}
