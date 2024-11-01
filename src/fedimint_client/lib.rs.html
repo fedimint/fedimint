@@ -3105,7 +3105,11 @@
 <a href="#3104" id="3104">3104</a>
 <a href="#3105" id="3105">3105</a>
 <a href="#3106" id="3106">3106</a>
-<a href="#3107" id="3107">3107</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#3107" id="3107">3107</a>
+<a href="#3108" id="3108">3108</a>
+<a href="#3109" id="3109">3109</a>
+<a href="#3110" id="3110">3110</a>
+<a href="#3111" id="3111">3111</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
@@ -3778,7 +3782,7 @@
     })
 }
 
-<span class="doccomment">/// User handle to [`Client`]
+<span class="doccomment">/// User handle to the [`Client`] instance
 ///
 /// On the drop of [`ClientHandle`] the client will be shut-down, and resources
 /// it used freed.
@@ -3786,13 +3790,14 @@
 /// Notably it [`ops::Deref`]s to the [`Client`] where most
 /// methods live.
 ///
-/// Put this in an Arc to clone it.
+/// Put this in an Arc to clone it (see [`ClientHandleArc`]).
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>ClientHandle {
     inner: <span class="prelude-ty">Option</span>&lt;Arc&lt;Client&gt;&gt;,
 }
 
-<span class="kw">pub type </span>ClientHandleArc = Arc&lt;ClientHandle&gt;;
+<span class="doccomment">/// An alias for a reference counted [`ClientHandle`]
+</span><span class="kw">pub type </span>ClientHandleArc = Arc&lt;ClientHandle&gt;;
 
 <span class="kw">impl </span>ClientHandle {
     <span class="doccomment">/// Create
@@ -3995,9 +4000,12 @@
 
 <span class="doccomment">/// Main client type
 ///
-/// A handle and API to interacting with a single Federation.
+/// A handle and API to interacting with a single federation. End user
+/// applications that want to support interacting with multiple federations at
+/// the same time, will need to instantiate and manage multiple instances of
+/// this struct.
 ///
-/// Under the hood managing service tasks, state machines,
+/// Under the hood it is starting and managing service tasks, state machines,
 /// database and other resources required.
 ///
 /// This type is shared externally and internally, and
