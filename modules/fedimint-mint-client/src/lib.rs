@@ -79,6 +79,7 @@ use fedimint_mint_common::config::{FeeConsensus, MintClientConfig};
 pub use fedimint_mint_common::*;
 use futures::{pin_mut, StreamExt};
 use hex::ToHex;
+use input::MintInputStateCreatedMulti;
 use oob::MintOOBStatesCreatedMulti;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -91,9 +92,7 @@ use crate::client_db::{
     CancelledOOBSpendKey, CancelledOOBSpendKeyPrefix, NextECashNoteIndexKey,
     NextECashNoteIndexKeyPrefix, NoteKey,
 };
-use crate::input::{
-    MintInputCommon, MintInputStateCreated, MintInputStateMachine, MintInputStates,
-};
+use crate::input::{MintInputCommon, MintInputStateMachine, MintInputStates};
 use crate::oob::{MintOOBStateMachine, MintOOBStates};
 use crate::output::{
     MintOutputCommon, MintOutputStateMachine, MintOutputStates, MintOutputStatesCreated,
@@ -813,17 +812,16 @@ impl ClientModule for MintClientModule {
             self.notifier
                 .subscribe_all_operations()
                 .filter_map(|state| async move {
+                    #[allow(deprecated)]
                     match state {
                         MintClientStateMachines::Output(MintOutputStateMachine {
                             state: MintOutputStates::Succeeded(_),
                             ..
                         })
                         | MintClientStateMachines::Input(MintInputStateMachine {
-                            state: MintInputStates::Created(_),
+                            state: MintInputStates::Created(_) | MintInputStates::CreatedMulti(_),
                             ..
                         })
-                        // We only trigger on created since refunds are already covered under the
-                        // output state
                         | MintClientStateMachines::OOB(MintOOBStateMachine {
                             state: MintOOBStates::Created(_),
                             ..
@@ -2360,29 +2358,23 @@ pub(crate) fn create_bundle_for_inputs(
     let mut input_states = Vec::new();
 
     for (input, spendable_note) in inputs_and_notes {
-        input_states.push(MintInputStateCreated {
-            amount: input.amount,
-            spendable_note,
-        });
+        input_states.push((input.amount, spendable_note));
         inputs.push(input);
     }
 
     let input_sm = Arc::new(move |txid, input_idxs: RangeInclusive<u64>| {
-        input_idxs
-            .clone()
-            .flat_map(|input_idx| {
-                let input_i = (input_idx - input_idxs.clone().start()) as usize;
-                let input_state = input_states.get(input_i).cloned().unwrap();
-                vec![MintClientStateMachines::Input(MintInputStateMachine {
-                    common: MintInputCommon {
-                        operation_id,
-                        txid,
-                        input_idx,
-                    },
-                    state: MintInputStates::Created(input_state),
-                })]
-            })
-            .collect()
+        debug_assert_eq!(input_idxs.clone().count(), input_states.len());
+
+        vec![MintClientStateMachines::Input(MintInputStateMachine {
+            common: MintInputCommon {
+                operation_id,
+                txid,
+                input_idxs,
+            },
+            state: MintInputStates::CreatedMulti(MintInputStateCreatedMulti {
+                notes: input_states.clone(),
+            }),
+        })]
     });
 
     ClientInputBundle::new(

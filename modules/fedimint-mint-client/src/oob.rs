@@ -9,7 +9,9 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{runtime, Amount, TransactionId};
 use fedimint_mint_common::MintInput;
 
-use crate::input::{MintInputCommon, MintInputStateMachine, MintInputStateRefund, MintInputStates};
+use crate::input::{
+    MintInputCommon, MintInputStateCreatedMulti, MintInputStateMachine, MintInputStates,
+};
 use crate::{MintClientContext, MintClientStateMachines, SpendableNote};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -317,6 +319,7 @@ async fn try_cancel_oob_spend_multi(
     global_context: DynGlobalClientContext,
 ) -> TransactionId {
     let inputs = spendable_notes
+        .clone()
         .into_iter()
         .map(|(amount, spendable_note)| ClientInput {
             input: MintInput::new_v0(amount, spendable_note.note()),
@@ -327,19 +330,17 @@ async fn try_cancel_oob_spend_multi(
 
     let sm = ClientInputSM {
         state_machines: Arc::new(move |txid, input_idxs| {
-            input_idxs
-                .into_iter()
-                .flat_map(|input_idx| {
-                    vec![MintClientStateMachines::Input(MintInputStateMachine {
-                        common: MintInputCommon {
-                            operation_id,
-                            txid,
-                            input_idx,
-                        },
-                        state: MintInputStates::Refund(MintInputStateRefund { refund_txid: txid }),
-                    })]
-                })
-                .collect()
+            debug_assert_eq!(input_idxs.clone().count(), spendable_notes.len());
+            vec![MintClientStateMachines::Input(MintInputStateMachine {
+                common: MintInputCommon {
+                    operation_id,
+                    txid,
+                    input_idxs,
+                },
+                state: MintInputStates::CreatedMulti(MintInputStateCreatedMulti {
+                    notes: spendable_notes.clone(),
+                }),
+            })]
         }),
     };
 
