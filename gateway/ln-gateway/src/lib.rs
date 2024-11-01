@@ -91,9 +91,9 @@ use rand::{thread_rng, Rng};
 use rpc::{
     CloseChannelsWithPeerPayload, CreateInvoiceForOperatorPayload, FederationInfo,
     GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelPayload,
-    PayInvoiceForOperatorPayload, ReceiveEcashPayload, ReceiveEcashResponse,
-    SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, WithdrawOnchainPayload,
-    WithdrawResponse, V1_API_ENDPOINT,
+    PayInvoiceForOperatorPayload, ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainPayload,
+    SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, WithdrawResponse,
+    V1_API_ENDPOINT,
 };
 use state_machine::{GatewayClientModule, GatewayExtPayStates};
 use tokio::sync::RwLock;
@@ -1450,13 +1450,10 @@ impl Gateway {
         Ok(channels)
     }
 
-    /// Withdraws funds from the gateway's lightning node on-chain wallet.
-    pub async fn handle_withdraw_onchain_msg(
-        &self,
-        payload: WithdrawOnchainPayload,
-    ) -> AdminResult<Txid> {
+    /// Send funds from the gateway's lightning node on-chain wallet.
+    pub async fn handle_send_onchain_msg(&self, payload: SendOnchainPayload) -> AdminResult<Txid> {
         let context = self.get_lightning_context().await?;
-        let response = context.lnrpc.withdraw_onchain(payload).await?;
+        let response = context.lnrpc.send_onchain(payload).await?;
         Txid::from_str(&response.txid).map_err(|e| AdminGatewayError::WithdrawError {
             failure_reason: format!("Failed to parse withdrawal TXID: {e}"),
         })

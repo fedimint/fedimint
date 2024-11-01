@@ -18,16 +18,16 @@ use crate::lightning::extension::{
     CLN_CREATE_INVOICE_ENDPOINT, CLN_GET_BALANCES_ENDPOINT, CLN_INFO_ENDPOINT,
     CLN_LIST_ACTIVE_CHANNELS_ENDPOINT, CLN_LN_ONCHAIN_ADDRESS_ENDPOINT, CLN_OPEN_CHANNEL_ENDPOINT,
     CLN_PAY_PRUNED_INVOICE_ENDPOINT, CLN_ROUTE_HINTS_ENDPOINT, CLN_ROUTE_HTLCS_ENDPOINT,
-    CLN_WITHDRAW_ONCHAIN_ENDPOINT,
+    CLN_SEND_ONCHAIN_ENDPOINT,
 };
 use crate::lightning::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest,
     GetRouteHintsResponse, InterceptPaymentRequest, InterceptPaymentResponse,
     ListActiveChannelsResponse, OpenChannelResponse, PayInvoiceResponse, PayPrunedInvoiceRequest,
-    WithdrawOnchainResponse,
+    SendOnchainResponse,
 };
-use crate::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, WithdrawOnchainPayload};
+use crate::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, SendOnchainPayload};
 
 /// An `ILnRpcClient` that wraps around `GatewayLightningClient` for
 /// convenience, and makes real RPC requests over the wire to a remote lightning
@@ -218,13 +218,13 @@ impl ILnRpcClient for NetworkLnRpcClient {
             })
     }
 
-    async fn withdraw_onchain(
+    async fn send_onchain(
         &self,
-        payload: WithdrawOnchainPayload,
-    ) -> Result<WithdrawOnchainResponse, LightningRpcError> {
+        payload: SendOnchainPayload,
+    ) -> Result<SendOnchainResponse, LightningRpcError> {
         let url = self
             .connection_url
-            .join(CLN_WITHDRAW_ONCHAIN_ENDPOINT)
+            .join(CLN_SEND_ONCHAIN_ENDPOINT)
             .expect("invalid base url");
         self.call_post(url, payload)
             .await

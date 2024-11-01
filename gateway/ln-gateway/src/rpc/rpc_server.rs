@@ -20,8 +20,8 @@ use fedimint_ln_common::gateway_endpoint_constants::{
 };
 use fedimint_lnv2_common::endpoint_constants::{
     CREATE_BOLT11_INVOICE_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
-    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_PAYMENT_ENDPOINT,
-    WITHDRAW_ONCHAIN_ENDPOINT,
+    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_ONCHAIN_ENDPOINT,
+    SEND_PAYMENT_ENDPOINT,
 };
 use fedimint_lnv2_common::gateway_api::{CreateBolt11InvoicePayload, SendPaymentPayload};
 use hex::ToHex;
@@ -33,8 +33,8 @@ use tracing::{error, info, instrument};
 use super::{
     BackupPayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
     CreateInvoiceForOperatorPayload, DepositAddressPayload, InfoPayload, LeaveFedPayload,
-    OpenChannelPayload, PayInvoiceForOperatorPayload, ReceiveEcashPayload, SetConfigurationPayload,
-    SpendEcashPayload, WithdrawOnchainPayload, WithdrawPayload, V1_API_ENDPOINT,
+    OpenChannelPayload, PayInvoiceForOperatorPayload, ReceiveEcashPayload, SendOnchainPayload,
+    SetConfigurationPayload, SpendEcashPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 use crate::error::{AdminGatewayError, PublicGatewayError};
 use crate::rpc::ConfigPayload;
@@ -201,7 +201,7 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
             post(close_channels_with_peer),
         )
         .route(LIST_ACTIVE_CHANNELS_ENDPOINT, get(list_active_channels))
-        .route(WITHDRAW_ONCHAIN_ENDPOINT, post(withdraw_onchain))
+        .route(SEND_ONCHAIN_ENDPOINT, post(send_onchain))
         .route(GET_BALANCES_ENDPOINT, get(get_balances))
         .route(SPEND_ECASH_ENDPOINT, post(spend_ecash))
         .route(MNEMONIC_ENDPOINT, get(mnemonic))
@@ -395,11 +395,11 @@ async fn list_active_channels(
 }
 
 #[instrument(skip_all, err)]
-async fn withdraw_onchain(
+async fn send_onchain(
     Extension(gateway): Extension<Arc<Gateway>>,
-    Json(payload): Json<WithdrawOnchainPayload>,
+    Json(payload): Json<SendOnchainPayload>,
 ) -> Result<impl IntoResponse, AdminGatewayError> {
-    let txid = gateway.handle_withdraw_onchain_msg(payload).await?;
+    let txid = gateway.handle_send_onchain_msg(payload).await?;
     Ok(Json(json!(txid)))
 }
 

@@ -175,7 +175,7 @@ pub struct CloseChannelsWithPeerPayload {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct WithdrawOnchainPayload {
+pub struct SendOnchainPayload {
     pub address: Address<NetworkUnchecked>,
     pub amount: BitcoinAmountOrAll,
     pub fee_rate_sats_per_vbyte: u64,

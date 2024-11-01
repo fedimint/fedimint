@@ -2,7 +2,7 @@ use bitcoin::address::NetworkUnchecked;
 use clap::Subcommand;
 use fedimint_core::BitcoinAmountOrAll;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
-use ln_gateway::rpc::WithdrawOnchainPayload;
+use ln_gateway::rpc::SendOnchainPayload;
 
 use crate::print_response;
 
@@ -11,9 +11,9 @@ pub enum OnchainCommands {
     /// Get a Bitcoin address from the gateway's lightning node's onchain
     /// wallet.
     Address,
-    /// Withdraw funds from the lightning node's on-chain wallet to a specified
+    /// Send funds from the lightning node's on-chain wallet to a specified
     /// address.
-    Withdraw {
+    Send {
         /// The address to withdraw funds to.
         #[clap(long)]
         address: bitcoin::Address<NetworkUnchecked>,
@@ -44,13 +44,13 @@ impl OnchainCommands {
                     .assume_checked();
                 println!("{response}");
             }
-            Self::Withdraw {
+            Self::Send {
                 address,
                 amount,
                 fee_rate_sats_per_vbyte,
             } => {
                 let response = create_client()
-                    .withdraw_onchain(WithdrawOnchainPayload {
+                    .send_onchain(SendOnchainPayload {
                         address,
                         amount,
                         fee_rate_sats_per_vbyte,

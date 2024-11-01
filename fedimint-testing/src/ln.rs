@@ -26,9 +26,9 @@ use ln_gateway::lightning::{
     ChannelInfo, CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse, LightningRpcError,
-    OpenChannelResponse, PayInvoiceResponse, RouteHtlcStream, WithdrawOnchainResponse,
+    OpenChannelResponse, PayInvoiceResponse, RouteHtlcStream, SendOnchainResponse,
 };
-use ln_gateway::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, WithdrawOnchainPayload};
+use ln_gateway::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, SendOnchainPayload};
 use rand::rngs::OsRng;
 use tokio::sync::mpsc;
 use tracing::info;
@@ -272,10 +272,10 @@ impl ILnRpcClient for FakeLightningTest {
         })
     }
 
-    async fn withdraw_onchain(
+    async fn send_onchain(
         &self,
-        _payload: WithdrawOnchainPayload,
-    ) -> Result<WithdrawOnchainResponse, LightningRpcError> {
+        _payload: SendOnchainPayload,
+    ) -> Result<SendOnchainResponse, LightningRpcError> {
         Err(LightningRpcError::FailedToWithdrawOnchain {
             failure_reason: "FakeLightningTest does not support withdrawing funds on-chain"
                 .to_string(),

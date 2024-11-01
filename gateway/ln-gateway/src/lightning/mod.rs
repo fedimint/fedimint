@@ -33,7 +33,7 @@ use crate::envs::{
     FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV, FM_LDK_ESPLORA_SERVER_URL,
     FM_LDK_NETWORK, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
-use crate::rpc::{CloseChannelsWithPeerPayload, WithdrawOnchainPayload};
+use crate::rpc::{CloseChannelsWithPeerPayload, SendOnchainPayload};
 use crate::{OpenChannelPayload, Preimage};
 
 pub const MAX_LIGHTNING_RETRIES: u32 = 10;
@@ -202,10 +202,10 @@ pub trait ILnRpcClient: Debug + Send + Sync {
 
     /// Executes an onchain transaction using the lightning node's on-chain
     /// wallet.
-    async fn withdraw_onchain(
+    async fn send_onchain(
         &self,
-        payload: WithdrawOnchainPayload,
-    ) -> Result<WithdrawOnchainResponse, LightningRpcError>;
+        payload: SendOnchainPayload,
+    ) -> Result<SendOnchainResponse, LightningRpcError>;
 
     /// Opens a channel with a peer lightning node.
     async fn open_channel(
@@ -486,7 +486,7 @@ pub struct GetLnOnchainAddressResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct WithdrawOnchainResponse {
+pub struct SendOnchainResponse {
     pub txid: String,
 }
 
