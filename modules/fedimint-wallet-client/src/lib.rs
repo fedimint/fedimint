@@ -27,8 +27,9 @@ use std::time::SystemTime;
 use anyhow::{anyhow, bail, ensure, Context as AnyhowContext};
 use async_stream::stream;
 use backup::WalletModuleBackup;
-use bitcoin30::address::NetworkUnchecked;
-use bitcoin30::{Address, Network, ScriptBuf};
+use bitcoin::address::NetworkUnchecked;
+use bitcoin::secp256k1::{All, Secp256k1, SECP256K1};
+use bitcoin::{Address, Network, ScriptBuf};
 use client_db::{DbKeyPrefix, PegInTweakIndexKey, TweakIdx};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
@@ -45,8 +46,9 @@ use fedimint_client::transaction::{
 };
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_outpoint, bitcoin30_to_bitcoin32_unchecked_address,
-    bitcoin32_to_bitcoin30_network,
+    bitcoin30_to_bitcoin32_address, bitcoin30_to_bitcoin32_script_buf,
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin30_to_bitcoin32_txid,
+    bitcoin32_to_bitcoin30_network, bitcoin32_to_bitcoin30_script_buf,
 };
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
@@ -69,7 +71,7 @@ use fedimint_wallet_common::tweakable::Tweakable;
 pub use fedimint_wallet_common::*;
 use futures::{Stream, StreamExt};
 use rand::{thread_rng, Rng};
-use secp256k1::{All, KeyPair, Secp256k1, SECP256K1};
+use secp256k1::KeyPair;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tokio::sync::watch;
@@ -90,7 +92,7 @@ const WALLET_TWEAK_CHILD_ID: ChildId = ChildId(0);
 pub struct BitcoinTransactionData {
     /// The bitcoin transaction is saved as soon as we see it so the transaction
     /// can be re-transmitted if it's evicted from the mempool.
-    pub btc_transaction: bitcoin30::Transaction,
+    pub btc_transaction: bitcoin::Transaction,
     /// Index of the deposit output
     pub out_idx: u32,
 }
@@ -108,19 +110,19 @@ pub enum DepositStateV1 {
 pub enum DepositStateV2 {
     WaitingForTransaction,
     WaitingForConfirmation {
-        #[serde(with = "bitcoin30::amount::serde::as_sat")]
-        btc_deposited: bitcoin30::Amount,
-        btc_out_point: bitcoin30::OutPoint,
+        #[serde(with = "bitcoin::amount::serde::as_sat")]
+        btc_deposited: bitcoin::Amount,
+        btc_out_point: bitcoin::OutPoint,
     },
     Confirmed {
-        #[serde(with = "bitcoin30::amount::serde::as_sat")]
-        btc_deposited: bitcoin30::Amount,
-        btc_out_point: bitcoin30::OutPoint,
+        #[serde(with = "bitcoin::amount::serde::as_sat")]
+        btc_deposited: bitcoin::Amount,
+        btc_out_point: bitcoin::OutPoint,
     },
     Claimed {
-        #[serde(with = "bitcoin30::amount::serde::as_sat")]
-        btc_deposited: bitcoin30::Amount,
-        btc_out_point: bitcoin30::OutPoint,
+        #[serde(with = "bitcoin::amount::serde::as_sat")]
+        btc_deposited: bitcoin::Amount,
+        btc_out_point: bitcoin::OutPoint,
     },
     Failed(String),
 }
@@ -128,7 +130,7 @@ pub enum DepositStateV2 {
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub enum WithdrawState {
     Created,
-    Succeeded(bitcoin30::Txid),
+    Succeeded(bitcoin::Txid),
     Failed(String),
     // TODO: track refund
     // Refunded,
@@ -283,7 +285,7 @@ pub struct WalletOperationMeta {
 #[serde(rename_all = "snake_case")]
 pub enum WalletOperationMetaVariant {
     Deposit {
-        address: bitcoin30::Address<NetworkUnchecked>,
+        address: Address<NetworkUnchecked>,
         /// Added in 0.4.2, can be `None` for old deposits or `Some` for ones
         /// using the pegin monitor. The value is the child index of the key
         /// used to generate the address, so we can re-generate the secret key
@@ -294,9 +296,9 @@ pub enum WalletOperationMetaVariant {
         expires_at: Option<SystemTime>,
     },
     Withdraw {
-        address: bitcoin30::Address<NetworkUnchecked>,
-        #[serde(with = "bitcoin30::amount::serde::as_sat")]
-        amount: bitcoin30::Amount,
+        address: Address<NetworkUnchecked>,
+        #[serde(with = "bitcoin::amount::serde::as_sat")]
+        amount: bitcoin::Amount,
         fee: PegOutFees,
         change: Vec<OutPoint>,
     },
@@ -334,12 +336,17 @@ impl WalletClientModuleData {
 
         let public_tweak_key = secret_tweak_key.public_key();
 
-        let address = self
-            .cfg
-            .peg_in_descriptor
-            .tweak(&public_tweak_key, secp256k1::SECP256K1)
-            .address(bitcoin32_to_bitcoin30_network(&self.cfg.network))
-            .unwrap();
+        let address = bitcoin30_to_bitcoin32_address(
+            &self
+                .cfg
+                .peg_in_descriptor
+                .tweak(
+                    &bitcoin30_to_bitcoin32_secp256k1_pubkey(&public_tweak_key),
+                    bitcoin::secp256k1::SECP256K1,
+                )
+                .address(bitcoin32_to_bitcoin30_network(&self.cfg.network))
+                .unwrap(),
+        );
 
         // TODO: make hash?
         let operation_id = OperationId(public_tweak_key.x_only_public_key().0.serialize());
@@ -350,14 +357,20 @@ impl WalletClientModuleData {
     fn derive_peg_in_script(
         &self,
         idx: TweakIdx,
-    ) -> (ScriptBuf, bitcoin30::Address, KeyPair, OperationId) {
+    ) -> (ScriptBuf, bitcoin::Address, KeyPair, OperationId) {
         let (secret_tweak_key, _, address, operation_id) = self.derive_deposit_address(idx);
 
         (
-            self.cfg
-                .peg_in_descriptor
-                .tweak(&secret_tweak_key.public_key(), SECP256K1)
-                .script_pubkey(),
+            bitcoin30_to_bitcoin32_script_buf(
+                &self
+                    .cfg
+                    .peg_in_descriptor
+                    .tweak(
+                        &bitcoin30_to_bitcoin32_secp256k1_pubkey(&secret_tweak_key.public_key()),
+                        SECP256K1,
+                    )
+                    .script_pubkey(),
+            ),
             address,
             secret_tweak_key,
             operation_id,
@@ -506,7 +519,7 @@ impl WalletClientModule {
     }
 
     pub fn get_network(&self) -> Network {
-        bitcoin32_to_bitcoin30_network(&self.cfg().network)
+        self.cfg().network
     }
 
     pub fn get_fee_consensus(&self) -> FeeConsensus {
@@ -548,13 +561,10 @@ impl WalletClientModule {
     /// The caller should be prepared to retry with a new fee estimate.
     pub async fn get_withdraw_fees(
         &self,
-        address: bitcoin30::Address<NetworkUnchecked>,
-        amount: bitcoin30::Amount,
+        address: bitcoin::Address<NetworkUnchecked>,
+        amount: bitcoin::Amount,
     ) -> anyhow::Result<PegOutFees> {
-        check_address(
-            &address,
-            bitcoin32_to_bitcoin30_network(&self.cfg().network),
-        )?;
+        check_address(&address, self.cfg().network)?;
 
         self.module_api
             .fetch_peg_out_fees(&address.assume_checked(), amount)
@@ -570,17 +580,13 @@ impl WalletClientModule {
     pub fn create_withdraw_output(
         &self,
         operation_id: OperationId,
-        address: &bitcoin30::Address<NetworkUnchecked>,
-        amount: bitcoin30::Amount,
+        address: &bitcoin::Address<NetworkUnchecked>,
+        amount: bitcoin::Amount,
         fees: PegOutFees,
     ) -> anyhow::Result<ClientOutputBundle<WalletOutput, WalletClientStates>> {
-        check_address(address, bitcoin32_to_bitcoin30_network(&self.cfg().network))?;
+        check_address(address, self.cfg().network)?;
 
-        let output = WalletOutput::new_v0_peg_out(
-            bitcoin30_to_bitcoin32_unchecked_address(address),
-            amount,
-            fees,
-        );
+        let output = WalletOutput::new_v0_peg_out(address.clone(), amount, fees);
 
         let amount = output.maybe_v0_ref().expect("v0 output").amount().into();
 
@@ -683,7 +689,7 @@ impl WalletClientModule {
 
                         // Begin watching the script address
                         self.rpc
-                            .watch_script_history(&address.script_pubkey())
+                            .watch_script_history(&bitcoin32_to_bitcoin30_script_buf(&address.script_pubkey()))
                             .await?;
 
                         let sender = self.pegin_monitor_wakeup_sender.clone();
@@ -747,11 +753,9 @@ impl WalletClientModule {
 
             let outcome_v2 = match outcome_v1 {
                 DepositStateV1::Claimed(tx_info) => DepositStateV2::Claimed {
-                    btc_deposited: bitcoin30::Amount::from_sat(
-                        tx_info.btc_transaction.output[tx_info.out_idx as usize].value,
-                    ),
-                    btc_out_point: bitcoin30::OutPoint {
-                        txid: tx_info.btc_transaction.txid(),
+                    btc_deposited: tx_info.btc_transaction.output[tx_info.out_idx as usize].value,
+                    btc_out_point: bitcoin::OutPoint {
+                        txid: tx_info.btc_transaction.compute_txid(),
                         vout: tx_info.out_idx,
                     },
                 },
@@ -769,6 +773,8 @@ impl WalletClientModule {
 
             stream! {
                 yield DepositStateV2::WaitingForTransaction;
+
+                let stream_script_pub_key = bitcoin32_to_bitcoin30_script_buf(&stream_script_pub_key);
 
                 retry(
                     "subscribe script history",
@@ -788,11 +794,11 @@ impl WalletClientModule {
                             let txid = tx.txid();
 
                             Some((
-                                bitcoin30::OutPoint {
-                                    txid,
+                                bitcoin::OutPoint {
+                                    txid: bitcoin30_to_bitcoin32_txid(&txid),
                                     vout: out_idx as u32,
                                 },
-                                bitcoin30::Amount::from_sat(amount)
+                                bitcoin::Amount::from_sat(amount)
                             ))
                         }).context("No deposit transaction found")
                     }
@@ -805,7 +811,7 @@ impl WalletClientModule {
 
                 let claim_data = stream_cient_ctx.module_db().wait_key_exists(&ClaimedPegInKey {
                     peg_in_index: tweak_idx,
-                    btc_out_point: bitcoin30_to_bitcoin32_outpoint(&btc_out_point),
+                    btc_out_point,
                 }).await;
 
                 yield DepositStateV2::Confirmed {
@@ -1003,8 +1009,8 @@ impl WalletClientModule {
     /// acknowledged by the user since it can be unexpectedly high.
     pub async fn withdraw<M: Serialize + MaybeSend + MaybeSync>(
         &self,
-        address: bitcoin30::Address<NetworkUnchecked>,
-        amount: bitcoin30::Amount,
+        address: bitcoin::Address<NetworkUnchecked>,
+        amount: bitcoin::Amount,
         fee: PegOutFees,
         extra_meta: M,
     ) -> anyhow::Result<OperationId> {

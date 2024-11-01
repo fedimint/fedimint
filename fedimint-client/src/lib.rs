@@ -107,7 +107,6 @@ use fedimint_api_client::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, GlobalFederationApiWithCacheExt,
     IGlobalFederationApi, WsFederationApi,
 };
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_pubkey;
 use fedimint_core::config::{
     ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig, ModuleInitRegistry,
 };
@@ -2058,7 +2057,7 @@ impl Client {
     /// once this function is guaranteed to return immediately.
     pub async fn get_guardian_public_keys_blocking(
         &self,
-    ) -> BTreeMap<PeerId, secp256k1::PublicKey> {
+    ) -> BTreeMap<PeerId, fedimint_core::secp256k1::PublicKey> {
         self.db.autocommit(|dbtx, _| Box::pin(async move {
             let config = self.config().await;
 
@@ -2093,7 +2092,7 @@ impl Client {
                 dbtx.insert_entry(&ClientConfigKey, &new_config).await;
                 *(self.config.write().await) = new_config;
                 guardian_pub_keys
-            }.into_iter().map(|(peer_id, pubkey)| (peer_id, bitcoin30_to_bitcoin32_secp256k1_pubkey(&pubkey))).collect();
+            };
 
             Result::<_, ()>::Ok(guardian_pub_keys)
         }), None).await.expect("Will retry forever")

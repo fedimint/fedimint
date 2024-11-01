@@ -2,7 +2,7 @@ use std::num::ParseIntError;
 use std::str::FromStr;
 
 use anyhow::bail;
-use bitcoin30::Denomination;
+use bitcoin::Denomination;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -67,7 +67,7 @@ impl Amount {
         if denom == Denomination::MilliSatoshi {
             return Ok(Self::from_msats(s.parse()?));
         }
-        let btc_amt = bitcoin30::amount::Amount::from_str_in(s, denom)?;
+        let btc_amt = bitcoin::amount::Amount::from_str_in(s, denom)?;
         Ok(Self::from(btc_amt))
     }
 
@@ -211,13 +211,13 @@ impl FromStr for Amount {
             Self::from_str_in(amt.trim(), denom.trim().parse()?)
         } else {
             // default to millisatoshi
-            Self::from_str_in(s.trim(), bitcoin30::Denomination::MilliSatoshi)
+            Self::from_str_in(s.trim(), Denomination::MilliSatoshi)
         }
     }
 }
 
-impl From<bitcoin30::Amount> for Amount {
-    fn from(amt: bitcoin30::Amount) -> Self {
+impl From<bitcoin::Amount> for Amount {
+    fn from(amt: bitcoin::Amount) -> Self {
         assert!(amt.to_sat() <= 2_100_000_000_000_000);
         Self {
             msats: amt.to_sat() * 1000,
@@ -238,7 +238,9 @@ pub enum ParseAmountError {
     #[error("Error parsing string as integer: {0}")]
     NotANumber(#[from] ParseIntError),
     #[error("Error parsing string as a bitcoin amount: {0}")]
-    WrongBitcoinAmount(#[from] bitcoin30::amount::ParseAmountError),
+    WrongBitcoinAmount(#[from] bitcoin::amount::ParseAmountError),
+    #[error("Error parsing string as a bitcoin denomination: {0}")]
+    WrongBitcoinDenomination(#[from] bitcoin_units::amount::ParseDenominationError),
 }
 
 #[cfg(test)]

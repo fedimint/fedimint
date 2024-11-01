@@ -1,12 +1,11 @@
 use std::io::{Error, Write};
 use std::str::FromStr;
 
-use bitcoin30::secp256k1::{Secp256k1, Verification};
-use bitcoin30::PublicKey;
+use bitcoin::secp256k1::{self, PublicKey, Secp256k1, Signing, Verification};
+use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 use fedimint_core::encoding::{Decodable, Encodable};
 use miniscript::bitcoin::hashes::{hash160, ripemd160, sha256};
 use miniscript::{hash256, MiniscriptKey, ToPublicKey};
-use secp256k1::Signing;
 use serde::{Deserialize, Serialize};
 
 use crate::tweakable::{Contract, Tweakable};
@@ -15,11 +14,11 @@ use crate::tweakable::{Contract, Tweakable};
     Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable,
 )]
 pub struct CompressedPublicKey {
-    pub key: secp256k1::PublicKey,
+    pub key: PublicKey,
 }
 
 impl CompressedPublicKey {
-    pub fn new(key: secp256k1::PublicKey) -> Self {
+    pub fn new(key: PublicKey) -> Self {
         CompressedPublicKey { key }
     }
 }
@@ -47,9 +46,9 @@ impl MiniscriptKey for CompressedPublicKey {
 
 impl ToPublicKey for CompressedPublicKey {
     fn to_public_key(&self) -> miniscript::bitcoin::PublicKey {
-        PublicKey {
+        miniscript::bitcoin::PublicKey {
             compressed: true,
-            inner: self.key,
+            inner: bitcoin32_to_bitcoin30_secp256k1_pubkey(&self.key),
         }
     }
 
@@ -81,7 +80,7 @@ impl FromStr for CompressedPublicKey {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(CompressedPublicKey {
-            key: secp256k1::PublicKey::from_str(s)?,
+            key: PublicKey::from_str(s)?,
         })
     }
 }
@@ -98,9 +97,9 @@ impl Tweakable for CompressedPublicKey {
     }
 }
 
-impl From<CompressedPublicKey> for bitcoin30::PublicKey {
+impl From<CompressedPublicKey> for bitcoin::PublicKey {
     fn from(key: CompressedPublicKey) -> Self {
-        bitcoin30::PublicKey {
+        bitcoin::PublicKey {
             compressed: true,
             inner: key.key,
         }

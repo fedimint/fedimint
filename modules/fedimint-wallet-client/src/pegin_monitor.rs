@@ -1,13 +1,14 @@
 use std::cmp;
 use std::time::{Duration, SystemTime};
 
-use bitcoin30::ScriptBuf;
+use bitcoin::ScriptBuf;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client::module::ClientContext;
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin30_to_bitcoin32_outpoint, bitcoin30_to_bitcoin32_tx,
+    bitcoin30_to_bitcoin32_keypair, bitcoin30_to_bitcoin32_secp256k1_pubkey,
+    bitcoin30_to_bitcoin32_tx, bitcoin32_to_bitcoin30_script_buf, bitcoin32_to_bitcoin30_txid,
 };
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
@@ -15,8 +16,8 @@ use fedimint_core::db::{
 };
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::task::sleep;
+use fedimint_core::time;
 use fedimint_core::txoproof::TxOutProof;
-use fedimint_core::{time, Amount};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use fedimint_wallet_common::txoproof::PegInProof;
 use fedimint_wallet_common::WalletInput;
@@ -199,7 +200,7 @@ async fn check_and_claim_idx_pegins(
                             let peg_in_tweak_index_data = PegInTweakIndexData {
                                 next_check_time,
                                 last_check_time: Some(now),
-                                claimed: [due_val.claimed.clone(), claimed_now.into_iter().map(|outpoint| bitcoin30_to_bitcoin32_outpoint(&outpoint)).collect()].concat(),
+                                claimed: [due_val.claimed.clone(), claimed_now].concat(),
                                 ..due_val
                             };
                             trace!(
@@ -235,7 +236,7 @@ enum CheckOutcome {
     /// There's a tx pending (needs more confirmation)
     Pending { num_blocks_needed: u64 },
     /// A state machine was created to claim the peg-in
-    Claimed { outpoint: bitcoin30::OutPoint },
+    Claimed { outpoint: bitcoin::OutPoint },
 
     /// A peg-in transaction was already claimed (state machine created) in the
     /// past
@@ -298,7 +299,7 @@ impl CheckOutcome {
         min
     }
 
-    fn get_claimed_now_outpoints(outcomes: &[CheckOutcome]) -> Vec<bitcoin30::OutPoint> {
+    fn get_claimed_now_outpoints(outcomes: &[CheckOutcome]) -> Vec<bitcoin::OutPoint> {
         let mut res = vec![];
         for outcome in outcomes {
             if let CheckOutcome::Claimed { outpoint } = outcome {
@@ -325,24 +326,30 @@ async fn check_idx_pegins(
 ) -> Result<Vec<CheckOutcome>, anyhow::Error> {
     let current_consensus_block_count = module_rpc.fetch_consensus_block_count().await?;
     let (script, address, tweak_key, operation_id) = data.derive_peg_in_script(tweak_idx);
-    btc_rpc.watch_script_history(&script).await?;
+    btc_rpc
+        .watch_script_history(&bitcoin32_to_bitcoin30_script_buf(&script))
+        .await?;
 
-    let history = btc_rpc.get_script_history(&script).await?;
+    let history = btc_rpc
+        .get_script_history(&bitcoin32_to_bitcoin30_script_buf(&script))
+        .await?;
 
     debug!(target: LOG_CLIENT_MODULE_WALLET, %address, num_txes=history.len(), "Got history of a peg-in address");
 
     let mut outcomes = vec![];
 
-    for (transaction, out_idx) in filter_onchain_deposit_outputs(history.into_iter(), &script) {
-        let txid = transaction.txid();
-        let outpoint = bitcoin30::OutPoint {
+    for (transaction, out_idx) in
+        filter_onchain_deposit_outputs(history.iter().map(bitcoin30_to_bitcoin32_tx), &script)
+    {
+        let txid = transaction.compute_txid();
+        let outpoint = bitcoin::OutPoint {
             txid,
             vout: out_idx,
         };
 
         let claimed_peg_in_key = ClaimedPegInKey {
             peg_in_index: tweak_idx,
-            btc_out_point: bitcoin30_to_bitcoin32_outpoint(&outpoint),
+            btc_out_point: outpoint,
         };
 
         if db
@@ -358,16 +365,18 @@ async fn check_idx_pegins(
         }
         let finality_delay = u64::from(data.cfg.finality_delay);
 
-        let tx_block_count =
-            if let Some(tx_block_height) = btc_rpc.get_tx_block_height(&txid).await? {
-                tx_block_height.saturating_add(1)
-            } else {
-                outcomes.push(CheckOutcome::Pending {
-                    num_blocks_needed: finality_delay,
-                });
-                debug!(target:LOG_CLIENT_MODULE_WALLET, %txid, %out_idx,"In the mempool");
-                continue;
-            };
+        let tx_block_count = if let Some(tx_block_height) = btc_rpc
+            .get_tx_block_height(&bitcoin32_to_bitcoin30_txid(&txid))
+            .await?
+        {
+            tx_block_height.saturating_add(1)
+        } else {
+            outcomes.push(CheckOutcome::Pending {
+                num_blocks_needed: finality_delay,
+            });
+            debug!(target:LOG_CLIENT_MODULE_WALLET, %txid, %out_idx,"In the mempool");
+            continue;
+        };
 
         let num_blocks_needed = tx_block_count.saturating_sub(current_consensus_block_count);
 
@@ -379,7 +388,9 @@ async fn check_idx_pegins(
 
         debug!(target: LOG_CLIENT_MODULE_WALLET, %txid, %out_idx, %finality_delay, %tx_block_count, %current_consensus_block_count, "Ready to claim");
 
-        let tx_out_proof = btc_rpc.get_txout_proof(txid).await?;
+        let tx_out_proof = btc_rpc
+            .get_txout_proof(bitcoin32_to_bitcoin30_txid(&txid))
+            .await?;
         claim_peg_in(
             client_ctx,
             tweak_idx,
@@ -400,15 +411,15 @@ async fn claim_peg_in(
     client_ctx: &ClientContext<WalletClientModule>,
     tweak_idx: TweakIdx,
     tweak_key: KeyPair,
-    transaction: &bitcoin30::Transaction,
+    transaction: &bitcoin::Transaction,
     operation_id: OperationId,
-    out_point: bitcoin30::OutPoint,
+    out_point: bitcoin::OutPoint,
     tx_out_proof: TxOutProof,
 ) -> anyhow::Result<()> {
     async fn claim_peg_in_inner(
         client_ctx: &ClientContext<WalletClientModule>,
         dbtx: &mut DatabaseTransaction<'_>,
-        btc_transaction: &bitcoin30::Transaction,
+        btc_transaction: &bitcoin::Transaction,
         out_idx: u32,
         tweak_key: KeyPair,
         txout_proof: TxOutProof,
@@ -416,13 +427,13 @@ async fn claim_peg_in(
     ) -> (fedimint_core::TransactionId, Vec<fedimint_core::OutPoint>) {
         let pegin_proof = PegInProof::new(
             txout_proof,
-            bitcoin30_to_bitcoin32_tx(btc_transaction),
+            btc_transaction.clone(),
             out_idx,
-            tweak_key.public_key(),
+            bitcoin30_to_bitcoin32_secp256k1_pubkey(&tweak_key.public_key()),
         )
         .expect("TODO: handle API returning faulty proofs");
 
-        let amount = Amount::from_sats(pegin_proof.tx_output().value);
+        let amount = pegin_proof.tx_output().value.into();
 
         let wallet_input = WalletInput::new_v0(pegin_proof);
 
@@ -465,7 +476,7 @@ async fn claim_peg_in(
                     dbtx.insert_entry(
                         &ClaimedPegInKey {
                             peg_in_index: tweak_idx,
-                            btc_out_point: bitcoin30_to_bitcoin32_outpoint(&out_point),
+                            btc_out_point: out_point,
                         },
                         &ClaimedPegInData { claim_txid, change },
                     )
@@ -489,9 +500,9 @@ async fn claim_peg_in(
 }
 
 pub(crate) fn filter_onchain_deposit_outputs<'a>(
-    tx_iter: impl Iterator<Item = bitcoin30::Transaction> + 'a,
+    tx_iter: impl Iterator<Item = bitcoin::Transaction> + 'a,
     out_script: &'a ScriptBuf,
-) -> impl Iterator<Item = (bitcoin30::Transaction, u32)> + 'a {
+) -> impl Iterator<Item = (bitcoin::Transaction, u32)> + 'a {
     tx_iter.flat_map(move |tx| {
         tx.output
             .clone()

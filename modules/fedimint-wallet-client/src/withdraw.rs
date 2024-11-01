@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use bitcoin30::Txid;
+use bitcoin::Txid;
 use fedimint_client::sm::{State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;

@@ -8,9 +8,7 @@ use fedimint_client::module::init::recovery::{RecoveryFromHistory, RecoveryFromH
 use fedimint_client::module::init::ClientModuleRecoverArgs;
 use fedimint_client::module::recovery::{DynModuleBackup, ModuleBackup};
 use fedimint_client::module::ClientContext;
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_script_buf, bitcoin32_to_bitcoin30_script_buf,
-};
+use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_script_buf;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -295,11 +293,9 @@ impl RecoveryFromHistory for WalletRecovery {
             }
         };
 
-        self.state.tracker.handle_script(
-            &self.data,
-            &bitcoin30_to_bitcoin32_script_buf(script_pubkey),
-            session_idx,
-        );
+        self.state
+            .tracker
+            .handle_script(&self.data, script_pubkey, session_idx);
 
         Ok(())
     }
@@ -349,6 +345,7 @@ impl RecoveryFromHistory for WalletRecovery {
                     if use_decoy_before_real_query {
                         use_decoy().await?;
                     }
+                    let script = bitcoin32_to_bitcoin30_script_buf(&script);
                     btc_rpc.watch_script_history(&script).await?;
                     let history = btc_rpc.get_script_history(&script).await?;
 

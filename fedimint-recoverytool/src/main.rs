@@ -8,9 +8,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::anyhow;
 use bitcoin::network::Network;
+use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
 use bitcoin::OutPoint;
 use clap::{ArgGroup, Parser, Subcommand};
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_secret_key;
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::epoch::ConsensusItem;
@@ -35,7 +35,6 @@ use fedimint_wallet_server::{nonce_from_idx, Wallet};
 use futures::stream::StreamExt;
 use hex::FromHex;
 use miniscript::{Descriptor, MiniscriptKey, TranslatePk, Translator};
-use secp256k1::SecretKey;
 use serde::Serialize;
 use tracing::info;
 
@@ -288,16 +287,15 @@ fn tweak_descriptor(
     tweak: &[u8; 33],
     network: Network,
 ) -> Descriptor<Key> {
-    let secret_key = base_sk.tweak(tweak, secp256k1::SECP256K1);
-    let pub_key =
-        CompressedPublicKey::new(secp256k1::PublicKey::from_secret_key_global(&secret_key));
+    let secret_key = base_sk.tweak(tweak, SECP256K1);
+    let pub_key = CompressedPublicKey::new(PublicKey::from_secret_key_global(&secret_key));
     base_descriptor
-        .tweak(tweak, secp256k1::SECP256K1)
+        .tweak(tweak, SECP256K1)
         .translate_pk(&mut SecretKeyInjector {
             secret: bitcoin::key::PrivateKey {
                 compressed: true,
                 network: network.into(),
-                inner: bitcoin30_to_bitcoin32_secp256k1_secret_key(&secret_key),
+                inner: secret_key,
             },
             public: pub_key,
         })

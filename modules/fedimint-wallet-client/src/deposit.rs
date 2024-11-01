@@ -5,19 +5,17 @@ use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_tx, bitcoin32_to_bitcoin30_keypair,
-    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_txid,
+    bitcoin30_to_bitcoin32_script_buf, bitcoin30_to_bitcoin32_tx, bitcoin32_to_bitcoin30_txid,
 };
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1_29::Keypair;
 use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
-use fedimint_core::{Amount, OutPoint, TransactionId};
+use fedimint_core::{OutPoint, TransactionId};
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::txoproof::PegInProof;
 use fedimint_wallet_common::WalletInput;
-use secp256k1::KeyPair;
 use tracing::{debug, instrument, trace, warn};
 
 use crate::api::WalletFederationApi;
@@ -58,10 +56,10 @@ impl State for DepositStateMachine {
                     StateTransition::new(
                         await_created_btc_transaction_submitted(
                             context.clone(),
-                            bitcoin32_to_bitcoin30_keypair(&created_state.tweak_key),
+                            created_state.tweak_key,
                         ),
                         |_db, (btc_tx, out_idx), old_state| {
-                            Box::pin(async move { transition_tx_seen(old_state, &btc_tx, out_idx) })
+                            Box::pin(async move { transition_tx_seen(old_state, btc_tx, out_idx) })
                         },
                     ),
                     StateTransition::new(
@@ -103,8 +101,8 @@ impl State for DepositStateMachine {
 
 async fn await_created_btc_transaction_submitted(
     context: WalletClientContext,
-    tweak: KeyPair,
-) -> (bitcoin30::Transaction, u32) {
+    tweak: Keypair,
+) -> (bitcoin::Transaction, u32) {
     let script = context
         .wallet_descriptor
         .tweak(&tweak.public_key(), &context.secp)
@@ -130,8 +128,11 @@ async fn await_created_btc_transaction_submitted(
                     warn!("More than one transaction was sent to deposit address, only considering the first one");
                 }
 
-                if let Some((transaction, out_idx)) =
-                    filter_onchain_deposit_outputs(received.into_iter(), &script).next()
+                if let Some((transaction, out_idx)) = filter_onchain_deposit_outputs(
+                    received.iter().map(bitcoin30_to_bitcoin32_tx),
+                    &bitcoin30_to_bitcoin32_script_buf(&script),
+                )
+                .next()
                 {
                     return (transaction, out_idx);
                 }
@@ -149,7 +150,7 @@ async fn await_created_btc_transaction_submitted(
 
 fn transition_tx_seen(
     old_state: DepositStateMachine,
-    btc_transaction: &bitcoin30::Transaction,
+    btc_transaction: bitcoin::Transaction,
     out_idx: u32,
 ) -> DepositStateMachine {
     let DepositStateMachine {
@@ -162,7 +163,7 @@ fn transition_tx_seen(
             operation_id,
             state: DepositStates::WaitingForConfirmations(WaitingForConfirmationsDepositState {
                 tweak_key: created_state.tweak_key,
-                btc_transaction: bitcoin30_to_bitcoin32_tx(btc_transaction),
+                btc_transaction,
                 out_idx,
             }),
         },
@@ -277,13 +278,11 @@ pub(crate) async fn transition_btc_tx_confirmed(
         txout_proof,
         awaiting_confirmation_state.btc_transaction,
         awaiting_confirmation_state.out_idx,
-        bitcoin32_to_bitcoin30_secp256k1_pubkey(
-            &awaiting_confirmation_state.tweak_key.public_key(),
-        ),
+        awaiting_confirmation_state.tweak_key.public_key(),
     )
     .expect("TODO: handle API returning faulty proofs");
 
-    let amount = Amount::from_sats(pegin_proof.tx_output().value);
+    let amount = pegin_proof.tx_output().value.into();
 
     let wallet_input = WalletInput::new_v0(pegin_proof);
 

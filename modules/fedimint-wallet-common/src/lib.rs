@@ -8,13 +8,10 @@
 use std::hash::Hasher;
 
 use bitcoin::address::NetworkUnchecked;
-use bitcoin::{Address, BlockHash, Network};
-use bitcoin30::psbt::raw::ProprietaryKey;
-use bitcoin30::{Amount, Txid};
+use bitcoin::psbt::raw::ProprietaryKey;
+use bitcoin::{secp256k1, Address, Amount, BlockHash, Network, Txid};
 use config::WalletClientConfig;
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_amount, bitcoin32_to_bitcoin30_amount,
-};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_amount;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
@@ -143,9 +140,7 @@ pub struct WalletSummary {
 
 impl WalletSummary {
     fn sum<'a>(txos: impl Iterator<Item = &'a TxOutputSummary>) -> Amount {
-        txos.fold(Amount::ZERO, |acc, txo| {
-            bitcoin32_to_bitcoin30_amount(&txo.amount) + acc
-        })
+        txos.fold(Amount::ZERO, |acc, txo| txo.amount + acc)
     }
 
     /// Total amount of all spendable UTXOs
@@ -236,7 +231,7 @@ impl PegOutFees {
     }
 
     pub fn amount(&self) -> Amount {
-        self.fee_rate.calculate_fee(self.total_weight)
+        bitcoin30_to_bitcoin32_amount(&self.fee_rate.calculate_fee(self.total_weight))
     }
 }
 
@@ -255,7 +250,7 @@ extensible_associated_module_type!(
 );
 
 impl WalletOutputOutcome {
-    pub fn new_v0(txid: bitcoin30::Txid) -> WalletOutputOutcome {
+    pub fn new_v0(txid: bitcoin::Txid) -> WalletOutputOutcome {
         WalletOutputOutcome::V0(WalletOutputOutcomeV0(txid))
     }
 }
@@ -263,7 +258,7 @@ impl WalletOutputOutcome {
 /// Contains the Bitcoin transaction id of the transaction created by the
 /// withdraw request
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct WalletOutputOutcomeV0(pub bitcoin30::Txid);
+pub struct WalletOutputOutcomeV0(pub bitcoin::Txid);
 
 impl std::fmt::Display for WalletOutputOutcomeV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -316,12 +311,12 @@ extensible_associated_module_type!(
 impl WalletOutput {
     pub fn new_v0_peg_out(
         recipient: Address<NetworkUnchecked>,
-        amount: bitcoin30::Amount,
+        amount: bitcoin::Amount,
         fees: PegOutFees,
     ) -> WalletOutput {
         WalletOutput::V0(WalletOutputV0::PegOut(PegOut {
             recipient,
-            amount: bitcoin30_to_bitcoin32_amount(&amount),
+            amount,
             fees,
         }))
     }
@@ -348,9 +343,7 @@ pub struct Rbf {
 impl WalletOutputV0 {
     pub fn amount(&self) -> Amount {
         match self {
-            WalletOutputV0::PegOut(pegout) => {
-                bitcoin32_to_bitcoin30_amount(&pegout.amount) + pegout.fees.amount()
-            }
+            WalletOutputV0::PegOut(pegout) => pegout.amount + pegout.fees.amount(),
             WalletOutputV0::Rbf(rbf) => rbf.fees.amount(),
         }
     }
@@ -474,5 +467,5 @@ pub enum ProcessPegOutSigError {
     #[error("Missing change tweak")]
     MissingOrMalformedChangeTweak,
     #[error("Error finalizing PSBT {0:?}")]
-    ErrorFinalizingPsbt(Vec<miniscript::psbt::Error>),
+    ErrorFinalizingPsbt(Vec<miniscript12::psbt::Error>),
 }

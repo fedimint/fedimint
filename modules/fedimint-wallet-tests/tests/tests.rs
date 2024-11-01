@@ -4,13 +4,16 @@ use std::time::Duration;
 
 use anyhow::{bail, Context};
 use assert_matches::assert_matches;
-use bitcoin30::secp256k1;
+use bitcoin::secp256k1;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::ClientHandleArc;
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_checked_address_to_unchecked_address, bitcoin30_to_bitcoin32_network,
-    bitcoin30_to_bitcoin32_outpoint, bitcoin30_to_bitcoin32_tx, bitcoin30_to_bitcoin32_txid,
-    bitcoin32_to_bitcoin30_network,
+    bitcoin30_checked_address_to_unchecked_address, bitcoin30_to_bitcoin32_amount,
+    bitcoin30_to_bitcoin32_network, bitcoin30_to_bitcoin32_outpoint,
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin30_to_bitcoin32_tx,
+    bitcoin30_to_bitcoin32_txid, bitcoin30_to_bitcoin32_unchecked_address,
+    bitcoin32_to_bitcoin30_address, bitcoin32_to_bitcoin30_amount, bitcoin32_to_bitcoin30_network,
+    bitcoin32_to_bitcoin30_txid,
 };
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
@@ -66,7 +69,7 @@ async fn peg_in<'a>(
     info!(?address, "Peg-in address generated");
     let (_proof, tx) = bitcoin
         .send_and_mine_block(
-            &address,
+            &bitcoin32_to_bitcoin30_address(&address),
             bsats(PEG_IN_AMOUNT_SATS)
                 + bsats(wallet_module.get_fee_consensus().peg_in_abs.msats / 1000),
         )
@@ -177,6 +180,8 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
         .allocate_deposit_address_expert_only(())
         .await?;
 
+    let address = bitcoin32_to_bitcoin30_address(&address);
+
     // Test operation is created
     let operations = client.operation_log().list_operations(10, None).await;
     assert_eq!(operations.len(), 1, "Expecting only the peg-in operation");
@@ -225,7 +230,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     info!("Waiting for confirmation");
     assert!(matches!(
         deposit_updates.next().await.unwrap(),
-        DepositStateV2::WaitingForConfirmation { btc_out_point, .. } if btc_out_point.txid == tx.txid()
+        DepositStateV2::WaitingForConfirmation { btc_out_point, .. } if btc_out_point.txid == bitcoin30_to_bitcoin32_txid(&tx.txid())
     ));
 
     bitcoin.mine_blocks(finality_delay).await;
@@ -249,13 +254,13 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     info!("Waiting for claim tx");
     assert!(matches!(
         await_update_while_rechecking.await.unwrap(),
-        DepositStateV2::Confirmed { btc_out_point, .. } if btc_out_point.txid == tx.txid()
+        DepositStateV2::Confirmed { btc_out_point, .. } if btc_out_point.txid == bitcoin30_to_bitcoin32_txid(&tx.txid())
     ));
 
     info!("Waiting for e-cash");
     assert!(matches!(
         deposit_updates.next().await.unwrap(),
-        DepositStateV2::Claimed { btc_out_point, .. } if btc_out_point.txid == tx.txid()
+        DepositStateV2::Claimed { btc_out_point, .. } if btc_out_point.txid == bitcoin30_to_bitcoin32_txid(&tx.txid())
     ));
 
     info!("Checking balance after deposit");
@@ -270,14 +275,22 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     let address = bitcoin30_checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
     let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
     let fees = wallet_module
-        .get_withdraw_fees(address.clone(), peg_out)
+        .get_withdraw_fees(
+            bitcoin30_to_bitcoin32_unchecked_address(&address),
+            bitcoin30_to_bitcoin32_amount(&peg_out),
+        )
         .await?;
     assert_eq!(
         fees.total_weight, 871,
         "stateless wallet should have constructed a tx with a total weight=871"
     );
     let op = wallet_module
-        .withdraw(address.clone(), peg_out, fees, ())
+        .withdraw(
+            bitcoin30_to_bitcoin32_unchecked_address(&address),
+            bitcoin30_to_bitcoin32_amount(&peg_out),
+            fees,
+            (),
+        )
         .await?;
 
     let balance_after_peg_out =
@@ -299,13 +312,15 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
         let tx_vbytes = (fees.total_weight + witness_scale_factor - 1) / witness_scale_factor;
         Amount::from_sats(sats_per_vbyte * tx_vbytes)
     };
-    let tx_fee = bitcoin.get_mempool_tx_fee(&txid).await;
+    let tx_fee = bitcoin
+        .get_mempool_tx_fee(&bitcoin32_to_bitcoin30_txid(&txid))
+        .await;
     assert_eq!(tx_fee, expected_tx_fee);
 
     let received = bitcoin
         .mine_block_and_get_received(&address.clone().assume_checked())
         .await;
-    assert_eq!(received, peg_out.into());
+    assert_eq!(received, bitcoin30_to_bitcoin32_amount(&peg_out).into());
     Ok(())
 }
 
@@ -329,6 +344,8 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
     let (op, address, tweak_idx) = wallet_module
         .allocate_deposit_address_expert_only(())
         .await?;
+
+    let address = bitcoin32_to_bitcoin30_address(&address);
 
     // First peg-in
     {
@@ -412,7 +429,12 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
 
     let wallet_module = client.get_first_module::<WalletClientModule>()?;
     let op = wallet_module
-        .withdraw(address.clone(), peg_out, fees, ())
+        .withdraw(
+            bitcoin30_to_bitcoin32_unchecked_address(&address),
+            bitcoin30_to_bitcoin32_amount(&peg_out),
+            fees,
+            (),
+        )
         .await?;
     assert_eq!(
         balance_sub.next().await.unwrap(),
@@ -452,10 +474,18 @@ async fn rbf_withdrawals_are_rejected() -> anyhow::Result<()> {
     let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
     let wallet_module = client.get_first_module::<WalletClientModule>()?;
     let fees = wallet_module
-        .get_withdraw_fees(address.clone(), peg_out)
+        .get_withdraw_fees(
+            bitcoin30_to_bitcoin32_unchecked_address(&address),
+            bitcoin30_to_bitcoin32_amount(&peg_out),
+        )
         .await?;
     let op = wallet_module
-        .withdraw(address.clone(), peg_out, fees, ())
+        .withdraw(
+            bitcoin30_to_bitcoin32_unchecked_address(&address),
+            bitcoin30_to_bitcoin32_amount(&peg_out),
+            fees,
+            (),
+        )
         .await?;
 
     let sub = wallet_module.subscribe_withdraw_updates(op).await?;
@@ -466,7 +496,9 @@ async fn rbf_withdrawals_are_rejected() -> anyhow::Result<()> {
         bail!("Unexpected state: {state:?}")
     };
     assert_eq!(
-        bitcoin.get_mempool_tx_fee(&txid).await,
+        bitcoin
+            .get_mempool_tx_fee(&bitcoin32_to_bitcoin30_txid(&txid))
+            .await,
         fees.amount().into()
     );
     let balance_after_normal_peg_out =
@@ -552,10 +584,18 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     let peg_out1 = PEG_OUT_AMOUNT_SATS;
     let wallet_module = client.get_first_module::<WalletClientModule>()?;
     let fees1 = wallet_module
-        .get_withdraw_fees(address.clone(), bsats(peg_out1))
+        .get_withdraw_fees(
+            bitcoin30_to_bitcoin32_unchecked_address(&address),
+            bitcoin30_to_bitcoin32_amount(&bsats(peg_out1)),
+        )
         .await?;
     let op = wallet_module
-        .withdraw(address.clone(), bsats(peg_out1), fees1, ())
+        .withdraw(
+            bitcoin30_to_bitcoin32_unchecked_address(&address),
+            bitcoin30_to_bitcoin32_amount(&bsats(peg_out1)),
+            fees1,
+            (),
+        )
         .await?;
     let balance_after_peg_out =
         sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - fees1.amount().to_sat());
@@ -569,7 +609,9 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
         WithdrawState::Succeeded(txid) => txid,
         other => panic!("Unexpected state: {other:?}"),
     };
-    bitcoin.get_mempool_tx_fee(&txid).await;
+    bitcoin
+        .get_mempool_tx_fee(&bitcoin32_to_bitcoin30_txid(&txid))
+        .await;
 
     // Do another peg-out
     // Note: important to use a different address, otherwise txid
@@ -578,7 +620,10 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     let address = bitcoin30_checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
     let peg_out2 = PEG_OUT_AMOUNT_SATS;
     let fees2 = wallet_module
-        .get_withdraw_fees(address.clone(), bsats(peg_out2))
+        .get_withdraw_fees(
+            bitcoin30_to_bitcoin32_unchecked_address(&address),
+            bitcoin30_to_bitcoin32_amount(&bsats(peg_out2)),
+        )
         .await;
     // Must fail because change UTXOs are still being confirmed
     assert!(fees2.is_err());
@@ -588,10 +633,18 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     await_consensus_to_catch_up(&client, current_block + 1).await?;
     // Now change UTXOs are available and we can peg-out again
     let fees2 = wallet_module
-        .get_withdraw_fees(address.clone(), bsats(peg_out2))
+        .get_withdraw_fees(
+            bitcoin30_to_bitcoin32_unchecked_address(&address),
+            bitcoin30_to_bitcoin32_amount(&bsats(peg_out2)),
+        )
         .await?;
     let op = wallet_module
-        .withdraw(address.clone(), bsats(peg_out2), fees2, ())
+        .withdraw(
+            bitcoin30_to_bitcoin32_unchecked_address(&address),
+            bitcoin30_to_bitcoin32_amount(&bsats(peg_out2)),
+            fees2,
+            (),
+        )
         .await?;
     let sub = wallet_module.subscribe_withdraw_updates(op).await?;
     let mut sub = sub.into_stream();
@@ -601,7 +654,9 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
         other => panic!("Unexpected state: {other:?}"),
     };
 
-    bitcoin.get_mempool_tx_fee(&txid).await;
+    bitcoin
+        .get_mempool_tx_fee(&bitcoin32_to_bitcoin30_txid(&txid))
+        .await;
     let balance_after_second_peg_out = sats(
         PEG_IN_AMOUNT_SATS
             - peg_out1
@@ -629,9 +684,9 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     let module_instance_id = 1;
     let root_secret =
         PlainRootSecretStrategy::to_root_secret(&PlainRootSecretStrategy::random(&mut OsRng));
-    let secp = secp256k1::Secp256k1::new();
+    let secp = fedimint_core::secp256k1::Secp256k1::new();
     let tweak_key = root_secret.to_secp_key(&secp);
-    let pk = tweak_key.public_key();
+    let pk = bitcoin30_to_bitcoin32_secp256k1_pubkey(&tweak_key.public_key());
     let wallet_config: WalletConfig = wallet_server_cfg[0].to_typed()?;
     let peg_in_descriptor = wallet_config.consensus.peg_in_descriptor;
 
@@ -787,9 +842,12 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
         let wallet_summary = wallet_module.get_wallet_summary().await?;
         assert_eq!(
             sum_utxos(expected_available_utxos.iter()),
-            wallet_summary.total_spendable_balance()
+            bitcoin32_to_bitcoin30_amount(&wallet_summary.total_spendable_balance())
         );
-        assert_eq!(bsats(0), wallet_summary.total_pending_change_balance());
+        assert_eq!(
+            bsats(0),
+            bitcoin32_to_bitcoin30_amount(&wallet_summary.total_pending_change_balance())
+        );
         assert_eq!(
             expected_available_utxos,
             wallet_summary
@@ -808,10 +866,18 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
     let address = bitcoin30_checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
     let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
     let fees = wallet_module
-        .get_withdraw_fees(address.clone(), peg_out)
+        .get_withdraw_fees(
+            bitcoin30_to_bitcoin32_unchecked_address(&address),
+            bitcoin30_to_bitcoin32_amount(&peg_out),
+        )
         .await?;
     let op = wallet_module
-        .withdraw(address.clone(), peg_out, fees, ())
+        .withdraw(
+            bitcoin30_to_bitcoin32_unchecked_address(&address),
+            bitcoin30_to_bitcoin32_amount(&peg_out),
+            fees,
+            (),
+        )
         .await?;
 
     let sub = wallet_module.subscribe_withdraw_updates(op).await?;
@@ -835,7 +901,7 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
         ),
         || async {
             bitcoin
-                .get_mempool_tx(&txid)
+                .get_mempool_tx(&bitcoin32_to_bitcoin30_txid(&txid))
                 .await
                 .ok_or(anyhow::anyhow!("No mempool tx found"))
         },
@@ -858,10 +924,7 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
     }
 
     let expected_pending_peg_out_txo = TxOutputSummary {
-        outpoint: bitcoin::OutPoint {
-            txid: bitcoin30_to_bitcoin32_txid(&txid),
-            vout: 0,
-        },
+        outpoint: bitcoin::OutPoint { txid, vout: 0 },
         amount: bitcoin::Amount::from_sat(
             mempool_tx
                 .output
@@ -872,10 +935,7 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
     };
 
     let expected_pending_change_utxo = TxOutputSummary {
-        outpoint: bitcoin::OutPoint {
-            txid: bitcoin30_to_bitcoin32_txid(&txid),
-            vout: 1,
-        },
+        outpoint: bitcoin::OutPoint { txid, vout: 1 },
         amount: bitcoin::Amount::from_sat(
             mempool_tx
                 .output
@@ -887,7 +947,7 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
 
     assert_eq!(
         sum_utxos(expected_available_utxos.iter()),
-        wallet_summary_before_mining.total_spendable_balance()
+        bitcoin32_to_bitcoin30_amount(&wallet_summary_before_mining.total_spendable_balance())
     );
 
     assert_eq!(
@@ -898,7 +958,7 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
                 .expect("peg-out tx includes change output")
                 .value
         ),
-        wallet_summary_before_mining.total_pending_change_balance()
+        bitcoin32_to_bitcoin30_amount(&wallet_summary_before_mining.total_pending_change_balance())
     );
 
     assert_eq!(
@@ -931,12 +991,12 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
 
     assert_eq!(
         sum_utxos(expected_available_utxos.iter()),
-        wallet_summary_after_mining.total_spendable_balance()
+        bitcoin32_to_bitcoin30_amount(&wallet_summary_after_mining.total_spendable_balance())
     );
 
     assert_eq!(
         bsats(0),
-        wallet_summary_after_mining.total_pending_change_balance()
+        bitcoin32_to_bitcoin30_amount(&wallet_summary_after_mining.total_pending_change_balance())
     );
 
     assert_eq!(
@@ -1011,15 +1071,14 @@ fn build_wallet_server_configs(
 #[cfg(test)]
 mod fedimint_migration_tests {
     use anyhow::ensure;
+    use bitcoin::absolute::LockTime;
     use bitcoin::hashes::Hash;
-    use bitcoin::{Amount, BlockHash};
-    use bitcoin30::absolute::LockTime;
-    use bitcoin30::psbt::{Input, PartiallySignedTransaction};
-    use bitcoin30::{secp256k1, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, WPubkeyHash};
+    use bitcoin::psbt::{Input, Psbt};
+    use bitcoin::{secp256k1, Amount, BlockHash, Sequence, Transaction, TxIn, TxOut};
+    use bitcoin30::{ScriptBuf, Txid, WPubkeyHash};
     use fedimint_client::module::init::DynClientModuleInit;
     use fedimint_core::bitcoin_migration::{
-        bitcoin30_to_bitcoin32_script_buf, bitcoin30_to_bitcoin32_tx, bitcoin30_to_bitcoin32_txid,
-        bitcoin32_to_bitcoin30_outpoint,
+        bitcoin30_to_bitcoin32_script_buf, bitcoin30_to_bitcoin32_txid,
     };
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
@@ -1090,38 +1149,39 @@ mod fedimint_migration_tests {
         )
         .await;
 
-        let unsigned_transaction_key = UnsignedTransactionKey(Txid::from_byte_array(BYTE_32));
+        let unsigned_transaction_key =
+            UnsignedTransactionKey(bitcoin30_to_bitcoin32_txid(&Txid::from_byte_array(BYTE_32)));
 
         let selected_utxos: Vec<(UTXOKey, SpendableUTXO)> = vec![(utxo.clone(), spendable_utxo)];
 
         let destination = ScriptBuf::new_v0_p2wpkh(&WPubkeyHash::from_slice(&BYTE_20).unwrap());
         let output: Vec<TxOut> = vec![TxOut {
-            value: 10000,
-            script_pubkey: destination.clone(),
+            value: bitcoin::Amount::from_sat(10_000),
+            script_pubkey: bitcoin30_to_bitcoin32_script_buf(&destination.clone()),
         }];
 
-        let transaction = Transaction {
-            version: 2,
+        let tx = Transaction {
+            version: bitcoin::transaction::Version(2),
             lock_time: LockTime::ZERO,
             input: vec![TxIn {
-                previous_output: bitcoin32_to_bitcoin30_outpoint(&utxo.0),
+                previous_output: utxo.0,
                 script_sig: Default::default(),
                 sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
-                witness: bitcoin30::Witness::new(),
+                witness: bitcoin::Witness::new(),
             }],
             output,
         };
 
         let inputs = vec![Input {
             non_witness_utxo: None,
-            witness_utxo: Some(bitcoin30::TxOut {
-                value: 10000,
-                script_pubkey: destination.clone(),
+            witness_utxo: Some(bitcoin::TxOut {
+                value: bitcoin::Amount::from_sat(10_000),
+                script_pubkey: bitcoin30_to_bitcoin32_script_buf(&destination.clone()),
             }),
             partial_sigs: Default::default(),
             sighash_type: None,
             redeem_script: None,
-            witness_script: Some(destination.clone()),
+            witness_script: Some(bitcoin30_to_bitcoin32_script_buf(&destination)),
             bip32_derivation: Default::default(),
             final_script_sig: None,
             final_script_witness: None,
@@ -1139,8 +1199,8 @@ mod fedimint_migration_tests {
             unknown: Default::default(),
         }];
 
-        let psbt = PartiallySignedTransaction {
-            unsigned_tx: transaction.clone(),
+        let psbt = Psbt {
+            unsigned_tx: tx.clone(),
             version: 0,
             xpub: Default::default(),
             proprietary: Default::default(),
@@ -1166,10 +1226,11 @@ mod fedimint_migration_tests {
         dbtx.insert_new_entry(&unsigned_transaction_key, &unsigned_transaction)
             .await;
 
-        let pending_transaction_key = PendingTransactionKey(Txid::from_byte_array(BYTE_32));
+        let pending_transaction_key =
+            PendingTransactionKey(bitcoin30_to_bitcoin32_txid(&Txid::from_byte_array(BYTE_32)));
 
         let pending_tx = PendingTransaction {
-            tx: bitcoin30_to_bitcoin32_tx(&transaction),
+            tx,
             tweak: BYTE_33,
             change: Amount::from_sat(0),
             destination: bitcoin30_to_bitcoin32_script_buf(&destination),
@@ -1184,7 +1245,7 @@ mod fedimint_migration_tests {
                     fee_rate: Feerate { sats_per_kvb: 1000 },
                     total_weight: 40000,
                 },
-                txid: Txid::from_byte_array(BYTE_32),
+                txid: bitcoin30_to_bitcoin32_txid(&Txid::from_byte_array(BYTE_32)),
             }),
         };
         dbtx.insert_new_entry(&pending_transaction_key, &pending_tx)
@@ -1192,9 +1253,9 @@ mod fedimint_migration_tests {
 
         let (sk, _) = secp256k1::generate_keypair(&mut OsRng);
         let secp = secp256k1::Secp256k1::new();
-        let signature = secp.sign_ecdsa(&Message::from_slice(&BYTE_32).unwrap(), &sk);
+        let signature = secp.sign_ecdsa(&Message::from_digest_slice(&BYTE_32).unwrap(), &sk);
         dbtx.insert_new_entry(
-            &PegOutTxSignatureCI(Txid::from_byte_array(BYTE_32)),
+            &PegOutTxSignatureCI(bitcoin30_to_bitcoin32_txid(&Txid::from_byte_array(BYTE_32))),
             &vec![signature],
         )
         .await;
@@ -1206,7 +1267,9 @@ mod fedimint_migration_tests {
 
         dbtx.insert_new_entry(
             &peg_out_bitcoin_tx,
-            &WalletOutputOutcome::new_v0(Txid::from_slice(&BYTE_32).unwrap()),
+            &WalletOutputOutcome::new_v0(bitcoin30_to_bitcoin32_txid(
+                &Txid::from_slice(&BYTE_32).unwrap(),
+            )),
         )
         .await;
 

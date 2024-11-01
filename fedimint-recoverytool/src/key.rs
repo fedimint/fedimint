@@ -2,7 +2,6 @@ use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 use std::hash::Hasher;
 
-use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_secret_key;
 use fedimint_wallet_server::common::keys::CompressedPublicKey;
 use miniscript::MiniscriptKey;
 
@@ -47,11 +46,9 @@ impl Key {
     fn to_compressed_public_key(self) -> CompressedPublicKey {
         match self {
             Key::Public(pk) => pk,
-            Key::Private(sk) => {
-                CompressedPublicKey::new(secp256k1::PublicKey::from_secret_key_global(
-                    &bitcoin32_to_bitcoin30_secp256k1_secret_key(&sk.inner),
-                ))
-            }
+            Key::Private(sk) => CompressedPublicKey::new(
+                bitcoin::secp256k1::PublicKey::from_secret_key_global(&sk.inner),
+            ),
         }
     }
 }

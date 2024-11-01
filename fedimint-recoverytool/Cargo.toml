@@ -27,7 +27,6 @@ fedimint-wallet-server = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 miniscript = { workspace = true }
-secp256k1 = { workspace = true, features = ["serde", "global-context"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

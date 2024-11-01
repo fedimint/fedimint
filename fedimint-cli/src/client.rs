@@ -11,8 +11,7 @@ use fedimint_bip39::Mnemonic;
 use fedimint_client::backup::Metadata;
 use fedimint_client::ClientHandleArc;
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_network, bitcoin32_to_bitcoin30_amount,
-    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_unchecked_address,
+    bitcoin30_to_bitcoin32_amount, bitcoin32_to_bitcoin30_secp256k1_pubkey,
 };
 use fedimint_core::config::{ClientModuleConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
@@ -554,14 +553,10 @@ pub async fn handle_command(
                 // If the amount is "all", then we need to subtract the fees from
                 // the amount we are withdrawing
                 BitcoinAmountOrAll::All => {
-                    let balance = bitcoin32_to_bitcoin30_amount(&bitcoin::Amount::from_sat(
-                        client.get_balance().await.msats / 1000,
-                    ));
+                    let balance =
+                        bitcoin::Amount::from_sat(client.get_balance().await.msats / 1000);
                     let fees = wallet_module
-                        .get_withdraw_fees(
-                            bitcoin32_to_bitcoin30_unchecked_address(&address),
-                            balance,
-                        )
+                        .get_withdraw_fees(address.clone(), balance)
                         .await?;
                     let amount = balance.checked_sub(fees.amount());
                     if amount.is_none() {
@@ -570,12 +565,9 @@ pub async fn handle_command(
                     (amount.unwrap(), fees)
                 }
                 BitcoinAmountOrAll::Amount(amount) => (
-                    amount,
+                    bitcoin30_to_bitcoin32_amount(&amount),
                     wallet_module
-                        .get_withdraw_fees(
-                            bitcoin32_to_bitcoin30_unchecked_address(&address),
-                            amount,
-                        )
+                        .get_withdraw_fees(address.clone(), bitcoin30_to_bitcoin32_amount(&amount))
                         .await?,
                 ),
             };
@@ -583,14 +575,7 @@ pub async fn handle_command(
 
             info!("Attempting withdraw with fees: {fees:?}");
 
-            let operation_id = wallet_module
-                .withdraw(
-                    bitcoin32_to_bitcoin30_unchecked_address(&address),
-                    amount,
-                    fees,
-                    (),
-                )
-                .await?;
+            let operation_id = wallet_module.withdraw(address, amount, fees, ()).await?;
 
             let mut updates = wallet_module
                 .subscribe_withdraw_updates(operation_id)
@@ -680,7 +665,7 @@ async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json
         .await;
     Ok(serde_json::to_value(InfoResponse {
         federation_id: client.federation_id(),
-        network: bitcoin30_to_bitcoin32_network(&wallet_client.get_network()),
+        network: wallet_client.get_network(),
         meta: client.config().await.global.meta.clone(),
         total_amount_msat: summary.total_amount(),
         total_num_notes: summary.count_items(),
