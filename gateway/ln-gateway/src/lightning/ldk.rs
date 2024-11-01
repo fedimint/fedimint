@@ -10,7 +10,8 @@ use fedimint_bip39::Mnemonic;
 use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_address, bitcoin30_to_bitcoin32_invoice, bitcoin30_to_bitcoin32_network,
     bitcoin30_to_bitcoin32_payment_preimage, bitcoin30_to_bitcoin32_secp256k1_pubkey,
-    bitcoin32_to_bitcoin30_outpoint, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+    bitcoin30_to_bitcoin32_txid, bitcoin32_to_bitcoin30_outpoint,
+    bitcoin32_to_bitcoin30_secp256k1_pubkey,
 };
 use fedimint_core::envs::{is_env_var_set, FM_IN_DEVIMINT_ENV};
 use fedimint_core::task::{sleep, TaskGroup, TaskHandle};
@@ -199,7 +200,7 @@ impl GatewayLdkClient {
     async fn outpoint_to_scid(&self, funding_txo: OutPoint) -> anyhow::Result<u64> {
         let block_height = self
             .esplora_client
-            .get_merkle_proof(&funding_txo.txid)
+            .get_merkle_proof(&bitcoin30_to_bitcoin32_txid(&funding_txo.txid))
             .await?
             .ok_or(anyhow::anyhow!("Failed to get merkle proof"))?
             .block_height;
@@ -216,7 +217,7 @@ impl GatewayLdkClient {
             .txdata
             .iter()
             .enumerate()
-            .find(|(_, tx)| tx.txid() == funding_txo.txid)
+            .find(|(_, tx)| tx.compute_txid() == bitcoin30_to_bitcoin32_txid(&funding_txo.txid))
             .ok_or(anyhow::anyhow!("Failed to find transaction"))?
             .0 as u32;
 

@@ -1069,9 +1069,7 @@ pub async fn open_channels_between_gateways(
     let mut is_missing_any_txids = false;
     for txid_or in &channel_funding_txids {
         if let Some(txid) = txid_or {
-            bitcoind
-                .poll_get_transaction(bitcoin30_to_bitcoin32_txid(txid))
-                .await?;
+            bitcoind.poll_get_transaction(*txid).await?;
         } else {
             is_missing_any_txids = true;
         }
