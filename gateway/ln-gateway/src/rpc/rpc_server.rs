@@ -32,10 +32,9 @@ use tracing::{error, info, instrument};
 
 use super::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
-    CreateInvoiceForOperatorPayload, DepositAddressPayload, GetLnOnchainAddressPayload,
-    InfoPayload, LeaveFedPayload, OpenChannelPayload, PayInvoiceForOperatorPayload,
-    ReceiveEcashPayload, SetConfigurationPayload, SpendEcashPayload, WithdrawOnchainPayload,
-    WithdrawPayload, V1_API_ENDPOINT,
+    CreateInvoiceForOperatorPayload, DepositAddressPayload, InfoPayload, LeaveFedPayload,
+    OpenChannelPayload, PayInvoiceForOperatorPayload, ReceiveEcashPayload, SetConfigurationPayload,
+    SpendEcashPayload, WithdrawOnchainPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 use crate::error::{AdminGatewayError, PublicGatewayError};
 use crate::rpc::ConfigPayload;
@@ -196,10 +195,7 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
             PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
             post(pay_invoice_operator),
         )
-        .route(
-            GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
-            post(get_ln_onchain_address),
-        )
+        .route(GET_LN_ONCHAIN_ADDRESS_ENDPOINT, get(get_ln_onchain_address))
         .route(OPEN_CHANNEL_ENDPOINT, post(open_channel))
         .route(
             CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
@@ -378,7 +374,6 @@ async fn set_configuration(
 #[instrument(skip_all, err)]
 async fn get_ln_onchain_address(
     Extension(gateway): Extension<Arc<Gateway>>,
-    Json(_payload): Json<GetLnOnchainAddressPayload>,
 ) -> Result<impl IntoResponse, AdminGatewayError> {
     let address = gateway.handle_get_ln_onchain_address_msg().await?;
     Ok(Json(json!(address.to_string())))

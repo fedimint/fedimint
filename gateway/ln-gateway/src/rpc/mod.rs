@@ -167,9 +167,6 @@ pub struct PayInvoiceForOperatorPayload {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GetLnOnchainAddressPayload;
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OpenChannelPayload {
     pub pubkey: secp256k1::PublicKey,
     pub host: String,

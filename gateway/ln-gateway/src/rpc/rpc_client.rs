@@ -23,8 +23,8 @@ use thiserror::Error;
 use super::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConfigPayload, ConnectFedPayload,
     CreateInvoiceForOperatorPayload, DepositAddressPayload, FederationInfo, GatewayBalances,
-    GatewayFedConfig, GatewayInfo, GetLnOnchainAddressPayload, LeaveFedPayload, MnemonicResponse,
-    OpenChannelPayload, PayInvoiceForOperatorPayload, ReceiveEcashPayload, ReceiveEcashResponse,
+    GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelPayload,
+    PayInvoiceForOperatorPayload, ReceiveEcashPayload, ReceiveEcashResponse,
     SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, WithdrawOnchainPayload,
     WithdrawPayload, WithdrawResponse,
 };
@@ -168,15 +168,12 @@ impl GatewayRpcClient {
         self.call_post(url, payload).await
     }
 
-    pub async fn get_ln_onchain_address(
-        &self,
-        payload: GetLnOnchainAddressPayload,
-    ) -> GatewayRpcResult<Address<NetworkUnchecked>> {
+    pub async fn get_ln_onchain_address(&self) -> GatewayRpcResult<Address<NetworkUnchecked>> {
         let url = self
             .base_url
             .join(GET_LN_ONCHAIN_ADDRESS_ENDPOINT)
             .expect("invalid base url");
-        self.call_post(url, payload).await
+        self.call_get(url).await
     }
 
     pub async fn open_channel(&self, payload: OpenChannelPayload) -> GatewayRpcResult<Txid> {
