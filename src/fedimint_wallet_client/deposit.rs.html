@@ -342,27 +342,24 @@
 <a href="#341" id="341">341</a>
 <a href="#342" id="342">342</a>
 <a href="#343" id="343">343</a>
-<a href="#344" id="344">344</a>
-<a href="#345" id="345">345</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
+<a href="#344" id="344">344</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_tx, bitcoin32_to_bitcoin30_keypair,
-    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_txid,
+    bitcoin30_to_bitcoin32_script_buf, bitcoin30_to_bitcoin32_tx, bitcoin32_to_bitcoin30_txid,
 };
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::secp256k1_29::Keypair;
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
-<span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_core::{OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_wallet_common::tweakable::Tweakable;
 <span class="kw">use </span>fedimint_wallet_common::txoproof::PegInProof;
 <span class="kw">use </span>fedimint_wallet_common::WalletInput;
-<span class="kw">use </span>secp256k1::KeyPair;
 <span class="kw">use </span>tracing::{debug, instrument, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::api::WalletFederationApi;
@@ -403,10 +400,10 @@
                     StateTransition::new(
                         await_created_btc_transaction_submitted(
                             context.clone(),
-                            bitcoin32_to_bitcoin30_keypair(<span class="kw-2">&amp;</span>created_state.tweak_key),
+                            created_state.tweak_key,
                         ),
                         |_db, (btc_tx, out_idx), old_state| {
-                            Box::pin(<span class="kw">async move </span>{ transition_tx_seen(old_state, <span class="kw-2">&amp;</span>btc_tx, out_idx) })
+                            Box::pin(<span class="kw">async move </span>{ transition_tx_seen(old_state, btc_tx, out_idx) })
                         },
                     ),
                     StateTransition::new(
@@ -448,8 +445,8 @@
 
 <span class="kw">async fn </span>await_created_btc_transaction_submitted(
     context: WalletClientContext,
-    tweak: KeyPair,
-) -&gt; (bitcoin30::Transaction, u32) {
+    tweak: Keypair,
+) -&gt; (bitcoin::Transaction, u32) {
     <span class="kw">let </span>script = context
         .wallet_descriptor
         .tweak(<span class="kw-2">&amp;</span>tweak.public_key(), <span class="kw-2">&amp;</span>context.secp)
@@ -475,8 +472,11 @@
                     <span class="macro">warn!</span>(<span class="string">"More than one transaction was sent to deposit address, only considering the first one"</span>);
                 }
 
-                <span class="kw">if let </span><span class="prelude-val">Some</span>((transaction, out_idx)) =
-                    filter_onchain_deposit_outputs(received.into_iter(), <span class="kw-2">&amp;</span>script).next()
+                <span class="kw">if let </span><span class="prelude-val">Some</span>((transaction, out_idx)) = filter_onchain_deposit_outputs(
+                    received.iter().map(bitcoin30_to_bitcoin32_tx),
+                    <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_script_buf(<span class="kw-2">&amp;</span>script),
+                )
+                .next()
                 {
                     <span class="kw">return </span>(transaction, out_idx);
                 }
@@ -494,7 +494,7 @@
 
 <span class="kw">fn </span>transition_tx_seen(
     old_state: DepositStateMachine,
-    btc_transaction: <span class="kw-2">&amp;</span>bitcoin30::Transaction,
+    btc_transaction: bitcoin::Transaction,
     out_idx: u32,
 ) -&gt; DepositStateMachine {
     <span class="kw">let </span>DepositStateMachine {
@@ -507,7 +507,7 @@
             operation_id,
             state: DepositStates::WaitingForConfirmations(WaitingForConfirmationsDepositState {
                 tweak_key: created_state.tweak_key,
-                btc_transaction: bitcoin30_to_bitcoin32_tx(btc_transaction),
+                btc_transaction,
                 out_idx,
             }),
         },
@@ -622,13 +622,11 @@
         txout_proof,
         awaiting_confirmation_state.btc_transaction,
         awaiting_confirmation_state.out_idx,
-        bitcoin32_to_bitcoin30_secp256k1_pubkey(
-            <span class="kw-2">&amp;</span>awaiting_confirmation_state.tweak_key.public_key(),
-        ),
+        awaiting_confirmation_state.tweak_key.public_key(),
     )
     .expect(<span class="string">"TODO: handle API returning faulty proofs"</span>);
 
-    <span class="kw">let </span>amount = Amount::from_sats(pegin_proof.tx_output().value);
+    <span class="kw">let </span>amount = pegin_proof.tx_output().value.into();
 
     <span class="kw">let </span>wallet_input = WalletInput::new_v0(pegin_proof);
 

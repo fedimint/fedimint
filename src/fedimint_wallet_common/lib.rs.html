@@ -469,14 +469,7 @@
 <a href="#468" id="468">468</a>
 <a href="#469" id="469">469</a>
 <a href="#470" id="470">470</a>
-<a href="#471" id="471">471</a>
-<a href="#472" id="472">472</a>
-<a href="#473" id="473">473</a>
-<a href="#474" id="474">474</a>
-<a href="#475" id="475">475</a>
-<a href="#476" id="476">476</a>
-<a href="#477" id="477">477</a>
-<a href="#478" id="478">478</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#471" id="471">471</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -486,13 +479,10 @@
 </span><span class="kw">use </span>std::hash::Hasher;
 
 <span class="kw">use </span>bitcoin::address::NetworkUnchecked;
-<span class="kw">use </span>bitcoin::{Address, BlockHash, Network};
-<span class="kw">use </span>bitcoin30::psbt::raw::ProprietaryKey;
-<span class="kw">use </span>bitcoin30::{Amount, Txid};
+<span class="kw">use </span>bitcoin::psbt::raw::ProprietaryKey;
+<span class="kw">use </span>bitcoin::{secp256k1, Address, Amount, BlockHash, Network, Txid};
 <span class="kw">use </span>config::WalletClientConfig;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_amount, bitcoin32_to_bitcoin30_amount,
-};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_amount;
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
@@ -621,9 +611,7 @@
 
 <span class="kw">impl </span>WalletSummary {
     <span class="kw">fn </span>sum&lt;<span class="lifetime">'a</span>&gt;(txos: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">'a </span>TxOutputSummary&gt;) -&gt; Amount {
-        txos.fold(Amount::ZERO, |acc, txo| {
-            bitcoin32_to_bitcoin30_amount(<span class="kw-2">&amp;</span>txo.amount) + acc
-        })
+        txos.fold(Amount::ZERO, |acc, txo| txo.amount + acc)
     }
 
     <span class="doccomment">/// Total amount of all spendable UTXOs
@@ -714,7 +702,7 @@
     }
 
     <span class="kw">pub fn </span>amount(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
-        <span class="self">self</span>.fee_rate.calculate_fee(<span class="self">self</span>.total_weight)
+        bitcoin30_to_bitcoin32_amount(<span class="kw-2">&amp;</span><span class="self">self</span>.fee_rate.calculate_fee(<span class="self">self</span>.total_weight))
     }
 }
 
@@ -733,7 +721,7 @@
 );
 
 <span class="kw">impl </span>WalletOutputOutcome {
-    <span class="kw">pub fn </span>new_v0(txid: bitcoin30::Txid) -&gt; WalletOutputOutcome {
+    <span class="kw">pub fn </span>new_v0(txid: bitcoin::Txid) -&gt; WalletOutputOutcome {
         WalletOutputOutcome::V0(WalletOutputOutcomeV0(txid))
     }
 }
@@ -741,7 +729,7 @@
 <span class="doccomment">/// Contains the Bitcoin transaction id of the transaction created by the
 /// withdraw request
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>WalletOutputOutcomeV0(<span class="kw">pub </span>bitcoin30::Txid);
+</span><span class="kw">pub struct </span>WalletOutputOutcomeV0(<span class="kw">pub </span>bitcoin::Txid);
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>WalletOutputOutcomeV0 {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
@@ -794,12 +782,12 @@
 <span class="kw">impl </span>WalletOutput {
     <span class="kw">pub fn </span>new_v0_peg_out(
         recipient: Address&lt;NetworkUnchecked&gt;,
-        amount: bitcoin30::Amount,
+        amount: bitcoin::Amount,
         fees: PegOutFees,
     ) -&gt; WalletOutput {
         WalletOutput::V0(WalletOutputV0::PegOut(PegOut {
             recipient,
-            amount: bitcoin30_to_bitcoin32_amount(<span class="kw-2">&amp;</span>amount),
+            amount,
             fees,
         }))
     }
@@ -826,9 +814,7 @@
 <span class="kw">impl </span>WalletOutputV0 {
     <span class="kw">pub fn </span>amount(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
         <span class="kw">match </span><span class="self">self </span>{
-            WalletOutputV0::PegOut(pegout) =&gt; {
-                bitcoin32_to_bitcoin30_amount(<span class="kw-2">&amp;</span>pegout.amount) + pegout.fees.amount()
-            }
+            WalletOutputV0::PegOut(pegout) =&gt; pegout.amount + pegout.fees.amount(),
             WalletOutputV0::Rbf(rbf) =&gt; rbf.fees.amount(),
         }
     }
@@ -952,6 +938,6 @@
     <span class="attr">#[error(<span class="string">"Missing change tweak"</span>)]
     </span>MissingOrMalformedChangeTweak,
     <span class="attr">#[error(<span class="string">"Error finalizing PSBT {0:?}"</span>)]
-    </span>ErrorFinalizingPsbt(Vec&lt;miniscript::psbt::Error&gt;),
+    </span>ErrorFinalizingPsbt(Vec&lt;miniscript12::psbt::Error&gt;),
 }
 </code></pre></div></section></main></body></html>

@@ -414,7 +414,11 @@
 <a href="#413" id="413">413</a>
 <a href="#414" id="414">414</a>
 <a href="#415" id="415">415</a>
-<a href="#416" id="416">416</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::repeat;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -434,6 +438,7 @@
     register_bitcoind, DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory,
     <span class="prelude-ty">Result </span><span class="kw">as </span>BitcoinRpcResult,
 };
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_amount;
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::task::{sleep_in_test, TaskHandle};
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
@@ -628,7 +633,10 @@
             }],
             inner.blocks.len() <span class="kw">as </span>u32,
         );
-        inner.addresses.insert(transaction.txid(), amount.into());
+        inner.addresses.insert(
+            transaction.txid(),
+            bitcoin30_to_bitcoin32_amount(<span class="kw-2">&amp;</span>amount).into(),
+        );
 
         inner.pending.push(transaction.clone());
         <span class="kw">let </span>merkle_proof = FakeBitcoinTest::pending_merkle_tree(<span class="kw-2">&amp;</span>inner.pending);

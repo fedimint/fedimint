@@ -1518,7 +1518,9 @@
 <a href="#1517" id="1517">1517</a>
 <a href="#1518" id="1518">1518</a>
 <a href="#1519" id="1519">1519</a>
-<a href="#1520" id="1520">1520</a></pre></div><pre class="rust"><code><span class="doccomment">//! Binary encoding interface suitable for
+<a href="#1520" id="1520">1520</a>
+<a href="#1521" id="1521">1521</a>
+<a href="#1522" id="1522">1522</a></pre></div><pre class="rust"><code><span class="doccomment">//! Binary encoding interface suitable for
 //! consensus critical encoding.
 //!
 //! Over time all structs that ! need to be encoded to binary will be migrated
@@ -1623,6 +1625,7 @@
         <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>io::sink())
             .expect(<span class="string">"encoding to bytes can't fail for io reasons"</span>)
     }
+
     <span class="doccomment">/// Generate a SHA256 hash of the consensus encoding using the default hash
     /// engine for `H`.
     ///
@@ -2683,6 +2686,7 @@
     <span class="kw">use </span>std::str::FromStr;
 
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
+    <span class="kw">use </span><span class="kw">crate</span>::bitcoin_migration::bitcoin30_to_bitcoin32_txid;
     <span class="kw">use </span><span class="kw">crate</span>::db::DatabaseValue;
     <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
 
@@ -2996,7 +3000,7 @@
         )
         .unwrap();
         test_roundtrip_expected(
-            <span class="kw-2">&amp;</span>txid,
+            <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_txid(<span class="kw-2">&amp;</span>txid),
             <span class="kw-2">&amp;</span>[
                 <span class="number">154</span>, <span class="number">192</span>, <span class="number">239</span>, <span class="number">210</span>, <span class="number">168</span>, <span class="number">79</span>, <span class="number">183</span>, <span class="number">215</span>, <span class="number">157</span>, <span class="number">7</span>, <span class="number">201</span>, <span class="number">237</span>, <span class="number">22</span>, <span class="number">132</span>, <span class="number">133</span>, <span class="number">30</span>, <span class="number">74</span>, <span class="number">48</span>,
                 <span class="number">206</span>, <span class="number">233</span>, <span class="number">21</span>, <span class="number">231</span>, <span class="number">57</span>, <span class="number">225</span>, <span class="number">198</span>, <span class="number">140</span>, <span class="number">229</span>, <span class="number">35</span>, <span class="number">47</span>, <span class="number">237</span>, <span class="number">247</span>, <span class="number">81</span>,

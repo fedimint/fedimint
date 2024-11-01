@@ -129,12 +129,8 @@
 <a href="#128" id="128">128</a>
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, VecDeque};
+<a href="#131" id="131">131</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_script_buf;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 <span class="kw">use </span>tracing::debug;
@@ -216,10 +212,8 @@
         <span class="kw">let </span>(script, _address, _tweak_key, _operation_id) =
             data.derive_peg_in_script(<span class="self">self</span>.next_pending_tweak_idx);
 
-        <span class="self">self</span>.pending_pubkey_scripts.insert(
-            bitcoin30_to_bitcoin32_script_buf(<span class="kw-2">&amp;</span>script),
-            <span class="self">self</span>.next_pending_tweak_idx,
-        );
+        <span class="self">self</span>.pending_pubkey_scripts
+            .insert(script, <span class="self">self</span>.next_pending_tweak_idx);
         <span class="self">self</span>.next_pending_tweak_idx = <span class="self">self</span>.next_pending_tweak_idx.next();
     }
 

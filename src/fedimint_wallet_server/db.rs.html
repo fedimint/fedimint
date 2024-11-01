@@ -154,12 +154,10 @@
 <a href="#153" id="153">153</a>
 <a href="#154" id="154">154</a>
 <a href="#155" id="155">155</a>
-<a href="#156" id="156">156</a>
-<a href="#157" id="157">157</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::BlockHash;
-<span class="kw">use </span>bitcoin30::Txid;
+<a href="#156" id="156">156</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::secp256k1::ecdsa::Signature;
+<span class="kw">use </span>bitcoin::{BlockHash, Txid};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
-<span class="kw">use </span>secp256k1::ecdsa::Signature;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;
 

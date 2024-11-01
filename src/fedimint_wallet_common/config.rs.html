@@ -207,6 +207,7 @@
 <a href="#206" id="206">206</a>
 <a href="#207" id="207">207</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
+<span class="kw">use </span>bitcoin::secp256k1::SecretKey;
 <span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -215,7 +216,6 @@
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{plugin_types_trait_impl_config, Feerate, PeerId};
 <span class="kw">use </span>miniscript::descriptor::{Wpkh, Wsh};
-<span class="kw">use </span>secp256k1::SecretKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use </span><span class="kw">crate</span>::envs::FM_PORT_ESPLORA_ENV;

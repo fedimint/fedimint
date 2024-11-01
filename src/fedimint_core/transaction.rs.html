@@ -149,13 +149,15 @@
 <a href="#148" id="148">148</a>
 <a href="#149" id="149">149</a>
 <a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin30::hashes::Hash <span class="kw">as </span>BitcoinHash;
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin30::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::SerdeModuleEncoding;
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
 <span class="kw">use </span>thiserror::Error;
 
+<span class="kw">use </span><span class="kw">crate</span>::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_pubkey;
 <span class="kw">use </span><span class="kw">crate</span>::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 <span class="kw">use </span><span class="kw">crate</span>::core::{DynInputError, DynOutputError};
 
@@ -254,7 +256,7 @@
                     tx: <span class="self">self</span>.consensus_encode_to_hex(),
                     hash: <span class="self">self</span>.tx_hash().consensus_encode_to_hex(),
                     sig: signature.consensus_encode_to_hex(),
-                    key: pk.consensus_encode_to_hex(),
+                    key: bitcoin30_to_bitcoin32_secp256k1_pubkey(pk).consensus_encode_to_hex(),
                 });
             }
         }

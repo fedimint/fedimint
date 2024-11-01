@@ -2178,7 +2178,10 @@
 <a href="#2177" id="2177">2177</a>
 <a href="#2178" id="2178">2178</a>
 <a href="#2179" id="2179">2179</a>
-<a href="#2180" id="2180">2180</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2180" id="2180">2180</a>
+<a href="#2181" id="2181">2181</a>
+<a href="#2182" id="2182">2182</a>
+<a href="#2183" id="2183">2183</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2228,7 +2231,9 @@
 <span class="kw">use </span>fedimint_client::secret::RootSecretStrategy;
 <span class="kw">use </span>fedimint_client::{Client, ClientHandleArc};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_network, bitcoin32_to_bitcoin30_network,
+    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_network,
+    bitcoin30_to_bitcoin32_unchecked_address, bitcoin32_to_bitcoin30_address,
+    bitcoin32_to_bitcoin30_network, bitcoin32_to_bitcoin30_txid,
 };
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{
@@ -3073,7 +3078,7 @@
             .expect(<span class="string">"Must have client module"</span>)
             .allocate_deposit_address_expert_only(())
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(address)
+        <span class="prelude-val">Ok</span>(bitcoin32_to_bitcoin30_address(<span class="kw-2">&amp;</span>address))
     }
 
     <span class="doccomment">/// Returns a Bitcoin TXID from a peg-out transaction for a specific
@@ -3086,6 +3091,7 @@
         } = payload;
         <span class="kw">let </span>client = <span class="self">self</span>.select_client(federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>wallet_module = client.value().get_first_module::&lt;WalletClientModule&gt;()<span class="question-mark">?</span>;
+        <span class="kw">let </span>address = bitcoin30_to_bitcoin32_unchecked_address(<span class="kw-2">&amp;</span>address);
 
         <span class="comment">// TODO: Fees should probably be passed in as a parameter
         </span><span class="kw">let </span>(amount, fees) = <span class="kw">match </span>amount {
@@ -3093,7 +3099,7 @@
             // the amount we are withdrawing
             </span>BitcoinAmountOrAll::All =&gt; {
                 <span class="kw">let </span>balance =
-                    bitcoin30::Amount::from_sat(client.value().get_balance().<span class="kw">await</span>.msats / <span class="number">1000</span>);
+                    bitcoin::Amount::from_sat(client.value().get_balance().<span class="kw">await</span>.msats / <span class="number">1000</span>);
                 <span class="kw">let </span>fees = wallet_module
                     .get_withdraw_fees(address.clone(), balance)
                     .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -3108,9 +3114,9 @@
                 (withdraw_amount.unwrap(), fees)
             }
             BitcoinAmountOrAll::Amount(amount) =&gt; (
-                amount,
+                bitcoin30_to_bitcoin32_amount(<span class="kw-2">&amp;</span>amount),
                 wallet_module
-                    .get_withdraw_fees(address.clone(), amount)
+                    .get_withdraw_fees(address.clone(), bitcoin30_to_bitcoin32_amount(<span class="kw-2">&amp;</span>amount))
                     .<span class="kw">await</span><span class="question-mark">?</span>,
             ),
         };
@@ -3130,7 +3136,7 @@
                         <span class="string">"Sent {amount} funds to address {}"</span>,
                         address.assume_checked()
                     );
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(txid);
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(bitcoin32_to_bitcoin30_txid(<span class="kw-2">&amp;</span>txid));
                 }
                 WithdrawState::Failed(e) =&gt; {
                     <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::WithdrawError { failure_reason: e });

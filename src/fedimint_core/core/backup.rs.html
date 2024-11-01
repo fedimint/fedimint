@@ -58,12 +58,18 @@
 <a href="#57" id="57">57</a>
 <a href="#58" id="58">58</a>
 <a href="#59" id="59">59</a>
-<a href="#60" id="60">60</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>secp256k1::{KeyPair, Message, Secp256k1, Signing, Verification};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+
+<span class="kw">use </span><span class="kw">crate</span>::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 
 <span class="doccomment">/// Maximum payload size of a backup request
 ///
@@ -76,7 +82,7 @@
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>BackupRequest {
-    <span class="kw">pub </span>id: secp256k1::PublicKey,
+    <span class="kw">pub </span>id: secp256k1_29::PublicKey,
     <span class="attr">#[serde(with = <span class="string">"fedimint_core::hex::serde"</span>)]
     </span><span class="kw">pub </span>payload: Vec&lt;u8&gt;,
     <span class="kw">pub </span>timestamp: std::time::SystemTime,
@@ -112,7 +118,9 @@
         ctx.verify_schnorr(
             <span class="kw-2">&amp;</span><span class="self">self</span>.signature,
             <span class="kw-2">&amp;</span>Message::from_slice(<span class="kw-2">&amp;</span><span class="self">self</span>.request.hash().to_byte_array()).expect(<span class="string">"Can't fail"</span>),
-            <span class="kw-2">&amp;</span><span class="self">self</span>.request.id.x_only_public_key().<span class="number">0</span>,
+            <span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span><span class="self">self</span>.request.id)
+                .x_only_public_key()
+                .<span class="number">0</span>,
         )<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.request)

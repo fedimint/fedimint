@@ -1370,7 +1370,13 @@
 <a href="#1369" id="1369">1369</a>
 <a href="#1370" id="1370">1370</a>
 <a href="#1371" id="1371">1371</a>
-<a href="#1372" id="1372">1372</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1372" id="1372">1372</a>
+<a href="#1373" id="1373">1373</a>
+<a href="#1374" id="1374">1374</a>
+<a href="#1375" id="1375">1375</a>
+<a href="#1376" id="1376">1376</a>
+<a href="#1377" id="1377">1377</a>
+<a href="#1378" id="1378">1378</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1399,8 +1405,9 @@
 <span class="kw">use </span>anyhow::{anyhow, bail, ensure, Context <span class="kw">as </span>AnyhowContext};
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>backup::WalletModuleBackup;
-<span class="kw">use </span>bitcoin30::address::NetworkUnchecked;
-<span class="kw">use </span>bitcoin30::{Address, Network, ScriptBuf};
+<span class="kw">use </span>bitcoin::address::NetworkUnchecked;
+<span class="kw">use </span>bitcoin::secp256k1::{All, Secp256k1, SECP256K1};
+<span class="kw">use </span>bitcoin::{Address, Network, ScriptBuf};
 <span class="kw">use </span>client_db::{DbKeyPrefix, PegInTweakIndexKey, TweakIdx};
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
@@ -1417,8 +1424,9 @@
 };
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_outpoint, bitcoin30_to_bitcoin32_unchecked_address,
-    bitcoin32_to_bitcoin30_network,
+    bitcoin30_to_bitcoin32_address, bitcoin30_to_bitcoin32_script_buf,
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin30_to_bitcoin32_txid,
+    bitcoin32_to_bitcoin30_network, bitcoin32_to_bitcoin30_script_buf,
 };
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
@@ -1441,7 +1449,7 @@
 <span class="kw">pub use </span>fedimint_wallet_common::<span class="kw-2">*</span>;
 <span class="kw">use </span>futures::{Stream, StreamExt};
 <span class="kw">use </span>rand::{thread_rng, Rng};
-<span class="kw">use </span>secp256k1::{All, KeyPair, Secp256k1, SECP256K1};
+<span class="kw">use </span>secp256k1::KeyPair;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>tokio::sync::watch;
@@ -1462,7 +1470,7 @@
 </span><span class="kw">pub struct </span>BitcoinTransactionData {
     <span class="doccomment">/// The bitcoin transaction is saved as soon as we see it so the transaction
     /// can be re-transmitted if it's evicted from the mempool.
-    </span><span class="kw">pub </span>btc_transaction: bitcoin30::Transaction,
+    </span><span class="kw">pub </span>btc_transaction: bitcoin::Transaction,
     <span class="doccomment">/// Index of the deposit output
     </span><span class="kw">pub </span>out_idx: u32,
 }
@@ -1480,19 +1488,19 @@
 </span><span class="kw">pub enum </span>DepositStateV2 {
     WaitingForTransaction,
     WaitingForConfirmation {
-        <span class="attr">#[serde(with = <span class="string">"bitcoin30::amount::serde::as_sat"</span>)]
-        </span>btc_deposited: bitcoin30::Amount,
-        btc_out_point: bitcoin30::OutPoint,
+        <span class="attr">#[serde(with = <span class="string">"bitcoin::amount::serde::as_sat"</span>)]
+        </span>btc_deposited: bitcoin::Amount,
+        btc_out_point: bitcoin::OutPoint,
     },
     Confirmed {
-        <span class="attr">#[serde(with = <span class="string">"bitcoin30::amount::serde::as_sat"</span>)]
-        </span>btc_deposited: bitcoin30::Amount,
-        btc_out_point: bitcoin30::OutPoint,
+        <span class="attr">#[serde(with = <span class="string">"bitcoin::amount::serde::as_sat"</span>)]
+        </span>btc_deposited: bitcoin::Amount,
+        btc_out_point: bitcoin::OutPoint,
     },
     Claimed {
-        <span class="attr">#[serde(with = <span class="string">"bitcoin30::amount::serde::as_sat"</span>)]
-        </span>btc_deposited: bitcoin30::Amount,
-        btc_out_point: bitcoin30::OutPoint,
+        <span class="attr">#[serde(with = <span class="string">"bitcoin::amount::serde::as_sat"</span>)]
+        </span>btc_deposited: bitcoin::Amount,
+        btc_out_point: bitcoin::OutPoint,
     },
     Failed(String),
 }
@@ -1500,7 +1508,7 @@
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 </span><span class="kw">pub enum </span>WithdrawState {
     Created,
-    Succeeded(bitcoin30::Txid),
+    Succeeded(bitcoin::Txid),
     Failed(String),
     <span class="comment">// TODO: track refund
     // Refunded,
@@ -1655,7 +1663,7 @@
 #[serde(rename_all = <span class="string">"snake_case"</span>)]
 </span><span class="kw">pub enum </span>WalletOperationMetaVariant {
     Deposit {
-        address: bitcoin30::Address&lt;NetworkUnchecked&gt;,
+        address: Address&lt;NetworkUnchecked&gt;,
         <span class="doccomment">/// Added in 0.4.2, can be `None` for old deposits or `Some` for ones
         /// using the pegin monitor. The value is the child index of the key
         /// used to generate the address, so we can re-generate the secret key
@@ -1666,9 +1674,9 @@
         </span>expires_at: <span class="prelude-ty">Option</span>&lt;SystemTime&gt;,
     },
     Withdraw {
-        address: bitcoin30::Address&lt;NetworkUnchecked&gt;,
-        <span class="attr">#[serde(with = <span class="string">"bitcoin30::amount::serde::as_sat"</span>)]
-        </span>amount: bitcoin30::Amount,
+        address: Address&lt;NetworkUnchecked&gt;,
+        <span class="attr">#[serde(with = <span class="string">"bitcoin::amount::serde::as_sat"</span>)]
+        </span>amount: bitcoin::Amount,
         fee: PegOutFees,
         change: Vec&lt;OutPoint&gt;,
     },
@@ -1706,12 +1714,17 @@
 
         <span class="kw">let </span>public_tweak_key = secret_tweak_key.public_key();
 
-        <span class="kw">let </span>address = <span class="self">self
-            </span>.cfg
-            .peg_in_descriptor
-            .tweak(<span class="kw-2">&amp;</span>public_tweak_key, secp256k1::SECP256K1)
-            .address(bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.network))
-            .unwrap();
+        <span class="kw">let </span>address = bitcoin30_to_bitcoin32_address(
+            <span class="kw-2">&amp;</span><span class="self">self
+                </span>.cfg
+                .peg_in_descriptor
+                .tweak(
+                    <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>public_tweak_key),
+                    bitcoin::secp256k1::SECP256K1,
+                )
+                .address(bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.network))
+                .unwrap(),
+        );
 
         <span class="comment">// TODO: make hash?
         </span><span class="kw">let </span>operation_id = OperationId(public_tweak_key.x_only_public_key().<span class="number">0</span>.serialize());
@@ -1722,14 +1735,20 @@
     <span class="kw">fn </span>derive_peg_in_script(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         idx: TweakIdx,
-    ) -&gt; (ScriptBuf, bitcoin30::Address, KeyPair, OperationId) {
+    ) -&gt; (ScriptBuf, bitcoin::Address, KeyPair, OperationId) {
         <span class="kw">let </span>(secret_tweak_key, <span class="kw">_</span>, address, operation_id) = <span class="self">self</span>.derive_deposit_address(idx);
 
         (
-            <span class="self">self</span>.cfg
-                .peg_in_descriptor
-                .tweak(<span class="kw-2">&amp;</span>secret_tweak_key.public_key(), SECP256K1)
-                .script_pubkey(),
+            bitcoin30_to_bitcoin32_script_buf(
+                <span class="kw-2">&amp;</span><span class="self">self
+                    </span>.cfg
+                    .peg_in_descriptor
+                    .tweak(
+                        <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>secret_tweak_key.public_key()),
+                        SECP256K1,
+                    )
+                    .script_pubkey(),
+            ),
             address,
             secret_tweak_key,
             operation_id,
@@ -1878,7 +1897,7 @@
     }
 
     <span class="kw">pub fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Network {
-        bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg().network)
+        <span class="self">self</span>.cfg().network
     }
 
     <span class="kw">pub fn </span>get_fee_consensus(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FeeConsensus {
@@ -1920,13 +1939,10 @@
     /// The caller should be prepared to retry with a new fee estimate.
     </span><span class="kw">pub async fn </span>get_withdraw_fees(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        address: bitcoin30::Address&lt;NetworkUnchecked&gt;,
-        amount: bitcoin30::Amount,
+        address: bitcoin::Address&lt;NetworkUnchecked&gt;,
+        amount: bitcoin::Amount,
     ) -&gt; anyhow::Result&lt;PegOutFees&gt; {
-        check_address(
-            <span class="kw-2">&amp;</span>address,
-            bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg().network),
-        )<span class="question-mark">?</span>;
+        check_address(<span class="kw-2">&amp;</span>address, <span class="self">self</span>.cfg().network)<span class="question-mark">?</span>;
 
         <span class="self">self</span>.module_api
             .fetch_peg_out_fees(<span class="kw-2">&amp;</span>address.assume_checked(), amount)
@@ -1942,17 +1958,13 @@
     <span class="kw">pub fn </span>create_withdraw_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-        address: <span class="kw-2">&amp;</span>bitcoin30::Address&lt;NetworkUnchecked&gt;,
-        amount: bitcoin30::Amount,
+        address: <span class="kw-2">&amp;</span>bitcoin::Address&lt;NetworkUnchecked&gt;,
+        amount: bitcoin::Amount,
         fees: PegOutFees,
     ) -&gt; anyhow::Result&lt;ClientOutputBundle&lt;WalletOutput, WalletClientStates&gt;&gt; {
-        check_address(address, bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg().network))<span class="question-mark">?</span>;
+        check_address(address, <span class="self">self</span>.cfg().network)<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>output = WalletOutput::new_v0_peg_out(
-            bitcoin30_to_bitcoin32_unchecked_address(address),
-            amount,
-            fees,
-        );
+        <span class="kw">let </span>output = WalletOutput::new_v0_peg_out(address.clone(), amount, fees);
 
         <span class="kw">let </span>amount = output.maybe_v0_ref().expect(<span class="string">"v0 output"</span>).amount().into();
 
@@ -2055,7 +2067,7 @@
 
                         <span class="comment">// Begin watching the script address
                         </span><span class="self">self</span>.rpc
-                            .watch_script_history(<span class="kw-2">&amp;</span>address.script_pubkey())
+                            .watch_script_history(<span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_script_buf(<span class="kw-2">&amp;</span>address.script_pubkey()))
                             .<span class="kw">await</span><span class="question-mark">?</span>;
 
                         <span class="kw">let </span>sender = <span class="self">self</span>.pegin_monitor_wakeup_sender.clone();
@@ -2119,11 +2131,9 @@
 
             <span class="kw">let </span>outcome_v2 = <span class="kw">match </span>outcome_v1 {
                 DepositStateV1::Claimed(tx_info) =&gt; DepositStateV2::Claimed {
-                    btc_deposited: bitcoin30::Amount::from_sat(
-                        tx_info.btc_transaction.output[tx_info.out_idx <span class="kw">as </span>usize].value,
-                    ),
-                    btc_out_point: bitcoin30::OutPoint {
-                        txid: tx_info.btc_transaction.txid(),
+                    btc_deposited: tx_info.btc_transaction.output[tx_info.out_idx <span class="kw">as </span>usize].value,
+                    btc_out_point: bitcoin::OutPoint {
+                        txid: tx_info.btc_transaction.compute_txid(),
                         vout: tx_info.out_idx,
                     },
                 },
@@ -2141,6 +2151,8 @@
 
             <span class="macro">stream!</span> {
                 <span class="kw">yield </span>DepositStateV2::WaitingForTransaction;
+
+                <span class="kw">let </span>stream_script_pub_key = bitcoin32_to_bitcoin30_script_buf(<span class="kw-2">&amp;</span>stream_script_pub_key);
 
                 retry(
                     <span class="string">"subscribe script history"</span>,
@@ -2160,11 +2172,11 @@
                             <span class="kw">let </span>txid = tx.txid();
 
                             <span class="prelude-val">Some</span>((
-                                bitcoin30::OutPoint {
-                                    txid,
+                                bitcoin::OutPoint {
+                                    txid: bitcoin30_to_bitcoin32_txid(<span class="kw-2">&amp;</span>txid),
                                     vout: out_idx <span class="kw">as </span>u32,
                                 },
-                                bitcoin30::Amount::from_sat(amount)
+                                bitcoin::Amount::from_sat(amount)
                             ))
                         }).context(<span class="string">"No deposit transaction found"</span>)
                     }
@@ -2177,7 +2189,7 @@
 
                 <span class="kw">let </span>claim_data = stream_cient_ctx.module_db().wait_key_exists(<span class="kw-2">&amp;</span>ClaimedPegInKey {
                     peg_in_index: tweak_idx,
-                    btc_out_point: bitcoin30_to_bitcoin32_outpoint(<span class="kw-2">&amp;</span>btc_out_point),
+                    btc_out_point,
                 }).<span class="kw">await</span>;
 
                 <span class="kw">yield </span>DepositStateV2::Confirmed {
@@ -2375,8 +2387,8 @@
     /// acknowledged by the user since it can be unexpectedly high.
     </span><span class="kw">pub async fn </span>withdraw&lt;M: Serialize + MaybeSend + MaybeSync&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        address: bitcoin30::Address&lt;NetworkUnchecked&gt;,
-        amount: bitcoin30::Amount,
+        address: bitcoin::Address&lt;NetworkUnchecked&gt;,
+        amount: bitcoin::Amount,
         fee: PegOutFees,
         extra_meta: M,
     ) -&gt; anyhow::Result&lt;OperationId&gt; {

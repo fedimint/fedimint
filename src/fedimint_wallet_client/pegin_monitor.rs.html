@@ -506,16 +506,28 @@
 <a href="#505" id="505">505</a>
 <a href="#506" id="506">506</a>
 <a href="#507" id="507">507</a>
-<a href="#508" id="508">508</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
+<a href="#508" id="508">508</a>
+<a href="#509" id="509">509</a>
+<a href="#510" id="510">510</a>
+<a href="#511" id="511">511</a>
+<a href="#512" id="512">512</a>
+<a href="#513" id="513">513</a>
+<a href="#514" id="514">514</a>
+<a href="#515" id="515">515</a>
+<a href="#516" id="516">516</a>
+<a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
-<span class="kw">use </span>bitcoin30::ScriptBuf;
+<span class="kw">use </span>bitcoin::ScriptBuf;
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_bitcoind::DynBitcoindRpc;
 <span class="kw">use </span>fedimint_client::module::ClientContext;
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin30_to_bitcoin32_outpoint, bitcoin30_to_bitcoin32_tx,
+    bitcoin30_to_bitcoin32_keypair, bitcoin30_to_bitcoin32_secp256k1_pubkey,
+    bitcoin30_to_bitcoin32_tx, bitcoin32_to_bitcoin30_script_buf, bitcoin32_to_bitcoin30_txid,
 };
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::db::{
@@ -523,8 +535,8 @@
 };
 <span class="kw">use </span>fedimint_core::envs::is_running_in_test_env;
 <span class="kw">use </span>fedimint_core::task::sleep;
+<span class="kw">use </span>fedimint_core::time;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
-<span class="kw">use </span>fedimint_core::{time, Amount};
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 <span class="kw">use </span>fedimint_wallet_common::txoproof::PegInProof;
 <span class="kw">use </span>fedimint_wallet_common::WalletInput;
@@ -707,7 +719,7 @@
                             <span class="kw">let </span>peg_in_tweak_index_data = PegInTweakIndexData {
                                 next_check_time,
                                 last_check_time: <span class="prelude-val">Some</span>(now),
-                                claimed: [due_val.claimed.clone(), claimed_now.into_iter().map(|outpoint| bitcoin30_to_bitcoin32_outpoint(<span class="kw-2">&amp;</span>outpoint)).collect()].concat(),
+                                claimed: [due_val.claimed.clone(), claimed_now].concat(),
                                 ..due_val
                             };
                             <span class="macro">trace!</span>(
@@ -743,7 +755,7 @@
     <span class="doccomment">/// There's a tx pending (needs more confirmation)
     </span>Pending { num_blocks_needed: u64 },
     <span class="doccomment">/// A state machine was created to claim the peg-in
-    </span>Claimed { outpoint: bitcoin30::OutPoint },
+    </span>Claimed { outpoint: bitcoin::OutPoint },
 
     <span class="doccomment">/// A peg-in transaction was already claimed (state machine created) in the
     /// past
@@ -806,7 +818,7 @@
         min
     }
 
-    <span class="kw">fn </span>get_claimed_now_outpoints(outcomes: <span class="kw-2">&amp;</span>[CheckOutcome]) -&gt; Vec&lt;bitcoin30::OutPoint&gt; {
+    <span class="kw">fn </span>get_claimed_now_outpoints(outcomes: <span class="kw-2">&amp;</span>[CheckOutcome]) -&gt; Vec&lt;bitcoin::OutPoint&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>res = <span class="macro">vec!</span>[];
         <span class="kw">for </span>outcome <span class="kw">in </span>outcomes {
             <span class="kw">if let </span>CheckOutcome::Claimed { outpoint } = outcome {
@@ -833,24 +845,30 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;CheckOutcome&gt;, anyhow::Error&gt; {
     <span class="kw">let </span>current_consensus_block_count = module_rpc.fetch_consensus_block_count().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>(script, address, tweak_key, operation_id) = data.derive_peg_in_script(tweak_idx);
-    btc_rpc.watch_script_history(<span class="kw-2">&amp;</span>script).<span class="kw">await</span><span class="question-mark">?</span>;
+    btc_rpc
+        .watch_script_history(<span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_script_buf(<span class="kw-2">&amp;</span>script))
+        .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>history = btc_rpc.get_script_history(<span class="kw-2">&amp;</span>script).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>history = btc_rpc
+        .get_script_history(<span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_script_buf(<span class="kw-2">&amp;</span>script))
+        .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_WALLET, %address, num_txes=history.len(), <span class="string">"Got history of a peg-in address"</span>);
 
     <span class="kw">let </span><span class="kw-2">mut </span>outcomes = <span class="macro">vec!</span>[];
 
-    <span class="kw">for </span>(transaction, out_idx) <span class="kw">in </span>filter_onchain_deposit_outputs(history.into_iter(), <span class="kw-2">&amp;</span>script) {
-        <span class="kw">let </span>txid = transaction.txid();
-        <span class="kw">let </span>outpoint = bitcoin30::OutPoint {
+    <span class="kw">for </span>(transaction, out_idx) <span class="kw">in
+        </span>filter_onchain_deposit_outputs(history.iter().map(bitcoin30_to_bitcoin32_tx), <span class="kw-2">&amp;</span>script)
+    {
+        <span class="kw">let </span>txid = transaction.compute_txid();
+        <span class="kw">let </span>outpoint = bitcoin::OutPoint {
             txid,
             vout: out_idx,
         };
 
         <span class="kw">let </span>claimed_peg_in_key = ClaimedPegInKey {
             peg_in_index: tweak_idx,
-            btc_out_point: bitcoin30_to_bitcoin32_outpoint(<span class="kw-2">&amp;</span>outpoint),
+            btc_out_point: outpoint,
         };
 
         <span class="kw">if </span>db
@@ -866,16 +884,18 @@
         }
         <span class="kw">let </span>finality_delay = u64::from(data.cfg.finality_delay);
 
-        <span class="kw">let </span>tx_block_count =
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(tx_block_height) = btc_rpc.get_tx_block_height(<span class="kw-2">&amp;</span>txid).<span class="kw">await</span><span class="question-mark">? </span>{
-                tx_block_height.saturating_add(<span class="number">1</span>)
-            } <span class="kw">else </span>{
-                outcomes.push(CheckOutcome::Pending {
-                    num_blocks_needed: finality_delay,
-                });
-                <span class="macro">debug!</span>(target:LOG_CLIENT_MODULE_WALLET, %txid, %out_idx,<span class="string">"In the mempool"</span>);
-                <span class="kw">continue</span>;
-            };
+        <span class="kw">let </span>tx_block_count = <span class="kw">if let </span><span class="prelude-val">Some</span>(tx_block_height) = btc_rpc
+            .get_tx_block_height(<span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_txid(<span class="kw-2">&amp;</span>txid))
+            .<span class="kw">await</span><span class="question-mark">?
+        </span>{
+            tx_block_height.saturating_add(<span class="number">1</span>)
+        } <span class="kw">else </span>{
+            outcomes.push(CheckOutcome::Pending {
+                num_blocks_needed: finality_delay,
+            });
+            <span class="macro">debug!</span>(target:LOG_CLIENT_MODULE_WALLET, %txid, %out_idx,<span class="string">"In the mempool"</span>);
+            <span class="kw">continue</span>;
+        };
 
         <span class="kw">let </span>num_blocks_needed = tx_block_count.saturating_sub(current_consensus_block_count);
 
@@ -887,7 +907,9 @@
 
         <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_WALLET, %txid, %out_idx, %finality_delay, %tx_block_count, %current_consensus_block_count, <span class="string">"Ready to claim"</span>);
 
-        <span class="kw">let </span>tx_out_proof = btc_rpc.get_txout_proof(txid).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>tx_out_proof = btc_rpc
+            .get_txout_proof(bitcoin32_to_bitcoin30_txid(<span class="kw-2">&amp;</span>txid))
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         claim_peg_in(
             client_ctx,
             tweak_idx,
@@ -908,15 +930,15 @@
     client_ctx: <span class="kw-2">&amp;</span>ClientContext&lt;WalletClientModule&gt;,
     tweak_idx: TweakIdx,
     tweak_key: KeyPair,
-    transaction: <span class="kw-2">&amp;</span>bitcoin30::Transaction,
+    transaction: <span class="kw-2">&amp;</span>bitcoin::Transaction,
     operation_id: OperationId,
-    out_point: bitcoin30::OutPoint,
+    out_point: bitcoin::OutPoint,
     tx_out_proof: TxOutProof,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">async fn </span>claim_peg_in_inner(
         client_ctx: <span class="kw-2">&amp;</span>ClientContext&lt;WalletClientModule&gt;,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-        btc_transaction: <span class="kw-2">&amp;</span>bitcoin30::Transaction,
+        btc_transaction: <span class="kw-2">&amp;</span>bitcoin::Transaction,
         out_idx: u32,
         tweak_key: KeyPair,
         txout_proof: TxOutProof,
@@ -924,13 +946,13 @@
     ) -&gt; (fedimint_core::TransactionId, Vec&lt;fedimint_core::OutPoint&gt;) {
         <span class="kw">let </span>pegin_proof = PegInProof::new(
             txout_proof,
-            bitcoin30_to_bitcoin32_tx(btc_transaction),
+            btc_transaction.clone(),
             out_idx,
-            tweak_key.public_key(),
+            bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>tweak_key.public_key()),
         )
         .expect(<span class="string">"TODO: handle API returning faulty proofs"</span>);
 
-        <span class="kw">let </span>amount = Amount::from_sats(pegin_proof.tx_output().value);
+        <span class="kw">let </span>amount = pegin_proof.tx_output().value.into();
 
         <span class="kw">let </span>wallet_input = WalletInput::new_v0(pegin_proof);
 
@@ -973,7 +995,7 @@
                     dbtx.insert_entry(
                         <span class="kw-2">&amp;</span>ClaimedPegInKey {
                             peg_in_index: tweak_idx,
-                            btc_out_point: bitcoin30_to_bitcoin32_outpoint(<span class="kw-2">&amp;</span>out_point),
+                            btc_out_point: out_point,
                         },
                         <span class="kw-2">&amp;</span>ClaimedPegInData { claim_txid, change },
                     )
@@ -997,9 +1019,9 @@
 }
 
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>filter_onchain_deposit_outputs&lt;<span class="lifetime">'a</span>&gt;(
-    tx_iter: <span class="kw">impl </span>Iterator&lt;Item = bitcoin30::Transaction&gt; + <span class="lifetime">'a</span>,
+    tx_iter: <span class="kw">impl </span>Iterator&lt;Item = bitcoin::Transaction&gt; + <span class="lifetime">'a</span>,
     out_script: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ScriptBuf,
-) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (bitcoin30::Transaction, u32)&gt; + <span class="lifetime">'a </span>{
+) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (bitcoin::Transaction, u32)&gt; + <span class="lifetime">'a </span>{
     tx_iter.flat_map(<span class="kw">move </span>|tx| {
         tx.output
             .clone()

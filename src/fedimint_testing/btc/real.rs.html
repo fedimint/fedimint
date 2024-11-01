@@ -339,7 +339,11 @@
 <a href="#338" id="338">338</a>
 <a href="#339" id="339">339</a>
 <a href="#340" id="340">340</a>
-<a href="#341" id="341">341</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -348,6 +352,7 @@
 <span class="kw">use </span>bitcoin30::{Address, Transaction, Txid};
 <span class="kw">use </span>bitcoincore_rpc::{Client, RpcApi};
 <span class="kw">use </span>fedimint_bitcoind::DynBitcoindRpc;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_amount;
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::{block_in_place, sleep_in_test};
@@ -469,10 +474,13 @@
     }
     <span class="kw">async fn </span>mine_block_and_get_received(<span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>Address) -&gt; Amount {
         <span class="self">self</span>.mine_blocks(<span class="number">1</span>).<span class="kw">await</span>;
-        <span class="self">self</span>.client
-            .get_received_by_address(address, <span class="prelude-val">None</span>)
-            .expect(<span class="self">Self</span>::ERROR)
-            .into()
+        bitcoin30_to_bitcoin32_amount(
+            <span class="kw-2">&amp;</span><span class="self">self
+                </span>.client
+                .get_received_by_address(address, <span class="prelude-val">None</span>)
+                .expect(<span class="self">Self</span>::ERROR),
+        )
+        .into()
     }
 
     <span class="kw">async fn </span>get_new_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Address {
@@ -485,7 +493,7 @@
     <span class="kw">async fn </span>get_mempool_tx_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; Amount {
         <span class="kw">loop </span>{
             <span class="kw">if let </span><span class="prelude-val">Ok</span>(tx) = <span class="self">self</span>.client.get_mempool_entry(txid) {
-                <span class="kw">return </span>tx.fees.base.into();
+                <span class="kw">return </span>bitcoin30_to_bitcoin32_amount(<span class="kw-2">&amp;</span>tx.fees.base).into();
             }
 
             sleep_in_test(<span class="string">"could not get mempool tx fee"</span>, Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;

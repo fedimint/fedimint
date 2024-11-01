@@ -304,7 +304,14 @@
 <a href="#303" id="303">303</a>
 <a href="#304" id="304">304</a>
 <a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::format_err;
@@ -314,9 +321,10 @@
 <span class="kw">use </span>miniscript::{Descriptor, MiniscriptKey};
 
 <span class="kw">use </span><span class="kw">crate</span>::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_psbt, bitcoin29_to_bitcoin32_network_magic, bitcoin30_to_bitcoin29_psbt,
+    bitcoin29_to_bitcoin32_network_magic, bitcoin29_to_bitcoin32_psbt,
     bitcoin30_to_bitcoin32_network, bitcoin32_checked_address_to_unchecked_address,
-    bitcoin32_to_bitcoin29_network_magic, bitcoin32_to_bitcoin30_address,
+    bitcoin32_to_bitcoin29_network_magic, bitcoin32_to_bitcoin29_psbt,
+    bitcoin32_to_bitcoin30_address,
 };
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
@@ -367,30 +375,33 @@
 <span class="macro">impl_encode_decode_bridge!</span>(bitcoin::Transaction);
 <span class="macro">impl_encode_decode_bridge!</span>(bitcoin::merkle_tree::PartialMerkleTree);
 
-<span class="kw">impl </span><span class="kw">crate</span>::encoding::Encodable <span class="kw">for </span>bitcoin30::psbt::PartiallySignedTransaction {
+<span class="kw">impl </span><span class="kw">crate</span>::encoding::Encodable <span class="kw">for </span>bitcoin::psbt::Psbt {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         bitcoin29::consensus::Encodable::consensus_encode(
-            <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin29_psbt(<span class="self">self</span>),
+            <span class="kw-2">&amp;</span>bitcoin32_to_bitcoin29_psbt(<span class="self">self</span>),
             writer,
         )
     }
 }
 
-<span class="kw">impl </span><span class="kw">crate</span>::encoding::Decodable <span class="kw">for </span>bitcoin30::psbt::PartiallySignedTransaction {
+<span class="kw">impl </span><span class="kw">crate</span>::encoding::Decodable <span class="kw">for </span>bitcoin::psbt::Psbt {
     <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(bitcoin29_to_bitcoin30_psbt(
+        <span class="prelude-val">Ok</span>(bitcoin29_to_bitcoin32_psbt(
             <span class="kw-2">&amp;</span>bitcoin29::consensus::Decodable::consensus_decode_from_finite_reader(d)
                 .map_err(<span class="kw">crate</span>::encoding::DecodeError::from_err)<span class="question-mark">?</span>,
         ))
     }
 }
 
-<span class="kw">impl </span><span class="kw">crate</span>::encoding::Encodable <span class="kw">for </span>bitcoin30::Txid {
+<span class="kw">impl </span><span class="kw">crate</span>::encoding::Encodable <span class="kw">for </span>bitcoin::Txid {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
-        bitcoin30::consensus::Encodable::consensus_encode(<span class="self">self</span>, writer)
+        <span class="prelude-val">Ok</span>(bitcoin::consensus::Encodable::consensus_encode(
+            <span class="self">self</span>,
+            <span class="kw-2">&amp;mut </span>std::io::BufWriter::new(writer),
+        )<span class="question-mark">?</span>)
     }
 
     <span class="kw">fn </span>consensus_encode_to_hex(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
@@ -405,13 +416,16 @@
         </span>bytes.encode_hex()
     }
 }
-<span class="kw">impl </span><span class="kw">crate</span>::encoding::Decodable <span class="kw">for </span>bitcoin30::Txid {
+
+<span class="kw">impl </span><span class="kw">crate</span>::encoding::Decodable <span class="kw">for </span>bitcoin::Txid {
     <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         _modules: <span class="kw-2">&amp;</span>::fedimint_core::module::registry::ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
-        bitcoin30::consensus::Decodable::consensus_decode_from_finite_reader(d)
-            .map_err(<span class="kw">crate</span>::encoding::DecodeError::from_err)
+        bitcoin::consensus::Decodable::consensus_decode_from_finite_reader(<span class="kw-2">&amp;mut </span>SimpleBitcoinRead(
+            d,
+        ))
+        .map_err(<span class="kw">crate</span>::encoding::DecodeError::from_err)
     }
 
     <span class="kw">fn </span>consensus_decode_hex(

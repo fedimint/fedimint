@@ -73,8 +73,8 @@
 <a href="#72" id="72">72</a>
 <a href="#73" id="73">73</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Write;
 
-<span class="kw">use </span>bitcoin30::hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash, Hmac, HmacEngine};
-<span class="kw">use </span>secp256k1::{Scalar, Secp256k1, Signing, Verification};
+<span class="kw">use </span>bitcoin::hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash, Hmac, HmacEngine};
+<span class="kw">use </span>bitcoin::secp256k1::{PublicKey, Scalar, Secp256k1, SecretKey, Signing, Verification};
 
 <span class="doccomment">/// An object that can be used as a Ricardian contract to tweak a key
 </span><span class="kw">pub trait </span>Contract {
@@ -93,7 +93,7 @@
     ) -&gt; <span class="self">Self</span>;
 }
 
-<span class="kw">impl </span>Tweakable <span class="kw">for </span>secp256k1::PublicKey {
+<span class="kw">impl </span>Tweakable <span class="kw">for </span>PublicKey {
     <span class="kw">fn </span>tweak&lt;Ctx: Verification + Signing, Ctr: Contract&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         tweak: <span class="kw-2">&amp;</span>Ctr,
@@ -108,13 +108,13 @@
     }
 }
 
-<span class="kw">impl </span>Tweakable <span class="kw">for </span>secp256k1::SecretKey {
+<span class="kw">impl </span>Tweakable <span class="kw">for </span>SecretKey {
     <span class="kw">fn </span>tweak&lt;Ctx: Verification + Signing, Ctr: Contract&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         tweak_in: <span class="kw-2">&amp;</span>Ctr,
         secp: <span class="kw-2">&amp;</span>Secp256k1&lt;Ctx&gt;,
     ) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span>pub_key = secp256k1::PublicKey::from_secret_key(secp, <span class="self">self</span>);
+        <span class="kw">let </span>pub_key = PublicKey::from_secret_key(secp, <span class="self">self</span>);
 
         <span class="kw">let </span>tweak = {
             <span class="kw">let </span><span class="kw-2">mut </span>hasher = HmacEngine::&lt;sha256::Hash&gt;::new(<span class="kw-2">&amp;</span>pub_key.serialize()[..]);
@@ -127,7 +127,7 @@
     </span>}
 }
 
-<span class="kw">impl </span>Contract <span class="kw">for </span>secp256k1::PublicKey {
+<span class="kw">impl </span>Contract <span class="kw">for </span>PublicKey {
     <span class="kw">fn </span>encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::io::Result&lt;()&gt; {
         writer.write_all(<span class="kw-2">&amp;</span><span class="self">self</span>.serialize())
     }

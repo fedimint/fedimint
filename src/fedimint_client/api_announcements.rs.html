@@ -128,13 +128,11 @@
 <a href="#127" id="127">127</a>
 <a href="#128" id="128">128</a>
 <a href="#129" id="129">129</a>
-<a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#130" id="130">130</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{bail, Context};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -198,7 +196,7 @@
                         <span class="macro">bail!</span>(<span class="string">"Guardian public key not found for peer {}"</span>, peer_id);
                     };
 
-                    <span class="kw">if </span>!announcement.verify(SECP256K1, <span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_secp256k1_pubkey(guardian_pub_key)) {
+                    <span class="kw">if </span>!announcement.verify(SECP256K1, guardian_pub_key) {
                         <span class="macro">bail!</span>(<span class="string">"Failed to verify announcement for peer {}"</span>, peer_id);
                     }
                 }

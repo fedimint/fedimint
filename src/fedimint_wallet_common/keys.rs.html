@@ -105,16 +105,14 @@
 <a href="#104" id="104">104</a>
 <a href="#105" id="105">105</a>
 <a href="#106" id="106">106</a>
-<a href="#107" id="107">107</a>
-<a href="#108" id="108">108</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
+<a href="#107" id="107">107</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
 <span class="kw">use </span>std::str::FromStr;
 
-<span class="kw">use </span>bitcoin30::secp256k1::{Secp256k1, Verification};
-<span class="kw">use </span>bitcoin30::PublicKey;
+<span class="kw">use </span>bitcoin::secp256k1::{<span class="self">self</span>, PublicKey, Secp256k1, Signing, Verification};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>miniscript::bitcoin::hashes::{hash160, ripemd160, sha256};
 <span class="kw">use </span>miniscript::{hash256, MiniscriptKey, ToPublicKey};
-<span class="kw">use </span>secp256k1::Signing;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use </span><span class="kw">crate</span>::tweakable::{Contract, Tweakable};
@@ -123,11 +121,11 @@
     Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable,
 )]
 </span><span class="kw">pub struct </span>CompressedPublicKey {
-    <span class="kw">pub </span>key: secp256k1::PublicKey,
+    <span class="kw">pub </span>key: PublicKey,
 }
 
 <span class="kw">impl </span>CompressedPublicKey {
-    <span class="kw">pub fn </span>new(key: secp256k1::PublicKey) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(key: PublicKey) -&gt; <span class="self">Self </span>{
         CompressedPublicKey { key }
     }
 }
@@ -155,9 +153,9 @@
 
 <span class="kw">impl </span>ToPublicKey <span class="kw">for </span>CompressedPublicKey {
     <span class="kw">fn </span>to_public_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; miniscript::bitcoin::PublicKey {
-        PublicKey {
+        miniscript::bitcoin::PublicKey {
             compressed: <span class="bool-val">true</span>,
-            inner: <span class="self">self</span>.key,
+            inner: bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span><span class="self">self</span>.key),
         }
     }
 
@@ -189,7 +187,7 @@
 
     <span class="kw">fn </span>from_str(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
         <span class="prelude-val">Ok</span>(CompressedPublicKey {
-            key: secp256k1::PublicKey::from_str(s)<span class="question-mark">?</span>,
+            key: PublicKey::from_str(s)<span class="question-mark">?</span>,
         })
     }
 }
@@ -206,9 +204,9 @@
     }
 }
 
-<span class="kw">impl </span>From&lt;CompressedPublicKey&gt; <span class="kw">for </span>bitcoin30::PublicKey {
+<span class="kw">impl </span>From&lt;CompressedPublicKey&gt; <span class="kw">for </span>bitcoin::PublicKey {
     <span class="kw">fn </span>from(key: CompressedPublicKey) -&gt; <span class="self">Self </span>{
-        bitcoin30::PublicKey {
+        bitcoin::PublicKey {
             compressed: <span class="bool-val">true</span>,
             inner: key.key,
         }

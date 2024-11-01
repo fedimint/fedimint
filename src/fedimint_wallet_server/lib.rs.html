@@ -1965,77 +1965,7 @@
 <a href="#1964" id="1964">1964</a>
 <a href="#1965" id="1965">1965</a>
 <a href="#1966" id="1966">1966</a>
-<a href="#1967" id="1967">1967</a>
-<a href="#1968" id="1968">1968</a>
-<a href="#1969" id="1969">1969</a>
-<a href="#1970" id="1970">1970</a>
-<a href="#1971" id="1971">1971</a>
-<a href="#1972" id="1972">1972</a>
-<a href="#1973" id="1973">1973</a>
-<a href="#1974" id="1974">1974</a>
-<a href="#1975" id="1975">1975</a>
-<a href="#1976" id="1976">1976</a>
-<a href="#1977" id="1977">1977</a>
-<a href="#1978" id="1978">1978</a>
-<a href="#1979" id="1979">1979</a>
-<a href="#1980" id="1980">1980</a>
-<a href="#1981" id="1981">1981</a>
-<a href="#1982" id="1982">1982</a>
-<a href="#1983" id="1983">1983</a>
-<a href="#1984" id="1984">1984</a>
-<a href="#1985" id="1985">1985</a>
-<a href="#1986" id="1986">1986</a>
-<a href="#1987" id="1987">1987</a>
-<a href="#1988" id="1988">1988</a>
-<a href="#1989" id="1989">1989</a>
-<a href="#1990" id="1990">1990</a>
-<a href="#1991" id="1991">1991</a>
-<a href="#1992" id="1992">1992</a>
-<a href="#1993" id="1993">1993</a>
-<a href="#1994" id="1994">1994</a>
-<a href="#1995" id="1995">1995</a>
-<a href="#1996" id="1996">1996</a>
-<a href="#1997" id="1997">1997</a>
-<a href="#1998" id="1998">1998</a>
-<a href="#1999" id="1999">1999</a>
-<a href="#2000" id="2000">2000</a>
-<a href="#2001" id="2001">2001</a>
-<a href="#2002" id="2002">2002</a>
-<a href="#2003" id="2003">2003</a>
-<a href="#2004" id="2004">2004</a>
-<a href="#2005" id="2005">2005</a>
-<a href="#2006" id="2006">2006</a>
-<a href="#2007" id="2007">2007</a>
-<a href="#2008" id="2008">2008</a>
-<a href="#2009" id="2009">2009</a>
-<a href="#2010" id="2010">2010</a>
-<a href="#2011" id="2011">2011</a>
-<a href="#2012" id="2012">2012</a>
-<a href="#2013" id="2013">2013</a>
-<a href="#2014" id="2014">2014</a>
-<a href="#2015" id="2015">2015</a>
-<a href="#2016" id="2016">2016</a>
-<a href="#2017" id="2017">2017</a>
-<a href="#2018" id="2018">2018</a>
-<a href="#2019" id="2019">2019</a>
-<a href="#2020" id="2020">2020</a>
-<a href="#2021" id="2021">2021</a>
-<a href="#2022" id="2022">2022</a>
-<a href="#2023" id="2023">2023</a>
-<a href="#2024" id="2024">2024</a>
-<a href="#2025" id="2025">2025</a>
-<a href="#2026" id="2026">2026</a>
-<a href="#2027" id="2027">2027</a>
-<a href="#2028" id="2028">2028</a>
-<a href="#2029" id="2029">2029</a>
-<a href="#2030" id="2030">2030</a>
-<a href="#2031" id="2031">2031</a>
-<a href="#2032" id="2032">2032</a>
-<a href="#2033" id="2033">2033</a>
-<a href="#2034" id="2034">2034</a>
-<a href="#2035" id="2035">2035</a>
-<a href="#2036" id="2036">2036</a>
-<a href="#2037" id="2037">2037</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1967" id="1967">1967</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -2053,16 +1983,15 @@
 </span><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{bail, ensure, format_err, Context};
-<span class="kw">use </span>bitcoin::ScriptBuf;
-<span class="kw">use </span>bitcoin30::absolute::LockTime;
-<span class="kw">use </span>bitcoin30::address::NetworkUnchecked;
-<span class="kw">use </span>bitcoin30::ecdsa::Signature <span class="kw">as </span>EcdsaSig;
-<span class="kw">use </span>bitcoin30::hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash, HashEngine, Hmac, HmacEngine};
-<span class="kw">use </span>bitcoin30::policy::DEFAULT_MIN_RELAY_TX_FEE;
-<span class="kw">use </span>bitcoin30::psbt::{Input, PartiallySignedTransaction};
-<span class="kw">use </span>bitcoin30::secp256k1::{All, Secp256k1, Verification};
-<span class="kw">use </span>bitcoin30::sighash::{EcdsaSighashType, SighashCache};
-<span class="kw">use </span>bitcoin30::{Address, BlockHash, Network, Sequence, Transaction, TxIn, TxOut, Txid};
+<span class="kw">use </span>bitcoin::absolute::LockTime;
+<span class="kw">use </span>bitcoin::address::NetworkUnchecked;
+<span class="kw">use </span>bitcoin::ecdsa::Signature <span class="kw">as </span>EcdsaSig;
+<span class="kw">use </span>bitcoin::hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash, HashEngine, Hmac, HmacEngine};
+<span class="kw">use </span>bitcoin::policy::DEFAULT_MIN_RELAY_TX_FEE;
+<span class="kw">use </span>bitcoin::psbt::{Input, Psbt};
+<span class="kw">use </span>bitcoin::secp256k1::{<span class="self">self</span>, All, Message, Scalar, Secp256k1, Verification};
+<span class="kw">use </span>bitcoin::sighash::{EcdsaSighashType, SighashCache};
+<span class="kw">use </span>bitcoin::{Address, BlockHash, Network, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid};
 <span class="kw">use </span>common::config::WalletConfigConsensus;
 <span class="kw">use </span>common::{
     proprietary_tweak_key, PegOutFees, PegOutSignatureItem, ProcessPegOutSigError, SpendableUTXO,
@@ -2073,13 +2002,9 @@
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_block_hash,
-    bitcoin30_to_bitcoin32_network, bitcoin30_to_bitcoin32_outpoint,
-    bitcoin30_to_bitcoin32_script_buf, bitcoin30_to_bitcoin32_secp256k1_pubkey,
-    bitcoin30_to_bitcoin32_tx, bitcoin30_to_bitcoin32_txid, bitcoin32_to_bitcoin30_amount,
-    bitcoin32_to_bitcoin30_network, bitcoin32_to_bitcoin30_outpoint,
-    bitcoin32_to_bitcoin30_script_buf, bitcoin32_to_bitcoin30_secp256k1_pubkey,
-    bitcoin32_to_bitcoin30_tx, bitcoin32_to_bitcoin30_txid,
-    bitcoin32_to_bitcoin30_unchecked_address,
+    bitcoin30_to_bitcoin32_network, bitcoin30_to_bitcoin32_script_buf,
+    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_tx,
+    bitcoin32_to_bitcoin30_txid, bitcoin32_to_bitcoin30_unchecked_address,
 };
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -2125,10 +2050,9 @@
     WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS, WALLET_PEGIN_SATS,
     WALLET_PEGOUT_FEES_SATS, WALLET_PEGOUT_SATS,
 };
-<span class="kw">use </span>miniscript::psbt::PsbtExt;
 <span class="kw">use </span>miniscript::{translate_hash_fail, Descriptor, TranslatePk};
+<span class="kw">use </span>miniscript12::psbt::PsbtExt;
 <span class="kw">use </span>rand::rngs::OsRng;
-<span class="kw">use </span>secp256k1::{Message, Scalar};
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>tokio::sync::watch;
@@ -2299,7 +2223,7 @@
         params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; BTreeMap&lt;PeerId, ServerModuleConfig&gt; {
         <span class="kw">let </span>params = <span class="self">self</span>.parse_params(params).unwrap();
-        <span class="kw">let </span>secp = secp256k1::Secp256k1::new();
+        <span class="kw">let </span>secp = bitcoin::secp256k1::Secp256k1::new();
 
         <span class="kw">let </span>btc_pegin_keys = peers
             .iter()
@@ -2342,20 +2266,10 @@
         <span class="kw">let </span>(sk, pk) = secp.generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>our_key = CompressedPublicKey { key: pk };
         <span class="kw">let </span>peer_peg_in_keys: BTreeMap&lt;PeerId, CompressedPublicKey&gt; = peers
-            .exchange_pubkeys(
-                <span class="string">"wallet"</span>.to_string(),
-                bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>our_key.key),
-            )
+            .exchange_pubkeys(<span class="string">"wallet"</span>.to_string(), our_key.key)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.into_iter()
-            .map(|(k, key)| {
-                (
-                    k,
-                    CompressedPublicKey {
-                        key: bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>key),
-                    },
-                )
-            })
+            .map(|(k, key)| (k, CompressedPublicKey { key }))
             .collect();
 
         <span class="kw">let </span>wallet_cfg = WalletConfig::new(
@@ -2569,7 +2483,7 @@
 
         <span class="kw">if </span>!<span class="self">self</span>.block_is_known(dbtx, input.proof_block()).<span class="kw">await </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletInputError::UnknownPegInProofBlock(
-                bitcoin30_to_bitcoin32_block_hash(<span class="kw-2">&amp;</span>input.proof_block()),
+                input.proof_block(),
             ));
         }
 
@@ -2579,10 +2493,10 @@
 
         <span class="kw">if </span>dbtx
             .insert_entry(
-                <span class="kw-2">&amp;</span>UTXOKey(bitcoin30_to_bitcoin32_outpoint(<span class="kw-2">&amp;</span>input.outpoint())),
+                <span class="kw-2">&amp;</span>UTXOKey(input.outpoint()),
                 <span class="kw-2">&amp;</span>SpendableUTXO {
                     tweak: input.tweak_contract_key().serialize(),
-                    amount: bitcoin::Amount::from_sat(input.tx_output().value),
+                    amount: input.tx_output().value,
                 },
             )
             .<span class="kw">await
@@ -2590,12 +2504,12 @@
         {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletInputError::PegInAlreadyClaimed);
         }
-        <span class="kw">let </span>amount = fedimint_core::Amount::from_sats(input.tx_output().value);
+        <span class="kw">let </span>amount = input.tx_output().value.into();
         <span class="kw">let </span>fee = <span class="self">self</span>.cfg.consensus.fee_consensus.peg_in_abs;
         calculate_pegin_metrics(dbtx, amount, fee);
         <span class="prelude-val">Ok</span>(InputMeta {
             amount: TransactionItemAmount { amount, fee },
-            pub_key: <span class="kw-2">*</span>input.tweak_contract_key(),
+            pub_key: bitcoin32_to_bitcoin30_secp256k1_pubkey(input.tweak_contract_key()),
         })
     }
 
@@ -2629,16 +2543,11 @@
 
         <span class="kw">let </span>fee_rate = <span class="self">self</span>.consensus_fee_rate(dbtx).<span class="kw">await</span>;
 
-        StatelessWallet::validate_tx(
-            <span class="kw-2">&amp;</span>tx,
-            output,
-            fee_rate,
-            bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.consensus.network),
-        )<span class="question-mark">?</span>;
+        StatelessWallet::validate_tx(<span class="kw-2">&amp;</span>tx, output, fee_rate, <span class="self">self</span>.cfg.consensus.network)<span class="question-mark">?</span>;
 
         <span class="self">self</span>.offline_wallet().sign_psbt(<span class="kw-2">&amp;mut </span>tx.psbt);
 
-        <span class="kw">let </span>txid = tx.psbt.unsigned_tx.txid();
+        <span class="kw">let </span>txid = tx.psbt.unsigned_tx.compute_txid();
 
         <span class="macro">info!</span>(
             %txid,
@@ -2673,10 +2582,7 @@
 
         <span class="comment">// Delete used UTXOs
         </span><span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>tx.psbt.unsigned_tx.input {
-            dbtx.remove_entry(<span class="kw-2">&amp;</span>UTXOKey(bitcoin30_to_bitcoin32_outpoint(
-                <span class="kw-2">&amp;</span>input.previous_output,
-            )))
-            .<span class="kw">await</span>;
+            dbtx.remove_entry(<span class="kw-2">&amp;</span>UTXOKey(input.previous_output)).<span class="kw">await</span>;
         }
 
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>UnsignedTransactionKey(txid), <span class="kw-2">&amp;</span>tx)
@@ -2766,8 +2672,8 @@
                     </span><span class="kw">let </span>dummy_tweak = [<span class="number">0</span>; <span class="number">33</span>];
 
                     <span class="kw">let </span>tx = module.offline_wallet().create_tx(
-                        bitcoin30::Amount::from_sat(sats),
-                        bitcoin30_to_bitcoin32_script_buf(<span class="kw-2">&amp;</span>address.assume_checked().script_pubkey()),
+                        bitcoin::Amount::from_sat(sats),
+                        address.assume_checked().script_pubkey(),
                         <span class="macro">vec!</span>[],
                         module.available_utxos(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc()).<span class="kw">await</span>,
                         feerate,
@@ -2920,7 +2826,7 @@
     <span class="doccomment">/// Try to attach signatures to a pending peg-out tx.
     </span><span class="kw">fn </span>sign_peg_out_psbt(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        psbt: <span class="kw-2">&amp;mut </span>PartiallySignedTransaction,
+        psbt: <span class="kw-2">&amp;mut </span>Psbt,
         peer: PeerId,
         signature: <span class="kw-2">&amp;</span>PegOutSignatureItem,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ProcessPegOutSigError&gt; {
@@ -2946,7 +2852,7 @@
             .enumerate()
         {
             <span class="kw">let </span>tx_hash = tx_hasher
-                .segwit_signature_hash(
+                .p2wsh_signature_hash(
                     idx,
                     input
                         .witness_script
@@ -2965,7 +2871,7 @@
             <span class="kw">let </span>tweaked_peer_key = peer_key.tweak(tweak, <span class="kw-2">&amp;</span><span class="self">self</span>.secp);
             <span class="self">self</span>.secp
                 .verify_ecdsa(
-                    <span class="kw-2">&amp;</span>Message::from_slice(<span class="kw-2">&amp;</span>tx_hash[..]).unwrap(),
+                    <span class="kw-2">&amp;</span>Message::from_digest_slice(<span class="kw-2">&amp;</span>tx_hash[..]).unwrap(),
                     signature,
                     <span class="kw-2">&amp;</span>tweaked_peer_key.key,
                 )
@@ -3004,10 +2910,10 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(ProcessPegOutSigError::ErrorFinalizingPsbt(error));
         }
 
-        <span class="kw">let </span>tx = unsigned.psbt.clone().extract_tx();
+        <span class="kw">let </span>tx = unsigned.psbt.clone().extract_tx_unchecked_fee_rate();
 
         <span class="prelude-val">Ok</span>(PendingTransaction {
-            tx: bitcoin30_to_bitcoin32_tx(<span class="kw-2">&amp;</span>tx),
+            tx,
             tweak: change_tweak,
             change: unsigned.change,
             destination: unsigned.destination,
@@ -3117,10 +3023,11 @@
                 <span class="string">"Recognizing change UTXOs"
             </span>);
             <span class="kw">for </span>(txid, tx) <span class="kw">in </span><span class="kw-2">&amp;</span>pending_transactions {
+                <span class="kw">let </span>txid = bitcoin32_to_bitcoin30_txid(txid);
                 <span class="kw">let </span>is_tx_in_block =
                     retry(<span class="string">"is_tx_in_block"</span>, backoff_util::background_backoff(), || {
                         <span class="self">self</span>.btc_rpc
-                            .is_tx_in_block(txid, <span class="kw-2">&amp;</span>block_hash, u64::from(height))
+                            .is_tx_in_block(<span class="kw-2">&amp;</span>txid, <span class="kw-2">&amp;</span>block_hash, u64::from(height))
                     })
                     .<span class="kw">await
                     </span>.unwrap_or_else(|<span class="kw">_</span>| {
@@ -3196,11 +3103,9 @@
         <span class="comment">// We need to search and remove all `PendingTransactions` invalidated by RBF
         </span><span class="kw">let </span><span class="kw-2">mut </span>pending_to_remove = <span class="macro">vec!</span>[pending_tx.clone()];
         <span class="kw">while let </span><span class="prelude-val">Some</span>(removed) = pending_to_remove.pop() {
-            all_transactions.remove(<span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_txid(<span class="kw-2">&amp;</span>removed.tx.compute_txid()));
-            dbtx.remove_entry(<span class="kw-2">&amp;</span>PendingTransactionKey(bitcoin32_to_bitcoin30_txid(
-                <span class="kw-2">&amp;</span>removed.tx.compute_txid(),
-            )))
-            .<span class="kw">await</span>;
+            all_transactions.remove(<span class="kw-2">&amp;</span>removed.tx.compute_txid());
+            dbtx.remove_entry(<span class="kw-2">&amp;</span>PendingTransactionKey(removed.tx.compute_txid()))
+                .<span class="kw">await</span>;
 
             <span class="comment">// Search for tx that this `removed` has as RBF
             </span><span class="kw">if let </span><span class="prelude-val">Some</span>(rbf) = <span class="kw-2">&amp;</span>removed.rbf {
@@ -3212,7 +3117,7 @@
             <span class="comment">// Search for tx that wanted to RBF the `removed` one
             </span><span class="kw">for </span>tx <span class="kw">in </span>all_transactions.values() {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(rbf) = <span class="kw-2">&amp;</span>tx.rbf {
-                    <span class="kw">if </span>rbf.txid == bitcoin32_to_bitcoin30_txid(<span class="kw-2">&amp;</span>removed.tx.compute_txid()) {
+                    <span class="kw">if </span>rbf.txid == removed.tx.compute_txid() {
                         pending_to_remove.push(tx.clone());
                     }
                 }
@@ -3225,11 +3130,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         block_hash: BlockHash,
     ) -&gt; bool {
-        dbtx.get_value(<span class="kw-2">&amp;</span>BlockHashKey(bitcoin30_to_bitcoin32_block_hash(
-            <span class="kw-2">&amp;</span>block_hash,
-        )))
-        .<span class="kw">await
-        </span>.is_some()
+        dbtx.get_value(<span class="kw-2">&amp;</span>BlockHashKey(block_hash)).<span class="kw">await</span>.is_some()
     }
 
     <span class="kw">async fn </span>create_peg_out_tx(
@@ -3240,7 +3141,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;UnsignedTransaction, WalletOutputError&gt; {
         <span class="kw">match </span>output {
             WalletOutputV0::PegOut(peg_out) =&gt; <span class="self">self</span>.offline_wallet().create_tx(
-                bitcoin32_to_bitcoin30_amount(<span class="kw-2">&amp;</span>peg_out.amount),
+                peg_out.amount,
                 peg_out.recipient.clone().assume_checked().script_pubkey(),
                 <span class="macro">vec!</span>[],
                 <span class="self">self</span>.available_utxos(dbtx).<span class="kw">await</span>,
@@ -3255,7 +3156,7 @@
                     </span>.ok_or(WalletOutputError::RbfTransactionIdNotFound)<span class="question-mark">?</span>;
 
                 <span class="self">self</span>.offline_wallet().create_tx(
-                    bitcoin32_to_bitcoin30_amount(<span class="kw-2">&amp;</span>tx.peg_out_amount),
+                    tx.peg_out_amount,
                     tx.destination,
                     tx.selected_utxos,
                     <span class="self">self</span>.available_utxos(dbtx).<span class="kw">await</span>,
@@ -3277,14 +3178,14 @@
             .<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>get_wallet_value(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; bitcoin30::Amount {
+    <span class="kw">pub async fn </span>get_wallet_value(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; bitcoin::Amount {
         <span class="kw">let </span>sat_sum = <span class="self">self
             </span>.available_utxos(dbtx)
             .<span class="kw">await
             </span>.into_iter()
             .map(|(<span class="kw">_</span>, utxo)| utxo.amount.to_sat())
             .sum();
-        bitcoin30::Amount::from_sat(sat_sum)
+        bitcoin::Amount::from_sat(sat_sum)
     }
 
     <span class="kw">async fn </span>get_wallet_summary(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; WalletSummary {
@@ -3295,7 +3196,7 @@
             <span class="kw">let </span><span class="kw-2">mut </span>change_utxos: Vec&lt;TxOutputSummary&gt; = Vec::new();
 
             <span class="kw">for </span>tx <span class="kw">in </span>transactions {
-                <span class="kw">let </span>txid = bitcoin30_to_bitcoin32_txid(<span class="kw-2">&amp;</span>tx.txid());
+                <span class="kw">let </span>txid = tx.compute_txid();
 
                 <span class="comment">// to identify outputs for the peg_out (idx = 0) and change (idx = 1), we lean
                 // on how the wallet constructs the transaction
@@ -3308,12 +3209,12 @@
 
                 peg_out_txos.push(TxOutputSummary {
                     outpoint: bitcoin::OutPoint { txid, vout: <span class="number">0 </span>},
-                    amount: bitcoin::Amount::from_sat(peg_out_output.value),
+                    amount: peg_out_output.value,
                 });
 
                 change_utxos.push(TxOutputSummary {
                     outpoint: bitcoin::OutPoint { txid, vout: <span class="number">1 </span>},
-                    amount: bitcoin::Amount::from_sat(change_output.value),
+                    amount: change_output.value,
                 });
             }
 
@@ -3349,12 +3250,8 @@
         <span class="kw">let </span>(unsigned_peg_out_txos, unsigned_change_utxos) =
             partition_peg_out_and_change(unsigned_transactions);
 
-        <span class="kw">let </span>(unconfirmed_peg_out_txos, unconfirmed_change_utxos) = partition_peg_out_and_change(
-            unconfirmed_transactions
-                .into_iter()
-                .map(|tx| bitcoin32_to_bitcoin30_tx(<span class="kw-2">&amp;</span>tx))
-                .collect(),
-        );
+        <span class="kw">let </span>(unconfirmed_peg_out_txos, unconfirmed_change_utxos) =
+            partition_peg_out_and_change(unconfirmed_transactions);
 
         WalletSummary {
             spendable_utxos,
@@ -3487,7 +3384,7 @@
     );
 
     <span class="kw">for </span>PendingTransaction { tx, .. } <span class="kw">in </span>pending_tx {
-        <span class="kw">if </span>!rbf_txids.contains(<span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_txid(<span class="kw-2">&amp;</span>tx.compute_txid())) {
+        <span class="kw">if </span>!rbf_txids.contains(<span class="kw-2">&amp;</span>tx.compute_txid()) {
             <span class="macro">debug!</span>(
                 tx = %tx.compute_txid(),
                 weight = tx.weight().to_wu(),
@@ -3516,12 +3413,9 @@
         network: Network,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), WalletOutputError&gt; {
         <span class="kw">if let </span>WalletOutputV0::PegOut(peg_out) = output {
-            <span class="kw">if </span>!peg_out
-                .recipient
-                .is_valid_for_network(bitcoin30_to_bitcoin32_network(<span class="kw-2">&amp;</span>network))
-            {
+            <span class="kw">if </span>!peg_out.recipient.is_valid_for_network(network) {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(WalletOutputError::WrongNetwork(
-                    bitcoin30_to_bitcoin32_network(<span class="kw-2">&amp;</span>network),
+                    network,
                     bitcoin30_to_bitcoin32_network(
                         <span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_unchecked_address(<span class="kw-2">&amp;</span>peg_out.recipient).network,
                     ),
@@ -3575,7 +3469,7 @@
     </span><span class="attr">#[allow(clippy::too_many_arguments)]
     </span><span class="kw">fn </span>create_tx(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        peg_out_amount: bitcoin30::Amount,
+        peg_out_amount: bitcoin::Amount,
         destination: ScriptBuf,
         <span class="kw-2">mut </span>included_utxos: Vec&lt;(UTXOKey, SpendableUTXO)&gt;,
         <span class="kw-2">mut </span>remaining_utxos: Vec&lt;(UTXOKey, SpendableUTXO)&gt;,
@@ -3622,18 +3516,18 @@
         included_utxos.extend(remaining_utxos);
 
         <span class="comment">// Finally we initialize our accumulator for selected input amounts
-        </span><span class="kw">let </span><span class="kw-2">mut </span>total_selected_value = bitcoin30::Amount::from_sat(<span class="number">0</span>);
+        </span><span class="kw">let </span><span class="kw-2">mut </span>total_selected_value = bitcoin::Amount::from_sat(<span class="number">0</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>selected_utxos: Vec&lt;(UTXOKey, SpendableUTXO)&gt; = <span class="macro">vec!</span>[];
         <span class="kw">let </span><span class="kw-2">mut </span>fees = fee_rate.calculate_fee(total_weight);
 
         <span class="kw">while </span>total_selected_value
             &lt; peg_out_amount
-                + bitcoin32_to_bitcoin30_amount(<span class="kw-2">&amp;</span>change_script.minimal_non_dust())
-                + fees
+                + change_script.minimal_non_dust()
+                + bitcoin30_to_bitcoin32_amount(<span class="kw-2">&amp;</span>fees)
         {
             <span class="kw">match </span>included_utxos.pop() {
                 <span class="prelude-val">Some</span>((utxo_key, utxo)) =&gt; {
-                    total_selected_value += bitcoin32_to_bitcoin30_amount(<span class="kw-2">&amp;</span>utxo.amount);
+                    total_selected_value += utxo.amount;
                     total_weight += max_input_weight;
                     fees = fee_rate.calculate_fee(total_weight);
                     selected_utxos.push((utxo_key, utxo));
@@ -3644,18 +3538,18 @@
 
         <span class="comment">// We always pay ourselves change back to ensure that we don't lose anything due
         // to dust
-        </span><span class="kw">let </span>change = total_selected_value - fees - peg_out_amount;
+        </span><span class="kw">let </span>change = total_selected_value - bitcoin30_to_bitcoin32_amount(<span class="kw-2">&amp;</span>fees) - peg_out_amount;
         <span class="kw">let </span>output: Vec&lt;TxOut&gt; = <span class="macro">vec!</span>[
             TxOut {
-                value: peg_out_amount.to_sat(),
-                script_pubkey: bitcoin32_to_bitcoin30_script_buf(<span class="kw-2">&amp;</span>destination.clone()),
+                value: peg_out_amount,
+                script_pubkey: destination.clone(),
             },
             TxOut {
-                value: change.to_sat(),
-                script_pubkey: bitcoin32_to_bitcoin30_script_buf(<span class="kw-2">&amp;</span>change_script),
+                value: change,
+                script_pubkey: change_script,
             },
         ];
-        <span class="kw">let </span><span class="kw-2">mut </span>change_out = bitcoin30::psbt::Output::default();
+        <span class="kw">let </span><span class="kw-2">mut </span>change_out = bitcoin::psbt::Output::default();
         change_out
             .proprietary
             .insert(proprietary_tweak_key(), change_tweak.to_vec());
@@ -3672,24 +3566,24 @@
         );
 
         <span class="kw">let </span>transaction = Transaction {
-            version: <span class="number">2</span>,
+            version: bitcoin::transaction::Version(<span class="number">2</span>),
             lock_time: LockTime::ZERO,
             input: selected_utxos
                 .iter()
                 .map(|(utxo_key, _utxo)| TxIn {
-                    previous_output: bitcoin32_to_bitcoin30_outpoint(<span class="kw-2">&amp;</span>utxo_key.<span class="number">0</span>),
+                    previous_output: utxo_key.<span class="number">0</span>,
                     script_sig: Default::default(),
                     sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
-                    witness: bitcoin30::Witness::new(),
+                    witness: bitcoin::Witness::new(),
                 })
                 .collect(),
             output,
         };
-        <span class="macro">info!</span>(txid = %transaction.txid(), <span class="string">"Creating peg-out tx"</span>);
+        <span class="macro">info!</span>(txid = %transaction.compute_txid(), <span class="string">"Creating peg-out tx"</span>);
 
         <span class="comment">// FIXME: use custom data structure that guarantees more invariants and only
         // convert to PSBT for finalization
-        </span><span class="kw">let </span>psbt = PartiallySignedTransaction {
+        </span><span class="kw">let </span>psbt = Psbt {
             unsigned_tx: transaction,
             version: <span class="number">0</span>,
             xpub: Default::default(),
@@ -3705,18 +3599,19 @@
                     Input {
                         non_witness_utxo: <span class="prelude-val">None</span>,
                         witness_utxo: <span class="prelude-val">Some</span>(TxOut {
-                            value: utxo.amount.to_sat(),
-                            script_pubkey,
+                            value: utxo.amount,
+                            script_pubkey: bitcoin30_to_bitcoin32_script_buf(<span class="kw-2">&amp;</span>script_pubkey),
                         }),
                         partial_sigs: Default::default(),
                         sighash_type: <span class="prelude-val">None</span>,
                         redeem_script: <span class="prelude-val">None</span>,
-                        witness_script: <span class="prelude-val">Some</span>(
-                            <span class="self">self</span>.descriptor
+                        witness_script: <span class="prelude-val">Some</span>(bitcoin30_to_bitcoin32_script_buf(
+                            <span class="kw-2">&amp;</span><span class="self">self
+                                </span>.descriptor
                                 .tweak(<span class="kw-2">&amp;</span>utxo.tweak, <span class="self">self</span>.secp)
                                 .script_code()
                                 .expect(<span class="string">"Failed to tweak descriptor"</span>),
-                        ),
+                        )),
                         bip32_derivation: Default::default(),
                         final_script_sig: <span class="prelude-val">None</span>,
                         final_script_witness: <span class="prelude-val">None</span>,
@@ -3743,19 +3638,19 @@
         <span class="prelude-val">Ok</span>(UnsignedTransaction {
             psbt,
             signatures: <span class="macro">vec!</span>[],
-            change: bitcoin30_to_bitcoin32_amount(<span class="kw-2">&amp;</span>change),
+            change,
             fees: PegOutFees {
                 fee_rate,
                 total_weight,
             },
             destination,
             selected_utxos,
-            peg_out_amount: bitcoin30_to_bitcoin32_amount(<span class="kw-2">&amp;</span>peg_out_amount),
+            peg_out_amount,
             rbf,
         })
     }
 
-    <span class="kw">fn </span>sign_psbt(<span class="kw-2">&amp;</span><span class="self">self</span>, psbt: <span class="kw-2">&amp;mut </span>PartiallySignedTransaction) {
+    <span class="kw">fn </span>sign_psbt(<span class="kw-2">&amp;</span><span class="self">self</span>, psbt: <span class="kw-2">&amp;mut </span>Psbt) {
         <span class="kw">let </span><span class="kw-2">mut </span>tx_hasher = SighashCache::new(<span class="kw-2">&amp;</span>psbt.unsigned_tx);
 
         <span class="kw">for </span>(idx, (psbt_input, _tx_input)) <span class="kw">in </span>psbt
@@ -3774,7 +3669,7 @@
             };
 
             <span class="kw">let </span>tx_hash = tx_hasher
-                .segwit_signature_hash(
+                .p2wsh_signature_hash(
                     idx,
                     psbt_input
                         .witness_script
@@ -3789,12 +3684,13 @@
                 )
                 .expect(<span class="string">"Failed to create segwit sighash"</span>);
 
-            <span class="kw">let </span>signature = <span class="self">self
-                </span>.secp
-                .sign_ecdsa(<span class="kw-2">&amp;</span>Message::from_slice(<span class="kw-2">&amp;</span>tx_hash[..]).unwrap(), <span class="kw-2">&amp;</span>tweaked_secret);
+            <span class="kw">let </span>signature = <span class="self">self</span>.secp.sign_ecdsa(
+                <span class="kw-2">&amp;</span>Message::from_digest_slice(<span class="kw-2">&amp;</span>tx_hash[..]).unwrap(),
+                <span class="kw-2">&amp;</span>tweaked_secret,
+            );
 
             psbt_input.partial_sigs.insert(
-                bitcoin30::PublicKey {
+                bitcoin::PublicKey {
                     compressed: <span class="bool-val">true</span>,
                     inner: secp256k1::PublicKey::from_secret_key(<span class="self">self</span>.secp, <span class="kw-2">&amp;</span>tweaked_secret),
                 },
@@ -3849,7 +3745,7 @@
     <span class="kw">let </span><span class="kw-2">mut </span>nonce: [u8; <span class="number">33</span>] = [<span class="number">0</span>; <span class="number">33</span>];
     <span class="comment">// Make it look like a compressed pubkey, has to be either 0x02 or 0x03
     </span>nonce[<span class="number">0</span>] = <span class="number">0x02</span>;
-    nonce[<span class="number">1</span>..].copy_from_slice(<span class="kw-2">&amp;</span>nonce_idx.consensus_hash::&lt;sha256::Hash&gt;()[..]);
+    nonce[<span class="number">1</span>..].copy_from_slice(<span class="kw-2">&amp;</span>nonce_idx.consensus_hash::&lt;bitcoin30::hashes::sha256::Hash&gt;()[..]);
 
     nonce
 }
@@ -3887,7 +3783,7 @@
 /// `PendingTransaction`
 </span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>UnsignedTransaction {
-    <span class="kw">pub </span>psbt: PartiallySignedTransaction,
+    <span class="kw">pub </span>psbt: Psbt,
     <span class="kw">pub </span>signatures: Vec&lt;(PeerId, PegOutSignatureItem)&gt;,
     <span class="kw">pub </span>change: bitcoin::Amount,
     <span class="kw">pub </span>fees: PegOutFees,
@@ -3918,14 +3814,10 @@
 
     <span class="kw">use </span>std::str::FromStr;
 
+    <span class="kw">use </span>bitcoin::hashes::Hash;
     <span class="kw">use </span>bitcoin::Network::{Bitcoin, Testnet};
-    <span class="kw">use </span>bitcoin::OutPoint;
-    <span class="kw">use </span>bitcoin30::{Address, Amount, Txid};
-    <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-        bitcoin30_to_bitcoin32_script_buf, bitcoin30_to_bitcoin32_unchecked_address,
-        bitcoin32_to_bitcoin30_network,
-    };
-    <span class="kw">use </span>fedimint_core::{BitcoinHash, Feerate};
+    <span class="kw">use </span>bitcoin::{secp256k1, Address, Amount, OutPoint, Txid};
+    <span class="kw">use </span>fedimint_core::Feerate;
     <span class="kw">use </span>fedimint_wallet_common::{PegOut, PegOutFees, Rbf, WalletOutputV0};
     <span class="kw">use </span>miniscript::descriptor::Wsh;
 
@@ -3973,7 +3865,7 @@
         // spendable sats = 3000 - 219 - 330 = 2451
         </span><span class="kw">let </span>tx = wallet.create_tx(
             Amount::from_sat(<span class="number">2452</span>),
-            bitcoin30_to_bitcoin32_script_buf(<span class="kw-2">&amp;</span>recipient.clone().assume_checked().script_pubkey()),
+            recipient.clone().assume_checked().script_pubkey(),
             <span class="macro">vec!</span>[],
             <span class="macro">vec!</span>[(UTXOKey(OutPoint::null()), spendable.clone())],
             fee,
@@ -3986,9 +3878,7 @@
         </span><span class="kw">let </span><span class="kw-2">mut </span>tx = wallet
             .create_tx(
                 Amount::from_sat(<span class="number">1000</span>),
-                bitcoin30_to_bitcoin32_script_buf(
-                    <span class="kw-2">&amp;</span>recipient.clone().assume_checked().script_pubkey(),
-                ),
+                recipient.clone().assume_checked().script_pubkey(),
                 <span class="macro">vec!</span>[],
                 <span class="macro">vec!</span>[(UTXOKey(OutPoint::null()), spendable)],
                 fee,
@@ -3998,40 +3888,20 @@
             .expect(<span class="string">"is ok"</span>);
 
         <span class="comment">// peg out weight is incorrectly set to 0
-        </span><span class="kw">let </span>res = StatelessWallet::validate_tx(
-            <span class="kw-2">&amp;</span>tx,
-            <span class="kw-2">&amp;</span>rbf(fee.sats_per_kvb, <span class="number">0</span>),
-            fee,
-            bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span>Bitcoin),
-        );
+        </span><span class="kw">let </span>res = StatelessWallet::validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>rbf(fee.sats_per_kvb, <span class="number">0</span>), fee, Bitcoin);
         <span class="macro">assert_eq!</span>(res, <span class="prelude-val">Err</span>(WalletOutputError::TxWeightIncorrect(<span class="number">0</span>, weight)));
 
         <span class="comment">// fee rate set below min relay fee to 0
-        </span><span class="kw">let </span>res = StatelessWallet::validate_tx(
-            <span class="kw-2">&amp;</span>tx,
-            <span class="kw-2">&amp;</span>rbf(<span class="number">0</span>, weight),
-            fee,
-            bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span>Bitcoin),
-        );
+        </span><span class="kw">let </span>res = StatelessWallet::validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>rbf(<span class="number">0</span>, weight), fee, Bitcoin);
         <span class="macro">assert_eq!</span>(res, <span class="prelude-val">Err</span>(WalletOutputError::BelowMinRelayFee));
 
         <span class="comment">// fees are okay
-        </span><span class="kw">let </span>res = StatelessWallet::validate_tx(
-            <span class="kw-2">&amp;</span>tx,
-            <span class="kw-2">&amp;</span>rbf(fee.sats_per_kvb, weight),
-            fee,
-            bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span>Bitcoin),
-        );
+        </span><span class="kw">let </span>res = StatelessWallet::validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
         <span class="macro">assert_eq!</span>(res, <span class="prelude-val">Ok</span>(()));
 
         <span class="comment">// tx has fee below consensus
         </span>tx.fees = PegOutFees::new(<span class="number">0</span>, weight);
-        <span class="kw">let </span>res = StatelessWallet::validate_tx(
-            <span class="kw-2">&amp;</span>tx,
-            <span class="kw-2">&amp;</span>rbf(fee.sats_per_kvb, weight),
-            fee,
-            bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span>Bitcoin),
-        );
+        <span class="kw">let </span>res = StatelessWallet::validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
         <span class="macro">assert_eq!</span>(
             res,
             <span class="prelude-val">Err</span>(WalletOutputError::PegOutFeeBelowConsensus(
@@ -4042,26 +3912,16 @@
 
         <span class="comment">// tx has peg-out amount under dust limit
         </span>tx.peg_out_amount = bitcoin::Amount::ZERO;
-        <span class="kw">let </span>res = StatelessWallet::validate_tx(
-            <span class="kw-2">&amp;</span>tx,
-            <span class="kw-2">&amp;</span>rbf(fee.sats_per_kvb, weight),
-            fee,
-            bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span>Bitcoin),
-        );
+        <span class="kw">let </span>res = StatelessWallet::validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
         <span class="macro">assert_eq!</span>(res, <span class="prelude-val">Err</span>(WalletOutputError::PegOutUnderDustLimit));
 
         <span class="comment">// tx is invalid for network
         </span><span class="kw">let </span>output = WalletOutputV0::PegOut(PegOut {
-            recipient: bitcoin30_to_bitcoin32_unchecked_address(<span class="kw-2">&amp;</span>recipient),
+            recipient,
             amount: bitcoin::Amount::from_sat(<span class="number">1000</span>),
             fees: PegOutFees::new(<span class="number">100</span>, weight),
         });
-        <span class="kw">let </span>res = StatelessWallet::validate_tx(
-            <span class="kw-2">&amp;</span>tx,
-            <span class="kw-2">&amp;</span>output,
-            fee,
-            bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span>Testnet),
-        );
+        <span class="kw">let </span>res = StatelessWallet::validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>output, fee, Testnet);
         <span class="macro">assert_eq!</span>(res, <span class="prelude-val">Err</span>(WalletOutputError::WrongNetwork(Testnet, Bitcoin)));
     }
 

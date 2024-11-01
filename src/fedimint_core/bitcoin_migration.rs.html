@@ -473,18 +473,18 @@
 <span class="kw">use </span>bitcoin30::consensus::{Decodable <span class="kw">as </span>Bitcoin30Decodable, Encodable <span class="kw">as </span>Bitcoin30Encodable};
 <span class="kw">use </span>bitcoin_hashes::Hash;
 
-<span class="kw">pub fn </span>bitcoin29_to_bitcoin30_psbt(
+<span class="kw">pub fn </span>bitcoin29_to_bitcoin32_psbt(
     psbt: <span class="kw-2">&amp;</span>bitcoin29::util::psbt::PartiallySignedTransaction,
-) -&gt; bitcoin30::psbt::PartiallySignedTransaction {
+) -&gt; bitcoin::psbt::Psbt {
     bincode::deserialize(<span class="kw-2">&amp;</span>bincode::serialize(psbt).expect(<span class="string">"Failed to serialize bitcoin29 psbt"</span>))
-        .expect(<span class="string">"Failed to convert bitcoin29 psbt to bitcoin30 psbt"</span>)
+        .expect(<span class="string">"Failed to convert bitcoin29 psbt to bitcoin32 psbt"</span>)
 }
 
-<span class="kw">pub fn </span>bitcoin30_to_bitcoin29_psbt(
-    psbt: <span class="kw-2">&amp;</span>bitcoin30::psbt::PartiallySignedTransaction,
+<span class="kw">pub fn </span>bitcoin32_to_bitcoin29_psbt(
+    psbt: <span class="kw-2">&amp;</span>bitcoin::psbt::Psbt,
 ) -&gt; bitcoin29::util::psbt::PartiallySignedTransaction {
-    bincode::deserialize(<span class="kw-2">&amp;</span>bincode::serialize(psbt).expect(<span class="string">"Failed to serialize bitcoin30 psbt"</span>))
-        .expect(<span class="string">"Failed to convert bitcoin30 psbt to bitcoin29 psbt"</span>)
+    bincode::deserialize(<span class="kw-2">&amp;</span>bincode::serialize(psbt).expect(<span class="string">"Failed to serialize bitcoin32 psbt"</span>))
+        .expect(<span class="string">"Failed to convert bitcoin32 psbt to bitcoin29 psbt"</span>)
 }
 
 <span class="kw">pub fn </span>bitcoin29_to_bitcoin32_network_magic(magic: u32) -&gt; bitcoin::p2p::Magic {
