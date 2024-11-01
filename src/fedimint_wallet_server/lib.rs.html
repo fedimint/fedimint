@@ -1957,15 +1957,7 @@
 <a href="#1956" id="1956">1956</a>
 <a href="#1957" id="1957">1957</a>
 <a href="#1958" id="1958">1958</a>
-<a href="#1959" id="1959">1959</a>
-<a href="#1960" id="1960">1960</a>
-<a href="#1961" id="1961">1961</a>
-<a href="#1962" id="1962">1962</a>
-<a href="#1963" id="1963">1963</a>
-<a href="#1964" id="1964">1964</a>
-<a href="#1965" id="1965">1965</a>
-<a href="#1966" id="1966">1966</a>
-<a href="#1967" id="1967">1967</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1959" id="1959">1959</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -2001,10 +1993,9 @@
 };
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_block_hash,
-    bitcoin30_to_bitcoin32_network, bitcoin30_to_bitcoin32_script_buf,
-    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_tx,
-    bitcoin32_to_bitcoin30_txid, bitcoin32_to_bitcoin30_unchecked_address,
+    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_network,
+    bitcoin30_to_bitcoin32_script_buf, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+    bitcoin32_to_bitcoin30_unchecked_address,
 };
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -2798,12 +2789,10 @@
 
         <span class="kw">let </span>bitcoind_rpc = bitcoind;
 
-        <span class="kw">let </span>bitcoind_net = bitcoin30_to_bitcoin32_network(
-            <span class="kw-2">&amp;</span>bitcoind_rpc
-                .get_network()
-                .<span class="kw">await
-                </span>.map_err(|e| WalletCreationError::RpcError(e.to_string()))<span class="question-mark">?</span>,
-        );
+        <span class="kw">let </span>bitcoind_net = bitcoind_rpc
+            .get_network()
+            .<span class="kw">await
+            </span>.map_err(|e| WalletCreationError::RpcError(e.to_string()))<span class="question-mark">?</span>;
         <span class="kw">if </span>bitcoind_net != cfg.consensus.network {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletCreationError::WrongNetwork(
                 cfg.consensus.network,
@@ -3023,11 +3012,10 @@
                 <span class="string">"Recognizing change UTXOs"
             </span>);
             <span class="kw">for </span>(txid, tx) <span class="kw">in </span><span class="kw-2">&amp;</span>pending_transactions {
-                <span class="kw">let </span>txid = bitcoin32_to_bitcoin30_txid(txid);
                 <span class="kw">let </span>is_tx_in_block =
                     retry(<span class="string">"is_tx_in_block"</span>, backoff_util::background_backoff(), || {
                         <span class="self">self</span>.btc_rpc
-                            .is_tx_in_block(<span class="kw-2">&amp;</span>txid, <span class="kw-2">&amp;</span>block_hash, u64::from(height))
+                            .is_tx_in_block(txid, <span class="kw-2">&amp;</span>block_hash, u64::from(height))
                     })
                     .<span class="kw">await
                     </span>.unwrap_or_else(|<span class="kw">_</span>| {
@@ -3047,11 +3035,7 @@
                 }
             }
 
-            dbtx.insert_new_entry(
-                <span class="kw-2">&amp;</span>BlockHashKey(bitcoin30_to_bitcoin32_block_hash(<span class="kw-2">&amp;</span>block_hash)),
-                <span class="kw-2">&amp;</span>(),
-            )
-            .<span class="kw">await</span>;
+            dbtx.insert_new_entry(<span class="kw-2">&amp;</span>BlockHashKey(block_hash), <span class="kw-2">&amp;</span>()).<span class="kw">await</span>;
         }
     }
 
@@ -3392,7 +3376,7 @@
                 <span class="string">"Broadcasting peg-out"</span>,
             );
             <span class="macro">trace!</span>(transaction = <span class="question-mark">?</span>tx);
-            rpc.submit_transaction(bitcoin32_to_bitcoin30_tx(<span class="kw-2">&amp;</span>tx)).<span class="kw">await</span>;
+            rpc.submit_transaction(tx).<span class="kw">await</span>;
         }
     }
 }

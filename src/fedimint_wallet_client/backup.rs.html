@@ -497,9 +497,7 @@
 <a href="#496" id="496">496</a>
 <a href="#497" id="497">497</a>
 <a href="#498" id="498">498</a>
-<a href="#499" id="499">499</a>
-<a href="#500" id="500">500</a>
-<a href="#501" id="501">501</a></pre></div><pre class="rust"><code><span class="kw">mod </span>recovery_history_tracker;
+<a href="#499" id="499">499</a></pre></div><pre class="rust"><code><span class="kw">mod </span>recovery_history_tracker;
 
 <span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::sync::{Arc, Mutex};
@@ -509,7 +507,6 @@
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleRecoverArgs;
 <span class="kw">use </span>fedimint_client::module::recovery::{DynModuleBackup, ModuleBackup};
 <span class="kw">use </span>fedimint_client::module::ClientContext;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_script_buf;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped <span class="kw">as _</span>};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -837,8 +834,8 @@
 
                     <span class="kw">let </span>use_decoy = || <span class="kw">async </span>{
                         <span class="kw">if let </span><span class="prelude-val">Some</span>(decoy) = decoy.as_ref() {
-                            btc_rpc.watch_script_history(<span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_script_buf(decoy)).<span class="kw">await</span><span class="question-mark">?</span>;
-                            <span class="kw">let _ </span>= btc_rpc.get_script_history(<span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_script_buf(decoy)).<span class="kw">await</span><span class="question-mark">?</span>;
+                            btc_rpc.watch_script_history(decoy).<span class="kw">await</span><span class="question-mark">?</span>;
+                            <span class="kw">let _ </span>= btc_rpc.get_script_history(decoy).<span class="kw">await</span><span class="question-mark">?</span>;
                         }
                         <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;(())
                     };
@@ -846,7 +843,6 @@
                     <span class="kw">if </span>use_decoy_before_real_query {
                         use_decoy().<span class="kw">await</span><span class="question-mark">?</span>;
                     }
-                    <span class="kw">let </span>script = bitcoin32_to_bitcoin30_script_buf(<span class="kw-2">&amp;</span>script);
                     btc_rpc.watch_script_history(<span class="kw-2">&amp;</span>script).<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="kw">let </span>history = btc_rpc.get_script_history(<span class="kw-2">&amp;</span>script).<span class="kw">await</span><span class="question-mark">?</span>;
 
