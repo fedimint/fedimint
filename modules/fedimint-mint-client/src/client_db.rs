@@ -11,6 +11,7 @@ use serde::Serialize;
 use strum_macros::EnumIter;
 
 use crate::backup::recovery::MintRecoveryState;
+use crate::input::{MintInputCommon, MintInputStateMachine, MintInputStateMachineV1};
 use crate::oob::{MintOOBStateMachine, MintOOBStateMachineV1, MintOOBStates, MintOOBStatesV1};
 use crate::{MintClientStateMachines, SpendableNoteUndecoded};
 
@@ -124,7 +125,19 @@ pub(crate) fn migrate_state_to_v2(
 
     let mint_client_state_machine_variant = u16::consensus_decode(cursor, &decoders)?;
 
-    let bytes = match mint_client_state_machine_variant {
+    let new_mint_state_machine = match mint_client_state_machine_variant {
+        1 => {
+            let old_state = MintInputStateMachineV1::consensus_decode(cursor, &decoders)?;
+
+            MintClientStateMachines::Input(MintInputStateMachine {
+                common: MintInputCommon {
+                    operation_id: old_state.common.operation_id,
+                    txid: old_state.common.txid,
+                    input_idxs: old_state.common.input_idx..=old_state.common.input_idx,
+                },
+                state: old_state.state,
+            })
+        }
         2 => {
             let old_state = MintOOBStateMachineV1::consensus_decode(cursor, &decoders)?;
 
@@ -137,9 +150,11 @@ pub(crate) fn migrate_state_to_v2(
                 operation_id: old_state.operation_id,
                 state: new_state,
             })
-            .consensus_encode_to_vec()
         }
         _ => return Ok(None),
     };
-    Ok(Some((bytes, operation_id)))
+    Ok(Some((
+        new_mint_state_machine.consensus_encode_to_vec(),
+        operation_id,
+    )))
 }

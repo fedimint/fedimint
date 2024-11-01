@@ -54,6 +54,12 @@ pub struct MintInputCommon {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct MintInputStateMachineV1 {
+    pub(crate) common: MintInputCommonV1,
+    pub(crate) state: MintInputStates,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintInputStateMachine {
     pub(crate) common: MintInputCommon,
     pub(crate) state: MintInputStates,
