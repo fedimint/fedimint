@@ -279,14 +279,14 @@ impl PaymentFee {
     /// This is the maximum send fee of one and a half percent plus one hundred
     /// satoshis a correct gateway may recommend as a default. It accounts for
     /// the fee required to reliably route this payment over lightning.
-    pub const SEND_FEE_LIMIT_DEFAULT: PaymentFee = PaymentFee {
+    pub const SEND_FEE_LIMIT: PaymentFee = PaymentFee {
         base: Amount::from_sats(100),
         parts_per_million: 15_000,
     };
 
     /// This is the maximum receive fee of half of one percent plus fifty
     /// satoshis a correct gateway may recommend as a default.
-    pub const RECEIVE_FEE_LIMIT_DEFAULT: PaymentFee = PaymentFee {
+    pub const RECEIVE_FEE_LIMIT: PaymentFee = PaymentFee {
         base: Amount::from_sats(50),
         parts_per_million: 5_000,
     };
@@ -515,8 +515,21 @@ impl LightningClientModule {
             .await
     }
 
-    /// Pay an invoice. For  testing  you can optionally specify a gateway to
-    /// route with, otherwise a gateway will be selected automatically.
+    /// Pay an invoice. For testing you can optionally specify a gateway to
+    /// route with, otherwise a gateway will be selected automatically. If the
+    /// invoice was created by a gateway connected to our federation, the same
+    /// gateway will be selected to allow for a direct ecash swap. Otherwise we
+    /// select a random online gateway.
+    ///
+    /// The fee for this payment may depend on the selected gateway but
+    /// will be limited to one and a half percent plus one hundred satoshis.
+    /// This fee accounts for the fee charged by the gateway as well as
+    /// the additional fee required to reliably route this payment over
+    /// lightning if necessary. Since the gateway has been vetted by at least
+    /// one guardian we trust it to set a reasonable fee.
+    ///
+    /// The absolute fee for a payment can be calculated from the operation meta
+    /// to be shown to the user in the transaction history.
     pub async fn send(
         &self,
         invoice: Bolt11Invoice,
@@ -562,14 +575,12 @@ impl LightningClientModule {
 
         let (send_fee, expiration_delta) = routing_info.send_parameters(&invoice);
 
-        if !send_fee.le(&PaymentFee::SEND_FEE_LIMIT_DEFAULT) {
-            return Err(SendPaymentError::PaymentFeeExceedsLimit(send_fee));
+        if !send_fee.le(&PaymentFee::SEND_FEE_LIMIT) {
+            return Err(SendPaymentError::PaymentFeeExceedsLimit);
         }
 
         if EXPIRATION_DELTA_LIMIT_DEFAULT < expiration_delta {
-            return Err(SendPaymentError::ExpirationDeltaExceedsLimit(
-                expiration_delta,
-            ));
+            return Err(SendPaymentError::ExpirationDeltaExceedsLimit);
         }
 
         let consensus_block_count = self
@@ -748,8 +759,16 @@ impl LightningClientModule {
     }
 
     /// Request an invoice. For testing you can optionally specify a gateway to
-    /// generate the invoice, otherwise a gateway will be selected
+    /// generate the invoice, otherwise a random online gateway will be selected
     /// automatically.
+    ///
+    /// The total fee for this payment may depend on the chosen gateway but
+    /// will be limited to a half percent plus fifty satoshis. Since the
+    /// selected gateway has been vetted by at least one guardian we trust it to
+    /// set a reasonable fee.
+    ///
+    /// The absolute fee for a payment can be calculated from the operation meta
+    /// to be shown to the user in the transaction history.
     pub async fn receive(
         &self,
         amount: Amount,
@@ -811,13 +830,8 @@ impl LightningClientModule {
                 .map_err(ReceiveError::FailedToSelectGateway)?,
         };
 
-        if !routing_info
-            .receive_fee
-            .le(&PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT)
-        {
-            return Err(ReceiveError::PaymentFeeExceedsLimit(
-                routing_info.receive_fee,
-            ));
+        if !routing_info.receive_fee.le(&PaymentFee::RECEIVE_FEE_LIMIT) {
+            return Err(ReceiveError::PaymentFeeExceedsLimit);
         }
 
         let contract_amount = routing_info.receive_fee.subtract_from(amount.msats);
@@ -1049,10 +1063,10 @@ pub enum SendPaymentError {
     GatewayConnectionError(GatewayConnectionError),
     #[error("The gateway does not support our federation")]
     UnknownFederation,
-    #[error("The gateways fee of {0:?} exceeds the supplied limit")]
-    PaymentFeeExceedsLimit(PaymentFee),
-    #[error("The gateways expiration delta of {0:?} exceeds the supplied limit")]
-    ExpirationDeltaExceedsLimit(u64),
+    #[error("The gateways fee of exceeds the limit")]
+    PaymentFeeExceedsLimit,
+    #[error("The gateways expiration delta of exceeds the limit")]
+    ExpirationDeltaExceedsLimit,
     #[error("Federation returned an error: {0}")]
     FederationError(String),
     #[error("We failed to finalize the funding transaction")]
@@ -1072,8 +1086,8 @@ pub enum ReceiveError {
     GatewayConnectionError(GatewayConnectionError),
     #[error("The gateway does not support our federation")]
     UnknownFederation,
-    #[error("The gateways fee of {0:?} exceeds the supplied limit")]
-    PaymentFeeExceedsLimit(PaymentFee),
+    #[error("The gateways fee exceeds the limit")]
+    PaymentFeeExceedsLimit,
     #[error("The total fees required to complete this payment exceed its amount")]
     DustAmount,
     #[error("The invoice's payment hash is incorrect")]
