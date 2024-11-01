@@ -34,10 +34,9 @@ use common::{
 };
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_block_hash,
-    bitcoin30_to_bitcoin32_network, bitcoin30_to_bitcoin32_script_buf,
-    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_tx,
-    bitcoin32_to_bitcoin30_txid, bitcoin32_to_bitcoin30_unchecked_address,
+    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_network,
+    bitcoin30_to_bitcoin32_script_buf, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+    bitcoin32_to_bitcoin30_unchecked_address,
 };
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -831,12 +830,10 @@ impl Wallet {
 
         let bitcoind_rpc = bitcoind;
 
-        let bitcoind_net = bitcoin30_to_bitcoin32_network(
-            &bitcoind_rpc
-                .get_network()
-                .await
-                .map_err(|e| WalletCreationError::RpcError(e.to_string()))?,
-        );
+        let bitcoind_net = bitcoind_rpc
+            .get_network()
+            .await
+            .map_err(|e| WalletCreationError::RpcError(e.to_string()))?;
         if bitcoind_net != cfg.consensus.network {
             return Err(WalletCreationError::WrongNetwork(
                 cfg.consensus.network,
@@ -1056,11 +1053,10 @@ impl Wallet {
                 "Recognizing change UTXOs"
             );
             for (txid, tx) in &pending_transactions {
-                let txid = bitcoin32_to_bitcoin30_txid(txid);
                 let is_tx_in_block =
                     retry("is_tx_in_block", backoff_util::background_backoff(), || {
                         self.btc_rpc
-                            .is_tx_in_block(&txid, &block_hash, u64::from(height))
+                            .is_tx_in_block(txid, &block_hash, u64::from(height))
                     })
                     .await
                     .unwrap_or_else(|_| {
@@ -1080,11 +1076,7 @@ impl Wallet {
                 }
             }
 
-            dbtx.insert_new_entry(
-                &BlockHashKey(bitcoin30_to_bitcoin32_block_hash(&block_hash)),
-                &(),
-            )
-            .await;
+            dbtx.insert_new_entry(&BlockHashKey(block_hash), &()).await;
         }
     }
 
@@ -1425,7 +1417,7 @@ pub async fn broadcast_pending_tx(mut dbtx: DatabaseTransaction<'_>, rpc: &DynBi
                 "Broadcasting peg-out",
             );
             trace!(transaction = ?tx);
-            rpc.submit_transaction(bitcoin32_to_bitcoin30_tx(&tx)).await;
+            rpc.submit_transaction(tx).await;
         }
     }
 }

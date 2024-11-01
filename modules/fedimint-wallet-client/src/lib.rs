@@ -47,8 +47,7 @@ use fedimint_client::transaction::{
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_address, bitcoin30_to_bitcoin32_script_buf,
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin30_to_bitcoin32_txid,
-    bitcoin32_to_bitcoin30_network, bitcoin32_to_bitcoin30_script_buf,
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_network,
 };
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
@@ -689,7 +688,7 @@ impl WalletClientModule {
 
                         // Begin watching the script address
                         self.rpc
-                            .watch_script_history(&bitcoin32_to_bitcoin30_script_buf(&address.script_pubkey()))
+                            .watch_script_history(&address.script_pubkey())
                             .await?;
 
                         let sender = self.pegin_monitor_wakeup_sender.clone();
@@ -774,8 +773,6 @@ impl WalletClientModule {
             stream! {
                 yield DepositStateV2::WaitingForTransaction;
 
-                let stream_script_pub_key = bitcoin32_to_bitcoin30_script_buf(&stream_script_pub_key);
-
                 retry(
                     "subscribe script history",
                     background_backoff(),
@@ -791,14 +788,14 @@ impl WalletClientModule {
                                 .iter()
                                 .enumerate()
                                 .find_map(|(idx, output)| (output.script_pubkey == stream_script_pub_key).then_some((idx, output.value)))?;
-                            let txid = tx.txid();
+                            let txid = tx.compute_txid();
 
                             Some((
                                 bitcoin::OutPoint {
-                                    txid: bitcoin30_to_bitcoin32_txid(&txid),
+                                    txid,
                                     vout: out_idx as u32,
                                 },
-                                bitcoin::Amount::from_sat(amount)
+                                amount
                             ))
                         }).context("No deposit transaction found")
                     }

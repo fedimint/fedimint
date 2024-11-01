@@ -8,7 +8,6 @@ use fedimint_client::module::ClientContext;
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_keypair, bitcoin30_to_bitcoin32_secp256k1_pubkey,
-    bitcoin30_to_bitcoin32_tx, bitcoin32_to_bitcoin30_script_buf, bitcoin32_to_bitcoin30_txid,
 };
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
@@ -326,21 +325,15 @@ async fn check_idx_pegins(
 ) -> Result<Vec<CheckOutcome>, anyhow::Error> {
     let current_consensus_block_count = module_rpc.fetch_consensus_block_count().await?;
     let (script, address, tweak_key, operation_id) = data.derive_peg_in_script(tweak_idx);
-    btc_rpc
-        .watch_script_history(&bitcoin32_to_bitcoin30_script_buf(&script))
-        .await?;
+    btc_rpc.watch_script_history(&script).await?;
 
-    let history = btc_rpc
-        .get_script_history(&bitcoin32_to_bitcoin30_script_buf(&script))
-        .await?;
+    let history = btc_rpc.get_script_history(&script).await?;
 
     debug!(target: LOG_CLIENT_MODULE_WALLET, %address, num_txes=history.len(), "Got history of a peg-in address");
 
     let mut outcomes = vec![];
 
-    for (transaction, out_idx) in
-        filter_onchain_deposit_outputs(history.iter().map(bitcoin30_to_bitcoin32_tx), &script)
-    {
+    for (transaction, out_idx) in filter_onchain_deposit_outputs(history.into_iter(), &script) {
         let txid = transaction.compute_txid();
         let outpoint = bitcoin::OutPoint {
             txid,
@@ -365,18 +358,16 @@ async fn check_idx_pegins(
         }
         let finality_delay = u64::from(data.cfg.finality_delay);
 
-        let tx_block_count = if let Some(tx_block_height) = btc_rpc
-            .get_tx_block_height(&bitcoin32_to_bitcoin30_txid(&txid))
-            .await?
-        {
-            tx_block_height.saturating_add(1)
-        } else {
-            outcomes.push(CheckOutcome::Pending {
-                num_blocks_needed: finality_delay,
-            });
-            debug!(target:LOG_CLIENT_MODULE_WALLET, %txid, %out_idx,"In the mempool");
-            continue;
-        };
+        let tx_block_count =
+            if let Some(tx_block_height) = btc_rpc.get_tx_block_height(&txid).await? {
+                tx_block_height.saturating_add(1)
+            } else {
+                outcomes.push(CheckOutcome::Pending {
+                    num_blocks_needed: finality_delay,
+                });
+                debug!(target:LOG_CLIENT_MODULE_WALLET, %txid, %out_idx,"In the mempool");
+                continue;
+            };
 
         let num_blocks_needed = tx_block_count.saturating_sub(current_consensus_block_count);
 
@@ -388,9 +379,7 @@ async fn check_idx_pegins(
 
         debug!(target: LOG_CLIENT_MODULE_WALLET, %txid, %out_idx, %finality_delay, %tx_block_count, %current_consensus_block_count, "Ready to claim");
 
-        let tx_out_proof = btc_rpc
-            .get_txout_proof(bitcoin32_to_bitcoin30_txid(&txid))
-            .await?;
+        let tx_out_proof = btc_rpc.get_txout_proof(txid).await?;
         claim_peg_in(
             client_ctx,
             tweak_idx,

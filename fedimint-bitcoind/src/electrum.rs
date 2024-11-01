@@ -1,9 +1,13 @@
 use std::fmt;
 
 use anyhow::{anyhow as format_err, bail};
-use bitcoin30::{BlockHash, Network, ScriptBuf, Transaction, Txid};
+use bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 use electrum_client::ElectrumApi;
 use electrum_client::Error::Protocol;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_block_hash, bitcoin30_to_bitcoin32_tx,
+    bitcoin32_to_bitcoin30_script_buf, bitcoin32_to_bitcoin30_txid,
+};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::runtime::block_in_place;
 use fedimint_core::task::TaskHandle;
@@ -71,11 +75,13 @@ impl IBitcoindRpc for ElectrumClient {
     async fn get_block_hash(&self, height: u64) -> anyhow::Result<BlockHash> {
         let height = usize::try_from(height)?;
         let result = block_in_place(|| self.client.block_headers(height, 1))?;
-        Ok(result
-            .headers
-            .first()
-            .ok_or_else(|| format_err!("empty block headers response"))?
-            .block_hash())
+        Ok(bitcoin30_to_bitcoin32_block_hash(
+            &result
+                .headers
+                .first()
+                .ok_or_else(|| format_err!("empty block headers response"))?
+                .block_hash(),
+        ))
     }
 
     async fn get_fee_rate(&self, confirmation_target: u16) -> anyhow::Result<Option<Feerate>> {
@@ -91,7 +97,7 @@ impl IBitcoindRpc for ElectrumClient {
 
     async fn submit_transaction(&self, transaction: Transaction) {
         let mut bytes = vec![];
-        bitcoin30::consensus::Encodable::consensus_encode(&transaction, &mut bytes)
+        bitcoin::consensus::Encodable::consensus_encode(&transaction, &mut bytes)
             .expect("can't fail");
         match block_in_place(|| self.client.transaction_broadcast_raw(&bytes)) {
             Err(Protocol(Value::Object(e))) if is_already_submitted_error(&e) => (),
@@ -101,8 +107,11 @@ impl IBitcoindRpc for ElectrumClient {
     }
 
     async fn get_tx_block_height(&self, txid: &Txid) -> anyhow::Result<Option<u64>> {
-        let tx = block_in_place(|| self.client.transaction_get(txid))
-            .map_err(|error| info!(?error, "Unable to get raw transaction"));
+        let tx = block_in_place(|| {
+            self.client
+                .transaction_get(&bitcoin32_to_bitcoin30_txid(txid))
+        })
+        .map_err(|error| info!(?error, "Unable to get raw transaction"));
         match tx.ok() {
             None => Ok(None),
             Some(tx) => {
@@ -123,8 +132,11 @@ impl IBitcoindRpc for ElectrumClient {
         block_hash: &BlockHash,
         block_height: u64,
     ) -> anyhow::Result<bool> {
-        let tx = block_in_place(|| self.client.transaction_get(txid))
-            .map_err(|error| info!(?error, "Unable to get raw transaction"));
+        let tx = block_in_place(|| {
+            self.client
+                .transaction_get(&bitcoin32_to_bitcoin30_txid(txid))
+        })
+        .map_err(|error| info!(?error, "Unable to get raw transaction"));
 
         match tx.ok() {
             None => Ok(false),
@@ -137,8 +149,10 @@ impl IBitcoindRpc for ElectrumClient {
 
                 match block_in_place(|| self.client.script_get_history(&output.script_pubkey))?
                     .iter()
-                    .find(|tx| tx.tx_hash == *txid && tx.height as u64 == block_height)
-                {
+                    .find(|tx| {
+                        tx.tx_hash == bitcoin32_to_bitcoin30_txid(txid)
+                            && tx.height as u64 == block_height
+                    }) {
                     Some(tx) => {
                         let sanity_block_hash = self.get_block_hash(tx.height as u64).await?;
                         anyhow::ensure!(
@@ -162,13 +176,16 @@ impl IBitcoindRpc for ElectrumClient {
     async fn get_script_history(
         &self,
         script: &ScriptBuf,
-    ) -> anyhow::Result<Vec<bitcoin30::Transaction>> {
+    ) -> anyhow::Result<Vec<bitcoin::Transaction>> {
         let mut results = vec![];
-        let transactions = block_in_place(|| self.client.script_get_history(script))?;
+        let transactions = block_in_place(|| {
+            self.client
+                .script_get_history(&bitcoin32_to_bitcoin30_script_buf(script))
+        })?;
         for history in transactions {
-            results.push(block_in_place(|| {
+            results.push(bitcoin30_to_bitcoin32_tx(&block_in_place(|| {
                 self.client.transaction_get(&history.tx_hash)
-            })?);
+            })?));
         }
         Ok(results)
     }

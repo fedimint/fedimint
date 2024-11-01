@@ -309,6 +309,14 @@ pub fn bitcoin30_to_bitcoin32_block_hash(
     ))
 }
 
+pub fn bitcoin32_to_bitcoin30_block_hash(
+    hash: &bitcoin::block::BlockHash,
+) -> bitcoin30::block::BlockHash {
+    bitcoin30::block::BlockHash::from_raw_hash(bitcoin32_to_bitcoin30_sha256d_hash(
+        &hash.to_raw_hash(),
+    ))
+}
+
 pub fn bitcoin30_to_bitcoin32_unchecked_address(
     address: &bitcoin30::Address<bitcoin30::address::NetworkUnchecked>,
 ) -> bitcoin::Address<bitcoin::address::NetworkUnchecked> {
