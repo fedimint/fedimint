@@ -256,7 +256,7 @@ impl Gatewayd {
 
     pub async fn backup_to_fed(&self, fed: &Federation) -> Result<()> {
         let federation_id = fed.calculate_federation_id();
-        cmd!(self, "backup", "--federation-id", federation_id)
+        cmd!(self, "ecash", "backup", "--federation-id", federation_id)
             .run()
             .await?;
         Ok(())
@@ -270,7 +270,7 @@ impl Gatewayd {
     }
 
     pub async fn get_pegin_addr(&self, fed_id: &str) -> Result<String> {
-        Ok(cmd!(self, "address", "--federation-id={fed_id}")
+        Ok(cmd!(self, "ecash", "pegin", "--federation-id={fed_id}")
             .out_json()
             .await?
             .as_str()
@@ -285,9 +285,7 @@ impl Gatewayd {
                 .out_string()
                 .await?
         } else {
-            cmd!(self, "lightning", "get-ln-onchain-address")
-                .out_string()
-                .await?
+            cmd!(self, "onchain", "address").out_string().await?
         };
 
         Ok(address)
