@@ -7,10 +7,6 @@ use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::key::Keypair;
 use bitcoin::secp256k1::{self, PublicKey, SecretKey};
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_message, bitcoin32_to_bitcoin30_recoverable_signature,
-    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_sha256_hash,
-};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::BoxStream;
 use fedimint_core::Amount;
@@ -75,7 +71,7 @@ impl FakeLightningTest {
 
         Ok(InvoiceBuilder::new(Currency::Regtest)
             .description(String::new())
-            .payment_hash(bitcoin32_to_bitcoin30_sha256_hash(&payment_hash))
+            .payment_hash(payment_hash)
             .current_timestamp()
             .min_final_cltv_expiry_delta(0)
             .payment_secret(PaymentSecret([0; 32]))
@@ -83,12 +79,7 @@ impl FakeLightningTest {
             .expiry_time(Duration::from_secs(
                 expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
             ))
-            .build_signed(|m| {
-                bitcoin32_to_bitcoin30_recoverable_signature(&ctx.sign_ecdsa_recoverable(
-                    &bitcoin30_to_bitcoin32_secp256k1_message(m),
-                    &self.gateway_node_sec_key,
-                ))
-            })
+            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &self.gateway_node_sec_key))
             .unwrap())
     }
 
@@ -105,9 +96,9 @@ impl FakeLightningTest {
         // `FakeLightningTest` will fail to pay any invoice with
         // `INVALID_INVOICE_DESCRIPTION` in the description of the invoice.
         InvoiceBuilder::new(Currency::Regtest)
-            .payee_pub_key(bitcoin32_to_bitcoin30_secp256k1_pubkey(&kp.public_key()))
+            .payee_pub_key(kp.public_key())
             .description("INVALID INVOICE DESCRIPTION".to_string())
-            .payment_hash(bitcoin32_to_bitcoin30_sha256_hash(&payment_hash))
+            .payment_hash(payment_hash)
             .current_timestamp()
             .min_final_cltv_expiry_delta(0)
             .payment_secret(PaymentSecret(INVALID_INVOICE_PAYMENT_SECRET))
@@ -115,12 +106,7 @@ impl FakeLightningTest {
             .expiry_time(Duration::from_secs(
                 expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
             ))
-            .build_signed(|m| {
-                bitcoin32_to_bitcoin30_recoverable_signature(&ctx.sign_ecdsa_recoverable(
-                    &bitcoin30_to_bitcoin32_secp256k1_message(m),
-                    &SecretKey::from_keypair(&kp),
-                ))
-            })
+            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &SecretKey::from_keypair(&kp)))
             .expect("Invoice creation failed")
     }
 
@@ -230,12 +216,12 @@ impl ILnRpcClient for FakeLightningTest {
         &self,
         create_invoice_request: CreateInvoiceRequest,
     ) -> Result<CreateInvoiceResponse, LightningRpcError> {
-        let ctx = fedimint_core::secp256k1::Secp256k1::new();
+        let ctx = secp256k1::Secp256k1::new();
 
         let invoice = match create_invoice_request.payment_hash {
             Some(payment_hash) => InvoiceBuilder::new(Currency::Regtest)
                 .description(String::new())
-                .payment_hash(bitcoin32_to_bitcoin30_sha256_hash(&payment_hash))
+                .payment_hash(payment_hash)
                 .current_timestamp()
                 .min_final_cltv_expiry_delta(0)
                 .payment_secret(PaymentSecret([0; 32]))
@@ -243,12 +229,7 @@ impl ILnRpcClient for FakeLightningTest {
                 .expiry_time(Duration::from_secs(u64::from(
                     create_invoice_request.expiry_secs,
                 )))
-                .build_signed(|m| {
-                    bitcoin32_to_bitcoin30_recoverable_signature(&ctx.sign_ecdsa_recoverable(
-                        &bitcoin30_to_bitcoin32_secp256k1_message(m),
-                        &self.gateway_node_sec_key,
-                    ))
-                })
+                .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &self.gateway_node_sec_key))
                 .unwrap(),
             None => {
                 return Err(LightningRpcError::FailedToGetInvoice {

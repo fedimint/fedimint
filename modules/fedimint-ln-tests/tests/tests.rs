@@ -606,10 +606,6 @@ mod fedimint_migration_tests {
     use anyhow::ensure;
     use bitcoin_hashes::{sha256, Hash as BitcoinHash};
     use fedimint_client::module::init::DynClientModuleInit;
-    use fedimint_core::bitcoin_migration::{
-        bitcoin30_to_bitcoin32_secp256k1_message, bitcoin32_to_bitcoin30_recoverable_signature,
-        bitcoin32_to_bitcoin30_sha256_hash,
-    };
     use fedimint_core::config::FederationId;
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
@@ -874,20 +870,13 @@ mod fedimint_migration_tests {
         let secp: Secp256k1<All> = Secp256k1::gen_new();
         let invoice = InvoiceBuilder::new(Currency::Regtest)
             .amount_milli_satoshis(1000)
-            .payment_hash(bitcoin32_to_bitcoin30_sha256_hash(&sha256::Hash::hash(
-                &BYTE_32,
-            )))
+            .payment_hash(sha256::Hash::hash(&BYTE_32))
             .description("".to_string())
             .payment_secret(PaymentSecret([0; 32]))
             .current_timestamp()
             .min_final_cltv_expiry_delta(18)
             .expiry_time(Duration::from_secs(86400))
-            .build_signed(|m| {
-                bitcoin32_to_bitcoin30_recoverable_signature(&secp.sign_ecdsa_recoverable(
-                    &bitcoin30_to_bitcoin32_secp256k1_message(m),
-                    &SecretKey::new(&mut OsRng),
-                ))
-            })
+            .build_signed(|m| secp.sign_ecdsa_recoverable(m, &SecretKey::new(&mut OsRng)))
             .expect("Invoice creation failed");
 
         // Create an active state and inactive state that will not be migrated.

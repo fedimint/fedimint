@@ -19,9 +19,8 @@ use cln_rpc::model::requests::SendpayRoute;
 use cln_rpc::model::responses::ListpeerchannelsChannels;
 use cln_rpc::primitives::{AmountOrAll, ChannelState, ShortChannelId};
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_message, bitcoin30_to_bitcoin32_secp256k1_pubkey,
-    bitcoin32_to_bitcoin30_network, bitcoin32_to_bitcoin30_recoverable_signature,
-    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_sha256_hash,
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+    bitcoin32_to_bitcoin30_sha256_hash,
 };
 use fedimint_core::secp256k1::{PublicKey, SecretKey, SECP256K1};
 use fedimint_core::task::timeout;
@@ -551,14 +550,12 @@ async fn cln_create_invoice(
 
     let info = cln_service.info().await?;
 
-    let network = bitcoin32_to_bitcoin30_network(
-        &bitcoin::Network::from_str(info.2.as_str())
-            .map_err(|e| ClnExtensionError::Error(anyhow!(e)))?,
-    );
+    let network = bitcoin::Network::from_str(info.2.as_str())
+        .map_err(|e| ClnExtensionError::Error(anyhow!(e)))?;
 
     let invoice_builder = InvoiceBuilder::new(Currency::from(network))
         .amount_milli_satoshis(amount_msat)
-        .payment_hash(bitcoin32_to_bitcoin30_sha256_hash(&payment_hash))
+        .payment_hash(payment_hash)
         .payment_secret(PaymentSecret(OsRng.gen()))
         .duration_since_epoch(fedimint_core::time::duration_since_epoch())
         .min_final_cltv_expiry_delta(18)
@@ -570,22 +567,15 @@ async fn cln_create_invoice(
                 &lightning_invoice::Description::new(description).expect("Description is valid"),
             ),
         ),
-        InvoiceDescription::Hash(hash) => {
-            invoice_builder.invoice_description(lightning_invoice::Bolt11InvoiceDescription::Hash(
-                &lightning_invoice::Sha256(bitcoin32_to_bitcoin30_sha256_hash(&hash)),
-            ))
-        }
+        InvoiceDescription::Hash(hash) => invoice_builder.invoice_description(
+            lightning_invoice::Bolt11InvoiceDescription::Hash(&lightning_invoice::Sha256(hash)),
+        ),
     };
 
     let invoice = invoice_builder
         // Temporarily sign with an ephemeral private key, we will request CLN to sign this
         // invoice next.
-        .build_signed(|m| {
-            bitcoin32_to_bitcoin30_recoverable_signature(&SECP256K1.sign_ecdsa_recoverable(
-                &bitcoin30_to_bitcoin32_secp256k1_message(m),
-                &SecretKey::new(&mut OsRng),
-            ))
-        })
+        .build_signed(|m| SECP256K1.sign_ecdsa_recoverable(m, &SecretKey::new(&mut OsRng)))
         .map_err(|e| ClnExtensionError::Error(anyhow!(e)))?;
 
     let invstring = invoice.to_string();

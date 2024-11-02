@@ -267,7 +267,7 @@ impl Decodable for BigSize {
         r: &mut R,
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Self::read(r)
+        Self::read(&mut SimpleBitcoinRead(r))
             .map_err(|e| DecodeError::new_custom(anyhow::anyhow!("BigSize decoding error: {e:?}")))
     }
 }
@@ -1040,15 +1040,15 @@ impl<W> From<W> for CountWrite<W> {
     }
 }
 
-impl<W: Write> Write for CountWrite<W> {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+impl<W: Write> bitcoin_io::Write for CountWrite<W> {
+    fn write(&mut self, buf: &[u8]) -> bitcoin_io::Result<usize> {
         let written = self.inner.write(buf)?;
         self.count += written as u64;
         Ok(written)
     }
 
-    fn flush(&mut self) -> io::Result<()> {
-        self.inner.flush()
+    fn flush(&mut self) -> bitcoin_io::Result<()> {
+        self.inner.flush().map_err(bitcoin_io::Error::from)
     }
 }
 

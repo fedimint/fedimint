@@ -44,9 +44,6 @@ itertools = { workspace = true }
 jsonrpsee-core = { version = "0.24.7", features = ["client"] }
 lightning = { workspace = true }
 lightning-invoice = { workspace = true, features = ["serde"] }
-lightning-invoice32 = { package = "lightning-invoice", version = "0.32.0", features = [
-    "serde",
-] }
 lightning-types = "0.1.0"
 macro_rules_attribute = "0.2.0"
 miniscript = { workspace = true, features = ["serde"] }

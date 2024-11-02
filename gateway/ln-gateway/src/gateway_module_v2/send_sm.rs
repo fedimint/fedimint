@@ -3,9 +3,6 @@ use std::fmt;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_sha256_hash, bitcoin32_to_bitcoin30_secp256k1_pubkey,
-};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::Keypair;
@@ -170,13 +167,11 @@ impl SendStateMachine {
             .await
             .map_err(|e| Cancelled::LightningRpcError(e.to_string()))?;
 
-        if bitcoin32_to_bitcoin30_secp256k1_pubkey(&lightning_context.lightning_public_key)
-            == invoice.get_payee_pub_key()
-        {
+        if lightning_context.lightning_public_key == invoice.get_payee_pub_key() {
             let (contract, client) = context
                 .gateway
                 .get_registered_incoming_contract_and_client_v2(
-                    PaymentImage::Hash(bitcoin30_to_bitcoin32_sha256_hash(invoice.payment_hash())),
+                    PaymentImage::Hash(*invoice.payment_hash()),
                     invoice
                         .amount_milli_satoshis()
                         .expect("The amount invoice has been checked previously"),

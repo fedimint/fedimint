@@ -1447,7 +1447,7 @@ impl Display for PrettyPaymentHash<'_> {
 mod tests {
     use hex::FromHex;
     use lightning::ln::features::Bolt11InvoiceFeatures;
-    use lightning::util::ser::{WithoutLength, Writeable};
+    use lightning::util::ser::Writeable;
 
     use super::wire_features_to_lnd_feature_vec;
 
@@ -1461,11 +1461,11 @@ mod tests {
         let features_payment_secret = {
             let mut f = Bolt11InvoiceFeatures::empty();
             f.set_payment_secret_optional();
-            WithoutLength(&f).encode()
+            f.encode()
         };
         assert_eq!(
             wire_features_to_lnd_feature_vec(&features_payment_secret).unwrap(),
-            vec![15]
+            vec![15, 17]
         );
 
         // Phoenix feature flags

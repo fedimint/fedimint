@@ -4,9 +4,6 @@ use bitcoin::hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin30_to_bitcoin32_sha256_hash,
-};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -299,7 +296,7 @@ impl LightningPayFunded {
         let payload = self.payload.clone();
         let contract_id = self.payload.contract_id;
         let timelock = self.timelock;
-        let payment_hash = bitcoin30_to_bitcoin32_sha256_hash(common.invoice.payment_hash());
+        let payment_hash = *common.invoice.payment_hash();
         let success_common = common.clone();
         let timeout_common = common.clone();
         let timeout_global_context = global_context.clone();
@@ -631,21 +628,17 @@ impl PaymentData {
 
     pub fn destination(&self) -> secp256k1::PublicKey {
         match self {
-            PaymentData::Invoice(invoice) => bitcoin30_to_bitcoin32_secp256k1_pubkey(
-                &invoice
-                    .payee_pub_key()
-                    .copied()
-                    .unwrap_or_else(|| invoice.recover_payee_pub_key()),
-            ),
+            PaymentData::Invoice(invoice) => invoice
+                .payee_pub_key()
+                .copied()
+                .unwrap_or_else(|| invoice.recover_payee_pub_key()),
             PaymentData::PrunedInvoice(PrunedInvoice { destination, .. }) => *destination,
         }
     }
 
     pub fn payment_hash(&self) -> sha256::Hash {
         match self {
-            PaymentData::Invoice(invoice) => {
-                bitcoin30_to_bitcoin32_sha256_hash(invoice.payment_hash())
-            }
+            PaymentData::Invoice(invoice) => *invoice.payment_hash(),
             PaymentData::PrunedInvoice(PrunedInvoice { payment_hash, .. }) => *payment_hash,
         }
     }

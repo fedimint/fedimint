@@ -1,6 +1,5 @@
 use bitcoin::secp256k1::schnorr::Signature;
 use bitcoin::secp256k1::PublicKey;
-use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 use fedimint_core::config::FederationId;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Amount};
@@ -185,9 +184,7 @@ pub struct RoutingInfo {
 
 impl RoutingInfo {
     pub fn send_parameters(&self, invoice: &Bolt11Invoice) -> (PaymentFee, u64) {
-        if invoice.recover_payee_pub_key()
-            == bitcoin32_to_bitcoin30_secp256k1_pubkey(&self.lightning_public_key)
-        {
+        if invoice.recover_payee_pub_key() == self.lightning_public_key {
             (self.send_fee_minimum.clone(), self.expiration_delta_minimum)
         } else {
             (self.send_fee_default.clone(), self.expiration_delta_default)

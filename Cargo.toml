@@ -156,8 +156,8 @@ hex = "0.4.3"
 hkdf = { package = "fedimint-hkdf", path = "./crypto/hkdf", version = "=0.5.0-alpha" }
 hyper = "1.5"
 itertools = "0.13.0"
-lightning = "0.0.123"
-lightning-invoice = "0.31.0"
+lightning = "0.0.125"
+lightning-invoice = { version = "0.32.0", features = ["std"] }
 ln-gateway = { package = "fedimint-ln-gateway", path = "./gateway/ln-gateway", version = "=0.5.0-alpha" }
 miniscript = "12.2.0"
 rand = "0.8.5"

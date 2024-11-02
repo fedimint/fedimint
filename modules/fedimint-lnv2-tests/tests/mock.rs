@@ -2,10 +2,6 @@ use std::time::Duration;
 
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::{SecretKey, SECP256K1};
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_message, bitcoin32_to_bitcoin30_recoverable_signature,
-    bitcoin32_to_bitcoin30_sha256_hash,
-};
 use fedimint_core::config::FederationId;
 use fedimint_core::secp256k1::rand::rngs::OsRng;
 use fedimint_core::secp256k1::schnorr::Signature;
@@ -60,18 +56,13 @@ fn bolt_11_invoice(payment_secret: [u8; 32], currency: Currency) -> Bolt11Invoic
 
     InvoiceBuilder::new(currency)
         .description(String::new())
-        .payment_hash(bitcoin32_to_bitcoin30_sha256_hash(&payment_hash))
+        .payment_hash(payment_hash)
         .current_timestamp()
         .min_final_cltv_expiry_delta(0)
         .payment_secret(PaymentSecret(payment_secret))
         .amount_milli_satoshis(1_000_000)
         .expiry_time(Duration::from_secs(DEFAULT_EXPIRY_TIME))
-        .build_signed(|m| {
-            bitcoin32_to_bitcoin30_recoverable_signature(
-                &SECP256K1
-                    .sign_ecdsa_recoverable(&bitcoin30_to_bitcoin32_secp256k1_message(m), &sk),
-            )
-        })
+        .build_signed(|m| SECP256K1.sign_ecdsa_recoverable(m, &sk))
         .expect("Invoice creation failed")
 }
 
@@ -123,7 +114,7 @@ impl GatewayConnection for MockGatewayConnection {
         expiry_time: u32,
     ) -> Result<Bolt11Invoice, GatewayConnectionError> {
         let payment_hash = match contract.commitment.payment_image {
-            PaymentImage::Hash(payment_hash) => bitcoin32_to_bitcoin30_sha256_hash(&payment_hash),
+            PaymentImage::Hash(payment_hash) => payment_hash,
             PaymentImage::Point(..) => panic!("PaymentImage is not a payment hash"),
         };
 
@@ -135,12 +126,7 @@ impl GatewayConnection for MockGatewayConnection {
             .payment_secret(PaymentSecret([0; 32]))
             .amount_milli_satoshis(invoice_amount.msats)
             .expiry_time(Duration::from_secs(expiry_time as u64))
-            .build_signed(|m| {
-                bitcoin32_to_bitcoin30_recoverable_signature(&SECP256K1.sign_ecdsa_recoverable(
-                    &bitcoin30_to_bitcoin32_secp256k1_message(m),
-                    &self.keypair.secret_key(),
-                ))
-            })
+            .build_signed(|m| SECP256K1.sign_ecdsa_recoverable(m, &self.keypair.secret_key()))
             .unwrap())
     }
 
