@@ -4,14 +4,9 @@ use std::time::Duration;
 
 use anyhow::Context;
 use async_trait::async_trait;
-use bitcoin30::{Address, Transaction, Txid};
+use bitcoin::{Address, Transaction, Txid};
 use bitcoincore_rpc::{Client, RpcApi};
 use fedimint_bitcoind::DynBitcoindRpc;
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_address, bitcoin30_to_bitcoin32_amount,
-    bitcoin30_to_bitcoin32_block_hash, bitcoin30_to_bitcoin32_txid, bitcoin32_to_bitcoin30_address,
-    bitcoin32_to_bitcoin30_block_hash, bitcoin32_to_bitcoin30_tx,
-};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{block_in_place, sleep_in_test};
@@ -47,13 +42,10 @@ impl BitcoinTest for RealBitcoinTestNoLock {
         )
     }
 
-    async fn mine_blocks(&self, block_num: u64) -> Vec<bitcoin30::BlockHash> {
+    async fn mine_blocks(&self, block_num: u64) -> Vec<bitcoin::BlockHash> {
         let mined_block_hashes = self
             .client
-            .generate_to_address(
-                block_num,
-                &bitcoin30_to_bitcoin32_address(&self.get_new_address().await),
-            )
+            .generate_to_address(block_num, &self.get_new_address().await)
             .expect(Self::ERROR);
 
         if let Some(block_hash) = mined_block_hashes.last() {
@@ -89,9 +81,6 @@ impl BitcoinTest for RealBitcoinTestNoLock {
         };
 
         mined_block_hashes
-            .iter()
-            .map(bitcoin32_to_bitcoin30_block_hash)
-            .collect()
     }
 
     async fn prepare_funding_wallet(&self) {
@@ -104,30 +93,18 @@ impl BitcoinTest for RealBitcoinTestNoLock {
     async fn send_and_mine_block(
         &self,
         address: &Address,
-        amount: bitcoin30::Amount,
+        amount: bitcoin::Amount,
     ) -> (TxOutProof, Transaction) {
         let id = self
             .client
-            .send_to_address(
-                &bitcoin30_to_bitcoin32_address(address),
-                bitcoin30_to_bitcoin32_amount(&amount),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
+            .send_to_address(address, amount, None, None, None, None, None, None)
             .expect(Self::ERROR);
         let mined_block_hashes = self.mine_blocks(1).await;
         let mined_block_hash = mined_block_hashes.first().expect("mined a block");
 
         let tx = self
             .client
-            .get_raw_transaction(
-                &id,
-                Some(&bitcoin30_to_bitcoin32_block_hash(mined_block_hash)),
-            )
+            .get_raw_transaction(&id, Some(mined_block_hash))
             .expect(Self::ERROR);
         let proof = TxOutProof::consensus_decode(
             &mut Cursor::new(loop {
@@ -147,32 +124,26 @@ impl BitcoinTest for RealBitcoinTestNoLock {
         )
         .expect(Self::ERROR);
 
-        (proof, bitcoin32_to_bitcoin30_tx(&tx))
+        (proof, tx)
     }
     async fn mine_block_and_get_received(&self, address: &Address) -> Amount {
         self.mine_blocks(1).await;
         self.client
-            .get_received_by_address(&bitcoin30_to_bitcoin32_address(address), None)
+            .get_received_by_address(address, None)
             .expect(Self::ERROR)
             .into()
     }
 
     async fn get_new_address(&self) -> Address {
-        bitcoin32_to_bitcoin30_address(
-            &self
-                .client
-                .get_new_address(None, None)
-                .expect(Self::ERROR)
-                .assume_checked(),
-        )
+        self.client
+            .get_new_address(None, None)
+            .expect(Self::ERROR)
+            .assume_checked()
     }
 
     async fn get_mempool_tx_fee(&self, txid: &Txid) -> Amount {
         loop {
-            if let Ok(tx) = self
-                .client
-                .get_mempool_entry(&bitcoin30_to_bitcoin32_txid(txid))
-            {
+            if let Ok(tx) = self.client.get_mempool_entry(txid) {
                 return tx.fees.base.into();
             }
 
@@ -197,7 +168,7 @@ impl BitcoinTest for RealBitcoinTestNoLock {
                     .expect("failed to fetch block info")
                     .tx
                     .iter()
-                    .any(|id| id == &bitcoin30_to_bitcoin32_txid(txid))
+                    .any(|id| id == txid)
             })
             .map(|height| height as u64)
     }
@@ -210,11 +181,8 @@ impl BitcoinTest for RealBitcoinTestNoLock {
             .expect("failed to fetch block count")
     }
 
-    async fn get_mempool_tx(&self, txid: &Txid) -> Option<bitcoin30::Transaction> {
-        self.client
-            .get_raw_transaction(&bitcoin30_to_bitcoin32_txid(txid), None)
-            .ok()
-            .map(|tx| bitcoin32_to_bitcoin30_tx(&tx))
+    async fn get_mempool_tx(&self, txid: &Txid) -> Option<bitcoin::Transaction> {
+        self.client.get_raw_transaction(txid, None).ok()
     }
 }
 
@@ -271,7 +239,7 @@ impl BitcoinTest for RealBitcoinTest {
         })
     }
 
-    async fn mine_blocks(&self, block_num: u64) -> Vec<bitcoin30::BlockHash> {
+    async fn mine_blocks(&self, block_num: u64) -> Vec<bitcoin::BlockHash> {
         let _lock = self.lock_exclusive().await;
         self.inner.mine_blocks(block_num).await
     }
@@ -284,7 +252,7 @@ impl BitcoinTest for RealBitcoinTest {
     async fn send_and_mine_block(
         &self,
         address: &Address,
-        amount: bitcoin30::Amount,
+        amount: bitcoin::Amount,
     ) -> (TxOutProof, Transaction) {
         let _lock = self.lock_exclusive().await;
         self.inner.send_and_mine_block(address, amount).await
@@ -315,7 +283,7 @@ impl BitcoinTest for RealBitcoinTest {
         self.inner.get_block_count().await
     }
 
-    async fn get_mempool_tx(&self, txid: &Txid) -> Option<bitcoin30::Transaction> {
+    async fn get_mempool_tx(&self, txid: &Txid) -> Option<bitcoin::Transaction> {
         let _lock = self.lock_exclusive().await;
         self.inner.get_mempool_tx(txid).await
     }
@@ -327,7 +295,7 @@ impl BitcoinTest for RealBitcoinTestLocked {
         panic!("Double-locking would lead to a hang");
     }
 
-    async fn mine_blocks(&self, block_num: u64) -> Vec<bitcoin30::BlockHash> {
+    async fn mine_blocks(&self, block_num: u64) -> Vec<bitcoin::BlockHash> {
         let pre = self.inner.client.get_block_count().unwrap();
         let mined_block_hashes = self.inner.mine_blocks(block_num).await;
         let post = self.inner.client.get_block_count().unwrap();
@@ -342,7 +310,7 @@ impl BitcoinTest for RealBitcoinTestLocked {
     async fn send_and_mine_block(
         &self,
         address: &Address,
-        amount: bitcoin30::Amount,
+        amount: bitcoin::Amount,
     ) -> (TxOutProof, Transaction) {
         self.inner.send_and_mine_block(address, amount).await
     }
@@ -367,7 +335,7 @@ impl BitcoinTest for RealBitcoinTestLocked {
         self.inner.get_block_count().await
     }
 
-    async fn get_mempool_tx(&self, txid: &Txid) -> Option<bitcoin30::Transaction> {
+    async fn get_mempool_tx(&self, txid: &Txid) -> Option<bitcoin::Transaction> {
         self.inner.get_mempool_tx(txid).await
     }
 }
