@@ -970,6 +970,17 @@ impl Decodable for Cow<'static, str> {
     }
 }
 
+// Simple decoder implementing `bitcoin_io::Read` for `std::io::Read`.
+// This is needed because `bitcoin::consensus::Decodable` requires a
+// `bitcoin_io::Read`.
+pub struct SimpleBitcoinRead<R: std::io::Read>(R);
+
+impl<R: std::io::Read> bitcoin_io::Read for SimpleBitcoinRead<R> {
+    fn read(&mut self, buf: &mut [u8]) -> bitcoin_io::Result<usize> {
+        self.0.read(buf).map_err(bitcoin_io::Error::from)
+    }
+}
+
 /// A writer counting number of writes written to it
 ///
 /// Copy&pasted from <https://github.com/SOF3/count-write> which
