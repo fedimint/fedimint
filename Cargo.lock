@@ -767,7 +767,7 @@ dependencies = [
  "bech32 0.11.0",
  "bitcoin-internals 0.3.0",
  "bitcoin-io",
- "bitcoin-units",
+ "bitcoin-units 0.1.2",
  "bitcoin_hashes 0.14.0",
  "hex-conservative 0.2.1",
  "hex_lit",
@@ -791,6 +791,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "bitcoin-internals"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b854212e29b96c8f0fe04cab11d57586c8f3257de0d146c76cb3b42b3eb9118"
+
+[[package]]
 name = "bitcoin-io"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -810,6 +816,15 @@ checksum = "5285c8bcaa25876d07f37e3d30c303f2609179716e11d688f51e8f1fe70063e2"
 dependencies = [
  "bitcoin-internals 0.3.0",
  "serde",
+]
+
+[[package]]
+name = "bitcoin-units"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d61aec975b0c91f4d2ee891c6e69e6ec2b94b3791336b7b76f9f4a9cbdeae3f7"
+dependencies = [
+ "bitcoin-internals 0.4.0",
 ]
 
 [[package]]
@@ -2256,7 +2271,7 @@ dependencies = [
  "bitcoin 0.30.2",
  "bitcoin 0.32.4",
  "bitcoin-io",
- "bitcoin-units",
+ "bitcoin-units 0.2.0",
  "bitcoin_hashes 0.12.0",
  "bitvec",
  "bls12_381",
