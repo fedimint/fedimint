@@ -12,7 +12,7 @@ use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_testing::gateway::LightningNodeType;
 use ln_gateway::envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV;
 use ln_gateway::lightning::ChannelInfo;
-use ln_gateway::rpc::{GatewayInfo, MnemonicResponse, V1_API_ENDPOINT};
+use ln_gateway::rpc::{MnemonicResponse, V1_API_ENDPOINT};
 use tracing::info;
 
 use crate::envs::{FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV};
@@ -406,10 +406,11 @@ impl Gatewayd {
     pub async fn wait_for_block_height(&self, target_block_height: u64) -> Result<()> {
         poll("waiting for block height", || async {
             let info = self.get_info().await.map_err(ControlFlow::Continue)?;
-            let gateway_info: GatewayInfo =
-                serde_json::from_value(info).expect("Failed to decode GatewayInfo");
-            if let Some(height) = gateway_info.block_height {
-                if height >= target_block_height as u32 {
+            let value = info.get("block_height");
+            if let Some(height) = value {
+                let block_height: u32 =
+                    serde_json::from_value(height.clone()).expect("Could not parse block height");
+                if block_height >= target_block_height as u32 {
                     return Ok(());
                 }
             }
