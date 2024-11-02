@@ -1972,7 +1972,7 @@ impl Gateway {
             .map(|module_public_key| RoutingInfo {
                 lightning_public_key: context.lightning_public_key,
                 module_public_key,
-                send_fee_default: PaymentFee::SEND_FEE_LIMIT_DEFAULT,
+                send_fee_default: PaymentFee::SEND_FEE_LIMIT,
                 // The base fee ensures that the gateway does not loose sats sending the payment due
                 // to fees paid on the transaction claiming the outgoing contract or
                 // subsequent transactions spending the newly issued ecash
@@ -1984,7 +1984,7 @@ impl Gateway {
                 expiration_delta_minimum: EXPIRATION_DELTA_MINIMUM_V2,
                 // The base fee ensures that the gateway does not loose sats receiving the payment
                 // due to fees paid on the transaction funding the incoming contract
-                receive_fee: PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
+                receive_fee: PaymentFee::RECEIVE_FEE_LIMIT,
             }))
     }
 
