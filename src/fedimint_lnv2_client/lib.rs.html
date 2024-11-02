@@ -1134,7 +1134,21 @@
 <a href="#1133" id="1133">1133</a>
 <a href="#1134" id="1134">1134</a>
 <a href="#1135" id="1135">1135</a>
-<a href="#1136" id="1136">1136</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1136" id="1136">1136</a>
+<a href="#1137" id="1137">1137</a>
+<a href="#1138" id="1138">1138</a>
+<a href="#1139" id="1139">1139</a>
+<a href="#1140" id="1140">1140</a>
+<a href="#1141" id="1141">1141</a>
+<a href="#1142" id="1142">1142</a>
+<a href="#1143" id="1143">1143</a>
+<a href="#1144" id="1144">1144</a>
+<a href="#1145" id="1145">1145</a>
+<a href="#1146" id="1146">1146</a>
+<a href="#1147" id="1147">1147</a>
+<a href="#1148" id="1148">1148</a>
+<a href="#1149" id="1149">1149</a>
+<a href="#1150" id="1150">1150</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -1417,14 +1431,14 @@
     <span class="doccomment">/// This is the maximum send fee of one and a half percent plus one hundred
     /// satoshis a correct gateway may recommend as a default. It accounts for
     /// the fee required to reliably route this payment over lightning.
-    </span><span class="kw">pub const </span>SEND_FEE_LIMIT_DEFAULT: PaymentFee = PaymentFee {
+    </span><span class="kw">pub const </span>SEND_FEE_LIMIT: PaymentFee = PaymentFee {
         base: Amount::from_sats(<span class="number">100</span>),
         parts_per_million: <span class="number">15_000</span>,
     };
 
     <span class="doccomment">/// This is the maximum receive fee of half of one percent plus fifty
     /// satoshis a correct gateway may recommend as a default.
-    </span><span class="kw">pub const </span>RECEIVE_FEE_LIMIT_DEFAULT: PaymentFee = PaymentFee {
+    </span><span class="kw">pub const </span>RECEIVE_FEE_LIMIT: PaymentFee = PaymentFee {
         base: Amount::from_sats(<span class="number">50</span>),
         parts_per_million: <span class="number">5_000</span>,
     };
@@ -1653,8 +1667,21 @@
             .<span class="kw">await
     </span>}
 
-    <span class="doccomment">/// Pay an invoice. For  testing  you can optionally specify a gateway to
-    /// route with, otherwise a gateway will be selected automatically.
+    <span class="doccomment">/// Pay an invoice. For testing you can optionally specify a gateway to
+    /// route with, otherwise a gateway will be selected automatically. If the
+    /// invoice was created by a gateway connected to our federation, the same
+    /// gateway will be selected to allow for a direct ecash swap. Otherwise we
+    /// select a random online gateway.
+    ///
+    /// The fee for this payment may depend on the selected gateway but
+    /// will be limited to one and a half percent plus one hundred satoshis.
+    /// This fee accounts for the fee charged by the gateway as well as
+    /// the additional fee required to reliably route this payment over
+    /// lightning if necessary. Since the gateway has been vetted by at least
+    /// one guardian we trust it to set a reasonable fee.
+    ///
+    /// The absolute fee for a payment can be calculated from the operation meta
+    /// to be shown to the user in the transaction history.
     </span><span class="kw">pub async fn </span>send(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         invoice: Bolt11Invoice,
@@ -1700,14 +1727,12 @@
 
         <span class="kw">let </span>(send_fee, expiration_delta) = routing_info.send_parameters(<span class="kw-2">&amp;</span>invoice);
 
-        <span class="kw">if </span>!send_fee.le(<span class="kw-2">&amp;</span>PaymentFee::SEND_FEE_LIMIT_DEFAULT) {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::PaymentFeeExceedsLimit(send_fee));
+        <span class="kw">if </span>!send_fee.le(<span class="kw-2">&amp;</span>PaymentFee::SEND_FEE_LIMIT) {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::PaymentFeeExceedsLimit);
         }
 
         <span class="kw">if </span>EXPIRATION_DELTA_LIMIT_DEFAULT &lt; expiration_delta {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::ExpirationDeltaExceedsLimit(
-                expiration_delta,
-            ));
+            <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::ExpirationDeltaExceedsLimit);
         }
 
         <span class="kw">let </span>consensus_block_count = <span class="self">self
@@ -1891,8 +1916,16 @@
     }
 
     <span class="doccomment">/// Request an invoice. For testing you can optionally specify a gateway to
-    /// generate the invoice, otherwise a gateway will be selected
+    /// generate the invoice, otherwise a random online gateway will be selected
     /// automatically.
+    ///
+    /// The total fee for this payment may depend on the chosen gateway but
+    /// will be limited to a half percent plus fifty satoshis. Since the
+    /// selected gateway has been vetted by at least one guardian we trust it to
+    /// set a reasonable fee.
+    ///
+    /// The absolute fee for a payment can be calculated from the operation meta
+    /// to be shown to the user in the transaction history.
     </span><span class="kw">pub async fn </span>receive(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
@@ -1954,13 +1987,8 @@
                 </span>.map_err(ReceiveError::FailedToSelectGateway)<span class="question-mark">?</span>,
         };
 
-        <span class="kw">if </span>!routing_info
-            .receive_fee
-            .le(<span class="kw-2">&amp;</span>PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT)
-        {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveError::PaymentFeeExceedsLimit(
-                routing_info.receive_fee,
-            ));
+        <span class="kw">if </span>!routing_info.receive_fee.le(<span class="kw-2">&amp;</span>PaymentFee::RECEIVE_FEE_LIMIT) {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveError::PaymentFeeExceedsLimit);
         }
 
         <span class="kw">let </span>contract_amount = routing_info.receive_fee.subtract_from(amount.msats);
@@ -2192,10 +2220,10 @@
     </span>GatewayConnectionError(GatewayConnectionError),
     <span class="attr">#[error(<span class="string">"The gateway does not support our federation"</span>)]
     </span>UnknownFederation,
-    <span class="attr">#[error(<span class="string">"The gateways fee of {0:?} exceeds the supplied limit"</span>)]
-    </span>PaymentFeeExceedsLimit(PaymentFee),
-    <span class="attr">#[error(<span class="string">"The gateways expiration delta of {0:?} exceeds the supplied limit"</span>)]
-    </span>ExpirationDeltaExceedsLimit(u64),
+    <span class="attr">#[error(<span class="string">"The gateways fee of exceeds the limit"</span>)]
+    </span>PaymentFeeExceedsLimit,
+    <span class="attr">#[error(<span class="string">"The gateways expiration delta of exceeds the limit"</span>)]
+    </span>ExpirationDeltaExceedsLimit,
     <span class="attr">#[error(<span class="string">"Federation returned an error: {0}"</span>)]
     </span>FederationError(String),
     <span class="attr">#[error(<span class="string">"We failed to finalize the funding transaction"</span>)]
@@ -2215,8 +2243,8 @@
     </span>GatewayConnectionError(GatewayConnectionError),
     <span class="attr">#[error(<span class="string">"The gateway does not support our federation"</span>)]
     </span>UnknownFederation,
-    <span class="attr">#[error(<span class="string">"The gateways fee of {0:?} exceeds the supplied limit"</span>)]
-    </span>PaymentFeeExceedsLimit(PaymentFee),
+    <span class="attr">#[error(<span class="string">"The gateways fee exceeds the limit"</span>)]
+    </span>PaymentFeeExceedsLimit,
     <span class="attr">#[error(<span class="string">"The total fees required to complete this payment exceed its amount"</span>)]
     </span>DustAmount,
     <span class="attr">#[error(<span class="string">"The invoice's payment hash is incorrect"</span>)]
