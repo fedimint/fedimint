@@ -812,7 +812,13 @@
 <a href="#811" id="811">811</a>
 <a href="#812" id="812">812</a>
 <a href="#813" id="813">813</a>
-<a href="#814" id="814">814</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -1222,7 +1228,7 @@
         .<span class="kw">await</span>;
 
         <span class="kw">let </span>amount = input.amount;
-        <span class="kw">let </span>fee = <span class="self">self</span>.cfg.consensus.fee_consensus.note_spend_abs;
+        <span class="kw">let </span>fee = <span class="self">self</span>.cfg.consensus.fee_consensus.fee(amount);
 
         calculate_mint_redeemed_ecash_metrics(dbtx, amount, fee);
 
@@ -1253,9 +1259,12 @@
 
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>MintAuditItemKey::Issuance(out_point), <span class="kw-2">&amp;</span>output.amount)
             .<span class="kw">await</span>;
+
         <span class="kw">let </span>amount = output.amount;
-        <span class="kw">let </span>fee = <span class="self">self</span>.cfg.consensus.fee_consensus.note_issuance_abs;
+        <span class="kw">let </span>fee = <span class="self">self</span>.cfg.consensus.fee_consensus.fee(amount);
+
         calculate_mint_issued_ecash_metrics(dbtx, amount, fee);
+
         <span class="prelude-val">Ok</span>(TransactionItemAmount { amount, fee })
     }
 
@@ -1496,10 +1505,10 @@
     };
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::Database;
+    <span class="kw">use </span>fedimint_core::fee_consensus::FeeConsensus;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
     <span class="kw">use </span>fedimint_core::module::{ModuleConsensusVersion, ServerModuleInit};
     <span class="kw">use </span>fedimint_core::{secp256k1, Amount, PeerId, ServerModule};
-    <span class="kw">use </span>fedimint_mint_common::config::FeeConsensus;
     <span class="kw">use </span>fedimint_mint_common::{MintInput, Nonce, Note};
     <span class="kw">use </span>tbs::blind_message;
 
@@ -1517,7 +1526,10 @@
             <span class="kw-2">&amp;</span>peers,
             <span class="kw-2">&amp;</span>ConfigGenModuleParams::from_typed(MintGenParams {
                 local: EmptyGenParams::default(),
-                consensus: MintGenParamsConsensus::new(<span class="number">2</span>, FeeConsensus::default()),
+                consensus: MintGenParamsConsensus::new(
+                    <span class="number">2</span>,
+                    FeeConsensus::new_lnv2(<span class="number">1000</span>).expect(<span class="string">"Relative fee is within range"</span>),
+                ),
             })
             .unwrap(),
         );
@@ -1548,7 +1560,7 @@
                     .unwrap()
                     .consensus
                     .peer_tbs_pks,
-                fee_consensus: FeeConsensus::default(),
+                fee_consensus: FeeConsensus::new_lnv2(<span class="number">1000</span>).expect(<span class="string">"Relative fee is within range"</span>),
                 max_notes_per_denomination: <span class="number">0</span>,
             },
             private: MintConfigPrivate {

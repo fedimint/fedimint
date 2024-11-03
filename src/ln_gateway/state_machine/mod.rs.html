@@ -829,7 +829,8 @@
 <a href="#828" id="828">828</a>
 <a href="#829" id="829">829</a>
 <a href="#830" id="830">830</a>
-<a href="#831" id="831">831</a></pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a></pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -1055,6 +1056,7 @@
 
     <span class="kw">fn </span>output_fee(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _amount: Amount,
         output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>fedimint_core::module::ModuleCommon&gt;::Output,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
         <span class="kw">match </span>output.maybe_v0_ref()<span class="question-mark">? </span>{

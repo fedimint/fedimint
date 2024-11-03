@@ -91,17 +91,20 @@
 <a href="#90" id="90">90</a>
 <a href="#91" id="91">91</a>
 <a href="#92" id="92">92</a>
-<a href="#93" id="93">93</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoincore_rpc::bitcoin::Network;
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoincore_rpc::bitcoin::Network;
 <span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_network;
 <span class="kw">use </span>fedimint_core::config::{EmptyGenParams, ServerModuleConfigGenParamsRegistry};
 <span class="kw">use </span>fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig, FM_USE_UNKNOWN_MODULE_ENV};
+<span class="kw">use </span>fedimint_core::fee_consensus::FeeConsensus;
 <span class="kw">use </span>fedimint_core::module::ServerModuleInit <span class="kw">as _</span>;
 <span class="kw">use </span>fedimint_ln_server::common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
 };
 <span class="kw">use </span>fedimint_ln_server::LightningInit;
 <span class="kw">use </span>fedimint_meta_server::{MetaGenParams, MetaInit};
-<span class="kw">use </span>fedimint_mint_server::common::config::{FeeConsensus, MintGenParams, MintGenParamsConsensus};
+<span class="kw">use </span>fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
 <span class="kw">use </span>fedimint_mint_server::MintInit;
 <span class="kw">use </span>fedimint_unknown_server::common::config::UnknownGenParams;
 <span class="kw">use </span>fedimint_unknown_server::UnknownInit;
@@ -138,7 +141,7 @@
             MintInit::kind(),
             MintGenParams {
                 local: EmptyGenParams::default(),
-                consensus: MintGenParamsConsensus::new(<span class="number">2</span>, FeeConsensus::default()),
+                consensus: MintGenParamsConsensus::new(<span class="number">2</span>, FeeConsensus::zero()),
             },
         )
         .attach_config_gen_params(
@@ -168,7 +171,8 @@
                     bitcoin_rpc: bitcoin_rpc.clone(),
                 },
                 consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
-                    fee_consensus: fedimint_core::fee_consensus::FeeConsensus::default(),
+                    fee_consensus: fedimint_core::fee_consensus::FeeConsensus::new_lnv2(<span class="number">1000</span>)
+                        .expect(<span class="string">"Relative fee is within range"</span>),
                     network: bitcoin30_to_bitcoin32_network(<span class="kw-2">&amp;</span>network),
                 },
             },

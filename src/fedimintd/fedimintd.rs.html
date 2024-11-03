@@ -588,7 +588,11 @@
 <a href="#587" id="587">587</a>
 <a href="#588" id="588">588</a>
 <a href="#589" id="589">589</a>
-<a href="#590" id="590">590</a></pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
+<a href="#590" id="590">590</a>
+<a href="#591" id="591">591</a>
+<a href="#592" id="592">592</a>
+<a href="#593" id="593">593</a>
+<a href="#594" id="594">594</a></pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -917,7 +921,9 @@
                     local: EmptyGenParams::default(),
                     consensus: MintGenParamsConsensus::new(
                         <span class="number">2</span>,
-                        fedimint_mint_server::common::config::FeeConsensus::default(),
+                        <span class="comment">// TODO: wait for clients to support the relative fees and set them to
+                        // non-zero in 0.6
+                        </span>fedimint_core::fee_consensus::FeeConsensus::zero(),
                     ),
                 },
             )
@@ -950,7 +956,9 @@
                         },
                         consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
                             <span class="comment">// TODO: actually make the relative fee configurable
-                            </span>fee_consensus: fedimint_core::fee_consensus::FeeConsensus::new(<span class="number">1_000</span>)<span class="question-mark">?</span>,
+                            </span>fee_consensus: fedimint_core::fee_consensus::FeeConsensus::new_lnv2(
+                                <span class="number">1_000</span>,
+                            )<span class="question-mark">?</span>,
                             network: bitcoin30_to_bitcoin32_network(<span class="kw-2">&amp;</span>network),
                         },
                     },

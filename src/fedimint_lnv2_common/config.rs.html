@@ -137,7 +137,8 @@
 <a href="#136" id="136">136</a>
 <a href="#137" id="137">137</a>
 <a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">pub use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
@@ -158,11 +159,12 @@
 }
 
 <span class="kw">impl </span>LightningGenParams {
-    <span class="kw">pub fn </span>regtest(bitcoin_rpc: BitcoinRpcConfig) -&gt; <span class="self">Self </span>{
+    <span class="attr">#[allow(clippy::missing_panics_doc)]
+    </span><span class="kw">pub fn </span>regtest(bitcoin_rpc: BitcoinRpcConfig) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             local: LightningGenParamsLocal { bitcoin_rpc },
             consensus: LightningGenParamsConsensus {
-                fee_consensus: FeeConsensus::default(),
+                fee_consensus: FeeConsensus::new_lnv2(<span class="number">1000</span>).expect(<span class="string">"Relative fee is within range"</span>),
                 network: Network::Regtest,
             },
         }
@@ -254,7 +256,7 @@
                 )
             })
             .collect(),
-        fee_consensus: FeeConsensus::default(),
+        fee_consensus: FeeConsensus::new_lnv2(<span class="number">1000</span>).expect(<span class="string">"Relative fee is within range"</span>),
         network: config.network,
     }
 }

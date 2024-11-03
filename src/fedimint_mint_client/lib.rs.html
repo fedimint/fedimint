@@ -2671,7 +2671,43 @@
 <a href="#2670" id="2670">2670</a>
 <a href="#2671" id="2671">2671</a>
 <a href="#2672" id="2672">2672</a>
-<a href="#2673" id="2673">2673</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2673" id="2673">2673</a>
+<a href="#2674" id="2674">2674</a>
+<a href="#2675" id="2675">2675</a>
+<a href="#2676" id="2676">2676</a>
+<a href="#2677" id="2677">2677</a>
+<a href="#2678" id="2678">2678</a>
+<a href="#2679" id="2679">2679</a>
+<a href="#2680" id="2680">2680</a>
+<a href="#2681" id="2681">2681</a>
+<a href="#2682" id="2682">2682</a>
+<a href="#2683" id="2683">2683</a>
+<a href="#2684" id="2684">2684</a>
+<a href="#2685" id="2685">2685</a>
+<a href="#2686" id="2686">2686</a>
+<a href="#2687" id="2687">2687</a>
+<a href="#2688" id="2688">2688</a>
+<a href="#2689" id="2689">2689</a>
+<a href="#2690" id="2690">2690</a>
+<a href="#2691" id="2691">2691</a>
+<a href="#2692" id="2692">2692</a>
+<a href="#2693" id="2693">2693</a>
+<a href="#2694" id="2694">2694</a>
+<a href="#2695" id="2695">2695</a>
+<a href="#2696" id="2696">2696</a>
+<a href="#2697" id="2697">2697</a>
+<a href="#2698" id="2698">2698</a>
+<a href="#2699" id="2699">2699</a>
+<a href="#2700" id="2700">2700</a>
+<a href="#2701" id="2701">2701</a>
+<a href="#2702" id="2702">2702</a>
+<a href="#2703" id="2703">2703</a>
+<a href="#2704" id="2704">2704</a>
+<a href="#2705" id="2705">2705</a>
+<a href="#2706" id="2706">2706</a>
+<a href="#2707" id="2707">2707</a>
+<a href="#2708" id="2708">2708</a>
+<a href="#2709" id="2709">2709</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2731,6 +2767,7 @@
     IDatabaseTransactionOpsCoreTyped,
 };
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+<span class="kw">use </span>fedimint_core::fee_consensus::FeeConsensus;
 <span class="kw">use </span>fedimint_core::invite_code::{InviteCode, InviteCodeV2};
 <span class="kw">use </span>fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 <span class="kw">use </span>fedimint_core::module::{
@@ -3370,14 +3407,18 @@
 
     <span class="kw">fn </span>input_fee(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _amount: Amount,
+        amount: Amount,
         _input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
-        <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.note_spend_abs)
+        <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.fee(amount))
     }
 
-    <span class="kw">fn </span>output_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, _output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
-        <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.note_issuance_abs)
+    <span class="kw">fn </span>output_fee(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        amount: Amount,
+        _output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+        <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.fee(amount))
     }
 
     <span class="kw">async fn </span>handle_cli_command(
@@ -3431,11 +3472,11 @@
             .map(|input| input.amount)
             .sum();
 
-        output_amount += <span class="self">self
-            </span>.cfg
-            .fee_consensus
-            .note_spend_abs
-            .mul_u64(consolidation_inputs.inputs().len() <span class="kw">as </span>u64);
+        output_amount += consolidation_inputs
+            .inputs()
+            .iter()
+            .map(|input| <span class="self">self</span>.cfg.fee_consensus.fee(input.amount))
+            .sum();
 
         <span class="kw">let </span>additional_inputs = <span class="self">self
             </span>.create_sufficient_input(
@@ -3451,14 +3492,14 @@
             .map(|input| input.amount)
             .sum();
 
-        output_amount += <span class="self">self
-            </span>.cfg
-            .fee_consensus
-            .note_spend_abs
-            .mul_u64(additional_inputs.inputs().len() <span class="kw">as </span>u64);
+        output_amount += additional_inputs
+            .inputs()
+            .iter()
+            .map(|input| <span class="self">self</span>.cfg.fee_consensus.fee(input.amount))
+            .sum();
 
         <span class="kw">let </span>outputs = <span class="self">self
-            </span>.create_exact_output(dbtx, operation_id, <span class="number">2</span>, input_amount - output_amount)
+            </span>.create_output(dbtx, operation_id, <span class="number">2</span>, input_amount - output_amount)
             .<span class="kw">await</span>;
 
         <span class="prelude-val">Ok</span>((consolidation_inputs.with(additional_inputs), outputs))
@@ -3657,7 +3698,7 @@
             dbtx,
             <span class="kw-2">&amp;</span>SelectNotesWithAtleastAmount,
             min_amount,
-            <span class="self">self</span>.cfg.fee_consensus.note_spend_abs,
+            <span class="self">self</span>.cfg.fee_consensus.clone(),
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -3714,10 +3755,10 @@
     </span>}
 
     <span class="comment">// TODO: put "notes per denomination" default into cfg
-    </span><span class="doccomment">/// Creates a mint output with exactly the given `amount`, issuing e-cash
+    </span><span class="doccomment">/// Creates a mint output close to the given `amount`, issuing e-cash
     /// notes such that the client holds `notes_per_denomination` notes of each
     /// e-cash note denomination held.
-    </span><span class="kw">pub async fn </span>create_exact_output(
+    </span><span class="kw">pub async fn </span>create_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         operation_id: OperationId,
@@ -3733,6 +3774,7 @@
             <span class="kw-2">&amp;</span><span class="self">self</span>.get_notes_tier_counts(dbtx).<span class="kw">await</span>,
             <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.tbs_pks,
             notes_per_denomination,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.fee_consensus,
         );
 
         <span class="kw">let </span><span class="kw-2">mut </span>outputs = Vec::new();
@@ -3769,8 +3811,6 @@
                 });
             }
         }
-
-        <span class="macro">assert!</span>(!outputs.is_empty());
 
         ClientOutputBundle::new(outputs, output_sms)
     }
@@ -3964,7 +4004,8 @@
             <span class="string">"zero-amount out-of-band spends are not supported"
         </span>);
 
-        <span class="kw">let </span>selected_notes = <span class="self">Self</span>::select_notes(dbtx, notes_selector, amount, Amount::ZERO).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>selected_notes =
+            <span class="self">Self</span>::select_notes(dbtx, notes_selector, amount, FeeConsensus::zero()).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>operation_id = spendable_notes_to_operation_id(<span class="kw-2">&amp;</span>selected_notes);
 
@@ -4021,7 +4062,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         notes_selector: <span class="kw-2">&amp;</span><span class="kw">impl </span>NotesSelector,
         requested_amount: Amount,
-        fee_per_note_input: Amount,
+        fee_consensus: FeeConsensus,
     ) -&gt; anyhow::Result&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
         <span class="kw">let </span>note_stream = dbtx
             .find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>NoteKeyPrefix)
@@ -4029,7 +4070,7 @@
             </span>.map(|(key, note)| (key.amount, note));
 
         notes_selector
-            .select_notes(note_stream, requested_amount, fee_per_note_input)
+            .select_notes(note_stream, requested_amount, fee_consensus)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.into_iter_items()
             .map(|(amt, snote)| <span class="prelude-val">Ok</span>((amt, snote.decode()<span class="question-mark">?</span>)))
@@ -4550,7 +4591,7 @@
         </span><span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))] </span>stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt; + Send,
         <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)] </span>stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt;,
         requested_amount: Amount,
-        fee_per_note_input: Amount,
+        fee_consensus: FeeConsensus,
     ) -&gt; anyhow::Result&lt;TieredMulti&lt;Note&gt;&gt;;
 }
 
@@ -4568,9 +4609,9 @@
         <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))] </span>stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt; + Send,
         <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)] </span>stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt;,
         requested_amount: Amount,
-        fee_per_note_input: Amount,
+        fee_consensus: FeeConsensus,
     ) -&gt; anyhow::Result&lt;TieredMulti&lt;Note&gt;&gt; {
-        <span class="prelude-val">Ok</span>(select_notes_from_stream(stream, requested_amount, fee_per_note_input).<span class="kw">await</span><span class="question-mark">?</span>)
+        <span class="prelude-val">Ok</span>(select_notes_from_stream(stream, requested_amount, fee_consensus).<span class="kw">await</span><span class="question-mark">?</span>)
     }
 }
 
@@ -4586,9 +4627,9 @@
         <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))] </span>stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt; + Send,
         <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)] </span>stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt;,
         requested_amount: Amount,
-        note_fee: Amount,
+        fee_consensus: FeeConsensus,
     ) -&gt; anyhow::Result&lt;TieredMulti&lt;Note&gt;&gt; {
-        <span class="kw">let </span>notes = select_notes_from_stream(stream, requested_amount, note_fee).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>notes = select_notes_from_stream(stream, requested_amount, fee_consensus).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">if </span>notes.total_amount() != requested_amount {
             <span class="macro">bail!</span>(
@@ -4610,7 +4651,7 @@
 </span><span class="kw">async fn </span>select_notes_from_stream&lt;Note&gt;(
     stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt;,
     requested_amount: Amount,
-    fee_per_note_input: Amount,
+    fee_consensus: FeeConsensus,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;Note&gt;, InsufficientBalanceError&gt; {
     <span class="kw">if </span>requested_amount == Amount::ZERO {
         <span class="kw">return </span><span class="prelude-val">Ok</span>(TieredMulti::default());
@@ -4632,14 +4673,14 @@
             </span>);
             previous_amount = <span class="prelude-val">Some</span>(note_amount);
 
-            <span class="kw">if </span>note_amount &lt;= fee_per_note_input {
+            <span class="kw">if </span>note_amount &lt;= fee_consensus.fee(note_amount) {
                 <span class="kw">continue</span>;
             }
 
-            <span class="kw">match </span>note_amount.cmp(<span class="kw-2">&amp;</span>(pending_amount + fee_per_note_input)) {
+            <span class="kw">match </span>note_amount.cmp(<span class="kw-2">&amp;</span>(pending_amount + fee_consensus.fee(note_amount))) {
                 Ordering::Less =&gt; {
                     <span class="comment">// keep adding notes until we have enough
-                    </span>pending_amount += fee_per_note_input;
+                    </span>pending_amount += fee_consensus.fee(note_amount);
                     pending_amount -= note_amount;
                     selected.push((note_amount, note));
                 }
@@ -4658,7 +4699,11 @@
                     <span class="macro">assert!</span>(
                         notes.total_amount().msats
                             &gt;= requested_amount.msats
-                                + notes.count_items() <span class="kw">as </span>u64 * fee_per_note_input.msats
+                                + notes
+                                    .iter()
+                                    .map(|note| fee_consensus.fee(note.<span class="number">0</span>))
+                                    .sum::&lt;Amount&gt;()
+                                    .msats
                     );
 
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(notes);
@@ -4678,7 +4723,11 @@
                 <span class="macro">assert!</span>(
                     notes.total_amount().msats
                         &gt;= requested_amount.msats
-                            + notes.count_items() <span class="kw">as </span>u64 * fee_per_note_input.msats
+                            + notes
+                                .iter()
+                                .map(|note| fee_consensus.fee(note.<span class="number">0</span>))
+                                .sum::&lt;Amount&gt;()
+                                .msats
                 );
 
                 <span class="comment">// so now we have enough to cover the requested amount, return
@@ -4971,6 +5020,7 @@
     current_denominations: <span class="kw-2">&amp;</span>TieredCounts,
     tiers: <span class="kw-2">&amp;</span>Tiered&lt;K&gt;,
     denomination_sets: u16,
+    fee_consensus: <span class="kw-2">&amp;</span>FeeConsensus,
 ) -&gt; TieredCounts {
     <span class="kw">let </span><span class="kw-2">mut </span>remaining_amount = amount;
     <span class="kw">let </span><span class="kw-2">mut </span>denominations = TieredCounts::default();
@@ -4979,25 +5029,28 @@
     </span><span class="kw">for </span>tier <span class="kw">in </span>tiers.tiers() {
         <span class="kw">let </span>notes = current_denominations.get(<span class="kw-2">*</span>tier);
         <span class="kw">let </span>missing_notes = u64::from(denomination_sets).saturating_sub(notes <span class="kw">as </span>u64);
-        <span class="kw">let </span>possible_notes = remaining_amount / <span class="kw-2">*</span>tier;
+        <span class="kw">let </span>possible_notes = remaining_amount / (<span class="kw-2">*</span>tier + fee_consensus.fee(<span class="kw-2">*</span>tier));
 
         <span class="kw">let </span>add_notes = min(possible_notes, missing_notes);
         denominations.inc(<span class="kw-2">*</span>tier, add_notes <span class="kw">as </span>usize);
-        remaining_amount -= <span class="kw-2">*</span>tier * add_notes;
+        remaining_amount -= (<span class="kw-2">*</span>tier + fee_consensus.fee(<span class="kw-2">*</span>tier)) * add_notes;
     }
 
     <span class="comment">// if there is a remaining amount, add denominations with a greedy algorithm
     </span><span class="kw">for </span>tier <span class="kw">in </span>tiers.tiers().rev() {
-        <span class="kw">let </span>res = remaining_amount / <span class="kw-2">*</span>tier;
-        remaining_amount %= <span class="kw-2">*</span>tier;
+        <span class="kw">let </span>res = remaining_amount / (<span class="kw-2">*</span>tier + fee_consensus.fee(<span class="kw-2">*</span>tier));
+        remaining_amount -= (<span class="kw-2">*</span>tier + fee_consensus.fee(<span class="kw-2">*</span>tier)) * res;
         denominations.inc(<span class="kw-2">*</span>tier, res <span class="kw">as </span>usize);
     }
 
     <span class="kw">let </span>represented: u64 = denominations
         .iter()
-        .map(|(k, v)| k.msats * (v <span class="kw">as </span>u64))
+        .map(|(k, v)| (k + fee_consensus.fee(k)).msats * (v <span class="kw">as </span>u64))
         .sum();
-    <span class="macro">assert_eq!</span>(represented, amount.msats);
+
+    <span class="macro">assert!</span>(represented &lt;= amount.msats);
+    <span class="macro">assert!</span>(represented + fee_consensus.fee(Amount::from_msats(<span class="number">1</span>)).msats &gt;= amount.msats);
+
     denominations
 }
 
@@ -5012,6 +5065,7 @@
     <span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
     <span class="kw">use </span>fedimint_core::config::FederationId;
     <span class="kw">use </span>fedimint_core::encoding::Decodable;
+    <span class="kw">use </span>fedimint_core::fee_consensus::FeeConsensus;
     <span class="kw">use </span>fedimint_core::invite_code::{InviteCode, InviteCodeV2};
     <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
     <span class="kw">use </span>fedimint_core::util::SafeUrl;
@@ -5052,13 +5106,25 @@
 
         <span class="comment">// target 3 tiers will fill out the 1 and 3 denominations
         </span><span class="macro">assert_eq!</span>(
-            represent_amount(Amount::from_sats(<span class="number">6</span>), <span class="kw-2">&amp;</span>starting, <span class="kw-2">&amp;</span>tiers, <span class="number">3</span>),
+            represent_amount(
+                Amount::from_sats(<span class="number">6</span>),
+                <span class="kw-2">&amp;</span>starting,
+                <span class="kw-2">&amp;</span>tiers,
+                <span class="number">3</span>,
+                <span class="kw-2">&amp;</span>FeeConsensus::zero()
+            ),
             denominations(<span class="macro">vec!</span>[(Amount::from_sats(<span class="number">1</span>), <span class="number">3</span>), (Amount::from_sats(<span class="number">3</span>), <span class="number">1</span>),])
         );
 
         <span class="comment">// target 2 tiers will fill out the 1 and 4 denominations
         </span><span class="macro">assert_eq!</span>(
-            represent_amount(Amount::from_sats(<span class="number">6</span>), <span class="kw-2">&amp;</span>starting, <span class="kw-2">&amp;</span>tiers, <span class="number">2</span>),
+            represent_amount(
+                Amount::from_sats(<span class="number">6</span>),
+                <span class="kw-2">&amp;</span>starting,
+                <span class="kw-2">&amp;</span>tiers,
+                <span class="number">2</span>,
+                <span class="kw-2">&amp;</span>FeeConsensus::zero()
+            ),
             denominations(<span class="macro">vec!</span>[(Amount::from_sats(<span class="number">1</span>), <span class="number">2</span>), (Amount::from_sats(<span class="number">4</span>), <span class="number">1</span>)])
         );
     }
@@ -5067,7 +5133,13 @@
     </span><span class="kw">async fn </span>select_notes_avg_test() {
         <span class="kw">let </span>max_amount = Amount::from_sats(<span class="number">1_000_000</span>);
         <span class="kw">let </span>tiers = Tiered::gen_denominations(<span class="number">2</span>, max_amount);
-        <span class="kw">let </span>tiered = represent_amount::&lt;()&gt;(max_amount, <span class="kw-2">&amp;</span>TieredCounts::default(), <span class="kw-2">&amp;</span>tiers, <span class="number">3</span>);
+        <span class="kw">let </span>tiered = represent_amount::&lt;()&gt;(
+            max_amount,
+            <span class="kw-2">&amp;</span>TieredCounts::default(),
+            <span class="kw-2">&amp;</span>tiers,
+            <span class="number">3</span>,
+            <span class="kw-2">&amp;</span>FeeConsensus::zero(),
+        );
 
         <span class="kw">let </span><span class="kw-2">mut </span>total_notes = <span class="number">0</span>;
         <span class="kw">for </span>multiplier <span class="kw">in </span><span class="number">1</span>..<span class="number">100 </span>{
@@ -5075,7 +5147,7 @@
             <span class="kw">let </span>select = select_notes_from_stream(
                 stream,
                 Amount::from_sats(multiplier * <span class="number">1000</span>),
-                Amount::ZERO,
+                FeeConsensus::zero(),
             )
             .<span class="kw">await</span>;
             total_notes += select.unwrap().into_iter_items().count();
@@ -5093,13 +5165,13 @@
             ])
         };
         <span class="macro">assert_eq!</span>(
-            select_notes_from_stream(f(), Amount::from_sats(<span class="number">7</span>), Amount::ZERO)
+            select_notes_from_stream(f(), Amount::from_sats(<span class="number">7</span>), FeeConsensus::zero())
                 .<span class="kw">await
                 </span>.unwrap(),
             notes(<span class="macro">vec!</span>[(Amount::from_sats(<span class="number">1</span>), <span class="number">2</span>), (Amount::from_sats(<span class="number">5</span>), <span class="number">1</span>)])
         );
         <span class="macro">assert_eq!</span>(
-            select_notes_from_stream(f(), Amount::from_sats(<span class="number">20</span>), Amount::ZERO)
+            select_notes_from_stream(f(), Amount::from_sats(<span class="number">20</span>), FeeConsensus::zero())
                 .<span class="kw">await
                 </span>.unwrap(),
             notes(<span class="macro">vec!</span>[(Amount::from_sats(<span class="number">20</span>), <span class="number">1</span>)])
@@ -5114,7 +5186,7 @@
             (Amount::from_sats(<span class="number">20</span>), <span class="number">5</span>),
         ]);
         <span class="macro">assert_eq!</span>(
-            select_notes_from_stream(stream, Amount::from_sats(<span class="number">7</span>), Amount::ZERO)
+            select_notes_from_stream(stream, Amount::from_sats(<span class="number">7</span>), FeeConsensus::zero())
                 .<span class="kw">await
                 </span>.unwrap(),
             notes(<span class="macro">vec!</span>[(Amount::from_sats(<span class="number">5</span>), <span class="number">2</span>)])
@@ -5129,7 +5201,7 @@
             (Amount::from_sats(<span class="number">20</span>), <span class="number">2</span>),
         ]);
         <span class="macro">assert_eq!</span>(
-            select_notes_from_stream(stream, Amount::from_sats(<span class="number">39</span>), Amount::ZERO)
+            select_notes_from_stream(stream, Amount::from_sats(<span class="number">39</span>), FeeConsensus::zero())
                 .<span class="kw">await
                 </span>.unwrap(),
             notes(<span class="macro">vec!</span>[(Amount::from_sats(<span class="number">20</span>), <span class="number">2</span>)])
@@ -5139,7 +5211,7 @@
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>select_notes_returns_error_if_amount_is_too_large() {
         <span class="kw">let </span>stream = reverse_sorted_note_stream(<span class="macro">vec!</span>[(Amount::from_sats(<span class="number">10</span>), <span class="number">1</span>)]);
-        <span class="kw">let </span>error = select_notes_from_stream(stream, Amount::from_sats(<span class="number">100</span>), Amount::ZERO)
+        <span class="kw">let </span>error = select_notes_from_stream(stream, Amount::from_sats(<span class="number">100</span>), FeeConsensus::zero())
             .<span class="kw">await
             </span>.unwrap_err();
         <span class="macro">assert_eq!</span>(error.total_amount, Amount::from_sats(<span class="number">10</span>));

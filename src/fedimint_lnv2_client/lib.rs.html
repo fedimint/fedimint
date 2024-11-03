@@ -1148,7 +1148,11 @@
 <a href="#1147" id="1147">1147</a>
 <a href="#1148" id="1148">1148</a>
 <a href="#1149" id="1149">1149</a>
-<a href="#1150" id="1150">1150</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1150" id="1150">1150</a>
+<a href="#1151" id="1151">1151</a>
+<a href="#1152" id="1152">1152</a>
+<a href="#1153" id="1153">1153</a>
+<a href="#1154" id="1154">1154</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -1566,7 +1570,11 @@
         <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.fee(amount))
     }
 
-    <span class="kw">fn </span>output_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+    <span class="kw">fn </span>output_fee(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _amount: Amount,
+        output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
         <span class="kw">let </span>amount = <span class="kw">match </span>output.ensure_v0_ref().ok()<span class="question-mark">? </span>{
             LightningOutputV0::Outgoing(contract) =&gt; contract.amount,
             LightningOutputV0::Incoming(contract) =&gt; contract.commitment.amount,
