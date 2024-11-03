@@ -10,6 +10,9 @@ use jsonrpsee_core::Serialize;
 use secp256k1::{Message, Verification};
 use serde::Deserialize;
 
+use crate::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_schnorr_signature, bitcoin32_to_bitcoin30_schnorr_signature,
+};
 use crate::db::{
     Database, DatabaseKey, DatabaseKeyPrefix, DatabaseRecord, IDatabaseTransactionOpsCoreTyped,
 };
@@ -27,7 +30,7 @@ pub struct ApiAnnouncement {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq, Encodable, Decodable)]
 pub struct SignedApiAnnouncement {
     pub api_announcement: ApiAnnouncement,
-    pub signature: secp256k1::schnorr::Signature,
+    pub signature: secp256k1_29::schnorr::Signature,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq, Encodable, Decodable)]
@@ -58,7 +61,7 @@ impl ApiAnnouncement {
         let signature = ctx.sign_schnorr(&msg, key);
         SignedApiAnnouncement {
             api_announcement: self.clone(),
-            signature,
+            signature: bitcoin30_to_bitcoin32_schnorr_signature(&signature),
         }
     }
 }
@@ -71,8 +74,12 @@ impl SignedApiAnnouncement {
         pk: &secp256k1::PublicKey,
     ) -> bool {
         let msg: Message = self.api_announcement.tagged_hash().into();
-        ctx.verify_schnorr(&self.signature, &msg, &pk.x_only_public_key().0)
-            .is_ok()
+        ctx.verify_schnorr(
+            &bitcoin32_to_bitcoin30_schnorr_signature(&self.signature),
+            &msg,
+            &pk.x_only_public_key().0,
+        )
+        .is_ok()
     }
 }
 

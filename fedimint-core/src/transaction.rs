@@ -5,7 +5,9 @@ use fedimint_core::module::SerdeModuleEncoding;
 use fedimint_core::{Amount, TransactionId};
 use thiserror::Error;
 
-use crate::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_pubkey;
+use crate::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_schnorr_signature,
+};
 use crate::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 use crate::core::{DynInputError, DynOutputError};
 
@@ -97,7 +99,11 @@ impl Transaction {
 
         for (pk, signature) in pub_keys.iter().zip(signatures) {
             if secp256k1::global::SECP256K1
-                .verify_schnorr(signature, &msg, &pk.x_only_public_key().0)
+                .verify_schnorr(
+                    &bitcoin32_to_bitcoin30_schnorr_signature(signature),
+                    &msg,
+                    &pk.x_only_public_key().0,
+                )
                 .is_err()
             {
                 return Err(TransactionError::InvalidSignature {
@@ -115,7 +121,7 @@ impl Transaction {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub enum TransactionSignature {
-    NaiveMultisig(Vec<secp256k1::schnorr::Signature>),
+    NaiveMultisig(Vec<fedimint_core::secp256k1_29::schnorr::Signature>),
     #[encodable_default]
     Default {
         variant: u64,

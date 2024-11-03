@@ -70,7 +70,7 @@ impl Decodable for secp256k1::SecretKey {
     }
 }
 
-impl Encodable for secp256k1::schnorr::Signature {
+impl Encodable for secp256k1_29::schnorr::Signature {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         let bytes = &self[..];
         assert_eq!(bytes.len(), secp256k1::constants::SCHNORR_SIGNATURE_SIZE);
@@ -79,7 +79,7 @@ impl Encodable for secp256k1::schnorr::Signature {
     }
 }
 
-impl Decodable for secp256k1::schnorr::Signature {
+impl Decodable for secp256k1_29::schnorr::Signature {
     fn consensus_decode<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
@@ -113,7 +113,6 @@ mod tests {
     use secp256k1_29::Message;
 
     use super::super::tests::test_roundtrip;
-    use crate::bitcoin_migration::bitcoin32_to_bitcoin30_schnorr_signature;
 
     #[test_log::test]
     fn test_ecdsa_sig() {
@@ -137,12 +136,12 @@ mod tests {
         let pub_key = sec_key.public_key();
         test_roundtrip(&pub_key);
 
-        let sig = bitcoin32_to_bitcoin30_schnorr_signature(&ctx.sign_schnorr(
+        let sig = ctx.sign_schnorr(
             &Message::from_digest(
                 *secp256k1_29::hashes::sha256::Hash::hash(b"Hello World!").as_ref(),
             ),
             &sec_key,
-        ));
+        );
 
         test_roundtrip(&sig);
     }

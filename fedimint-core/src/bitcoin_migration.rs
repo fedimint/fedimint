@@ -417,6 +417,13 @@ fn bitcoin32_to_bitcoin30_sha256d_hash(
     bitcoin30::hashes::sha256d::Hash::from_byte_array(*hash.as_ref())
 }
 
+pub fn bitcoin30_to_bitcoin32_schnorr_signature(
+    signature: &bitcoin30::secp256k1::schnorr::Signature,
+) -> bitcoin::secp256k1::schnorr::Signature {
+    bitcoin::secp256k1::schnorr::Signature::from_slice(signature.as_ref())
+        .expect("Failed to convert bitcoin30 schnorr signature to bitcoin32 schnorr signature")
+}
+
 pub fn bitcoin32_to_bitcoin30_schnorr_signature(
     signature: &bitcoin::secp256k1::schnorr::Signature,
 ) -> bitcoin30::secp256k1::schnorr::Signature {

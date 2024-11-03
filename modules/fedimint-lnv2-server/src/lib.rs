@@ -10,6 +10,7 @@ use std::time::Duration;
 use anyhow::{anyhow, ensure, Context};
 use bls12_381::{G1Projective, Scalar};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_schnorr_signature;
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -416,7 +417,9 @@ impl ServerModule for Lightning {
                         contract.refund_pk
                     }
                     OutgoingWitness::Cancel(forfeit_signature) => {
-                        if !contract.verify_forfeit_signature(forfeit_signature) {
+                        if !contract.verify_forfeit_signature(
+                            &bitcoin32_to_bitcoin30_schnorr_signature(forfeit_signature),
+                        ) {
                             return Err(LightningInputError::InvalidForfeitSignature);
                         }
 
