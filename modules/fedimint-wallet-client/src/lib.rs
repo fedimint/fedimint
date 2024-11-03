@@ -45,10 +45,7 @@ use fedimint_client::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_address, bitcoin30_to_bitcoin32_script_buf,
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_network,
-};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_pubkey;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
@@ -335,17 +332,15 @@ impl WalletClientModuleData {
 
         let public_tweak_key = secret_tweak_key.public_key();
 
-        let address = bitcoin30_to_bitcoin32_address(
-            &self
-                .cfg
-                .peg_in_descriptor
-                .tweak(
-                    &bitcoin30_to_bitcoin32_secp256k1_pubkey(&public_tweak_key),
-                    bitcoin::secp256k1::SECP256K1,
-                )
-                .address(bitcoin32_to_bitcoin30_network(&self.cfg.network))
-                .unwrap(),
-        );
+        let address = self
+            .cfg
+            .peg_in_descriptor
+            .tweak(
+                &bitcoin30_to_bitcoin32_secp256k1_pubkey(&public_tweak_key),
+                bitcoin::secp256k1::SECP256K1,
+            )
+            .address(self.cfg.network)
+            .unwrap();
 
         // TODO: make hash?
         let operation_id = OperationId(public_tweak_key.x_only_public_key().0.serialize());
@@ -360,16 +355,13 @@ impl WalletClientModuleData {
         let (secret_tweak_key, _, address, operation_id) = self.derive_deposit_address(idx);
 
         (
-            bitcoin30_to_bitcoin32_script_buf(
-                &self
-                    .cfg
-                    .peg_in_descriptor
-                    .tweak(
-                        &bitcoin30_to_bitcoin32_secp256k1_pubkey(&secret_tweak_key.public_key()),
-                        SECP256K1,
-                    )
-                    .script_pubkey(),
-            ),
+            self.cfg
+                .peg_in_descriptor
+                .tweak(
+                    &bitcoin30_to_bitcoin32_secp256k1_pubkey(&secret_tweak_key.public_key()),
+                    SECP256K1,
+                )
+                .script_pubkey(),
             address,
             secret_tweak_key,
             operation_id,

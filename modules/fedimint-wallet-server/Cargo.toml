@@ -30,7 +30,6 @@ fedimint-wallet-common = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 miniscript = { workspace = true }
-miniscript12 = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 strum = { workspace = true }

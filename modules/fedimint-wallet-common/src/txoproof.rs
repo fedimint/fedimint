@@ -5,8 +5,7 @@ use anyhow::format_err;
 use bitcoin::secp256k1::{PublicKey, Secp256k1, Signing, Verification};
 use bitcoin::{Amount, BlockHash, OutPoint, Transaction};
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_block_hash, bitcoin32_to_bitcoin30_script_buf,
-    bitcoin32_to_bitcoin30_txid,
+    bitcoin30_to_bitcoin32_block_hash, bitcoin32_to_bitcoin30_txid,
 };
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -107,7 +106,7 @@ impl PegInProof {
             .get(self.output_idx as usize)
             .expect("output_idx in-rangeness is an invariant guaranteed by constructors");
 
-        if bitcoin32_to_bitcoin30_script_buf(&txo.script_pubkey) != script {
+        if txo.script_pubkey != script {
             return Err(PegInProofError::ScriptDoesNotMatch);
         }
 

@@ -35,8 +35,7 @@ use common::{
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_network,
-    bitcoin30_to_bitcoin32_script_buf, bitcoin32_to_bitcoin30_secp256k1_pubkey,
-    bitcoin32_to_bitcoin30_unchecked_address,
+    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_unchecked_address,
 };
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -82,8 +81,8 @@ use metrics::{
     WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS, WALLET_PEGIN_SATS,
     WALLET_PEGOUT_FEES_SATS, WALLET_PEGOUT_SATS,
 };
+use miniscript::psbt::PsbtExt;
 use miniscript::{translate_hash_fail, Descriptor, TranslatePk};
-use miniscript12::psbt::PsbtExt;
 use rand::rngs::OsRng;
 use serde::Serialize;
 use strum::IntoEnumIterator;
@@ -1096,7 +1095,7 @@ impl Wallet {
             .tweak(&pending_tx.tweak, &self.secp)
             .script_pubkey();
         for (idx, output) in pending_tx.tx.output.iter().enumerate() {
-            if output.script_pubkey == bitcoin30_to_bitcoin32_script_buf(&script_pk) {
+            if output.script_pubkey == script_pk {
                 dbtx.insert_entry(
                     &UTXOKey(bitcoin::OutPoint {
                         txid: pending_tx.tx.compute_txid(),
@@ -1625,18 +1624,17 @@ impl<'a> StatelessWallet<'a> {
                         non_witness_utxo: None,
                         witness_utxo: Some(TxOut {
                             value: utxo.amount,
-                            script_pubkey: bitcoin30_to_bitcoin32_script_buf(&script_pubkey),
+                            script_pubkey,
                         }),
                         partial_sigs: Default::default(),
                         sighash_type: None,
                         redeem_script: None,
-                        witness_script: Some(bitcoin30_to_bitcoin32_script_buf(
-                            &self
-                                .descriptor
+                        witness_script: Some(
+                            self.descriptor
                                 .tweak(&utxo.tweak, self.secp)
                                 .script_code()
                                 .expect("Failed to tweak descriptor"),
-                        )),
+                        ),
                         bip32_derivation: Default::default(),
                         final_script_sig: None,
                         final_script_witness: None,
@@ -1762,7 +1760,7 @@ impl<'a> StatelessWallet<'a> {
             })
             .expect("can't fail");
 
-        bitcoin30_to_bitcoin32_script_buf(&descriptor.script_pubkey())
+        descriptor.script_pubkey()
     }
 }
 

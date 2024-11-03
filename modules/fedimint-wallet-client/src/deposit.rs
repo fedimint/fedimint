@@ -4,7 +4,6 @@ use std::time::{Duration, SystemTime};
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_script_buf;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1_29::Keypair;
@@ -101,12 +100,10 @@ async fn await_created_btc_transaction_submitted(
     context: WalletClientContext,
     tweak: Keypair,
 ) -> (bitcoin::Transaction, u32) {
-    let script = bitcoin30_to_bitcoin32_script_buf(
-        &context
-            .wallet_descriptor
-            .tweak(&tweak.public_key(), &context.secp)
-            .script_pubkey(),
-    );
+    let script = context
+        .wallet_descriptor
+        .tweak(&tweak.public_key(), &context.secp)
+        .script_pubkey();
     loop {
         match context.rpc.watch_script_history(&script).await {
             Ok(()) => break,

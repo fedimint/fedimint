@@ -7,7 +7,6 @@ use fedimint_core::task::MaybeSend;
 use fedimint_core::PeerId;
 use futures::StreamExt;
 use jsonrpsee_core::Serialize;
-use miniscript::ToPublicKey;
 use secp256k1::{Message, Verification};
 use serde::Deserialize;
 
@@ -72,7 +71,7 @@ impl SignedApiAnnouncement {
         pk: &secp256k1::PublicKey,
     ) -> bool {
         let msg: Message = self.api_announcement.tagged_hash().into();
-        ctx.verify_schnorr(&self.signature, &msg, &pk.to_x_only_pubkey())
+        ctx.verify_schnorr(&self.signature, &msg, &pk.x_only_public_key().0)
             .is_ok()
     }
 }
