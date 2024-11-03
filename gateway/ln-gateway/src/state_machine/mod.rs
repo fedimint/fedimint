@@ -224,6 +224,7 @@ impl ClientModule for GatewayClientModule {
 
     fn output_fee(
         &self,
+        _amount: Amount,
         output: &<Self::Common as fedimint_core::module::ModuleCommon>::Output,
     ) -> Option<Amount> {
         match output.maybe_v0_ref()? {

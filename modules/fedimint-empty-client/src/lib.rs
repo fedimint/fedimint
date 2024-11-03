@@ -66,7 +66,11 @@ impl ClientModule for EmptyClientModule {
         unreachable!()
     }
 
-    fn output_fee(&self, _output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
+    fn output_fee(
+        &self,
+        _amount: Amount,
+        _output: &<Self::Common as ModuleCommon>::Output,
+    ) -> Option<Amount> {
         unreachable!()
     }
 

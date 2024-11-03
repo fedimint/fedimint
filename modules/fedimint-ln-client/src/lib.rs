@@ -426,7 +426,11 @@ impl ClientModule for LightningClientModule {
         Some(self.cfg.fee_consensus.contract_input)
     }
 
-    fn output_fee(&self, output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
+    fn output_fee(
+        &self,
+        _amount: Amount,
+        output: &<Self::Common as ModuleCommon>::Output,
+    ) -> Option<Amount> {
         match output.maybe_v0_ref()? {
             LightningOutputV0::Contract(_) => Some(self.cfg.fee_consensus.contract_output),
             LightningOutputV0::Offer(_) | LightningOutputV0::CancelOutgoing { .. } => {

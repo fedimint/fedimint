@@ -19,11 +19,12 @@ pub struct LightningGenParams {
 }
 
 impl LightningGenParams {
+    #[allow(clippy::missing_panics_doc)]
     pub fn regtest(bitcoin_rpc: BitcoinRpcConfig) -> Self {
         Self {
             local: LightningGenParamsLocal { bitcoin_rpc },
             consensus: LightningGenParamsConsensus {
-                fee_consensus: FeeConsensus::default(),
+                fee_consensus: FeeConsensus::new_lnv2(1000).expect("Relative fee is within range"),
                 network: Network::Regtest,
             },
         }
@@ -115,7 +116,7 @@ fn migrate_config_consensus(
                 )
             })
             .collect(),
-        fee_consensus: FeeConsensus::default(),
+        fee_consensus: FeeConsensus::new_lnv2(1000).expect("Relative fee is within range"),
         network: config.network,
     }
 }

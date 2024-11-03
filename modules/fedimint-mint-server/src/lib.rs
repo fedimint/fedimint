@@ -408,7 +408,7 @@ impl ServerModule for Mint {
         .await;
 
         let amount = input.amount;
-        let fee = self.cfg.consensus.fee_consensus.note_spend_abs;
+        let fee = self.cfg.consensus.fee_consensus.fee(amount);
 
         calculate_mint_redeemed_ecash_metrics(dbtx, amount, fee);
 
@@ -439,9 +439,12 @@ impl ServerModule for Mint {
 
         dbtx.insert_new_entry(&MintAuditItemKey::Issuance(out_point), &output.amount)
             .await;
+
         let amount = output.amount;
-        let fee = self.cfg.consensus.fee_consensus.note_issuance_abs;
+        let fee = self.cfg.consensus.fee_consensus.fee(amount);
+
         calculate_mint_issued_ecash_metrics(dbtx, amount, fee);
+
         Ok(TransactionItemAmount { amount, fee })
     }
 
@@ -682,10 +685,10 @@ mod test {
     };
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
+    use fedimint_core::fee_consensus::FeeConsensus;
     use fedimint_core::module::registry::ModuleRegistry;
     use fedimint_core::module::{ModuleConsensusVersion, ServerModuleInit};
     use fedimint_core::{secp256k1, Amount, PeerId, ServerModule};
-    use fedimint_mint_common::config::FeeConsensus;
     use fedimint_mint_common::{MintInput, Nonce, Note};
     use tbs::blind_message;
 
@@ -703,7 +706,10 @@ mod test {
             &peers,
             &ConfigGenModuleParams::from_typed(MintGenParams {
                 local: EmptyGenParams::default(),
-                consensus: MintGenParamsConsensus::new(2, FeeConsensus::default()),
+                consensus: MintGenParamsConsensus::new(
+                    2,
+                    FeeConsensus::new_lnv2(1000).expect("Relative fee is within range"),
+                ),
             })
             .unwrap(),
         );
@@ -734,7 +740,7 @@ mod test {
                     .unwrap()
                     .consensus
                     .peer_tbs_pks,
-                fee_consensus: FeeConsensus::default(),
+                fee_consensus: FeeConsensus::new_lnv2(1000).expect("Relative fee is within range"),
                 max_notes_per_denomination: 0,
             },
             private: MintConfigPrivate {
