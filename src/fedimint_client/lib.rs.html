@@ -3809,8 +3809,8 @@
         <span class="self">self</span>.inner.as_ref().expect(<span class="string">"Inner always set"</span>)
     }
 
-    <span class="kw">pub async fn </span>start_executor(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="self">self</span>.as_inner().start_executor().<span class="kw">await</span>;
+    <span class="kw">pub fn </span>start_executor(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="self">self</span>.as_inner().start_executor();
     }
 
     <span class="doccomment">/// Shutdown the client.
@@ -4142,12 +4142,12 @@
         <span class="self">Self</span>::get_config_from_db(db).<span class="kw">await</span>.is_some()
     }
 
-    <span class="kw">pub async fn </span>start_executor(<span class="self">self</span>: <span class="kw-2">&amp;</span>Arc&lt;<span class="self">Self</span>&gt;) {
+    <span class="kw">pub fn </span>start_executor(<span class="self">self</span>: <span class="kw-2">&amp;</span>Arc&lt;<span class="self">Self</span>&gt;) {
         <span class="macro">debug!</span>(
             <span class="string">"Starting fedimint client executor (version: {})"</span>,
             <span class="macro">fedimint_build_code_version_env!</span>()
         );
-        <span class="self">self</span>.executor.start_executor(<span class="self">self</span>.context_gen()).<span class="kw">await</span>;
+        <span class="self">self</span>.executor.start_executor(<span class="self">self</span>.context_gen());
     }
 
     <span class="kw">pub fn </span>federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationId {
@@ -5762,7 +5762,7 @@
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>!stopped {
-            client.as_inner().start_executor().<span class="kw">await</span>;
+            client.as_inner().start_executor();
         }
         <span class="prelude-val">Ok</span>(client)
     }
@@ -5785,7 +5785,7 @@
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>!stopped {
-            client.as_inner().start_executor().<span class="kw">await</span>;
+            client.as_inner().start_executor();
         }
 
         <span class="prelude-val">Ok</span>(client)

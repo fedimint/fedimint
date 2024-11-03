@@ -504,7 +504,7 @@
     <span class="attr">#[wasm_bindgen_test]
     </span><span class="kw">async fn </span>receive() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>client = client(<span class="kw-2">&amp;</span>faucet::invite_code().<span class="kw">await</span><span class="question-mark">?</span>.parse()<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        client.start_executor().<span class="kw">await</span>;
+        client.start_executor();
         <span class="kw">let </span>ln_gateway = get_gateway(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
         futures::future::try_join_all(
             (<span class="number">0</span>..<span class="number">10</span>)
@@ -599,7 +599,7 @@
     <span class="attr">#[wasm_bindgen_test]
     </span><span class="kw">async fn </span>receive_and_pay() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>client = client(<span class="kw-2">&amp;</span>faucet::invite_code().<span class="kw">await</span><span class="question-mark">?</span>.parse()<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        client.start_executor().<span class="kw">await</span>;
+        client.start_executor();
         <span class="kw">let </span>ln_gateway = get_gateway(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
 
         futures::future::try_join_all(
@@ -683,7 +683,7 @@
     <span class="attr">#[wasm_bindgen_test]
     </span><span class="kw">async fn </span>test_ecash() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>client = client(<span class="kw-2">&amp;</span>faucet::invite_code().<span class="kw">await</span><span class="question-mark">?</span>.parse()<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        client.start_executor().<span class="kw">await</span>;
+        client.start_executor();
         <span class="kw">let </span>ln_gateway = get_gateway(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
 
         futures::future::try_join_all(
@@ -699,7 +699,7 @@
     <span class="attr">#[wasm_bindgen_test]
     </span><span class="kw">async fn </span>test_ecash_exact() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>client = client(<span class="kw-2">&amp;</span>faucet::invite_code().<span class="kw">await</span><span class="question-mark">?</span>.parse()<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        client.start_executor().<span class="kw">await</span>;
+        client.start_executor();
         <span class="kw">let </span>ln_gateway = get_gateway(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
 
         receive_once(client.clone(), Amount::from_sats(<span class="number">100</span>), ln_gateway).<span class="kw">await</span><span class="question-mark">?</span>;

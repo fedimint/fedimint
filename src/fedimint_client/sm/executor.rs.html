@@ -1433,8 +1433,7 @@
 <a href="#1432" id="1432">1432</a>
 <a href="#1433" id="1433">1433</a>
 <a href="#1434" id="1434">1434</a>
-<a href="#1435" id="1435">1435</a>
-<a href="#1436" id="1436">1436</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
+<a href="#1435" id="1435">1435</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 <span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::io::{Error, Read, Write};
@@ -1458,7 +1457,7 @@
 <span class="kw">use </span>futures::future::{<span class="self">self</span>, select_all};
 <span class="kw">use </span>futures::stream::{FuturesUnordered, StreamExt};
 <span class="kw">use </span>tokio::select;
-<span class="kw">use </span>tokio::sync::{mpsc, oneshot, Mutex};
+<span class="kw">use </span>tokio::sync::{mpsc, oneshot};
 <span class="kw">use </span>tracing::{debug, error, info, trace, warn, Instrument};
 
 <span class="kw">use </span><span class="kw">super</span>::state::StateTransitionFunction;
@@ -1495,7 +1494,7 @@
 
 <span class="kw">struct </span>ExecutorInner {
     db: Database,
-    state: Mutex&lt;ExecutorState&gt;,
+    state: std::sync::RwLock&lt;ExecutorState&gt;,
     module_contexts: BTreeMap&lt;ModuleInstanceId, DynContext&gt;,
     valid_module_ids: BTreeSet&lt;ModuleInstanceId&gt;,
     notifier: Notifier,
@@ -1667,9 +1666,9 @@
                 <span class="kw">let </span>context = <span class="self">self
                     </span>.inner
                     .state
-                    .lock()
-                    .<span class="kw">await
-                    </span>.gen_context(<span class="kw-2">&amp;</span>state)
+                    .read()
+                    .unwrap()
+                    .gen_context(<span class="kw-2">&amp;</span>state)
                     .expect(<span class="string">"executor should be running at this point"</span>);
 
                 <span class="kw">if </span>state.is_terminal(module_context, <span class="kw-2">&amp;</span>context) {
@@ -1778,9 +1777,13 @@
     ///
     /// ## Panics
     /// If called more than once.
-    </span><span class="kw">pub async fn </span>start_executor(<span class="kw-2">&amp;</span><span class="self">self</span>, context_gen: ContextGen) {
-        <span class="kw">let </span><span class="prelude-val">Some</span>((shutdown_receiver, sm_update_rx)) =
-            <span class="self">self</span>.inner.state.lock().<span class="kw">await</span>.start(context_gen.clone())
+    </span><span class="kw">pub fn </span>start_executor(<span class="kw-2">&amp;</span><span class="self">self</span>, context_gen: ContextGen) {
+        <span class="kw">let </span><span class="prelude-val">Some</span>((shutdown_receiver, sm_update_rx)) = <span class="self">self
+            </span>.inner
+            .state
+            .write()
+            .expect(<span class="string">"locking can't fail"</span>)
+            .start(context_gen.clone())
         <span class="kw">else </span>{
             <span class="macro">panic!</span>(<span class="string">"start_executor was called previously"</span>);
         };
@@ -2248,10 +2251,7 @@
 <span class="kw">impl </span>ExecutorInner {
     <span class="doccomment">/// See [`Executor::stop_executor`].
     </span><span class="kw">fn </span>stop_executor(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;()&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self
-            </span>.state
-            .try_lock()
-            .expect(<span class="string">"Only locked during startup, no collisions should be possible"</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.write().expect(<span class="string">"Locking can't fail"</span>);
 
         state.stop()
     }
@@ -2302,7 +2302,7 @@
 
         <span class="kw">let </span>inner = Arc::new(ExecutorInner {
             db,
-            state: Mutex::new(ExecutorState::Unstarted { sm_update_rx }),
+            state: std::sync::RwLock::new(ExecutorState::Unstarted { sm_update_rx }),
             module_contexts: <span class="self">self</span>.module_contexts,
             valid_module_ids: <span class="self">self</span>.valid_module_ids,
             notifier,
@@ -2790,7 +2790,7 @@
         <span class="kw">const </span>KIND: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; = <span class="prelude-val">None</span>;
     }
 
-    <span class="kw">async fn </span>get_executor() -&gt; (Executor, Sender&lt;u64&gt;, Database) {
+    <span class="kw">fn </span>get_executor() -&gt; (Executor, Sender&lt;u64&gt;, Database) {
         <span class="kw">let </span>(broadcast, <span class="kw">_</span>) = tokio::sync::broadcast::channel(<span class="number">10</span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>decoder_builder = Decoder::builder();
@@ -2810,9 +2810,7 @@
         );
         <span class="kw">let </span>executor =
             executor_builder.build(db.clone(), Notifier::new(db.clone()), TaskGroup::new());
-        executor
-            .start_executor(Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| DynGlobalClientContext::new_fake()))
-            .<span class="kw">await</span>;
+        executor.start_executor(Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| DynGlobalClientContext::new_fake()));
 
         <span class="macro">info!</span>(<span class="string">"Initialized test executor"</span>);
         (executor, broadcast, db)
@@ -2824,7 +2822,7 @@
         <span class="kw">const </span>MOCK_INSTANCE_1: ModuleInstanceId = <span class="number">42</span>;
         <span class="kw">const </span>MOCK_INSTANCE_2: ModuleInstanceId = <span class="number">21</span>;
 
-        <span class="kw">let </span>(executor, sender, _db) = get_executor().<span class="kw">await</span>;
+        <span class="kw">let </span>(executor, sender, _db) = get_executor();
         executor
             .add_state_machines(<span class="macro">vec!</span>[DynState::from_typed(
                 MOCK_INSTANCE_1,
