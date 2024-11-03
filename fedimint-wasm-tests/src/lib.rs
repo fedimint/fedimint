@@ -148,7 +148,7 @@ mod tests {
     #[wasm_bindgen_test]
     async fn receive() -> Result<()> {
         let client = client(&faucet::invite_code().await?.parse()?).await?;
-        client.start_executor().await;
+        client.start_executor();
         let ln_gateway = get_gateway(&client).await?;
         futures::future::try_join_all(
             (0..10)
@@ -243,7 +243,7 @@ mod tests {
     #[wasm_bindgen_test]
     async fn receive_and_pay() -> Result<()> {
         let client = client(&faucet::invite_code().await?.parse()?).await?;
-        client.start_executor().await;
+        client.start_executor();
         let ln_gateway = get_gateway(&client).await?;
 
         futures::future::try_join_all(
@@ -327,7 +327,7 @@ mod tests {
     #[wasm_bindgen_test]
     async fn test_ecash() -> Result<()> {
         let client = client(&faucet::invite_code().await?.parse()?).await?;
-        client.start_executor().await;
+        client.start_executor();
         let ln_gateway = get_gateway(&client).await?;
 
         futures::future::try_join_all(
@@ -343,7 +343,7 @@ mod tests {
     #[wasm_bindgen_test]
     async fn test_ecash_exact() -> Result<()> {
         let client = client(&faucet::invite_code().await?.parse()?).await?;
-        client.start_executor().await;
+        client.start_executor();
         let ln_gateway = get_gateway(&client).await?;
 
         receive_once(client.clone(), Amount::from_sats(100), ln_gateway).await?;
