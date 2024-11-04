@@ -129,22 +129,24 @@ impl WaitForPreimageState {
         let mut stream = context.notifier.subscribe(common.operation_id).await;
         loop {
             debug!("Waiting for preimage for {common:?}");
-            if let Some(GatewayClientStateMachines::Receive(state)) = stream.next().await {
-                match state.state {
-                    IncomingSmStates::Preimage(preimage) => {
-                        debug!("Received preimage for {common:?}");
-                        return Ok(preimage);
-                    }
-                    IncomingSmStates::RefundSubmitted { out_points, error } => {
-                        info!("Refund submitted for {common:?}: {out_points:?} {error}");
-                        return Err(CompleteHtlcError::IncomingContractNotFunded);
-                    }
-                    IncomingSmStates::FundingFailed { error } => {
-                        warn!("Funding failed for {common:?}: {error}");
-                        return Err(CompleteHtlcError::IncomingContractNotFunded);
-                    }
-                    _ => {}
+            let Some(GatewayClientStateMachines::Receive(state)) = stream.next().await else {
+                continue;
+            };
+
+            match state.state {
+                IncomingSmStates::Preimage(preimage) => {
+                    debug!("Received preimage for {common:?}");
+                    return Ok(preimage);
                 }
+                IncomingSmStates::RefundSubmitted { out_points, error } => {
+                    info!("Refund submitted for {common:?}: {out_points:?} {error}");
+                    return Err(CompleteHtlcError::IncomingContractNotFunded);
+                }
+                IncomingSmStates::FundingFailed { error } => {
+                    warn!("Funding failed for {common:?}: {error}");
+                    return Err(CompleteHtlcError::IncomingContractNotFunded);
+                }
+                _ => {}
             }
         }
     }
@@ -199,56 +201,46 @@ impl CompleteHtlcState {
     async fn await_complete_htlc(
         context: GatewayClientContext,
         common: GatewayCompleteCommon,
-        outcome: HtlcOutcome,
+        htlc_outcome: HtlcOutcome,
     ) -> Result<(), CompleteHtlcError> {
-        // Wait until the lightning node is online to complete the HTLC
-        loop {
-            let htlc_outcome = outcome.clone();
-            let lightning_context = context.gateway.get_lightning_context().await;
-            match lightning_context {
-                Ok(lightning_context) => {
-                    let htlc = match htlc_outcome {
-                        HtlcOutcome::Success(preimage) => InterceptPaymentResponse {
-                            action: PaymentAction::Settle(preimage),
-                            payment_hash: common.payment_hash,
-                            incoming_chan_id: common.incoming_chan_id,
-                            htlc_id: common.htlc_id,
-                        },
-                        HtlcOutcome::Failure(_) => InterceptPaymentResponse {
-                            action: PaymentAction::Cancel,
-                            payment_hash: common.payment_hash,
-                            incoming_chan_id: common.incoming_chan_id,
-                            htlc_id: common.htlc_id,
-                        },
-                    };
-
-                    lightning_context
-                        .lnrpc
-                        .complete_htlc(htlc)
-                        .await
-                        .map_err(|_| CompleteHtlcError::FailedToCompleteHtlc)?;
-                    return Ok(());
-                }
+        // Wait until the lightning node is online to complete the HTLC.
+        let lightning_context = loop {
+            match context.gateway.get_lightning_context().await {
+                Ok(lightning_context) => break lightning_context,
                 Err(e) => {
                     warn!("Trying to complete HTLC but got {e}, will keep retrying...");
                     sleep(Duration::from_secs(5)).await;
+                    continue;
                 }
             }
-        }
+        };
+
+        let htlc = InterceptPaymentResponse {
+            action: match htlc_outcome {
+                HtlcOutcome::Success(preimage) => PaymentAction::Settle(preimage),
+                HtlcOutcome::Failure(_) => PaymentAction::Cancel,
+            },
+            payment_hash: common.payment_hash,
+            incoming_chan_id: common.incoming_chan_id,
+            htlc_id: common.htlc_id,
+        };
+
+        lightning_context
+            .lnrpc
+            .complete_htlc(htlc)
+            .await
+            .map_err(|_| CompleteHtlcError::FailedToCompleteHtlc)
     }
 
     fn transition_success(
         result: &Result<(), CompleteHtlcError>,
         common: GatewayCompleteCommon,
     ) -> GatewayCompleteStateMachine {
-        match result {
-            Ok(()) => GatewayCompleteStateMachine {
-                common,
-                state: GatewayCompleteStates::HtlcFinished,
-            },
-            Err(_) => GatewayCompleteStateMachine {
-                common,
-                state: GatewayCompleteStates::Failure,
+        GatewayCompleteStateMachine {
+            common,
+            state: match result {
+                Ok(()) => GatewayCompleteStates::HtlcFinished,
+                Err(_) => GatewayCompleteStates::Failure,
             },
         }
     }
