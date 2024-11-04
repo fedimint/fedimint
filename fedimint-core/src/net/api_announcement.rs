@@ -11,7 +11,7 @@ use secp256k1::{Message, Verification};
 use serde::Deserialize;
 
 use crate::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_schnorr_signature, bitcoin32_to_bitcoin30_schnorr_signature,
+    bitcoin30_to_bitcoin32_secp256k1_message, bitcoin32_to_bitcoin30_schnorr_signature,
 };
 use crate::db::{
     Database, DatabaseKey, DatabaseKeyPrefix, DatabaseRecord, IDatabaseTransactionOpsCoreTyped,
@@ -52,16 +52,16 @@ impl ApiAnnouncement {
         sha256::Hash::hash(&msg)
     }
 
-    pub fn sign<C: secp256k1::Signing>(
+    pub fn sign<C: secp256k1_29::Signing>(
         &self,
-        ctx: &secp256k1::Secp256k1<C>,
-        key: &secp256k1::KeyPair,
+        ctx: &secp256k1_29::Secp256k1<C>,
+        key: &secp256k1_29::Keypair,
     ) -> SignedApiAnnouncement {
-        let msg = self.tagged_hash().into();
+        let msg = bitcoin30_to_bitcoin32_secp256k1_message(&self.tagged_hash().into());
         let signature = ctx.sign_schnorr(&msg, key);
         SignedApiAnnouncement {
             api_announcement: self.clone(),
-            signature: bitcoin30_to_bitcoin32_schnorr_signature(&signature),
+            signature,
         }
     }
 }

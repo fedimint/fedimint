@@ -45,7 +45,7 @@ rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = "1.10.0"
 rcgen = "=0.13.1"
-secp256k1 = { workspace = true }
+secp256k1_29 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha3 = { workspace = true }
