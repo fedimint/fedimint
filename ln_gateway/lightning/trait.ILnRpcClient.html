@@ -189,7 +189,7 @@ state machines. In more detail, when called for a given invoice:</p>
 <ul>
 <li>If the payment is already in-flight, wait for that payment to complete
 as if it were the first call.</li>
-<li>If the payment has already been attempted and failed, retry.</li>
+<li>If the payment has already been attempted and failed, return an error.</li>
 <li>If the payment has already succeeded, return a success response.</li>
 </ul>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.pay_private" class="method"><a class="src rightside" href="../../src/ln_gateway/lightning/mod.rs.html#150-159">Source</a><h4 class="code-header">fn <a href="#method.pay_private" class="fn">pay_private</a>&lt;'life0, 'async_trait&gt;(
