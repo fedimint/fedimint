@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
 use bitcoin30::secp256k1;
@@ -19,7 +19,6 @@ use fedimint_lnv2_common::endpoint_constants::{
     SEND_PAYMENT_ENDPOINT,
 };
 use fedimint_lnv2_common::ContractId;
-use itertools::Itertools;
 use lightning_invoice::Bolt11Invoice;
 use rand::seq::SliceRandom;
 use secp256k1::schnorr::Signature;
@@ -126,8 +125,9 @@ where
         let mut union = gateways
             .values()
             .flatten()
-            .dedup()
             .cloned()
+            .collect::<BTreeSet<SafeUrl>>()
+            .into_iter()
             .collect::<Vec<SafeUrl>>();
 
         // Shuffling the gateways ensures that payments are distributed over the

@@ -3,7 +3,6 @@ use devimint::federation::Client;
 use devimint::version_constants::VERSION_0_5_0_ALPHA;
 use devimint::{cmd, util};
 use fedimint_core::core::OperationId;
-use fedimint_core::util::SafeUrl;
 use fedimint_lnv2_client::{FinalReceiveState, FinalSendState};
 use lightning_invoice::Bolt11Invoice;
 use substring::Substring;
@@ -56,24 +55,27 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
-    info!("Testing gateway registration...");
-
     let client = dev_fed
         .fed()
         .await?
         .new_joined_client("lnv2-test-gateway-registration-client")
         .await?;
 
+    let gw_lnd = dev_fed.gw_lnd().await?;
     let gw_ldk = dev_fed
         .gw_ldk_connected()
         .await?
         .as_ref()
         .expect("Gateways of version 0.5.0 or higher support LDK");
 
-    let gateway = SafeUrl::parse(&gw_ldk.addr).expect("LDK gateway address is invalid url");
+    let gateways = [gw_lnd.addr.clone(), gw_ldk.addr.clone()];
 
-    for peer in 0..dev_fed.fed().await?.members.len() {
-        assert!(add_gateway(&client, peer, &gateway.to_string()).await?);
+    info!("Testing registration of gateways...");
+
+    for gateway in &gateways {
+        for peer in 0..dev_fed.fed().await?.members.len() {
+            assert!(add_gateway(&client, peer, gateway).await?);
+        }
     }
 
     assert_eq!(
@@ -83,7 +85,7 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
             .as_array()
             .expect("JSON Value is not an array")
             .len(),
-        1
+        2
     );
 
     assert_eq!(
@@ -93,20 +95,53 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
             .as_array()
             .expect("JSON Value is not an array")
             .len(),
-        1
+        2
     );
 
-    assert_eq!(
-        cmd!(client, "module", "lnv2", "gateway", "select")
+    info!("Testing selection of gateways...");
+
+    assert!(gateways.contains(
+        &cmd!(client, "module", "lnv2", "gateway", "select")
             .out_json()
             .await?
             .as_str()
-            .expect("JSON Value is not a string"),
-        gateway.to_string().as_str()
-    );
+            .expect("JSON Value is not a string")
+            .to_string()
+    ));
 
-    for peer in 0..dev_fed.fed().await?.members.len() {
-        assert!(remove_gateway(&client, peer, &gateway).await?);
+    cmd!(client, "module", "lnv2", "gateway", "cache")
+        .out_json()
+        .await?;
+
+    for _ in 0..10 {
+        for gateway in &gateways {
+            let invoice = receive(&client, gateway, 1_000_000).await?.0;
+
+            assert_eq!(
+                cmd!(
+                    client,
+                    "module",
+                    "lnv2",
+                    "gateway",
+                    "select",
+                    "--invoice",
+                    invoice.to_string()
+                )
+                .out_json()
+                .await?
+                .as_str()
+                .expect("JSON Value is not a string"),
+                gateway
+            )
+        }
+    }
+
+    info!("Testing deregistration of gateways...");
+
+    for gateway in &gateways {
+        for peer in 0..dev_fed.fed().await?.members.len() {
+            assert!(remove_gateway(&client, peer, gateway).await?);
+        }
     }
 
     assert!(cmd!(client, "module", "lnv2", "gateway", "list")
@@ -255,7 +290,7 @@ async fn add_gateway(client: &Client, peer: usize, gateway: &String) -> anyhow::
     .ok_or(anyhow::anyhow!("JSON Value is not a boolean"))
 }
 
-async fn remove_gateway(client: &Client, peer: usize, gateway: &SafeUrl) -> anyhow::Result<bool> {
+async fn remove_gateway(client: &Client, peer: usize, gateway: &String) -> anyhow::Result<bool> {
     cmd!(
         client,
         "--our-id",
@@ -266,7 +301,7 @@ async fn remove_gateway(client: &Client, peer: usize, gateway: &SafeUrl) -> anyh
         "lnv2",
         "gateway",
         "remove",
-        gateway.to_string()
+        gateway
     )
     .out_json()
     .await?
