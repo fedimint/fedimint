@@ -120,7 +120,7 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// state machines. In more detail, when called for a given invoice:
     /// * If the payment is already in-flight, wait for that payment to complete
     ///   as if it were the first call.
-    /// * If the payment has already been attempted and failed, retry.
+    /// * If the payment has already been attempted and failed, return an error.
     /// * If the payment has already succeeded, return a success response.
     async fn pay(
         &self,
