@@ -94,6 +94,12 @@ impl ConfigGenApi {
     // Sets the auth and decryption key derived from the password
     pub async fn set_password(&self, auth: ApiAuth) -> ApiResult<()> {
         let mut state = self.require_status(ServerStatus::AwaitingPassword).await?;
+        let auth_trimmed = auth.0.trim();
+        if auth_trimmed != auth.0 {
+            return Err(ApiError::bad_request(
+                "Password contains leading/trailing whitespace".to_string(),
+            ));
+        }
         state.auth = Some(auth);
         state.status = ServerStatus::SharingConfigGenParams;
         info!(
