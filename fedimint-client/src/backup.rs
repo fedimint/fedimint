@@ -16,9 +16,9 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::secp256k1::{Secp256k1, SignOnly};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_BACKUP, LOG_CLIENT_RECOVERY};
-use secp256k1::{Secp256k1, SignOnly};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 

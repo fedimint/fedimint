@@ -3,6 +3,7 @@ use std::{ffi, iter};
 use anyhow::Context as _;
 use clap::Parser;
 use fedimint_core::core::OperationId;
+use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::Amount;
 use lightning_invoice::{Bolt11InvoiceDescription, Description};
 use serde::{Deserialize, Serialize};
@@ -20,7 +21,7 @@ enum Opts {
         #[clap(long)]
         expiry_time: Option<u64>,
         #[clap(long)]
-        gateway_id: Option<secp256k1::PublicKey>,
+        gateway_id: Option<PublicKey>,
         #[clap(long, default_value = "false")]
         force_internal: bool,
     },
@@ -38,7 +39,7 @@ enum Opts {
         #[clap(long, action)]
         finish_in_background: bool,
         #[clap(long)]
-        gateway_id: Option<secp256k1::PublicKey>,
+        gateway_id: Option<PublicKey>,
         #[clap(long, default_value = "false")]
         force_internal: bool,
     },

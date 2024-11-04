@@ -59,7 +59,8 @@ use fedimint_core::task::{timeout, MaybeSend, MaybeSync};
 use fedimint_core::util::update_merge::UpdateMerge;
 use fedimint_core::util::{backoff_util, retry, BoxStream};
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, runtime, Amount, OutPoint, TransactionId,
+    apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1, Amount, OutPoint,
+    TransactionId,
 };
 use fedimint_ln_common::config::{FeeToAmount, LightningClientConfig};
 use fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};

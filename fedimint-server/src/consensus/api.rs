@@ -49,7 +49,7 @@ use fedimint_core::transaction::{
     SerdeTransaction, Transaction, TransactionError, TransactionSubmissionOutcome,
 };
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{OutPoint, PeerId, TransactionId};
+use fedimint_core::{secp256k1_29, OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
 use futures::StreamExt;
 use tokio::sync::{watch, RwLock};

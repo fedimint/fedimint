@@ -4,7 +4,7 @@ use std::sync::Arc;
 use assert_matches::assert_matches;
 use fedimint_client::Client;
 use fedimint_core::util::NextOrPending;
-use fedimint_core::{sats, Amount};
+use fedimint_core::{sats, secp256k1, Amount};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
@@ -615,7 +615,7 @@ mod fedimint_migration_tests {
     use fedimint_core::encoding::Encodable;
     use fedimint_core::module::DynServerModuleInit;
     use fedimint_core::util::SafeUrl;
-    use fedimint_core::{Amount, OutPoint, PeerId, TransactionId};
+    use fedimint_core::{secp256k1, Amount, OutPoint, PeerId, TransactionId};
     use fedimint_ln_client::db::{PaymentResult, PaymentResultKey, PaymentResultPrefix};
     use fedimint_ln_client::pay::{
         LightningPayCommon, LightningPayStates, PayInvoicePayload, PaymentData,

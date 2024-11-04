@@ -37,7 +37,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
-    extensible_associated_module_type, plugin_types_trait_impl_common, Amount, PeerId,
+    extensible_associated_module_type, plugin_types_trait_impl_common, secp256k1, Amount, PeerId,
 };
 use lightning::util::ser::{WithoutLength, Writeable};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
@@ -431,8 +431,8 @@ plugin_types_trait_impl_common!(
 /// Hack to get a route hint that implements `serde` traits.
 pub mod route_hints {
     use fedimint_core::encoding::{Decodable, Encodable};
+    use fedimint_core::secp256k1::PublicKey;
     use lightning_invoice::RoutingFees;
-    use secp256k1::PublicKey;
     use serde::{Deserialize, Serialize};
 
     #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]

@@ -1,6 +1,6 @@
 use bitcoin_hashes::Hash as BitcoinHash;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::Amount;
+use fedimint_core::{secp256k1, Amount};
 use serde::{Deserialize, Serialize};
 
 use super::Preimage;

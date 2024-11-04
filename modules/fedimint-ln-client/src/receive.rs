@@ -400,8 +400,8 @@ impl LightningReceiveFunded {
 #[cfg(test)]
 mod tests {
     use bitcoin30::hashes::{sha256, Hash};
+    use fedimint_core::secp256k1::{Secp256k1, SecretKey};
     use lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
-    use secp256k1::SecretKey;
 
     use super::*;
 
@@ -436,7 +436,7 @@ mod tests {
     }
 
     fn invoice(now_epoch: Duration, expiry_time: Duration) -> anyhow::Result<Bolt11Invoice> {
-        let ctx = secp256k1::Secp256k1::new();
+        let ctx = Secp256k1::new();
         let secret_key = SecretKey::new(&mut rand::thread_rng());
         Ok(InvoiceBuilder::new(Currency::Regtest)
             .description(String::new())

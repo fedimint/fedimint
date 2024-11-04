@@ -5,7 +5,7 @@ use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::secp256k1_29::Keypair;
-use fedimint_core::{impl_db_lookup, impl_db_record, OutPoint, TransactionId};
+use fedimint_core::{impl_db_lookup, impl_db_record, secp256k1, OutPoint, TransactionId};
 use fedimint_ln_common::{LightningGateway, LightningGatewayRegistration};
 use lightning_invoice::Bolt11Invoice;
 use secp256k1::PublicKey;
@@ -269,10 +269,10 @@ mod tests {
     use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
     use fedimint_core::core::{IntoDynInstance, OperationId};
     use fedimint_core::encoding::Encodable;
+    use fedimint_core::secp256k1::{self, KeyPair};
     use fedimint_core::{BitcoinHash, TransactionId};
     use lightning_invoice::Bolt11Invoice;
     use rand::thread_rng;
-    use secp256k1::KeyPair;
 
     use crate::db::{get_v1_migrated_state, get_v2_migrated_state};
     use crate::receive::{

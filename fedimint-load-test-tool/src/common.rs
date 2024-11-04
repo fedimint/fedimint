@@ -14,7 +14,7 @@ use fedimint_core::db::Database;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::CommonModuleInit;
-use fedimint_core::{Amount, OutPoint, TieredCounts};
+use fedimint_core::{secp256k1_29, Amount, OutPoint, TieredCounts};
 use fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LnPayState, OutgoingLightningPayment,
 };

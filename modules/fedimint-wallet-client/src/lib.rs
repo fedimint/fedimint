@@ -59,7 +59,8 @@ use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::util::backoff_util::background_backoff;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, runtime, Amount, OutPoint, TransactionId,
+    apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1_29, Amount, OutPoint,
+    TransactionId,
 };
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use fedimint_wallet_common::config::{FeeConsensus, WalletClientConfig};

@@ -28,7 +28,6 @@ fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 lightning = { workspace = true }
 lightning-invoice = { workspace = true }
-secp256k1 = { workspace = true }
 serde = { workspace = true }
 serde-big-array = { workspace = true }
 serde_json = { workspace = true }

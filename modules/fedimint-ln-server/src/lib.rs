@@ -25,6 +25,7 @@ use fedimint_core::module::{
     ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
     SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
+use fedimint_core::secp256k1::{PublicKey, SECP256K1};
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::{
@@ -59,7 +60,6 @@ use fedimint_server::config::distributedgen::PeerHandleOps;
 use futures::StreamExt;
 use metrics::{LN_CANCEL_OUTGOING_CONTRACTS, LN_FUNDED_CONTRACT_SATS, LN_INCOMING_OFFER};
 use rand::rngs::OsRng;
-use secp256k1::PublicKey;
 use strum::IntoEnumIterator;
 use tracing::{debug, error, info, info_span, trace, warn};
 
@@ -748,7 +748,7 @@ impl ServerModule for Lightning {
                     }
                 };
 
-                secp256k1::global::SECP256K1
+                SECP256K1
                     .verify_schnorr(
                         &bitcoin32_to_bitcoin30_schnorr_signature(gateway_signature),
                         &outgoing_contract.cancellation_message().into(),
@@ -1246,6 +1246,7 @@ mod tests {
     use fedimint_core::envs::BitcoinRpcConfig;
     use fedimint_core::module::registry::ModuleRegistry;
     use fedimint_core::module::{InputMeta, ServerModuleInit, TransactionItemAmount};
+    use fedimint_core::secp256k1::{generate_keypair, PublicKey};
     use fedimint_core::task::TaskGroup;
     use fedimint_core::{Amount, OutPoint, PeerId, ServerModule, TransactionId};
     use fedimint_ln_common::config::{
@@ -1262,7 +1263,6 @@ mod tests {
     };
     use fedimint_ln_common::{ContractAccount, LightningInput, LightningOutput};
     use rand::rngs::OsRng;
-    use secp256k1::{generate_keypair, PublicKey};
 
     use crate::db::{ContractKey, LightningAuditItemKey};
     use crate::{Lightning, LightningInit};
