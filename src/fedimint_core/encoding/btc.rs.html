@@ -301,17 +301,7 @@
 <a href="#300" id="300">300</a>
 <a href="#301" id="301">301</a>
 <a href="#302" id="302">302</a>
-<a href="#303" id="303">303</a>
-<a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
+<a href="#303" id="303">303</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::format_err;
@@ -320,6 +310,7 @@
 <span class="kw">use </span>hex::{FromHex, ToHex};
 <span class="kw">use </span>miniscript::{Descriptor, MiniscriptKey};
 
+<span class="kw">use </span><span class="kw">super</span>::SimpleBitcoinRead;
 <span class="kw">use </span><span class="kw">crate</span>::bitcoin_migration::{
     bitcoin29_to_bitcoin32_network_magic, bitcoin29_to_bitcoin32_psbt,
     bitcoin30_to_bitcoin32_network, bitcoin32_checked_address_to_unchecked_address,
@@ -328,17 +319,6 @@
 };
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
-
-<span class="comment">// Simple decoder implementing `bitcoin_io::Read` for `std::io::Read`.
-// This is needed because `bitcoin::consensus::Decodable` requires a
-// `bitcoin_io::Read`.
-</span><span class="kw">struct </span>SimpleBitcoinRead&lt;R: std::io::Read&gt;(R);
-
-<span class="kw">impl</span>&lt;R: std::io::Read&gt; bitcoin_io::Read <span class="kw">for </span>SimpleBitcoinRead&lt;R&gt; {
-    <span class="kw">fn </span>read(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;mut </span>[u8]) -&gt; bitcoin_io::Result&lt;usize&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.read(buf).map_err(bitcoin_io::Error::from)
-    }
-}
 
 <span class="macro">macro_rules!</span> impl_encode_decode_bridge {
     (<span class="macro-nonterminal">$btc_type</span>:ty) =&gt; {

@@ -104,12 +104,10 @@
 <a href="#103" id="103">103</a>
 <a href="#104" id="104">104</a>
 <a href="#105" id="105">105</a>
-<a href="#106" id="106">106</a>
-<a href="#107" id="107">107</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
+<a href="#106" id="106">106</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>bitcoin::secp256k1::{<span class="self">self</span>, PublicKey, Secp256k1, Signing, Verification};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>miniscript::bitcoin::hashes::{hash160, ripemd160, sha256};
 <span class="kw">use </span>miniscript::{hash256, MiniscriptKey, ToPublicKey};
@@ -155,7 +153,7 @@
     <span class="kw">fn </span>to_public_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; miniscript::bitcoin::PublicKey {
         miniscript::bitcoin::PublicKey {
             compressed: <span class="bool-val">true</span>,
-            inner: bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span><span class="self">self</span>.key),
+            inner: <span class="self">self</span>.key,
         }
     }
 

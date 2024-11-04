@@ -503,10 +503,7 @@
 <a href="#502" id="502">502</a>
 <a href="#503" id="503">503</a>
 <a href="#504" id="504">504</a>
-<a href="#505" id="505">505</a>
-<a href="#506" id="506">506</a>
-<a href="#507" id="507">507</a>
-<a href="#508" id="508">508</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
+<a href="#505" id="505">505</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>bitcoin::ScriptBuf;
@@ -514,9 +511,6 @@
 <span class="kw">use </span>fedimint_bitcoind::DynBitcoindRpc;
 <span class="kw">use </span>fedimint_client::module::ClientContext;
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin30_to_bitcoin32_secp256k1_pubkey,
-};
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped <span class="kw">as _</span>,
@@ -529,7 +523,7 @@
 <span class="kw">use </span>fedimint_wallet_common::txoproof::PegInProof;
 <span class="kw">use </span>fedimint_wallet_common::WalletInput;
 <span class="kw">use </span>futures::StreamExt <span class="kw">as _</span>;
-<span class="kw">use </span>secp256k1::KeyPair;
+<span class="kw">use </span>secp256k1_29::Keypair;
 <span class="kw">use </span>tokio::sync::watch;
 <span class="kw">use </span>tracing::{debug, instrument, trace, warn};
 
@@ -907,7 +901,7 @@
 </span><span class="kw">async fn </span>claim_peg_in(
     client_ctx: <span class="kw-2">&amp;</span>ClientContext&lt;WalletClientModule&gt;,
     tweak_idx: TweakIdx,
-    tweak_key: KeyPair,
+    tweak_key: Keypair,
     transaction: <span class="kw-2">&amp;</span>bitcoin::Transaction,
     operation_id: OperationId,
     out_point: bitcoin::OutPoint,
@@ -918,7 +912,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         btc_transaction: <span class="kw-2">&amp;</span>bitcoin::Transaction,
         out_idx: u32,
-        tweak_key: KeyPair,
+        tweak_key: Keypair,
         txout_proof: TxOutProof,
         operation_id: OperationId,
     ) -&gt; (fedimint_core::TransactionId, Vec&lt;fedimint_core::OutPoint&gt;) {
@@ -926,7 +920,7 @@
             txout_proof,
             btc_transaction.clone(),
             out_idx,
-            bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>tweak_key.public_key()),
+            tweak_key.public_key(),
         )
         .expect(<span class="string">"TODO: handle API returning faulty proofs"</span>);
 
@@ -936,7 +930,7 @@
 
         <span class="kw">let </span>client_input = ClientInput::&lt;WalletInput&gt; {
             input: wallet_input,
-            keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>tweak_key)],
+            keys: <span class="macro">vec!</span>[tweak_key],
             amount,
         };
 

@@ -108,7 +108,13 @@
 <a href="#107" id="107">107</a>
 <a href="#108" id="108">108</a>
 <a href="#109" id="109">109</a>
-<a href="#110" id="110">110</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_core::db::DatabaseLookup;
@@ -117,10 +123,12 @@
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>jsonrpsee_core::Serialize;
-<span class="kw">use </span>miniscript::ToPublicKey;
 <span class="kw">use </span>secp256k1::{Message, Verification};
 <span class="kw">use </span>serde::Deserialize;
 
+<span class="kw">use </span><span class="kw">crate</span>::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_secp256k1_message, bitcoin32_to_bitcoin30_schnorr_signature,
+};
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     Database, DatabaseKey, DatabaseKeyPrefix, DatabaseRecord, IDatabaseTransactionOpsCoreTyped,
 };
@@ -138,7 +146,7 @@
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>SignedApiAnnouncement {
     <span class="kw">pub </span>api_announcement: ApiAnnouncement,
-    <span class="kw">pub </span>signature: secp256k1::schnorr::Signature,
+    <span class="kw">pub </span>signature: secp256k1_29::schnorr::Signature,
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq, Encodable, Decodable)]
@@ -160,12 +168,12 @@
         sha256::Hash::hash(<span class="kw-2">&amp;</span>msg)
     }
 
-    <span class="kw">pub fn </span>sign&lt;C: secp256k1::Signing&gt;(
+    <span class="kw">pub fn </span>sign&lt;C: secp256k1_29::Signing&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        ctx: <span class="kw-2">&amp;</span>secp256k1::Secp256k1&lt;C&gt;,
-        key: <span class="kw-2">&amp;</span>secp256k1::KeyPair,
+        ctx: <span class="kw-2">&amp;</span>secp256k1_29::Secp256k1&lt;C&gt;,
+        key: <span class="kw-2">&amp;</span>secp256k1_29::Keypair,
     ) -&gt; SignedApiAnnouncement {
-        <span class="kw">let </span>msg = <span class="self">self</span>.tagged_hash().into();
+        <span class="kw">let </span>msg = bitcoin30_to_bitcoin32_secp256k1_message(<span class="kw-2">&amp;</span><span class="self">self</span>.tagged_hash().into());
         <span class="kw">let </span>signature = ctx.sign_schnorr(<span class="kw-2">&amp;</span>msg, key);
         SignedApiAnnouncement {
             api_announcement: <span class="self">self</span>.clone(),
@@ -182,8 +190,12 @@
         pk: <span class="kw-2">&amp;</span>secp256k1::PublicKey,
     ) -&gt; bool {
         <span class="kw">let </span>msg: Message = <span class="self">self</span>.api_announcement.tagged_hash().into();
-        ctx.verify_schnorr(<span class="kw-2">&amp;</span><span class="self">self</span>.signature, <span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>pk.to_x_only_pubkey())
-            .is_ok()
+        ctx.verify_schnorr(
+            <span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_schnorr_signature(<span class="kw-2">&amp;</span><span class="self">self</span>.signature),
+            <span class="kw-2">&amp;</span>msg,
+            <span class="kw-2">&amp;</span>pk.x_only_public_key().<span class="number">0</span>,
+        )
+        .is_ok()
     }
 }
 

@@ -940,7 +940,13 @@
 <a href="#939" id="939">939</a>
 <a href="#940" id="940">940</a>
 <a href="#941" id="941">941</a>
-<a href="#942" id="942">942</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
+<a href="#942" id="942">942</a>
+<a href="#943" id="943">943</a>
+<a href="#944" id="944">944</a>
+<a href="#945" id="945">945</a>
+<a href="#946" id="946">946</a>
+<a href="#947" id="947">947</a>
+<a href="#948" id="948">948</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -948,7 +954,10 @@
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle,
 };
 <span class="kw">use </span>fedimint_client::{ClientHandleArc, DynGlobalClientContext};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_keypair,
+    bitcoin32_to_bitcoin30_schnorr_signature,
+};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -1320,7 +1329,7 @@
 
             <span class="kw">let </span>payment_parameters = <span class="self">Self</span>::validate_outgoing_account(
                 <span class="kw-2">&amp;</span>outgoing_contract_account,
-                context.redeem_key,
+                bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>context.redeem_key),
                 context.timelock_delta,
                 consensus_block_count.unwrap(),
                 <span class="kw-2">&amp;</span>payment_data,
@@ -1526,13 +1535,14 @@
 
     <span class="kw">fn </span>validate_outgoing_account(
         account: <span class="kw-2">&amp;</span>OutgoingContractAccount,
-        redeem_key: bitcoin30::key::KeyPair,
+        redeem_key: bitcoin::key::Keypair,
         timelock_delta: u64,
         consensus_block_count: u64,
         payment_data: <span class="kw-2">&amp;</span>PaymentData,
         routing_fees: RoutingFees,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PaymentParameters, OutgoingContractError&gt; {
-        <span class="kw">let </span>our_pub_key = secp256k1::PublicKey::from_keypair(<span class="kw-2">&amp;</span>redeem_key);
+        <span class="kw">let </span>our_pub_key =
+            secp256k1::PublicKey::from_keypair(<span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_keypair(<span class="kw-2">&amp;</span>redeem_key));
 
         <span class="kw">if </span>account.contract.cancelled {
             <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingContractError::CancelledContract);
@@ -1840,12 +1850,14 @@
     ) -&gt; GatewayPayStateMachine {
         <span class="macro">info!</span>(<span class="string">"Canceling outgoing contract {contract:?}"</span>);
         <span class="kw">let </span>cancel_signature = context.secp.sign_schnorr(
-            <span class="kw-2">&amp;</span>contract.contract.cancellation_message().into(),
-            <span class="kw-2">&amp;</span>context.redeem_key,
+            <span class="kw-2">&amp;</span>bitcoin::secp256k1::Message::from_digest(
+                <span class="kw-2">*</span>contract.contract.cancellation_message().as_ref(),
+            ),
+            <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>context.redeem_key),
         );
         <span class="kw">let </span>cancel_output = LightningOutput::new_v0_cancel_outgoing(
             contract.contract.contract_id(),
-            cancel_signature,
+            bitcoin32_to_bitcoin30_schnorr_signature(<span class="kw-2">&amp;</span>cancel_signature),
         );
         <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutput&gt; {
             output: cancel_output,

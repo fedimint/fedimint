@@ -1520,7 +1520,18 @@
 <a href="#1519" id="1519">1519</a>
 <a href="#1520" id="1520">1520</a>
 <a href="#1521" id="1521">1521</a>
-<a href="#1522" id="1522">1522</a></pre></div><pre class="rust"><code><span class="doccomment">//! Binary encoding interface suitable for
+<a href="#1522" id="1522">1522</a>
+<a href="#1523" id="1523">1523</a>
+<a href="#1524" id="1524">1524</a>
+<a href="#1525" id="1525">1525</a>
+<a href="#1526" id="1526">1526</a>
+<a href="#1527" id="1527">1527</a>
+<a href="#1528" id="1528">1528</a>
+<a href="#1529" id="1529">1529</a>
+<a href="#1530" id="1530">1530</a>
+<a href="#1531" id="1531">1531</a>
+<a href="#1532" id="1532">1532</a>
+<a href="#1533" id="1533">1533</a></pre></div><pre class="rust"><code><span class="doccomment">//! Binary encoding interface suitable for
 //! consensus critical encoding.
 //!
 //! Over time all structs that ! need to be encoded to binary will be migrated
@@ -2489,6 +2500,17 @@
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="prelude-val">Ok</span>(Cow::Owned(String::consensus_decode(d, modules)<span class="question-mark">?</span>))
+    }
+}
+
+<span class="comment">// Simple decoder implementing `bitcoin_io::Read` for `std::io::Read`.
+// This is needed because `bitcoin::consensus::Decodable` requires a
+// `bitcoin_io::Read`.
+</span><span class="kw">pub struct </span>SimpleBitcoinRead&lt;R: std::io::Read&gt;(R);
+
+<span class="kw">impl</span>&lt;R: std::io::Read&gt; bitcoin_io::Read <span class="kw">for </span>SimpleBitcoinRead&lt;R&gt; {
+    <span class="kw">fn </span>read(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;mut </span>[u8]) -&gt; bitcoin_io::Result&lt;usize&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.read(buf).map_err(bitcoin_io::Error::from)
     }
 }
 

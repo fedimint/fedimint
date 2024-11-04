@@ -443,14 +443,10 @@
 <a href="#442" id="442">442</a>
 <a href="#443" id="443">443</a>
 <a href="#444" id="444">444</a>
-<a href="#445" id="445">445</a>
-<a href="#446" id="446">446</a>
-<a href="#447" id="447">447</a>
-<a href="#448" id="448">448</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#445" id="445">445</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin::key::Keypair;
 <span class="kw">use </span>bitcoin::secp256k1;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_schnorr_signature;
 <span class="kw">use </span>fedimint_core::core::{
     DynInput, DynOutput, IInput, IOutput, IntoDynInstance, ModuleInstanceId,
 };
@@ -854,11 +850,9 @@
         <span class="kw">let </span>msg = secp256k1::Message::from_digest_slice(<span class="kw-2">&amp;</span>txid[..]).expect(<span class="string">"txid has right length"</span>);
 
         <span class="kw">let </span>signatures = input_keys
-            .into_iter()
+            .iter()
             .flatten()
-            .map(|keypair| {
-                bitcoin32_to_bitcoin30_schnorr_signature(<span class="kw-2">&amp;</span>secp_ctx.sign_schnorr(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>keypair))
-            })
+            .map(|keypair| secp_ctx.sign_schnorr(<span class="kw-2">&amp;</span>msg, keypair))
             .collect();
 
         <span class="kw">let </span>transaction = Transaction {

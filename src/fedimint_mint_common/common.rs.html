@@ -51,9 +51,15 @@
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
 <a href="#52" id="52">52</a>
-<a href="#53" id="53">53</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_schnorr_signature, bitcoin32_to_bitcoin30_schnorr_signature,
+};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::secp256k1;
 <span class="kw">use </span>secp256k1::{KeyPair, Message, PublicKey, Secp256k1, Signing, Verification, SECP256K1};
@@ -77,7 +83,7 @@
 
         <span class="prelude-val">Ok</span>(SignedBackupRequest {
             request: <span class="self">self</span>,
-            signature,
+            signature: bitcoin30_to_bitcoin32_schnorr_signature(<span class="kw-2">&amp;</span>signature),
         })
     }
 }
@@ -87,7 +93,7 @@
     <span class="attr">#[serde(flatten)]
     </span>request: BackupRequest,
     <span class="attr">#[serde(with = <span class="string">"::fedimint_core::encoding::as_hex"</span>)]
-    </span><span class="kw">pub </span>signature: secp256k1::schnorr::Signature,
+    </span><span class="kw">pub </span>signature: fedimint_core::secp256k1_29::schnorr::Signature,
 }
 
 <span class="kw">impl </span>SignedBackupRequest {
@@ -96,7 +102,7 @@
         </span>C: Signing + Verification,
     {
         ctx.verify_schnorr(
-            <span class="kw-2">&amp;</span><span class="self">self</span>.signature,
+            <span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_schnorr_signature(<span class="kw-2">&amp;</span><span class="self">self</span>.signature),
             <span class="kw-2">&amp;</span>Message::from_slice(<span class="kw-2">&amp;</span><span class="self">self</span>.request.hash().to_byte_array()).expect(<span class="string">"Can't fail"</span>),
             <span class="kw-2">&amp;</span><span class="self">self</span>.request.id.x_only_public_key().<span class="number">0</span>,
         )<span class="question-mark">?</span>;

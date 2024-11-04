@@ -2170,18 +2170,7 @@
 <a href="#2169" id="2169">2169</a>
 <a href="#2170" id="2170">2170</a>
 <a href="#2171" id="2171">2171</a>
-<a href="#2172" id="2172">2172</a>
-<a href="#2173" id="2173">2173</a>
-<a href="#2174" id="2174">2174</a>
-<a href="#2175" id="2175">2175</a>
-<a href="#2176" id="2176">2176</a>
-<a href="#2177" id="2177">2177</a>
-<a href="#2178" id="2178">2178</a>
-<a href="#2179" id="2179">2179</a>
-<a href="#2180" id="2180">2180</a>
-<a href="#2181" id="2181">2181</a>
-<a href="#2182" id="2182">2182</a>
-<a href="#2183" id="2183">2183</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2172" id="2172">2172</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2216,7 +2205,7 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{anyhow, Context};
-<span class="kw">use </span>bitcoin30::{Address, Network, Txid};
+<span class="kw">use </span>bitcoin::{Address, Network, Txid};
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>client::GatewayClientBuilder;
@@ -2231,9 +2220,7 @@
 <span class="kw">use </span>fedimint_client::secret::RootSecretStrategy;
 <span class="kw">use </span>fedimint_client::{Client, ClientHandleArc};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_network,
-    bitcoin30_to_bitcoin32_unchecked_address, bitcoin32_to_bitcoin30_address,
-    bitcoin32_to_bitcoin30_network, bitcoin32_to_bitcoin30_txid,
+    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_keypair,
 };
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{
@@ -2704,7 +2691,7 @@
                 .<span class="kw">await
         </span>};
 
-        <span class="kw">if </span>bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span>gateway_config.network) != lightning_network {
+        <span class="kw">if </span>gateway_config.network != lightning_network {
             <span class="macro">warn!</span>(
                 <span class="string">"Lightning node does not match previously configured gateway network : ({:?})"</span>,
                 gateway_config.network
@@ -3013,7 +3000,7 @@
             lightning_alias: <span class="prelude-val">Some</span>(lightning_context.lightning_alias.clone()),
             gateway_id: <span class="self">self</span>.gateway_id,
             gateway_state: <span class="self">self</span>.state.read().<span class="kw">await</span>.to_string(),
-            network: <span class="prelude-val">Some</span>(bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span>gateway_config.network)),
+            network: <span class="prelude-val">Some</span>(gateway_config.network),
             block_height: <span class="prelude-val">Some</span>(node_info.<span class="number">3</span>),
             synced_to_chain: node_info.<span class="number">4</span>,
             api: <span class="self">self</span>.versioned_api.clone(),
@@ -3078,7 +3065,7 @@
             .expect(<span class="string">"Must have client module"</span>)
             .allocate_deposit_address_expert_only(())
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(bitcoin32_to_bitcoin30_address(<span class="kw-2">&amp;</span>address))
+        <span class="prelude-val">Ok</span>(address)
     }
 
     <span class="doccomment">/// Returns a Bitcoin TXID from a peg-out transaction for a specific
@@ -3091,7 +3078,6 @@
         } = payload;
         <span class="kw">let </span>client = <span class="self">self</span>.select_client(federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>wallet_module = client.value().get_first_module::&lt;WalletClientModule&gt;()<span class="question-mark">?</span>;
-        <span class="kw">let </span>address = bitcoin30_to_bitcoin32_unchecked_address(<span class="kw-2">&amp;</span>address);
 
         <span class="comment">// TODO: Fees should probably be passed in as a parameter
         </span><span class="kw">let </span>(amount, fees) = <span class="kw">match </span>amount {
@@ -3136,7 +3122,7 @@
                         <span class="string">"Sent {amount} funds to address {}"</span>,
                         address.assume_checked()
                     );
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(bitcoin32_to_bitcoin30_txid(<span class="kw-2">&amp;</span>txid));
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(txid);
                 }
                 WithdrawState::Failed(e) =&gt; {
                     <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::WithdrawError { failure_reason: e });
@@ -3368,11 +3354,7 @@
         };
 
         <span class="kw">if </span><span class="self">self</span>.is_running_lnv1() {
-            <span class="self">Self</span>::check_lnv1_federation_network(
-                <span class="kw-2">&amp;</span>client,
-                bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span>gateway_config.network),
-            )
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="self">Self</span>::check_lnv1_federation_network(<span class="kw-2">&amp;</span>client, gateway_config.network).<span class="kw">await</span><span class="question-mark">?</span>;
             client
                 .get_first_module::&lt;GatewayClientModule&gt;()<span class="question-mark">?
                 </span>.try_register_with_federation(
@@ -3386,11 +3368,7 @@
         }
 
         <span class="kw">if </span><span class="self">self</span>.is_running_lnv2() {
-            <span class="self">Self</span>::check_lnv2_federation_network(
-                <span class="kw-2">&amp;</span>client,
-                bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span>gateway_config.network),
-            )
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="self">Self</span>::check_lnv2_federation_network(<span class="kw-2">&amp;</span>client, gateway_config.network).<span class="kw">await</span><span class="question-mark">?</span>;
         }
 
         <span class="comment">// no need to enter span earlier, because connect-fed has a span
@@ -3528,7 +3506,7 @@
                         <span class="string">"Cannot change network while connected to a federation"</span>.to_string(),
                     ));
                 }
-                prev_config.network = bitcoin30_to_bitcoin32_network(<span class="kw-2">&amp;</span>network);
+                prev_config.network = network;
             }
 
             <span class="kw">if let </span><span class="prelude-val">Some</span>(num_route_hints) = num_route_hints {
@@ -3552,7 +3530,7 @@
 
             GatewayConfiguration {
                 hashed_password,
-                network: bitcoin30_to_bitcoin32_network(<span class="kw-2">&amp;</span>lightning_network),
+                network: lightning_network,
                 num_route_hints: DEFAULT_NUM_ROUTE_HINTS,
                 routing_fees: DEFAULT_FEES,
                 password_salt,
@@ -3899,7 +3877,7 @@
         <span class="kw">let </span>hashed_password = hash_password(password, password_salt);
         <span class="kw">let </span>gateway_config = GatewayConfiguration {
             hashed_password,
-            network: bitcoin30_to_bitcoin32_network(<span class="kw-2">&amp;</span>network),
+            network,
             num_route_hints,
             routing_fees: routing_fees.<span class="number">0</span>,
             password_salt,
@@ -4049,7 +4027,7 @@
             </span>))))<span class="question-mark">?</span>;
         <span class="kw">let </span>ln_cfg: <span class="kw-2">&amp;</span>LightningClientConfig = cfg.cast()<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span>ln_cfg.network) != network {
+        <span class="kw">if </span>ln_cfg.network != network {
             <span class="macro">error!</span>(
                 <span class="string">"Federation {federation_id} runs on {} but this gateway supports {network}"</span>,
                 ln_cfg.network,
@@ -4080,7 +4058,7 @@
             </span>))))<span class="question-mark">?</span>;
         <span class="kw">let </span>ln_cfg: <span class="kw-2">&amp;</span>fedimint_lnv2_common::config::LightningClientConfig = cfg.cast()<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span>ln_cfg.network) != network {
+        <span class="kw">if </span>ln_cfg.network != network {
             <span class="macro">error!</span>(
                 <span class="string">"Federation {federation_id} runs on {} but this gateway supports {network}"</span>,
                 ln_cfg.network,
@@ -4116,7 +4094,7 @@
         <span class="self">self</span>.federation_manager
             .read()
             .<span class="kw">await
-            </span>.unannounce_from_all_federations(gateway_keypair)
+            </span>.unannounce_from_all_federations(bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>gateway_keypair))
             .<span class="kw">await</span>;
     }
 }

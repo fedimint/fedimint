@@ -589,10 +589,7 @@
 <a href="#588" id="588">588</a>
 <a href="#589" id="589">589</a>
 <a href="#590" id="590">590</a>
-<a href="#591" id="591">591</a>
-<a href="#592" id="592">592</a>
-<a href="#593" id="593">593</a>
-<a href="#594" id="594">594</a></pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
+<a href="#591" id="591">591</a></pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -602,7 +599,6 @@
 <span class="kw">use </span>anyhow::{bail, format_err, Context};
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::admin_client::ConfigGenParamsRequest;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_network;
 <span class="kw">use </span>fedimint_core::config::{
     EmptyGenParams, ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
@@ -681,7 +677,7 @@
     </span>api_url: SafeUrl,
     <span class="doccomment">/// The bitcoin network that fedimint will be running on
     </span><span class="attr">#[arg(long, env = FM_BITCOIN_NETWORK_ENV, default_value = <span class="string">"regtest"</span>)]
-    </span>network: bitcoin30::network::constants::Network,
+    </span>network: bitcoin::network::Network,
     <span class="doccomment">/// The number of blocks the federation stays behind the blockchain tip
     </span><span class="attr">#[arg(long, env = FM_FINALITY_DELAY_ENV, default_value = <span class="string">"10"</span>)]
     </span>finality_delay: u32,
@@ -909,9 +905,7 @@
                     local: LightningGenParamsLocal {
                         bitcoin_rpc: bitcoind_rpc.clone(),
                     },
-                    consensus: LightningGenParamsConsensus {
-                        network: bitcoin30_to_bitcoin32_network(<span class="kw-2">&amp;</span>network),
-                    },
+                    consensus: LightningGenParamsConsensus { network },
                 },
             )
             .with_module_kind(MintInit)
@@ -935,7 +929,7 @@
                         bitcoin_rpc: bitcoind_rpc.clone(),
                     },
                     consensus: WalletGenParamsConsensus {
-                        network: bitcoin30_to_bitcoin32_network(<span class="kw-2">&amp;</span>network),
+                        network,
                         <span class="comment">// TODO this is not very elegant, but I'm planning to get rid of it in a
                         // next commit anyway
                         </span>finality_delay,
@@ -959,7 +953,7 @@
                             </span>fee_consensus: fedimint_core::fee_consensus::FeeConsensus::new_lnv2(
                                 <span class="number">1_000</span>,
                             )<span class="question-mark">?</span>,
-                            network: bitcoin30_to_bitcoin32_network(<span class="kw-2">&amp;</span>network),
+                            network,
                         },
                     },
                 )

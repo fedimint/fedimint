@@ -791,7 +791,10 @@
 <a href="#790" id="790">790</a>
 <a href="#791" id="791">791</a>
 <a href="#792" id="792">792</a>
-<a href="#793" id="793">793</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 
@@ -803,6 +806,7 @@
 <span class="kw">use </span>anyhow::{anyhow, ensure, Context};
 <span class="kw">use </span>bls12_381::{G1Projective, Scalar};
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_schnorr_signature;
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -1209,7 +1213,9 @@
                         contract.refund_pk
                     }
                     OutgoingWitness::Cancel(forfeit_signature) =&gt; {
-                        <span class="kw">if </span>!contract.verify_forfeit_signature(forfeit_signature) {
+                        <span class="kw">if </span>!contract.verify_forfeit_signature(
+                            <span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_schnorr_signature(forfeit_signature),
+                        ) {
                             <span class="kw">return </span><span class="prelude-val">Err</span>(LightningInputError::InvalidForfeitSignature);
                         }
 

@@ -475,7 +475,34 @@
 <a href="#474" id="474">474</a>
 <a href="#475" id="475">475</a>
 <a href="#476" id="476">476</a>
-<a href="#477" id="477">477</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
+<a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
+<a href="#501" id="501">501</a>
+<a href="#502" id="502">502</a>
+<a href="#503" id="503">503</a>
+<a href="#504" id="504">504</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>bitcoin::consensus::{Decodable, Encodable};
 <span class="kw">use </span>bitcoin30::consensus::{Decodable <span class="kw">as </span>Bitcoin30Decodable, Encodable <span class="kw">as </span>Bitcoin30Encodable};
@@ -894,11 +921,38 @@
     bitcoin30::hashes::sha256d::Hash::from_byte_array(<span class="kw-2">*</span>hash.as_ref())
 }
 
+<span class="kw">pub fn </span>bitcoin30_to_bitcoin32_schnorr_signature(
+    signature: <span class="kw-2">&amp;</span>bitcoin30::secp256k1::schnorr::Signature,
+) -&gt; bitcoin::secp256k1::schnorr::Signature {
+    bitcoin::secp256k1::schnorr::Signature::from_slice(signature.as_ref())
+        .expect(<span class="string">"Failed to convert bitcoin30 schnorr signature to bitcoin32 schnorr signature"</span>)
+}
+
 <span class="kw">pub fn </span>bitcoin32_to_bitcoin30_schnorr_signature(
     signature: <span class="kw-2">&amp;</span>bitcoin::secp256k1::schnorr::Signature,
 ) -&gt; bitcoin30::secp256k1::schnorr::Signature {
     bitcoin30::secp256k1::schnorr::Signature::from_slice(signature.as_ref())
         .expect(<span class="string">"Failed to convert bitcoin32 schnorr signature to bitcoin30 schnorr signature"</span>)
+}
+
+<span class="kw">pub fn </span>bitcoin32_to_bitcoin30_recoverable_signature(
+    signature: <span class="kw-2">&amp;</span>bitcoin::secp256k1::ecdsa::RecoverableSignature,
+) -&gt; bitcoin30::secp256k1::ecdsa::RecoverableSignature {
+    <span class="kw">let </span>(recovery_id, data) = signature.serialize_compact();
+
+    bitcoin30::secp256k1::ecdsa::RecoverableSignature::from_compact(
+        <span class="kw-2">&amp;</span>data,
+        bitcoin30::secp256k1::ecdsa::RecoveryId::from_i32(recovery_id.to_i32())
+            .expect(<span class="string">"Invalid recovery id"</span>),
+    )
+    .expect(<span class="string">"Failed to convert bitcoin32 recoverable signature to bitcoin30 recoverable signature"</span>)
+}
+
+<span class="kw">pub fn </span>bitcoin30_to_bitcoin32_secp256k1_message(
+    message: <span class="kw-2">&amp;</span>bitcoin30::secp256k1::Message,
+) -&gt; bitcoin::secp256k1::Message {
+    bitcoin::secp256k1::Message::from_digest_slice(message.as_ref())
+        .expect(<span class="string">"Failed to convert bitcoin30 message to bitcoin32 message"</span>)
 }
 
 <span class="attr">#[cfg(test)]

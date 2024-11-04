@@ -735,8 +735,8 @@
     }
 }
 
-<span class="kw">pub fn </span>parse_gateway_id(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;secp256k1::PublicKey, secp256k1::Error&gt; {
-    secp256k1::PublicKey::from_str(s)
+<span class="kw">pub fn </span>parse_gateway_id(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;secp256k1_29::PublicKey, secp256k1_29::Error&gt; {
+    secp256k1_29::PublicKey::from_str(s)
 }
 
 <span class="kw">pub async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>ClientHandleArc) -&gt; anyhow::Result&lt;TieredCounts&gt; {

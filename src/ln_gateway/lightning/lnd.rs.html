@@ -2711,7 +2711,7 @@
 
         <span class="kw">for </span>channel <span class="kw">in </span><span class="kw-2">&amp;</span>channels_with_peer {
             <span class="kw">let </span>channel_point =
-                bitcoin30::OutPoint::from_str(<span class="kw-2">&amp;</span>channel.channel_point).map_err(|e| {
+                bitcoin::OutPoint::from_str(<span class="kw-2">&amp;</span>channel.channel_point).map_err(|e| {
                     LightningRpcError::FailedToCloseChannelsWithPeer {
                         failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to parse channel point {e:?}"</span>),
                     }
@@ -2723,7 +2723,7 @@
                     channel_point: <span class="prelude-val">Some</span>(ChannelPoint {
                         funding_txid: <span class="prelude-val">Some</span>(
                             tonic_lnd::lnrpc::channel_point::FundingTxid::FundingTxidBytes(
-                                &lt;bitcoin30::Txid <span class="kw">as </span>AsRef&lt;[u8]&gt;&gt;::as_ref(<span class="kw-2">&amp;</span>channel_point.txid)
+                                &lt;bitcoin::Txid <span class="kw">as </span>AsRef&lt;[u8]&gt;&gt;::as_ref(<span class="kw-2">&amp;</span>channel_point.txid)
                                     .to_vec(),
                             ),
                         ),

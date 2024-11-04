@@ -1345,8 +1345,7 @@
 <a href="#1344" id="1344">1344</a>
 <a href="#1345" id="1345">1345</a>
 <a href="#1346" id="1346">1346</a>
-<a href="#1347" id="1347">1347</a>
-<a href="#1348" id="1348">1348</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<a href="#1347" id="1347">1347</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -1358,7 +1357,6 @@
 <span class="kw">use </span>axum::response::{IntoResponse, Response};
 <span class="kw">use </span>axum::routing::{get, post};
 <span class="kw">use </span>axum::{Extension, Json, Router};
-<span class="kw">use </span>bitcoin30::secp256k1;
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>cln_plugin::options::{<span class="self">self</span>, StringConfigOption};
@@ -1367,7 +1365,8 @@
 <span class="kw">use </span>cln_rpc::model::requests::SendpayRoute;
 <span class="kw">use </span>cln_rpc::model::responses::ListpeerchannelsChannels;
 <span class="kw">use </span>cln_rpc::primitives::{AmountOrAll, ChannelState, ShortChannelId};
-<span class="kw">use </span>fedimint_core::secp256k1::{PublicKey, SecretKey};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_network;
+<span class="kw">use </span>fedimint_core::secp256k1::{PublicKey, SecretKey, SECP256K1};
 <span class="kw">use </span>fedimint_core::task::timeout;
 <span class="kw">use </span>fedimint_core::util::handle_version_hash_command;
 <span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll};
@@ -1897,8 +1896,10 @@
 
     <span class="kw">let </span>info = cln_service.info().<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>network = bitcoin30::Network::from_str(info.<span class="number">2</span>.as_str())
-        .map_err(|e| ClnExtensionError::Error(<span class="macro">anyhow!</span>(e)))<span class="question-mark">?</span>;
+    <span class="kw">let </span>network = bitcoin32_to_bitcoin30_network(
+        <span class="kw-2">&amp;</span>bitcoin::Network::from_str(info.<span class="number">2</span>.as_str())
+            .map_err(|e| ClnExtensionError::Error(<span class="macro">anyhow!</span>(e)))<span class="question-mark">?</span>,
+    );
 
     <span class="kw">let </span>invoice_builder = InvoiceBuilder::new(Currency::from(network))
         .amount_milli_satoshis(amount_msat)
@@ -1922,10 +1923,7 @@
     <span class="kw">let </span>invoice = invoice_builder
         <span class="comment">// Temporarily sign with an ephemeral private key, we will request CLN to sign this
         // invoice next.
-        </span>.build_signed(|m| {
-            <span class="kw">let </span>ctx = secp256k1::global::SECP256K1;
-            ctx.sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span>SecretKey::new(<span class="kw-2">&amp;mut </span>OsRng))
-        })
+        </span>.build_signed(|m| SECP256K1.sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span>SecretKey::new(<span class="kw-2">&amp;mut </span>OsRng)))
         .map_err(|e| ClnExtensionError::Error(<span class="macro">anyhow!</span>(e)))<span class="question-mark">?</span>;
 
     <span class="kw">let </span>invstring = invoice.to_string();

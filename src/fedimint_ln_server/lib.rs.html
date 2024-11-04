@@ -1482,7 +1482,8 @@
 <a href="#1481" id="1481">1481</a>
 <a href="#1482" id="1482">1482</a>
 <a href="#1483" id="1483">1483</a>
-<a href="#1484" id="1484">1484</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1484" id="1484">1484</a>
+<a href="#1485" id="1485">1485</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -1495,6 +1496,7 @@
 <span class="kw">use </span>anyhow::{bail, Context};
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash};
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_schnorr_signature;
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -2233,7 +2235,7 @@
 
                 secp256k1::global::SECP256K1
                     .verify_schnorr(
-                        gateway_signature,
+                        <span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_schnorr_signature(gateway_signature),
                         <span class="kw-2">&amp;</span>outgoing_contract.cancellation_message().into(),
                         <span class="kw-2">&amp;</span>outgoing_contract.gateway_key.x_only_public_key().<span class="number">0</span>,
                     )

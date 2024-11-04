@@ -744,7 +744,8 @@
 <a href="#743" id="743">743</a>
 <a href="#744" id="744">744</a>
 <a href="#745" id="745">745</a>
-<a href="#746" id="746">746</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -776,6 +777,7 @@
 <span class="kw">use </span>config::LightningClientConfig;
 <span class="kw">use </span>fedimint_client::oplog::OperationLogEntry;
 <span class="kw">use </span>fedimint_client::ClientHandleArc;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_schnorr_signature;
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -864,7 +866,7 @@
     ) -&gt; LightningOutput {
         LightningOutput::V0(LightningOutputV0::CancelOutgoing {
             contract,
-            gateway_signature,
+            gateway_signature: bitcoin30_to_bitcoin32_schnorr_signature(<span class="kw-2">&amp;</span>gateway_signature),
         })
     }
 }
@@ -892,7 +894,7 @@
         <span class="doccomment">/// Contract to update
         </span>contract: ContractId,
         <span class="doccomment">/// Signature of gateway
-        </span>gateway_signature: secp256k1::schnorr::Signature,
+        </span>gateway_signature: fedimint_core::secp256k1_29::schnorr::Signature,
     },
 }
 

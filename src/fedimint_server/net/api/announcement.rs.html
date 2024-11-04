@@ -132,11 +132,16 @@
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
 <span class="kw">use </span>fedimint_api_client::api::DynGlobalApi;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_secret_key;
 <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::net::api_announcement::{
@@ -240,9 +245,12 @@
         cfg.consensus.api_endpoints[<span class="kw-2">&amp;</span>cfg.local.identity].url.clone(),
         <span class="number">0</span>,
     );
-    <span class="kw">let </span>ctx = secp256k1::Secp256k1::new();
-    <span class="kw">let </span>signed_announcement =
-        api_announcement.sign(<span class="kw-2">&amp;</span>ctx, <span class="kw-2">&amp;</span>cfg.private.broadcast_secret_key.keypair(<span class="kw-2">&amp;</span>ctx));
+    <span class="kw">let </span>ctx = secp256k1_29::Secp256k1::new();
+    <span class="kw">let </span>signed_announcement = api_announcement.sign(
+        <span class="kw-2">&amp;</span>ctx,
+        <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_secp256k1_secret_key(<span class="kw-2">&amp;</span>cfg.private.broadcast_secret_key)
+            .keypair(<span class="kw-2">&amp;</span>ctx),
+    );
 
     dbtx.insert_entry(
         <span class="kw-2">&amp;</span>ApiAnnouncementKey(cfg.local.identity),

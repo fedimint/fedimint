@@ -90,11 +90,7 @@
 <a href="#89" id="89">89</a>
 <a href="#90" id="90">90</a>
 <a href="#91" id="91">91</a>
-<a href="#92" id="92">92</a>
-<a href="#93" id="93">93</a>
-<a href="#94" id="94">94</a>
-<a href="#95" id="95">95</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoincore_rpc::bitcoin::Network;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_network;
+<a href="#92" id="92">92</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoincore_rpc::bitcoin::Network;
 <span class="kw">use </span>fedimint_core::config::{EmptyGenParams, ServerModuleConfigGenParamsRegistry};
 <span class="kw">use </span>fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig, FM_USE_UNKNOWN_MODULE_ENV};
 <span class="kw">use </span>fedimint_core::fee_consensus::FeeConsensus;
@@ -132,9 +128,7 @@
                 local: LightningGenParamsLocal {
                     bitcoin_rpc: bitcoin_rpc.clone(),
                 },
-                consensus: LightningGenParamsConsensus {
-                    network: bitcoin30_to_bitcoin32_network(<span class="kw-2">&amp;</span>network),
-                },
+                consensus: LightningGenParamsConsensus { network },
             },
         )
         .attach_config_gen_params(
@@ -151,7 +145,7 @@
                     bitcoin_rpc: bitcoin_rpc.clone(),
                 },
                 consensus: WalletGenParamsConsensus {
-                    network: bitcoin30_to_bitcoin32_network(<span class="kw-2">&amp;</span>network),
+                    network,
                     <span class="comment">// TODO this is not very elegant, but I'm planning to get rid of it in a next
                     // commit anyway
                     </span>finality_delay,
@@ -173,7 +167,7 @@
                 consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
                     fee_consensus: fedimint_core::fee_consensus::FeeConsensus::new_lnv2(<span class="number">1000</span>)
                         .expect(<span class="string">"Relative fee is within range"</span>),
-                    network: bitcoin30_to_bitcoin32_network(<span class="kw-2">&amp;</span>network),
+                    network,
                 },
             },
         );

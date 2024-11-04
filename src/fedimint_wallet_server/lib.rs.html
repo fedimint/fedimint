@@ -1955,9 +1955,7 @@
 <a href="#1954" id="1954">1954</a>
 <a href="#1955" id="1955">1955</a>
 <a href="#1956" id="1956">1956</a>
-<a href="#1957" id="1957">1957</a>
-<a href="#1958" id="1958">1958</a>
-<a href="#1959" id="1959">1959</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1957" id="1957">1957</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -1994,8 +1992,7 @@
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_network,
-    bitcoin30_to_bitcoin32_script_buf, bitcoin32_to_bitcoin30_secp256k1_pubkey,
-    bitcoin32_to_bitcoin30_unchecked_address,
+    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_unchecked_address,
 };
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -2041,8 +2038,8 @@
     WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS, WALLET_PEGIN_SATS,
     WALLET_PEGOUT_FEES_SATS, WALLET_PEGOUT_SATS,
 };
+<span class="kw">use </span>miniscript::psbt::PsbtExt;
 <span class="kw">use </span>miniscript::{translate_hash_fail, Descriptor, TranslatePk};
-<span class="kw">use </span>miniscript12::psbt::PsbtExt;
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum::IntoEnumIterator;
@@ -3055,7 +3052,7 @@
             .tweak(<span class="kw-2">&amp;</span>pending_tx.tweak, <span class="kw-2">&amp;</span><span class="self">self</span>.secp)
             .script_pubkey();
         <span class="kw">for </span>(idx, output) <span class="kw">in </span>pending_tx.tx.output.iter().enumerate() {
-            <span class="kw">if </span>output.script_pubkey == bitcoin30_to_bitcoin32_script_buf(<span class="kw-2">&amp;</span>script_pk) {
+            <span class="kw">if </span>output.script_pubkey == script_pk {
                 dbtx.insert_entry(
                     <span class="kw-2">&amp;</span>UTXOKey(bitcoin::OutPoint {
                         txid: pending_tx.tx.compute_txid(),
@@ -3584,18 +3581,17 @@
                         non_witness_utxo: <span class="prelude-val">None</span>,
                         witness_utxo: <span class="prelude-val">Some</span>(TxOut {
                             value: utxo.amount,
-                            script_pubkey: bitcoin30_to_bitcoin32_script_buf(<span class="kw-2">&amp;</span>script_pubkey),
+                            script_pubkey,
                         }),
                         partial_sigs: Default::default(),
                         sighash_type: <span class="prelude-val">None</span>,
                         redeem_script: <span class="prelude-val">None</span>,
-                        witness_script: <span class="prelude-val">Some</span>(bitcoin30_to_bitcoin32_script_buf(
-                            <span class="kw-2">&amp;</span><span class="self">self
-                                </span>.descriptor
+                        witness_script: <span class="prelude-val">Some</span>(
+                            <span class="self">self</span>.descriptor
                                 .tweak(<span class="kw-2">&amp;</span>utxo.tweak, <span class="self">self</span>.secp)
                                 .script_code()
                                 .expect(<span class="string">"Failed to tweak descriptor"</span>),
-                        )),
+                        ),
                         bip32_derivation: Default::default(),
                         final_script_sig: <span class="prelude-val">None</span>,
                         final_script_witness: <span class="prelude-val">None</span>,
@@ -3721,7 +3717,7 @@
             })
             .expect(<span class="string">"can't fail"</span>);
 
-        bitcoin30_to_bitcoin32_script_buf(<span class="kw-2">&amp;</span>descriptor.script_pubkey())
+        descriptor.script_pubkey()
     }
 }
 

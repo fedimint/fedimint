@@ -146,8 +146,7 @@
 <a href="#145" id="145">145</a>
 <a href="#146" id="146">146</a>
 <a href="#147" id="147">147</a>
-<a href="#148" id="148">148</a>
-<a href="#149" id="149">149</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Read, Write};
+<a href="#148" id="148">148</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Read, Write};
 
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
@@ -219,7 +218,7 @@
     }
 }
 
-<span class="kw">impl </span>Encodable <span class="kw">for </span>secp256k1::schnorr::Signature {
+<span class="kw">impl </span>Encodable <span class="kw">for </span>secp256k1_29::schnorr::Signature {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="kw">let </span>bytes = <span class="kw-2">&amp;</span><span class="self">self</span>[..];
         <span class="macro">assert_eq!</span>(bytes.len(), secp256k1::constants::SCHNORR_SIGNATURE_SIZE);
@@ -228,7 +227,7 @@
     }
 }
 
-<span class="kw">impl </span>Decodable <span class="kw">for </span>secp256k1::schnorr::Signature {
+<span class="kw">impl </span>Decodable <span class="kw">for </span>secp256k1_29::schnorr::Signature {
     <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
@@ -262,7 +261,6 @@
     <span class="kw">use </span>secp256k1_29::Message;
 
     <span class="kw">use </span><span class="kw">super</span>::<span class="kw">super</span>::tests::test_roundtrip;
-    <span class="kw">use </span><span class="kw">crate</span>::bitcoin_migration::bitcoin32_to_bitcoin30_schnorr_signature;
 
     <span class="attr">#[test_log::test]
     </span><span class="kw">fn </span>test_ecdsa_sig() {
@@ -286,12 +284,12 @@
         <span class="kw">let </span>pub_key = sec_key.public_key();
         test_roundtrip(<span class="kw-2">&amp;</span>pub_key);
 
-        <span class="kw">let </span>sig = bitcoin32_to_bitcoin30_schnorr_signature(<span class="kw-2">&amp;</span>ctx.sign_schnorr(
+        <span class="kw">let </span>sig = ctx.sign_schnorr(
             <span class="kw-2">&amp;</span>Message::from_digest(
                 <span class="kw-2">*</span>secp256k1_29::hashes::sha256::Hash::hash(<span class="string">b"Hello World!"</span>).as_ref(),
             ),
             <span class="kw-2">&amp;</span>sec_key,
-        ));
+        );
 
         test_roundtrip(<span class="kw-2">&amp;</span>sig);
     }

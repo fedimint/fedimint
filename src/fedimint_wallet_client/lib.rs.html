@@ -1365,19 +1365,7 @@
 <a href="#1364" id="1364">1364</a>
 <a href="#1365" id="1365">1365</a>
 <a href="#1366" id="1366">1366</a>
-<a href="#1367" id="1367">1367</a>
-<a href="#1368" id="1368">1368</a>
-<a href="#1369" id="1369">1369</a>
-<a href="#1370" id="1370">1370</a>
-<a href="#1371" id="1371">1371</a>
-<a href="#1372" id="1372">1372</a>
-<a href="#1373" id="1373">1373</a>
-<a href="#1374" id="1374">1374</a>
-<a href="#1375" id="1375">1375</a>
-<a href="#1376" id="1376">1376</a>
-<a href="#1377" id="1377">1377</a>
-<a href="#1378" id="1378">1378</a>
-<a href="#1379" id="1379">1379</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1367" id="1367">1367</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1424,10 +1412,7 @@
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_address, bitcoin30_to_bitcoin32_script_buf,
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_network,
-};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
@@ -1449,7 +1434,7 @@
 <span class="kw">pub use </span>fedimint_wallet_common::<span class="kw-2">*</span>;
 <span class="kw">use </span>futures::{Stream, StreamExt};
 <span class="kw">use </span>rand::{thread_rng, Rng};
-<span class="kw">use </span>secp256k1::KeyPair;
+<span class="kw">use </span>secp256k1_29::Keypair;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>tokio::sync::watch;
@@ -1699,32 +1684,29 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         idx: TweakIdx,
     ) -&gt; (
-        secp256k1::KeyPair,
-        secp256k1::PublicKey,
+        secp256k1_29::Keypair,
+        secp256k1_29::PublicKey,
         Address,
         OperationId,
     ) {
         <span class="kw">let </span>idx = ChildId(idx.<span class="number">0</span>);
 
-        <span class="kw">let </span>secret_tweak_key = <span class="self">self
-            </span>.module_root_secret
-            .child_key(WALLET_TWEAK_CHILD_ID)
-            .child_key(idx)
-            .to_secp_key(secp256k1::SECP256K1);
+        <span class="kw">let </span>secret_tweak_key = bitcoin30_to_bitcoin32_keypair(
+            <span class="kw-2">&amp;</span><span class="self">self
+                </span>.module_root_secret
+                .child_key(WALLET_TWEAK_CHILD_ID)
+                .child_key(idx)
+                .to_secp_key(fedimint_core::secp256k1::SECP256K1),
+        );
 
         <span class="kw">let </span>public_tweak_key = secret_tweak_key.public_key();
 
-        <span class="kw">let </span>address = bitcoin30_to_bitcoin32_address(
-            <span class="kw-2">&amp;</span><span class="self">self
-                </span>.cfg
-                .peg_in_descriptor
-                .tweak(
-                    <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>public_tweak_key),
-                    bitcoin::secp256k1::SECP256K1,
-                )
-                .address(bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.network))
-                .unwrap(),
-        );
+        <span class="kw">let </span>address = <span class="self">self
+            </span>.cfg
+            .peg_in_descriptor
+            .tweak(<span class="kw-2">&amp;</span>public_tweak_key, bitcoin::secp256k1::SECP256K1)
+            .address(<span class="self">self</span>.cfg.network)
+            .unwrap();
 
         <span class="comment">// TODO: make hash?
         </span><span class="kw">let </span>operation_id = OperationId(public_tweak_key.x_only_public_key().<span class="number">0</span>.serialize());
@@ -1735,20 +1717,14 @@
     <span class="kw">fn </span>derive_peg_in_script(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         idx: TweakIdx,
-    ) -&gt; (ScriptBuf, bitcoin::Address, KeyPair, OperationId) {
+    ) -&gt; (ScriptBuf, bitcoin::Address, Keypair, OperationId) {
         <span class="kw">let </span>(secret_tweak_key, <span class="kw">_</span>, address, operation_id) = <span class="self">self</span>.derive_deposit_address(idx);
 
         (
-            bitcoin30_to_bitcoin32_script_buf(
-                <span class="kw-2">&amp;</span><span class="self">self
-                    </span>.cfg
-                    .peg_in_descriptor
-                    .tweak(
-                        <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>secret_tweak_key.public_key()),
-                        SECP256K1,
-                    )
-                    .script_pubkey(),
-            ),
+            <span class="self">self</span>.cfg
+                .peg_in_descriptor
+                .tweak(<span class="kw-2">&amp;</span>secret_tweak_key.public_key(), SECP256K1)
+                .script_pubkey(),
             address,
             secret_tweak_key,
             operation_id,

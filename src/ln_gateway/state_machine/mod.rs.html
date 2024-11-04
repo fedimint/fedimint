@@ -840,8 +840,8 @@
 
 <span class="kw">use </span>anyhow::ensure;
 <span class="kw">use </span>async_stream::stream;
-<span class="kw">use </span>bitcoin30::key::Secp256k1;
-<span class="kw">use </span>bitcoin30::secp256k1::All;
+<span class="kw">use </span>bitcoin::key::Secp256k1;
+<span class="kw">use </span>bitcoin::secp256k1::All;
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_client::derivable_secret::ChildId;
@@ -978,7 +978,7 @@
             redeem_key: args
                 .module_root_secret()
                 .child_key(ChildId(<span class="number">0</span>))
-                .to_secp_key(<span class="kw-2">&amp;</span>Secp256k1::new()),
+                .to_secp_key(<span class="kw-2">&amp;</span>fedimint_core::secp256k1::Secp256k1::new()),
             module_api: args.module_api().clone(),
             timelock_delta: <span class="self">self</span>.timelock_delta,
             federation_index: <span class="self">self</span>.federation_index,

@@ -150,14 +150,22 @@
 <a href="#149" id="149">149</a>
 <a href="#150" id="150">150</a>
 <a href="#151" id="151">151</a>
-<a href="#152" id="152">152</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin30::hashes::Hash <span class="kw">as </span>BitcoinHash;
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin30::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::SerdeModuleEncoding;
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
 <span class="kw">use </span>thiserror::Error;
 
-<span class="kw">use </span><span class="kw">crate</span>::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_pubkey;
+<span class="kw">use </span><span class="kw">crate</span>::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_schnorr_signature,
+};
 <span class="kw">use </span><span class="kw">crate</span>::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 <span class="kw">use </span><span class="kw">crate</span>::core::{DynInputError, DynOutputError};
 
@@ -249,7 +257,11 @@
 
         <span class="kw">for </span>(pk, signature) <span class="kw">in </span>pub_keys.iter().zip(signatures) {
             <span class="kw">if </span>secp256k1::global::SECP256K1
-                .verify_schnorr(signature, <span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>pk.x_only_public_key().<span class="number">0</span>)
+                .verify_schnorr(
+                    <span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_schnorr_signature(signature),
+                    <span class="kw-2">&amp;</span>msg,
+                    <span class="kw-2">&amp;</span>pk.x_only_public_key().<span class="number">0</span>,
+                )
                 .is_err()
             {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(TransactionError::InvalidSignature {
@@ -267,7 +279,7 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 </span><span class="kw">pub enum </span>TransactionSignature {
-    NaiveMultisig(Vec&lt;secp256k1::schnorr::Signature&gt;),
+    NaiveMultisig(Vec&lt;fedimint_core::secp256k1_29::schnorr::Signature&gt;),
     <span class="attr">#[encodable_default]
     </span>Default {
         variant: u64,

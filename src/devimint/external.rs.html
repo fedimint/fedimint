@@ -1285,30 +1285,7 @@
 <a href="#1284" id="1284">1284</a>
 <a href="#1285" id="1285">1285</a>
 <a href="#1286" id="1286">1286</a>
-<a href="#1287" id="1287">1287</a>
-<a href="#1288" id="1288">1288</a>
-<a href="#1289" id="1289">1289</a>
-<a href="#1290" id="1290">1290</a>
-<a href="#1291" id="1291">1291</a>
-<a href="#1292" id="1292">1292</a>
-<a href="#1293" id="1293">1293</a>
-<a href="#1294" id="1294">1294</a>
-<a href="#1295" id="1295">1295</a>
-<a href="#1296" id="1296">1296</a>
-<a href="#1297" id="1297">1297</a>
-<a href="#1298" id="1298">1298</a>
-<a href="#1299" id="1299">1299</a>
-<a href="#1300" id="1300">1300</a>
-<a href="#1301" id="1301">1301</a>
-<a href="#1302" id="1302">1302</a>
-<a href="#1303" id="1303">1303</a>
-<a href="#1304" id="1304">1304</a>
-<a href="#1305" id="1305">1305</a>
-<a href="#1306" id="1306">1306</a>
-<a href="#1307" id="1307">1307</a>
-<a href="#1308" id="1308">1308</a>
-<a href="#1309" id="1309">1309</a>
-<a href="#1310" id="1310">1310</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
+<a href="#1287" id="1287">1287</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -1323,10 +1300,8 @@
 <span class="kw">use </span>cln_rpc::primitives::{Amount <span class="kw">as </span>ClnRpcAmount, AmountOrAny};
 <span class="kw">use </span>cln_rpc::ClnRpc;
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin30_to_bitcoin32_tx,
-    bitcoin30_to_bitcoin32_txid, bitcoin32_to_bitcoin30_address, bitcoin32_to_bitcoin30_amount,
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin30_to_bitcoin32_txid,
     bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_sha256_hash,
-    bitcoin32_to_bitcoin30_txid,
 };
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::task::jit::{JitTry, JitTryAnyhow};
@@ -1545,24 +1520,14 @@
         <span class="kw">let </span>tx = <span class="self">self
             </span>.wallet_client()
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.send_to_address(
-                bitcoin32_to_bitcoin30_address(
-                    <span class="kw-2">&amp;</span>bitcoin::Address::from_str(<span class="kw-2">&amp;</span>addr)<span class="question-mark">?</span>.assume_checked(),
-                ),
-                amount,
-            )
+            </span>.send_to_address(bitcoin::Address::from_str(<span class="kw-2">&amp;</span>addr)<span class="question-mark">?</span>.assume_checked(), amount)
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(tx)
     }
 
     <span class="kw">pub async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: bitcoin::Txid) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
         <span class="kw">let </span>client = <span class="self">self</span>.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>.clone();
-        <span class="kw">let </span>proof = spawn_blocking(<span class="kw">move </span>|| {
-            client
-                .client
-                .get_tx_out_proof(<span class="kw-2">&amp;</span>[bitcoin32_to_bitcoin30_txid(<span class="kw-2">&amp;</span>txid)], <span class="prelude-val">None</span>)
-        })
-        .<span class="kw">await</span><span class="question-mark">??</span>;
+        <span class="kw">let </span>proof = spawn_blocking(<span class="kw">move </span>|| client.client.get_tx_out_proof(<span class="kw-2">&amp;</span>[txid], <span class="prelude-val">None</span>)).<span class="kw">await</span><span class="question-mark">??</span>;
         <span class="prelude-val">Ok</span>(proof.encode_hex())
     }
 
@@ -1630,10 +1595,8 @@
         block_hash: <span class="prelude-ty">Option</span>&lt;BlockHash&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;String&gt;&gt; {
         <span class="kw">let </span>client = <span class="self">self</span>.client.clone();
-        <span class="kw">let </span>tx_or = spawn_blocking(<span class="kw">move </span>|| {
-            client.get_raw_transaction(<span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_txid(<span class="kw-2">&amp;</span>txid), block_hash.as_ref())
-        })
-        .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>tx_or =
+            spawn_blocking(<span class="kw">move </span>|| client.get_raw_transaction(<span class="kw-2">&amp;</span>txid, block_hash.as_ref())).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>tx = <span class="kw">match </span>tx_or {
             <span class="prelude-val">Ok</span>(tx) =&gt; tx,
@@ -1646,7 +1609,7 @@
             ))) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
             <span class="prelude-val">Err</span>(err) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(err.into()),
         };
-        <span class="kw">let </span>bytes = bitcoin30_to_bitcoin32_tx(<span class="kw-2">&amp;</span>tx).consensus_encode_to_vec();
+        <span class="kw">let </span>bytes = tx.consensus_encode_to_vec();
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(bytes.encode_hex()))
     }
 
@@ -1686,21 +1649,12 @@
         amount: bitcoin::Amount,
     ) -&gt; anyhow::Result&lt;bitcoin::Txid&gt; {
         <span class="kw">let </span>client = <span class="self">self</span>.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>.clone();
-        <span class="prelude-val">Ok</span>(bitcoin30_to_bitcoin32_txid(
-            <span class="kw-2">&amp;</span>spawn_blocking(<span class="kw">move </span>|| {
-                client.client.send_to_address(
-                    <span class="kw-2">&amp;</span>addr,
-                    bitcoin32_to_bitcoin30_amount(<span class="kw-2">&amp;</span>amount),
-                    <span class="prelude-val">None</span>,
-                    <span class="prelude-val">None</span>,
-                    <span class="prelude-val">None</span>,
-                    <span class="prelude-val">None</span>,
-                    <span class="prelude-val">None</span>,
-                    <span class="prelude-val">None</span>,
-                )
-            })
-            .<span class="kw">await</span><span class="question-mark">??</span>,
-        ))
+        <span class="prelude-val">Ok</span>(spawn_blocking(<span class="kw">move </span>|| {
+            client
+                .client
+                .send_to_address(<span class="kw-2">&amp;</span>addr, amount, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>)
+        })
+        .<span class="kw">await</span><span class="question-mark">??</span>)
     }
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>get_balances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;GetBalancesResult&gt; {
