@@ -245,15 +245,7 @@
 <a href="#244" id="244">244</a>
 <a href="#245" id="245">245</a>
 <a href="#246" id="246">246</a>
-<a href="#247" id="247">247</a>
-<a href="#248" id="248">248</a>
-<a href="#249" id="249">249</a>
-<a href="#250" id="250">250</a>
-<a href="#251" id="251">251</a>
-<a href="#252" id="252">252</a>
-<a href="#253" id="253">253</a>
-<a href="#254" id="254">254</a>
-<a href="#255" id="255">255</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
+<a href="#247" id="247">247</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_client::sm::{State, StateTransition};
@@ -384,22 +376,24 @@
         <span class="kw">let </span><span class="kw-2">mut </span>stream = context.notifier.subscribe(common.operation_id).<span class="kw">await</span>;
         <span class="kw">loop </span>{
             <span class="macro">debug!</span>(<span class="string">"Waiting for preimage for {common:?}"</span>);
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(GatewayClientStateMachines::Receive(state)) = stream.next().<span class="kw">await </span>{
-                <span class="kw">match </span>state.state {
-                    IncomingSmStates::Preimage(preimage) =&gt; {
-                        <span class="macro">debug!</span>(<span class="string">"Received preimage for {common:?}"</span>);
-                        <span class="kw">return </span><span class="prelude-val">Ok</span>(preimage);
-                    }
-                    IncomingSmStates::RefundSubmitted { out_points, error } =&gt; {
-                        <span class="macro">info!</span>(<span class="string">"Refund submitted for {common:?}: {out_points:?} {error}"</span>);
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(CompleteHtlcError::IncomingContractNotFunded);
-                    }
-                    IncomingSmStates::FundingFailed { error } =&gt; {
-                        <span class="macro">warn!</span>(<span class="string">"Funding failed for {common:?}: {error}"</span>);
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(CompleteHtlcError::IncomingContractNotFunded);
-                    }
-                    <span class="kw">_ </span>=&gt; {}
+            <span class="kw">let </span><span class="prelude-val">Some</span>(GatewayClientStateMachines::Receive(state)) = stream.next().<span class="kw">await else </span>{
+                <span class="kw">continue</span>;
+            };
+
+            <span class="kw">match </span>state.state {
+                IncomingSmStates::Preimage(preimage) =&gt; {
+                    <span class="macro">debug!</span>(<span class="string">"Received preimage for {common:?}"</span>);
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(preimage);
                 }
+                IncomingSmStates::RefundSubmitted { out_points, error } =&gt; {
+                    <span class="macro">info!</span>(<span class="string">"Refund submitted for {common:?}: {out_points:?} {error}"</span>);
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(CompleteHtlcError::IncomingContractNotFunded);
+                }
+                IncomingSmStates::FundingFailed { error } =&gt; {
+                    <span class="macro">warn!</span>(<span class="string">"Funding failed for {common:?}: {error}"</span>);
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(CompleteHtlcError::IncomingContractNotFunded);
+                }
+                <span class="kw">_ </span>=&gt; {}
             }
         }
     }
@@ -454,56 +448,46 @@
     <span class="kw">async fn </span>await_complete_htlc(
         context: GatewayClientContext,
         common: GatewayCompleteCommon,
-        outcome: HtlcOutcome,
+        htlc_outcome: HtlcOutcome,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), CompleteHtlcError&gt; {
-        <span class="comment">// Wait until the lightning node is online to complete the HTLC
-        </span><span class="kw">loop </span>{
-            <span class="kw">let </span>htlc_outcome = outcome.clone();
-            <span class="kw">let </span>lightning_context = context.gateway.get_lightning_context().<span class="kw">await</span>;
-            <span class="kw">match </span>lightning_context {
-                <span class="prelude-val">Ok</span>(lightning_context) =&gt; {
-                    <span class="kw">let </span>htlc = <span class="kw">match </span>htlc_outcome {
-                        HtlcOutcome::Success(preimage) =&gt; InterceptPaymentResponse {
-                            action: PaymentAction::Settle(preimage),
-                            payment_hash: common.payment_hash,
-                            incoming_chan_id: common.incoming_chan_id,
-                            htlc_id: common.htlc_id,
-                        },
-                        HtlcOutcome::Failure(<span class="kw">_</span>) =&gt; InterceptPaymentResponse {
-                            action: PaymentAction::Cancel,
-                            payment_hash: common.payment_hash,
-                            incoming_chan_id: common.incoming_chan_id,
-                            htlc_id: common.htlc_id,
-                        },
-                    };
-
-                    lightning_context
-                        .lnrpc
-                        .complete_htlc(htlc)
-                        .<span class="kw">await
-                        </span>.map_err(|<span class="kw">_</span>| CompleteHtlcError::FailedToCompleteHtlc)<span class="question-mark">?</span>;
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                }
+        <span class="comment">// Wait until the lightning node is online to complete the HTLC.
+        </span><span class="kw">let </span>lightning_context = <span class="kw">loop </span>{
+            <span class="kw">match </span>context.gateway.get_lightning_context().<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>(lightning_context) =&gt; <span class="kw">break </span>lightning_context,
                 <span class="prelude-val">Err</span>(e) =&gt; {
                     <span class="macro">warn!</span>(<span class="string">"Trying to complete HTLC but got {e}, will keep retrying..."</span>);
                     sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
+                    <span class="kw">continue</span>;
                 }
             }
-        }
+        };
+
+        <span class="kw">let </span>htlc = InterceptPaymentResponse {
+            action: <span class="kw">match </span>htlc_outcome {
+                HtlcOutcome::Success(preimage) =&gt; PaymentAction::Settle(preimage),
+                HtlcOutcome::Failure(<span class="kw">_</span>) =&gt; PaymentAction::Cancel,
+            },
+            payment_hash: common.payment_hash,
+            incoming_chan_id: common.incoming_chan_id,
+            htlc_id: common.htlc_id,
+        };
+
+        lightning_context
+            .lnrpc
+            .complete_htlc(htlc)
+            .<span class="kw">await
+            </span>.map_err(|<span class="kw">_</span>| CompleteHtlcError::FailedToCompleteHtlc)
     }
 
     <span class="kw">fn </span>transition_success(
         result: <span class="kw-2">&amp;</span><span class="prelude-ty">Result</span>&lt;(), CompleteHtlcError&gt;,
         common: GatewayCompleteCommon,
     ) -&gt; GatewayCompleteStateMachine {
-        <span class="kw">match </span>result {
-            <span class="prelude-val">Ok</span>(()) =&gt; GatewayCompleteStateMachine {
-                common,
-                state: GatewayCompleteStates::HtlcFinished,
-            },
-            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; GatewayCompleteStateMachine {
-                common,
-                state: GatewayCompleteStates::Failure,
+        GatewayCompleteStateMachine {
+            common,
+            state: <span class="kw">match </span>result {
+                <span class="prelude-val">Ok</span>(()) =&gt; GatewayCompleteStates::HtlcFinished,
+                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; GatewayCompleteStates::Failure,
             },
         }
     }
