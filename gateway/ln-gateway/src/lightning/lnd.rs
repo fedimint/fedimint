@@ -1377,7 +1377,9 @@ impl ILnRpcClient for GatewayLndClient {
             total_inbound.msat - unsettled_inbound.msat - pending_inbound.msat;
 
         Ok(GetBalancesResponse {
-            onchain_balance_sats: wallet_balance_response.total_balance as u64,
+            onchain_balance_sats: (wallet_balance_response.total_balance
+                + wallet_balance_response.reserved_balance_anchor_chan)
+                as u64,
             lightning_balance_msats,
             inbound_lightning_liquidity_msats,
         })

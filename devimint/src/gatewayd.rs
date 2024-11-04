@@ -8,11 +8,12 @@ use esplora_client::Txid;
 use fedimint_core::config::FederationId;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
+use fedimint_core::BitcoinAmountOrAll;
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_testing::gateway::LightningNodeType;
 use ln_gateway::envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV;
 use ln_gateway::lightning::ChannelInfo;
-use ln_gateway::rpc::{MnemonicResponse, V1_API_ENDPOINT};
+use ln_gateway::rpc::{GatewayBalances, MnemonicResponse, V1_API_ENDPOINT};
 use tracing::info;
 
 use crate::envs::{FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV};
@@ -326,6 +327,98 @@ impl Gatewayd {
 
         Ok(())
     }
+
+    pub async fn send_ecash(&self, federation_id: String, amount_msats: u64) -> Result<String> {
+        let value = cmd!(
+            self,
+            "spend-ecash",
+            "--federation-id",
+            federation_id,
+            amount_msats
+        )
+        .out_json()
+        .await?;
+        let ecash: String = serde_json::from_value(
+            value
+                .get("notes")
+                .expect("notes key does not exist")
+                .clone(),
+        )?;
+        Ok(ecash)
+    }
+
+    pub async fn receive_ecash(&self, ecash: String) -> Result<()> {
+        cmd!(self, "receive-ecash", "--notes", ecash).run().await?;
+        Ok(())
+    }
+
+    pub async fn get_balances(&self) -> Result<GatewayBalances> {
+        let value = cmd!(self, "get-balances").out_json().await?;
+        Ok(serde_json::from_value(value)?)
+    }
+
+    pub async fn ecash_balance(&self, federation_id: String) -> anyhow::Result<u64> {
+        let federation_id = FederationId::from_str(&federation_id)?;
+        let balances = self.get_balances().await?;
+        let ecash_balance = balances
+            .ecash_balances
+            .into_iter()
+            .find(|info| info.federation_id == federation_id)
+            .ok_or(anyhow::anyhow!("Gateway is not joined to federation"))?
+            .ecash_balance_msats
+            .msats;
+        Ok(ecash_balance)
+    }
+
+    pub async fn withdraw_onchain(
+        &self,
+        bitcoind: &Bitcoind,
+        amount: BitcoinAmountOrAll,
+        fee_rate: u64,
+    ) -> Result<()> {
+        let withdraw_address = bitcoind.get_new_address().await?;
+        let value = cmd!(
+            self,
+            "lightning",
+            "withdraw-onchain",
+            "--address",
+            withdraw_address,
+            "--amount",
+            amount,
+            "--fee-rate-sats-per-vbyte",
+            fee_rate
+        )
+        .out_json()
+        .await?;
+        let txid: bitcoin::Txid = serde_json::from_value(value)?;
+        bitcoind.mine_blocks(21).await?;
+        let block_height = bitcoind.get_block_count().await? - 1;
+        bitcoind.poll_get_transaction(txid).await?;
+        self.wait_for_block_height(block_height).await?;
+        Ok(())
+    }
+
+    pub async fn close_all_channels(&self, bitcoind: Bitcoind) -> Result<()> {
+        let channels = self.list_active_channels().await?;
+        for chan in channels {
+            let remote_pubkey = chan.remote_pubkey;
+            cmd!(
+                self,
+                "lightning",
+                "close-channels-with-peer",
+                "--pubkey",
+                remote_pubkey
+            )
+            .run()
+            .await?;
+        }
+        bitcoind.mine_blocks(50).await?;
+        let block_height = bitcoind.get_block_count().await? - 1;
+        self.wait_for_block_height(block_height).await?;
+
+        Ok(())
+    }
+
     /// Open a channel with the gateway's lightning node.
     /// Returns the txid of the funding transaction if the gateway is a new
     /// enough version to return it. Otherwise, returns `None`.

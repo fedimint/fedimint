@@ -107,7 +107,7 @@ use crate::lightning::{GatewayLightningBuilder, LightningContext, LightningMode,
 use crate::rpc::rpc_server::{hash_password, run_webserver};
 use crate::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
-    GatewayBalances, WithdrawPayload,
+    GatewayBalances, WithdrawPayload, WithdrawResponse,
 };
 use crate::types::PrettyInterceptPaymentRequest;
 
@@ -898,7 +898,10 @@ impl Gateway {
 
     /// Returns a Bitcoin TXID from a peg-out transaction for a specific
     /// connected federation.
-    pub async fn handle_withdraw_msg(&self, payload: WithdrawPayload) -> AdminResult<Txid> {
+    pub async fn handle_withdraw_msg(
+        &self,
+        payload: WithdrawPayload,
+    ) -> AdminResult<WithdrawResponse> {
         let WithdrawPayload {
             amount,
             address,
@@ -950,7 +953,7 @@ impl Gateway {
                         "Sent {amount} funds to address {}",
                         address.assume_checked()
                     );
-                    return Ok(txid);
+                    return Ok(WithdrawResponse { txid, fees });
                 }
                 WithdrawState::Failed(e) => {
                     return Err(AdminGatewayError::WithdrawError { failure_reason: e });

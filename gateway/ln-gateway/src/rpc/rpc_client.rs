@@ -1,7 +1,7 @@
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Txid};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{Amount, TransactionId};
+use fedimint_core::Amount;
 use fedimint_ln_common::gateway_endpoint_constants::{
     ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
     CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT,
@@ -26,7 +26,7 @@ use super::{
     GatewayFedConfig, GatewayInfo, GetLnOnchainAddressPayload, LeaveFedPayload, MnemonicResponse,
     OpenChannelPayload, PayInvoiceForOperatorPayload, ReceiveEcashPayload, ReceiveEcashResponse,
     SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, WithdrawOnchainPayload,
-    WithdrawPayload,
+    WithdrawPayload, WithdrawResponse,
 };
 use crate::lightning::{ChannelInfo, CloseChannelsWithPeerResponse};
 
@@ -97,7 +97,7 @@ impl GatewayRpcClient {
         self.call_post(url, payload).await
     }
 
-    pub async fn withdraw(&self, payload: WithdrawPayload) -> GatewayRpcResult<TransactionId> {
+    pub async fn withdraw(&self, payload: WithdrawPayload) -> GatewayRpcResult<WithdrawResponse> {
         let url = self
             .base_url
             .join(WITHDRAW_ENDPOINT)

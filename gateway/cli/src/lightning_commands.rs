@@ -153,7 +153,7 @@ impl LightningCommands {
                         fee_rate_sats_per_vbyte,
                     })
                     .await?;
-                println!("{response}");
+                print_response(response);
             }
         };
 

@@ -12,8 +12,9 @@ use devimint::util::ProcessManager;
 use devimint::version_constants::{VERSION_0_3_0, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA};
 use devimint::{cmd, util, Gatewayd, LightningNode};
 use fedimint_core::config::FederationId;
-use fedimint_core::Amount;
+use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_testing::gateway::LightningNodeType;
+use itertools::Itertools;
 use ln_gateway::rpc::{FederationInfo, GatewayBalances, GatewayFedConfig, GatewayInfo};
 use tracing::{info, warn};
 
@@ -46,6 +47,7 @@ enum GatewayTest {
         new_gateway_cln_extension_path: PathBuf,
     },
     BackupRestoreTest,
+    LiquidityTest,
 }
 
 #[tokio::main]
@@ -74,6 +76,7 @@ async fn main() -> anyhow::Result<()> {
             .await
         }
         GatewayTest::BackupRestoreTest => Box::pin(backup_restore_test()).await,
+        GatewayTest::LiquidityTest => Box::pin(liquidity_test()).await,
     }
 }
 
@@ -542,6 +545,93 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
         },
     ))
     .await
+}
+
+/// Test that verifies the various liquidity tools (onchain, lightning, ecash)
+/// work correctly.
+async fn liquidity_test() -> anyhow::Result<()> {
+    devimint::run_devfed_test(|dev_fed, _process_mgr| async move {
+        let federation = dev_fed.fed().await?;
+        let gatewayd_version = util::Gatewayd::version_or_default().await;
+        if gatewayd_version < *VERSION_0_5_0_ALPHA {
+            info!(%gatewayd_version, "Version did not support gateway liquidity management, skipping");
+            return Ok(());
+        }
+
+        let gw_lnd = dev_fed.gw_lnd_registered().await?;
+        let gw_cln = dev_fed.gw_cln_registered().await?;
+
+        let gateways = if let Some(gw_ldk) = dev_fed.gw_ldk_connected().await? {
+            [gw_lnd, gw_cln, gw_ldk].to_vec()
+        } else {
+            [gw_lnd, gw_cln].to_vec()
+        };
+
+        let gateway_matrix = gateways
+            .iter()
+            .cartesian_product(gateways.iter())
+            .filter(|(a, b)| a.ln_type() != b.ln_type());
+
+        info!("Testing payments between gateways...");
+
+        for (gw_send, gw_receive) in gateway_matrix.clone() {
+            info!(
+                "Testing lightning payment: {} -> {}",
+                gw_send.ln_type(),
+                gw_receive.ln_type()
+            );
+
+            let invoice = gw_receive.create_invoice(1_000_000).await?;
+            gw_send.pay_invoice(invoice).await?;
+        }
+
+        info!("Pegging-in gateways...");
+
+        federation
+            .pegin_gateways(1_000_000, gateways.clone())
+            .await?;
+
+        info!("Testing ecash payments between gateways...");
+        for (gw_send, gw_receive) in gateway_matrix.clone() {
+            info!(
+                "Testing ecash payment: {} -> {}",
+                gw_send.ln_type(),
+                gw_receive.ln_type()
+            );
+
+            let fed_id = federation.calculate_federation_id();
+            let prev_send_ecash_balance = gw_send.ecash_balance(fed_id.clone()).await?;
+            let prev_receive_ecash_balance = gw_receive.ecash_balance(fed_id.clone()).await?;
+            let ecash = gw_send.send_ecash(fed_id.clone(), 500_000).await?;
+            gw_receive.receive_ecash(ecash).await?;
+            let after_send_ecash_balance = gw_send.ecash_balance(fed_id.clone()).await?;
+            let after_receive_ecash_balance = gw_receive.ecash_balance(fed_id.clone()).await?;
+            assert_eq!(prev_send_ecash_balance - 500_000, after_send_ecash_balance);
+            assert_eq!(prev_receive_ecash_balance + 500_000, after_receive_ecash_balance);
+        }
+
+        info!("Pegging-out gateways...");
+        federation.pegout_gateways(500_000_000, gateways.clone()).await?;
+
+        info!("Testing closing all channels...");
+        for gw in gateways.clone() {
+            gw.close_all_channels(dev_fed.bitcoind().await?.clone()).await?;
+            let balances = gw.get_balances().await?;
+            let curr_lightning_balance = balances.lightning_balance_msats;
+            assert_eq!(curr_lightning_balance, 0, "Close channels did not sweep all lightning funds");
+            let inbound_lightning_balance = balances.inbound_lightning_liquidity_msats;
+            assert_eq!(inbound_lightning_balance, 0, "Close channels did not sweep all lightning funds");
+        }
+
+        info!("Testing withdraw onchain...");
+        for gw in gateways {
+            gw.withdraw_onchain(dev_fed.bitcoind().await?, BitcoinAmountOrAll::All, 10).await?;
+            let curr_balance = gw.get_balances().await?.onchain_balance_sats;
+            assert_eq!(curr_balance, 0, "Gateway onchain balance did not match previous balance minus withdraw amount");
+        }
+
+        Ok(())
+    }).await
 }
 
 /// Retrieves the `GatewayInfo` by issuing an `info` GET request to the gateway.

@@ -153,20 +153,6 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         (gw_ldk, gw_ldk),
     ];
 
-    info!("Testing payments between gateways...");
-
-    for (gw_send, gw_receive) in gateway_pairs {
-        info!(
-            "Testing payment: {} -> {}",
-            gw_send.ln_type(),
-            gw_receive.ln_type()
-        );
-
-        let invoice = gw_receive.create_invoice(1_000_000).await?;
-
-        gw_send.pay_invoice(invoice).await?;
-    }
-
     info!("Testing refund of circular payments...");
 
     for (gw_send, gw_receive) in gateway_matrix {
