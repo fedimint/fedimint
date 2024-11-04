@@ -6,9 +6,6 @@ use fedimint_api_client::api::DynModuleApi;
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client::module::ClientContext;
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin30_to_bitcoin32_secp256k1_pubkey,
-};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
@@ -21,7 +18,7 @@ use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use fedimint_wallet_common::txoproof::PegInProof;
 use fedimint_wallet_common::WalletInput;
 use futures::StreamExt as _;
-use secp256k1::KeyPair;
+use secp256k1_29::Keypair;
 use tokio::sync::watch;
 use tracing::{debug, instrument, trace, warn};
 
@@ -399,7 +396,7 @@ async fn check_idx_pegins(
 async fn claim_peg_in(
     client_ctx: &ClientContext<WalletClientModule>,
     tweak_idx: TweakIdx,
-    tweak_key: KeyPair,
+    tweak_key: Keypair,
     transaction: &bitcoin::Transaction,
     operation_id: OperationId,
     out_point: bitcoin::OutPoint,
@@ -410,7 +407,7 @@ async fn claim_peg_in(
         dbtx: &mut DatabaseTransaction<'_>,
         btc_transaction: &bitcoin::Transaction,
         out_idx: u32,
-        tweak_key: KeyPair,
+        tweak_key: Keypair,
         txout_proof: TxOutProof,
         operation_id: OperationId,
     ) -> (fedimint_core::TransactionId, Vec<fedimint_core::OutPoint>) {
@@ -418,7 +415,7 @@ async fn claim_peg_in(
             txout_proof,
             btc_transaction.clone(),
             out_idx,
-            bitcoin30_to_bitcoin32_secp256k1_pubkey(&tweak_key.public_key()),
+            tweak_key.public_key(),
         )
         .expect("TODO: handle API returning faulty proofs");
 
@@ -428,7 +425,7 @@ async fn claim_peg_in(
 
         let client_input = ClientInput::<WalletInput> {
             input: wallet_input,
-            keys: vec![bitcoin30_to_bitcoin32_keypair(&tweak_key)],
+            keys: vec![tweak_key],
             amount,
         };
 

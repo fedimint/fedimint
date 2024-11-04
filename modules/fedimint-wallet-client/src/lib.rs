@@ -45,7 +45,7 @@ use fedimint_client::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_pubkey;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
@@ -67,7 +67,7 @@ use fedimint_wallet_common::tweakable::Tweakable;
 pub use fedimint_wallet_common::*;
 use futures::{Stream, StreamExt};
 use rand::{thread_rng, Rng};
-use secp256k1::KeyPair;
+use secp256k1_29::Keypair;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tokio::sync::watch;
@@ -317,28 +317,27 @@ impl WalletClientModuleData {
         &self,
         idx: TweakIdx,
     ) -> (
-        secp256k1::KeyPair,
-        secp256k1::PublicKey,
+        secp256k1_29::Keypair,
+        secp256k1_29::PublicKey,
         Address,
         OperationId,
     ) {
         let idx = ChildId(idx.0);
 
-        let secret_tweak_key = self
-            .module_root_secret
-            .child_key(WALLET_TWEAK_CHILD_ID)
-            .child_key(idx)
-            .to_secp_key(secp256k1::SECP256K1);
+        let secret_tweak_key = bitcoin30_to_bitcoin32_keypair(
+            &self
+                .module_root_secret
+                .child_key(WALLET_TWEAK_CHILD_ID)
+                .child_key(idx)
+                .to_secp_key(fedimint_core::secp256k1::SECP256K1),
+        );
 
         let public_tweak_key = secret_tweak_key.public_key();
 
         let address = self
             .cfg
             .peg_in_descriptor
-            .tweak(
-                &bitcoin30_to_bitcoin32_secp256k1_pubkey(&public_tweak_key),
-                bitcoin::secp256k1::SECP256K1,
-            )
+            .tweak(&public_tweak_key, bitcoin::secp256k1::SECP256K1)
             .address(self.cfg.network)
             .unwrap();
 
@@ -351,16 +350,13 @@ impl WalletClientModuleData {
     fn derive_peg_in_script(
         &self,
         idx: TweakIdx,
-    ) -> (ScriptBuf, bitcoin::Address, KeyPair, OperationId) {
+    ) -> (ScriptBuf, bitcoin::Address, Keypair, OperationId) {
         let (secret_tweak_key, _, address, operation_id) = self.derive_deposit_address(idx);
 
         (
             self.cfg
                 .peg_in_descriptor
-                .tweak(
-                    &bitcoin30_to_bitcoin32_secp256k1_pubkey(&secret_tweak_key.public_key()),
-                    SECP256K1,
-                )
+                .tweak(&secret_tweak_key.public_key(), SECP256K1)
                 .script_pubkey(),
             address,
             secret_tweak_key,
