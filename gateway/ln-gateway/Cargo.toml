@@ -36,7 +36,6 @@ async-trait = { workspace = true }
 axum = { version = "0.7.7", features = [ "json" ] }
 axum-macros = "0.4.2"
 bitcoin = { workspace = true }
-bitcoin30 = { workspace = true }
 bitcoin_hashes = { workspace = true }
 clap = { workspace = true }
 cln-plugin = "0.2.0"

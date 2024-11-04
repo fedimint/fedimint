@@ -5,7 +5,9 @@ use bitcoin30::secp256k1;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_keypair;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_schnorr_signature, bitcoin32_to_bitcoin30_keypair,
+};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -217,7 +219,9 @@ impl SendStateMachine {
                 let client_input = ClientInput::<LightningInput> {
                     input: LightningInput::V0(LightningInputV0::Outgoing(
                         old_state.common.contract.contract_id(),
-                        OutgoingWitness::Cancel(signature),
+                        OutgoingWitness::Cancel(bitcoin30_to_bitcoin32_schnorr_signature(
+                            &signature,
+                        )),
                     )),
                     amount: old_state.common.contract.amount,
                     keys: vec![old_state.common.refund_keypair],

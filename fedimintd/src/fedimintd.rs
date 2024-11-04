@@ -8,7 +8,6 @@ use std::time::Duration;
 use anyhow::{bail, format_err, Context};
 use clap::{Parser, Subcommand};
 use fedimint_core::admin_client::ConfigGenParamsRequest;
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_network;
 use fedimint_core::config::{
     EmptyGenParams, ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
@@ -87,7 +86,7 @@ struct ServerOpts {
     api_url: SafeUrl,
     /// The bitcoin network that fedimint will be running on
     #[arg(long, env = FM_BITCOIN_NETWORK_ENV, default_value = "regtest")]
-    network: bitcoin30::network::constants::Network,
+    network: bitcoin::network::Network,
     /// The number of blocks the federation stays behind the blockchain tip
     #[arg(long, env = FM_FINALITY_DELAY_ENV, default_value = "10")]
     finality_delay: u32,
@@ -315,9 +314,7 @@ impl Fedimintd {
                     local: LightningGenParamsLocal {
                         bitcoin_rpc: bitcoind_rpc.clone(),
                     },
-                    consensus: LightningGenParamsConsensus {
-                        network: bitcoin30_to_bitcoin32_network(&network),
-                    },
+                    consensus: LightningGenParamsConsensus { network },
                 },
             )
             .with_module_kind(MintInit)
@@ -341,7 +338,7 @@ impl Fedimintd {
                         bitcoin_rpc: bitcoind_rpc.clone(),
                     },
                     consensus: WalletGenParamsConsensus {
-                        network: bitcoin30_to_bitcoin32_network(&network),
+                        network,
                         // TODO this is not very elegant, but I'm planning to get rid of it in a
                         // next commit anyway
                         finality_delay,
@@ -365,7 +362,7 @@ impl Fedimintd {
                             fee_consensus: fedimint_core::fee_consensus::FeeConsensus::new_lnv2(
                                 1_000,
                             )?,
-                            network: bitcoin30_to_bitcoin32_network(&network),
+                            network,
                         },
                     },
                 )

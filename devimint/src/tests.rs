@@ -8,7 +8,9 @@ use std::{env, ffi};
 use anyhow::{anyhow, bail, Context, Result};
 use bitcoin::Txid;
 use clap::Subcommand;
-use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_tx;
+use fedimint_core::bitcoin_migration::{
+    bitcoin32_to_bitcoin30_script_buf, bitcoin32_to_bitcoin30_tx,
+};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::envs::is_env_var_set;
@@ -1081,10 +1083,9 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         &tx_hex,
         &ModuleRegistry::default(),
     )?);
-    assert!(tx
-        .output
-        .iter()
-        .any(|o| o.script_pubkey == address.script_pubkey() && o.value == 50000));
+    assert!(tx.output.iter().any(|o| o.script_pubkey
+        == bitcoin32_to_bitcoin30_script_buf(&address.script_pubkey())
+        && o.value == 50000));
 
     let post_withdraw_walletng_balance = client.balance().await?;
     let expected_wallet_balance = initial_walletng_balance - 50_000_000 - (fees_sat * 1000);
@@ -2033,7 +2034,10 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         let change_output = tx
             .output
             .iter()
-            .find(|o| o.to_owned().script_pubkey != withdrawal_address.script_pubkey())
+            .find(|o| {
+                o.to_owned().script_pubkey
+                    != bitcoin32_to_bitcoin30_script_buf(&withdrawal_address.script_pubkey())
+            })
             .expect("withdrawal must have change output");
         assert!(fed_utxos_sats.insert(change_output.value));
 
@@ -2088,25 +2092,26 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
 
     debug!(target: LOG_DEVIMINT, ?utxos_descriptors, "recoverytool descriptors using UTXOs method");
 
-    let descriptors_json = [serde_json::value::to_raw_value(&serde_json::Value::Array(
-        utxos_descriptors
-            .iter()
-            .map(|d| {
-                let object = json!({
-                    "desc": d,
-                    "timestamp": 0,
-                });
-                object
-            })
-            .collect::<Vec<_>>(),
-    ))?];
+    let descriptors_json = serde_json::value::to_raw_value(&serde_json::Value::Array(vec![
+        serde_json::Value::Array(
+            utxos_descriptors
+                .iter()
+                .map(|d| {
+                    json!({
+                        "desc": d,
+                        "timestamp": 0,
+                    })
+                })
+                .collect(),
+        ),
+    ]))?;
     info!("Getting wallet balances before import");
     let bitcoin_client = bitcoind.wallet_client().await?;
     let balances_before = bitcoin_client.get_balances().await?;
     info!("Importing descriptors into bitcoin wallet");
     let request = bitcoin_client
         .get_jsonrpc_client()
-        .build_request("importdescriptors", &descriptors_json);
+        .build_request("importdescriptors", Some(&descriptors_json));
     let response = block_in_place(|| bitcoin_client.get_jsonrpc_client().send_request(request))?;
     response.check_error()?;
     info!("Getting wallet balances after import");

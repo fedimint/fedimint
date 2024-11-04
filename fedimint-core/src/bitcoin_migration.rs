@@ -417,11 +417,38 @@ fn bitcoin32_to_bitcoin30_sha256d_hash(
     bitcoin30::hashes::sha256d::Hash::from_byte_array(*hash.as_ref())
 }
 
+pub fn bitcoin30_to_bitcoin32_schnorr_signature(
+    signature: &bitcoin30::secp256k1::schnorr::Signature,
+) -> bitcoin::secp256k1::schnorr::Signature {
+    bitcoin::secp256k1::schnorr::Signature::from_slice(signature.as_ref())
+        .expect("Failed to convert bitcoin30 schnorr signature to bitcoin32 schnorr signature")
+}
+
 pub fn bitcoin32_to_bitcoin30_schnorr_signature(
     signature: &bitcoin::secp256k1::schnorr::Signature,
 ) -> bitcoin30::secp256k1::schnorr::Signature {
     bitcoin30::secp256k1::schnorr::Signature::from_slice(signature.as_ref())
         .expect("Failed to convert bitcoin32 schnorr signature to bitcoin30 schnorr signature")
+}
+
+pub fn bitcoin32_to_bitcoin30_recoverable_signature(
+    signature: &bitcoin::secp256k1::ecdsa::RecoverableSignature,
+) -> bitcoin30::secp256k1::ecdsa::RecoverableSignature {
+    let (recovery_id, data) = signature.serialize_compact();
+
+    bitcoin30::secp256k1::ecdsa::RecoverableSignature::from_compact(
+        &data,
+        bitcoin30::secp256k1::ecdsa::RecoveryId::from_i32(recovery_id.to_i32())
+            .expect("Invalid recovery id"),
+    )
+    .expect("Failed to convert bitcoin32 recoverable signature to bitcoin30 recoverable signature")
+}
+
+pub fn bitcoin30_to_bitcoin32_secp256k1_message(
+    message: &bitcoin30::secp256k1::Message,
+) -> bitcoin::secp256k1::Message {
+    bitcoin::secp256k1::Message::from_digest_slice(message.as_ref())
+        .expect("Failed to convert bitcoin30 message to bitcoin32 message")
 }
 
 #[cfg(test)]

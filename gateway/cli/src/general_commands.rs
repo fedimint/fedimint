@@ -2,9 +2,6 @@ use anyhow::bail;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::Address;
 use clap::Subcommand;
-use fedimint_core::bitcoin_migration::{
-    bitcoin32_to_bitcoin30_network, bitcoin32_to_bitcoin30_unchecked_address,
-};
 use fedimint_core::config::FederationId;
 use fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll};
 use fedimint_mint_client::OOBNotes;
@@ -205,7 +202,7 @@ impl GeneralCommands {
                     .withdraw(WithdrawPayload {
                         federation_id,
                         amount,
-                        address: bitcoin32_to_bitcoin30_unchecked_address(&address),
+                        address,
                     })
                     .await?;
 
@@ -253,7 +250,7 @@ impl GeneralCommands {
                         password,
                         num_route_hints,
                         routing_fees,
-                        network: network.map(|network| bitcoin32_to_bitcoin30_network(&network)),
+                        network,
                         per_federation_routing_fees,
                     })
                     .await?;

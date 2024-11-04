@@ -10,7 +10,6 @@ use axum::body::{Body, Bytes};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
-use bitcoin30::secp256k1;
 use bitcoin_hashes::sha256;
 use clap::Parser;
 use cln_plugin::options::{self, StringConfigOption};
@@ -19,7 +18,8 @@ use cln_rpc::model;
 use cln_rpc::model::requests::SendpayRoute;
 use cln_rpc::model::responses::ListpeerchannelsChannels;
 use cln_rpc::primitives::{AmountOrAll, ChannelState, ShortChannelId};
-use fedimint_core::secp256k1::{PublicKey, SecretKey};
+use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_network;
+use fedimint_core::secp256k1::{PublicKey, SecretKey, SECP256K1};
 use fedimint_core::task::timeout;
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll};
@@ -549,8 +549,10 @@ async fn cln_create_invoice(
 
     let info = cln_service.info().await?;
 
-    let network = bitcoin30::Network::from_str(info.2.as_str())
-        .map_err(|e| ClnExtensionError::Error(anyhow!(e)))?;
+    let network = bitcoin32_to_bitcoin30_network(
+        &bitcoin::Network::from_str(info.2.as_str())
+            .map_err(|e| ClnExtensionError::Error(anyhow!(e)))?,
+    );
 
     let invoice_builder = InvoiceBuilder::new(Currency::from(network))
         .amount_milli_satoshis(amount_msat)
@@ -574,10 +576,7 @@ async fn cln_create_invoice(
     let invoice = invoice_builder
         // Temporarily sign with an ephemeral private key, we will request CLN to sign this
         // invoice next.
-        .build_signed(|m| {
-            let ctx = secp256k1::global::SECP256K1;
-            ctx.sign_ecdsa_recoverable(m, &SecretKey::new(&mut OsRng))
-        })
+        .build_signed(|m| SECP256K1.sign_ecdsa_recoverable(m, &SecretKey::new(&mut OsRng)))
         .map_err(|e| ClnExtensionError::Error(anyhow!(e)))?;
 
     let invstring = invoice.to_string();

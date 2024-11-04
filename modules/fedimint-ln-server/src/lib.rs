@@ -11,6 +11,7 @@ use std::time::Duration;
 use anyhow::{bail, Context};
 use bitcoin_hashes::{sha256, Hash as BitcoinHash};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_schnorr_signature;
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -749,7 +750,7 @@ impl ServerModule for Lightning {
 
                 secp256k1::global::SECP256K1
                     .verify_schnorr(
-                        gateway_signature,
+                        &bitcoin32_to_bitcoin30_schnorr_signature(gateway_signature),
                         &outgoing_contract.cancellation_message().into(),
                         &outgoing_contract.gateway_key.x_only_public_key().0,
                     )

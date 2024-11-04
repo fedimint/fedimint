@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use bitcoin::key::Keypair;
 use bitcoin::secp256k1;
-use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_schnorr_signature;
 use fedimint_core::core::{
     DynInput, DynOutput, IInput, IOutput, IntoDynInstance, ModuleInstanceId,
 };
@@ -406,11 +405,9 @@ impl TransactionBuilder {
         let msg = secp256k1::Message::from_digest_slice(&txid[..]).expect("txid has right length");
 
         let signatures = input_keys
-            .into_iter()
+            .iter()
             .flatten()
-            .map(|keypair| {
-                bitcoin32_to_bitcoin30_schnorr_signature(&secp_ctx.sign_schnorr(&msg, &keypair))
-            })
+            .map(|keypair| secp_ctx.sign_schnorr(&msg, keypair))
             .collect();
 
         let transaction = Transaction {

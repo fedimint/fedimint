@@ -22,7 +22,6 @@ fedimint-core = { workspace = true }
 hex = { workspace = true }
 impl-tools = "0.10.1"
 miniscript = { workspace = true, features = ["serde"] }
-miniscript12 = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }

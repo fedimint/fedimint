@@ -30,6 +30,7 @@ use bitcoin_hashes::sha256;
 use config::LightningClientConfig;
 use fedimint_client::oplog::OperationLogEntry;
 use fedimint_client::ClientHandleArc;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_schnorr_signature;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -118,7 +119,7 @@ impl LightningOutput {
     ) -> LightningOutput {
         LightningOutput::V0(LightningOutputV0::CancelOutgoing {
             contract,
-            gateway_signature,
+            gateway_signature: bitcoin30_to_bitcoin32_schnorr_signature(&gateway_signature),
         })
     }
 }
@@ -146,7 +147,7 @@ pub enum LightningOutputV0 {
         /// Contract to update
         contract: ContractId,
         /// Signature of gateway
-        gateway_signature: secp256k1::schnorr::Signature,
+        gateway_signature: fedimint_core::secp256k1_29::schnorr::Signature,
     },
 }
 

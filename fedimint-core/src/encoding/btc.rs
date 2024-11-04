@@ -7,6 +7,7 @@ use bitcoin30::hashes::Hash as BitcoinHash;
 use hex::{FromHex, ToHex};
 use miniscript::{Descriptor, MiniscriptKey};
 
+use super::SimpleBitcoinRead;
 use crate::bitcoin_migration::{
     bitcoin29_to_bitcoin32_network_magic, bitcoin29_to_bitcoin32_psbt,
     bitcoin30_to_bitcoin32_network, bitcoin32_checked_address_to_unchecked_address,
@@ -15,17 +16,6 @@ use crate::bitcoin_migration::{
 };
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
-
-// Simple decoder implementing `bitcoin_io::Read` for `std::io::Read`.
-// This is needed because `bitcoin::consensus::Decodable` requires a
-// `bitcoin_io::Read`.
-struct SimpleBitcoinRead<R: std::io::Read>(R);
-
-impl<R: std::io::Read> bitcoin_io::Read for SimpleBitcoinRead<R> {
-    fn read(&mut self, buf: &mut [u8]) -> bitcoin_io::Result<usize> {
-        self.0.read(buf).map_err(bitcoin_io::Error::from)
-    }
-}
 
 macro_rules! impl_encode_decode_bridge {
     ($btc_type:ty) => {

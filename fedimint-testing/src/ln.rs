@@ -4,12 +4,17 @@ use std::time::Duration;
 
 use async_stream::stream;
 use async_trait::async_trait;
-use bitcoin30::hashes::{sha256, Hash};
-use bitcoin30::key::KeyPair;
-use bitcoin30::secp256k1::{PublicKey, SecretKey};
+use bitcoin::hashes::{sha256, Hash};
+use bitcoin::key::Keypair;
+use bitcoin::secp256k1::{self, PublicKey, SecretKey};
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_secp256k1_message, bitcoin32_to_bitcoin30_recoverable_signature,
+    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_secp256k1_secret_key,
+    bitcoin32_to_bitcoin30_sha256_hash,
+};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::BoxStream;
-use fedimint_core::{secp256k1, Amount};
+use fedimint_core::Amount;
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::PrunedInvoice;
@@ -42,8 +47,8 @@ pub struct FakeLightningTest {
 impl FakeLightningTest {
     pub fn new() -> Self {
         info!(target: LOG_TEST, "Setting up fake lightning test fixture");
-        let ctx = bitcoin30::secp256k1::Secp256k1::new();
-        let kp = KeyPair::new(&ctx, &mut OsRng);
+        let ctx = bitcoin::secp256k1::Secp256k1::new();
+        let kp = Keypair::new(&ctx, &mut OsRng);
         let amount_sent = AtomicU64::new(0);
 
         FakeLightningTest {
@@ -66,12 +71,12 @@ impl FakeLightningTest {
         amount: Amount,
         expiry_time: Option<u64>,
     ) -> ln_gateway::Result<Bolt11Invoice> {
-        let ctx = bitcoin30::secp256k1::Secp256k1::new();
+        let ctx = bitcoin::secp256k1::Secp256k1::new();
         let payment_hash = sha256::Hash::hash(&MOCK_INVOICE_PREIMAGE);
 
         Ok(InvoiceBuilder::new(Currency::Regtest)
             .description(String::new())
-            .payment_hash(payment_hash)
+            .payment_hash(bitcoin32_to_bitcoin30_sha256_hash(&payment_hash))
             .current_timestamp()
             .min_final_cltv_expiry_delta(0)
             .payment_secret(PaymentSecret([0; 32]))
@@ -79,7 +84,12 @@ impl FakeLightningTest {
             .expiry_time(Duration::from_secs(
                 expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
             ))
-            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &self.gateway_node_sec_key))
+            .build_signed(|m| {
+                bitcoin32_to_bitcoin30_recoverable_signature(&ctx.sign_ecdsa_recoverable(
+                    &bitcoin30_to_bitcoin32_secp256k1_message(m),
+                    &self.gateway_node_sec_key,
+                ))
+            })
             .unwrap())
     }
 
@@ -88,17 +98,17 @@ impl FakeLightningTest {
     /// * Mocks use hard-coded invoice description to fail the payment
     /// * Real fixtures won't be able to route to randomly generated node pubkey
     pub fn unpayable_invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Bolt11Invoice {
-        let ctx = bitcoin30::secp256k1::Secp256k1::new();
+        let ctx = secp256k1::Secp256k1::new();
         // Generate fake node keypair
-        let kp = KeyPair::new(&ctx, &mut OsRng);
+        let kp = Keypair::new(&ctx, &mut OsRng);
         let payment_hash = sha256::Hash::hash(&MOCK_INVOICE_PREIMAGE);
 
         // `FakeLightningTest` will fail to pay any invoice with
         // `INVALID_INVOICE_DESCRIPTION` in the description of the invoice.
         InvoiceBuilder::new(Currency::Regtest)
-            .payee_pub_key(kp.public_key())
+            .payee_pub_key(bitcoin32_to_bitcoin30_secp256k1_pubkey(&kp.public_key()))
             .description("INVALID INVOICE DESCRIPTION".to_string())
-            .payment_hash(payment_hash)
+            .payment_hash(bitcoin32_to_bitcoin30_sha256_hash(&payment_hash))
             .current_timestamp()
             .min_final_cltv_expiry_delta(0)
             .payment_secret(PaymentSecret(INVALID_INVOICE_PAYMENT_SECRET))
@@ -106,7 +116,12 @@ impl FakeLightningTest {
             .expiry_time(Duration::from_secs(
                 expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
             ))
-            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &SecretKey::from_keypair(&kp)))
+            .build_signed(|m| {
+                bitcoin32_to_bitcoin30_recoverable_signature(&ctx.sign_ecdsa_recoverable(
+                    &bitcoin30_to_bitcoin32_secp256k1_message(m),
+                    &SecretKey::from_keypair(&kp),
+                ))
+            })
             .expect("Invoice creation failed")
     }
 
@@ -119,7 +134,7 @@ impl FakeLightningTest {
 impl ILnRpcClient for FakeLightningTest {
     async fn info(&self) -> Result<GetNodeInfoResponse, LightningRpcError> {
         Ok(GetNodeInfoResponse {
-            pub_key: self.gateway_node_pub_key,
+            pub_key: bitcoin32_to_bitcoin30_secp256k1_pubkey(&self.gateway_node_pub_key),
             alias: "FakeLightningNode".to_string(),
             network: "regtest".to_string(),
             block_height: 0,
@@ -216,7 +231,7 @@ impl ILnRpcClient for FakeLightningTest {
         &self,
         create_invoice_request: CreateInvoiceRequest,
     ) -> Result<CreateInvoiceResponse, LightningRpcError> {
-        let ctx = bitcoin30::secp256k1::Secp256k1::new();
+        let ctx = fedimint_core::secp256k1::Secp256k1::new();
 
         let invoice = match create_invoice_request.payment_hash {
             Some(payment_hash) => InvoiceBuilder::new(Currency::Regtest)
@@ -229,7 +244,12 @@ impl ILnRpcClient for FakeLightningTest {
                 .expiry_time(Duration::from_secs(u64::from(
                     create_invoice_request.expiry_secs,
                 )))
-                .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &self.gateway_node_sec_key))
+                .build_signed(|m| {
+                    ctx.sign_ecdsa_recoverable(
+                        m,
+                        &bitcoin32_to_bitcoin30_secp256k1_secret_key(&self.gateway_node_sec_key),
+                    )
+                })
                 .unwrap(),
             None => {
                 return Err(LightningRpcError::FailedToGetInvoice {

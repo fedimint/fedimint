@@ -13,10 +13,8 @@ use bitcoincore_rpc::RpcApi;
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::ClnRpc;
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin30_to_bitcoin32_tx,
-    bitcoin30_to_bitcoin32_txid, bitcoin32_to_bitcoin30_address, bitcoin32_to_bitcoin30_amount,
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin30_to_bitcoin32_txid,
     bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_sha256_hash,
-    bitcoin32_to_bitcoin30_txid,
 };
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
@@ -235,24 +233,14 @@ impl Bitcoind {
         let tx = self
             .wallet_client()
             .await?
-            .send_to_address(
-                bitcoin32_to_bitcoin30_address(
-                    &bitcoin::Address::from_str(&addr)?.assume_checked(),
-                ),
-                amount,
-            )
+            .send_to_address(bitcoin::Address::from_str(&addr)?.assume_checked(), amount)
             .await?;
         Ok(tx)
     }
 
     pub async fn get_txout_proof(&self, txid: bitcoin::Txid) -> Result<String> {
         let client = self.wallet_client().await?.clone();
-        let proof = spawn_blocking(move || {
-            client
-                .client
-                .get_tx_out_proof(&[bitcoin32_to_bitcoin30_txid(&txid)], None)
-        })
-        .await??;
+        let proof = spawn_blocking(move || client.client.get_tx_out_proof(&[txid], None)).await??;
         Ok(proof.encode_hex())
     }
 
@@ -320,10 +308,8 @@ impl Bitcoind {
         block_hash: Option<BlockHash>,
     ) -> Result<Option<String>> {
         let client = self.client.clone();
-        let tx_or = spawn_blocking(move || {
-            client.get_raw_transaction(&bitcoin32_to_bitcoin30_txid(&txid), block_hash.as_ref())
-        })
-        .await?;
+        let tx_or =
+            spawn_blocking(move || client.get_raw_transaction(&txid, block_hash.as_ref())).await?;
 
         let tx = match tx_or {
             Ok(tx) => tx,
@@ -336,7 +322,7 @@ impl Bitcoind {
             ))) => return Ok(None),
             Err(err) => return Err(err.into()),
         };
-        let bytes = bitcoin30_to_bitcoin32_tx(&tx).consensus_encode_to_vec();
+        let bytes = tx.consensus_encode_to_vec();
         Ok(Some(bytes.encode_hex()))
     }
 
@@ -376,21 +362,12 @@ impl Bitcoind {
         amount: bitcoin::Amount,
     ) -> anyhow::Result<bitcoin::Txid> {
         let client = self.wallet_client().await?.clone();
-        Ok(bitcoin30_to_bitcoin32_txid(
-            &spawn_blocking(move || {
-                client.client.send_to_address(
-                    &addr,
-                    bitcoin32_to_bitcoin30_amount(&amount),
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                )
-            })
-            .await??,
-        ))
+        Ok(spawn_blocking(move || {
+            client
+                .client
+                .send_to_address(&addr, amount, None, None, None, None, None, None)
+        })
+        .await??)
     }
 
     pub(crate) async fn get_balances(&self) -> anyhow::Result<GetBalancesResult> {

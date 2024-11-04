@@ -2,8 +2,11 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-use bitcoin30::secp256k1::KeyPair;
+use bitcoin::secp256k1::Keypair;
 use fedimint_client::ClientHandleArc;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_keypair,
+};
 use fedimint_core::config::{FederationId, FederationIdPrefix, JsonClientConfig};
 use fedimint_core::db::{DatabaseTransaction, NonCommittable};
 use fedimint_core::util::Spanned;
@@ -65,7 +68,8 @@ impl FederationManager {
     ) -> AdminResult<FederationInfo> {
         let federation_info = self.federation_info(federation_id, dbtx).await?;
 
-        let gateway_keypair = dbtx.load_gateway_keypair_assert_exists().await;
+        let gateway_keypair =
+            bitcoin30_to_bitcoin32_keypair(&dbtx.load_gateway_keypair_assert_exists().await);
 
         self.unannounce_from_federation(federation_id, gateway_keypair)
             .await?;
@@ -129,7 +133,7 @@ impl FederationManager {
     async fn unannounce_from_federation(
         &self,
         federation_id: FederationId,
-        gateway_keypair: KeyPair,
+        gateway_keypair: Keypair,
     ) -> AdminResult<()> {
         let client = self
             .clients
@@ -141,7 +145,7 @@ impl FederationManager {
         client
             .value()
             .get_first_module::<GatewayClientModule>()?
-            .remove_from_federation(gateway_keypair)
+            .remove_from_federation(bitcoin32_to_bitcoin30_keypair(&gateway_keypair))
             .await;
 
         Ok(())
@@ -149,7 +153,7 @@ impl FederationManager {
 
     /// Iterates through all of the federations the gateway is registered with
     /// and requests to remove the registration record.
-    pub async fn unannounce_from_all_federations(&self, gateway_keypair: KeyPair) {
+    pub async fn unannounce_from_all_federations(&self, gateway_keypair: Keypair) {
         let removal_futures = self
             .clients
             .values()
@@ -158,7 +162,7 @@ impl FederationManager {
                     .value()
                     .get_first_module::<GatewayClientModule>()
                     .expect("Must have client module")
-                    .remove_from_federation(gateway_keypair)
+                    .remove_from_federation(bitcoin32_to_bitcoin30_keypair(&gateway_keypair))
                     .await;
             })
             .collect::<Vec<_>>();

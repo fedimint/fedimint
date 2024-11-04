@@ -1,6 +1,9 @@
 use std::fmt::Debug;
 
 use bitcoin_hashes::{sha256, Hash};
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_schnorr_signature, bitcoin32_to_bitcoin30_schnorr_signature,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1;
 use secp256k1::{KeyPair, Message, PublicKey, Secp256k1, Signing, Verification, SECP256K1};
@@ -24,7 +27,7 @@ impl BackupRequest {
 
         Ok(SignedBackupRequest {
             request: self,
-            signature,
+            signature: bitcoin30_to_bitcoin32_schnorr_signature(&signature),
         })
     }
 }
@@ -34,7 +37,7 @@ pub struct SignedBackupRequest {
     #[serde(flatten)]
     request: BackupRequest,
     #[serde(with = "::fedimint_core::encoding::as_hex")]
-    pub signature: secp256k1::schnorr::Signature,
+    pub signature: fedimint_core::secp256k1_29::schnorr::Signature,
 }
 
 impl SignedBackupRequest {
@@ -43,7 +46,7 @@ impl SignedBackupRequest {
         C: Signing + Verification,
     {
         ctx.verify_schnorr(
-            &self.signature,
+            &bitcoin32_to_bitcoin30_schnorr_signature(&self.signature),
             &Message::from_slice(&self.request.hash().to_byte_array()).expect("Can't fail"),
             &self.request.id.x_only_public_key().0,
         )?;
