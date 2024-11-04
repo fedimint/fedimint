@@ -14,6 +14,7 @@ members = [
     "fedimint-cli",
     "fedimint-client",
     "fedimint-client-rpc",
+    "fedimint-client-stdio",
     "fedimint-client-wasm",
     "fedimint-core",
     "fedimint-dbtool",

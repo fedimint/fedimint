@@ -1,0 +1,22 @@
+[package]
+edition = "2021"
+name = "fedimint-client-stdio"
+version = { workspace = true }
+authors = ["The Fedimint Developers"]
+description = "fedimint client for stdio"
+license = "MIT"
+readme = "../README.md"
+repository = "https://github.com/fedimint/fedimint"
+
+[[bin]]
+name = "fedimint_client_stdio"
+path = "src/main.rs"
+
+[dependencies]
+async-trait = "0.1"
+anyhow = { workspace = true }
+fedimint-client-rpc = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-rocksdb = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["full"] }

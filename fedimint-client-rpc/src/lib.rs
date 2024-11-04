@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_stream::try_stream;
 use fedimint_client::module::IClientModule;
@@ -17,6 +18,7 @@ use futures::future::{AbortHandle, Abortable};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
+use tracing::info;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -163,7 +165,7 @@ impl<D: DatabaseFactory> RpcGlobalState<D> {
 
     async fn handle_close_client(&self, client_name: String) -> anyhow::Result<()> {
         let mut clients = self.clients.lock().await;
-        let client = clients
+        let mut client = clients
             .remove(&client_name)
             .ok_or_else(|| anyhow::format_err!("client not found"))?;
 
