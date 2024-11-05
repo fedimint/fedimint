@@ -74,10 +74,22 @@ pub enum MintOutputStates {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct MintOutputCommonV1 {
+    pub(crate) operation_id: OperationId,
+    pub(crate) out_point: OutPoint,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintOutputCommon {
     pub(crate) operation_id: OperationId,
     pub(crate) txid: TransactionId,
     pub(crate) out_idxs: std::ops::RangeInclusive<u64>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct MintOutputStateMachineV1 {
+    pub(crate) common: MintOutputCommonV1,
+    pub(crate) state: MintOutputStates,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]

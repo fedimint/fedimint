@@ -13,6 +13,7 @@ use strum_macros::EnumIter;
 use crate::backup::recovery::MintRecoveryState;
 use crate::input::{MintInputCommon, MintInputStateMachine, MintInputStateMachineV1};
 use crate::oob::{MintOOBStateMachine, MintOOBStateMachineV1, MintOOBStates, MintOOBStatesV1};
+use crate::output::{MintOutputCommon, MintOutputStateMachine, MintOutputStateMachineV1};
 use crate::{MintClientStateMachines, SpendableNoteUndecoded};
 
 #[repr(u8)]
@@ -126,6 +127,18 @@ pub(crate) fn migrate_state_to_v2(
     let mint_client_state_machine_variant = u16::consensus_decode(cursor, &decoders)?;
 
     let new_mint_state_machine = match mint_client_state_machine_variant {
+        0 => {
+            let old_state = MintOutputStateMachineV1::consensus_decode(cursor, &decoders)?;
+            MintClientStateMachines::Output(MintOutputStateMachine {
+                common: MintOutputCommon {
+                    operation_id: old_state.common.operation_id,
+                    txid: old_state.common.out_point.txid,
+                    out_idxs: old_state.common.out_point.out_idx
+                        ..=old_state.common.out_point.out_idx,
+                },
+                state: old_state.state,
+            })
+        }
         1 => {
             let old_state = MintInputStateMachineV1::consensus_decode(cursor, &decoders)?;
 
