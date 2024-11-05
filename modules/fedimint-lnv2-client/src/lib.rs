@@ -4,7 +4,7 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 
-pub mod api;
+mod api;
 #[cfg(feature = "cli")]
 mod cli;
 mod db;
@@ -14,15 +14,15 @@ mod send_sm;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use api::{GatewayConnection, RealGatewayConnection};
 use async_stream::stream;
 use bitcoin30::hashes::{sha256, Hash};
 use bitcoin30::secp256k1;
+use bitcoin30::secp256k1::{ecdh, KeyPair, PublicKey, Scalar, SecretKey};
 use db::GatewayKey;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
-use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
+use fedimint_client::module::{ClientContext, ClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
@@ -34,7 +34,7 @@ use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_network,
 };
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
+use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -42,24 +42,33 @@ use fedimint_core::module::{
 };
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId, TransactionId};
+use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
+use fedimint_lnv2_common::gateway_api::{
+    GatewayConnection, GatewayConnectionError, PaymentFee, RealGatewayConnection, RoutingInfo,
+};
 use fedimint_lnv2_common::{
-    LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0, KIND,
+    Bolt11InvoiceDescription, LightningCommonInit, LightningInvoice, LightningModuleTypes,
+    LightningOutput, LightningOutputV0, KIND,
 };
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Currency};
-use secp256k1::schnorr::Signature;
-use secp256k1::{ecdh, KeyPair, PublicKey, Scalar, SecretKey};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
-use tpe::{derive_agg_decryption_key, AggregateDecryptionKey, AggregatePublicKey, PublicKeyShare};
+use tpe::{derive_agg_decryption_key, AggregateDecryptionKey};
 
-use crate::api::LnFederationApi;
+use crate::api::LightningFederationApi;
 use crate::receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
 use crate::send_sm::{SendSMCommon, SendSMState, SendStateMachine};
+
+/// Number of blocks until outgoing lightning contracts times out and user
+/// client can refund it unilaterally
+const EXPIRATION_DELTA_LIMIT: u64 = 1440;
+
+/// A two hour buffer in case either the client or gateway go offline
+const CONTRACT_CONFIRMATION_BUFFER: u64 = 12;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum LightningOperationMeta {
@@ -111,15 +120,8 @@ impl ReceiveOperationMeta {
     }
 }
 
-/// Number of blocks until outgoing lightning contracts times out and user
-/// client can refund it unilaterally
-pub const EXPIRATION_DELTA_LIMIT_DEFAULT: u64 = 1008;
-
-/// A two hour buffer in case either the client or gateway go offline
-pub const CONTRACT_CONFIRMATION_BUFFER: u64 = 12;
-
 #[cfg_attr(doc, aquamarine::aquamarine)]
-/// The high-level state of sending a payment over lightning.
+/// The state of an operation sending a payment over lightning.
 ///
 /// ```mermaid
 /// graph LR
@@ -137,26 +139,27 @@ pub const CONTRACT_CONFIRMATION_BUFFER: u64 = 12;
 /// The transition from Refunding to Success is only possible if the gateway
 /// misbehaves.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub enum SendState {
-    /// We are funding the outgoing contract.
+pub enum SendOperationState {
+    /// We are funding the contract to incentivize the gateway.
     Funding,
     /// We are waiting for the gateway to complete the payment.
     Funded,
     /// The payment was successful.
     Success,
-    /// The payment has failed. We are refunding the outgoing contract.
+    /// The payment has failed and we are refunding the contract.
     Refunding,
-    /// The outgoing contract has been refunded.
+    /// The payment has been refunded.
     Refunded,
     /// Either a programming error has occurred or the federation is malicious.
     Failure,
 }
 
+/// The final state of an operation sending a payment over lightning.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub enum FinalSendState {
+pub enum FinalSendOperationState {
     /// The payment was successful.
     Success,
-    /// The outgoing contract has been refunded.
+    /// The payment has been refunded.
     Refunded,
     /// Either a programming error has occurred or the federation is malicious.
     Failure,
@@ -165,7 +168,7 @@ pub enum FinalSendState {
 pub type SendResult = Result<OperationId, SendPaymentError>;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
-/// The high-level state of receiving a payment over lightning.
+/// The state of an operation receiving a payment over lightning.
 ///
 /// ```mermaid
 /// graph LR
@@ -177,136 +180,31 @@ pub type SendResult = Result<OperationId, SendPaymentError>;
 ///     Claiming -- minting ecash fails --> Failure
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub enum ReceiveState {
-    /// We are waititng for the gateway to fund the incoming contract.
+pub enum ReceiveOperationState {
+    /// We are waiting for the payment.
     Pending,
-    /// The incoming contract has expired.
+    /// The payment request has expired.
     Expired,
-    /// The gateway has funded the incoming contract.
+    /// The payment has been confirmed and we are issuing the ecash.
     Claiming,
-    /// The payment was successful.
+    /// The payment has been successful.
     Claimed,
     /// Either a programming error has occurred or the federation is malicious.
     Failure,
 }
 
+/// The final state of an operation receiving a payment over lightning.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub enum FinalReceiveState {
-    /// The incoming contract has expired.
+pub enum FinalReceiveOperationState {
+    /// The payment request has expired.
     Expired,
-    /// The payment was successful.
+    /// The payment has been successful.
     Claimed,
     /// Either a programming error has occurred or the federation is malicious.
     Failure,
 }
 
 pub type ReceiveResult = Result<(Bolt11Invoice, OperationId), ReceiveError>;
-
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct CreateBolt11InvoicePayload {
-    pub federation_id: FederationId,
-    pub contract: IncomingContract,
-    pub amount: Amount,
-    pub description: Bolt11InvoiceDescription,
-    pub expiry_secs: u32,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub enum Bolt11InvoiceDescription {
-    Direct(String),
-    Hash(sha256::Hash),
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct SendPaymentPayload {
-    pub federation_id: FederationId,
-    pub contract: OutgoingContract,
-    pub invoice: LightningInvoice,
-    pub auth: Signature,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
-pub enum LightningInvoice {
-    Bolt11(Bolt11Invoice),
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct RoutingInfo {
-    /// The public key of the gateways lightning node. Since this key signs the
-    /// gateways invoices the senders client uses it to differentiate between a
-    /// direct swap between fedimints and a lightning swap.
-    pub lightning_public_key: PublicKey,
-    /// The public key of the gateways client module. This key is used to claim
-    /// or cancel outgoing contracts and refund incoming contracts.
-    pub module_public_key: PublicKey,
-    /// This is the fee the gateway charges for an outgoing payment. The senders
-    /// client will use this fee in case of a direct swap.
-    pub send_fee_minimum: PaymentFee,
-    /// This is the default total fee the gateway recommends for an outgoing
-    /// payment in case of a lightning swap. It accounts for the additional fee
-    /// required to reliably route this payment over lightning.
-    pub send_fee_default: PaymentFee,
-    /// This is the minimum expiration delta in block the gateway requires for
-    /// an outgoing payment. The senders client will use this expiration delta
-    /// in case of a direct swap.
-    pub expiration_delta_minimum: u64,
-    /// This is the default total expiration the gateway recommends for an
-    /// outgoing payment in case of a lightning swap. It accounts for the
-    /// additional expiration delta required to successfully route this payment
-    /// over lightning.
-    pub expiration_delta_default: u64,
-    /// This is the fee the gateway charges for an incoming payment.
-    pub receive_fee: PaymentFee,
-}
-
-impl RoutingInfo {
-    pub fn send_parameters(&self, invoice: &Bolt11Invoice) -> (PaymentFee, u64) {
-        if invoice.recover_payee_pub_key() == self.lightning_public_key {
-            (self.send_fee_minimum.clone(), self.expiration_delta_minimum)
-        } else {
-            (self.send_fee_default.clone(), self.expiration_delta_default)
-        }
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Hash, Serialize, Deserialize)]
-pub struct PaymentFee {
-    pub base: Amount,
-    pub parts_per_million: u64,
-}
-
-impl PaymentFee {
-    /// This is the maximum send fee of one and a half percent plus one hundred
-    /// satoshis a correct gateway may recommend as a default. It accounts for
-    /// the fee required to reliably route this payment over lightning.
-    pub const SEND_FEE_LIMIT: PaymentFee = PaymentFee {
-        base: Amount::from_sats(100),
-        parts_per_million: 15_000,
-    };
-
-    /// This is the maximum receive fee of half of one percent plus fifty
-    /// satoshis a correct gateway may recommend as a default.
-    pub const RECEIVE_FEE_LIMIT: PaymentFee = PaymentFee {
-        base: Amount::from_sats(50),
-        parts_per_million: 5_000,
-    };
-
-    pub fn add_to(&self, msats: u64) -> Amount {
-        Amount::from_msats(msats.saturating_add(self.absolute_fee(msats)))
-    }
-
-    pub fn subtract_from(&self, msats: u64) -> Amount {
-        Amount::from_msats(msats.saturating_sub(self.absolute_fee(msats)))
-    }
-
-    fn absolute_fee(&self, msats: u64) -> u64 {
-        msats
-            .saturating_mul(self.parts_per_million)
-            .saturating_div(1_000_000)
-            .checked_add(self.base.msats)
-            .expect("The division creates sufficient headroom to add the base fee")
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct LightningClientInit {
@@ -361,31 +259,25 @@ impl ClientModuleInit for LightningClientInit {
 
 #[derive(Debug, Clone)]
 pub struct LightningClientContext {
-    pub decoder: Decoder,
-    pub federation_id: FederationId,
-    pub tpe_agg_pk: AggregatePublicKey,
-    pub tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
-    pub gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+    federation_id: FederationId,
+    gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
 }
 
 impl Context for LightningClientContext {
     const KIND: Option<ModuleKind> = Some(KIND);
 }
 
-/// Client side lightning module
-///
-/// Note that lightning gateways use a different version
-/// of client side module.
 #[derive(Debug)]
 pub struct LightningClientModule {
-    pub federation_id: FederationId,
-    pub cfg: LightningClientConfig,
-    pub notifier: ModuleNotifier<LightningClientStateMachines>,
-    pub client_ctx: ClientContext<Self>,
-    pub module_api: DynModuleApi,
-    pub keypair: KeyPair,
-    pub admin_auth: Option<ApiAuth>,
-    pub gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+    federation_id: FederationId,
+    cfg: LightningClientConfig,
+    notifier: ModuleNotifier<LightningClientStateMachines>,
+    client_ctx: ClientContext<Self>,
+    module_api: DynModuleApi,
+    keypair: KeyPair,
+    gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+    #[allow(unused)] // The field is only used by the cli feature
+    admin_auth: Option<ApiAuth>,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -398,10 +290,7 @@ impl ClientModule for LightningClientModule {
 
     fn context(&self) -> Self::ModuleStateMachineContext {
         LightningClientContext {
-            decoder: self.decoder(),
             federation_id: self.federation_id,
-            tpe_agg_pk: self.cfg.tpe_agg_pk,
-            tpe_pks: self.cfg.tpe_pks.clone(),
             gateway_conn: self.gateway_conn.clone(),
         }
     }
@@ -416,14 +305,9 @@ impl ClientModule for LightningClientModule {
 
     fn output_fee(
         &self,
-        _amount: Amount,
-        output: &<Self::Common as ModuleCommon>::Output,
+        amount: Amount,
+        _output: &<Self::Common as ModuleCommon>::Output,
     ) -> Option<Amount> {
-        let amount = match output.ensure_v0_ref().ok()? {
-            LightningOutputV0::Outgoing(contract) => contract.amount,
-            LightningOutputV0::Incoming(contract) => contract.commitment.amount,
-        };
-
         Some(self.cfg.fee_consensus.fee(amount))
     }
 
@@ -526,7 +410,8 @@ impl LightningClientModule {
     /// This fee accounts for the fee charged by the gateway as well as
     /// the additional fee required to reliably route this payment over
     /// lightning if necessary. Since the gateway has been vetted by at least
-    /// one guardian we trust it to set a reasonable fee.
+    /// one guardian we trust it to set a reasonable fee and only enforce a
+    /// rather high limit.
     ///
     /// The absolute fee for a payment can be calculated from the operation meta
     /// to be shown to the user in the transaction history.
@@ -579,7 +464,7 @@ impl LightningClientModule {
             return Err(SendPaymentError::PaymentFeeExceedsLimit);
         }
 
-        if EXPIRATION_DELTA_LIMIT_DEFAULT < expiration_delta {
+        if EXPIRATION_DELTA_LIMIT < expiration_delta {
             return Err(SendPaymentError::ExpirationDeltaExceedsLimit);
         }
 
@@ -666,7 +551,7 @@ impl LightningClientModule {
             }
 
             let mut stream = self
-                .subscribe_send(operation_id)
+                .subscribe_send_operation(operation_id)
                 .await
                 .expect("operation_id exists")
                 .into_stream();
@@ -674,7 +559,7 @@ impl LightningClientModule {
             // This will not block since we checked for active states and there were none,
             // so by definition a final state has to have been assumed already.
             while let Some(state) = stream.next().await {
-                if let SendState::Success = state {
+                if let SendOperationState::Success = state {
                     return Err(SendPaymentError::SuccessfulPreviousPayment(operation_id));
                 }
             }
@@ -683,11 +568,11 @@ impl LightningClientModule {
         panic!("We could not find an unused operation id for sending a lightning payment");
     }
 
-    /// Subscribe to all updates of the send operation.
-    pub async fn subscribe_send(
+    /// Subscribe to all state updates of the send operation.
+    pub async fn subscribe_send_operation(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<SendState>> {
+    ) -> anyhow::Result<UpdateStreamOrOutcome<SendOperationState>> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
@@ -698,20 +583,20 @@ impl LightningClientModule {
                 loop {
                     if let Some(LightningClientStateMachines::Send(state)) = stream.next().await {
                         match state.state {
-                            SendSMState::Funding => yield SendState::Funding,
-                            SendSMState::Funded => yield SendState::Funded,
+                            SendSMState::Funding => yield SendOperationState::Funding,
+                            SendSMState::Funded => yield SendOperationState::Funded,
                             SendSMState::Success(preimage) => {
                                 // the preimage has been verified by the state machine previously
                                 assert!(state.common.contract.verify_preimage(&preimage));
 
-                                yield SendState::Success;
+                                yield SendOperationState::Success;
                                 return;
                             },
                             SendSMState::Refunding(out_points) => {
-                                yield SendState::Refunding;
+                                yield SendOperationState::Refunding;
 
                                 if client_ctx.await_primary_module_outputs(operation_id, out_points.clone()).await.is_ok() {
-                                    yield SendState::Refunded;
+                                    yield SendOperationState::Refunded;
                                     return;
                                 }
 
@@ -723,16 +608,16 @@ impl LightningClientModule {
                                     0
                                 ).await {
                                     if state.common.contract.verify_preimage(&preimage) {
-                                        yield SendState::Success;
+                                        yield SendOperationState::Success;
                                         return;
                                     }
                                 }
 
-                                yield SendState::Failure;
+                                yield SendOperationState::Failure;
                                 return;
                             },
                             SendSMState::Rejected(..) => {
-                                yield SendState::Failure;
+                                yield SendOperationState::Failure;
                                 return;
                             },
                         }
@@ -743,16 +628,19 @@ impl LightningClientModule {
     }
 
     /// Await the final state of the send operation.
-    pub async fn await_send(&self, operation_id: OperationId) -> anyhow::Result<FinalSendState> {
+    pub async fn await_final_send_operation_state(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<FinalSendOperationState> {
         let state = self
-            .subscribe_send(operation_id)
+            .subscribe_send_operation(operation_id)
             .await?
             .into_stream()
             .filter_map(|state| {
                 futures::future::ready(match state {
-                    SendState::Success => Some(FinalSendState::Success),
-                    SendState::Refunded => Some(FinalSendState::Refunded),
-                    SendState::Failure => Some(FinalSendState::Failure),
+                    SendOperationState::Success => Some(FinalSendOperationState::Success),
+                    SendOperationState::Refunded => Some(FinalSendOperationState::Refunded),
+                    SendOperationState::Failure => Some(FinalSendOperationState::Failure),
                     _ => None,
                 })
             })
@@ -768,9 +656,9 @@ impl LightningClientModule {
     /// automatically.
     ///
     /// The total fee for this payment may depend on the chosen gateway but
-    /// will be limited to a half percent plus fifty satoshis. Since the
+    /// will be limited to half of one percent plus fifty satoshis. Since the
     /// selected gateway has been vetted by at least one guardian we trust it to
-    /// set a reasonable fee.
+    /// set a reasonable fee and only enforce a rather high limit.
     ///
     /// The absolute fee for a payment can be calculated from the operation meta
     /// to be shown to the user in the transaction history.
@@ -973,11 +861,11 @@ impl LightningClientModule {
         Some((claim_keypair, agg_decryption_key))
     }
 
-    /// Subscribe to all updates of the receive operation.
-    pub async fn subscribe_receive(
+    /// Subscribe to all state updates of the receive operation.
+    pub async fn subscribe_receive_operation(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<ReceiveState>> {
+    ) -> anyhow::Result<UpdateStreamOrOutcome<ReceiveOperationState>> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
@@ -987,19 +875,19 @@ impl LightningClientModule {
                 loop {
                     if let Some(LightningClientStateMachines::Receive(state)) = stream.next().await {
                         match state.state {
-                            ReceiveSMState::Pending => yield ReceiveState::Pending,
+                            ReceiveSMState::Pending => yield ReceiveOperationState::Pending,
                             ReceiveSMState::Claiming(out_points) => {
-                                yield ReceiveState::Claiming;
+                                yield ReceiveOperationState::Claiming;
 
                                 if client_ctx.await_primary_module_outputs(operation_id, out_points).await.is_ok() {
-                                    yield ReceiveState::Claimed;
+                                    yield ReceiveOperationState::Claimed;
                                 } else {
-                                    yield ReceiveState::Failure;
+                                    yield ReceiveOperationState::Failure;
                                 }
                                 return;
                             },
                             ReceiveSMState::Expired => {
-                                yield ReceiveState::Expired;
+                                yield ReceiveOperationState::Expired;
                                 return;
                             }
                         }
@@ -1010,19 +898,19 @@ impl LightningClientModule {
     }
 
     /// Await the final state of the receive operation.
-    pub async fn await_receive(
+    pub async fn await_final_receive_operation_state(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<FinalReceiveState> {
+    ) -> anyhow::Result<FinalReceiveOperationState> {
         let state = self
-            .subscribe_receive(operation_id)
+            .subscribe_receive_operation(operation_id)
             .await?
             .into_stream()
             .filter_map(|state| {
                 futures::future::ready(match state {
-                    ReceiveState::Expired => Some(FinalReceiveState::Expired),
-                    ReceiveState::Claimed => Some(FinalReceiveState::Claimed),
-                    ReceiveState::Failure => Some(FinalReceiveState::Failure),
+                    ReceiveOperationState::Expired => Some(FinalReceiveOperationState::Expired),
+                    ReceiveOperationState::Claimed => Some(FinalReceiveOperationState::Claimed),
+                    ReceiveOperationState::Failure => Some(FinalReceiveOperationState::Failure),
                     _ => None,
                 })
             })
@@ -1032,14 +920,6 @@ impl LightningClientModule {
 
         Ok(state)
     }
-}
-
-#[derive(Error, Debug, Clone, Eq, PartialEq)]
-pub enum GatewayConnectionError {
-    #[error("The gateway is unreachable: {0}")]
-    Unreachable(String),
-    #[error("The gateway returned an error for this request: {0}")]
-    Request(String),
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]

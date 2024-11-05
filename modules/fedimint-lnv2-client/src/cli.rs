@@ -8,7 +8,7 @@ use lightning_invoice::Bolt11Invoice;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::api::LnFederationApi;
+use crate::api::LightningFederationApi;
 use crate::{Bolt11InvoiceDescription, LightningClientModule};
 
 #[derive(Parser, Serialize)]
@@ -68,7 +68,11 @@ pub(crate) async fn handle_cli_command(
         Opts::Send { gateway, invoice } => {
             json(lightning.send(invoice, gateway, Value::Null).await?)
         }
-        Opts::AwaitSend { operation_id } => json(lightning.await_send(operation_id).await?),
+        Opts::AwaitSend { operation_id } => json(
+            lightning
+                .await_final_send_operation_state(operation_id)
+                .await?,
+        ),
         Opts::Receive { amount, gateway } => json(
             lightning
                 .receive(
@@ -80,7 +84,11 @@ pub(crate) async fn handle_cli_command(
                 )
                 .await?,
         ),
-        Opts::AwaitReceive { operation_id } => json(lightning.await_receive(operation_id).await?),
+        Opts::AwaitReceive { operation_id } => json(
+            lightning
+                .await_final_receive_operation_state(operation_id)
+                .await?,
+        ),
         Opts::Gateway(gateway_opts) => match gateway_opts {
             #[allow(clippy::unit_arg)]
             GatewayOpts::Cache => json(lightning.update_gateway_cache().await),

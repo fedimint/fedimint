@@ -1,3 +1,4 @@
+mod api;
 mod complete_sm;
 mod receive_sm;
 mod send_sm;
@@ -27,12 +28,11 @@ use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint, PeerId};
-use fedimint_lnv2_client::api::LnFederationApi;
-use fedimint_lnv2_client::{LightningInvoice, SendPaymentPayload};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
+use fedimint_lnv2_common::gateway_api::SendPaymentPayload;
 use fedimint_lnv2_common::{
-    LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
+    LightningCommonInit, LightningInvoice, LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
 use futures::StreamExt;
 use receive_sm::{ReceiveSMState, ReceiveStateMachine};
@@ -43,6 +43,7 @@ use serde::{Deserialize, Serialize};
 use tpe::{AggregatePublicKey, PublicKeyShare};
 use tracing::{info, warn};
 
+use crate::gateway_module_v2::api::GatewayFederationApi;
 use crate::gateway_module_v2::complete_sm::{
     CompleteSMCommon, CompleteSMState, CompleteStateMachine,
 };

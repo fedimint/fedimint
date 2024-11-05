@@ -9,7 +9,7 @@ use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0};
 use tpe::AggregateDecryptionKey;
 
-use crate::api::LnFederationApi;
+use crate::api::LightningFederationApi;
 use crate::LightningClientContext;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]

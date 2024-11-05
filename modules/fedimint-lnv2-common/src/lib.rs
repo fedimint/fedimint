@@ -12,6 +12,7 @@ extern crate core;
 pub mod config;
 pub mod contracts;
 pub mod endpoint_constants;
+pub mod gateway_api;
 
 use bitcoin::secp256k1::schnorr::Signature;
 use bitcoin_hashes::sha256;
@@ -20,11 +21,23 @@ use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common};
+use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tpe::{AggregateDecryptionKey, DecryptionKeyShare};
 
 use crate::contracts::{IncomingContract, OutgoingContract};
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub enum Bolt11InvoiceDescription {
+    Direct(String),
+    Hash(sha256::Hash),
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
+pub enum LightningInvoice {
+    Bolt11(Bolt11Invoice),
+}
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("lnv2");
 pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(1, 0);

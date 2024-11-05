@@ -21,7 +21,7 @@ use secp256k1::schnorr::Signature;
 use secp256k1::KeyPair;
 use tracing::error;
 
-use crate::api::LnFederationApi;
+use crate::api::LightningFederationApi;
 use crate::{LightningClientContext, LightningInvoice};
 
 const RETRY_DELAY: Duration = Duration::from_secs(1);

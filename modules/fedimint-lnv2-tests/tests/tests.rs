@@ -2,21 +2,23 @@ mod mock;
 
 use std::sync::Arc;
 
+use fedimint_client::module::ClientModule;
 use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
 use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
-use fedimint_core::core::OperationId;
+use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::util::NextOrPending as _;
 use fedimint_core::{sats, Amount};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_lnv2_client::{
-    Bolt11InvoiceDescription, LightningClientInit, LightningClientModule, LightningOperationMeta,
-    ReceiveState, SendPaymentError, SendState, CONTRACT_CONFIRMATION_BUFFER,
-    EXPIRATION_DELTA_LIMIT_DEFAULT,
+    LightningClientInit, LightningClientModule, LightningOperationMeta, ReceiveOperationState,
+    SendOperationState, SendPaymentError,
 };
 use fedimint_lnv2_common::config::LightningGenParams;
-use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
+use fedimint_lnv2_common::{
+    Bolt11InvoiceDescription, LightningInput, LightningInputV0, OutgoingWitness,
+};
 use fedimint_lnv2_server::LightningInit;
 use fedimint_testing::fixtures::Fixtures;
 use serde_json::Value;
@@ -69,13 +71,13 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
 
     let mut sub = client
         .get_first_module::<LightningClientModule>()?
-        .subscribe_send(operation_id)
+        .subscribe_send_operation(operation_id)
         .await?
         .into_stream();
 
-    assert_eq!(sub.ok().await?, SendState::Funding);
-    assert_eq!(sub.ok().await?, SendState::Funded);
-    assert_eq!(sub.ok().await?, SendState::Success);
+    assert_eq!(sub.ok().await?, SendOperationState::Funding);
+    assert_eq!(sub.ok().await?, SendOperationState::Funded);
+    assert_eq!(sub.ok().await?, SendOperationState::Success);
 
     assert_eq!(
         client
@@ -113,14 +115,14 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
 
     let mut sub = client
         .get_first_module::<LightningClientModule>()?
-        .subscribe_send(op)
+        .subscribe_send_operation(op)
         .await?
         .into_stream();
 
-    assert_eq!(sub.ok().await?, SendState::Funding);
-    assert_eq!(sub.ok().await?, SendState::Funded);
-    assert_eq!(sub.ok().await?, SendState::Refunding);
-    assert_eq!(sub.ok().await?, SendState::Refunded);
+    assert_eq!(sub.ok().await?, SendOperationState::Funding);
+    assert_eq!(sub.ok().await?, SendOperationState::Funded);
+    assert_eq!(sub.ok().await?, SendOperationState::Refunding);
+    assert_eq!(sub.ok().await?, SendOperationState::Refunded);
 
     Ok(())
 }
@@ -146,20 +148,17 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
 
     let mut sub = client
         .get_first_module::<LightningClientModule>()?
-        .subscribe_send(op)
+        .subscribe_send_operation(op)
         .await?
         .into_stream();
 
-    assert_eq!(sub.ok().await?, SendState::Funding);
-    assert_eq!(sub.ok().await?, SendState::Funded);
+    assert_eq!(sub.ok().await?, SendOperationState::Funding);
+    assert_eq!(sub.ok().await?, SendOperationState::Funded);
 
-    fixtures
-        .bitcoin()
-        .mine_blocks(EXPIRATION_DELTA_LIMIT_DEFAULT + CONTRACT_CONFIRMATION_BUFFER)
-        .await;
+    fixtures.bitcoin().mine_blocks(1440 + 12).await;
 
-    assert_eq!(sub.ok().await?, SendState::Refunding);
-    assert_eq!(sub.ok().await?, SendState::Refunded);
+    assert_eq!(sub.ok().await?, SendOperationState::Refunding);
+    assert_eq!(sub.ok().await?, SendOperationState::Refunded);
 
     Ok(())
 }
@@ -185,18 +184,18 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
 
     let mut sub = client
         .get_first_module::<LightningClientModule>()?
-        .subscribe_send(op)
+        .subscribe_send_operation(op)
         .await?
         .into_stream();
 
-    assert_eq!(sub.ok().await?, SendState::Funding);
-    assert_eq!(sub.ok().await?, SendState::Funded);
+    assert_eq!(sub.ok().await?, SendOperationState::Funding);
+    assert_eq!(sub.ok().await?, SendOperationState::Funded);
 
     let operation = client
-        .get_first_module::<LightningClientModule>()?
-        .client_ctx
+        .operation_log()
         .get_operation(op)
-        .await?;
+        .await
+        .ok_or(anyhow::anyhow!("Operation not found"))?;
 
     let contract = match operation.meta::<LightningOperationMeta>() {
         LightningOperationMeta::Send(send_operation_meta) => send_operation_meta.contract,
@@ -212,22 +211,23 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
         keys: vec![bitcoin30_to_bitcoin32_keypair(&mock::gateway_keypair())],
     };
 
+    let lnv2_module_id = client
+        .get_first_instance(&LightningClientModule::kind())
+        .unwrap();
+
     client
         .finalize_and_submit_transaction(
             OperationId::new_random(),
             "Claiming Outgoing Contract",
             |_, _| (),
             TransactionBuilder::new().with_inputs(
-                client
-                    .get_first_module::<LightningClientModule>()?
-                    .client_ctx
-                    .make_client_inputs(ClientInputBundle::new_no_sm(vec![client_input])),
+                ClientInputBundle::new_no_sm(vec![client_input]).into_dyn(lnv2_module_id),
             ),
         )
         .await
         .expect("Failed to claim outgoing contract");
 
-    assert_eq!(sub.ok().await?, SendState::Success);
+    assert_eq!(sub.ok().await?, SendOperationState::Success);
 
     Ok(())
 }
@@ -252,12 +252,12 @@ async fn receive_operation_expires() -> anyhow::Result<()> {
 
     let mut sub = client
         .get_first_module::<LightningClientModule>()?
-        .subscribe_receive(op)
+        .subscribe_receive_operation(op)
         .await?
         .into_stream();
 
-    assert_eq!(sub.ok().await?, ReceiveState::Pending);
-    assert_eq!(sub.ok().await?, ReceiveState::Expired);
+    assert_eq!(sub.ok().await?, ReceiveOperationState::Pending);
+    assert_eq!(sub.ok().await?, ReceiveOperationState::Expired);
 
     Ok(())
 }

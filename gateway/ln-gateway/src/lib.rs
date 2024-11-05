@@ -67,11 +67,11 @@ use fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll}
 use fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::LightningCommonInit;
-use fedimint_lnv2_client::{
-    Bolt11InvoiceDescription, CreateBolt11InvoicePayload, PaymentFee, RoutingInfo,
-    SendPaymentPayload, EXPIRATION_DELTA_LIMIT_DEFAULT,
-};
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
+use fedimint_lnv2_common::gateway_api::{
+    CreateBolt11InvoicePayload, PaymentFee, RoutingInfo, SendPaymentPayload,
+};
+use fedimint_lnv2_common::Bolt11InvoiceDescription;
 use fedimint_mint_client::{
     MintClientInit, MintClientModule, MintCommonInit, SelectNotesWithAtleastAmount,
     SelectNotesWithExactAmount,
@@ -1969,7 +1969,7 @@ impl Gateway {
                     base: Amount::from_sats(50),
                     parts_per_million: 5_000,
                 },
-                expiration_delta_default: EXPIRATION_DELTA_LIMIT_DEFAULT,
+                expiration_delta_default: 1440,
                 expiration_delta_minimum: EXPIRATION_DELTA_MINIMUM_V2,
                 // The base fee ensures that the gateway does not loose sats receiving the payment
                 // due to fees paid on the transaction funding the incoming contract

@@ -7,9 +7,8 @@ use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1_29::Keypair;
 use fedimint_core::{Amount, OutPoint};
-use fedimint_lnv2_client::LightningInvoice;
 use fedimint_lnv2_common::contracts::{OutgoingContract, PaymentImage};
-use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
+use fedimint_lnv2_common::{LightningInput, LightningInputV0, LightningInvoice, OutgoingWitness};
 use serde::{Deserialize, Serialize};
 
 use super::FinalReceiveState;

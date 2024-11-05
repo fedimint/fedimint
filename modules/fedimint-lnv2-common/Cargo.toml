@@ -16,12 +16,17 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 bitcoin = { workspace = true }
 bitcoin30 = { workspace = true }
 bitcoin_hashes = { workspace = true }
+fedimint-api-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-ln-common = { workspace = true }
 group = { workspace = true }
+lightning-invoice = { workspace = true }
+rand = { workspace = true }
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
