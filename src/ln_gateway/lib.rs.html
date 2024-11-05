@@ -2239,11 +2239,11 @@
 <span class="kw">use </span>fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
 <span class="kw">use </span>fedimint_ln_common::LightningCommonInit;
-<span class="kw">use </span>fedimint_lnv2_client::{
-    Bolt11InvoiceDescription, CreateBolt11InvoicePayload, PaymentFee, RoutingInfo,
-    SendPaymentPayload, EXPIRATION_DELTA_LIMIT_DEFAULT,
-};
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
+<span class="kw">use </span>fedimint_lnv2_common::gateway_api::{
+    CreateBolt11InvoicePayload, PaymentFee, RoutingInfo, SendPaymentPayload,
+};
+<span class="kw">use </span>fedimint_lnv2_common::Bolt11InvoiceDescription;
 <span class="kw">use </span>fedimint_mint_client::{
     MintClientInit, MintClientModule, MintCommonInit, SelectNotesWithAtleastAmount,
     SelectNotesWithExactAmount,
@@ -4141,7 +4141,7 @@
                     base: Amount::from_sats(<span class="number">50</span>),
                     parts_per_million: <span class="number">5_000</span>,
                 },
-                expiration_delta_default: EXPIRATION_DELTA_LIMIT_DEFAULT,
+                expiration_delta_default: <span class="number">1440</span>,
                 expiration_delta_minimum: EXPIRATION_DELTA_MINIMUM_V2,
                 <span class="comment">// The base fee ensures that the gateway does not loose sats receiving the payment
                 // due to fees paid on the transaction funding the incoming contract

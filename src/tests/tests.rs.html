@@ -381,12 +381,31 @@
 <a href="#380" id="380">380</a>
 <a href="#381" id="381">381</a>
 <a href="#382" id="382">382</a>
-<a href="#383" id="383">383</a></pre></div><pre class="rust"><code><span class="kw">use </span>devimint::devfed::DevJitFed;
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a></pre></div><pre class="rust"><code><span class="kw">use </span>devimint::devfed::DevJitFed;
 <span class="kw">use </span>devimint::federation::Client;
 <span class="kw">use </span>devimint::version_constants::VERSION_0_5_0_ALPHA;
 <span class="kw">use </span>devimint::{cmd, util};
 <span class="kw">use </span>fedimint_core::core::OperationId;
-<span class="kw">use </span>fedimint_lnv2_client::{FinalReceiveState, FinalSendState};
+<span class="kw">use </span>fedimint_lnv2_client::{FinalReceiveOperationState, FinalSendOperationState};
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>substring::Substring;
 <span class="kw">use </span>tokio::try_join;
@@ -596,7 +615,13 @@
 
         <span class="kw">let </span>invoice = receive(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_receive.addr, <span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>.<span class="number">0</span>;
 
-        test_send(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_send.addr, <span class="kw-2">&amp;</span>invoice, FinalSendState::Refunded).<span class="kw">await</span><span class="question-mark">?</span>;
+        test_send(
+            <span class="kw-2">&amp;</span>client,
+            <span class="kw-2">&amp;</span>gw_send.addr,
+            <span class="kw-2">&amp;</span>invoice,
+            FinalSendOperationState::Refunded,
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
     }
 
     <span class="macro">info!</span>(<span class="string">"Pegging-in gateways..."</span>);
@@ -616,7 +641,13 @@
 
         <span class="kw">let </span>(invoice, receive_op) = receive(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_receive.addr, <span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        test_send(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_send.addr, <span class="kw-2">&amp;</span>invoice, FinalSendState::Success).<span class="kw">await</span><span class="question-mark">?</span>;
+        test_send(
+            <span class="kw-2">&amp;</span>client,
+            <span class="kw-2">&amp;</span>gw_send.addr,
+            <span class="kw-2">&amp;</span>invoice,
+            FinalSendOperationState::Success,
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
 
         await_receive_claimed(<span class="kw-2">&amp;</span>client, receive_op).<span class="kw">await</span><span class="question-mark">?</span>;
     }
@@ -632,7 +663,13 @@
 
         <span class="kw">let </span>invoice = gw_receive.create_invoice(<span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        test_send(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_send.addr, <span class="kw-2">&amp;</span>invoice, FinalSendState::Success).<span class="kw">await</span><span class="question-mark">?</span>;
+        test_send(
+            <span class="kw-2">&amp;</span>client,
+            <span class="kw-2">&amp;</span>gw_send.addr,
+            <span class="kw-2">&amp;</span>invoice,
+            FinalSendOperationState::Success,
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
     }
 
     <span class="macro">info!</span>(<span class="string">"Testing payments from gateways to client..."</span>);
@@ -716,7 +753,7 @@
     client: <span class="kw-2">&amp;</span>Client,
     gateway: <span class="kw-2">&amp;</span>String,
     invoice: <span class="kw-2">&amp;</span>Bolt11Invoice,
-    final_state: FinalSendState,
+    final_state: FinalSendOperationState,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>send_op = serde_json::from_value::&lt;OperationId&gt;(
         <span class="macro">cmd!</span>(
@@ -759,7 +796,8 @@
         )
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?</span>,
-        serde_json::to_value(FinalReceiveState::Claimed).expect(<span class="string">"JSON serialization failed"</span>),
+        serde_json::to_value(FinalReceiveOperationState::Claimed)
+            .expect(<span class="string">"JSON serialization failed"</span>),
     );
 
     <span class="prelude-val">Ok</span>(())

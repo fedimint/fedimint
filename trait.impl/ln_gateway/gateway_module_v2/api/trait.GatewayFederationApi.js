@@ -1,9 +1,9 @@
 (function() {
-    var implementors = Object.fromEntries([["fedimint_lnv2_client",[]]]);
+    var implementors = Object.fromEntries([["ln_gateway",[]]]);
     if (window.register_implementors) {
         window.register_implementors(implementors);
     } else {
         window.pending_implementors = implementors;
     }
 })()
-//{"start":57,"fragment_lengths":[27]}
+//{"start":57,"fragment_lengths":[17]}

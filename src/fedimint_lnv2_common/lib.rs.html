@@ -168,7 +168,20 @@
 <a href="#167" id="167">167</a>
 <a href="#168" id="168">168</a>
 <a href="#169" id="169">169</a>
-<a href="#170" id="170">170</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 
@@ -182,6 +195,7 @@
 <span class="kw">pub mod </span>config;
 <span class="kw">pub mod </span>contracts;
 <span class="kw">pub mod </span>endpoint_constants;
+<span class="kw">pub mod </span>gateway_api;
 
 <span class="kw">use </span>bitcoin::secp256k1::schnorr::Signature;
 <span class="kw">use </span>bitcoin_hashes::sha256;
@@ -190,11 +204,23 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 <span class="kw">use </span>fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common};
+<span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tpe::{AggregateDecryptionKey, DecryptionKeyShare};
 
 <span class="kw">use </span><span class="kw">crate</span>::contracts::{IncomingContract, OutgoingContract};
+
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+</span><span class="kw">pub enum </span>Bolt11InvoiceDescription {
+    Direct(String),
+    Hash(sha256::Hash),
+}
+
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
+</span><span class="kw">pub enum </span>LightningInvoice {
+    Bolt11(Bolt11Invoice),
+}
 
 <span class="kw">pub const </span>KIND: ModuleKind = ModuleKind::from_static_str(<span class="string">"lnv2"</span>);
 <span class="kw">pub const </span>MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(<span class="number">1</span>, <span class="number">0</span>);

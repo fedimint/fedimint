@@ -533,7 +533,9 @@
 <a href="#532" id="532">532</a>
 <a href="#533" id="533">533</a>
 <a href="#534" id="534">534</a>
-<a href="#535" id="535">535</a></pre></div><pre class="rust"><code><span class="kw">mod </span>complete_sm;
+<a href="#535" id="535">535</a>
+<a href="#536" id="536">536</a></pre></div><pre class="rust"><code><span class="kw">mod </span>api;
+<span class="kw">mod </span>complete_sm;
 <span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
 
@@ -562,12 +564,11 @@
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint, PeerId};
-<span class="kw">use </span>fedimint_lnv2_client::api::LnFederationApi;
-<span class="kw">use </span>fedimint_lnv2_client::{LightningInvoice, SendPaymentPayload};
 <span class="kw">use </span>fedimint_lnv2_common::config::LightningClientConfig;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
+<span class="kw">use </span>fedimint_lnv2_common::gateway_api::SendPaymentPayload;
 <span class="kw">use </span>fedimint_lnv2_common::{
-    LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
+    LightningCommonInit, LightningInvoice, LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>receive_sm::{ReceiveSMState, ReceiveStateMachine};
@@ -578,6 +579,7 @@
 <span class="kw">use </span>tpe::{AggregatePublicKey, PublicKeyShare};
 <span class="kw">use </span>tracing::{info, warn};
 
+<span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::api::GatewayFederationApi;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::complete_sm::{
     CompleteSMCommon, CompleteSMState, CompleteStateMachine,
 };
