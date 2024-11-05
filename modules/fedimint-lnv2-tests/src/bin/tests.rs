@@ -3,7 +3,7 @@ use devimint::federation::Client;
 use devimint::version_constants::VERSION_0_5_0_ALPHA;
 use devimint::{cmd, util};
 use fedimint_core::core::OperationId;
-use fedimint_lnv2_client::{FinalReceiveState, FinalSendState};
+use fedimint_lnv2_client::{FinalReceiveOperationState, FinalSendOperationState};
 use lightning_invoice::Bolt11Invoice;
 use substring::Substring;
 use tokio::try_join;
@@ -213,7 +213,13 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
         let invoice = receive(&client, &gw_receive.addr, 1_000_000).await?.0;
 
-        test_send(&client, &gw_send.addr, &invoice, FinalSendState::Refunded).await?;
+        test_send(
+            &client,
+            &gw_send.addr,
+            &invoice,
+            FinalSendOperationState::Refunded,
+        )
+        .await?;
     }
 
     info!("Pegging-in gateways...");
@@ -233,7 +239,13 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
         let (invoice, receive_op) = receive(&client, &gw_receive.addr, 1_000_000).await?;
 
-        test_send(&client, &gw_send.addr, &invoice, FinalSendState::Success).await?;
+        test_send(
+            &client,
+            &gw_send.addr,
+            &invoice,
+            FinalSendOperationState::Success,
+        )
+        .await?;
 
         await_receive_claimed(&client, receive_op).await?;
     }
@@ -249,7 +261,13 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
         let invoice = gw_receive.create_invoice(1_000_000).await?;
 
-        test_send(&client, &gw_send.addr, &invoice, FinalSendState::Success).await?;
+        test_send(
+            &client,
+            &gw_send.addr,
+            &invoice,
+            FinalSendOperationState::Success,
+        )
+        .await?;
     }
 
     info!("Testing payments from gateways to client...");
@@ -333,7 +351,7 @@ async fn test_send(
     client: &Client,
     gateway: &String,
     invoice: &Bolt11Invoice,
-    final_state: FinalSendState,
+    final_state: FinalSendOperationState,
 ) -> anyhow::Result<()> {
     let send_op = serde_json::from_value::<OperationId>(
         cmd!(
@@ -376,7 +394,8 @@ async fn await_receive_claimed(client: &Client, operation_id: OperationId) -> an
         )
         .out_json()
         .await?,
-        serde_json::to_value(FinalReceiveState::Claimed).expect("JSON serialization failed"),
+        serde_json::to_value(FinalReceiveOperationState::Claimed)
+            .expect("JSON serialization failed"),
     );
 
     Ok(())

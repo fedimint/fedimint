@@ -121,7 +121,7 @@ impl ReceiveOperationMeta {
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
-/// The high-level state of an operation sending a payment over lightning.
+/// The state of an operation sending a payment over lightning.
 ///
 /// ```mermaid
 /// graph LR
@@ -139,26 +139,27 @@ impl ReceiveOperationMeta {
 /// The transition from Refunding to Success is only possible if the gateway
 /// misbehaves.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub enum SendState {
-    /// We are funding the outgoing contract.
+pub enum SendOperationState {
+    /// We are funding the contract to incentivize the gateway.
     Funding,
     /// We are waiting for the gateway to complete the payment.
     Funded,
     /// The payment was successful.
     Success,
-    /// The payment has failed. We are refunding the outgoing contract.
+    /// The payment has failed and we are refunding the contract.
     Refunding,
-    /// The outgoing contract has been refunded.
+    /// The payment has been refunded.
     Refunded,
     /// Either a programming error has occurred or the federation is malicious.
     Failure,
 }
 
+/// The final state of an operation sending a payment over lightning.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub enum FinalSendState {
+pub enum FinalSendOperationState {
     /// The payment was successful.
     Success,
-    /// The outgoing contract has been refunded.
+    /// The payment has been refunded.
     Refunded,
     /// Either a programming error has occurred or the federation is malicious.
     Failure,
@@ -167,7 +168,7 @@ pub enum FinalSendState {
 pub type SendResult = Result<OperationId, SendPaymentError>;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
-/// The high-level state of an operation receiving a payment over lightning.
+/// The state of an operation receiving a payment over lightning.
 ///
 /// ```mermaid
 /// graph LR
@@ -179,24 +180,25 @@ pub type SendResult = Result<OperationId, SendPaymentError>;
 ///     Claiming -- minting ecash fails --> Failure
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub enum ReceiveState {
-    /// We are waititng for the gateway to fund the incoming contract.
+pub enum ReceiveOperationState {
+    /// We are waiting for the payment.
     Pending,
-    /// The incoming contract has expired.
+    /// The payment request has expired.
     Expired,
-    /// The gateway has funded the incoming contract.
+    /// The payment has been confirmed and we are issuing the ecash.
     Claiming,
-    /// The payment was successful.
+    /// The payment has been successful.
     Claimed,
     /// Either a programming error has occurred or the federation is malicious.
     Failure,
 }
 
+/// The final state of an operation receiving a payment over lightning.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub enum FinalReceiveState {
-    /// The incoming contract has expired.
+pub enum FinalReceiveOperationState {
+    /// The payment request has expired.
     Expired,
-    /// The payment was successful.
+    /// The payment has been successful.
     Claimed,
     /// Either a programming error has occurred or the federation is malicious.
     Failure,
@@ -549,7 +551,7 @@ impl LightningClientModule {
             }
 
             let mut stream = self
-                .subscribe_send(operation_id)
+                .subscribe_send_operation(operation_id)
                 .await
                 .expect("operation_id exists")
                 .into_stream();
@@ -557,7 +559,7 @@ impl LightningClientModule {
             // This will not block since we checked for active states and there were none,
             // so by definition a final state has to have been assumed already.
             while let Some(state) = stream.next().await {
-                if let SendState::Success = state {
+                if let SendOperationState::Success = state {
                     return Err(SendPaymentError::SuccessfulPreviousPayment(operation_id));
                 }
             }
@@ -566,11 +568,11 @@ impl LightningClientModule {
         panic!("We could not find an unused operation id for sending a lightning payment");
     }
 
-    /// Subscribe to all updates of the send operation.
-    pub async fn subscribe_send(
+    /// Subscribe to all state updates of the send operation.
+    pub async fn subscribe_send_operation(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<SendState>> {
+    ) -> anyhow::Result<UpdateStreamOrOutcome<SendOperationState>> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
@@ -581,20 +583,20 @@ impl LightningClientModule {
                 loop {
                     if let Some(LightningClientStateMachines::Send(state)) = stream.next().await {
                         match state.state {
-                            SendSMState::Funding => yield SendState::Funding,
-                            SendSMState::Funded => yield SendState::Funded,
+                            SendSMState::Funding => yield SendOperationState::Funding,
+                            SendSMState::Funded => yield SendOperationState::Funded,
                             SendSMState::Success(preimage) => {
                                 // the preimage has been verified by the state machine previously
                                 assert!(state.common.contract.verify_preimage(&preimage));
 
-                                yield SendState::Success;
+                                yield SendOperationState::Success;
                                 return;
                             },
                             SendSMState::Refunding(out_points) => {
-                                yield SendState::Refunding;
+                                yield SendOperationState::Refunding;
 
                                 if client_ctx.await_primary_module_outputs(operation_id, out_points.clone()).await.is_ok() {
-                                    yield SendState::Refunded;
+                                    yield SendOperationState::Refunded;
                                     return;
                                 }
 
@@ -606,16 +608,16 @@ impl LightningClientModule {
                                     0
                                 ).await {
                                     if state.common.contract.verify_preimage(&preimage) {
-                                        yield SendState::Success;
+                                        yield SendOperationState::Success;
                                         return;
                                     }
                                 }
 
-                                yield SendState::Failure;
+                                yield SendOperationState::Failure;
                                 return;
                             },
                             SendSMState::Rejected(..) => {
-                                yield SendState::Failure;
+                                yield SendOperationState::Failure;
                                 return;
                             },
                         }
@@ -626,16 +628,19 @@ impl LightningClientModule {
     }
 
     /// Await the final state of the send operation.
-    pub async fn await_send(&self, operation_id: OperationId) -> anyhow::Result<FinalSendState> {
+    pub async fn await_final_send_operation_state(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<FinalSendOperationState> {
         let state = self
-            .subscribe_send(operation_id)
+            .subscribe_send_operation(operation_id)
             .await?
             .into_stream()
             .filter_map(|state| {
                 futures::future::ready(match state {
-                    SendState::Success => Some(FinalSendState::Success),
-                    SendState::Refunded => Some(FinalSendState::Refunded),
-                    SendState::Failure => Some(FinalSendState::Failure),
+                    SendOperationState::Success => Some(FinalSendOperationState::Success),
+                    SendOperationState::Refunded => Some(FinalSendOperationState::Refunded),
+                    SendOperationState::Failure => Some(FinalSendOperationState::Failure),
                     _ => None,
                 })
             })
@@ -856,11 +861,11 @@ impl LightningClientModule {
         Some((claim_keypair, agg_decryption_key))
     }
 
-    /// Subscribe to all updates of the receive operation.
-    pub async fn subscribe_receive(
+    /// Subscribe to all state updates of the receive operation.
+    pub async fn subscribe_receive_operation(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<ReceiveState>> {
+    ) -> anyhow::Result<UpdateStreamOrOutcome<ReceiveOperationState>> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
@@ -870,19 +875,19 @@ impl LightningClientModule {
                 loop {
                     if let Some(LightningClientStateMachines::Receive(state)) = stream.next().await {
                         match state.state {
-                            ReceiveSMState::Pending => yield ReceiveState::Pending,
+                            ReceiveSMState::Pending => yield ReceiveOperationState::Pending,
                             ReceiveSMState::Claiming(out_points) => {
-                                yield ReceiveState::Claiming;
+                                yield ReceiveOperationState::Claiming;
 
                                 if client_ctx.await_primary_module_outputs(operation_id, out_points).await.is_ok() {
-                                    yield ReceiveState::Claimed;
+                                    yield ReceiveOperationState::Claimed;
                                 } else {
-                                    yield ReceiveState::Failure;
+                                    yield ReceiveOperationState::Failure;
                                 }
                                 return;
                             },
                             ReceiveSMState::Expired => {
-                                yield ReceiveState::Expired;
+                                yield ReceiveOperationState::Expired;
                                 return;
                             }
                         }
@@ -893,19 +898,19 @@ impl LightningClientModule {
     }
 
     /// Await the final state of the receive operation.
-    pub async fn await_receive(
+    pub async fn await_final_receive_operation_state(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<FinalReceiveState> {
+    ) -> anyhow::Result<FinalReceiveOperationState> {
         let state = self
-            .subscribe_receive(operation_id)
+            .subscribe_receive_operation(operation_id)
             .await?
             .into_stream()
             .filter_map(|state| {
                 futures::future::ready(match state {
-                    ReceiveState::Expired => Some(FinalReceiveState::Expired),
-                    ReceiveState::Claimed => Some(FinalReceiveState::Claimed),
-                    ReceiveState::Failure => Some(FinalReceiveState::Failure),
+                    ReceiveOperationState::Expired => Some(FinalReceiveOperationState::Expired),
+                    ReceiveOperationState::Claimed => Some(FinalReceiveOperationState::Claimed),
+                    ReceiveOperationState::Failure => Some(FinalReceiveOperationState::Failure),
                     _ => None,
                 })
             })

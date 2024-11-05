@@ -12,8 +12,8 @@ use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_lnv2_client::{
-    LightningClientInit, LightningClientModule, LightningOperationMeta, ReceiveState,
-    SendPaymentError, SendState,
+    LightningClientInit, LightningClientModule, LightningOperationMeta, ReceiveOperationState,
+    SendOperationState, SendPaymentError,
 };
 use fedimint_lnv2_common::config::LightningGenParams;
 use fedimint_lnv2_common::{
@@ -71,13 +71,13 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
 
     let mut sub = client
         .get_first_module::<LightningClientModule>()?
-        .subscribe_send(operation_id)
+        .subscribe_send_operation(operation_id)
         .await?
         .into_stream();
 
-    assert_eq!(sub.ok().await?, SendState::Funding);
-    assert_eq!(sub.ok().await?, SendState::Funded);
-    assert_eq!(sub.ok().await?, SendState::Success);
+    assert_eq!(sub.ok().await?, SendOperationState::Funding);
+    assert_eq!(sub.ok().await?, SendOperationState::Funded);
+    assert_eq!(sub.ok().await?, SendOperationState::Success);
 
     assert_eq!(
         client
@@ -115,14 +115,14 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
 
     let mut sub = client
         .get_first_module::<LightningClientModule>()?
-        .subscribe_send(op)
+        .subscribe_send_operation(op)
         .await?
         .into_stream();
 
-    assert_eq!(sub.ok().await?, SendState::Funding);
-    assert_eq!(sub.ok().await?, SendState::Funded);
-    assert_eq!(sub.ok().await?, SendState::Refunding);
-    assert_eq!(sub.ok().await?, SendState::Refunded);
+    assert_eq!(sub.ok().await?, SendOperationState::Funding);
+    assert_eq!(sub.ok().await?, SendOperationState::Funded);
+    assert_eq!(sub.ok().await?, SendOperationState::Refunding);
+    assert_eq!(sub.ok().await?, SendOperationState::Refunded);
 
     Ok(())
 }
@@ -148,17 +148,17 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
 
     let mut sub = client
         .get_first_module::<LightningClientModule>()?
-        .subscribe_send(op)
+        .subscribe_send_operation(op)
         .await?
         .into_stream();
 
-    assert_eq!(sub.ok().await?, SendState::Funding);
-    assert_eq!(sub.ok().await?, SendState::Funded);
+    assert_eq!(sub.ok().await?, SendOperationState::Funding);
+    assert_eq!(sub.ok().await?, SendOperationState::Funded);
 
     fixtures.bitcoin().mine_blocks(1440 + 12).await;
 
-    assert_eq!(sub.ok().await?, SendState::Refunding);
-    assert_eq!(sub.ok().await?, SendState::Refunded);
+    assert_eq!(sub.ok().await?, SendOperationState::Refunding);
+    assert_eq!(sub.ok().await?, SendOperationState::Refunded);
 
     Ok(())
 }
@@ -184,12 +184,12 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
 
     let mut sub = client
         .get_first_module::<LightningClientModule>()?
-        .subscribe_send(op)
+        .subscribe_send_operation(op)
         .await?
         .into_stream();
 
-    assert_eq!(sub.ok().await?, SendState::Funding);
-    assert_eq!(sub.ok().await?, SendState::Funded);
+    assert_eq!(sub.ok().await?, SendOperationState::Funding);
+    assert_eq!(sub.ok().await?, SendOperationState::Funded);
 
     let operation = client
         .operation_log()
@@ -227,7 +227,7 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
         .await
         .expect("Failed to claim outgoing contract");
 
-    assert_eq!(sub.ok().await?, SendState::Success);
+    assert_eq!(sub.ok().await?, SendOperationState::Success);
 
     Ok(())
 }
@@ -252,12 +252,12 @@ async fn receive_operation_expires() -> anyhow::Result<()> {
 
     let mut sub = client
         .get_first_module::<LightningClientModule>()?
-        .subscribe_receive(op)
+        .subscribe_receive_operation(op)
         .await?
         .into_stream();
 
-    assert_eq!(sub.ok().await?, ReceiveState::Pending);
-    assert_eq!(sub.ok().await?, ReceiveState::Expired);
+    assert_eq!(sub.ok().await?, ReceiveOperationState::Pending);
+    assert_eq!(sub.ok().await?, ReceiveOperationState::Expired);
 
     Ok(())
 }
