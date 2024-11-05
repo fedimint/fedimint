@@ -1,4 +1,5 @@
 use std::fmt;
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 
 use bitcoin::key::Keypair;
@@ -407,6 +408,10 @@ impl TransactionBuilder {
     where
         C: secp256k1::Signing + secp256k1::Verification,
     {
+        // `input_idx_to_bundle_idx[input_idx]` stores the index of a bundle the input
+        // at `input_idx` comes from, so we can call state machines of the
+        // corresponding bundle for every input bundle. It is always
+        // monotonically increasing, e.g. `[0, 0, 1, 2, 2, 2, 4]`
         let (input_idx_to_bundle_idx, inputs, input_keys): (Vec<_>, Vec<_>, Vec<_>) = multiunzip(
             self.inputs
                 .iter()
@@ -418,6 +423,8 @@ impl TransactionBuilder {
                         .map(move |input| (bundle_idx, input.input.clone(), input.keys.clone()))
                 }),
         );
+        // `output_idx_to_bundle` works exactly like `input_idx_to_bundle_idx` above,
+        // but for outputs.
         let (output_idx_to_bundle_idx, outputs): (Vec<_>, Vec<_>) = multiunzip(
             self.outputs
                 .iter()
@@ -452,18 +459,10 @@ impl TransactionBuilder {
             .into_iter()
             .enumerate()
             .flat_map(|(bundle_idx, bundle)| {
-                let input_idxs = input_idx_to_bundle_idx
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(input_idx, input_bundle_idx)| {
-                        (*input_bundle_idx == bundle_idx).then_some(input_idx as u64)
-                    })
-                    .fold(None, |cur: Option<(u64, u64)>, idx| {
-                        Some(cur.map_or((idx, idx), |cur| (cur.0.min(idx), cur.1.max(idx))))
-                    });
+                let input_idxs = find_range_of_matching_items(&input_idx_to_bundle_idx, bundle_idx);
                 bundle.sms.into_iter().flat_map(move |sm| {
-                    if let Some(input_idxs) = input_idxs {
-                        (sm.state_machines)(txid, input_idxs.0..=input_idxs.1)
+                    if let Some(input_idxs) = input_idxs.as_ref() {
+                        (sm.state_machines)(txid, input_idxs.clone())
                     } else {
                         vec![]
                     }
@@ -475,18 +474,11 @@ impl TransactionBuilder {
                 .into_iter()
                 .enumerate()
                 .flat_map(|(bundle_idx, bundle)| {
-                    let output_idxs: Option<(u64, u64)> = output_idx_to_bundle_idx
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(output_idx, output_bundle_idx)| {
-                            (*output_bundle_idx == bundle_idx).then_some(output_idx as u64)
-                        })
-                        .fold(None, |cur: Option<(u64, u64)>, idx| {
-                            Some(cur.map_or((idx, idx), |cur| (cur.0.min(idx), cur.1.max(idx))))
-                        });
+                    let output_idxs =
+                        find_range_of_matching_items(&output_idx_to_bundle_idx, bundle_idx);
                     bundle.sms.into_iter().flat_map(move |sm| {
-                        if let Some(output_idxs) = output_idxs {
-                            (sm.state_machines)(txid, output_idxs.0..=output_idxs.1)
+                        if let Some(output_idxs) = output_idxs.as_ref() {
+                            (sm.state_machines)(txid, output_idxs.clone())
                         } else {
                             vec![]
                         }
@@ -502,6 +494,30 @@ impl TransactionBuilder {
     pub(crate) fn outputs(&self) -> impl Iterator<Item = &ClientOutput> {
         self.outputs.iter().flat_map(|i| i.outputs.iter())
     }
+}
+
+/// Find the range of indexes in an monotonically increasing `arr`, that is
+/// equal to `item`
+fn find_range_of_matching_items(arr: &[usize], item: usize) -> Option<RangeInclusive<u64>> {
+    // `arr` must be monotonically increasing
+    debug_assert!(arr.windows(2).all(|w| w[0] <= w[1]));
+
+    arr.iter()
+        .enumerate()
+        .filter_map(|(arr_idx, arr_item)| (*arr_item == item).then_some(arr_idx as u64))
+        .fold(None, |cur: Option<(u64, u64)>, idx| {
+            Some(cur.map_or((idx, idx), |cur| (cur.0.min(idx), cur.1.max(idx))))
+        })
+        .map(|(start, end)| start..=end)
+}
+
+#[test]
+fn find_range_of_matching_items_sanity() {
+    assert_eq!(find_range_of_matching_items(&[0, 0], 0), Some(0..=1));
+    assert_eq!(find_range_of_matching_items(&[0, 0, 1], 0), Some(0..=1));
+    assert_eq!(find_range_of_matching_items(&[0, 0, 1], 1), Some(2..=2));
+    assert_eq!(find_range_of_matching_items(&[0, 0, 1], 2), None);
+    assert_eq!(find_range_of_matching_items(&[], 0), None);
 }
 
 fn state_gen_to_dyn<S>(
