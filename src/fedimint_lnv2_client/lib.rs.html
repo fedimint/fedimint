@@ -1146,13 +1146,7 @@
 <a href="#1145" id="1145">1145</a>
 <a href="#1146" id="1146">1146</a>
 <a href="#1147" id="1147">1147</a>
-<a href="#1148" id="1148">1148</a>
-<a href="#1149" id="1149">1149</a>
-<a href="#1150" id="1150">1150</a>
-<a href="#1151" id="1151">1151</a>
-<a href="#1152" id="1152">1152</a>
-<a href="#1153" id="1153">1153</a>
-<a href="#1154" id="1154">1154</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1148" id="1148">1148</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -1167,7 +1161,6 @@
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>api::{GatewayConnection, RealGatewayConnection};
 <span class="kw">use </span>async_stream::stream;
@@ -1195,7 +1188,6 @@
 <span class="kw">use </span>fedimint_core::module::{
     ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-<span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::time::duration_since_epoch;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId, TransactionId};
@@ -1601,29 +1593,25 @@
 }
 
 <span class="kw">impl </span>LightningClientModule {
-    <span class="doccomment">/// This method updates the mapping from lightning node public keys to
-    /// gateway api endpoints maintained in the module database once a day. When
-    /// paying an invoice this enables the client to select the gateway that has
-    /// created the invoice, if possible, such that the payment does not go
-    /// over lightning, reducing fees and latency.
+    <span class="doccomment">/// Updates the mapping from lightning node public keys to gateway api
+    /// endpoints maintained in the module database. When paying an invoice this
+    /// enables the client to select the gateway that has created the invoice,
+    /// if possible, such that the payment does not go over lightning, reducing
+    /// fees and latency.
     ///
-    /// Client integrators are expected to call this function in a spawned task.
-    </span><span class="kw">pub async fn </span>update_gateway_map(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ! {
-        <span class="kw">loop </span>{
-            <span class="kw">if let </span><span class="prelude-val">Ok</span>(gateways) = <span class="self">self</span>.module_api.gateways().<span class="kw">await </span>{
-                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.client_ctx.module_db().begin_transaction().<span class="kw">await</span>;
+    /// Client integrators are expected to call this function once a day.
+    </span><span class="kw">pub async fn </span>update_gateway_cache(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="kw">if let </span><span class="prelude-val">Ok</span>(gateways) = <span class="self">self</span>.module_api.gateways().<span class="kw">await </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.client_ctx.module_db().begin_transaction().<span class="kw">await</span>;
 
-                <span class="kw">for </span>gateway <span class="kw">in </span>gateways {
-                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(routing_info)) = <span class="self">self</span>.routing_info(<span class="kw-2">&amp;</span>gateway).<span class="kw">await </span>{
-                        dbtx.insert_entry(<span class="kw-2">&amp;</span>GatewayKey(routing_info.lightning_public_key), <span class="kw-2">&amp;</span>gateway)
-                            .<span class="kw">await</span>;
-                    }
+            <span class="kw">for </span>gateway <span class="kw">in </span>gateways {
+                <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(routing_info)) = <span class="self">self</span>.routing_info(<span class="kw-2">&amp;</span>gateway).<span class="kw">await </span>{
+                    dbtx.insert_entry(<span class="kw-2">&amp;</span>GatewayKey(routing_info.lightning_public_key), <span class="kw-2">&amp;</span>gateway)
+                        .<span class="kw">await</span>;
                 }
-
-                dbtx.commit_tx().<span class="kw">await</span>;
             }
 
-            sleep(Duration::from_secs(<span class="number">24 </span>* <span class="number">60 </span>* <span class="number">60</span>)).<span class="kw">await</span>;
+            dbtx.commit_tx().<span class="kw">await</span>;
         }
     }
 

@@ -109,7 +109,12 @@
 <a href="#108" id="108">108</a>
 <a href="#109" id="109">109</a>
 <a href="#110" id="110">110</a>
-<a href="#111" id="111">111</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::{ffi, iter};
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::{ffi, iter};
 
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::core::OperationId;
@@ -150,6 +155,9 @@
 
 <span class="attr">#[derive(Clone, Subcommand, Serialize)]
 </span><span class="kw">enum </span>GatewayOpts {
+    <span class="doccomment">/// Update cache of gateway information to optimise gateway selection for a
+    /// given invoice.
+    </span>Cache,
     <span class="doccomment">/// Select an online vetted gateway; this command is intended for testing.
     </span>Select {
         <span class="attr">#[arg(long)]
@@ -190,6 +198,8 @@
         ),
         Opts::AwaitReceive { operation_id } =&gt; json(lightning.await_receive(operation_id).<span class="kw">await</span><span class="question-mark">?</span>),
         Opts::Gateway(gateway_opts) =&gt; <span class="kw">match </span>gateway_opts {
+            <span class="attr">#[allow(clippy::unit_arg)]
+            </span>GatewayOpts::Cache =&gt; json(lightning.update_gateway_cache().<span class="kw">await</span>),
             GatewayOpts::Select { invoice } =&gt; json(lightning.select_gateway(invoice).<span class="kw">await</span><span class="question-mark">?</span>.<span class="number">0</span>),
             GatewayOpts::List { peer } =&gt; <span class="kw">match </span>peer {
                 <span class="prelude-val">Some</span>(peer) =&gt; json(lightning.module_api.gateways_from_peer(peer).<span class="kw">await</span><span class="question-mark">?</span>),

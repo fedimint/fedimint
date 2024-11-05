@@ -346,12 +346,46 @@
 <a href="#345" id="345">345</a>
 <a href="#346" id="346">346</a>
 <a href="#347" id="347">347</a>
-<a href="#348" id="348">348</a></pre></div><pre class="rust"><code><span class="kw">use </span>devimint::devfed::DevJitFed;
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a></pre></div><pre class="rust"><code><span class="kw">use </span>devimint::devfed::DevJitFed;
 <span class="kw">use </span>devimint::federation::Client;
 <span class="kw">use </span>devimint::version_constants::VERSION_0_5_0_ALPHA;
 <span class="kw">use </span>devimint::{cmd, util};
 <span class="kw">use </span>fedimint_core::core::OperationId;
-<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_lnv2_client::{FinalReceiveState, FinalSendState};
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>substring::Substring;
@@ -404,24 +438,27 @@
 </span>}
 
 <span class="kw">async fn </span>test_gateway_registration(dev_fed: <span class="kw-2">&amp;</span>DevJitFed) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="macro">info!</span>(<span class="string">"Testing gateway registration..."</span>);
-
     <span class="kw">let </span>client = dev_fed
         .fed()
         .<span class="kw">await</span><span class="question-mark">?
         </span>.new_joined_client(<span class="string">"lnv2-test-gateway-registration-client"</span>)
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
+    <span class="kw">let </span>gw_lnd = dev_fed.gw_lnd().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>gw_ldk = dev_fed
         .gw_ldk_connected()
         .<span class="kw">await</span><span class="question-mark">?
         </span>.as_ref()
         .expect(<span class="string">"Gateways of version 0.5.0 or higher support LDK"</span>);
 
-    <span class="kw">let </span>gateway = SafeUrl::parse(<span class="kw-2">&amp;</span>gw_ldk.addr).expect(<span class="string">"LDK gateway address is invalid url"</span>);
+    <span class="kw">let </span>gateways = [gw_lnd.addr.clone(), gw_ldk.addr.clone()];
 
-    <span class="kw">for </span>peer <span class="kw">in </span><span class="number">0</span>..dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.members.len() {
-        <span class="macro">assert!</span>(add_gateway(<span class="kw-2">&amp;</span>client, peer, <span class="kw-2">&amp;</span>gateway.to_string()).<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="macro">info!</span>(<span class="string">"Testing registration of gateways..."</span>);
+
+    <span class="kw">for </span>gateway <span class="kw">in </span><span class="kw-2">&amp;</span>gateways {
+        <span class="kw">for </span>peer <span class="kw">in </span><span class="number">0</span>..dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.members.len() {
+            <span class="macro">assert!</span>(add_gateway(<span class="kw-2">&amp;</span>client, peer, gateway).<span class="kw">await</span><span class="question-mark">?</span>);
+        }
     }
 
     <span class="macro">assert_eq!</span>(
@@ -431,7 +468,7 @@
             </span>.as_array()
             .expect(<span class="string">"JSON Value is not an array"</span>)
             .len(),
-        <span class="number">1
+        <span class="number">2
     </span>);
 
     <span class="macro">assert_eq!</span>(
@@ -441,20 +478,53 @@
             </span>.as_array()
             .expect(<span class="string">"JSON Value is not an array"</span>)
             .len(),
-        <span class="number">1
+        <span class="number">2
     </span>);
 
-    <span class="macro">assert_eq!</span>(
-        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateway"</span>, <span class="string">"select"</span>)
+    <span class="macro">info!</span>(<span class="string">"Testing selection of gateways..."</span>);
+
+    <span class="macro">assert!</span>(gateways.contains(
+        <span class="kw-2">&amp;</span><span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateway"</span>, <span class="string">"select"</span>)
             .out_json()
             .<span class="kw">await</span><span class="question-mark">?
             </span>.as_str()
-            .expect(<span class="string">"JSON Value is not a string"</span>),
-        gateway.to_string().as_str()
-    );
+            .expect(<span class="string">"JSON Value is not a string"</span>)
+            .to_string()
+    ));
 
-    <span class="kw">for </span>peer <span class="kw">in </span><span class="number">0</span>..dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.members.len() {
-        <span class="macro">assert!</span>(remove_gateway(<span class="kw-2">&amp;</span>client, peer, <span class="kw-2">&amp;</span>gateway).<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateway"</span>, <span class="string">"cache"</span>)
+        .out_json()
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">for _ in </span><span class="number">0</span>..<span class="number">10 </span>{
+        <span class="kw">for </span>gateway <span class="kw">in </span><span class="kw-2">&amp;</span>gateways {
+            <span class="kw">let </span>invoice = receive(<span class="kw-2">&amp;</span>client, gateway, <span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>.<span class="number">0</span>;
+
+            <span class="macro">assert_eq!</span>(
+                <span class="macro">cmd!</span>(
+                    client,
+                    <span class="string">"module"</span>,
+                    <span class="string">"lnv2"</span>,
+                    <span class="string">"gateway"</span>,
+                    <span class="string">"select"</span>,
+                    <span class="string">"--invoice"</span>,
+                    invoice.to_string()
+                )
+                .out_json()
+                .<span class="kw">await</span><span class="question-mark">?
+                </span>.as_str()
+                .expect(<span class="string">"JSON Value is not a string"</span>),
+                gateway
+            )
+        }
+    }
+
+    <span class="macro">info!</span>(<span class="string">"Testing deregistration of gateways..."</span>);
+
+    <span class="kw">for </span>gateway <span class="kw">in </span><span class="kw-2">&amp;</span>gateways {
+        <span class="kw">for </span>peer <span class="kw">in </span><span class="number">0</span>..dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.members.len() {
+            <span class="macro">assert!</span>(remove_gateway(<span class="kw-2">&amp;</span>client, peer, gateway).<span class="kw">await</span><span class="question-mark">?</span>);
+        }
     }
 
     <span class="macro">assert!</span>(<span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateway"</span>, <span class="string">"list"</span>)
@@ -603,7 +673,7 @@
     .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"JSON Value is not a boolean"</span>))
 }
 
-<span class="kw">async fn </span>remove_gateway(client: <span class="kw-2">&amp;</span>Client, peer: usize, gateway: <span class="kw-2">&amp;</span>SafeUrl) -&gt; anyhow::Result&lt;bool&gt; {
+<span class="kw">async fn </span>remove_gateway(client: <span class="kw-2">&amp;</span>Client, peer: usize, gateway: <span class="kw-2">&amp;</span>String) -&gt; anyhow::Result&lt;bool&gt; {
     <span class="macro">cmd!</span>(
         client,
         <span class="string">"--our-id"</span>,
@@ -614,7 +684,7 @@
         <span class="string">"lnv2"</span>,
         <span class="string">"gateway"</span>,
         <span class="string">"remove"</span>,
-        gateway.to_string()
+        gateway
     )
     .out_json()
     .<span class="kw">await</span><span class="question-mark">?

@@ -292,7 +292,7 @@
 <a href="#291" id="291">291</a>
 <a href="#292" id="292">292</a>
 <a href="#293" id="293">293</a>
-<a href="#294" id="294">294</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#294" id="294">294</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin30::secp256k1;
@@ -313,7 +313,6 @@
     SEND_PAYMENT_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_lnv2_common::ContractId;
-<span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>rand::seq::SliceRandom;
 <span class="kw">use </span>secp256k1::schnorr::Signature;
@@ -420,8 +419,9 @@
         <span class="kw">let </span><span class="kw-2">mut </span>union = gateways
             .values()
             .flatten()
-            .dedup()
             .cloned()
+            .collect::&lt;BTreeSet&lt;SafeUrl&gt;&gt;()
+            .into_iter()
             .collect::&lt;Vec&lt;SafeUrl&gt;&gt;();
 
         <span class="comment">// Shuffling the gateways ensures that payments are distributed over the
