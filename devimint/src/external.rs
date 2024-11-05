@@ -12,9 +12,7 @@ use bitcoincore_rpc::jsonrpc::error::RpcError;
 use bitcoincore_rpc::RpcApi;
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::ClnRpc;
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_txid, bitcoin32_to_bitcoin30_sha256_hash,
-};
+use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_sha256_hash;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_core::task::{block_in_place, block_on, sleep, timeout};
@@ -1045,9 +1043,7 @@ pub async fn open_channels_between_gateways(
     let mut is_missing_any_txids = false;
     for txid_or in &channel_funding_txids {
         if let Some(txid) = txid_or {
-            bitcoind
-                .poll_get_transaction(bitcoin30_to_bitcoin32_txid(txid))
-                .await?;
+            bitcoind.poll_get_transaction(*txid).await?;
         } else {
             is_missing_any_txids = true;
         }

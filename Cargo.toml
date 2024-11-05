@@ -104,8 +104,7 @@ criterion = "0.5.1"
 devimint = { path = "./devimint", version = "=0.5.0-alpha" }
 electrum-client = { version = "0.18.0", features = ["use-rustls"] }
 erased-serde = "0.4"
-esplora-client = { version = "0.6.0", default-features = false, features = [
-    "async",
+esplora-client = { version = "0.10.0", default-features = false, features = [
     "async-https-rustls",
 ] }
 fedimintd = { path = "./fedimintd", version = "=0.5.0-alpha" }

@@ -9,7 +9,6 @@ use bitcoin_hashes::Hash;
 use fedimint_bip39::Mnemonic;
 use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_invoice, bitcoin30_to_bitcoin32_payment_preimage,
-    bitcoin32_to_bitcoin30_txid,
 };
 use fedimint_core::task::{TaskGroup, TaskHandle};
 use fedimint_core::{Amount, BitcoinAmountOrAll};
@@ -181,7 +180,7 @@ impl GatewayLdkClient {
     async fn outpoint_to_scid(&self, funding_txo: OutPoint) -> anyhow::Result<u64> {
         let block_height = self
             .esplora_client
-            .get_merkle_proof(&bitcoin32_to_bitcoin30_txid(&funding_txo.txid))
+            .get_merkle_proof(&funding_txo.txid)
             .await?
             .ok_or(anyhow::anyhow!("Failed to get merkle proof"))?
             .block_height;
@@ -198,7 +197,7 @@ impl GatewayLdkClient {
             .txdata
             .iter()
             .enumerate()
-            .find(|(_, tx)| tx.txid() == bitcoin32_to_bitcoin30_txid(&funding_txo.txid))
+            .find(|(_, tx)| tx.compute_txid() == funding_txo.txid)
             .ok_or(anyhow::anyhow!("Failed to find transaction"))?
             .0 as u32;
 
