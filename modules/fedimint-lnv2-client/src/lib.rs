@@ -18,7 +18,6 @@ use api::{GatewayConnection, RealGatewayConnection};
 use async_stream::stream;
 use bitcoin30::hashes::{sha256, Hash};
 use bitcoin30::secp256k1;
-use bitcoin30::secp256k1::schnorr::Signature;
 use bitcoin30::secp256k1::{ecdh, KeyPair, PublicKey, Scalar, SecretKey};
 use db::GatewayKey;
 use fedimint_api_client::api::DynModuleApi;
@@ -203,26 +202,9 @@ pub enum FinalReceiveState {
 pub type ReceiveResult = Result<(Bolt11Invoice, OperationId), ReceiveError>;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct CreateBolt11InvoicePayload {
-    pub federation_id: FederationId,
-    pub contract: IncomingContract,
-    pub amount: Amount,
-    pub description: Bolt11InvoiceDescription,
-    pub expiry_secs: u32,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Bolt11InvoiceDescription {
     Direct(String),
     Hash(sha256::Hash),
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct SendPaymentPayload {
-    pub federation_id: FederationId,
-    pub contract: OutgoingContract,
-    pub invoice: LightningInvoice,
-    pub auth: Signature,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]

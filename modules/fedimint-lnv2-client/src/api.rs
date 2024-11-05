@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
-use bitcoin30::secp256k1;
+use bitcoin30::secp256k1::schnorr::Signature;
 use fedimint_api_client::api::{
     FederationApiExt, FederationResult, IModuleFederationApi, PeerResult,
 };
@@ -21,12 +21,9 @@ use fedimint_lnv2_common::endpoint_constants::{
 use fedimint_lnv2_common::ContractId;
 use lightning_invoice::Bolt11Invoice;
 use rand::seq::SliceRandom;
-use secp256k1::schnorr::Signature;
+use serde::{Deserialize, Serialize};
 
-use crate::{
-    Bolt11InvoiceDescription, CreateBolt11InvoicePayload, GatewayConnectionError, LightningInvoice,
-    RoutingInfo, SendPaymentPayload,
-};
+use crate::{Bolt11InvoiceDescription, GatewayConnectionError, LightningInvoice, RoutingInfo};
 
 const RETRY_DELAY: Duration = Duration::from_secs(1);
 
@@ -291,4 +288,21 @@ impl GatewayConnection for RealGatewayConnection {
             .await
             .map_err(|e| GatewayConnectionError::Request(e.to_string()))
     }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct CreateBolt11InvoicePayload {
+    pub federation_id: FederationId,
+    pub contract: IncomingContract,
+    pub amount: Amount,
+    pub description: Bolt11InvoiceDescription,
+    pub expiry_secs: u32,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct SendPaymentPayload {
+    pub federation_id: FederationId,
+    pub contract: OutgoingContract,
+    pub invoice: LightningInvoice,
+    pub auth: Signature,
 }

@@ -27,8 +27,8 @@ use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint, PeerId};
-use fedimint_lnv2_client::api::LnFederationApi;
-use fedimint_lnv2_client::{LightningInvoice, SendPaymentPayload};
+use fedimint_lnv2_client::api::{LnFederationApi, SendPaymentPayload};
+use fedimint_lnv2_client::LightningInvoice;
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::{
