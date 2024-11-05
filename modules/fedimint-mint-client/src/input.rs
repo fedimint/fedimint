@@ -32,11 +32,16 @@ pub enum MintInputStates {
     Success(MintInputStateSuccess),
     Error(MintInputStateError),
     RefundSuccess(MintInputStateRefundSuccess),
+    /// A mint inputs bundle was submitted as a part of a general purpose tx,
+    /// and if the tx fails, the bundle should be reissued (refunded)
+    ///
     /// Like [`Self::Created`], but tracks multiple notes at the same time
-    CreatedMulti(MintInputStateCreatedMulti),
-    /// Refund multiple notes in one tx, if fails, switch to per-note
-    /// [`Self::Refund`]
-    RefundMulti(MintInputStateRefundMulti),
+    CreatedBundle(MintInputStateCreatedBundle),
+    /// Refunded multiple notes in a single tx, if fails, switch to
+    /// per-note-refund
+    RefundedBundle(MintInputStateRefundedBundle),
+    /// Refunded note via multiple single-note transactions
+    RefundedPerNote(MintInputStateRefundedPerNote),
 }
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq, Decodable, Encodable)]
@@ -78,8 +83,11 @@ impl State for MintInputStateMachine {
             MintInputStates::Created(_) => {
                 MintInputStateCreated::transitions(&self.common, global_context)
             }
-            MintInputStates::CreatedMulti(_) => {
-                MintInputStateCreatedMulti::transitions(&self.common, global_context)
+            MintInputStates::CreatedBundle(_) => {
+                MintInputStateCreatedBundle::transitions(&self.common, global_context)
+            }
+            MintInputStates::RefundedBundle(_) => {
+                MintInputStateRefundedBundle::transitions(&self.common, global_context)
             }
             MintInputStates::Refund(refund) => refund.transitions(global_context),
             MintInputStates::Success(_)
@@ -87,7 +95,7 @@ impl State for MintInputStateMachine {
             | MintInputStates::RefundSuccess(_)
             // `RefundMulti` means that the refund was split between multiple new per-note state machines, so
             // the current state machine has nothing more to do
-            | MintInputStates::RefundMulti(_) => {
+            | MintInputStates::RefundedPerNote(_) => {
                 vec![]
             }
         }
@@ -190,11 +198,11 @@ impl MintInputStateCreated {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-pub struct MintInputStateCreatedMulti {
+pub struct MintInputStateCreatedBundle {
     pub(crate) notes: Vec<(Amount, SpendableNote)>,
 }
 
-impl MintInputStateCreatedMulti {
+impl MintInputStateCreatedBundle {
     fn transitions(
         common: &MintInputCommon,
         global_context: &DynGlobalClientContext,
@@ -226,7 +234,7 @@ impl MintInputStateCreatedMulti {
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         global_context: DynGlobalClientContext,
     ) -> MintInputStateMachine {
-        assert!(matches!(old_state.state, MintInputStates::CreatedMulti(_)));
+        assert!(matches!(old_state.state, MintInputStates::CreatedBundle(_)));
 
         match result {
             Ok(()) => {
@@ -250,7 +258,112 @@ impl MintInputStateCreatedMulti {
         global_context: DynGlobalClientContext,
     ) -> MintInputStateMachine {
         let spendable_notes = match old_state.state {
-            MintInputStates::CreatedMulti(created) => created.notes,
+            MintInputStates::CreatedBundle(created) => created.notes,
+            _ => panic!("Invalid state transition"),
+        };
+
+        let mut inputs = Vec::new();
+
+        for (amount, spendable_note) in spendable_notes.clone() {
+            inputs.push(ClientInput::<MintInput> {
+                input: MintInput::new_v0(amount, spendable_note.note()),
+                keys: vec![spendable_note.spend_key],
+                amount,
+            });
+        }
+
+        let (refund_txid, _) = global_context
+            .claim_inputs(
+                dbtx,
+                // We are inside an input state machine, so no need to spawn new ones
+                ClientInputBundle::new_no_sm(inputs),
+            )
+            .await
+            .expect("Cannot claim input, additional funding needed");
+
+        MintInputStateMachine {
+            common: old_state.common,
+            state: if spendable_notes.len() == 1 {
+                // if the bundle had 1 note, we did per-note refund already
+                MintInputStates::RefundedPerNote(MintInputStateRefundedPerNote {
+                    refund_txids: vec![refund_txid],
+                })
+            } else {
+                MintInputStates::RefundedBundle(MintInputStateRefundedBundle {
+                    refund_txid,
+                    spendable_notes,
+                })
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct MintInputStateRefundedBundle {
+    pub(crate) refund_txid: TransactionId,
+    pub(crate) spendable_notes: Vec<(Amount, SpendableNote)>,
+}
+
+impl MintInputStateRefundedBundle {
+    fn transitions(
+        common: &MintInputCommon,
+        global_context: &DynGlobalClientContext,
+    ) -> Vec<StateTransition<MintInputStateMachine>> {
+        let global_context = global_context.clone();
+        vec![StateTransition::new(
+            Self::await_success(common.clone(), global_context.clone()),
+            move |dbtx, result, old_state| {
+                Box::pin(Self::transition_success(
+                    result,
+                    old_state,
+                    dbtx,
+                    global_context.clone(),
+                ))
+            },
+        )]
+    }
+
+    async fn await_success(
+        common: MintInputCommon,
+        global_context: DynGlobalClientContext,
+    ) -> Result<(), String> {
+        global_context.await_tx_accepted(common.txid).await
+    }
+
+    async fn transition_success(
+        result: Result<(), String>,
+        old_state: MintInputStateMachine,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        global_context: DynGlobalClientContext,
+    ) -> MintInputStateMachine {
+        assert!(matches!(
+            old_state.state,
+            MintInputStates::RefundedBundle(_)
+        ));
+
+        match result {
+            Ok(()) => {
+                // Success case: containing transaction is accepted
+                MintInputStateMachine {
+                    common: old_state.common,
+                    state: MintInputStates::Success(MintInputStateSuccess {}),
+                }
+            }
+            Err(err) => {
+                // Transaction rejected: attempting to refund
+                debug!(target: LOG_CLIENT_MODULE_MINT, %err, "Refunding mint transaction input due to transaction error on multi-note refund");
+                Self::refund(dbtx, old_state, global_context).await
+            }
+        }
+    }
+
+    async fn refund(
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        old_state: MintInputStateMachine,
+        global_context: DynGlobalClientContext,
+    ) -> MintInputStateMachine {
+        let spendable_notes = match old_state.state {
+            MintInputStates::RefundedBundle(created) => created.spendable_notes,
             _ => panic!("Invalid state transition"),
         };
 
@@ -277,7 +390,7 @@ impl MintInputStateCreatedMulti {
         assert!(!refund_txids.is_empty());
         MintInputStateMachine {
             common: old_state.common,
-            state: MintInputStates::RefundMulti(MintInputStateRefundMulti { refund_txids }),
+            state: MintInputStates::RefundedPerNote(MintInputStateRefundedPerNote { refund_txids }),
         }
     }
 }
@@ -342,7 +455,7 @@ impl MintInputStateRefund {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-pub struct MintInputStateRefundMulti {
+pub struct MintInputStateRefundedPerNote {
     pub refund_txids: Vec<TransactionId>,
 }
 

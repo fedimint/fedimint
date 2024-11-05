@@ -10,7 +10,7 @@ use fedimint_core::{runtime, Amount, TransactionId};
 use fedimint_mint_common::MintInput;
 
 use crate::input::{
-    MintInputCommon, MintInputStateCreatedMulti, MintInputStateMachine, MintInputStates,
+    MintInputCommon, MintInputStateMachine, MintInputStateRefundedBundle, MintInputStates,
 };
 use crate::{MintClientContext, MintClientStateMachines, SpendableNote};
 
@@ -337,8 +337,13 @@ async fn try_cancel_oob_spend_multi(
                     txid,
                     input_idxs,
                 },
-                state: MintInputStates::CreatedMulti(MintInputStateCreatedMulti {
-                    notes: spendable_notes.clone(),
+                // When canceling OOB, we are reating the multi-refund input already here.
+                // So  we can cut straight to
+                // `MintInputStates::RefundedMulti` state. If the reund tx fails, it will
+                // retry using per-note refund again.
+                state: MintInputStates::RefundedBundle(MintInputStateRefundedBundle {
+                    refund_txid: txid,
+                    spendable_notes: spendable_notes.clone(),
                 }),
             })]
         }),

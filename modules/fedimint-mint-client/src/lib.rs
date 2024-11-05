@@ -79,7 +79,7 @@ use fedimint_mint_common::config::{FeeConsensus, MintClientConfig};
 pub use fedimint_mint_common::*;
 use futures::{pin_mut, StreamExt};
 use hex::ToHex;
-use input::MintInputStateCreatedMulti;
+use input::MintInputStateCreatedBundle;
 use oob::MintOOBStatesCreatedMulti;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -819,7 +819,7 @@ impl ClientModule for MintClientModule {
                             ..
                         })
                         | MintClientStateMachines::Input(MintInputStateMachine {
-                            state: MintInputStates::Created(_) | MintInputStates::CreatedMulti(_),
+                            state: MintInputStates::Created(_) | MintInputStates::CreatedBundle(_),
                             ..
                         })
                         | MintClientStateMachines::OOB(MintOOBStateMachine {
@@ -2371,7 +2371,7 @@ pub(crate) fn create_bundle_for_inputs(
                 txid,
                 input_idxs,
             },
-            state: MintInputStates::CreatedMulti(MintInputStateCreatedMulti {
+            state: MintInputStates::CreatedBundle(MintInputStateCreatedBundle {
                 notes: input_states.clone(),
             }),
         })]
