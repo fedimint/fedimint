@@ -28,12 +28,11 @@ use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint, PeerId};
-use fedimint_lnv2_client::api::SendPaymentPayload;
-use fedimint_lnv2_client::LightningInvoice;
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
+use fedimint_lnv2_common::gateway_api::SendPaymentPayload;
 use fedimint_lnv2_common::{
-    LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
+    LightningCommonInit, LightningInvoice, LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
 use futures::StreamExt;
 use receive_sm::{ReceiveSMState, ReceiveStateMachine};

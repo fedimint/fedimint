@@ -9,11 +9,11 @@ use fedimint_core::secp256k1::KeyPair;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Amount};
 use fedimint_ln_common::bitcoin;
-use fedimint_lnv2_client::api::{
+use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
+use fedimint_lnv2_common::gateway_api::{
     GatewayConnection, GatewayConnectionError, PaymentFee, RoutingInfo,
 };
-use fedimint_lnv2_client::{Bolt11InvoiceDescription, LightningInvoice};
-use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
+use fedimint_lnv2_common::{Bolt11InvoiceDescription, LightningInvoice};
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, DEFAULT_EXPIRY_TIME,
 };

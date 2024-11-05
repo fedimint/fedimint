@@ -67,11 +67,11 @@ use fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll}
 use fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::LightningCommonInit;
-use fedimint_lnv2_client::api::{
+use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
+use fedimint_lnv2_common::gateway_api::{
     CreateBolt11InvoicePayload, PaymentFee, RoutingInfo, SendPaymentPayload,
 };
-use fedimint_lnv2_client::Bolt11InvoiceDescription;
-use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
+use fedimint_lnv2_common::Bolt11InvoiceDescription;
 use fedimint_mint_client::{
     MintClientInit, MintClientModule, MintCommonInit, SelectNotesWithAtleastAmount,
     SelectNotesWithExactAmount,

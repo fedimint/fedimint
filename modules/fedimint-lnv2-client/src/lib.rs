@@ -4,7 +4,7 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 
-pub mod api;
+mod api;
 #[cfg(feature = "cli")]
 mod cli;
 mod db;
@@ -14,7 +14,6 @@ mod send_sm;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use api::{GatewayConnection, RealGatewayConnection};
 use async_stream::stream;
 use bitcoin30::hashes::{sha256, Hash};
 use bitcoin30::secp256k1;
@@ -46,8 +45,12 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
+use fedimint_lnv2_common::gateway_api::{
+    GatewayConnection, GatewayConnectionError, PaymentFee, RealGatewayConnection, RoutingInfo,
+};
 use fedimint_lnv2_common::{
-    LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0, KIND,
+    Bolt11InvoiceDescription, LightningCommonInit, LightningInvoice, LightningModuleTypes,
+    LightningOutput, LightningOutputV0, KIND,
 };
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Currency};
@@ -56,7 +59,7 @@ use serde_json::Value;
 use thiserror::Error;
 use tpe::{derive_agg_decryption_key, AggregateDecryptionKey};
 
-use crate::api::{GatewayConnectionError, LightningFederationApi, PaymentFee, RoutingInfo};
+use crate::api::LightningFederationApi;
 use crate::receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
 use crate::send_sm::{SendSMCommon, SendSMState, SendStateMachine};
 
@@ -200,17 +203,6 @@ pub enum FinalReceiveState {
 }
 
 pub type ReceiveResult = Result<(Bolt11Invoice, OperationId), ReceiveError>;
-
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub enum Bolt11InvoiceDescription {
-    Direct(String),
-    Hash(sha256::Hash),
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
-pub enum LightningInvoice {
-    Bolt11(Bolt11Invoice),
-}
 
 #[derive(Debug, Clone)]
 pub struct LightningClientInit {

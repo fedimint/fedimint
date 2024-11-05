@@ -12,11 +12,13 @@ use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_lnv2_client::{
-    Bolt11InvoiceDescription, LightningClientInit, LightningClientModule, LightningOperationMeta,
-    ReceiveState, SendPaymentError, SendState,
+    LightningClientInit, LightningClientModule, LightningOperationMeta, ReceiveState,
+    SendPaymentError, SendState,
 };
 use fedimint_lnv2_common::config::LightningGenParams;
-use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
+use fedimint_lnv2_common::{
+    Bolt11InvoiceDescription, LightningInput, LightningInputV0, OutgoingWitness,
+};
 use fedimint_lnv2_server::LightningInit;
 use fedimint_testing::fixtures::Fixtures;
 use serde_json::Value;
