@@ -3,11 +3,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Cursor, Error, Read, Write};
 
 use anyhow::{bail, ensure, Context, Result};
-use bitcoin::secp256k1::{Keypair, PublicKey};
+use bitcoin::secp256k1::{Keypair, PublicKey, Secp256k1, SignOnly};
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin30_to_bitcoin32_secp256k1_pubkey,
-    bitcoin32_to_bitcoin30_keypair,
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_keypair,
 };
 use fedimint_core::core::backup::{
     BackupRequest, SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES,
@@ -16,7 +15,6 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::secp256k1::{Secp256k1, SignOnly};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_BACKUP, LOG_CLIENT_RECOVERY};
 use serde::{Deserialize, Serialize};
@@ -410,11 +408,9 @@ impl Client {
     /// Static version of [`Self::get_derived_backup_signing_key`] for testing
     /// without creating whole `MintClient`
     fn get_derived_backup_signing_key_static(secret: &DerivableSecret) -> Keypair {
-        bitcoin30_to_bitcoin32_keypair(
-            &secret
-                .derive_backup_secret()
-                .to_secp_key(&Secp256k1::<SignOnly>::gen_new()),
-        )
+        secret
+            .derive_backup_secret()
+            .to_secp_key(&Secp256k1::<SignOnly>::gen_new())
     }
 
     fn get_derived_backup_encryption_key(&self) -> fedimint_aead::LessSafeKey {

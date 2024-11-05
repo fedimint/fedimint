@@ -13,9 +13,7 @@ use fedimint_api_client::api::{
 };
 use fedimint_core::admin_client::ServerStatus;
 use fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin30_to_bitcoin32_secp256k1_secret_key,
-};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_secret_key;
 use fedimint_core::config::{ClientConfig, JsonClientConfig};
 use fedimint_core::core::backup::{SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES};
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
@@ -42,7 +40,8 @@ use fedimint_core::module::{
 use fedimint_core::net::api_announcement::{
     ApiAnnouncement, SignedApiAnnouncement, SignedApiAnnouncementSubmission,
 };
-use fedimint_core::secp256k1::{PublicKey, SECP256K1};
+use fedimint_core::secp256k1::SECP256K1;
+use fedimint_core::secp256k1_29::PublicKey;
 use fedimint_core::server::DynServerModule;
 use fedimint_core::session_outcome::{SessionOutcome, SessionStatus, SignedSessionOutcome};
 use fedimint_core::transaction::{
@@ -379,10 +378,7 @@ impl ConsensusApi {
         dbtx: &mut DatabaseTransaction<'_>,
         id: PublicKey,
     ) -> Option<ClientBackupSnapshot> {
-        dbtx.get_value(&ClientBackupKey(bitcoin30_to_bitcoin32_secp256k1_pubkey(
-            &id,
-        )))
-        .await
+        dbtx.get_value(&ClientBackupKey(id)).await
     }
 
     /// List API URL announcements from all peers we have received them from (at

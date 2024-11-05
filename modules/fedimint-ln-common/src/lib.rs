@@ -355,8 +355,8 @@ pub struct LightningGateway {
     #[serde(rename = "mint_channel_id")]
     pub federation_index: u64,
     /// Key used to pay the gateway
-    pub gateway_redeem_key: secp256k1::PublicKey,
-    pub node_pub_key: secp256k1::PublicKey,
+    pub gateway_redeem_key: fedimint_core::secp256k1_29::PublicKey,
+    pub node_pub_key: fedimint_core::secp256k1_29::PublicKey,
     pub lightning_alias: String,
     /// URL to the gateway's versioned public API
     /// (e.g. <https://gateway.example.com/v1>)
@@ -430,8 +430,11 @@ plugin_types_trait_impl_common!(
 // TODO: upstream serde support to LDK
 /// Hack to get a route hint that implements `serde` traits.
 pub mod route_hints {
+    use fedimint_core::bitcoin_migration::{
+        bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+    };
     use fedimint_core::encoding::{Decodable, Encodable};
-    use fedimint_core::secp256k1::PublicKey;
+    use fedimint_core::secp256k1_29::PublicKey;
     use lightning_invoice::RoutingFees;
     use serde::{Deserialize, Serialize};
 
@@ -465,7 +468,7 @@ pub mod route_hints {
                 self.0
                     .iter()
                     .map(|hop| lightning_invoice::RouteHintHop {
-                        src_node_id: hop.src_node_id,
+                        src_node_id: bitcoin32_to_bitcoin30_secp256k1_pubkey(&hop.src_node_id),
                         short_channel_id: hop.short_channel_id,
                         fees: RoutingFees {
                             base_msat: hop.base_msat,
@@ -489,7 +492,7 @@ pub mod route_hints {
     impl From<lightning_invoice::RouteHintHop> for RouteHintHop {
         fn from(rhh: lightning_invoice::RouteHintHop) -> Self {
             RouteHintHop {
-                src_node_id: rhh.src_node_id,
+                src_node_id: bitcoin30_to_bitcoin32_secp256k1_pubkey(&rhh.src_node_id),
                 short_channel_id: rhh.short_channel_id,
                 base_msat: rhh.fees.base_msat,
                 proportional_millionths: rhh.fees.proportional_millionths,

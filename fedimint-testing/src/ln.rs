@@ -134,7 +134,7 @@ impl FakeLightningTest {
 impl ILnRpcClient for FakeLightningTest {
     async fn info(&self) -> Result<GetNodeInfoResponse, LightningRpcError> {
         Ok(GetNodeInfoResponse {
-            pub_key: bitcoin32_to_bitcoin30_secp256k1_pubkey(&self.gateway_node_pub_key),
+            pub_key: self.gateway_node_pub_key,
             alias: "FakeLightningNode".to_string(),
             network: "regtest".to_string(),
             block_height: 0,

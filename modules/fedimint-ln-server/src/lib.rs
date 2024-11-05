@@ -11,7 +11,10 @@ use std::time::Duration;
 use anyhow::{bail, Context};
 use bitcoin_hashes::{sha256, Hash as BitcoinHash};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
-use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_schnorr_signature;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_secp256k1_message, bitcoin30_to_bitcoin32_secp256k1_pubkey,
+    bitcoin32_to_bitcoin30_secp256k1_pubkey,
+};
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -25,7 +28,7 @@ use fedimint_core::module::{
     ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
     SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
-use fedimint_core::secp256k1::{PublicKey, SECP256K1};
+use fedimint_core::secp256k1_29::{PublicKey, SECP256K1};
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::{
@@ -570,7 +573,7 @@ impl ServerModule for Lightning {
                 }
                 // … either the user may spend the funds since they sold a valid preimage …
                 DecryptedPreimage::Some(preimage) => match preimage.to_public_key() {
-                    Ok(pub_key) => pub_key,
+                    Ok(pub_key) => bitcoin30_to_bitcoin32_secp256k1_pubkey(&pub_key),
                     Err(_) => return Err(LightningInputError::InvalidPreimage),
                 },
                 // … or the gateway may claim back funds for not receiving the advertised preimage.
@@ -598,7 +601,7 @@ impl ServerModule for Lightning {
                 amount: input.amount,
                 fee: self.cfg.consensus.fee_consensus.contract_input,
             },
-            pub_key,
+            pub_key: bitcoin32_to_bitcoin30_secp256k1_pubkey(&pub_key),
         })
     }
 
@@ -750,8 +753,10 @@ impl ServerModule for Lightning {
 
                 SECP256K1
                     .verify_schnorr(
-                        &bitcoin32_to_bitcoin30_schnorr_signature(gateway_signature),
-                        &outgoing_contract.cancellation_message().into(),
+                        gateway_signature,
+                        &bitcoin30_to_bitcoin32_secp256k1_message(
+                            &outgoing_contract.cancellation_message().into(),
+                        ),
                         &outgoing_contract.gateway_key.x_only_public_key().0,
                     )
                     .map_err(|_| LightningOutputError::InvalidCancellationSignature)?;
@@ -1178,7 +1183,12 @@ impl Lightning {
         gateway_id: PublicKey,
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> Option<sha256::Hash> {
-        if let Some(gateway) = dbtx.get_value(&LightningGatewayKey(gateway_id)).await {
+        if let Some(gateway) = dbtx
+            .get_value(&LightningGatewayKey(
+                bitcoin32_to_bitcoin30_secp256k1_pubkey(&gateway_id),
+            ))
+            .await
+        {
             let mut valid_until_bytes = gateway.valid_until.to_bytes();
             let mut challenge_bytes = gateway_id.to_bytes();
             challenge_bytes.append(&mut valid_until_bytes);
@@ -1210,7 +1220,10 @@ impl Lightning {
         // If there is no challenge, the gateway does not exist in the database and
         // there is nothing to do
         let challenge = self
-            .get_gateway_remove_challenge(gateway_id, dbtx)
+            .get_gateway_remove_challenge(
+                bitcoin30_to_bitcoin32_secp256k1_pubkey(&gateway_id),
+                dbtx,
+            )
             .await
             .ok_or(anyhow::anyhow!(
                 "Gateway {gateway_id} is not registered with peer {our_peer_id}"
@@ -1239,6 +1252,7 @@ fn record_funded_contract_metric(updated_contract_account: &ContractAccount) {
 mod tests {
     use assert_matches::assert_matches;
     use bitcoin_hashes::{sha256, Hash as BitcoinHash};
+    use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_pubkey;
     use fedimint_core::config::ConfigGenModuleParams;
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
@@ -1386,7 +1400,7 @@ mod tests {
                     client_cfg.threshold_pub_key.encrypt(preimage.0),
                 ),
                 decrypted_preimage: DecryptedPreimage::Some(preimage.clone()),
-                gateway_key: random_pub_key(),
+                gateway_key: bitcoin30_to_bitcoin32_secp256k1_pubkey(&random_pub_key()),
             },
             out_point: OutPoint {
                 txid: TransactionId::all_zeros(),
@@ -1443,9 +1457,9 @@ mod tests {
         let gateway_key = random_pub_key();
         let outgoing_contract = FundedContract::Outgoing(OutgoingContract {
             hash: preimage.consensus_hash(),
-            gateway_key,
+            gateway_key: bitcoin30_to_bitcoin32_secp256k1_pubkey(&gateway_key),
             timelock: 1_000_000,
-            user_key: random_pub_key(),
+            user_key: bitcoin30_to_bitcoin32_secp256k1_pubkey(&random_pub_key()),
             cancelled: false,
         });
         let contract_id = outgoing_contract.contract_id();

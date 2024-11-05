@@ -32,7 +32,7 @@ use fedimint_client::transaction::{
 };
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_network,
+    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_keypair, bitcoin32_to_bitcoin30_network,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -250,9 +250,12 @@ impl ClientModuleInit for LightningClientInit {
             args.notifier().clone(),
             args.context(),
             args.module_api().clone(),
-            args.module_root_secret()
-                .clone()
-                .to_secp_key(secp256k1::SECP256K1),
+            bitcoin32_to_bitcoin30_keypair(
+                &args
+                    .module_root_secret()
+                    .clone()
+                    .to_secp_key(fedimint_core::secp256k1_29::SECP256K1),
+            ),
             self.gateway_conn.clone(),
             args.admin_auth().cloned(),
             args.task_group(),

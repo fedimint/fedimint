@@ -2,7 +2,9 @@ use anyhow::bail;
 use fedimint_client::transaction::{
     ClientInput, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+};
 use fedimint_core::config::ClientModuleConfig;
 use fedimint_core::core::{IntoDynInstance, ModuleKind, OperationId};
 use fedimint_core::db::mem_impl::MemDatabase;
@@ -120,7 +122,7 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
     let output = ClientOutput {
         output: DummyOutput {
             amount: sats(1000),
-            account: dummy_module.account(),
+            account: bitcoin32_to_bitcoin30_secp256k1_pubkey(&dummy_module.account()),
         },
         amount: sats(1000),
     };

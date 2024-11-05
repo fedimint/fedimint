@@ -18,8 +18,12 @@ use cln_rpc::model;
 use cln_rpc::model::requests::SendpayRoute;
 use cln_rpc::model::responses::ListpeerchannelsChannels;
 use cln_rpc::primitives::{AmountOrAll, ChannelState, ShortChannelId};
-use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_network;
-use fedimint_core::secp256k1::{PublicKey, SecretKey, SECP256K1};
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_secp256k1_message, bitcoin30_to_bitcoin32_secp256k1_pubkey,
+    bitcoin32_to_bitcoin30_network, bitcoin32_to_bitcoin30_recoverable_signature,
+    bitcoin32_to_bitcoin30_secp256k1_pubkey,
+};
+use fedimint_core::secp256k1_29::{PublicKey, SecretKey, SECP256K1};
 use fedimint_core::task::timeout;
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll};
@@ -248,11 +252,9 @@ async fn cln_route_hints(
 
         let channel = match channels_response {
             cln_rpc::Response::ListChannels(channels) => {
-                let Some(channel) = channels
-                    .channels
-                    .into_iter()
-                    .find(|chan| chan.destination == node_info.0)
-                else {
+                let Some(channel) = channels.channels.into_iter().find(|chan| {
+                    chan.destination == bitcoin32_to_bitcoin30_secp256k1_pubkey(&node_info.0)
+                }) else {
                     warn!(?scid, "Channel not found in graph");
                     continue;
                 };
@@ -262,7 +264,7 @@ async fn cln_route_hints(
         };
 
         let route_hint_hop = RouteHintHop {
-            src_node_id: peer_id,
+            src_node_id: bitcoin30_to_bitcoin32_secp256k1_pubkey(&peer_id),
             short_channel_id: scid_to_u64(scid),
             base_msat: channel.base_fee_millisatoshi,
             proportional_millionths: channel.fee_per_millionth,
@@ -576,7 +578,12 @@ async fn cln_create_invoice(
     let invoice = invoice_builder
         // Temporarily sign with an ephemeral private key, we will request CLN to sign this
         // invoice next.
-        .build_signed(|m| SECP256K1.sign_ecdsa_recoverable(m, &SecretKey::new(&mut OsRng)))
+        .build_signed(|m| {
+            bitcoin32_to_bitcoin30_recoverable_signature(&SECP256K1.sign_ecdsa_recoverable(
+                &bitcoin30_to_bitcoin32_secp256k1_message(m),
+                &SecretKey::new(&mut OsRng),
+            ))
+        })
         .map_err(|e| ClnExtensionError::Error(anyhow!(e)))?;
 
     let invstring = invoice.to_string();
@@ -676,7 +683,7 @@ async fn cln_open_channel(
         .await?
         .call(cln_rpc::Request::FundChannel(
             model::requests::FundchannelRequest {
-                id: payload.pubkey,
+                id: bitcoin32_to_bitcoin30_secp256k1_pubkey(&payload.pubkey),
                 amount: cln_rpc::primitives::AmountOrAll::Amount(
                     cln_rpc::primitives::Amount::from_sat(payload.channel_size_sats),
                 ),
@@ -717,7 +724,7 @@ async fn cln_close_channels_with_peer(
         .await?
         .call(cln_rpc::Request::ListPeerChannels(
             model::requests::ListpeerchannelsRequest {
-                id: Some(payload.pubkey),
+                id: Some(bitcoin32_to_bitcoin30_secp256k1_pubkey(&payload.pubkey)),
             },
         ))
         .await
@@ -782,7 +789,9 @@ async fn cln_list_active_channels(
                         model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
                     ) {
                         Some(ln_gateway::lightning::ChannelInfo {
-                            remote_pubkey: channel.peer_id,
+                            remote_pubkey: bitcoin30_to_bitcoin32_secp256k1_pubkey(
+                                &channel.peer_id,
+                            ),
                             channel_size_sats: channel
                                 .total_msat
                                 .map(|value| value.msat() / 1000)
@@ -1012,7 +1021,13 @@ impl ClnRpcService {
                     let alias = alias.unwrap_or_default();
                     let synced_to_chain =
                         warning_bitcoind_sync.is_none() && warning_lightningd_sync.is_none();
-                    (id, alias, network, blockheight, synced_to_chain)
+                    (
+                        bitcoin30_to_bitcoin32_secp256k1_pubkey(&id),
+                        alias,
+                        network,
+                        blockheight,
+                        synced_to_chain,
+                    )
                 }
                 _ => unreachable!("Unexpected response from Getinfo"),
             })

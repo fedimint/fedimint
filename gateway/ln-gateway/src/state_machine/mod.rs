@@ -23,6 +23,10 @@ use fedimint_client::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
 use fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlobalClientContext};
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_keypair, bitcoin30_to_bitcoin32_secp256k1_pubkey,
+    bitcoin32_to_bitcoin30_keypair, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -143,10 +147,12 @@ impl ClientModuleInit for GatewayClientInit {
         Ok(GatewayClientModule {
             cfg: args.cfg().clone(),
             notifier: args.notifier().clone(),
-            redeem_key: args
-                .module_root_secret()
-                .child_key(ChildId(0))
-                .to_secp_key(&fedimint_core::secp256k1::Secp256k1::new()),
+            redeem_key: bitcoin32_to_bitcoin30_keypair(
+                &args
+                    .module_root_secret()
+                    .child_key(ChildId(0))
+                    .to_secp_key(&fedimint_core::secp256k1_29::Secp256k1::new()),
+            ),
             module_api: args.module_api().clone(),
             timelock_delta: self.timelock_delta,
             federation_index: self.federation_index,
@@ -174,7 +180,7 @@ impl From<&GatewayClientContext> for LightningClientContext {
     fn from(ctx: &GatewayClientContext) -> Self {
         LightningClientContext {
             ln_decoder: ctx.ln_decoder.clone(),
-            redeem_key: ctx.redeem_key,
+            redeem_key: bitcoin30_to_bitcoin32_keypair(&ctx.redeem_key),
             gateway_conn: Arc::new(RealGatewayConnection::default()),
         }
     }
@@ -247,13 +253,15 @@ impl GatewayClientModule {
         LightningGatewayAnnouncement {
             info: LightningGateway {
                 federation_index: self.federation_index,
-                gateway_redeem_key: self.redeem_key.public_key(),
+                gateway_redeem_key: bitcoin30_to_bitcoin32_secp256k1_pubkey(
+                    &self.redeem_key.public_key(),
+                ),
                 node_pub_key: lightning_context.lightning_public_key,
                 lightning_alias: lightning_context.lightning_alias,
                 api: self.gateway.versioned_api.clone(),
                 route_hints,
                 fees,
-                gateway_id: self.gateway.gateway_id,
+                gateway_id: bitcoin32_to_bitcoin30_secp256k1_pubkey(&self.gateway.gateway_id),
                 supports_private_payments: lightning_context.lnrpc.supports_private_payments(),
             },
             ttl,
@@ -278,7 +286,7 @@ impl GatewayClientModule {
             &self.module_api,
             htlc.payment_hash,
             htlc.outgoing_amount_msat,
-            self.redeem_key,
+            &bitcoin30_to_bitcoin32_keypair(&self.redeem_key),
         )
         .await?;
 
@@ -329,7 +337,7 @@ impl GatewayClientModule {
             &self.module_api,
             payment_hash,
             swap.amount_msat,
-            self.redeem_key,
+            &bitcoin30_to_bitcoin32_keypair(&self.redeem_key),
         )
         .await?;
 

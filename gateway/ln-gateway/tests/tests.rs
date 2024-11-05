@@ -12,7 +12,10 @@ use fedimint_client::transaction::{
     ClientInput, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
 use fedimint_client::ClientHandleArc;
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_keypair,
+    bitcoin32_to_bitcoin30_secp256k1_pubkey,
+};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::encoding::Encodable;
@@ -233,7 +236,7 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
                 invoice,
                 &user_client,
                 &gateway_client,
-                &gateway.gateway_id(),
+                &bitcoin32_to_bitcoin30_secp256k1_pubkey(&gateway.gateway_id()),
             )
             .await?;
 
@@ -274,7 +277,9 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
 
             let user_lightning_module = user_client.get_first_module::<LightningClientModule>()?;
             let gateway_id = gateway.gateway_id();
-            let ln_gateway = user_lightning_module.select_gateway(&gateway_id).await;
+            let ln_gateway = user_lightning_module
+                .select_gateway(&bitcoin32_to_bitcoin30_secp256k1_pubkey(&gateway_id))
+                .await;
             let gateway_client = gateway.select_client(fed.id()).await?.into_value();
 
             let invoice_amount = sats(250);
@@ -365,7 +370,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
                     .get_first_module::<LightningClientModule>()
                     .unwrap(),
                 invoice.clone(),
-                &gateway_id,
+                &bitcoin32_to_bitcoin30_secp256k1_pubkey(&gateway_id),
             )
             .await?;
 
@@ -432,14 +437,21 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
             // Create invoice that cannot be paid
             let invoice = other_lightning_client.unpayable_invoice(sats(250), None);
 
-            let gateway = lightning_module.select_gateway(&gateway_id).await;
+            let gateway = lightning_module
+                .select_gateway(&bitcoin32_to_bitcoin30_secp256k1_pubkey(&gateway_id))
+                .await;
 
             // User client pays test invoice
             let OutgoingLightningPayment {
                 payment_type,
                 contract_id,
                 fee: _,
-            } = user_pay_invoice(&lightning_module, invoice.clone(), &gateway_id).await?;
+            } = user_pay_invoice(
+                &lightning_module,
+                invoice.clone(),
+                &bitcoin32_to_bitcoin30_secp256k1_pubkey(&gateway_id),
+            )
+            .await?;
             match payment_type {
                 PayType::Lightning(pay_op) => {
                     let mut pay_sub = lightning_module
@@ -493,7 +505,9 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
         // User client creates invoice in federation
         let invoice_amount = sats(100);
         let ln_module = user_client.get_first_module::<LightningClientModule>()?;
-        let ln_gateway = ln_module.select_gateway(&gateway_id).await;
+        let ln_gateway = ln_module
+            .select_gateway(&bitcoin32_to_bitcoin30_secp256k1_pubkey(&gateway_id))
+            .await;
         let desc = Description::new("description".to_string())?;
         let (_invoice_op, invoice, _) = ln_module
             .create_bolt11_invoice(
@@ -584,7 +598,9 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
         let gateway_client = gateway.select_client(fed.id()).await?.into_value();
         // User client creates invoice in federation
         let ln_module = user_client.get_first_module::<LightningClientModule>()?;
-        let ln_gateway = ln_module.select_gateway(&gateway_id).await;
+        let ln_gateway = ln_module
+            .select_gateway(&bitcoin32_to_bitcoin30_secp256k1_pubkey(&gateway_id))
+            .await;
         let desc = Description::new("description".to_string())?;
         let (_invoice_op, invoice, _) = ln_module
             .create_bolt11_invoice(
@@ -757,12 +773,19 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
 
             // User client pays test invoice
             let lightning_module = user_client.get_first_module::<LightningClientModule>()?;
-            let gateway_module = lightning_module.select_gateway(&gateway_id).await;
+            let gateway_module = lightning_module
+                .select_gateway(&bitcoin32_to_bitcoin30_secp256k1_pubkey(&gateway_id))
+                .await;
             let OutgoingLightningPayment {
                 payment_type,
                 contract_id,
                 fee: _,
-            } = user_pay_invoice(&lightning_module, invoice.clone(), &gateway_id).await?;
+            } = user_pay_invoice(
+                &lightning_module,
+                invoice.clone(),
+                &bitcoin32_to_bitcoin30_secp256k1_pubkey(&gateway_id),
+            )
+            .await?;
             match payment_type {
                 PayType::Lightning(pay_op) => {
                     let mut pay_sub = lightning_module
@@ -856,7 +879,9 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
         // User creates invoice in federation 2
         let invoice_amt = msats(2_500);
         let ln_module = client2.get_first_module::<LightningClientModule>()?;
-        let ln_gateway = ln_module.select_gateway(&gateway_id).await;
+        let ln_gateway = ln_module
+            .select_gateway(&bitcoin32_to_bitcoin30_secp256k1_pubkey(&gateway_id))
+            .await;
         let desc = Description::new("description".to_string())?;
         let (receive_op, invoice, _) = ln_module
             .create_bolt11_invoice(
@@ -874,8 +899,13 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
 
         // A client pays invoice in federation 1
         let gateway_client = gateway.select_client(id1).await?.into_value();
-        gateway_pay_valid_invoice(invoice, &client1, &gateway_client, &gateway.gateway_id())
-            .await?;
+        gateway_pay_valid_invoice(
+            invoice,
+            &client1,
+            &gateway_client,
+            &bitcoin32_to_bitcoin30_secp256k1_pubkey(&gateway.gateway_id()),
+        )
+        .await?;
 
         // A client receives cash via swap in federation 2
         assert_eq!(receive_sub.ok().await?, LnReceiveState::Created);
@@ -980,10 +1010,10 @@ async fn lnv2_incoming_contract_with_invalid_preimage_is_refunded() -> anyhow::R
         Amount::from_sats(1000),
         u64::MAX,
         KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
-        client
-            .get_first_module::<GatewayClientModuleV2>()?
-            .keypair
-            .public_key(),
+        bitcoin32_to_bitcoin30_keypair(
+            &client.get_first_module::<GatewayClientModuleV2>()?.keypair,
+        )
+        .public_key(),
         KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
     );
 
@@ -1024,10 +1054,10 @@ async fn lnv2_expired_incoming_contract_is_rejected() -> anyhow::Result<()> {
         Amount::from_sats(1000),
         0, // this incoming contract expired on the 1st of January 1970
         KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
-        client
-            .get_first_module::<GatewayClientModuleV2>()?
-            .keypair
-            .public_key(),
+        bitcoin32_to_bitcoin30_keypair(
+            &client.get_first_module::<GatewayClientModuleV2>()?.keypair,
+        )
+        .public_key(),
         KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
     );
 
@@ -1068,10 +1098,10 @@ async fn lnv2_malleated_incoming_contract_is_rejected() -> anyhow::Result<()> {
         Amount::from_sats(1000),
         u64::MAX,
         KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
-        client
-            .get_first_module::<GatewayClientModuleV2>()?
-            .keypair
-            .public_key(),
+        bitcoin32_to_bitcoin30_keypair(
+            &client.get_first_module::<GatewayClientModuleV2>()?.keypair,
+        )
+        .public_key(),
         KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
     );
 

@@ -45,7 +45,6 @@ use fedimint_client::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
@@ -317,21 +316,14 @@ impl WalletClientModuleData {
     fn derive_deposit_address(
         &self,
         idx: TweakIdx,
-    ) -> (
-        secp256k1_29::Keypair,
-        secp256k1_29::PublicKey,
-        Address,
-        OperationId,
-    ) {
+    ) -> (Keypair, secp256k1_29::PublicKey, Address, OperationId) {
         let idx = ChildId(idx.0);
 
-        let secret_tweak_key = bitcoin30_to_bitcoin32_keypair(
-            &self
-                .module_root_secret
-                .child_key(WALLET_TWEAK_CHILD_ID)
-                .child_key(idx)
-                .to_secp_key(fedimint_core::secp256k1::SECP256K1),
-        );
+        let secret_tweak_key = self
+            .module_root_secret
+            .child_key(WALLET_TWEAK_CHILD_ID)
+            .child_key(idx)
+            .to_secp_key(fedimint_core::secp256k1_29::SECP256K1);
 
         let public_tweak_key = secret_tweak_key.public_key();
 

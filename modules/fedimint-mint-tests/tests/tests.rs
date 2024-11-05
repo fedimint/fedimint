@@ -463,7 +463,9 @@ mod fedimint_migration_tests {
     };
     use fedimint_core::module::DynServerModuleInit;
     use fedimint_core::time::now;
-    use fedimint_core::{secp256k1, Amount, OutPoint, Tiered, TieredMulti, TransactionId};
+    use fedimint_core::{
+        secp256k1, secp256k1_29, Amount, OutPoint, Tiered, TieredMulti, TransactionId,
+    };
     use fedimint_logging::TracingSetup;
     use fedimint_mint_client::backup::recovery::{
         MintRecovery, MintRecoveryState, MintRecoveryStateV0,
@@ -635,7 +637,7 @@ mod fedimint_migration_tests {
                 out_idx: 0,
             },
             Amount::from_sats(10000),
-            NoteIssuanceRequest::new(secp256k1::SECP256K1, &secret).0,
+            NoteIssuanceRequest::new(secp256k1_29::SECP256K1, &secret).0,
         );
         let pending_notes = vec![pending_note];
         let session_count = 0;
