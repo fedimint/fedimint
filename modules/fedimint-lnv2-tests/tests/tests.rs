@@ -2,9 +2,10 @@ mod mock;
 
 use std::sync::Arc;
 
+use fedimint_client::module::ClientModule;
 use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
 use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
-use fedimint_core::core::OperationId;
+use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::util::NextOrPending as _;
 use fedimint_core::{sats, Amount};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
@@ -193,10 +194,10 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
     assert_eq!(sub.ok().await?, SendState::Funded);
 
     let operation = client
-        .get_first_module::<LightningClientModule>()?
-        .client_ctx
+        .operation_log()
         .get_operation(op)
-        .await?;
+        .await
+        .ok_or(anyhow::anyhow!("Operation not found"))?;
 
     let contract = match operation.meta::<LightningOperationMeta>() {
         LightningOperationMeta::Send(send_operation_meta) => send_operation_meta.contract,
@@ -212,16 +213,17 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
         keys: vec![bitcoin30_to_bitcoin32_keypair(&mock::gateway_keypair())],
     };
 
+    let lnv2_module_id = client
+        .get_first_instance(&LightningClientModule::kind())
+        .unwrap();
+
     client
         .finalize_and_submit_transaction(
             OperationId::new_random(),
             "Claiming Outgoing Contract",
             |_, _| (),
             TransactionBuilder::new().with_inputs(
-                client
-                    .get_first_module::<LightningClientModule>()?
-                    .client_ctx
-                    .make_client_inputs(ClientInputBundle::new_no_sm(vec![client_input])),
+                ClientInputBundle::new_no_sm(vec![client_input]).into_dyn(lnv2_module_id),
             ),
         )
         .await

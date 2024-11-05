@@ -18,11 +18,13 @@ use api::{GatewayConnection, RealGatewayConnection};
 use async_stream::stream;
 use bitcoin30::hashes::{sha256, Hash};
 use bitcoin30::secp256k1;
+use bitcoin30::secp256k1::schnorr::Signature;
+use bitcoin30::secp256k1::{ecdh, KeyPair, PublicKey, Scalar, SecretKey};
 use db::GatewayKey;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
-use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
+use fedimint_client::module::{ClientContext, ClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
@@ -34,7 +36,7 @@ use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_network,
 };
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
+use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -42,7 +44,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId, TransactionId};
+use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::{
@@ -50,12 +52,10 @@ use fedimint_lnv2_common::{
 };
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Currency};
-use secp256k1::schnorr::Signature;
-use secp256k1::{ecdh, KeyPair, PublicKey, Scalar, SecretKey};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
-use tpe::{derive_agg_decryption_key, AggregateDecryptionKey, AggregatePublicKey, PublicKeyShare};
+use tpe::{derive_agg_decryption_key, AggregateDecryptionKey};
 
 use crate::api::LnFederationApi;
 use crate::receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
@@ -361,31 +361,26 @@ impl ClientModuleInit for LightningClientInit {
 
 #[derive(Debug, Clone)]
 pub struct LightningClientContext {
-    pub decoder: Decoder,
-    pub federation_id: FederationId,
-    pub tpe_agg_pk: AggregatePublicKey,
-    pub tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
-    pub gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+    federation_id: FederationId,
+    gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
 }
 
 impl Context for LightningClientContext {
     const KIND: Option<ModuleKind> = Some(KIND);
 }
 
-/// Client side lightning module
-///
-/// Note that lightning gateways use a different version
-/// of client side module.
+/// Client side lightning module.
 #[derive(Debug)]
 pub struct LightningClientModule {
-    pub federation_id: FederationId,
-    pub cfg: LightningClientConfig,
-    pub notifier: ModuleNotifier<LightningClientStateMachines>,
-    pub client_ctx: ClientContext<Self>,
-    pub module_api: DynModuleApi,
-    pub keypair: KeyPair,
-    pub admin_auth: Option<ApiAuth>,
-    pub gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+    federation_id: FederationId,
+    cfg: LightningClientConfig,
+    notifier: ModuleNotifier<LightningClientStateMachines>,
+    client_ctx: ClientContext<Self>,
+    module_api: DynModuleApi,
+    keypair: KeyPair,
+    gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+    #[allow(unused)] // The field is only used by the cli feature
+    admin_auth: Option<ApiAuth>,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -398,10 +393,7 @@ impl ClientModule for LightningClientModule {
 
     fn context(&self) -> Self::ModuleStateMachineContext {
         LightningClientContext {
-            decoder: self.decoder(),
             federation_id: self.federation_id,
-            tpe_agg_pk: self.cfg.tpe_agg_pk,
-            tpe_pks: self.cfg.tpe_pks.clone(),
             gateway_conn: self.gateway_conn.clone(),
         }
     }
@@ -416,14 +408,9 @@ impl ClientModule for LightningClientModule {
 
     fn output_fee(
         &self,
-        _amount: Amount,
-        output: &<Self::Common as ModuleCommon>::Output,
+        amount: Amount,
+        _output: &<Self::Common as ModuleCommon>::Output,
     ) -> Option<Amount> {
-        let amount = match output.ensure_v0_ref().ok()? {
-            LightningOutputV0::Outgoing(contract) => contract.amount,
-            LightningOutputV0::Incoming(contract) => contract.commitment.amount,
-        };
-
         Some(self.cfg.fee_consensus.fee(amount))
     }
 
