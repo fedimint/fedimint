@@ -56,7 +56,7 @@ use serde_json::Value;
 use thiserror::Error;
 use tpe::{derive_agg_decryption_key, AggregateDecryptionKey};
 
-use crate::api::LnFederationApi;
+use crate::api::{GatewayConnectionError, LnFederationApi, PaymentFee, RoutingInfo};
 use crate::receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
 use crate::send_sm::{SendSMCommon, SendSMState, SendStateMachine};
 
@@ -118,7 +118,7 @@ impl ReceiveOperationMeta {
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
-/// The high-level state of sending a payment over lightning.
+/// The high-level state of an operation sending a payment over lightning.
 ///
 /// ```mermaid
 /// graph LR
@@ -164,7 +164,7 @@ pub enum FinalSendState {
 pub type SendResult = Result<OperationId, SendPaymentError>;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
-/// The high-level state of receiving a payment over lightning.
+/// The high-level state of an operation receiving a payment over lightning.
 ///
 /// ```mermaid
 /// graph LR
@@ -210,84 +210,6 @@ pub enum Bolt11InvoiceDescription {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
 pub enum LightningInvoice {
     Bolt11(Bolt11Invoice),
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct RoutingInfo {
-    /// The public key of the gateways lightning node. Since this key signs the
-    /// gateways invoices the senders client uses it to differentiate between a
-    /// direct swap between fedimints and a lightning swap.
-    pub lightning_public_key: PublicKey,
-    /// The public key of the gateways client module. This key is used to claim
-    /// or cancel outgoing contracts and refund incoming contracts.
-    pub module_public_key: PublicKey,
-    /// This is the fee the gateway charges for an outgoing payment. The senders
-    /// client will use this fee in case of a direct swap.
-    pub send_fee_minimum: PaymentFee,
-    /// This is the default total fee the gateway recommends for an outgoing
-    /// payment in case of a lightning swap. It accounts for the additional fee
-    /// required to reliably route this payment over lightning.
-    pub send_fee_default: PaymentFee,
-    /// This is the minimum expiration delta in block the gateway requires for
-    /// an outgoing payment. The senders client will use this expiration delta
-    /// in case of a direct swap.
-    pub expiration_delta_minimum: u64,
-    /// This is the default total expiration the gateway recommends for an
-    /// outgoing payment in case of a lightning swap. It accounts for the
-    /// additional expiration delta required to successfully route this payment
-    /// over lightning.
-    pub expiration_delta_default: u64,
-    /// This is the fee the gateway charges for an incoming payment.
-    pub receive_fee: PaymentFee,
-}
-
-impl RoutingInfo {
-    pub fn send_parameters(&self, invoice: &Bolt11Invoice) -> (PaymentFee, u64) {
-        if invoice.recover_payee_pub_key() == self.lightning_public_key {
-            (self.send_fee_minimum.clone(), self.expiration_delta_minimum)
-        } else {
-            (self.send_fee_default.clone(), self.expiration_delta_default)
-        }
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Hash, Serialize, Deserialize)]
-pub struct PaymentFee {
-    pub base: Amount,
-    pub parts_per_million: u64,
-}
-
-impl PaymentFee {
-    /// This is the maximum send fee of one and a half percent plus one hundred
-    /// satoshis a correct gateway may recommend as a default. It accounts for
-    /// the fee required to reliably route this payment over lightning.
-    pub const SEND_FEE_LIMIT: PaymentFee = PaymentFee {
-        base: Amount::from_sats(100),
-        parts_per_million: 15_000,
-    };
-
-    /// This is the maximum receive fee of half of one percent plus fifty
-    /// satoshis a correct gateway may recommend as a default.
-    pub const RECEIVE_FEE_LIMIT: PaymentFee = PaymentFee {
-        base: Amount::from_sats(50),
-        parts_per_million: 5_000,
-    };
-
-    pub fn add_to(&self, msats: u64) -> Amount {
-        Amount::from_msats(msats.saturating_add(self.absolute_fee(msats)))
-    }
-
-    pub fn subtract_from(&self, msats: u64) -> Amount {
-        Amount::from_msats(msats.saturating_sub(self.absolute_fee(msats)))
-    }
-
-    fn absolute_fee(&self, msats: u64) -> u64 {
-        msats
-            .saturating_mul(self.parts_per_million)
-            .saturating_div(1_000_000)
-            .checked_add(self.base.msats)
-            .expect("The division creates sufficient headroom to add the base fee")
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -351,7 +273,6 @@ impl Context for LightningClientContext {
     const KIND: Option<ModuleKind> = Some(KIND);
 }
 
-/// Client side lightning module.
 #[derive(Debug)]
 pub struct LightningClientModule {
     federation_id: FederationId,
@@ -495,7 +416,8 @@ impl LightningClientModule {
     /// This fee accounts for the fee charged by the gateway as well as
     /// the additional fee required to reliably route this payment over
     /// lightning if necessary. Since the gateway has been vetted by at least
-    /// one guardian we trust it to set a reasonable fee.
+    /// one guardian we trust it to set a reasonable fee and only enforce a
+    /// rather high limit.
     ///
     /// The absolute fee for a payment can be calculated from the operation meta
     /// to be shown to the user in the transaction history.
@@ -737,9 +659,9 @@ impl LightningClientModule {
     /// automatically.
     ///
     /// The total fee for this payment may depend on the chosen gateway but
-    /// will be limited to a half percent plus fifty satoshis. Since the
+    /// will be limited to half of one percent plus fifty satoshis. Since the
     /// selected gateway has been vetted by at least one guardian we trust it to
-    /// set a reasonable fee.
+    /// set a reasonable fee and only enforce a rather high limit.
     ///
     /// The absolute fee for a payment can be calculated from the operation meta
     /// to be shown to the user in the transaction history.
@@ -1001,14 +923,6 @@ impl LightningClientModule {
 
         Ok(state)
     }
-}
-
-#[derive(Error, Debug, Clone, Eq, PartialEq)]
-pub enum GatewayConnectionError {
-    #[error("The gateway is unreachable: {0}")]
-    Unreachable(String),
-    #[error("The gateway returned an error for this request: {0}")]
-    Request(String),
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
