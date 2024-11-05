@@ -13,8 +13,7 @@ use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_lnv2_client::{
     Bolt11InvoiceDescription, LightningClientInit, LightningClientModule, LightningOperationMeta,
-    ReceiveState, SendPaymentError, SendState, CONTRACT_CONFIRMATION_BUFFER,
-    EXPIRATION_DELTA_LIMIT_DEFAULT,
+    ReceiveState, SendPaymentError, SendState,
 };
 use fedimint_lnv2_common::config::LightningGenParams;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
@@ -154,10 +153,7 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
     assert_eq!(sub.ok().await?, SendState::Funding);
     assert_eq!(sub.ok().await?, SendState::Funded);
 
-    fixtures
-        .bitcoin()
-        .mine_blocks(EXPIRATION_DELTA_LIMIT_DEFAULT + CONTRACT_CONFIRMATION_BUFFER)
-        .await;
+    fixtures.bitcoin().mine_blocks(1440 + 12).await;
 
     assert_eq!(sub.ok().await?, SendState::Refunding);
     assert_eq!(sub.ok().await?, SendState::Refunded);

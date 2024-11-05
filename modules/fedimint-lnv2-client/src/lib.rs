@@ -60,6 +60,13 @@ use crate::api::LnFederationApi;
 use crate::receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
 use crate::send_sm::{SendSMCommon, SendSMState, SendStateMachine};
 
+/// Number of blocks until outgoing lightning contracts times out and user
+/// client can refund it unilaterally
+const EXPIRATION_DELTA_LIMIT: u64 = 1440;
+
+/// A two hour buffer in case either the client or gateway go offline
+const CONTRACT_CONFIRMATION_BUFFER: u64 = 12;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum LightningOperationMeta {
     Send(SendOperationMeta),
@@ -109,13 +116,6 @@ impl ReceiveOperationMeta {
         }
     }
 }
-
-/// Number of blocks until outgoing lightning contracts times out and user
-/// client can refund it unilaterally
-pub const EXPIRATION_DELTA_LIMIT_DEFAULT: u64 = 1008;
-
-/// A two hour buffer in case either the client or gateway go offline
-pub const CONTRACT_CONFIRMATION_BUFFER: u64 = 12;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// The high-level state of sending a payment over lightning.
@@ -548,7 +548,7 @@ impl LightningClientModule {
             return Err(SendPaymentError::PaymentFeeExceedsLimit);
         }
 
-        if EXPIRATION_DELTA_LIMIT_DEFAULT < expiration_delta {
+        if EXPIRATION_DELTA_LIMIT < expiration_delta {
             return Err(SendPaymentError::ExpirationDeltaExceedsLimit);
         }
 
