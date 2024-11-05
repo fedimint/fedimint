@@ -93,13 +93,40 @@ impl MintClientModule {
                 MintClientStateMachines::Output(MintOutputStateMachine {
                     common,
                     state: crate::output::MintOutputStates::Created(created_state),
-                }) => Some((
-                    common.out_point,
+                }) => Some(vec![(
+                    OutPoint {
+                        txid: common.txid,
+                        // MintOutputStates::Created always has one out_idx
+                        out_idx: *common.out_idxs.start(),
+                    },
                     created_state.amount,
                     created_state.issuance_request,
-                )),
+                )]),
+                MintClientStateMachines::Output(MintOutputStateMachine {
+                    common,
+                    state: crate::output::MintOutputStates::CreatedMulti(created_state),
+                }) => Some(
+                    common
+                        .out_idxs
+                        .map(|out_idx| {
+                            let issuance_request = created_state
+                                .issuance_requests
+                                .get(&out_idx)
+                                .expect("Must have corresponding out_idx");
+                            (
+                                OutPoint {
+                                    txid: common.txid,
+                                    out_idx,
+                                },
+                                issuance_request.0,
+                                issuance_request.1,
+                            )
+                        })
+                        .collect(),
+                ),
                 _ => None,
             })
+            .flatten()
             .collect::<Vec<_>>();
 
         let mut idxes = vec![];

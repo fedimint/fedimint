@@ -1,6 +1,6 @@
 use std::cmp::max;
 use std::collections::BTreeMap;
-use std::fmt;
+use std::{fmt, ops};
 
 use fedimint_client::module::init::recovery::{RecoveryFromHistory, RecoveryFromHistoryCommon};
 use fedimint_client::module::init::ClientModuleRecoverArgs;
@@ -217,7 +217,11 @@ impl RecoveryFromHistory for MintRecovery {
                             MintOutputStateMachine {
                                 common: MintOutputCommon {
                                     operation_id: OperationId::new_random(),
-                                    out_point,
+                                    txid: out_point.txid,
+                                    out_idxs: ops::RangeInclusive::new(
+                                        out_point.out_idx,
+                                        out_point.out_idx,
+                                    ),
                                 },
                                 state: crate::output::MintOutputStates::Created(
                                     MintOutputStatesCreated {

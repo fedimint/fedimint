@@ -81,6 +81,7 @@ use futures::{pin_mut, StreamExt};
 use hex::ToHex;
 use input::MintInputStateCreatedBundle;
 use oob::MintOOBStatesCreatedMulti;
+use output::MintOutputStatesCreatedMulti;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tbs::{AggregatePublicKey, Signature};
@@ -95,8 +96,7 @@ use crate::client_db::{
 use crate::input::{MintInputCommon, MintInputStateMachine, MintInputStates};
 use crate::oob::{MintOOBStateMachine, MintOOBStates};
 use crate::output::{
-    MintOutputCommon, MintOutputStateMachine, MintOutputStates, MintOutputStatesCreated,
-    NoteIssuanceRequest,
+    MintOutputCommon, MintOutputStateMachine, MintOutputStates, NoteIssuanceRequest,
 };
 
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
@@ -1065,7 +1065,7 @@ impl MintClientModule {
         );
 
         let mut outputs = Vec::new();
-        let mut output_states = Vec::new();
+        let mut issuance_requests = Vec::new();
 
         for (amount, num) in denominations.iter() {
             for _ in 0..num {
@@ -1081,28 +1081,22 @@ impl MintClientModule {
                     amount,
                 });
 
-                output_states.push(MintOutputStatesCreated {
-                    amount,
-                    issuance_request,
-                });
+                issuance_requests.push((amount, issuance_request));
             }
         }
 
         let state_generator = Arc::new(move |txid, out_idxs: RangeInclusive<u64>| {
-            out_idxs
-                .clone()
-                .flat_map(|out_idx| {
-                    let output_i = (out_idx - out_idxs.clone().start()) as usize;
-                    let output_state = output_states.get(output_i).copied().unwrap();
-                    vec![MintClientStateMachines::Output(MintOutputStateMachine {
-                        common: MintOutputCommon {
-                            operation_id,
-                            out_point: OutPoint { txid, out_idx },
-                        },
-                        state: MintOutputStates::Created(output_state),
-                    })]
-                })
-                .collect()
+            assert_eq!(out_idxs.clone().count(), issuance_requests.len());
+            vec![MintClientStateMachines::Output(MintOutputStateMachine {
+                common: MintOutputCommon {
+                    operation_id,
+                    txid,
+                    out_idxs: out_idxs.clone(),
+                },
+                state: MintOutputStates::CreatedMulti(MintOutputStatesCreatedMulti {
+                    issuance_requests: out_idxs.zip(issuance_requests.clone()).collect(),
+                }),
+            })]
         });
 
         assert!(!outputs.is_empty());
@@ -1146,7 +1140,9 @@ impl MintClientModule {
                     return None;
                 };
 
-                if state.common.out_point != out_point {
+                if state.common.txid != out_point.txid
+                    || !state.common.out_idxs.contains(&out_point.out_idx)
+                {
                     return None;
                 }
 
@@ -1157,7 +1153,7 @@ impl MintClientModule {
                         "Failed to finalize transaction: {}",
                         failed.error
                     ))),
-                    MintOutputStates::Created(_) => None,
+                    MintOutputStates::Created(_) | MintOutputStates::CreatedMulti(_) => None,
                 }
             });
         pin_mut!(stream);
