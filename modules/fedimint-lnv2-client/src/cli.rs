@@ -8,7 +8,7 @@ use lightning_invoice::Bolt11Invoice;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::api::LnFederationApi;
+use crate::api::LightningFederationApi;
 use crate::{Bolt11InvoiceDescription, LightningClientModule};
 
 #[derive(Parser, Serialize)]

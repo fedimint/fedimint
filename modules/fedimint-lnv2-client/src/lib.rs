@@ -56,7 +56,7 @@ use serde_json::Value;
 use thiserror::Error;
 use tpe::{derive_agg_decryption_key, AggregateDecryptionKey};
 
-use crate::api::{GatewayConnectionError, LnFederationApi, PaymentFee, RoutingInfo};
+use crate::api::{GatewayConnectionError, LightningFederationApi, PaymentFee, RoutingInfo};
 use crate::receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
 use crate::send_sm::{SendSMCommon, SendSMState, SendStateMachine};
 

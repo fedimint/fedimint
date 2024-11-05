@@ -16,8 +16,7 @@ use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::endpoint_constants::{
     ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT,
     CONSENSUS_BLOCK_COUNT_ENDPOINT, CREATE_BOLT11_INVOICE_ENDPOINT, GATEWAYS_ENDPOINT,
-    OUTGOING_CONTRACT_EXPIRATION_ENDPOINT, REMOVE_GATEWAY_ENDPOINT, ROUTING_INFO_ENDPOINT,
-    SEND_PAYMENT_ENDPOINT,
+    REMOVE_GATEWAY_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_PAYMENT_ENDPOINT,
 };
 use fedimint_lnv2_common::ContractId;
 use lightning_invoice::Bolt11Invoice;
@@ -30,17 +29,12 @@ use crate::{Bolt11InvoiceDescription, LightningInvoice};
 const RETRY_DELAY: Duration = Duration::from_secs(1);
 
 #[apply(async_trait_maybe_send!)]
-pub trait LnFederationApi {
+pub trait LightningFederationApi {
     async fn consensus_block_count(&self) -> FederationResult<u64>;
 
     async fn await_incoming_contract(&self, contract_id: &ContractId, expiration: u64) -> bool;
 
     async fn await_preimage(&self, contract_id: &ContractId, expiration: u64) -> Option<[u8; 32]>;
-
-    async fn outgoing_contract_expiration(
-        &self,
-        contract_id: &ContractId,
-    ) -> FederationResult<Option<u64>>;
 
     async fn gateways(&self) -> FederationResult<Vec<SafeUrl>>;
 
@@ -52,7 +46,7 @@ pub trait LnFederationApi {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<T: ?Sized> LnFederationApi for T
+impl<T: ?Sized> LightningFederationApi for T
 where
     T: IModuleFederationApi + MaybeSend + MaybeSync + 'static,
 {
@@ -96,17 +90,6 @@ where
 
             sleep(RETRY_DELAY).await;
         }
-    }
-
-    async fn outgoing_contract_expiration(
-        &self,
-        contract_id: &ContractId,
-    ) -> FederationResult<Option<u64>> {
-        self.request_current_consensus(
-            OUTGOING_CONTRACT_EXPIRATION_ENDPOINT.to_string(),
-            ApiRequestErased::new(contract_id),
-        )
-        .await
     }
 
     async fn gateways(&self) -> FederationResult<Vec<SafeUrl>> {
