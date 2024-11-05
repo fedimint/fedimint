@@ -1,24 +1,22 @@
 use std::time::Duration;
 
 use bitcoin30::hashes::sha256;
-use bitcoin30::secp256k1;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_schnorr_signature, bitcoin32_to_bitcoin30_keypair,
+    bitcoin30_to_bitcoin32_schnorr_signature, bitcoin32_to_bitcoin30_schnorr_signature,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::secp256k1_29::Keypair;
 use fedimint_core::task::sleep;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{OutPoint, TransactionId};
+use fedimint_core::{secp256k1_29 as secp256k1, OutPoint, TransactionId};
 use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
 use secp256k1::schnorr::Signature;
-use secp256k1::KeyPair;
+use secp256k1::Keypair;
 use tracing::error;
 
 use crate::api::LightningFederationApi;
@@ -103,7 +101,7 @@ impl State for SendStateMachine {
                             context.federation_id,
                             self.common.contract.clone(),
                             self.common.invoice.clone(),
-                            bitcoin32_to_bitcoin30_keypair(&self.common.refund_keypair),
+                            self.common.refund_keypair,
                             context.clone(),
                         ),
                         move |dbtx, response, old_state| {
@@ -162,7 +160,7 @@ impl SendStateMachine {
         federation_id: FederationId,
         contract: OutgoingContract,
         invoice: LightningInvoice,
-        refund_keypair: KeyPair,
+        refund_keypair: Keypair,
         context: LightningClientContext,
     ) -> Result<[u8; 32], Signature> {
         loop {
@@ -173,13 +171,19 @@ impl SendStateMachine {
                     federation_id,
                     contract.clone(),
                     invoice.clone(),
-                    refund_keypair.sign_schnorr(invoice.consensus_hash::<sha256::Hash>().into()),
+                    bitcoin32_to_bitcoin30_schnorr_signature(&refund_keypair.sign_schnorr(
+                        secp256k1::Message::from_digest(
+                            *invoice.consensus_hash::<sha256::Hash>().as_ref(),
+                        ),
+                    )),
                 )
                 .await
             {
                 Ok(send_result) => {
                     if contract.verify_gateway_response(&send_result) {
-                        return send_result;
+                        return send_result.map_err(|signature| {
+                            bitcoin30_to_bitcoin32_schnorr_signature(&signature)
+                        });
                     }
 
                     error!(
@@ -219,9 +223,7 @@ impl SendStateMachine {
                 let client_input = ClientInput::<LightningInput> {
                     input: LightningInput::V0(LightningInputV0::Outgoing(
                         old_state.common.contract.contract_id(),
-                        OutgoingWitness::Cancel(bitcoin30_to_bitcoin32_schnorr_signature(
-                            &signature,
-                        )),
+                        OutgoingWitness::Cancel(signature),
                     )),
                     amount: old_state.common.contract.amount,
                     keys: vec![old_state.common.refund_keypair],
