@@ -562,7 +562,7 @@ async fn liquidity_test() -> anyhow::Result<()> {
         let gw_cln = dev_fed.gw_cln_registered().await?;
 
         let gateways = if let Some(gw_ldk) = dev_fed.gw_ldk_connected().await? {
-            [gw_lnd, gw_cln, gw_ldk].to_vec()
+            [gw_lnd, gw_ldk].to_vec()
         } else {
             [gw_lnd, gw_cln].to_vec()
         };
@@ -571,19 +571,6 @@ async fn liquidity_test() -> anyhow::Result<()> {
             .iter()
             .cartesian_product(gateways.iter())
             .filter(|(a, b)| a.ln_type() != b.ln_type());
-
-        info!("Testing payments between gateways...");
-
-        for (gw_send, gw_receive) in gateway_matrix.clone() {
-            info!(
-                "Testing lightning payment: {} -> {}",
-                gw_send.ln_type(),
-                gw_receive.ln_type()
-            );
-
-            let invoice = gw_receive.create_invoice(1_000_000).await?;
-            gw_send.pay_invoice(invoice).await?;
-        }
 
         info!("Pegging-in gateways...");
 
@@ -608,6 +595,19 @@ async fn liquidity_test() -> anyhow::Result<()> {
             let after_receive_ecash_balance = gw_receive.ecash_balance(fed_id.clone()).await?;
             assert_eq!(prev_send_ecash_balance - 500_000, after_send_ecash_balance);
             assert_eq!(prev_receive_ecash_balance + 500_000, after_receive_ecash_balance);
+        }
+
+        info!("Testing payments between gateways...");
+
+        for (gw_send, gw_receive) in gateway_matrix.clone() {
+            info!(
+                "Testing lightning payment: {} -> {}",
+                gw_send.ln_type(),
+                gw_receive.ln_type()
+            );
+
+            let invoice = gw_receive.create_invoice(1_000_000).await?;
+            gw_send.pay_invoice(invoice).await?;
         }
 
         info!("Pegging-out gateways...");

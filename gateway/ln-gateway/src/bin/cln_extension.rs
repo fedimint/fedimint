@@ -777,10 +777,12 @@ async fn cln_list_active_channels(
             }) => channels
                 .into_iter()
                 .filter_map(|channel| {
-                    if matches!(
-                        channel.state,
-                        model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
-                    ) {
+                    if channel.peer_connected
+                        && matches!(
+                            channel.state,
+                            model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
+                        )
+                    {
                         Some(ln_gateway::lightning::ChannelInfo {
                             remote_pubkey: channel.peer_id,
                             channel_size_sats: channel

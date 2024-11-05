@@ -12,8 +12,7 @@ use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_secp256k1_pubkey,
     bitcoin32_to_bitcoin30_txid,
 };
-use fedimint_core::envs::{is_env_var_set, FM_IN_DEVIMINT_ENV};
-use fedimint_core::task::{sleep, TaskGroup, TaskHandle};
+use fedimint_core::task::{TaskGroup, TaskHandle};
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::contracts::Preimage;
 use ldk_node::config::EsploraSyncConfig;
@@ -118,22 +117,6 @@ impl GatewayLdkClient {
 
         let (htlc_stream_sender, htlc_stream_receiver) = tokio::sync::mpsc::channel(1024);
         let task_group = TaskGroup::new();
-
-        // LDK Node will sync the wallet's chain automatically in the background, but in
-        // devimint we want this to sync faster, so we spawn a thread that
-        // manually syncs the chain.
-        if is_env_var_set(FM_IN_DEVIMINT_ENV) {
-            let node_clone = node.clone();
-            task_group.spawn_cancellable("ldk node sync event handler", async move {
-                loop {
-                    if let Err(e) = node_clone.sync_wallets() {
-                        error!(?e, "Failed to sync LDK Node to chain");
-                    }
-
-                    sleep(Duration::from_millis(500)).await;
-                }
-            });
-        }
 
         let node_clone = node.clone();
         task_group.spawn("ldk lightning node event handler", |handle| async move {
@@ -582,7 +565,7 @@ impl ILnRpcClient for GatewayLdkClient {
             .node
             .list_channels()
             .iter()
-            .filter(|channel| channel.is_channel_ready)
+            .filter(|channel| channel.is_usable)
         {
             channels.push(ChannelInfo {
                 remote_pubkey: bitcoin32_to_bitcoin30_secp256k1_pubkey(
