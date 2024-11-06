@@ -27,6 +27,7 @@ fedimint-lnv2-common = { workspace = true }
 fedimint-lnv2-server = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-meta-server = { workspace = true }
+fedimint-mint-common = { workspace = true }
 fedimint-mint-server = { workspace = true }
 fedimint-portalloc = { workspace = true }
 fedimint-server = { workspace = true }

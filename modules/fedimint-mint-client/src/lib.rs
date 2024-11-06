@@ -58,7 +58,6 @@ use fedimint_core::db::{
     IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
-use fedimint_core::fee_consensus::FeeConsensus;
 use fedimint_core::invite_code::{InviteCode, InviteCodeV2};
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
@@ -74,7 +73,7 @@ use fedimint_core::{
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 pub use fedimint_mint_common as common;
-use fedimint_mint_common::config::MintClientConfig;
+use fedimint_mint_common::config::{FeeConsensus, MintClientConfig};
 pub use fedimint_mint_common::*;
 use futures::{pin_mut, StreamExt};
 use hex::ToHex;
@@ -2356,13 +2355,13 @@ mod tests {
     use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
     use fedimint_core::config::FederationId;
     use fedimint_core::encoding::Decodable;
-    use fedimint_core::fee_consensus::FeeConsensus;
     use fedimint_core::invite_code::{InviteCode, InviteCodeV2};
     use fedimint_core::module::registry::ModuleRegistry;
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{
         secp256k1, Amount, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId,
     };
+    use fedimint_mint_common::config::FeeConsensus;
     use itertools::Itertools;
     use secp256k1::rand::rngs::OsRng;
     use secp256k1::{SecretKey, SECP256K1};
