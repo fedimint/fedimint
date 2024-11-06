@@ -309,7 +309,7 @@
 <a href="#308" id="308">308</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::{Address, Txid};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
-<span class="kw">use </span>fedimint_core::{Amount, TransactionId};
+<span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>fedimint_ln_common::gateway_endpoint_constants::{
     ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
     CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT,
@@ -334,7 +334,7 @@
     GatewayFedConfig, GatewayInfo, GetLnOnchainAddressPayload, LeaveFedPayload, MnemonicResponse,
     OpenChannelPayload, PayInvoiceForOperatorPayload, ReceiveEcashPayload, ReceiveEcashResponse,
     SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, WithdrawOnchainPayload,
-    WithdrawPayload,
+    WithdrawPayload, WithdrawResponse,
 };
 <span class="kw">use </span><span class="kw">crate</span>::lightning::{ChannelInfo, CloseChannelsWithPeerResponse};
 
@@ -405,7 +405,7 @@
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>withdraw(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: WithdrawPayload) -&gt; GatewayRpcResult&lt;TransactionId&gt; {
+    <span class="kw">pub async fn </span>withdraw(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: WithdrawPayload) -&gt; GatewayRpcResult&lt;WithdrawResponse&gt; {
         <span class="kw">let </span>url = <span class="self">self
             </span>.base_url
             .join(WITHDRAW_ENDPOINT)

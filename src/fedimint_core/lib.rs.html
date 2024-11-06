@@ -266,7 +266,25 @@
 <a href="#265" id="265">265</a>
 <a href="#266" id="266">266</a>
 <a href="#267" id="267">267</a>
-<a href="#268" id="268">268</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic, clippy::nursery)]
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_precision_loss)]
@@ -401,6 +419,15 @@
     </span>Amount(<span class="attr">#[serde(with = <span class="string">"bitcoin30::amount::serde::as_sat"</span>)] </span>bitcoin30::Amount),
 }
 
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>BitcoinAmountOrAll {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="kw">match </span><span class="self">self </span>{
+            <span class="self">Self</span>::All =&gt; <span class="macro">write!</span>(f, <span class="string">"all"</span>),
+            <span class="self">Self</span>::Amount(amount) =&gt; <span class="macro">write!</span>(f, <span class="string">"{amount}"</span>),
+        }
+    }
+}
+
 <span class="kw">impl </span>FromStr <span class="kw">for </span>BitcoinAmountOrAll {
     <span class="kw">type </span><span class="prelude-val">Err </span>= anyhow::Error;
 
@@ -527,11 +554,20 @@
         <span class="kw">let </span>all: BitcoinAmountOrAll = serde_json::from_str(<span class="string">"\"all\""</span>).unwrap();
         <span class="macro">assert_eq!</span>(all, BitcoinAmountOrAll::All);
 
-        <span class="kw">let </span>all: BitcoinAmountOrAll = serde_json::from_str(<span class="string">"12345"</span>).unwrap();
+        <span class="kw">let </span>amount: BitcoinAmountOrAll = serde_json::from_str(<span class="string">"12345"</span>).unwrap();
         <span class="macro">assert_eq!</span>(
-            all,
+            amount,
             BitcoinAmountOrAll::Amount(bitcoin30::Amount::from_sat(<span class="number">12345</span>))
         );
+
+        <span class="kw">let </span>all_string = all.to_string();
+        <span class="macro">assert_eq!</span>(all_string, <span class="string">"all"</span>);
+        <span class="kw">let </span>amount_string = amount.to_string();
+        <span class="macro">assert_eq!</span>(amount_string, <span class="string">"0.00012345 BTC"</span>);
+        <span class="kw">let </span>all_parsed = BitcoinAmountOrAll::from_str(<span class="kw-2">&amp;</span>all_string).unwrap();
+        <span class="macro">assert_eq!</span>(all, all_parsed);
+        <span class="kw">let </span>amount_parsed = BitcoinAmountOrAll::from_str(<span class="kw-2">&amp;</span>amount_string).unwrap();
+        <span class="macro">assert_eq!</span>(amount, amount_parsed);
     }
 }
 </code></pre></div></section></main></body></html>

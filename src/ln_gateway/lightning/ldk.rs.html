@@ -605,24 +605,7 @@
 <a href="#604" id="604">604</a>
 <a href="#605" id="605">605</a>
 <a href="#606" id="606">606</a>
-<a href="#607" id="607">607</a>
-<a href="#608" id="608">608</a>
-<a href="#609" id="609">609</a>
-<a href="#610" id="610">610</a>
-<a href="#611" id="611">611</a>
-<a href="#612" id="612">612</a>
-<a href="#613" id="613">613</a>
-<a href="#614" id="614">614</a>
-<a href="#615" id="615">615</a>
-<a href="#616" id="616">616</a>
-<a href="#617" id="617">617</a>
-<a href="#618" id="618">618</a>
-<a href="#619" id="619">619</a>
-<a href="#620" id="620">620</a>
-<a href="#621" id="621">621</a>
-<a href="#622" id="622">622</a>
-<a href="#623" id="623">623</a>
-<a href="#624" id="624">624</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
+<a href="#607" id="607">607</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -636,8 +619,7 @@
     bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_secp256k1_pubkey,
     bitcoin32_to_bitcoin30_txid,
 };
-<span class="kw">use </span>fedimint_core::envs::{is_env_var_set, FM_IN_DEVIMINT_ENV};
-<span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup, TaskHandle};
+<span class="kw">use </span>fedimint_core::task::{TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll};
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
 <span class="kw">use </span>ldk_node::config::EsploraSyncConfig;
@@ -742,22 +724,6 @@
 
         <span class="kw">let </span>(htlc_stream_sender, htlc_stream_receiver) = tokio::sync::mpsc::channel(<span class="number">1024</span>);
         <span class="kw">let </span>task_group = TaskGroup::new();
-
-        <span class="comment">// LDK Node will sync the wallet's chain automatically in the background, but in
-        // devimint we want this to sync faster, so we spawn a thread that
-        // manually syncs the chain.
-        </span><span class="kw">if </span>is_env_var_set(FM_IN_DEVIMINT_ENV) {
-            <span class="kw">let </span>node_clone = node.clone();
-            task_group.spawn_cancellable(<span class="string">"ldk node sync event handler"</span>, <span class="kw">async move </span>{
-                <span class="kw">loop </span>{
-                    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = node_clone.sync_wallets() {
-                        <span class="macro">error!</span>(<span class="question-mark">?</span>e, <span class="string">"Failed to sync LDK Node to chain"</span>);
-                    }
-
-                    sleep(Duration::from_millis(<span class="number">500</span>)).<span class="kw">await</span>;
-                }
-            });
-        }
 
         <span class="kw">let </span>node_clone = node.clone();
         task_group.spawn(<span class="string">"ldk lightning node event handler"</span>, |handle| <span class="kw">async move </span>{
@@ -1206,7 +1172,7 @@
             </span>.node
             .list_channels()
             .iter()
-            .filter(|channel| channel.is_channel_ready)
+            .filter(|channel| channel.is_usable)
         {
             channels.push(ChannelInfo {
                 remote_pubkey: bitcoin32_to_bitcoin30_secp256k1_pubkey(

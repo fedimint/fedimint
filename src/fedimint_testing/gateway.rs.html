@@ -57,7 +57,7 @@
 
 <span class="kw">pub const </span>DEFAULT_GATEWAY_PASSWORD: <span class="kw-2">&amp;</span>str = <span class="string">"thereisnosecondbest"</span>;
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 </span><span class="kw">pub enum </span>LightningNodeType {
     Cln,
     Lnd,

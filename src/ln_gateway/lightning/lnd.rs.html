@@ -1475,7 +1475,9 @@
 <a href="#1474" id="1474">1474</a>
 <a href="#1475" id="1475">1475</a>
 <a href="#1476" id="1476">1476</a>
-<a href="#1477" id="1477">1477</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
+<a href="#1477" id="1477">1477</a>
+<a href="#1478" id="1478">1478</a>
+<a href="#1479" id="1479">1479</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -2854,7 +2856,9 @@
             total_inbound.msat - unsettled_inbound.msat - pending_inbound.msat;
 
         <span class="prelude-val">Ok</span>(GetBalancesResponse {
-            onchain_balance_sats: wallet_balance_response.total_balance <span class="kw">as </span>u64,
+            onchain_balance_sats: (wallet_balance_response.total_balance
+                + wallet_balance_response.reserved_balance_anchor_chan)
+                <span class="kw">as </span>u64,
             lightning_balance_msats,
             inbound_lightning_liquidity_msats,
         })

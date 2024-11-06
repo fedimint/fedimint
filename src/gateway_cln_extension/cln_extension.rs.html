@@ -1345,7 +1345,9 @@
 <a href="#1344" id="1344">1344</a>
 <a href="#1345" id="1345">1345</a>
 <a href="#1346" id="1346">1346</a>
-<a href="#1347" id="1347">1347</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<a href="#1347" id="1347">1347</a>
+<a href="#1348" id="1348">1348</a>
+<a href="#1349" id="1349">1349</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -2124,10 +2126,12 @@
             }) =&gt; channels
                 .into_iter()
                 .filter_map(|channel| {
-                    <span class="kw">if </span><span class="macro">matches!</span>(
-                        channel.state,
-                        model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
-                    ) {
+                    <span class="kw">if </span>channel.peer_connected
+                        &amp;&amp; <span class="macro">matches!</span>(
+                            channel.state,
+                            model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
+                        )
+                    {
                         <span class="prelude-val">Some</span>(ln_gateway::lightning::ChannelInfo {
                             remote_pubkey: channel.peer_id,
                             channel_size_sats: channel

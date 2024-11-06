@@ -2170,7 +2170,10 @@
 <a href="#2169" id="2169">2169</a>
 <a href="#2170" id="2170">2170</a>
 <a href="#2171" id="2171">2171</a>
-<a href="#2172" id="2172">2172</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2172" id="2172">2172</a>
+<a href="#2173" id="2173">2173</a>
+<a href="#2174" id="2174">2174</a>
+<a href="#2175" id="2175">2175</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2279,7 +2282,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::rpc::rpc_server::{hash_password, run_webserver};
 <span class="kw">use </span><span class="kw">crate</span>::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
-    GatewayBalances, WithdrawPayload,
+    GatewayBalances, WithdrawPayload, WithdrawResponse,
 };
 <span class="kw">use </span><span class="kw">crate</span>::types::PrettyInterceptPaymentRequest;
 
@@ -3070,7 +3073,10 @@
 
     <span class="doccomment">/// Returns a Bitcoin TXID from a peg-out transaction for a specific
     /// connected federation.
-    </span><span class="kw">pub async fn </span>handle_withdraw_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: WithdrawPayload) -&gt; AdminResult&lt;Txid&gt; {
+    </span><span class="kw">pub async fn </span>handle_withdraw_msg(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        payload: WithdrawPayload,
+    ) -&gt; AdminResult&lt;WithdrawResponse&gt; {
         <span class="kw">let </span>WithdrawPayload {
             amount,
             address,
@@ -3122,7 +3128,7 @@
                         <span class="string">"Sent {amount} funds to address {}"</span>,
                         address.assume_checked()
                     );
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(txid);
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(WithdrawResponse { txid, fees });
                 }
                 WithdrawState::Failed(e) =&gt; {
                     <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::WithdrawError { failure_reason: e });
