@@ -58,6 +58,8 @@ use threshold_crypto::group::Curve;
 use threshold_crypto::{G2Projective, Scalar};
 use tracing::{debug, info};
 
+use crate::common::endpoint_constants::NOTE_SPENT_ENDPOINT;
+use crate::common::Nonce;
 use crate::db::{
     DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix, MintAuditItemKey,
     MintAuditItemKeyPrefix, MintOutputOutcomeKey, MintOutputOutcomePrefix, NonceKey,
@@ -136,7 +138,7 @@ impl ServerModuleInit for MintInit {
                 MODULE_CONSENSUS_VERSION.major,
                 MODULE_CONSENSUS_VERSION.minor,
             ),
-            &[(0, 0)],
+            &[(0, 1)],
         )
     }
 
@@ -524,6 +526,13 @@ impl ServerModule for Mint {
                 async |module: &Mint, context, id: secp256k1::PublicKey| -> Option<ECashUserBackupSnapshot> {
                     Ok(module
                         .handle_recover_request(&mut context.dbtx().into_nc(), id).await)
+                }
+            },
+            api_endpoint! {
+                NOTE_SPENT_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |_module: &Mint, context, nonce: Nonce| -> bool {
+                    Ok(context.dbtx().get_value(&NonceKey(nonce)).await.is_some())
                 }
             },
         ]
