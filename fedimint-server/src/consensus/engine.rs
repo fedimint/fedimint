@@ -205,7 +205,7 @@ impl ConsensusEngine {
     }
 
     async fn confirm_server_config_consensus_hash(&self) -> anyhow::Result<()> {
-        let our_hash = self.cfg.consensus.consensus_hash();
+        let our_hash = self.cfg.consensus.consensus_hash_bitcoin30();
 
         info!(target: LOG_CONSENSUS, "Waiting for peers config {our_hash}");
 

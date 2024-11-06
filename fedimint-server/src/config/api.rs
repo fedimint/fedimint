@@ -358,7 +358,12 @@ impl ConfigGenApi {
             .consensus
             .api_endpoints
             .keys()
-            .map(|peer| (*peer, (*peer, config.consensus.clone()).consensus_hash()))
+            .map(|peer| {
+                (
+                    *peer,
+                    (*peer, config.consensus.clone()).consensus_hash_bitcoin30(),
+                )
+            })
             .collect();
 
         Ok(verification_hashes)

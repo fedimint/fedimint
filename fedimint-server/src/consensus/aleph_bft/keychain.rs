@@ -24,7 +24,10 @@ impl Keychain {
         Keychain {
             identity: cfg.local.identity,
             pks: cfg.consensus.broadcast_public_keys.clone(),
-            message_tag: cfg.consensus.broadcast_public_keys.consensus_hash(),
+            message_tag: cfg
+                .consensus
+                .broadcast_public_keys
+                .consensus_hash_bitcoin30(),
             keypair: cfg
                 .private
                 .broadcast_secret_key

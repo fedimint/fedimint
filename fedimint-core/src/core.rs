@@ -71,7 +71,11 @@ impl OperationId {
     }
 
     pub fn from_encodable<E: Encodable>(encodable: &E) -> Self {
-        Self(encodable.consensus_hash::<sha256::Hash>().to_byte_array())
+        Self(
+            encodable
+                .consensus_hash_bitcoin30::<sha256::Hash>()
+                .to_byte_array(),
+        )
     }
 
     pub fn fmt_short(&self) -> OperationIdShortFmt {

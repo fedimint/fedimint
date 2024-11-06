@@ -598,7 +598,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> sha256::Hash {
-                Ok(fedimint.cfg.consensus.consensus_hash())
+                Ok(fedimint.cfg.consensus.consensus_hash_bitcoin30())
             }
         },
         api_endpoint! {
