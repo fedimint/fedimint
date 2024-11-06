@@ -1,4 +1,4 @@
-use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{IDatabaseTransactionOpsCoreTyped, MigrationContext};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint};
@@ -53,7 +53,8 @@ impl_db_record!(
 impl_db_lookup!(key = DummyFundsKeyV1, query_prefix = DummyFundsPrefixV1);
 
 /// Example DB migration from version 0 to version 1
-pub async fn migrate_to_v1(dbtx: &mut DatabaseTransaction<'_>) -> Result<(), anyhow::Error> {
+pub async fn migrate_to_v1(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Error> {
+    let mut dbtx = ctx.dbtx();
     // Select old entries
     let v0_entries = dbtx
         .find_by_prefix(&DummyFundsKeyPrefixV0)

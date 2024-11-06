@@ -405,8 +405,10 @@ pub type ClientMigrationFn = for<'r, 'tx> fn(
 
 pub fn get_core_client_database_migrations() -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
     let mut migrations: BTreeMap<DatabaseVersion, CoreMigrationFn> = BTreeMap::new();
-    migrations.insert(DatabaseVersion(0), |dbtx| {
-        Box::pin(async {
+    migrations.insert(DatabaseVersion(0), |mut ctx| {
+        Box::pin(async move {
+            let mut dbtx = ctx.dbtx();
+
             let config_v0 = dbtx
                 .find_by_prefix(&ClientConfigKeyPrefixV0)
                 .await
