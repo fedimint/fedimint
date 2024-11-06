@@ -71,7 +71,7 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
 
     let mut sub = client
         .get_first_module::<LightningClientModule>()?
-        .subscribe_send_operation(operation_id)
+        .subscribe_send_operation_state_updates(operation_id)
         .await?
         .into_stream();
 
@@ -104,7 +104,7 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
 
     client.await_primary_module_output(op, outpoint).await?;
 
-    let op = client
+    let operation_id = client
         .get_first_module::<LightningClientModule>()?
         .send(
             mock::unpayable_invoice(),
@@ -115,7 +115,7 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
 
     let mut sub = client
         .get_first_module::<LightningClientModule>()?
-        .subscribe_send_operation(op)
+        .subscribe_send_operation_state_updates(operation_id)
         .await?
         .into_stream();
 
@@ -141,14 +141,14 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
 
     client.await_primary_module_output(op, outpoint).await?;
 
-    let op = client
+    let operation_id = client
         .get_first_module::<LightningClientModule>()?
         .send(mock::crash_invoice(), Some(mock::gateway()), Value::Null)
         .await?;
 
     let mut sub = client
         .get_first_module::<LightningClientModule>()?
-        .subscribe_send_operation(op)
+        .subscribe_send_operation_state_updates(operation_id)
         .await?
         .into_stream();
 
@@ -177,14 +177,14 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
 
     client.await_primary_module_output(op, outpoint).await?;
 
-    let op = client
+    let operation_id = client
         .get_first_module::<LightningClientModule>()?
         .send(mock::crash_invoice(), Some(mock::gateway()), Value::Null)
         .await?;
 
     let mut sub = client
         .get_first_module::<LightningClientModule>()?
-        .subscribe_send_operation(op)
+        .subscribe_send_operation_state_updates(operation_id)
         .await?
         .into_stream();
 
@@ -193,7 +193,7 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
 
     let operation = client
         .operation_log()
-        .get_operation(op)
+        .get_operation(operation_id)
         .await
         .ok_or(anyhow::anyhow!("Operation not found"))?;
 
@@ -252,7 +252,7 @@ async fn receive_operation_expires() -> anyhow::Result<()> {
 
     let mut sub = client
         .get_first_module::<LightningClientModule>()?
-        .subscribe_receive_operation(op)
+        .subscribe_receive_operation_state_updates(op)
         .await?
         .into_stream();
 

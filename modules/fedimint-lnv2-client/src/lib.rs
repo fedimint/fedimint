@@ -551,7 +551,7 @@ impl LightningClientModule {
             }
 
             let mut stream = self
-                .subscribe_send_operation(operation_id)
+                .subscribe_send_operation_state_updates(operation_id)
                 .await
                 .expect("operation_id exists")
                 .into_stream();
@@ -569,7 +569,7 @@ impl LightningClientModule {
     }
 
     /// Subscribe to all state updates of the send operation.
-    pub async fn subscribe_send_operation(
+    pub async fn subscribe_send_operation_state_updates(
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<SendOperationState>> {
@@ -633,7 +633,7 @@ impl LightningClientModule {
         operation_id: OperationId,
     ) -> anyhow::Result<FinalSendOperationState> {
         let state = self
-            .subscribe_send_operation(operation_id)
+            .subscribe_send_operation_state_updates(operation_id)
             .await?
             .into_stream()
             .filter_map(|state| {
@@ -862,7 +862,7 @@ impl LightningClientModule {
     }
 
     /// Subscribe to all state updates of the receive operation.
-    pub async fn subscribe_receive_operation(
+    pub async fn subscribe_receive_operation_state_updates(
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<ReceiveOperationState>> {
@@ -903,7 +903,7 @@ impl LightningClientModule {
         operation_id: OperationId,
     ) -> anyhow::Result<FinalReceiveOperationState> {
         let state = self
-            .subscribe_receive_operation(operation_id)
+            .subscribe_receive_operation_state_updates(operation_id)
             .await?
             .into_stream()
             .filter_map(|state| {
