@@ -450,7 +450,7 @@
 </span><span class="kw">impl </span>ILnRpcClient <span class="kw">for </span>FakeLightningTest {
     <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse, LightningRpcError&gt; {
         <span class="prelude-val">Ok</span>(GetNodeInfoResponse {
-            pub_key: bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span><span class="self">self</span>.gateway_node_pub_key),
+            pub_key: <span class="self">self</span>.gateway_node_pub_key,
             alias: <span class="string">"FakeLightningNode"</span>.to_string(),
             network: <span class="string">"regtest"</span>.to_string(),
             block_height: <span class="number">0</span>,

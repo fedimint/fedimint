@@ -944,9 +944,7 @@
 <a href="#943" id="943">943</a>
 <a href="#944" id="944">944</a>
 <a href="#945" id="945">945</a>
-<a href="#946" id="946">946</a>
-<a href="#947" id="947">947</a>
-<a href="#948" id="948">948</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
+<a href="#946" id="946">946</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -955,14 +953,13 @@
 };
 <span class="kw">use </span>fedimint_client::{ClientHandleArc, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_keypair,
-    bitcoin32_to_bitcoin30_schnorr_signature,
+    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_schnorr_signature,
 };
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::util::Spanned;
-<span class="kw">use </span>fedimint_core::{secp256k1, Amount, OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_core::{secp256k1_29 <span class="kw">as </span>secp256k1, Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_client::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 <span class="kw">use </span>fedimint_ln_common::config::FeeToAmount;
@@ -1541,8 +1538,7 @@
         payment_data: <span class="kw-2">&amp;</span>PaymentData,
         routing_fees: RoutingFees,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PaymentParameters, OutgoingContractError&gt; {
-        <span class="kw">let </span>our_pub_key =
-            secp256k1::PublicKey::from_keypair(<span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_keypair(<span class="kw-2">&amp;</span>redeem_key));
+        <span class="kw">let </span>our_pub_key = secp256k1::PublicKey::from_keypair(<span class="kw-2">&amp;</span>redeem_key);
 
         <span class="kw">if </span>account.contract.cancelled {
             <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingContractError::CancelledContract);

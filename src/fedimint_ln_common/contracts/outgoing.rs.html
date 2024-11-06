@@ -74,8 +74,10 @@
 <a href="#73" id="73">73</a>
 <a href="#74" id="74">74</a>
 <a href="#75" id="75">75</a>
-<a href="#76" id="76">76</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::secp256k1_29::PublicKey;
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
@@ -97,12 +99,12 @@
     </span><span class="kw">pub </span>hash: bitcoin_hashes::sha256::Hash,
     <span class="doccomment">/// Public key of the LN gateway allowed to claim the HTLC before the
     /// timelock expires
-    </span><span class="kw">pub </span>gateway_key: secp256k1::PublicKey,
+    </span><span class="kw">pub </span>gateway_key: PublicKey,
     <span class="doccomment">/// Block height at which the money will be spendable by the pubkey
     </span><span class="kw">pub </span>timelock: u32,
     <span class="doccomment">/// Public key of the user that can claim the money back after the timelock
     /// expires
-    </span><span class="kw">pub </span>user_key: secp256k1::PublicKey,
+    </span><span class="kw">pub </span>user_key: PublicKey,
     <span class="doccomment">/// Flag that can be set by the gateway and allows the client to claim an
     /// early refund
     </span><span class="kw">pub </span>cancelled: bool,

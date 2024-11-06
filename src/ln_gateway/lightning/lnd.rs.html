@@ -1488,13 +1488,13 @@
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
-<span class="kw">use </span>fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
+<span class="kw">use </span>fedimint_core::{secp256k1_29, Amount, BitcoinAmountOrAll};
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
 <span class="kw">use </span>fedimint_ln_common::route_hints::{RouteHint, RouteHintHop};
 <span class="kw">use </span>fedimint_ln_common::PrunedInvoice;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::PaymentImage;
 <span class="kw">use </span>hex::ToHex;
-<span class="kw">use </span>secp256k1::PublicKey;
+<span class="kw">use </span>secp256k1_29::PublicKey;
 <span class="kw">use </span>tokio::sync::{mpsc, RwLock};
 <span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
 <span class="kw">use </span>tonic_lnd::invoicesrpc::lookup_invoice_msg::InvoiceRef;

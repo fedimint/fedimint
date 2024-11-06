@@ -510,22 +510,16 @@
 <a href="#509" id="509">509</a>
 <a href="#510" id="510">510</a>
 <a href="#511" id="511">511</a>
-<a href="#512" id="512">512</a>
-<a href="#513" id="513">513</a>
-<a href="#514" id="514">514</a>
-<a href="#515" id="515">515</a>
-<a href="#516" id="516">516</a>
-<a href="#517" id="517">517</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
+<a href="#512" id="512">512</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
 
 <span class="kw">use </span>bitcoin30::hashes::sha256;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::secp256k1_29::Keypair;
+<span class="kw">use </span>fedimint_core::secp256k1_29::{Keypair, PublicKey};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_common::{LightningGateway, LightningGatewayRegistration};
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
-<span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;
 
@@ -783,13 +777,12 @@
     <span class="kw">use </span>std::str::FromStr;
 
     <span class="kw">use </span>fedimint_client::db::migrate_state;
-    <span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
     <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, OperationId};
     <span class="kw">use </span>fedimint_core::encoding::Encodable;
+    <span class="kw">use </span>fedimint_core::secp256k1_29::{Keypair, SECP256K1};
     <span class="kw">use </span>fedimint_core::{BitcoinHash, TransactionId};
     <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
     <span class="kw">use </span>rand::thread_rng;
-    <span class="kw">use </span>secp256k1::KeyPair;
 
     <span class="kw">use </span><span class="kw">crate</span>::db::{get_v1_migrated_state, get_v2_migrated_state};
     <span class="kw">use </span><span class="kw">crate</span>::receive::{
@@ -807,8 +800,7 @@
         cqp2rzjq0ag45qspt2vd47jvj3t5nya5vsn0hlhf5wel8h779npsrspm6eeuqtjuuqqqqgqqyqqqqqqqqqqqqqqqc9q\
         yysgqddrv0jqhyf3q6z75rt7nrwx0crxme87s8rx2rt8xr9slzu0p3xg3f3f0zmqavtmsnqaj5v0y5mdzszah7thrmg\
         2we42dvjggjkf44egqheymyw"</span>,).expect(<span class="string">"Invalid invoice"</span>);
-        <span class="kw">let </span>claim_key =
-            bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>KeyPair::new(secp256k1::SECP256K1, <span class="kw-2">&amp;mut </span>thread_rng()));
+        <span class="kw">let </span>claim_key = Keypair::new(SECP256K1, <span class="kw-2">&amp;mut </span>thread_rng());
         <span class="kw">let </span>operation_id = OperationId::new_random();
         <span class="kw">let </span>txid = TransactionId::from_byte_array([<span class="number">42</span>; <span class="number">32</span>]);
 
@@ -886,8 +878,7 @@
     </span><span class="kw">async fn </span>test_sm_migration_to_v2_confirmed() -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>operation_id = OperationId::new_random();
         <span class="kw">let </span>instance_id = <span class="number">0x42</span>;
-        <span class="kw">let </span>claim_key =
-            bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>KeyPair::new(secp256k1::SECP256K1, <span class="kw-2">&amp;mut </span>thread_rng()));
+        <span class="kw">let </span>claim_key = Keypair::new(SECP256K1, <span class="kw-2">&amp;mut </span>thread_rng());
         <span class="kw">let </span>dummy_invoice = Bolt11Invoice::from_str(<span class="string">"lntbs1u1pj8308gsp5xhxz908q5usddjjm6mfq6nwc2nu62twwm6za69d32kyx8h49a4hqpp5j5egfqw9kf5e96nk\
         6htr76a8kggl0xyz3pzgemv887pya4flguzsdp5235xzmntwvsxvmmjypex2en4dejxjmn8yp6xsefqvesh2cm9wsss\
         cqp2rzjq0ag45qspt2vd47jvj3t5nya5vsn0hlhf5wel8h779npsrspm6eeuqtjuuqqqqgqqyqqqqqqqqqqqqqqqc9q\
@@ -957,8 +948,7 @@
         cqp2rzjq0ag45qspt2vd47jvj3t5nya5vsn0hlhf5wel8h779npsrspm6eeuqtjuuqqqqgqqyqqqqqqqqqqqqqqqc9q\
         yysgqddrv0jqhyf3q6z75rt7nrwx0crxme87s8rx2rt8xr9slzu0p3xg3f3f0zmqavtmsnqaj5v0y5mdzszah7thrmg\
         2we42dvjggjkf44egqheymyw"</span>,).expect(<span class="string">"Invalid invoice"</span>);
-        <span class="kw">let </span>claim_key =
-            bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>KeyPair::new(secp256k1::SECP256K1, <span class="kw-2">&amp;mut </span>thread_rng()));
+        <span class="kw">let </span>claim_key = Keypair::new(SECP256K1, <span class="kw-2">&amp;mut </span>thread_rng());
         <span class="kw">let </span>operation_id = OperationId::new_random();
         <span class="kw">let </span>txid = TransactionId::from_byte_array([<span class="number">42</span>; <span class="number">32</span>]);
 

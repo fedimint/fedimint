@@ -181,7 +181,7 @@
 <span class="kw">use </span>bls12_381::Scalar;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::secp256k1::{KeyPair, Secp256k1, Signing};
+<span class="kw">use </span>fedimint_core::secp256k1_29::{Keypair, Secp256k1, Signing};
 <span class="kw">use </span>fedimint_core::BitcoinHash;
 <span class="kw">use </span>hkdf::hashes::Sha512;
 <span class="kw">use </span>hkdf::Hkdf;
@@ -261,14 +261,14 @@
 
     <span class="doccomment">/// secp256k1 keys are used for bitcoin deposit addresses, redeem keys and
     /// contract keys for lightning.
-    </span><span class="kw">pub fn </span>to_secp_key&lt;C: Signing&gt;(<span class="self">self</span>, ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;) -&gt; KeyPair {
+    </span><span class="kw">pub fn </span>to_secp_key&lt;C: Signing&gt;(<span class="self">self</span>, ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;) -&gt; Keypair {
         <span class="kw">for </span>key_try <span class="kw">in </span><span class="number">0u64</span>.. {
             <span class="kw">let </span>secret = <span class="self">self
                 </span>.kdf
                 .derive::&lt;<span class="number">32</span>&gt;(<span class="kw-2">&amp;</span>tagged_derive(SECP256K1_TAG, ChildId(key_try)));
             <span class="comment">// The secret not forming a valid key is highly unlikely, this approach is the
             // same used when generating a random secp key.
-            </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(key) = KeyPair::from_seckey_slice(ctx, <span class="kw-2">&amp;</span>secret) {
+            </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(key) = Keypair::from_seckey_slice(ctx, <span class="kw-2">&amp;</span>secret) {
                 <span class="kw">return </span>key;
             }
         }

@@ -235,11 +235,15 @@
 <a href="#234" id="234">234</a>
 <a href="#235" id="235">235</a>
 <a href="#236" id="236">236</a>
-<a href="#237" id="237">237</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::secp256k1_29::Keypair;
@@ -404,7 +408,9 @@
             .<span class="kw">await
             </span>.map_err(|e| Cancelled::LightningRpcError(e.to_string()))<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>lightning_context.lightning_public_key == invoice.get_payee_pub_key() {
+        <span class="kw">if </span>bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>lightning_context.lightning_public_key)
+            == invoice.get_payee_pub_key()
+        {
             <span class="kw">let </span>(contract, client) = context
                 .gateway
                 .get_registered_incoming_contract_and_client_v2(

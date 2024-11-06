@@ -1347,7 +1347,22 @@
 <a href="#1346" id="1346">1346</a>
 <a href="#1347" id="1347">1347</a>
 <a href="#1348" id="1348">1348</a>
-<a href="#1349" id="1349">1349</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<a href="#1349" id="1349">1349</a>
+<a href="#1350" id="1350">1350</a>
+<a href="#1351" id="1351">1351</a>
+<a href="#1352" id="1352">1352</a>
+<a href="#1353" id="1353">1353</a>
+<a href="#1354" id="1354">1354</a>
+<a href="#1355" id="1355">1355</a>
+<a href="#1356" id="1356">1356</a>
+<a href="#1357" id="1357">1357</a>
+<a href="#1358" id="1358">1358</a>
+<a href="#1359" id="1359">1359</a>
+<a href="#1360" id="1360">1360</a>
+<a href="#1361" id="1361">1361</a>
+<a href="#1362" id="1362">1362</a>
+<a href="#1363" id="1363">1363</a>
+<a href="#1364" id="1364">1364</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -1367,8 +1382,12 @@
 <span class="kw">use </span>cln_rpc::model::requests::SendpayRoute;
 <span class="kw">use </span>cln_rpc::model::responses::ListpeerchannelsChannels;
 <span class="kw">use </span>cln_rpc::primitives::{AmountOrAll, ChannelState, ShortChannelId};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_network;
-<span class="kw">use </span>fedimint_core::secp256k1::{PublicKey, SecretKey, SECP256K1};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_secp256k1_message, bitcoin30_to_bitcoin32_secp256k1_pubkey,
+    bitcoin32_to_bitcoin30_network, bitcoin32_to_bitcoin30_recoverable_signature,
+    bitcoin32_to_bitcoin30_secp256k1_pubkey,
+};
+<span class="kw">use </span>fedimint_core::secp256k1_29::{PublicKey, SecretKey, SECP256K1};
 <span class="kw">use </span>fedimint_core::task::timeout;
 <span class="kw">use </span>fedimint_core::util::handle_version_hash_command;
 <span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll};
@@ -1597,11 +1616,9 @@
 
         <span class="kw">let </span>channel = <span class="kw">match </span>channels_response {
             cln_rpc::Response::ListChannels(channels) =&gt; {
-                <span class="kw">let </span><span class="prelude-val">Some</span>(channel) = channels
-                    .channels
-                    .into_iter()
-                    .find(|chan| chan.destination == node_info.<span class="number">0</span>)
-                <span class="kw">else </span>{
+                <span class="kw">let </span><span class="prelude-val">Some</span>(channel) = channels.channels.into_iter().find(|chan| {
+                    chan.destination == bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>node_info.<span class="number">0</span>)
+                }) <span class="kw">else </span>{
                     <span class="macro">warn!</span>(<span class="question-mark">?</span>scid, <span class="string">"Channel not found in graph"</span>);
                     <span class="kw">continue</span>;
                 };
@@ -1611,7 +1628,7 @@
         };
 
         <span class="kw">let </span>route_hint_hop = RouteHintHop {
-            src_node_id: peer_id,
+            src_node_id: bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>peer_id),
             short_channel_id: scid_to_u64(scid),
             base_msat: channel.base_fee_millisatoshi,
             proportional_millionths: channel.fee_per_millionth,
@@ -1925,7 +1942,12 @@
     <span class="kw">let </span>invoice = invoice_builder
         <span class="comment">// Temporarily sign with an ephemeral private key, we will request CLN to sign this
         // invoice next.
-        </span>.build_signed(|m| SECP256K1.sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span>SecretKey::new(<span class="kw-2">&amp;mut </span>OsRng)))
+        </span>.build_signed(|m| {
+            bitcoin32_to_bitcoin30_recoverable_signature(<span class="kw-2">&amp;</span>SECP256K1.sign_ecdsa_recoverable(
+                <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_secp256k1_message(m),
+                <span class="kw-2">&amp;</span>SecretKey::new(<span class="kw-2">&amp;mut </span>OsRng),
+            ))
+        })
         .map_err(|e| ClnExtensionError::Error(<span class="macro">anyhow!</span>(e)))<span class="question-mark">?</span>;
 
     <span class="kw">let </span>invstring = invoice.to_string();
@@ -2025,7 +2047,7 @@
         .<span class="kw">await</span><span class="question-mark">?
         </span>.call(cln_rpc::Request::FundChannel(
             model::requests::FundchannelRequest {
-                id: payload.pubkey,
+                id: bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>payload.pubkey),
                 amount: cln_rpc::primitives::AmountOrAll::Amount(
                     cln_rpc::primitives::Amount::from_sat(payload.channel_size_sats),
                 ),
@@ -2066,7 +2088,7 @@
         .<span class="kw">await</span><span class="question-mark">?
         </span>.call(cln_rpc::Request::ListPeerChannels(
             model::requests::ListpeerchannelsRequest {
-                id: <span class="prelude-val">Some</span>(payload.pubkey),
+                id: <span class="prelude-val">Some</span>(bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>payload.pubkey)),
             },
         ))
         .<span class="kw">await
@@ -2133,7 +2155,9 @@
                         )
                     {
                         <span class="prelude-val">Some</span>(ln_gateway::lightning::ChannelInfo {
-                            remote_pubkey: channel.peer_id,
+                            remote_pubkey: bitcoin30_to_bitcoin32_secp256k1_pubkey(
+                                <span class="kw-2">&amp;</span>channel.peer_id,
+                            ),
                             channel_size_sats: channel
                                 .total_msat
                                 .map(|value| value.msat() / <span class="number">1000</span>)
@@ -2363,7 +2387,13 @@
                     </span><span class="kw">let </span>alias = alias.unwrap_or_default();
                     <span class="kw">let </span>synced_to_chain =
                         warning_bitcoind_sync.is_none() &amp;&amp; warning_lightningd_sync.is_none();
-                    (id, alias, network, blockheight, synced_to_chain)
+                    (
+                        bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>id),
+                        alias,
+                        network,
+                        blockheight,
+                        synced_to_chain,
+                    )
                 }
                 <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">"Unexpected response from Getinfo"</span>),
             })

@@ -1483,7 +1483,21 @@
 <a href="#1482" id="1482">1482</a>
 <a href="#1483" id="1483">1483</a>
 <a href="#1484" id="1484">1484</a>
-<a href="#1485" id="1485">1485</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1485" id="1485">1485</a>
+<a href="#1486" id="1486">1486</a>
+<a href="#1487" id="1487">1487</a>
+<a href="#1488" id="1488">1488</a>
+<a href="#1489" id="1489">1489</a>
+<a href="#1490" id="1490">1490</a>
+<a href="#1491" id="1491">1491</a>
+<a href="#1492" id="1492">1492</a>
+<a href="#1493" id="1493">1493</a>
+<a href="#1494" id="1494">1494</a>
+<a href="#1495" id="1495">1495</a>
+<a href="#1496" id="1496">1496</a>
+<a href="#1497" id="1497">1497</a>
+<a href="#1498" id="1498">1498</a>
+<a href="#1499" id="1499">1499</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -1496,7 +1510,10 @@
 <span class="kw">use </span>anyhow::{bail, Context};
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash};
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_schnorr_signature;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_secp256k1_message, bitcoin30_to_bitcoin32_secp256k1_pubkey,
+    bitcoin32_to_bitcoin30_secp256k1_pubkey,
+};
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -1510,6 +1527,7 @@
     ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
     SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
+<span class="kw">use </span>fedimint_core::secp256k1_29::{PublicKey, SECP256K1};
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::{
@@ -1544,7 +1562,6 @@
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>metrics::{LN_CANCEL_OUTGOING_CONTRACTS, LN_FUNDED_CONTRACT_SATS, LN_INCOMING_OFFER};
 <span class="kw">use </span>rand::rngs::OsRng;
-<span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>tracing::{debug, error, info, info_span, trace, warn};
 
@@ -2055,7 +2072,7 @@
                 }
                 <span class="comment">// … either the user may spend the funds since they sold a valid preimage …
                 </span>DecryptedPreimage::Some(preimage) =&gt; <span class="kw">match </span>preimage.to_public_key() {
-                    <span class="prelude-val">Ok</span>(pub_key) =&gt; pub_key,
+                    <span class="prelude-val">Ok</span>(pub_key) =&gt; bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>pub_key),
                     <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(LightningInputError::InvalidPreimage),
                 },
                 <span class="comment">// … or the gateway may claim back funds for not receiving the advertised preimage.
@@ -2083,7 +2100,7 @@
                 amount: input.amount,
                 fee: <span class="self">self</span>.cfg.consensus.fee_consensus.contract_input,
             },
-            pub_key,
+            pub_key: bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>pub_key),
         })
     }
 
@@ -2233,10 +2250,12 @@
                     }
                 };
 
-                secp256k1::global::SECP256K1
+                SECP256K1
                     .verify_schnorr(
-                        <span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_schnorr_signature(gateway_signature),
-                        <span class="kw-2">&amp;</span>outgoing_contract.cancellation_message().into(),
+                        gateway_signature,
+                        <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_secp256k1_message(
+                            <span class="kw-2">&amp;</span>outgoing_contract.cancellation_message().into(),
+                        ),
                         <span class="kw-2">&amp;</span>outgoing_contract.gateway_key.x_only_public_key().<span class="number">0</span>,
                     )
                     .map_err(|<span class="kw">_</span>| LightningOutputError::InvalidCancellationSignature)<span class="question-mark">?</span>;
@@ -2663,7 +2682,12 @@
         gateway_id: PublicKey,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;sha256::Hash&gt; {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway) = dbtx.get_value(<span class="kw-2">&amp;</span>LightningGatewayKey(gateway_id)).<span class="kw">await </span>{
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway) = dbtx
+            .get_value(<span class="kw-2">&amp;</span>LightningGatewayKey(
+                bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>gateway_id),
+            ))
+            .<span class="kw">await
+        </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>valid_until_bytes = gateway.valid_until.to_bytes();
             <span class="kw">let </span><span class="kw-2">mut </span>challenge_bytes = gateway_id.to_bytes();
             challenge_bytes.append(<span class="kw-2">&amp;mut </span>valid_until_bytes);
@@ -2695,7 +2719,10 @@
         <span class="comment">// If there is no challenge, the gateway does not exist in the database and
         // there is nothing to do
         </span><span class="kw">let </span>challenge = <span class="self">self
-            </span>.get_gateway_remove_challenge(gateway_id, dbtx)
+            </span>.get_gateway_remove_challenge(
+                bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>gateway_id),
+                dbtx,
+            )
             .<span class="kw">await
             </span>.ok_or(<span class="macro">anyhow::anyhow!</span>(
                 <span class="string">"Gateway {gateway_id} is not registered with peer {our_peer_id}"
@@ -2724,6 +2751,7 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>assert_matches::assert_matches;
     <span class="kw">use </span>bitcoin_hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash};
+    <span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_pubkey;
     <span class="kw">use </span>fedimint_core::config::ConfigGenModuleParams;
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
@@ -2731,6 +2759,7 @@
     <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
     <span class="kw">use </span>fedimint_core::module::{InputMeta, ServerModuleInit, TransactionItemAmount};
+    <span class="kw">use </span>fedimint_core::secp256k1::{generate_keypair, PublicKey};
     <span class="kw">use </span>fedimint_core::task::TaskGroup;
     <span class="kw">use </span>fedimint_core::{Amount, OutPoint, PeerId, ServerModule, TransactionId};
     <span class="kw">use </span>fedimint_ln_common::config::{
@@ -2747,7 +2776,6 @@
     };
     <span class="kw">use </span>fedimint_ln_common::{ContractAccount, LightningInput, LightningOutput};
     <span class="kw">use </span>rand::rngs::OsRng;
-    <span class="kw">use </span>secp256k1::{generate_keypair, PublicKey};
 
     <span class="kw">use </span><span class="kw">crate</span>::db::{ContractKey, LightningAuditItemKey};
     <span class="kw">use crate</span>::{Lightning, LightningInit};
@@ -2871,7 +2899,7 @@
                     client_cfg.threshold_pub_key.encrypt(preimage.<span class="number">0</span>),
                 ),
                 decrypted_preimage: DecryptedPreimage::Some(preimage.clone()),
-                gateway_key: random_pub_key(),
+                gateway_key: bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>random_pub_key()),
             },
             out_point: OutPoint {
                 txid: TransactionId::all_zeros(),
@@ -2928,9 +2956,9 @@
         <span class="kw">let </span>gateway_key = random_pub_key();
         <span class="kw">let </span>outgoing_contract = FundedContract::Outgoing(OutgoingContract {
             hash: preimage.consensus_hash(),
-            gateway_key,
+            gateway_key: bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>gateway_key),
             timelock: <span class="number">1_000_000</span>,
-            user_key: random_pub_key(),
+            user_key: bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>random_pub_key()),
             cancelled: <span class="bool-val">false</span>,
         });
         <span class="kw">let </span>contract_id = outgoing_contract.contract_id();

@@ -2253,7 +2253,10 @@
 <a href="#2252" id="2252">2252</a>
 <a href="#2253" id="2253">2253</a>
 <a href="#2254" id="2254">2254</a>
-<a href="#2255" id="2255">2255</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2255" id="2255">2255</a>
+<a href="#2256" id="2256">2256</a>
+<a href="#2257" id="2257">2257</a>
+<a href="#2258" id="2258">2258</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2279,7 +2282,6 @@
 <span class="kw">use </span>api::LnFederationApi;
 <span class="kw">use </span>async_stream::{stream, try_stream};
 <span class="kw">use </span>bitcoin30::hashes::{sha256, Hash, HashEngine, Hmac, HmacEngine};
-<span class="kw">use </span>bitcoin30::key::KeyPair;
 <span class="kw">use </span>bitcoin30::Network;
 <span class="kw">use </span>db::{
     DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
@@ -2299,8 +2301,9 @@
 };
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_network,
-    bitcoin32_to_bitcoin30_secp256k1_pubkey,
+    bitcoin30_to_bitcoin32_secp256k1_message, bitcoin30_to_bitcoin32_secp256k1_pubkey,
+    bitcoin32_to_bitcoin30_keypair, bitcoin32_to_bitcoin30_network,
+    bitcoin32_to_bitcoin30_recoverable_signature, bitcoin32_to_bitcoin30_secp256k1_pubkey,
 };
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -2309,12 +2312,15 @@
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-<span class="kw">use </span>fedimint_core::secp256k1_29::Keypair;
+<span class="kw">use </span>fedimint_core::secp256k1_29::{
+    All, Keypair, PublicKey, Scalar, Secp256k1, SecretKey, Signing, Verification,
+};
 <span class="kw">use </span>fedimint_core::task::{timeout, MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::util::update_merge::UpdateMerge;
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry, BoxStream};
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, runtime, Amount, OutPoint, TransactionId,
+    apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1, Amount, OutPoint,
+    TransactionId,
 };
 <span class="kw">use </span>fedimint_ln_common::config::{FeeToAmount, LightningClientConfig};
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
@@ -2343,9 +2349,7 @@
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::seq::IteratorRandom <span class="kw">as _</span>;
 <span class="kw">use </span>rand::{CryptoRng, Rng, RngCore};
-<span class="kw">use </span>secp256k1::{
-    All, PublicKey, Scalar, Secp256k1, SecretKey, Signing, ThirtyTwoByteHash, Verification,
-};
+<span class="kw">use </span>secp256k1::ThirtyTwoByteHash;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>strum::IntoEnumIterator;
@@ -2413,9 +2417,7 @@
     <span class="doccomment">/// The public key of the receiving key
     </span><span class="kw">pub fn </span>public_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PublicKey {
         <span class="kw">match </span><span class="self">self </span>{
-            ReceivingKey::Personal(keypair) =&gt; {
-                bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>keypair.public_key())
-            }
+            ReceivingKey::Personal(keypair) =&gt; keypair.public_key(),
             ReceivingKey::External(public_key) =&gt; <span class="kw-2">*</span>public_key,
         }
     }
@@ -2494,7 +2496,10 @@
             .first()
             .and_then(|rh| rh.<span class="number">0</span>.last())
             .map(|hop| (hop.src_node_id, hop.short_channel_id))
-            == <span class="prelude-val">Some</span>((gateway.node_pub_key, gateway.federation_index))
+            == <span class="prelude-val">Some</span>((
+                bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>gateway.node_pub_key),
+                gateway.federation_index,
+            ))
     })
 }
 
@@ -2648,10 +2653,10 @@
 </span><span class="kw">pub struct </span>LightningClientModule {
     <span class="kw">pub </span>cfg: LightningClientConfig,
     notifier: ModuleNotifier&lt;LightningClientStateMachines&gt;,
-    redeem_key: KeyPair,
+    redeem_key: Keypair,
     secp: Secp256k1&lt;All&gt;,
     module_api: DynModuleApi,
-    preimage_auth: KeyPair,
+    preimage_auth: Keypair,
     client_ctx: ClientContext&lt;<span class="self">Self</span>&gt;,
     update_gateway_cache_merge: UpdateMerge,
     gateway_conn: Arc&lt;<span class="kw">dyn </span>GatewayConnection + Send + Sync&gt;,
@@ -2769,7 +2774,7 @@
                 }
                 <span class="string">"scan_receive_for_user_tweaked" </span>=&gt; {
                     <span class="kw">let </span>req: ScanReceiveForUserTweakedRequest = serde_json::from_value(payload)<span class="question-mark">?</span>;
-                    <span class="kw">let </span>keypair = KeyPair::from_secret_key(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;</span>req.user_key);
+                    <span class="kw">let </span>keypair = Keypair::from_secret_key(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;</span>req.user_key);
                     <span class="kw">let </span>operation_ids = <span class="self">self</span>.scan_receive_for_user_tweaked(keypair, req.indices, req.extra_meta).<span class="kw">await</span>;
                     <span class="kw">yield </span>serde_json::to_value(operation_ids)<span class="question-mark">?</span>;
                 }
@@ -2976,7 +2981,7 @@
         <span class="kw">let </span>gateway_fee = gateway.fees.to_amount(<span class="kw-2">&amp;</span>invoice_amount);
         <span class="kw">let </span>contract_amount = invoice_amount + gateway_fee;
 
-        <span class="kw">let </span>user_sk = KeyPair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;mut </span>rng);
+        <span class="kw">let </span>user_sk = Keypair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;mut </span>rng);
 
         <span class="kw">let </span>preimage_auth = <span class="self">self</span>.get_preimage_authentication(invoice.payment_hash());
         <span class="kw">let </span>payment_hash = <span class="kw-2">*</span>invoice.payment_hash();
@@ -2989,7 +2994,7 @@
         };
 
         <span class="kw">let </span>outgoing_payment = OutgoingContractData {
-            recovery_key: bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>user_sk),
+            recovery_key: user_sk,
             contract_account: OutgoingContractAccount {
                 amount: contract_amount,
                 contract: contract.clone(),
@@ -3061,7 +3066,7 @@
             <span class="kw-2">&amp;</span><span class="self">self</span>.module_api,
             <span class="kw-2">*</span>payment_hash,
             invoice_amount,
-            <span class="self">self</span>.redeem_key,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.redeem_key,
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -3191,7 +3196,7 @@
             .payment_secret(PaymentSecret(rng.gen()))
             .duration_since_epoch(duration_since_epoch)
             .min_final_cltv_expiry_delta(<span class="number">18</span>)
-            .payee_pub_key(node_public_key)
+            .payee_pub_key(bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>node_public_key))
             .expiry_time(Duration::from_secs(
                 expiry_time.unwrap_or(DEFAULT_INVOICE_EXPIRY_TIME.as_secs()),
             ));
@@ -3200,8 +3205,12 @@
             invoice_builder = invoice_builder.private_route(rh);
         }
 
-        <span class="kw">let </span>invoice = invoice_builder
-            .build_signed(|hash| <span class="self">self</span>.secp.sign_ecdsa_recoverable(hash, <span class="kw-2">&amp;</span>node_secret_key))<span class="question-mark">?</span>;
+        <span class="kw">let </span>invoice = invoice_builder.build_signed(|hash| {
+            bitcoin32_to_bitcoin30_recoverable_signature(<span class="kw-2">&amp;</span><span class="self">self</span>.secp.sign_ecdsa_recoverable(
+                <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_secp256k1_message(hash),
+                <span class="kw-2">&amp;</span>node_secret_key,
+            ))
+        })<span class="question-mark">?</span>;
 
         <span class="kw">let </span>operation_id = OperationId(invoice.payment_hash().to_byte_array());
 
@@ -3276,7 +3285,9 @@
 
                 <span class="kw">for </span>gw <span class="kw">in </span><span class="kw-2">&amp;</span>gateways {
                     dbtx.insert_entry(
-                        <span class="kw-2">&amp;</span>LightningGatewayKey(gw.info.gateway_id),
+                        <span class="kw-2">&amp;</span>LightningGatewayKey(bitcoin30_to_bitcoin32_secp256k1_pubkey(
+                            <span class="kw-2">&amp;</span>gw.info.gateway_id,
+                        )),
                         <span class="kw-2">&amp;</span>gw.clone().anchor(),
                     )
                     .<span class="kw">await</span>;
@@ -3708,7 +3719,7 @@
     /// tweaked keys in the `indices` vector
     </span><span class="kw">pub async fn </span>scan_receive_for_user_tweaked&lt;M: Serialize + Send + Sync + Clone&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        key_pair: KeyPair,
+        key_pair: Keypair,
         indices: Vec&lt;u64&gt;,
         extra_meta: M,
     ) -&gt; Vec&lt;OperationId&gt; {
@@ -3733,7 +3744,7 @@
     /// key and claim the incoming contract
     </span><span class="kw">pub async fn </span>scan_receive_for_user&lt;M: Serialize + Send + Sync&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        key_pair: KeyPair,
+        key_pair: Keypair,
         extra_meta: M,
     ) -&gt; anyhow::Result&lt;OperationId&gt; {
         <span class="kw">let </span>preimage_key: [u8; <span class="number">33</span>] = key_pair.public_key().serialize();
@@ -3747,7 +3758,7 @@
     /// to the federation and awaiting the primary module's outputs
     </span><span class="kw">pub async fn </span>claim_funded_incoming_contract&lt;M: Serialize + Send + Sync&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        key_pair: KeyPair,
+        key_pair: Keypair,
         contract_id: ContractId,
         extra_meta: M,
     ) -&gt; anyhow::Result&lt;OperationId&gt; {
@@ -3760,7 +3771,7 @@
         <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput&gt; {
             input,
             amount: incoming_contract_account.amount,
-            keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>key_pair)],
+            keys: <span class="macro">vec!</span>[key_pair],
         };
 
         <span class="kw">let </span>tx = TransactionBuilder::new().with_inputs(
@@ -3793,10 +3804,8 @@
         extra_meta: M,
         gateway: <span class="prelude-ty">Option</span>&lt;LightningGateway&gt;,
     ) -&gt; anyhow::Result&lt;(OperationId, Bolt11Invoice, [u8; <span class="number">32</span>])&gt; {
-        <span class="kw">let </span>receiving_key = ReceivingKey::Personal(bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>KeyPair::new(
-            <span class="kw-2">&amp;</span><span class="self">self</span>.secp,
-            <span class="kw-2">&amp;mut </span>rand::rngs::OsRng,
-        )));
+        <span class="kw">let </span>receiving_key =
+            ReceivingKey::Personal(Keypair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;mut </span>rand::rngs::OsRng));
         <span class="self">self</span>.create_bolt11_invoice_internal(
             amount,
             description,
@@ -3875,11 +3884,7 @@
         } <span class="kw">else </span>{
             <span class="comment">// If no gateway is provided, this is assumed to be an internal payment.
             </span><span class="kw">let </span>markers = <span class="self">self</span>.client_ctx.get_internal_payment_markers()<span class="question-mark">?</span>;
-            (
-                bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>markers.<span class="number">0</span>),
-                markers.<span class="number">1</span>,
-                <span class="macro">vec!</span>[],
-            )
+            (markers.<span class="number">0</span>, markers.<span class="number">1</span>, <span class="macro">vec!</span>[])
         };
 
         <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_LN, <span class="question-mark">?</span>gateway_id, %amount, <span class="string">"Selected LN gateway for invoice generation"</span>);
@@ -3890,7 +3895,7 @@
             receiving_key,
             rand::rngs::OsRng,
             expiry_time,
-            src_node_id,
+            bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>src_node_id),
             short_channel_id,
             <span class="kw-2">&amp;</span>route_hints,
             bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.network),
@@ -4252,15 +4257,16 @@
     module_api: <span class="kw-2">&amp;</span>DynModuleApi,
     payment_hash: sha256::Hash,
     amount_msat: Amount,
-    redeem_key: KeyPair,
+    redeem_key: <span class="kw-2">&amp;</span>Keypair,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(LightningOutputV0, Amount, ContractId), IncomingSmError&gt; {
     <span class="kw">let </span>offer = fetch_and_validate_offer(module_api, payment_hash, amount_msat).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>our_pub_key = secp256k1::PublicKey::from_keypair(<span class="kw-2">&amp;</span>redeem_key);
+    <span class="kw">let </span>our_pub_key =
+        secp256k1::PublicKey::from_keypair(<span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_keypair(redeem_key));
     <span class="kw">let </span>contract = IncomingContract {
         hash: offer.hash,
         encrypted_preimage: offer.encrypted_preimage.clone(),
         decrypted_preimage: DecryptedPreimage::Pending,
-        gateway_key: our_pub_key,
+        gateway_key: bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>our_pub_key),
     };
     <span class="kw">let </span>contract_id = contract.contract_id();
     <span class="kw">let </span>incoming_output = LightningOutputV0::Contract(ContractOutput {
@@ -4316,9 +4322,9 @@
 /// contract.
 </span><span class="kw">fn </span>tweak_user_secret_key&lt;Ctx: Verification + Signing&gt;(
     secp: <span class="kw-2">&amp;</span>Secp256k1&lt;Ctx&gt;,
-    key_pair: KeyPair,
+    key_pair: Keypair,
     index: u64,
-) -&gt; KeyPair {
+) -&gt; Keypair {
     <span class="kw">let </span>public_key = key_pair.public_key();
     <span class="kw">let </span><span class="kw-2">mut </span>hasher = HmacEngine::&lt;sha256::Hash&gt;::new(<span class="kw-2">&amp;</span>public_key.serialize()[..]);
     hasher.input(<span class="kw-2">&amp;</span>index.to_be_bytes());
@@ -4328,7 +4334,7 @@
     <span class="kw">let </span>sk_tweaked = secret_key
         .add_tweak(<span class="kw-2">&amp;</span>Scalar::from_be_bytes(tweak).expect(<span class="string">"Cant fail"</span>))
         .expect(<span class="string">"Cant fail"</span>);
-    KeyPair::from_secret_key(secp, <span class="kw-2">&amp;</span>sk_tweaked)
+    Keypair::from_secret_key(secp, <span class="kw-2">&amp;</span>sk_tweaked)
 }
 
 <span class="doccomment">/// Get LN invoice with given settings
@@ -4387,7 +4393,7 @@
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>LightningClientContext {
     <span class="kw">pub </span>ln_decoder: Decoder,
-    <span class="kw">pub </span>redeem_key: KeyPair,
+    <span class="kw">pub </span>redeem_key: Keypair,
     <span class="kw">pub </span>gateway_conn: Arc&lt;<span class="kw">dyn </span>GatewayConnection + Send + Sync&gt;,
 }
 
@@ -4438,7 +4444,7 @@
 
         <span class="kw">let </span>text_gateway_id = response.text().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>gateway_id = PublicKey::from_str(<span class="kw-2">&amp;</span>text_gateway_id[<span class="number">1</span>..text_gateway_id.len() - <span class="number">1</span>])<span class="question-mark">?</span>;
-        <span class="kw">if </span>gateway_id != gateway.gateway_id {
+        <span class="kw">if </span>gateway_id != bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>gateway.gateway_id) {
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">"Unexpected gateway id returned: {gateway_id}"</span>));
         }
 

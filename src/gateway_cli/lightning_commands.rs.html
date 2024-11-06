@@ -155,14 +155,8 @@
 <a href="#154" id="154">154</a>
 <a href="#155" id="155">155</a>
 <a href="#156" id="156">156</a>
-<a href="#157" id="157">157</a>
-<a href="#158" id="158">158</a>
-<a href="#159" id="159">159</a>
-<a href="#160" id="160">160</a>
-<a href="#161" id="161">161</a>
-<a href="#162" id="162">162</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
+<a href="#157" id="157">157</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>clap::Subcommand;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 <span class="kw">use </span>fedimint_core::BitcoinAmountOrAll;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
@@ -279,8 +273,6 @@
                 channel_size_sats,
                 push_amount_sats,
             } =&gt; {
-                <span class="kw">let </span>pubkey = bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>pubkey);
-
                 <span class="kw">let </span>funding_txid = create_client()
                     .open_channel(OpenChannelPayload {
                         pubkey,
@@ -292,8 +284,6 @@
                 <span class="macro">println!</span>(<span class="string">"{funding_txid}"</span>);
             }
             <span class="self">Self</span>::CloseChannelsWithPeer { pubkey } =&gt; {
-                <span class="kw">let </span>pubkey = bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>pubkey);
-
                 <span class="kw">let </span>response = create_client()
                     .close_channels_with_peer(CloseChannelsWithPeerPayload { pubkey })
                     .<span class="kw">await</span><span class="question-mark">?</span>;

@@ -359,6 +359,7 @@
 };
 <span class="kw">use </span>fedimint_api_client::query::FilterMapThreshold;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
+<span class="kw">use </span>fedimint_core::secp256k1::PublicKey;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId};
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
@@ -376,7 +377,6 @@
     ContractAccount, LightningGateway, LightningGatewayAnnouncement, RemoveGatewayRequest,
 };
 <span class="kw">use </span>itertools::Itertools;
-<span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>tracing::{info, warn};
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]

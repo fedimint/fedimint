@@ -677,7 +677,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::time::duration_since_epoch;
-<span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_core::{secp256k1, Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_common::contracts::outgoing::OutgoingContractData;
 <span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, IdentifiableContract};
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;

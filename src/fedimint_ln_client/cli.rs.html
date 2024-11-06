@@ -127,11 +127,13 @@
 <a href="#126" id="126">126</a>
 <a href="#127" id="127">127</a>
 <a href="#128" id="128">128</a>
-<a href="#129" id="129">129</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::{ffi, iter};
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::{ffi, iter};
 
 <span class="kw">use </span>anyhow::Context <span class="kw">as _</span>;
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>fedimint_core::core::OperationId;
+<span class="kw">use </span>fedimint_core::secp256k1::PublicKey;
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>lightning_invoice::{Bolt11InvoiceDescription, Description};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -149,7 +151,7 @@
         <span class="attr">#[clap(long)]
         </span>expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
         <span class="attr">#[clap(long)]
-        </span>gateway_id: <span class="prelude-ty">Option</span>&lt;secp256k1::PublicKey&gt;,
+        </span>gateway_id: <span class="prelude-ty">Option</span>&lt;PublicKey&gt;,
         <span class="attr">#[clap(long, default_value = <span class="string">"false"</span>)]
         </span>force_internal: bool,
     },
@@ -167,7 +169,7 @@
         </span><span class="attr">#[clap(long, action)]
         </span>finish_in_background: bool,
         <span class="attr">#[clap(long)]
-        </span>gateway_id: <span class="prelude-ty">Option</span>&lt;secp256k1::PublicKey&gt;,
+        </span>gateway_id: <span class="prelude-ty">Option</span>&lt;PublicKey&gt;,
         <span class="attr">#[clap(long, default_value = <span class="string">"false"</span>)]
         </span>force_internal: bool,
     },

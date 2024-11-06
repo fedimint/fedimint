@@ -118,7 +118,9 @@
 <a href="#117" id="117">117</a>
 <a href="#118" id="118">118</a>
 <a href="#119" id="119">119</a>
-<a href="#120" id="120">120</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_pubkey;
+<span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_core::module::registry::ServerModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionError};
@@ -171,7 +173,7 @@
             </span>.map_err(TransactionError::Input)<span class="question-mark">?</span>;
 
         funding_verifier.add_input(meta.amount);
-        public_keys.push(meta.pub_key);
+        public_keys.push(bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>meta.pub_key));
     }
 
     transaction.validate_signatures(<span class="kw-2">&amp;</span>public_keys)<span class="question-mark">?</span>;
