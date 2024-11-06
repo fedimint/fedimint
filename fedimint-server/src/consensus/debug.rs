@@ -1,6 +1,6 @@
 use std::fmt;
 
-use bitcoin_hashes::{sha256, Hash as _};
+use bitcoin::hashes::{sha256, Hash as _};
 use fedimint_core::encoding::Encodable as _;
 use fedimint_core::session_outcome::AcceptedItem;
 

@@ -5,11 +5,13 @@ use std::io::Write;
 
 use anyhow::{ensure, format_err};
 use async_trait::async_trait;
+use bitcoin::hashes::sha256::{Hash as Sha256, HashEngine};
+use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::secp256k1;
-use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
 use bls12_381::Scalar;
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin30_to_bitcoin32_sha256_hash,
+    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_sha256_hash,
 };
 use fedimint_core::config::{
     DkgError, DkgGroup, DkgMessage, DkgPeerMsg, DkgResult, ISupportedDkgMessage,
@@ -20,7 +22,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::PeerHandle;
 use fedimint_core::net::peers::MuxPeerConnections;
 use fedimint_core::runtime::spawn;
-use fedimint_core::{BitcoinHash, NumPeersExt, PeerId};
+use fedimint_core::{NumPeersExt, PeerId};
 use rand::rngs::OsRng;
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
@@ -91,7 +93,9 @@ impl<G: DkgGroup> Dkg<G> {
         let hashed = Dkg::hash(&commit);
         dkg.commitments.insert(our_id, commit);
         dkg.hashed_commits.insert(our_id, hashed);
-        let step = dkg.broadcast(&DkgMessage::HashedCommit(hashed));
+        let step = dkg.broadcast(&DkgMessage::HashedCommit(
+            bitcoin32_to_bitcoin30_sha256_hash(&hashed),
+        ));
 
         (dkg, step)
     }
@@ -101,10 +105,12 @@ impl<G: DkgGroup> Dkg<G> {
         match msg {
             DkgMessage::HashedCommit(hashed) => {
                 match self.hashed_commits.get(&peer) {
-                    Some(old) if *old != hashed => {
+                    Some(old) if *old != bitcoin30_to_bitcoin32_sha256_hash(&hashed) => {
                         return Err(format_err!("{peer} sent us two hashes!"))
                     }
-                    _ => self.hashed_commits.insert(peer, hashed),
+                    _ => self
+                        .hashed_commits
+                        .insert(peer, bitcoin30_to_bitcoin32_sha256_hash(&hashed)),
                 };
 
                 if self.hashed_commits.len() == self.peers.len() {

@@ -3044,7 +3044,6 @@ dependencies = [
  "base64 0.22.1",
  "bincode",
  "bitcoin 0.32.4",
- "bitcoin_hashes 0.12.0",
  "bitcoincore-rpc",
  "bls12_381",
  "bytes",

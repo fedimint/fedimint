@@ -101,7 +101,6 @@ mod fedimint_migration_tests {
     use anyhow::ensure;
     use bitcoin::key::Keypair;
     use bitcoin::secp256k1;
-    use bitcoin_hashes::Hash;
     use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
     use fedimint_core::core::{DynInput, DynOutput};
     use fedimint_core::db::{
@@ -113,7 +112,7 @@ mod fedimint_migration_tests {
     use fedimint_core::net::api_announcement::{ApiAnnouncement, SignedApiAnnouncement};
     use fedimint_core::session_outcome::{SessionOutcome, SignedSessionOutcome};
     use fedimint_core::transaction::{Transaction, TransactionSignature};
-    use fedimint_core::{Amount, PeerId, ServerModule, TransactionId};
+    use fedimint_core::{Amount, BitcoinHash, PeerId, ServerModule, TransactionId};
     use fedimint_dummy_common::{DummyCommonInit, DummyInput, DummyOutput};
     use fedimint_dummy_server::Dummy;
     use fedimint_logging::{TracingSetup, LOG_DB};
