@@ -110,17 +110,54 @@
 <a href="#109" id="109">109</a>
 <a href="#110" id="110">110</a>
 <a href="#111" id="111">111</a>
-<a href="#112" id="112">112</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::module::init::recovery::RecoveryFromHistoryCommon;
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
+
+<span class="kw">use </span>fedimint_client::module::init::recovery::RecoveryFromHistoryCommon;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped <span class="kw">as _</span>};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, Amount};
 <span class="kw">use </span>fedimint_mint_common::Nonce;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::recovery::MintRecoveryState;
-<span class="kw">use </span><span class="kw">crate</span>::SpendableNoteUndecoded;
+<span class="kw">use </span><span class="kw">crate</span>::oob::{MintOOBStateMachine, MintOOBStateMachineV1, MintOOBStates, MintOOBStatesV1};
+<span class="kw">use crate</span>::{MintClientStateMachines, SpendableNoteUndecoded};
 
 <span class="attr">#[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -221,5 +258,34 @@
     </span>dbtx.remove_entry(<span class="kw-2">&amp;</span>RecoveryStateKey).<span class="kw">await</span>;
 
     <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+}
+
+<span class="doccomment">/// Maps all `Unreachable` states in the state machine to `OutputDone`
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>migrate_state_to_v2(
+    operation_id: OperationId,
+    cursor: <span class="kw-2">&amp;mut </span>Cursor&lt;<span class="kw-2">&amp;</span>[u8]&gt;,
+) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;(Vec&lt;u8&gt;, OperationId)&gt;&gt; {
+    <span class="kw">let </span>decoders = ModuleDecoderRegistry::default();
+
+    <span class="kw">let </span>mint_client_state_machine_variant = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+
+    <span class="kw">let </span>bytes = <span class="kw">match </span>mint_client_state_machine_variant {
+        <span class="number">2 </span>=&gt; {
+            <span class="kw">let </span>old_state = MintOOBStateMachineV1::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+
+            <span class="kw">let </span>new_state = <span class="kw">match </span>old_state.state {
+                MintOOBStatesV1::Created(created) =&gt; MintOOBStates::Created(created),
+                MintOOBStatesV1::UserRefund(refund) =&gt; MintOOBStates::UserRefund(refund),
+                MintOOBStatesV1::TimeoutRefund(refund) =&gt; MintOOBStates::TimeoutRefund(refund),
+            };
+            MintClientStateMachines::OOB(MintOOBStateMachine {
+                operation_id: old_state.operation_id,
+                state: new_state,
+            })
+            .consensus_encode_to_vec()
+        }
+        <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
+    };
+    <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>((bytes, operation_id)))
 }
 </code></pre></div></section></main></body></html>

@@ -1433,7 +1433,9 @@
 <a href="#1432" id="1432">1432</a>
 <a href="#1433" id="1433">1433</a>
 <a href="#1434" id="1434">1434</a>
-<a href="#1435" id="1435">1435</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
+<a href="#1435" id="1435">1435</a>
+<a href="#1436" id="1436">1436</a>
+<a href="#1437" id="1437">1437</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 <span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::io::{Error, Read, Write};
@@ -1663,18 +1665,20 @@
             </span><span class="kw">if let </span><span class="prelude-val">Some</span>(module_context) =
                 <span class="self">self</span>.inner.module_contexts.get(<span class="kw-2">&amp;</span>state.module_instance_id())
             {
-                <span class="kw">let </span>context = <span class="self">self
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(context) = <span class="self">self
                     </span>.inner
                     .state
                     .read()
-                    .unwrap()
+                    .expect(<span class="string">"locking failed"</span>)
                     .gen_context(<span class="kw-2">&amp;</span>state)
-                    .expect(<span class="string">"executor should be running at this point"</span>);
-
-                <span class="kw">if </span>state.is_terminal(module_context, <span class="kw-2">&amp;</span>context) {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(AddStateMachinesError::Other(<span class="macro">anyhow!</span>(
+                {
+                    <span class="kw">if </span>state.is_terminal(module_context, <span class="kw-2">&amp;</span>context) {
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(AddStateMachinesError::Other(<span class="macro">anyhow!</span>(
                         <span class="string">"State is already terminal, adding it to the executor doesn't make sense."
                     </span>)));
+                    }
+                } <span class="kw">else </span>{
+                    <span class="macro">warn!</span>(target: LOG_CLIENT_REACTOR, <span class="string">"Executor should be running at this point"</span>);
                 }
             }
 

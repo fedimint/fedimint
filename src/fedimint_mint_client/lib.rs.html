@@ -2707,7 +2707,24 @@
 <a href="#2706" id="2706">2706</a>
 <a href="#2707" id="2707">2707</a>
 <a href="#2708" id="2708">2708</a>
-<a href="#2709" id="2709">2709</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2709" id="2709">2709</a>
+<a href="#2710" id="2710">2710</a>
+<a href="#2711" id="2711">2711</a>
+<a href="#2712" id="2712">2712</a>
+<a href="#2713" id="2713">2713</a>
+<a href="#2714" id="2714">2714</a>
+<a href="#2715" id="2715">2715</a>
+<a href="#2716" id="2716">2716</a>
+<a href="#2717" id="2717">2717</a>
+<a href="#2718" id="2718">2718</a>
+<a href="#2719" id="2719">2719</a>
+<a href="#2720" id="2720">2720</a>
+<a href="#2721" id="2721">2721</a>
+<a href="#2722" id="2722">2722</a>
+<a href="#2723" id="2723">2723</a>
+<a href="#2724" id="2724">2724</a>
+<a href="#2725" id="2725">2725</a>
+<a href="#2726" id="2726">2726</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2744,9 +2761,11 @@
 <span class="kw">use </span>backup::recovery::MintRecovery;
 <span class="kw">use </span>base64::Engine <span class="kw">as _</span>;
 <span class="kw">use </span>bitcoin_hashes::{sha256, sha256t, Hash, HashEngine <span class="kw">as </span>BitcoinHashEngine};
-<span class="kw">use </span>client_db::{migrate_to_v1, DbKeyPrefix, NoteKeyPrefix, RecoveryFinalizedKey};
+<span class="kw">use </span>client_db::{
+    migrate_state_to_v2, migrate_to_v1, DbKeyPrefix, NoteKeyPrefix, RecoveryFinalizedKey,
+};
 <span class="kw">use </span>event::NoteSpent;
-<span class="kw">use </span>fedimint_client::db::ClientMigrationFn;
+<span class="kw">use </span>fedimint_client::db::{migrate_state, ClientMigrationFn};
 <span class="kw">use </span>fedimint_client::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
@@ -2787,6 +2806,7 @@
 <span class="kw">pub use </span>fedimint_mint_common::<span class="kw-2">*</span>;
 <span class="kw">use </span>futures::{pin_mut, StreamExt};
 <span class="kw">use </span>hex::ToHex;
+<span class="kw">use </span>oob::MintOOBStatesCreatedMulti;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>tbs::{AggregatePublicKey, Signature};
@@ -2801,7 +2821,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::input::{
     MintInputCommon, MintInputStateCreated, MintInputStateMachine, MintInputStates,
 };
-<span class="kw">use </span><span class="kw">crate</span>::oob::{MintOOBStateMachine, MintOOBStates, MintOOBStatesCreated};
+<span class="kw">use </span><span class="kw">crate</span>::oob::{MintOOBStateMachine, MintOOBStates};
 <span class="kw">use </span><span class="kw">crate</span>::output::{
     MintOutputCommon, MintOutputStateMachine, MintOutputStates, MintOutputStatesCreated,
     NoteIssuanceRequest,
@@ -3318,6 +3338,9 @@
         <span class="kw">let </span><span class="kw-2">mut </span>migrations: BTreeMap&lt;DatabaseVersion, ClientMigrationFn&gt; = BTreeMap::new();
         migrations.insert(DatabaseVersion(<span class="number">0</span>), |dbtx, <span class="kw">_</span>, <span class="kw">_</span>| {
             Box::pin(migrate_to_v1(dbtx))
+        });
+        migrations.insert(DatabaseVersion(<span class="number">1</span>), |<span class="kw">_</span>, active_states, inactive_states| {
+            Box::pin(<span class="kw">async </span>{ migrate_state(active_states, inactive_states, migrate_state_to_v2) })
         });
 
         migrations
@@ -4014,18 +4037,13 @@
             MintClientModule::delete_spendable_note(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx, dbtx, amount, note).<span class="kw">await</span>;
         }
 
-        <span class="kw">let </span><span class="kw-2">mut </span>state_machines = Vec::new();
-
-        <span class="kw">for </span>(amount, spendable_note) <span class="kw">in </span>selected_notes.clone().into_iter_items() {
-            state_machines.push(MintClientStateMachines::OOB(MintOOBStateMachine {
-                operation_id,
-                state: MintOOBStates::Created(MintOOBStatesCreated {
-                    amount,
-                    spendable_note,
-                    timeout: fedimint_core::time::now() + try_cancel_after,
-                }),
-            }));
-        }
+        <span class="kw">let </span>state_machines = <span class="macro">vec!</span>[MintClientStateMachines::OOB(MintOOBStateMachine {
+            operation_id,
+            state: MintOOBStates::CreatedMulti(MintOOBStatesCreatedMulti {
+                spendable_notes: selected_notes.clone().into_iter_items().collect(),
+                timeout: fedimint_core::time::now() + try_cancel_after,
+            }),
+        })];
 
         <span class="prelude-val">Ok</span>((operation_id, state_machines, selected_notes))
     }
@@ -4043,13 +4061,17 @@
                     <span class="kw">match </span>state.state {
                         MintOOBStates::TimeoutRefund(refund) =&gt; <span class="prelude-val">Some</span>(SpendOOBRefund {
                             user_triggered: <span class="bool-val">false</span>,
-                            transaction_id: refund.refund_txid,
+                            transaction_ids: <span class="macro">vec!</span>[refund.refund_txid],
                         }),
                         MintOOBStates::UserRefund(refund) =&gt; <span class="prelude-val">Some</span>(SpendOOBRefund {
                             user_triggered: <span class="bool-val">true</span>,
-                            transaction_id: refund.refund_txid,
+                            transaction_ids: <span class="macro">vec!</span>[refund.refund_txid],
                         }),
-                        MintOOBStates::Created(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
+                        MintOOBStates::UserRefundMulti(refund) =&gt; <span class="prelude-val">Some</span>(SpendOOBRefund {
+                            user_triggered: <span class="bool-val">true</span>,
+                            transaction_ids: <span class="macro">vec!</span>[refund.refund_txid],
+                        }),
+                        MintOOBStates::Created(<span class="kw">_</span>) | MintOOBStates::CreatedMulti(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
                     }
                 }),
         )
@@ -4480,33 +4502,45 @@
 
                     <span class="kw">if </span>refund.user_triggered {
                         <span class="kw">yield </span>SpendOOBState::UserCanceledProcessing;
+                    }
 
-                        <span class="kw">match </span>client_ctx
+                    <span class="kw">let </span><span class="kw-2">mut </span>success = <span class="bool-val">true</span>;
+
+                    <span class="kw">for </span>txid <span class="kw">in </span>refund.transaction_ids {
+                        <span class="macro">debug!</span>(
+                            target: LOG_CLIENT_MODULE_MINT,
+                            %txid,
+                            operation_id=%operation_id.fmt_short(),
+                            <span class="string">"Waiting for oob refund txid"
+                        </span>);
+                        <span class="kw">if </span>client_ctx
                             .transaction_updates(operation_id)
                             .<span class="kw">await
-                            </span>.await_tx_accepted(refund.transaction_id)
-                            .<span class="kw">await
-                        </span>{
-                            <span class="prelude-val">Ok</span>(()) =&gt; {
-                                <span class="kw">yield </span>SpendOOBState::UserCanceledSuccess;
-                            },
-                            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                                <span class="kw">yield </span>SpendOOBState::UserCanceledFailure;
+                            </span>.await_tx_accepted(txid)
+                            .<span class="kw">await</span>.is_err() {
+                                success = <span class="bool-val">false</span>;
                             }
-                        }
-                    } <span class="kw">else </span>{
-                        <span class="kw">match </span>client_ctx
-                            .transaction_updates(operation_id)
-                            .<span class="kw">await
-                            </span>.await_tx_accepted(refund.transaction_id)
-                            .<span class="kw">await
-                        </span>{
-                            <span class="prelude-val">Ok</span>(()) =&gt; {
-                                <span class="kw">yield </span>SpendOOBState::Refunded;
-                            },
-                            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                                <span class="kw">yield </span>SpendOOBState::Success;
-                            }
+                    }
+
+                    <span class="macro">debug!</span>(
+                        target: LOG_CLIENT_MODULE_MINT,
+                        operation_id=%operation_id.fmt_short(),
+                        %success,
+                        <span class="string">"Done waiting for all refund oob txids"
+                     </span>);
+
+                    <span class="kw">match </span>(refund.user_triggered, success) {
+                        (<span class="bool-val">true</span>, <span class="bool-val">true</span>) =&gt; {
+                            <span class="kw">yield </span>SpendOOBState::UserCanceledSuccess;
+                        },
+                        (<span class="bool-val">true</span>, <span class="bool-val">false</span>) =&gt; {
+                            <span class="kw">yield </span>SpendOOBState::UserCanceledFailure;
+                        },
+                        (<span class="bool-val">false</span>, <span class="bool-val">true</span>) =&gt; {
+                            <span class="kw">yield </span>SpendOOBState::Refunded;
+                        },
+                        (<span class="bool-val">false</span>, <span class="bool-val">false</span>) =&gt; {
+                            <span class="kw">yield </span>SpendOOBState::Success;
                         }
                     }
                 }
@@ -4576,7 +4610,7 @@
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>SpendOOBRefund {
     <span class="kw">pub </span>user_triggered: bool,
-    <span class="kw">pub </span>transaction_id: TransactionId,
+    <span class="kw">pub </span>transaction_ids: Vec&lt;TransactionId&gt;,
 }
 
 <span class="doccomment">/// Defines a strategy for selecting e-cash notes given a specific target amount

@@ -3564,7 +3564,9 @@
 <a href="#3563" id="3563">3563</a>
 <a href="#3564" id="3564">3564</a>
 <a href="#3565" id="3565">3565</a>
-<a href="#3566" id="3566">3566</a></pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
+<a href="#3566" id="3566">3566</a>
+<a href="#3567" id="3567">3567</a>
+<a href="#3568" id="3568">3568</a></pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! This module provides the core key-value database for Fedimint.
 //!
@@ -4138,6 +4140,7 @@
                         <span class="macro">warn!</span>(
                             target: LOG_DB,
                             curr_attempts,
+                            <span class="question-mark">?</span>err,
                             <span class="string">"Database commit failed in an autocommit block - terminating"
                         </span>);
                         <span class="kw">return </span><span class="prelude-val">Err</span>(AutocommitError::CommitFailed {
@@ -4151,6 +4154,7 @@
                     <span class="macro">warn!</span>(
                         target: LOG_DB,
                         curr_attempts,
+                        %err,
                         delay_ms = %delay,
                         <span class="string">"Database commit failed in an autocommit block - retrying"
                     </span>);
