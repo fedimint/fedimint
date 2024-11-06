@@ -255,7 +255,7 @@ impl ClientModuleInit for LightningClientInit {
                 &args
                     .module_root_secret()
                     .clone()
-                    .to_secp_key(fedimint_core::secp256k1_29::SECP256K1),
+                    .to_secp_key(fedimint_core::secp256k1::SECP256K1),
             ),
             self.gateway_conn.clone(),
             args.admin_auth().cloned(),

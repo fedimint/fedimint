@@ -19,10 +19,9 @@ use fedimint_core::bitcoin_migration::{
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::encoding::Encodable;
-use fedimint_core::secp256k1::{KeyPair, PublicKey};
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending;
-use fedimint_core::{msats, sats, secp256k1, Amount, OutPoint, TransactionId};
+use fedimint_core::{msats, sats, secp256k1_27 as secp256k1, Amount, OutPoint, TransactionId};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
@@ -60,6 +59,7 @@ use ln_gateway::state_machine::{
     GatewayClientModule, GatewayExtPayStates, GatewayExtReceiveStates, GatewayMeta, Htlc,
 };
 use ln_gateway::Gateway;
+use secp256k1::{KeyPair, PublicKey};
 use tpe::G1Affine;
 use tracing::info;
 

@@ -59,8 +59,8 @@ use fedimint_core::core::{
 use fedimint_core::db::{apply_migrations_server, Database, DatabaseTransaction};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
-use fedimint_core::secp256k1::schnorr::Signature;
-use fedimint_core::secp256k1_29::PublicKey;
+use fedimint_core::secp256k1::PublicKey;
+use fedimint_core::secp256k1_27::schnorr::Signature;
 use fedimint_core::task::{sleep, TaskGroup, TaskHandle, TaskShutdownToken};
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::{SafeUrl, Spanned};

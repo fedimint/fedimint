@@ -29,8 +29,10 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-use fedimint_core::secp256k1_29::Keypair;
-use fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint, PeerId};
+use fedimint_core::secp256k1::Keypair;
+use fedimint_core::{
+    apply, async_trait_maybe_send, secp256k1_27 as secp256k1, Amount, OutPoint, PeerId,
+};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::SendPaymentPayload;
@@ -92,7 +94,7 @@ impl ClientModuleInit for GatewayClientInitV2 {
             keypair: args
                 .module_root_secret()
                 .clone()
-                .to_secp_key(fedimint_core::secp256k1_29::SECP256K1),
+                .to_secp_key(fedimint_core::secp256k1::SECP256K1),
             gateway: self.gateway.clone(),
         })
     }

@@ -13,7 +13,7 @@ use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::secp256k1_29::Keypair;
+use fedimint_core::secp256k1::Keypair;
 use fedimint_core::task::sleep;
 use fedimint_core::{NumPeersExt, OutPoint, PeerId, TransactionId};
 use fedimint_lnv2_common::contracts::IncomingContract;

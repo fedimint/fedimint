@@ -31,7 +31,7 @@ use fedimint_core::db::{
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-use fedimint_core::secp256k1_29::{Keypair, PublicKey, Secp256k1};
+use fedimint_core::secp256k1::{Keypair, PublicKey, Secp256k1};
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
 pub use fedimint_dummy_common as common;

@@ -78,7 +78,7 @@ impl Transaction {
     /// Validate the schnorr signatures signed over the `tx_hash`
     pub fn validate_signatures(
         &self,
-        pub_keys: &[secp256k1_29::PublicKey],
+        pub_keys: &[secp256k1::PublicKey],
     ) -> Result<(), TransactionError> {
         let signatures = match &self.signatures {
             TransactionSignature::NaiveMultisig(sigs) => sigs,
@@ -92,11 +92,10 @@ impl Transaction {
         }
 
         let txid = self.tx_hash();
-        let msg =
-            secp256k1_29::Message::from_digest_slice(&txid[..]).expect("txid has right length");
+        let msg = secp256k1::Message::from_digest_slice(&txid[..]).expect("txid has right length");
 
         for (pk, signature) in pub_keys.iter().zip(signatures) {
-            if secp256k1_29::global::SECP256K1
+            if secp256k1::global::SECP256K1
                 .verify_schnorr(signature, &msg, &pk.x_only_public_key().0)
                 .is_err()
             {
@@ -115,7 +114,7 @@ impl Transaction {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub enum TransactionSignature {
-    NaiveMultisig(Vec<fedimint_core::secp256k1_29::schnorr::Signature>),
+    NaiveMultisig(Vec<fedimint_core::secp256k1::schnorr::Signature>),
     #[encodable_default]
     Default {
         variant: u64,

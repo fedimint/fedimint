@@ -4,7 +4,7 @@ use std::io::Write;
 use aleph_bft::Keychain as KeychainTrait;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::session_outcome::SchnorrSignature;
-use fedimint_core::{secp256k1, BitcoinHash, NumPeersExt, PeerId};
+use fedimint_core::{secp256k1_27 as secp256k1, BitcoinHash, NumPeersExt, PeerId};
 use secp256k1::hashes::sha256;
 use secp256k1::{schnorr, KeyPair, Message, PublicKey};
 

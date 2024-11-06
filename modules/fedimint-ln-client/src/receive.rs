@@ -10,7 +10,7 @@ use fedimint_core::bitcoin_migration::{
 };
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::secp256k1_29::Keypair;
+use fedimint_core::secp256k1::Keypair;
 use fedimint_core::task::sleep;
 use fedimint_core::{OutPoint, TransactionId};
 use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
@@ -400,7 +400,7 @@ impl LightningReceiveFunded {
 #[cfg(test)]
 mod tests {
     use bitcoin30::hashes::{sha256, Hash};
-    use fedimint_core::secp256k1::{Secp256k1, SecretKey};
+    use fedimint_core::secp256k1_27::{Secp256k1, SecretKey};
     use lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
 
     use super::*;

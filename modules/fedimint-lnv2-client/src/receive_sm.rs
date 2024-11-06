@@ -3,7 +3,7 @@ use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::secp256k1_29::Keypair;
+use fedimint_core::secp256k1::Keypair;
 use fedimint_core::OutPoint;
 use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0};

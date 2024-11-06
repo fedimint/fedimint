@@ -231,7 +231,7 @@ impl ILnRpcClient for FakeLightningTest {
         &self,
         create_invoice_request: CreateInvoiceRequest,
     ) -> Result<CreateInvoiceResponse, LightningRpcError> {
-        let ctx = fedimint_core::secp256k1::Secp256k1::new();
+        let ctx = fedimint_core::secp256k1_27::Secp256k1::new();
 
         let invoice = match create_invoice_request.payment_hash {
             Some(payment_hash) => InvoiceBuilder::new(Currency::Regtest)

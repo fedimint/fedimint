@@ -5,7 +5,7 @@ use assert_matches::assert_matches;
 use fedimint_client::Client;
 use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 use fedimint_core::util::NextOrPending;
-use fedimint_core::{sats, secp256k1_29 as secp256k1, Amount};
+use fedimint_core::{sats, secp256k1, Amount};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
@@ -626,9 +626,9 @@ mod fedimint_migration_tests {
     };
     use fedimint_core::encoding::Encodable;
     use fedimint_core::module::DynServerModuleInit;
-    use fedimint_core::secp256k1::hashes::Hash;
+    use fedimint_core::secp256k1_27::hashes::Hash;
     use fedimint_core::util::SafeUrl;
-    use fedimint_core::{secp256k1_29 as secp256k1, Amount, OutPoint, PeerId, TransactionId};
+    use fedimint_core::{secp256k1, Amount, OutPoint, PeerId, TransactionId};
     use fedimint_ln_client::db::{PaymentResult, PaymentResultKey, PaymentResultPrefix};
     use fedimint_ln_client::pay::{
         LightningPayCommon, LightningPayStates, PayInvoicePayload, PaymentData,
@@ -694,7 +694,7 @@ mod fedimint_migration_tests {
         let contract_id = ContractId::from_str(STRING_64).unwrap();
         let amount = fedimint_core::Amount { msats: 1000 };
         let threshold_key = threshold_crypto::PublicKey::from(G1Projective::identity());
-        let (_, pk) = fedimint_core::secp256k1_29::generate_keypair(&mut OsRng);
+        let (_, pk) = fedimint_core::secp256k1::generate_keypair(&mut OsRng);
         let incoming_contract = IncomingContract {
             hash: bitcoin32_to_bitcoin30_sha256_hash(&secp256k1::hashes::sha256::Hash::hash(
                 &BYTE_8,

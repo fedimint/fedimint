@@ -8,7 +8,7 @@ use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::net::api_announcement::{override_api_urls, SignedApiAnnouncement};
 use fedimint_core::runtime::sleep;
-use fedimint_core::secp256k1::SECP256K1;
+use fedimint_core::secp256k1_27::SECP256K1;
 use fedimint_core::util::{backoff_util, retry, SafeUrl};
 use fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
 use fedimint_logging::LOG_CLIENT;

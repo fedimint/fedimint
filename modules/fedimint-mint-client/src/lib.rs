@@ -66,7 +66,7 @@ use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-use fedimint_core::secp256k1_29::{All, Keypair, Secp256k1};
+use fedimint_core::secp256k1::{All, Keypair, Secp256k1};
 use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, PeerId, Tiered,
@@ -2402,8 +2402,8 @@ mod tests {
     use fedimint_core::module::registry::ModuleRegistry;
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{
-        secp256k1, Amount, BitcoinHash, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti,
-        TransactionId,
+        secp256k1_27 as secp256k1, Amount, BitcoinHash, OutPoint, PeerId, Tiered, TieredCounts,
+        TieredMulti, TransactionId,
     };
     use fedimint_mint_common::config::FeeConsensus;
     use itertools::Itertools;

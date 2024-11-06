@@ -9,7 +9,7 @@ use config::DummyClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-use fedimint_core::secp256k1::{KeyPair, PublicKey, Secp256k1};
+use fedimint_core::secp256k1_27::{KeyPair, PublicKey, Secp256k1};
 use fedimint_core::{plugin_types_trait_impl_common, Amount};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

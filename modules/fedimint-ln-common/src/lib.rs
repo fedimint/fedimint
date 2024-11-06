@@ -37,7 +37,8 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
-    extensible_associated_module_type, plugin_types_trait_impl_common, secp256k1, Amount, PeerId,
+    extensible_associated_module_type, plugin_types_trait_impl_common, secp256k1_27 as secp256k1,
+    Amount, PeerId,
 };
 use lightning::util::ser::{WithoutLength, Writeable};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
@@ -147,7 +148,7 @@ pub enum LightningOutputV0 {
         /// Contract to update
         contract: ContractId,
         /// Signature of gateway
-        gateway_signature: fedimint_core::secp256k1_29::schnorr::Signature,
+        gateway_signature: fedimint_core::secp256k1::schnorr::Signature,
     },
 }
 
@@ -355,8 +356,8 @@ pub struct LightningGateway {
     #[serde(rename = "mint_channel_id")]
     pub federation_index: u64,
     /// Key used to pay the gateway
-    pub gateway_redeem_key: fedimint_core::secp256k1_29::PublicKey,
-    pub node_pub_key: fedimint_core::secp256k1_29::PublicKey,
+    pub gateway_redeem_key: fedimint_core::secp256k1::PublicKey,
+    pub node_pub_key: fedimint_core::secp256k1::PublicKey,
     pub lightning_alias: String,
     /// URL to the gateway's versioned public API
     /// (e.g. <https://gateway.example.com/v1>)
@@ -434,7 +435,7 @@ pub mod route_hints {
         bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_secp256k1_pubkey,
     };
     use fedimint_core::encoding::{Decodable, Encodable};
-    use fedimint_core::secp256k1_29::PublicKey;
+    use fedimint_core::secp256k1::PublicKey;
     use lightning_invoice::RoutingFees;
     use serde::{Deserialize, Serialize};
 

@@ -54,15 +54,15 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-use fedimint_core::secp256k1_29::{
+use fedimint_core::secp256k1::{
     All, Keypair, PublicKey, Scalar, Secp256k1, SecretKey, Signing, Verification,
 };
 use fedimint_core::task::{timeout, MaybeSend, MaybeSync};
 use fedimint_core::util::update_merge::UpdateMerge;
 use fedimint_core::util::{backoff_util, retry, BoxStream};
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1, Amount, OutPoint,
-    TransactionId,
+    apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1_27 as secp256k1, Amount,
+    OutPoint, TransactionId,
 };
 use fedimint_ln_common::config::{FeeToAmount, LightningClientConfig};
 use fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};

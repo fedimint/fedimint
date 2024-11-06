@@ -31,7 +31,9 @@ use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind
 use fedimint_core::db::{AutocommitError, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion};
-use fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint, TransactionId};
+use fedimint_core::{
+    apply, async_trait_maybe_send, secp256k1_27 as secp256k1, Amount, OutPoint, TransactionId,
+};
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
@@ -151,7 +153,7 @@ impl ClientModuleInit for GatewayClientInit {
                 &args
                     .module_root_secret()
                     .child_key(ChildId(0))
-                    .to_secp_key(&fedimint_core::secp256k1_29::Secp256k1::new()),
+                    .to_secp_key(&fedimint_core::secp256k1::Secp256k1::new()),
             ),
             module_api: args.module_api().clone(),
             timelock_delta: self.timelock_delta,

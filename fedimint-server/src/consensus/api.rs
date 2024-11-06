@@ -40,15 +40,15 @@ use fedimint_core::module::{
 use fedimint_core::net::api_announcement::{
     ApiAnnouncement, SignedApiAnnouncement, SignedApiAnnouncementSubmission,
 };
-use fedimint_core::secp256k1::SECP256K1;
-use fedimint_core::secp256k1_29::PublicKey;
+use fedimint_core::secp256k1::PublicKey;
+use fedimint_core::secp256k1_27::SECP256K1;
 use fedimint_core::server::DynServerModule;
 use fedimint_core::session_outcome::{SessionOutcome, SessionStatus, SignedSessionOutcome};
 use fedimint_core::transaction::{
     SerdeTransaction, Transaction, TransactionError, TransactionSubmissionOutcome,
 };
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{secp256k1_29, OutPoint, PeerId, TransactionId};
+use fedimint_core::{secp256k1, OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
 use futures::StreamExt;
 use tokio::sync::{watch, RwLock};
@@ -453,7 +453,7 @@ impl ConsensusApi {
                             api_url: new_url_inner,
                             nonce: new_nonce,
                         };
-                        let ctx = secp256k1_29::Secp256k1::new();
+                        let ctx = secp256k1::Secp256k1::new();
                         let signed_announcement = announcement.sign(
                             &ctx,
                             &bitcoin30_to_bitcoin32_secp256k1_secret_key(

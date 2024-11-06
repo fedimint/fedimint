@@ -54,7 +54,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 pub use tiered::Tiered;
 pub use tiered_multi::*;
-pub use {hex, secp256k1, secp256k1_29};
+pub use {hex, secp256k1, secp256k1_27};
 
 pub use crate::core::server;
 use crate::encoding::{Decodable, DecodeError, Encodable};

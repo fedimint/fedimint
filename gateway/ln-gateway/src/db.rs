@@ -12,8 +12,10 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
-use fedimint_core::secp256k1_29::Keypair;
-use fedimint_core::{impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1, Amount};
+use fedimint_core::secp256k1::Keypair;
+use fedimint_core::{
+    impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1_27 as secp256k1, Amount,
+};
 use fedimint_ln_common::serde_routing_fees;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use futures::{FutureExt, StreamExt};

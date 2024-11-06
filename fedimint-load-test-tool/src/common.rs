@@ -14,7 +14,7 @@ use fedimint_core::db::Database;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::CommonModuleInit;
-use fedimint_core::{secp256k1_29, Amount, OutPoint, TieredCounts};
+use fedimint_core::{secp256k1, Amount, OutPoint, TieredCounts};
 use fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LnPayState, OutgoingLightningPayment,
 };
@@ -332,8 +332,8 @@ pub async fn cln_wait_invoice_payment(label: &str) -> anyhow::Result<()> {
     }
 }
 
-pub fn parse_gateway_id(s: &str) -> Result<secp256k1_29::PublicKey, secp256k1_29::Error> {
-    secp256k1_29::PublicKey::from_str(s)
+pub fn parse_gateway_id(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Error> {
+    secp256k1::PublicKey::from_str(s)
 }
 
 pub async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<TieredCounts> {

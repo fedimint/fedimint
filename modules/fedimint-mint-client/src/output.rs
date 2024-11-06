@@ -13,7 +13,7 @@ use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::secp256k1_29::{Keypair, Secp256k1, Signing};
+use fedimint_core::secp256k1::{Keypair, Secp256k1, Signing};
 use fedimint_core::task::sleep;
 use fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered};
 use fedimint_derive_secret::{ChildId, DerivableSecret};

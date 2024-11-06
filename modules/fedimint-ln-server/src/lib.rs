@@ -28,7 +28,7 @@ use fedimint_core::module::{
     ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
     SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
-use fedimint_core::secp256k1_29::{PublicKey, SECP256K1};
+use fedimint_core::secp256k1::{PublicKey, SECP256K1};
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::{
@@ -1262,7 +1262,7 @@ mod tests {
     use fedimint_core::envs::BitcoinRpcConfig;
     use fedimint_core::module::registry::ModuleRegistry;
     use fedimint_core::module::{InputMeta, ServerModuleInit, TransactionItemAmount};
-    use fedimint_core::secp256k1::{generate_keypair, PublicKey};
+    use fedimint_core::secp256k1_27::{generate_keypair, PublicKey};
     use fedimint_core::task::TaskGroup;
     use fedimint_core::{Amount, OutPoint, PeerId, ServerModule, TransactionId};
     use fedimint_ln_common::config::{

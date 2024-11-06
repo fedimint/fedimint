@@ -9,7 +9,7 @@ use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::time::duration_since_epoch;
-use fedimint_core::{secp256k1, Amount, OutPoint, TransactionId};
+use fedimint_core::{secp256k1_27 as secp256k1, Amount, OutPoint, TransactionId};
 use fedimint_ln_common::contracts::outgoing::OutgoingContractData;
 use fedimint_ln_common::contracts::{ContractId, IdentifiableContract};
 use fedimint_ln_common::route_hints::RouteHint;

@@ -4,7 +4,7 @@ use bitcoin30::hashes::sha256::Hash as Sha256;
 use bitcoin30::hashes::{hash_newtype, Hash as BitcoinHash};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::{secp256k1_29 as secp256k1, Amount, OutPoint};
+use fedimint_core::{secp256k1, Amount, OutPoint};
 use serde::{Deserialize, Serialize};
 
 use crate::contracts::{ContractId, DecryptedPreimage, EncryptedPreimage, IdentifiableContract};

@@ -76,7 +76,7 @@ impl_db_lookup!(
 
 /// Key used to store user's ecash backups
 #[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
-pub struct EcashBackupKey(pub fedimint_core::secp256k1::PublicKey);
+pub struct EcashBackupKey(pub fedimint_core::secp256k1_27::PublicKey);
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct EcashBackupKeyPrefix;

@@ -9,7 +9,7 @@ use fedimint_core::config::ClientModuleConfig;
 use fedimint_core::core::{IntoDynInstance, ModuleKind, OperationId};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::module::ModuleConsensusVersion;
-use fedimint_core::secp256k1_29::Secp256k1;
+use fedimint_core::secp256k1::Secp256k1;
 use fedimint_core::{sats, Amount, OutPoint};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::{DummyClientConfig, DummyGenParams};
@@ -157,7 +157,7 @@ mod fedimint_migration_tests {
     };
     use fedimint_core::encoding::Encodable;
     use fedimint_core::module::DynServerModuleInit;
-    use fedimint_core::{secp256k1, Amount, BitcoinHash, OutPoint, TransactionId};
+    use fedimint_core::{secp256k1_27 as secp256k1, Amount, BitcoinHash, OutPoint, TransactionId};
     use fedimint_dummy_client::db::{
         DummyClientFundsKeyV0, DummyClientFundsKeyV1, DummyClientNameKey,
     };

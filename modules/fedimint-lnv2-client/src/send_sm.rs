@@ -12,7 +12,7 @@ use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{secp256k1_29 as secp256k1, OutPoint, TransactionId};
+use fedimint_core::{secp256k1, OutPoint, TransactionId};
 use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
 use secp256k1::schnorr::Signature;

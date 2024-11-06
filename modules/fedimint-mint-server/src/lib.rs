@@ -25,9 +25,8 @@ use fedimint_core::module::{
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items,
-    secp256k1_29 as secp256k1, Amount, NumPeersExt, OutPoint, PeerId, ServerModule, Tiered,
-    TieredMulti,
+    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, secp256k1, Amount,
+    NumPeersExt, OutPoint, PeerId, ServerModule, Tiered, TieredMulti,
 };
 use fedimint_logging::LOG_MODULE_MINT;
 pub use fedimint_mint_common as common;
@@ -697,7 +696,7 @@ mod test {
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleRegistry;
     use fedimint_core::module::{ModuleConsensusVersion, ServerModuleInit};
-    use fedimint_core::{secp256k1, Amount, PeerId, ServerModule};
+    use fedimint_core::{secp256k1_27 as secp256k1, Amount, PeerId, ServerModule};
     use fedimint_mint_common::config::FeeConsensus;
     use fedimint_mint_common::{MintInput, Nonce, Note};
     use tbs::blind_message;

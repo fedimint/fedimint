@@ -11,7 +11,7 @@ use fedimint_core::net::api_announcement::{
 };
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{impl_db_lookup, impl_db_record, secp256k1_29, PeerId};
+use fedimint_core::{impl_db_lookup, impl_db_record, secp256k1, PeerId};
 use tokio::select;
 use tracing::debug;
 
@@ -107,7 +107,7 @@ async fn insert_signed_api_announcement_if_not_present(db: &Database, cfg: &Serv
         cfg.consensus.api_endpoints[&cfg.local.identity].url.clone(),
         0,
     );
-    let ctx = secp256k1_29::Secp256k1::new();
+    let ctx = secp256k1::Secp256k1::new();
     let signed_announcement = api_announcement.sign(
         &ctx,
         &bitcoin30_to_bitcoin32_secp256k1_secret_key(&cfg.private.broadcast_secret_key)

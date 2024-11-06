@@ -2027,7 +2027,7 @@ impl Client {
     /// once this function is guaranteed to return immediately.
     pub async fn get_guardian_public_keys_blocking(
         &self,
-    ) -> BTreeMap<PeerId, fedimint_core::secp256k1::PublicKey> {
+    ) -> BTreeMap<PeerId, fedimint_core::secp256k1_27::PublicKey> {
         self.db.autocommit(|dbtx, _| Box::pin(async move {
             let config = self.config().await;
 
