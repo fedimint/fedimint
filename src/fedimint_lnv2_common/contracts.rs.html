@@ -203,11 +203,8 @@
 <a href="#202" id="202">202</a>
 <a href="#203" id="203">203</a>
 <a href="#204" id="204">204</a>
-<a href="#205" id="205">205</a>
-<a href="#206" id="206">206</a>
-<a href="#207" id="207">207</a>
-<a href="#208" id="208">208</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin30::secp256k1;
-<span class="kw">use </span>bitcoin_hashes::sha256;
+<a href="#205" id="205">205</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin30::hashes::sha256;
+<span class="kw">use </span>bitcoin30::secp256k1;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>secp256k1::schnorr::Signature;
@@ -269,7 +266,7 @@
             <span class="kw-2">&amp;</span>agg_pk,
             <span class="kw-2">&amp;</span>encryption_seed,
             <span class="kw-2">&amp;</span>preimage,
-            <span class="kw-2">&amp;</span>commitment.consensus_hash_bitcoin30(),
+            <span class="kw-2">&amp;</span>commitment.consensus_hash(),
         );
 
         IncomingContract {
@@ -283,10 +280,7 @@
     }
 
     <span class="kw">pub fn </span>verify(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-        verify_ciphertext(
-            <span class="kw-2">&amp;</span><span class="self">self</span>.ciphertext,
-            <span class="kw-2">&amp;</span><span class="self">self</span>.commitment.consensus_hash_bitcoin30(),
-        )
+        verify_ciphertext(<span class="kw-2">&amp;</span><span class="self">self</span>.ciphertext, <span class="kw-2">&amp;</span><span class="self">self</span>.commitment.consensus_hash())
     }
 
     <span class="kw">pub fn </span>verify_decryption_share(
@@ -298,7 +292,7 @@
             pk,
             dk_share,
             <span class="kw-2">&amp;</span><span class="self">self</span>.ciphertext,
-            <span class="kw-2">&amp;</span><span class="self">self</span>.commitment.consensus_hash_bitcoin30(),
+            <span class="kw-2">&amp;</span><span class="self">self</span>.commitment.consensus_hash(),
         )
     }
 
@@ -311,7 +305,7 @@
             agg_pk,
             agg_decryption_key,
             <span class="kw-2">&amp;</span><span class="self">self</span>.ciphertext,
-            <span class="kw-2">&amp;</span><span class="self">self</span>.commitment.consensus_hash_bitcoin30(),
+            <span class="kw-2">&amp;</span><span class="self">self</span>.commitment.consensus_hash(),
         )
     }
 
@@ -400,10 +394,10 @@
 
 <span class="attr">#[test]
 </span><span class="kw">fn </span>test_verify_preimage() {
-    <span class="kw">use </span>bitcoin_hashes::Hash;
+    <span class="kw">use </span>bitcoin30::hashes::Hash;
 
     <span class="macro">assert!</span>(verify_preimage(
-        <span class="kw-2">&amp;</span>PaymentImage::Hash(bitcoin_hashes::sha256::Hash::hash(<span class="kw-2">&amp;</span>[<span class="number">42</span>; <span class="number">32</span>])),
+        <span class="kw-2">&amp;</span>PaymentImage::Hash(bitcoin30::hashes::sha256::Hash::hash(<span class="kw-2">&amp;</span>[<span class="number">42</span>; <span class="number">32</span>])),
         <span class="kw-2">&amp;</span>[<span class="number">42</span>; <span class="number">32</span>]
     ));
 

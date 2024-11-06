@@ -69,9 +69,7 @@
 <a href="#68" id="68">68</a>
 <a href="#69" id="69">69</a>
 <a href="#70" id="70">70</a>
-<a href="#71" id="71">71</a>
-<a href="#72" id="72">72</a>
-<a href="#73" id="73">73</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
+<a href="#71" id="71">71</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::net::peers::IPeerConnections;
 <span class="kw">use </span>parity_scale_codec::{Decode, Encode, IoReader};
@@ -88,9 +86,7 @@
     <span class="kw">type </span>Hash = [u8; <span class="number">32</span>];
 
     <span class="kw">fn </span>hash(input: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="self">Self</span>::Hash {
-        input
-            .consensus_hash_bitcoin30::&lt;sha256::Hash&gt;()
-            .to_byte_array()
+        input.consensus_hash::&lt;sha256::Hash&gt;().to_byte_array()
     }
 }
 

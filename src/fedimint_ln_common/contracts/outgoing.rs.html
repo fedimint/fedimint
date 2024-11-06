@@ -75,7 +75,7 @@
 <a href="#74" id="74">74</a>
 <a href="#75" id="75">75</a>
 <a href="#76" id="76">76</a>
-<a href="#77" id="77">77</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
+<a href="#77" id="77">77</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin30::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::secp256k1_29::PublicKey;
 <span class="kw">use </span>fedimint_core::Amount;
@@ -96,7 +96,7 @@
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>OutgoingContract {
     <span class="doccomment">/// Hash that can be used to spend the output before the timelock expires
-    </span><span class="kw">pub </span>hash: bitcoin_hashes::sha256::Hash,
+    </span><span class="kw">pub </span>hash: bitcoin30::hashes::sha256::Hash,
     <span class="doccomment">/// Public key of the LN gateway allowed to claim the HTLC before the
     /// timelock expires
     </span><span class="kw">pub </span>gateway_key: PublicKey,
@@ -122,12 +122,12 @@
 }
 
 <span class="kw">impl </span>OutgoingContract {
-    <span class="kw">pub fn </span>cancellation_message(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bitcoin_hashes::sha256::Hash {
-        <span class="kw">let </span><span class="kw-2">mut </span>engine = bitcoin_hashes::sha256::Hash::engine();
+    <span class="kw">pub fn </span>cancellation_message(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bitcoin30::hashes::sha256::Hash {
+        <span class="kw">let </span><span class="kw-2">mut </span>engine = bitcoin30::hashes::sha256::Hash::engine();
         Encodable::consensus_encode(<span class="kw-2">&amp;</span>CANCELLATION_TAG.as_bytes(), <span class="kw-2">&amp;mut </span>engine)
             .expect(<span class="string">"Hashing never fails"</span>);
         Encodable::consensus_encode(<span class="kw-2">&amp;</span><span class="self">self</span>.contract_id(), <span class="kw-2">&amp;mut </span>engine).expect(<span class="string">"Hashing never fails"</span>);
-        bitcoin_hashes::sha256::Hash::from_engine(engine)
+        bitcoin30::hashes::sha256::Hash::from_engine(engine)
     }
 }
 

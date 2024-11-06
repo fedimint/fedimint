@@ -126,7 +126,7 @@
 <a href="#125" id="125">125</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::time::Instant;
 
-<span class="kw">use </span>bitcoin_hashes::Hash;
+<span class="kw">use </span>bitcoin::hashes::Hash;
 <span class="kw">use </span>fedimint_core::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
@@ -245,7 +245,7 @@
 
 <span class="doccomment">/// Calculate a cheap chesum of an encoded citem
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_citem_bytes_chsum(bytes: <span class="kw-2">&amp;</span>[u8]) -&gt; u64 {
-    <span class="kw">let </span>chsum = bitcoin_hashes::sha256::Hash::hash(bytes);
+    <span class="kw">let </span>chsum = bitcoin::hashes::sha256::Hash::hash(bytes);
     u64::from_le_bytes(chsum[..<span class="number">8</span>].try_into().expect(<span class="string">"Can't fail"</span>))
 }
 </code></pre></div></section></main></body></html>

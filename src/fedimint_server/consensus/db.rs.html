@@ -326,8 +326,7 @@
 <a href="#325" id="325">325</a>
 <a href="#326" id="326">326</a>
 <a href="#327" id="327">327</a>
-<a href="#328" id="328">328</a>
-<a href="#329" id="329">329</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#328" id="328">328</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
@@ -430,7 +429,6 @@
     <span class="kw">use </span>anyhow::ensure;
     <span class="kw">use </span>bitcoin::key::Keypair;
     <span class="kw">use </span>bitcoin::secp256k1;
-    <span class="kw">use </span>bitcoin_hashes::Hash;
     <span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
     <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput};
     <span class="kw">use </span>fedimint_core::db::{
@@ -442,7 +440,7 @@
     <span class="kw">use </span>fedimint_core::net::api_announcement::{ApiAnnouncement, SignedApiAnnouncement};
     <span class="kw">use </span>fedimint_core::session_outcome::{SessionOutcome, SignedSessionOutcome};
     <span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionSignature};
-    <span class="kw">use </span>fedimint_core::{Amount, PeerId, ServerModule, TransactionId};
+    <span class="kw">use </span>fedimint_core::{Amount, BitcoinHash, PeerId, ServerModule, TransactionId};
     <span class="kw">use </span>fedimint_dummy_common::{DummyCommonInit, DummyInput, DummyOutput};
     <span class="kw">use </span>fedimint_dummy_server::Dummy;
     <span class="kw">use </span>fedimint_logging::{TracingSetup, LOG_DB};

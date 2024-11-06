@@ -52,17 +52,12 @@
 <a href="#51" id="51">51</a>
 <a href="#52" id="52">52</a>
 <a href="#53" id="53">53</a>
-<a href="#54" id="54">54</a>
-<a href="#55" id="55">55</a>
-<a href="#56" id="56">56</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
+<a href="#54" id="54">54</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_schnorr_signature, bitcoin32_to_bitcoin30_schnorr_signature,
-};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::secp256k1;
-<span class="kw">use </span>secp256k1::{KeyPair, Message, PublicKey, Secp256k1, Signing, Verification, SECP256K1};
+<span class="kw">use </span>fedimint_core::secp256k1_29 <span class="kw">as </span>secp256k1;
+<span class="kw">use </span>secp256k1::{Keypair, Message, PublicKey, Secp256k1, Signing, Verification, SECP256K1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Encodable, Decodable)]
@@ -75,15 +70,16 @@
 
 <span class="kw">impl </span>BackupRequest {
     <span class="kw">fn </span>hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; sha256::Hash {
-        <span class="self">self</span>.consensus_hash_bitcoin30()
+        <span class="self">self</span>.consensus_hash()
     }
 
-    <span class="kw">pub fn </span>sign(<span class="self">self</span>, keypair: <span class="kw-2">&amp;</span>KeyPair) -&gt; anyhow::Result&lt;SignedBackupRequest&gt; {
-        <span class="kw">let </span>signature = SECP256K1.sign_schnorr(<span class="kw-2">&amp;</span>Message::from(<span class="self">self</span>.hash()), keypair);
+    <span class="kw">pub fn </span>sign(<span class="self">self</span>, keypair: <span class="kw-2">&amp;</span>Keypair) -&gt; anyhow::Result&lt;SignedBackupRequest&gt; {
+        <span class="kw">let </span>signature =
+            SECP256K1.sign_schnorr(<span class="kw-2">&amp;</span>Message::from_digest(<span class="kw-2">*</span><span class="self">self</span>.hash().as_ref()), keypair);
 
         <span class="prelude-val">Ok</span>(SignedBackupRequest {
             request: <span class="self">self</span>,
-            signature: bitcoin30_to_bitcoin32_schnorr_signature(<span class="kw-2">&amp;</span>signature),
+            signature,
         })
     }
 }
@@ -102,8 +98,8 @@
         </span>C: Signing + Verification,
     {
         ctx.verify_schnorr(
-            <span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_schnorr_signature(<span class="kw-2">&amp;</span><span class="self">self</span>.signature),
-            <span class="kw-2">&amp;</span>Message::from_slice(<span class="kw-2">&amp;</span><span class="self">self</span>.request.hash().to_byte_array()).expect(<span class="string">"Can't fail"</span>),
+            <span class="kw-2">&amp;</span><span class="self">self</span>.signature,
+            <span class="kw-2">&amp;</span>Message::from_digest_slice(<span class="kw-2">&amp;</span><span class="self">self</span>.request.hash().to_byte_array()).expect(<span class="string">"Can't fail"</span>),
             <span class="kw-2">&amp;</span><span class="self">self</span>.request.id.x_only_public_key().<span class="number">0</span>,
         )<span class="question-mark">?</span>;
 
