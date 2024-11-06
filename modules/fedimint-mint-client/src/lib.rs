@@ -21,6 +21,9 @@ pub mod output;
 
 pub mod event;
 
+/// API client impl for mint-specific requests
+pub mod api;
+
 use std::cmp::{min, Ordering};
 use std::collections::BTreeMap;
 use std::fmt;

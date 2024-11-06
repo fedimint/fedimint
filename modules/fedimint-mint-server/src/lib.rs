@@ -15,7 +15,10 @@ use fedimint_core::config::{
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+    MigrationContext,
+};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
@@ -23,6 +26,7 @@ use fedimint_core::module::{
     SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
 use fedimint_core::server::DynServerModule;
+use fedimint_core::util::BoxFuture;
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, secp256k1, Amount,
     NumPeersExt, OutPoint, PeerId, ServerModule, Tiered, TieredMulti,
@@ -41,6 +45,7 @@ use fedimint_mint_common::{
     MODULE_CONSENSUS_VERSION,
 };
 use fedimint_server::config::distributedgen::{evaluate_polynomial_g2, scalar, PeerHandleOps};
+use fedimint_server::consensus::db::{MigrationContextExt, TypedModuleHistoryItem};
 use futures::StreamExt;
 use itertools::Itertools;
 use metrics::{
@@ -56,14 +61,14 @@ use tbs::{
 use threshold_crypto::ff::Field;
 use threshold_crypto::group::Curve;
 use threshold_crypto::{G2Projective, Scalar};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
-use crate::common::endpoint_constants::NOTE_SPENT_ENDPOINT;
-use crate::common::Nonce;
+use crate::common::endpoint_constants::{BLIND_NONCE_USED_ENDPOINT, NOTE_SPENT_ENDPOINT};
+use crate::common::{BlindNonce, Nonce};
 use crate::db::{
-    DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix, MintAuditItemKey,
-    MintAuditItemKeyPrefix, MintOutputOutcomeKey, MintOutputOutcomePrefix, NonceKey,
-    NonceKeyPrefix,
+    BlindNonceKey, BlindNonceKeyPrefix, DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey,
+    EcashBackupKeyPrefix, MintAuditItemKey, MintAuditItemKeyPrefix, MintOutputOutcomeKey,
+    MintOutputOutcomePrefix, NonceKey, NonceKeyPrefix,
 };
 
 #[derive(Debug, Clone)]
@@ -114,6 +119,15 @@ impl ModuleInit for MintInit {
                         ECashUserBackupSnapshot,
                         mint,
                         "User Ecash Backup"
+                    );
+                }
+                DbKeyPrefix::BlindNonce => {
+                    push_db_key_items!(
+                        dbtx,
+                        BlindNonceKeyPrefix,
+                        BlindNonceKey,
+                        mint,
+                        "Used Blind Nonces"
                     );
                 }
             }
@@ -311,6 +325,57 @@ impl ServerModuleInit for MintInit {
             max_notes_per_denomination: config.max_notes_per_denomination,
         })
     }
+
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
+        let mut migrations = BTreeMap::new();
+        migrations.insert(DatabaseVersion(0), migrate_db_v0 as CoreMigrationFn);
+        migrations
+    }
+}
+
+fn migrate_db_v0(mut migration_context: MigrationContext<'_>) -> BoxFuture<anyhow::Result<()>> {
+    Box::pin(async move {
+        let blind_nonces = migration_context
+            .get_typed_module_history_stream::<MintModuleTypes>()
+            .await
+            .filter_map(|history_item: TypedModuleHistoryItem<_>| async move {
+                match history_item {
+                    TypedModuleHistoryItem::Output(mint_output) => Some(
+                        mint_output
+                            .ensure_v0_ref()
+                            .expect("This migration only runs while we only have v0 outputs")
+                            .blind_nonce,
+                    ),
+                    _ => {
+                        // We only care about e-cash issuances for this migration
+                        None
+                    }
+                }
+            })
+            .collect::<Vec<_>>()
+            .await;
+
+        info!("Found {} blind nonces in history", blind_nonces.len());
+
+        let mut double_issuances = 0usize;
+        for blind_nonce in blind_nonces {
+            if migration_context
+                .dbtx()
+                .insert_entry(&BlindNonceKey(blind_nonce), &())
+                .await
+                .is_some()
+            {
+                double_issuances += 1;
+                debug!(?blind_nonce, "Blind nonce already used, money was burned!");
+            }
+        }
+
+        if double_issuances > 0 {
+            warn!("{double_issuances} blind nonces were reused, money was burned by faulty user clients!");
+        }
+
+        Ok(())
+    })
 }
 
 fn dealer_keygen(
@@ -442,6 +507,19 @@ impl ServerModule for Mint {
         dbtx.insert_new_entry(&MintAuditItemKey::Issuance(out_point), &output.amount)
             .await;
 
+        if dbtx
+            .insert_entry(&BlindNonceKey(output.blind_nonce), &())
+            .await
+            .is_some()
+        {
+            // TODO: make a consensus rule against this
+            warn!(
+                denomination = %output.amount,
+                bnonce = ?output.blind_nonce,
+                "Blind nonce already used, money was burned!"
+            );
+        }
+
         let amount = output.amount;
         let fee = self.cfg.consensus.fee_consensus.fee(amount);
 
@@ -533,6 +611,13 @@ impl ServerModule for Mint {
                 ApiVersion::new(0, 1),
                 async |_module: &Mint, context, nonce: Nonce| -> bool {
                     Ok(context.dbtx().get_value(&NonceKey(nonce)).await.is_some())
+                }
+            },
+            api_endpoint! {
+                BLIND_NONCE_USED_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |_module: &Mint, context, blind_nonce: BlindNonce| -> bool {
+                    Ok(context.dbtx().get_value(&BlindNonceKey(blind_nonce)).await.is_some())
                 }
             },
         ]

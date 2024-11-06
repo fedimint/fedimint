@@ -105,7 +105,9 @@ let
   # env vars for linking rocksdb
   commonEnvsCross =
     let
-      build_arch_underscores = lib.strings.replaceStrings [ "-" ] [ "_" ] pkgs.stdenv.buildPlatform.config;
+      build_arch_underscores = lib.strings.replaceStrings [ "-" ] [
+        "_"
+      ] pkgs.stdenv.buildPlatform.config;
     in
     {
       # for cargo-deluxe
@@ -120,7 +122,8 @@ let
         "SQLCIPHER_target_STATIC"
         "SQLCIPHER_target_LIB_DIR"
       ];
-    } // pkgs.lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
+    }
+    // pkgs.lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
       "ROCKSDB_${build_arch_underscores}_STATIC" = "true";
       "ROCKSDB_${build_arch_underscores}_LIB_DIR" = "${pkgs.rocksdb}/lib/";
 
@@ -129,13 +132,13 @@ let
       "SNAPPY_${build_arch_underscores}_LIB_DIR" = "${pkgs.pkgsStatic.snappy}/lib/";
       # "SNAPPY_${build_arch_underscores}_COMPILE" = "true";
 
-
       "SQLITE3_${build_arch_underscores}_STATIC" = "true";
       "SQLITE3_${build_arch_underscores}_LIB_DIR" = "${pkgs.pkgsStatic.sqlite.out}/lib/";
 
       "SQLCIPHER_${build_arch_underscores}_LIB_DIR" = "${pkgs.pkgsStatic.sqlcipher}/lib/";
       "SQLCIPHER_${build_arch_underscores}_STATIC" = "true";
-    } // pkgs.lib.optionalAttrs pkgs.stdenv.isDarwin {
+    }
+    // pkgs.lib.optionalAttrs pkgs.stdenv.isDarwin {
       # tons of problems, just compile
       # "SNAPPY_${build_arch_underscores}_LIB_DIR" = "${pkgs.snappy}/lib/";
       "SNAPPY_${build_arch_underscores}_COMPILE" = "true";

@@ -7,8 +7,8 @@ final: prev: {
     };
     makeFlags = [ "VERSION=v${version}" ];
     configureFlags = [
-        "--enable-developer"
-        "--disable-valgrind"
+      "--enable-developer"
+      "--disable-valgrind"
     ];
     env = {
       NIX_CFLAGS_COMPILE = "-w";
