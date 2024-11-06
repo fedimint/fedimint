@@ -3725,7 +3725,7 @@
     <span class="kw">let </span><span class="kw-2">mut </span>nonce: [u8; <span class="number">33</span>] = [<span class="number">0</span>; <span class="number">33</span>];
     <span class="comment">// Make it look like a compressed pubkey, has to be either 0x02 or 0x03
     </span>nonce[<span class="number">0</span>] = <span class="number">0x02</span>;
-    nonce[<span class="number">1</span>..].copy_from_slice(<span class="kw-2">&amp;</span>nonce_idx.consensus_hash::&lt;bitcoin30::hashes::sha256::Hash&gt;()[..]);
+    nonce[<span class="number">1</span>..].copy_from_slice(<span class="kw-2">&amp;</span>nonce_idx.consensus_hash::&lt;bitcoin::hashes::sha256::Hash&gt;()[..]);
 
     nonce
 }

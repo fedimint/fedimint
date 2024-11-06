@@ -536,7 +536,10 @@
 <a href="#535" id="535">535</a>
 <a href="#536" id="536">536</a>
 <a href="#537" id="537">537</a>
-<a href="#538" id="538">538</a></pre></div><pre class="rust"><code><span class="kw">mod </span>api;
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a></pre></div><pre class="rust"><code><span class="kw">mod </span>api;
 <span class="kw">mod </span>complete_sm;
 <span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
@@ -806,7 +809,10 @@
             secp256k1::SECP256K1
                 .verify_schnorr(
                     <span class="kw-2">&amp;</span>payload.auth,
-                    <span class="kw-2">&amp;</span>payload.invoice.consensus_hash::&lt;sha256::Hash&gt;().into(),
+                    <span class="kw-2">&amp;</span>payload
+                        .invoice
+                        .consensus_hash_bitcoin30::&lt;sha256::Hash&gt;()
+                        .into(),
                     <span class="kw-2">&amp;</span>payload.contract.refund_pk.x_only_public_key().<span class="number">0</span>,
                 )
                 .is_ok(),

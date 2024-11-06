@@ -1531,7 +1531,23 @@
 <a href="#1530" id="1530">1530</a>
 <a href="#1531" id="1531">1531</a>
 <a href="#1532" id="1532">1532</a>
-<a href="#1533" id="1533">1533</a></pre></div><pre class="rust"><code><span class="doccomment">//! Binary encoding interface suitable for
+<a href="#1533" id="1533">1533</a>
+<a href="#1534" id="1534">1534</a>
+<a href="#1535" id="1535">1535</a>
+<a href="#1536" id="1536">1536</a>
+<a href="#1537" id="1537">1537</a>
+<a href="#1538" id="1538">1538</a>
+<a href="#1539" id="1539">1539</a>
+<a href="#1540" id="1540">1540</a>
+<a href="#1541" id="1541">1541</a>
+<a href="#1542" id="1542">1542</a>
+<a href="#1543" id="1543">1543</a>
+<a href="#1544" id="1544">1544</a>
+<a href="#1545" id="1545">1545</a>
+<a href="#1546" id="1546">1546</a>
+<a href="#1547" id="1547">1547</a>
+<a href="#1548" id="1548">1548</a>
+<a href="#1549" id="1549">1549</a></pre></div><pre class="rust"><code><span class="doccomment">//! Binary encoding interface suitable for
 //! consensus critical encoding.
 //!
 //! Over time all structs that ! need to be encoded to binary will be migrated
@@ -1642,9 +1658,25 @@
     ///
     /// Can be used to validate all federation members agree on state without
     /// revealing the object
+    </span><span class="kw">fn </span>consensus_hash_bitcoin30&lt;H&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; H
+    <span class="kw">where
+        </span>H: bitcoin30::hashes::Hash,
+        H::Engine: std::io::Write,
+    {
+        <span class="kw">let </span><span class="kw-2">mut </span>engine = H::engine();
+        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>engine)
+            .expect(<span class="string">"writing to HashEngine cannot fail"</span>);
+        H::from_engine(engine)
+    }
+
+    <span class="doccomment">/// Generate a SHA256 hash of the consensus encoding using the default hash
+    /// engine for `H`.
+    ///
+    /// Can be used to validate all federation members agree on state without
+    /// revealing the object
     </span><span class="kw">fn </span>consensus_hash&lt;H&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; H
     <span class="kw">where
-        </span>H: bitcoin_hashes::Hash,
+        </span>H: bitcoin::hashes::Hash,
         H::Engine: std::io::Write,
     {
         <span class="kw">let </span><span class="kw-2">mut </span>engine = H::engine();

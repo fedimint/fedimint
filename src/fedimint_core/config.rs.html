@@ -1334,7 +1334,7 @@
     <span class="doccomment">/// 0.4.0 and later uses a hash of broadcast public keys to calculate the
     /// federation id. 0.3.x and earlier use a hash of api endpoints
     </span><span class="kw">pub fn </span>calculate_federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationId {
-        FederationId(<span class="self">self</span>.api_endpoints.consensus_hash())
+        FederationId(<span class="self">self</span>.api_endpoints.consensus_hash_bitcoin30())
     }
 
     <span class="doccomment">/// Federation name from config metadata (if set)

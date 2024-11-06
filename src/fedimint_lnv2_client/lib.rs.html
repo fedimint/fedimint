@@ -1894,11 +1894,11 @@
         <span class="kw">let </span>(ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(recipient_static_pk);
 
         <span class="kw">let </span>encryption_seed = ephemeral_tweak
-            .consensus_hash::&lt;sha256::Hash&gt;()
+            .consensus_hash_bitcoin30::&lt;sha256::Hash&gt;()
             .to_byte_array();
 
         <span class="kw">let </span>preimage = encryption_seed
-            .consensus_hash::&lt;sha256::Hash&gt;()
+            .consensus_hash_bitcoin30::&lt;sha256::Hash&gt;()
             .to_byte_array();
 
         <span class="kw">let </span>(gateway, routing_info) = <span class="kw">match </span>gateway {
@@ -1942,7 +1942,7 @@
             <span class="self">self</span>.cfg.tpe_agg_pk,
             encryption_seed,
             preimage,
-            PaymentImage::Hash(preimage.consensus_hash()),
+            PaymentImage::Hash(preimage.consensus_hash_bitcoin30()),
             contract_amount,
             expiration,
             claim_pk,
@@ -1963,7 +1963,7 @@
             .<span class="kw">await
             </span>.map_err(ReceiveError::GatewayConnectionError)<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>invoice.payment_hash() != <span class="kw-2">&amp;</span>preimage.consensus_hash() {
+        <span class="kw">if </span>invoice.payment_hash() != <span class="kw-2">&amp;</span>preimage.consensus_hash_bitcoin30() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveError::InvalidInvoicePaymentHash);
         }
 
@@ -2028,7 +2028,7 @@
         .secret_bytes();
 
         <span class="kw">let </span>encryption_seed = ephemeral_tweak
-            .consensus_hash::&lt;sha256::Hash&gt;()
+            .consensus_hash_bitcoin30::&lt;sha256::Hash&gt;()
             .to_byte_array();
 
         <span class="kw">let </span>claim_keypair = <span class="self">self

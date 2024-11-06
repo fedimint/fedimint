@@ -4194,7 +4194,7 @@
 
         <span class="kw">let </span>operation_id = OperationId(
             notes
-                .consensus_hash::&lt;sha256t::Hash&lt;OOBReissueTag&gt;&gt;()
+                .consensus_hash_bitcoin30::&lt;sha256t::Hash&lt;OOBReissueTag&gt;&gt;()
                 .to_byte_array(),
         );
 
@@ -4598,7 +4598,7 @@
 ) -&gt; OperationId {
     OperationId(
         spendable_selected_notes
-            .consensus_hash::&lt;sha256t::Hash&lt;OOBSpendTag&gt;&gt;()
+            .consensus_hash_bitcoin30::&lt;sha256t::Hash&lt;OOBSpendTag&gt;&gt;()
             .to_byte_array(),
     )
 }
