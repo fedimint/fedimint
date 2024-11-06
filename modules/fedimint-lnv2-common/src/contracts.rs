@@ -61,7 +61,7 @@ impl IncomingContract {
             &agg_pk,
             &encryption_seed,
             &preimage,
-            &commitment.consensus_hash(),
+            &commitment.consensus_hash_bitcoin30(),
         );
 
         IncomingContract {
@@ -71,11 +71,14 @@ impl IncomingContract {
     }
 
     pub fn contract_id(&self) -> ContractId {
-        ContractId(self.consensus_hash())
+        ContractId(self.consensus_hash_bitcoin30())
     }
 
     pub fn verify(&self) -> bool {
-        verify_ciphertext(&self.ciphertext, &self.commitment.consensus_hash())
+        verify_ciphertext(
+            &self.ciphertext,
+            &self.commitment.consensus_hash_bitcoin30(),
+        )
     }
 
     pub fn verify_decryption_share(
@@ -87,7 +90,7 @@ impl IncomingContract {
             pk,
             dk_share,
             &self.ciphertext,
-            &self.commitment.consensus_hash(),
+            &self.commitment.consensus_hash_bitcoin30(),
         )
     }
 
@@ -100,7 +103,7 @@ impl IncomingContract {
             agg_pk,
             agg_decryption_key,
             &self.ciphertext,
-            &self.commitment.consensus_hash(),
+            &self.commitment.consensus_hash_bitcoin30(),
         )
     }
 
@@ -138,7 +141,7 @@ pub struct OutgoingContract {
 
 impl OutgoingContract {
     pub fn contract_id(&self) -> ContractId {
-        ContractId(self.consensus_hash())
+        ContractId(self.consensus_hash_bitcoin30())
     }
 
     pub fn forfeit_message(&self) -> Message {
@@ -179,7 +182,7 @@ impl OutgoingContract {
 
 fn verify_preimage(payment_image: &PaymentImage, preimage: &[u8; 32]) -> bool {
     match payment_image {
-        PaymentImage::Hash(hash) => preimage.consensus_hash::<sha256::Hash>() == *hash,
+        PaymentImage::Hash(hash) => preimage.consensus_hash_bitcoin30::<sha256::Hash>() == *hash,
         PaymentImage::Point(pk) => match SecretKey::from_slice(preimage) {
             Ok(sk) => sk.public_key(secp256k1::SECP256K1) == *pk,
             Err(..) => false,

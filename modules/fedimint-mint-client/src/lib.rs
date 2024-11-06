@@ -1470,7 +1470,7 @@ impl MintClientModule {
 
         let operation_id = OperationId(
             notes
-                .consensus_hash::<sha256t::Hash<OOBReissueTag>>()
+                .consensus_hash_bitcoin30::<sha256t::Hash<OOBReissueTag>>()
                 .to_byte_array(),
         );
 
@@ -1874,7 +1874,7 @@ pub fn spendable_notes_to_operation_id(
 ) -> OperationId {
     OperationId(
         spendable_selected_notes
-            .consensus_hash::<sha256t::Hash<OOBSpendTag>>()
+            .consensus_hash_bitcoin30::<sha256t::Hash<OOBSpendTag>>()
             .to_byte_array(),
     )
 }

@@ -26,7 +26,7 @@ pub struct BackupRequest {
 
 impl BackupRequest {
     fn hash(&self) -> sha256::Hash {
-        self.consensus_hash()
+        self.consensus_hash_bitcoin30()
     }
 
     pub fn sign(self, keypair: &KeyPair) -> anyhow::Result<SignedBackupRequest> {

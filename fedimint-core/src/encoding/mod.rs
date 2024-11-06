@@ -109,9 +109,25 @@ pub trait Encodable {
     ///
     /// Can be used to validate all federation members agree on state without
     /// revealing the object
+    fn consensus_hash_bitcoin30<H>(&self) -> H
+    where
+        H: bitcoin30::hashes::Hash,
+        H::Engine: std::io::Write,
+    {
+        let mut engine = H::engine();
+        self.consensus_encode(&mut engine)
+            .expect("writing to HashEngine cannot fail");
+        H::from_engine(engine)
+    }
+
+    /// Generate a SHA256 hash of the consensus encoding using the default hash
+    /// engine for `H`.
+    ///
+    /// Can be used to validate all federation members agree on state without
+    /// revealing the object
     fn consensus_hash<H>(&self) -> H
     where
-        H: bitcoin_hashes::Hash,
+        H: bitcoin::hashes::Hash,
         H::Engine: std::io::Write,
     {
         let mut engine = H::engine();

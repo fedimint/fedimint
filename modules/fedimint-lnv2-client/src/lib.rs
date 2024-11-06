@@ -784,11 +784,11 @@ impl LightningClientModule {
         let (ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(recipient_static_pk);
 
         let encryption_seed = ephemeral_tweak
-            .consensus_hash::<sha256::Hash>()
+            .consensus_hash_bitcoin30::<sha256::Hash>()
             .to_byte_array();
 
         let preimage = encryption_seed
-            .consensus_hash::<sha256::Hash>()
+            .consensus_hash_bitcoin30::<sha256::Hash>()
             .to_byte_array();
 
         let (gateway, routing_info) = match gateway {
@@ -832,7 +832,7 @@ impl LightningClientModule {
             self.cfg.tpe_agg_pk,
             encryption_seed,
             preimage,
-            PaymentImage::Hash(preimage.consensus_hash()),
+            PaymentImage::Hash(preimage.consensus_hash_bitcoin30()),
             contract_amount,
             expiration,
             claim_pk,
@@ -853,7 +853,7 @@ impl LightningClientModule {
             .await
             .map_err(ReceiveError::GatewayConnectionError)?;
 
-        if invoice.payment_hash() != &preimage.consensus_hash() {
+        if invoice.payment_hash() != &preimage.consensus_hash_bitcoin30() {
             return Err(ReceiveError::InvalidInvoicePaymentHash);
         }
 
@@ -918,7 +918,7 @@ impl LightningClientModule {
         .secret_bytes();
 
         let encryption_seed = ephemeral_tweak
-            .consensus_hash::<sha256::Hash>()
+            .consensus_hash_bitcoin30::<sha256::Hash>()
             .to_byte_array();
 
         let claim_keypair = self

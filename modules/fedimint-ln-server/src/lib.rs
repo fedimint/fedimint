@@ -710,7 +710,9 @@ impl ServerModule for Lightning {
                 // Check that each preimage is only offered for sale once, see #1397
                 if dbtx
                     .insert_entry(
-                        &EncryptedPreimageIndexKey(offer.encrypted_preimage.consensus_hash()),
+                        &EncryptedPreimageIndexKey(
+                            offer.encrypted_preimage.consensus_hash_bitcoin30(),
+                        ),
                         &(),
                     )
                     .await
@@ -1333,7 +1335,7 @@ mod tests {
         let preimage = [42u8; 32];
         let encrypted_preimage = EncryptedPreimage(client_cfg.threshold_pub_key.encrypt([42; 32]));
 
-        let hash = preimage.consensus_hash();
+        let hash = preimage.consensus_hash_bitcoin30();
         let offer = IncomingContractOffer {
             amount: Amount::from_sats(10),
             hash,
@@ -1358,7 +1360,7 @@ mod tests {
             .await
             .expect("First time works");
 
-        let hash2 = [21u8, 32].consensus_hash();
+        let hash2 = [21u8, 32].consensus_hash_bitcoin30();
         let offer2 = IncomingContractOffer {
             amount: Amount::from_sats(1),
             hash: hash2,
@@ -1456,7 +1458,7 @@ mod tests {
         let preimage = Preimage([42u8; 32]);
         let gateway_key = random_pub_key();
         let outgoing_contract = FundedContract::Outgoing(OutgoingContract {
-            hash: preimage.consensus_hash(),
+            hash: preimage.consensus_hash_bitcoin30(),
             gateway_key: bitcoin30_to_bitcoin32_secp256k1_pubkey(&gateway_key),
             timelock: 1_000_000,
             user_key: bitcoin30_to_bitcoin32_secp256k1_pubkey(&random_pub_key()),

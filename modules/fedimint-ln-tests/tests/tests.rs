@@ -799,8 +799,11 @@ mod fedimint_migration_tests {
         dbtx.insert_new_entry(&BlockCountVoteKey(PeerId::from(0)), &1)
             .await;
 
-        dbtx.insert_new_entry(&EncryptedPreimageIndexKey("foobar".consensus_hash()), &())
-            .await;
+        dbtx.insert_new_entry(
+            &EncryptedPreimageIndexKey("foobar".consensus_hash_bitcoin30()),
+            &(),
+        )
+        .await;
 
         dbtx.insert_new_entry(
             &LightningAuditItemKey::from_funded_contract(&incoming_contract),

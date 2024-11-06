@@ -271,7 +271,7 @@ impl ServerConfig {
     }
 
     pub fn calculate_federation_id(&self) -> FederationId {
-        FederationId(self.consensus.api_endpoints.consensus_hash())
+        FederationId(self.consensus.api_endpoints.consensus_hash_bitcoin30())
     }
 
     pub fn add_modules(&mut self, modules: BTreeMap<ModuleInstanceId, ServerModuleConfig>) {

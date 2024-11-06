@@ -14,7 +14,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin::hashes::{sha256, Hash};
 use fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use rand::RngCore;

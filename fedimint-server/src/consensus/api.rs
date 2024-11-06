@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use bitcoin_hashes::sha256;
+use bitcoin::hashes::sha256;
 use fedimint_aead::{encrypt, get_encryption_key, random_salt};
 use fedimint_api_client::api::{
     FederationStatus, GuardianConfigBackup, PeerConnectionStatus, PeerStatus, StatusResponse,

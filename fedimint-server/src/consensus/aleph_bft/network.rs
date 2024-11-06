@@ -15,7 +15,9 @@ impl aleph_bft::Hasher for Hasher {
     type Hash = [u8; 32];
 
     fn hash(input: &[u8]) -> Self::Hash {
-        input.consensus_hash::<sha256::Hash>().to_byte_array()
+        input
+            .consensus_hash_bitcoin30::<sha256::Hash>()
+            .to_byte_array()
     }
 }
 

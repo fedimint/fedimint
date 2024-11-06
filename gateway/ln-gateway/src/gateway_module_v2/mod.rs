@@ -268,7 +268,10 @@ impl GatewayClientModuleV2 {
             secp256k1::SECP256K1
                 .verify_schnorr(
                     &payload.auth,
-                    &payload.invoice.consensus_hash::<sha256::Hash>().into(),
+                    &payload
+                        .invoice
+                        .consensus_hash_bitcoin30::<sha256::Hash>()
+                        .into(),
                     &payload.contract.refund_pk.x_only_public_key().0,
                 )
                 .is_ok(),
