@@ -1,14 +1,18 @@
+use std::io::Cursor;
+
 use fedimint_client::module::init::recovery::RecoveryFromHistoryCommon;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{impl_db_lookup, impl_db_record, Amount};
 use fedimint_mint_common::Nonce;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
 use crate::backup::recovery::MintRecoveryState;
-use crate::SpendableNoteUndecoded;
+use crate::oob::{MintOOBStateMachine, MintOOBStateMachineV1, MintOOBStates, MintOOBStatesV1};
+use crate::{MintClientStateMachines, SpendableNoteUndecoded};
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -109,4 +113,33 @@ pub async fn migrate_to_v1(
     dbtx.remove_entry(&RecoveryStateKey).await;
 
     Ok(None)
+}
+
+/// Maps all `Unreachable` states in the state machine to `OutputDone`
+pub(crate) fn migrate_state_to_v2(
+    operation_id: OperationId,
+    cursor: &mut Cursor<&[u8]>,
+) -> anyhow::Result<Option<(Vec<u8>, OperationId)>> {
+    let decoders = ModuleDecoderRegistry::default();
+
+    let mint_client_state_machine_variant = u16::consensus_decode(cursor, &decoders)?;
+
+    let bytes = match mint_client_state_machine_variant {
+        2 => {
+            let old_state = MintOOBStateMachineV1::consensus_decode(cursor, &decoders)?;
+
+            let new_state = match old_state.state {
+                MintOOBStatesV1::Created(created) => MintOOBStates::Created(created),
+                MintOOBStatesV1::UserRefund(refund) => MintOOBStates::UserRefund(refund),
+                MintOOBStatesV1::TimeoutRefund(refund) => MintOOBStates::TimeoutRefund(refund),
+            };
+            MintClientStateMachines::OOB(MintOOBStateMachine {
+                operation_id: old_state.operation_id,
+                state: new_state,
+            })
+            .consensus_encode_to_vec()
+        }
+        _ => return Ok(None),
+    };
+    Ok(Some((bytes, operation_id)))
 }

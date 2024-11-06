@@ -572,6 +572,7 @@ impl Database {
                         warn!(
                             target: LOG_DB,
                             curr_attempts,
+                            ?err,
                             "Database commit failed in an autocommit block - terminating"
                         );
                         return Err(AutocommitError::CommitFailed {
@@ -585,6 +586,7 @@ impl Database {
                     warn!(
                         target: LOG_DB,
                         curr_attempts,
+                        %err,
                         delay_ms = %delay,
                         "Database commit failed in an autocommit block - retrying"
                     );

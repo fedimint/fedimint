@@ -228,18 +228,20 @@ impl Executor {
             if let Some(module_context) =
                 self.inner.module_contexts.get(&state.module_instance_id())
             {
-                let context = self
+                if let Some(context) = self
                     .inner
                     .state
                     .read()
-                    .unwrap()
+                    .expect("locking failed")
                     .gen_context(&state)
-                    .expect("executor should be running at this point");
-
-                if state.is_terminal(module_context, &context) {
-                    return Err(AddStateMachinesError::Other(anyhow!(
+                {
+                    if state.is_terminal(module_context, &context) {
+                        return Err(AddStateMachinesError::Other(anyhow!(
                         "State is already terminal, adding it to the executor doesn't make sense."
                     )));
+                    }
+                } else {
+                    warn!(target: LOG_CLIENT_REACTOR, "Executor should be running at this point");
                 }
             }
 
