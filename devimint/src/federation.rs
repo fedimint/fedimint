@@ -755,7 +755,7 @@ impl Federation {
         try_join_all(gateways.into_iter().map(|gw| {
             poll("gateway pegin", || async {
                 let gateway_balance = gw
-                    .balance(fed_id.clone())
+                    .ecash_balance(fed_id.clone())
                     .await
                     .map_err(ControlFlow::Continue)?;
                 poll_eq!(gateway_balance, amount * 1000)
@@ -789,7 +789,8 @@ impl Federation {
             let pegout_address = self.bitcoind.get_new_address().await?;
             let value = cmd!(
                 gw,
-                "withdraw",
+                "ecash",
+                "pegout",
                 "--federation-id",
                 fed_id,
                 "--amount",

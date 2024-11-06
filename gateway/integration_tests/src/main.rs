@@ -623,9 +623,9 @@ async fn liquidity_test() -> anyhow::Result<()> {
             assert_eq!(inbound_lightning_balance, 0, "Close channels did not sweep all lightning funds");
         }
 
-        info!("Testing withdraw onchain...");
+        info!("Testing sending onchain...");
         for gw in gateways {
-            gw.withdraw_onchain(dev_fed.bitcoind().await?, BitcoinAmountOrAll::All, 10).await?;
+            gw.send_onchain(dev_fed.bitcoind().await?, BitcoinAmountOrAll::All, 10).await?;
             let curr_balance = gw.get_balances().await?.onchain_balance_sats;
             assert_eq!(curr_balance, 0, "Gateway onchain balance did not match previous balance minus withdraw amount");
         }

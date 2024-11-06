@@ -329,6 +329,7 @@ impl Gatewayd {
     pub async fn send_ecash(&self, federation_id: String, amount_msats: u64) -> Result<String> {
         let value = cmd!(
             self,
+            "ecash",
             "spend-ecash",
             "--federation-id",
             federation_id,
@@ -346,7 +347,9 @@ impl Gatewayd {
     }
 
     pub async fn receive_ecash(&self, ecash: String) -> Result<()> {
-        cmd!(self, "receive-ecash", "--notes", ecash).run().await?;
+        cmd!(self, "ecash", "receive-ecash", "--notes", ecash)
+            .run()
+            .await?;
         Ok(())
     }
 
@@ -368,7 +371,7 @@ impl Gatewayd {
         Ok(ecash_balance)
     }
 
-    pub async fn withdraw_onchain(
+    pub async fn send_onchain(
         &self,
         bitcoind: &Bitcoind,
         amount: BitcoinAmountOrAll,
@@ -377,8 +380,8 @@ impl Gatewayd {
         let withdraw_address = bitcoind.get_new_address().await?;
         let value = cmd!(
             self,
-            "lightning",
-            "withdraw-onchain",
+            "onchain",
+            "send",
             "--address",
             withdraw_address,
             "--amount",

@@ -880,7 +880,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     client.use_gateway(&gw_cln).await?;
 
     let initial_client_balance = client.balance().await?;
-    let initial_cln_gateway_balance = gw_cln.balance(fed_id.clone()).await?;
+    let initial_cln_gateway_balance = gw_cln.ecash_balance(fed_id.clone()).await?;
     let (invoice, payment_hash) = lnd.invoice(1_200_000).await?;
     ln_pay(&client, invoice.clone(), cln_gw_id.clone(), false).await?;
     lnd.wait_bolt11_invoice(payment_hash).await?;
@@ -896,7 +896,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     // Assert balances changed by 1_200_000 msat (amount sent) + 0 msat (fee)
     let final_cln_outgoing_client_balance = client.balance().await?;
-    let final_cln_outgoing_gateway_balance = gw_cln.balance(fed_id.clone()).await?;
+    let final_cln_outgoing_gateway_balance = gw_cln.ecash_balance(fed_id.clone()).await?;
 
     let expected_diff = 1_200_000;
     anyhow::ensure!(
@@ -929,7 +929,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     // Assert balances changed by 1100000 msat
     let final_cln_incoming_client_balance = client.balance().await?;
-    let final_cln_incoming_gateway_balance = gw_cln.balance(fed_id.clone()).await?;
+    let final_cln_incoming_gateway_balance = gw_cln.ecash_balance(fed_id.clone()).await?;
     anyhow::ensure!(
         final_cln_incoming_client_balance - final_cln_outgoing_client_balance == 1_100_000,
         "Client balance changed by {} on CLN incoming payment, expected 1100000",
@@ -947,7 +947,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     // OUTGOING: fedimint-cli pays CLN via LND gateaway
     info!("Testing outgoing payment from client to CLN via LND gateway");
-    let initial_lnd_gateway_balance = gw_lnd.balance(fed_id.clone()).await?;
+    let initial_lnd_gateway_balance = gw_lnd.ecash_balance(fed_id.clone()).await?;
     let invoice = cln
         .invoice(
             2_000_000,
@@ -962,7 +962,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     // Assert balances changed by 2_000_000 msat (amount sent) + 0 msat (fee)
     let final_lnd_outgoing_client_balance = client.balance().await?;
-    let final_lnd_outgoing_gateway_balance = gw_lnd.balance(fed_id.clone()).await?;
+    let final_lnd_outgoing_gateway_balance = gw_lnd.ecash_balance(fed_id.clone()).await?;
     anyhow::ensure!(
         final_cln_incoming_client_balance - final_lnd_outgoing_client_balance == 2_000_000,
         "Client balance changed by {} on LND outgoing payment, expected 2_000_000",
@@ -995,7 +995,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     // Assert balances changed by 1_300_000 msat
     let final_lnd_incoming_client_balance = client.balance().await?;
-    let final_lnd_incoming_gateway_balance = gw_lnd.balance(fed_id.clone()).await?;
+    let final_lnd_incoming_gateway_balance = gw_lnd.ecash_balance(fed_id.clone()).await?;
     anyhow::ensure!(
         final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance == 1_300_000,
         "Client balance changed by {} on LND incoming payment, expected 1_300_000",
