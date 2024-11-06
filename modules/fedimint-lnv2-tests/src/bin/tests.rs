@@ -79,7 +79,7 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     }
 
     assert_eq!(
-        cmd!(client, "module", "lnv2", "gateway", "list")
+        cmd!(client, "module", "lnv2", "gateways", "list")
             .out_json()
             .await?
             .as_array()
@@ -89,7 +89,7 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     );
 
     assert_eq!(
-        cmd!(client, "module", "lnv2", "gateway", "list", "--peer", "0")
+        cmd!(client, "module", "lnv2", "gateways", "list", "--peer", "0")
             .out_json()
             .await?
             .as_array()
@@ -101,7 +101,7 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     info!("Testing selection of gateways...");
 
     assert!(gateways.contains(
-        &cmd!(client, "module", "lnv2", "gateway", "select")
+        &cmd!(client, "module", "lnv2", "gateways", "select")
             .out_json()
             .await?
             .as_str()
@@ -109,7 +109,7 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
             .to_string()
     ));
 
-    cmd!(client, "module", "lnv2", "gateway", "cache")
+    cmd!(client, "module", "lnv2", "gateways", "map")
         .out_json()
         .await?;
 
@@ -122,7 +122,7 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
                     client,
                     "module",
                     "lnv2",
-                    "gateway",
+                    "gateways",
                     "select",
                     "--invoice",
                     invoice.to_string()
@@ -144,7 +144,7 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         }
     }
 
-    assert!(cmd!(client, "module", "lnv2", "gateway", "list")
+    assert!(cmd!(client, "module", "lnv2", "gateways", "list")
         .out_json()
         .await?
         .as_array()
@@ -152,7 +152,7 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         .is_empty(),);
 
     assert!(
-        cmd!(client, "module", "lnv2", "gateway", "list", "--peer", "0")
+        cmd!(client, "module", "lnv2", "gateways", "list", "--peer", "0")
             .out_json()
             .await?
             .as_array()
@@ -298,7 +298,7 @@ async fn add_gateway(client: &Client, peer: usize, gateway: &String) -> anyhow::
         "pass",
         "module",
         "lnv2",
-        "gateway",
+        "gateways",
         "add",
         gateway
     )
@@ -317,7 +317,7 @@ async fn remove_gateway(client: &Client, peer: usize, gateway: &String) -> anyho
         "pass",
         "module",
         "lnv2",
-        "gateway",
+        "gateways",
         "remove",
         gateway
     )
