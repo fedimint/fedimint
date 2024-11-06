@@ -44,9 +44,9 @@ use std::str::FromStr;
 pub use amount::*;
 /// Mostly re-exported for [`Decodable`] macros.
 pub use anyhow;
-use bitcoin_hashes::hash_newtype;
-use bitcoin_hashes::sha256::Hash as Sha256;
-pub use bitcoin_hashes::Hash as BitcoinHash;
+use bitcoin30::hashes::hash_newtype;
+use bitcoin30::hashes::sha256::Hash as Sha256;
+pub use bitcoin30::hashes::Hash as BitcoinHash;
 pub use macro_rules_attribute::apply;
 pub use module::ServerModule;
 pub use peer_id::*;

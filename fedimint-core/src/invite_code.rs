@@ -285,7 +285,7 @@ mod tests {
                     peer: PeerId::new(0),
                 },
                 crate::invite_code::InviteCodePart::FederationId(FederationId(
-                    bitcoin_hashes::sha256::Hash::from_str(
+                    bitcoin30::hashes::sha256::Hash::from_str(
                         "bea7ff4116f2b1d324c7b5d699cce4ac7408cee41db2c88027e21b76fff3b9f4"
                     )
                     .expect("valid hash")

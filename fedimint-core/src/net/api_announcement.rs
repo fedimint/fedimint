@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin30::hashes::{sha256, Hash};
 use fedimint_core::db::DatabaseLookup;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::MaybeSend;

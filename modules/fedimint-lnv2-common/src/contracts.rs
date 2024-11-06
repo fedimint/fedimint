@@ -1,5 +1,5 @@
+use bitcoin30::hashes::sha256;
 use bitcoin30::secp256k1;
-use bitcoin_hashes::sha256;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::Amount;
 use secp256k1::schnorr::Signature;
@@ -192,10 +192,10 @@ fn verify_preimage(payment_image: &PaymentImage, preimage: &[u8; 32]) -> bool {
 
 #[test]
 fn test_verify_preimage() {
-    use bitcoin_hashes::Hash;
+    use bitcoin30::hashes::Hash;
 
     assert!(verify_preimage(
-        &PaymentImage::Hash(bitcoin_hashes::sha256::Hash::hash(&[42; 32])),
+        &PaymentImage::Hash(bitcoin30::hashes::sha256::Hash::hash(&[42; 32])),
         &[42; 32]
     ));
 
