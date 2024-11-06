@@ -34,11 +34,11 @@ enum Opts {
     AwaitReceive { operation_id: OperationId },
     /// Gateway subcommands
     #[command(subcommand)]
-    Gateway(GatewayOpts),
+    Gateways(GatewaysOpts),
 }
 
 #[derive(Clone, Subcommand, Serialize)]
-enum GatewayOpts {
+enum GatewaysOpts {
     /// Update the mapping from lightning node public keys to gateway api
     /// endpoints maintained in the module database to optimise gateway
     /// selection for a given invoice; this command is intended for testing.
@@ -90,9 +90,9 @@ pub(crate) async fn handle_cli_command(
                 .await_final_receive_operation_state(operation_id)
                 .await?,
         ),
-        Opts::Gateway(gateway_opts) => match gateway_opts {
+        Opts::Gateways(gateway_opts) => match gateway_opts {
             #[allow(clippy::unit_arg)]
-            GatewayOpts::Map => json(
+            GatewaysOpts::Map => json(
                 LightningClientModule::update_gateway_map(
                     &lightning.federation_id,
                     &lightning.client_ctx,
@@ -101,12 +101,12 @@ pub(crate) async fn handle_cli_command(
                 )
                 .await,
             ),
-            GatewayOpts::Select { invoice } => json(lightning.select_gateway(invoice).await?.0),
-            GatewayOpts::List { peer } => match peer {
+            GatewaysOpts::Select { invoice } => json(lightning.select_gateway(invoice).await?.0),
+            GatewaysOpts::List { peer } => match peer {
                 Some(peer) => json(lightning.module_api.gateways_from_peer(peer).await?),
                 None => json(lightning.module_api.gateways().await?),
             },
-            GatewayOpts::Add { gateway } => {
+            GatewaysOpts::Add { gateway } => {
                 let auth = lightning
                     .admin_auth
                     .clone()
@@ -114,7 +114,7 @@ pub(crate) async fn handle_cli_command(
 
                 json(lightning.module_api.add_gateway(auth, gateway).await?)
             }
-            GatewayOpts::Remove { gateway } => {
+            GatewaysOpts::Remove { gateway } => {
                 let auth = lightning
                     .admin_auth
                     .clone()
