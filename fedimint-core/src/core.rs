@@ -14,7 +14,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin::hashes::{sha256, Hash};
 use fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use rand::RngCore;
@@ -71,11 +71,7 @@ impl OperationId {
     }
 
     pub fn from_encodable<E: Encodable>(encodable: &E) -> Self {
-        Self(
-            encodable
-                .consensus_hash_bitcoin30::<sha256::Hash>()
-                .to_byte_array(),
-        )
+        Self(encodable.consensus_hash::<sha256::Hash>().to_byte_array())
     }
 
     pub fn fmt_short(&self) -> OperationIdShortFmt {

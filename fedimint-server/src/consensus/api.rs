@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use bitcoin_hashes::sha256;
+use bitcoin::hashes::sha256;
 use fedimint_aead::{encrypt, get_encryption_key, random_salt};
 use fedimint_api_client::api::{
     FederationStatus, GuardianConfigBackup, PeerConnectionStatus, PeerStatus, StatusResponse,
@@ -598,7 +598,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> sha256::Hash {
-                Ok(fedimint.cfg.consensus.consensus_hash_bitcoin30())
+                Ok(fedimint.cfg.consensus.consensus_hash())
             }
         },
         api_endpoint! {

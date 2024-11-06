@@ -119,6 +119,22 @@ pub trait Encodable {
             .expect("writing to HashEngine cannot fail");
         H::from_engine(engine)
     }
+
+    /// Generate a SHA256 hash of the consensus encoding using the default hash
+    /// engine for `H`.
+    ///
+    /// Can be used to validate all federation members agree on state without
+    /// revealing the object
+    fn consensus_hash<H>(&self) -> H
+    where
+        H: bitcoin::hashes::Hash,
+        H::Engine: std::io::Write,
+    {
+        let mut engine = H::engine();
+        self.consensus_encode(&mut engine)
+            .expect("writing to HashEngine cannot fail");
+        H::from_engine(engine)
+    }
 }
 
 /// Maximum size, in bytes, of data we are allowed to ever decode

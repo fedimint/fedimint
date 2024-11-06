@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use bitcoin30::hashes::sha256;
+use bitcoin::hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
@@ -173,7 +173,7 @@ impl SendStateMachine {
                     invoice.clone(),
                     bitcoin32_to_bitcoin30_schnorr_signature(&refund_keypair.sign_schnorr(
                         secp256k1::Message::from_digest(
-                            *invoice.consensus_hash_bitcoin30::<sha256::Hash>().as_ref(),
+                            *invoice.consensus_hash::<sha256::Hash>().as_ref(),
                         ),
                     )),
                 )

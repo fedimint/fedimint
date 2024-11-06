@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use bitcoin_hashes::sha256;
+use bitcoin::hashes::sha256;
 use bitcoincore_rpc::RpcApi;
 use fedimint_api_client::api::{DynGlobalApi, StatusResponse};
 use fedimint_bitcoind::create_bitcoind;
@@ -358,12 +358,7 @@ impl ConfigGenApi {
             .consensus
             .api_endpoints
             .keys()
-            .map(|peer| {
-                (
-                    *peer,
-                    (*peer, config.consensus.clone()).consensus_hash_bitcoin30(),
-                )
-            })
+            .map(|peer| (*peer, (*peer, config.consensus.clone()).consensus_hash()))
             .collect();
 
         Ok(verification_hashes)
