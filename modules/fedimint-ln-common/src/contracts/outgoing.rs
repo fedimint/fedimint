@@ -1,5 +1,6 @@
 use bitcoin_hashes::Hash as BitcoinHash;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::secp256k1_29::PublicKey;
 use fedimint_core::Amount;
 use serde::{Deserialize, Serialize};
 
@@ -21,12 +22,12 @@ pub struct OutgoingContract {
     pub hash: bitcoin_hashes::sha256::Hash,
     /// Public key of the LN gateway allowed to claim the HTLC before the
     /// timelock expires
-    pub gateway_key: secp256k1::PublicKey,
+    pub gateway_key: PublicKey,
     /// Block height at which the money will be spendable by the pubkey
     pub timelock: u32,
     /// Public key of the user that can claim the money back after the timelock
     /// expires
-    pub user_key: secp256k1::PublicKey,
+    pub user_key: PublicKey,
     /// Flag that can be set by the gateway and allows the client to claim an
     /// early refund
     pub cancelled: bool,

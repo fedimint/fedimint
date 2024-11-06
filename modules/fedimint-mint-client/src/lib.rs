@@ -65,8 +65,7 @@ use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-use fedimint_core::secp256k1::{All, Secp256k1};
-use fedimint_core::secp256k1_29::Keypair;
+use fedimint_core::secp256k1_29::{All, Keypair, Secp256k1};
 use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, PeerId, Tiered,

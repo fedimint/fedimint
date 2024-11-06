@@ -11,7 +11,7 @@ use fedimint_core::net::api_announcement::{
 };
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
+use fedimint_core::{impl_db_lookup, impl_db_record, secp256k1_29, PeerId};
 use tokio::select;
 use tracing::debug;
 

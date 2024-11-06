@@ -19,7 +19,9 @@ use fedimint_client::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_keypair,
+};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::DatabaseTransaction;
@@ -27,6 +29,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
+use fedimint_core::secp256k1_29::Keypair;
 use fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint, PeerId};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
@@ -37,7 +40,6 @@ use fedimint_lnv2_common::{
 use futures::StreamExt;
 use receive_sm::{ReceiveSMState, ReceiveStateMachine};
 use secp256k1::schnorr::Signature;
-use secp256k1::KeyPair;
 use send_sm::{SendSMState, SendStateMachine};
 use serde::{Deserialize, Serialize};
 use tpe::{AggregatePublicKey, PublicKeyShare};
@@ -90,7 +92,7 @@ impl ClientModuleInit for GatewayClientInitV2 {
             keypair: args
                 .module_root_secret()
                 .clone()
-                .to_secp_key(secp256k1::SECP256K1),
+                .to_secp_key(fedimint_core::secp256k1_29::SECP256K1),
             gateway: self.gateway.clone(),
         })
     }
@@ -103,7 +105,7 @@ pub struct GatewayClientModuleV2 {
     pub notifier: ModuleNotifier<GatewayClientStateMachinesV2>,
     pub client_ctx: ClientContext<Self>,
     pub module_api: DynModuleApi,
-    pub keypair: KeyPair,
+    pub keypair: Keypair,
     pub gateway: Arc<Gateway>,
 }
 
@@ -256,7 +258,8 @@ impl GatewayClientModuleV2 {
         // programming error we do not have to enable cancellation and can check
         // them before we start the state machine.
         ensure!(
-            payload.contract.claim_pk == self.keypair.public_key(),
+            bitcoin30_to_bitcoin32_secp256k1_pubkey(&payload.contract.claim_pk)
+                == self.keypair.public_key(),
             "The outgoing contract is keyed to another gateway"
         );
 
@@ -311,7 +314,7 @@ impl GatewayClientModuleV2 {
                 max_delay,
                 min_contract_amount,
                 invoice: payload.invoice,
-                claim_keypair: bitcoin30_to_bitcoin32_keypair(&self.keypair),
+                claim_keypair: self.keypair,
             },
             state: SendSMState::Sending,
         });
@@ -353,8 +356,7 @@ impl GatewayClientModuleV2 {
                     SendSMState::Cancelled(cancelled) => {
                         warn!("Outgoing lightning payment is cancelled {:?}", cancelled);
 
-                        let signature = self
-                            .keypair
+                        let signature = bitcoin32_to_bitcoin30_keypair(&self.keypair)
                             .sign_schnorr(state.common.contract.forfeit_message());
 
                         assert!(state.common.contract.verify_forfeit_signature(&signature));
@@ -393,7 +395,7 @@ impl GatewayClientModuleV2 {
                             operation_id,
                             contract: contract.clone(),
                             out_point: OutPoint { txid, out_idx },
-                            refund_keypair: bitcoin30_to_bitcoin32_keypair(&refund_keypair),
+                            refund_keypair,
                         },
                         state: ReceiveSMState::Funding,
                     }),
@@ -451,7 +453,7 @@ impl GatewayClientModuleV2 {
                         operation_id,
                         contract: contract.clone(),
                         out_point: OutPoint { txid, out_idx },
-                        refund_keypair: bitcoin30_to_bitcoin32_keypair(&refund_keypair),
+                        refund_keypair,
                     },
                     state: ReceiveSMState::Funding,
                 })]

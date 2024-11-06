@@ -1,6 +1,5 @@
 use bitcoin::address::NetworkUnchecked;
 use clap::Subcommand;
-use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 use fedimint_core::BitcoinAmountOrAll;
 use lightning_invoice::Bolt11Invoice;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
@@ -117,8 +116,6 @@ impl LightningCommands {
                 channel_size_sats,
                 push_amount_sats,
             } => {
-                let pubkey = bitcoin32_to_bitcoin30_secp256k1_pubkey(&pubkey);
-
                 let funding_txid = create_client()
                     .open_channel(OpenChannelPayload {
                         pubkey,
@@ -130,8 +127,6 @@ impl LightningCommands {
                 println!("{funding_txid}");
             }
             Self::CloseChannelsWithPeer { pubkey } => {
-                let pubkey = bitcoin32_to_bitcoin30_secp256k1_pubkey(&pubkey);
-
                 let response = create_client()
                     .close_channels_with_peer(CloseChannelsWithPeerPayload { pubkey })
                     .await?;

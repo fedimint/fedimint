@@ -9,7 +9,6 @@ use bitcoin_hashes::Hash;
 use fedimint_bip39::Mnemonic;
 use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_invoice, bitcoin30_to_bitcoin32_payment_preimage,
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_secp256k1_pubkey,
     bitcoin32_to_bitcoin30_txid,
 };
 use fedimint_core::task::{TaskGroup, TaskHandle};
@@ -259,7 +258,7 @@ impl ILnRpcClient for GatewayLdkClient {
         );
 
         Ok(GetNodeInfoResponse {
-            pub_key: bitcoin32_to_bitcoin30_secp256k1_pubkey(&self.node.node_id()),
+            pub_key: self.node.node_id(),
             alias: match self.node.node_alias() {
                 Some(alias) => alias.to_string(),
                 None => format!("LDK Fedimint Gateway Node {}", self.node.node_id()),
@@ -494,7 +493,7 @@ impl ILnRpcClient for GatewayLdkClient {
         let user_channel_id = self
             .node
             .open_announced_channel(
-                bitcoin30_to_bitcoin32_secp256k1_pubkey(&pubkey),
+                pubkey,
                 SocketAddress::from_str(&host).map_err(|e| {
                     LightningRpcError::FailedToConnectToPeer {
                         failure_reason: e.to_string(),
@@ -538,15 +537,15 @@ impl ILnRpcClient for GatewayLdkClient {
     ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError> {
         let mut num_channels_closed = 0;
 
-        for channel_with_peer in self.node.list_channels().iter().filter(|channel| {
-            channel.counterparty_node_id == bitcoin30_to_bitcoin32_secp256k1_pubkey(&pubkey)
-        }) {
+        for channel_with_peer in self
+            .node
+            .list_channels()
+            .iter()
+            .filter(|channel| channel.counterparty_node_id == pubkey)
+        {
             if self
                 .node
-                .close_channel(
-                    &channel_with_peer.user_channel_id,
-                    bitcoin30_to_bitcoin32_secp256k1_pubkey(&pubkey),
-                )
+                .close_channel(&channel_with_peer.user_channel_id, pubkey)
                 .is_ok()
             {
                 num_channels_closed += 1;
@@ -568,9 +567,7 @@ impl ILnRpcClient for GatewayLdkClient {
             .filter(|channel| channel.is_usable)
         {
             channels.push(ChannelInfo {
-                remote_pubkey: bitcoin32_to_bitcoin30_secp256k1_pubkey(
-                    &channel_details.counterparty_node_id,
-                ),
+                remote_pubkey: channel_details.counterparty_node_id,
                 channel_size_sats: channel_details.channel_value_sats,
                 outbound_liquidity_sats: channel_details.outbound_capacity_msat / 1000,
                 inbound_liquidity_sats: channel_details.inbound_capacity_msat / 1000,

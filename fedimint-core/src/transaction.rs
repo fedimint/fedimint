@@ -5,9 +5,6 @@ use fedimint_core::module::SerdeModuleEncoding;
 use fedimint_core::{Amount, TransactionId};
 use thiserror::Error;
 
-use crate::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_schnorr_signature,
-};
 use crate::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 use crate::core::{DynInputError, DynOutputError};
 
@@ -81,7 +78,7 @@ impl Transaction {
     /// Validate the schnorr signatures signed over the `tx_hash`
     pub fn validate_signatures(
         &self,
-        pub_keys: &[secp256k1::PublicKey],
+        pub_keys: &[secp256k1_29::PublicKey],
     ) -> Result<(), TransactionError> {
         let signatures = match &self.signatures {
             TransactionSignature::NaiveMultisig(sigs) => sigs,
@@ -95,22 +92,19 @@ impl Transaction {
         }
 
         let txid = self.tx_hash();
-        let msg = secp256k1::Message::from_slice(&txid[..]).expect("txid has right length");
+        let msg =
+            secp256k1_29::Message::from_digest_slice(&txid[..]).expect("txid has right length");
 
         for (pk, signature) in pub_keys.iter().zip(signatures) {
-            if secp256k1::global::SECP256K1
-                .verify_schnorr(
-                    &bitcoin32_to_bitcoin30_schnorr_signature(signature),
-                    &msg,
-                    &pk.x_only_public_key().0,
-                )
+            if secp256k1_29::global::SECP256K1
+                .verify_schnorr(signature, &msg, &pk.x_only_public_key().0)
                 .is_err()
             {
                 return Err(TransactionError::InvalidSignature {
                     tx: self.consensus_encode_to_hex(),
                     hash: self.tx_hash().consensus_encode_to_hex(),
                     sig: signature.consensus_encode_to_hex(),
-                    key: bitcoin30_to_bitcoin32_secp256k1_pubkey(pk).consensus_encode_to_hex(),
+                    key: pk.consensus_encode_to_hex(),
                 });
             }
         }

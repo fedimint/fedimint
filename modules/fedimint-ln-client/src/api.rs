@@ -7,6 +7,7 @@ use fedimint_api_client::api::{
 };
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_core::module::ApiRequestErased;
+use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId};
 use fedimint_ln_common::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
@@ -24,7 +25,6 @@ use fedimint_ln_common::{
     ContractAccount, LightningGateway, LightningGatewayAnnouncement, RemoveGatewayRequest,
 };
 use itertools::Itertools;
-use secp256k1::PublicKey;
 use tracing::{info, warn};
 
 #[apply(async_trait_maybe_send!)]

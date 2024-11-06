@@ -13,8 +13,7 @@ use bitcoincore_rpc::RpcApi;
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::ClnRpc;
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin30_to_bitcoin32_txid,
-    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_sha256_hash,
+    bitcoin30_to_bitcoin32_txid, bitcoin32_to_bitcoin30_sha256_hash,
 };
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
@@ -1076,16 +1075,8 @@ pub async fn open_channels_between_gateways(
         let gw_a_node_pubkey = gw_a.lightning_pubkey().await?;
         let gw_b_node_pubkey = gw_b.lightning_pubkey().await?;
 
-        wait_for_ready_channel_on_gateway_with_counterparty(
-            gw_b,
-            bitcoin30_to_bitcoin32_secp256k1_pubkey(&gw_a_node_pubkey),
-        )
-        .await?;
-        wait_for_ready_channel_on_gateway_with_counterparty(
-            gw_a,
-            bitcoin30_to_bitcoin32_secp256k1_pubkey(&gw_b_node_pubkey),
-        )
-        .await?;
+        wait_for_ready_channel_on_gateway_with_counterparty(gw_b, gw_a_node_pubkey).await?;
+        wait_for_ready_channel_on_gateway_with_counterparty(gw_a, gw_b_node_pubkey).await?;
     }
 
     Ok(())
@@ -1102,10 +1093,10 @@ async fn wait_for_ready_channel_on_gateway_with_counterparty(
             .context("list channels")
             .map_err(ControlFlow::Break)?;
 
-        if channels.iter().any(|channel| {
-            channel.remote_pubkey
-                == bitcoin32_to_bitcoin30_secp256k1_pubkey(&counterparty_lightning_node_pubkey)
-        }) {
+        if channels
+            .iter()
+            .any(|channel| channel.remote_pubkey == counterparty_lightning_node_pubkey)
+        {
             return Ok(());
         }
 

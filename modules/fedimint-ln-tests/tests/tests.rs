@@ -3,8 +3,9 @@ use std::sync::Arc;
 
 use assert_matches::assert_matches;
 use fedimint_client::Client;
+use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 use fedimint_core::util::NextOrPending;
-use fedimint_core::{sats, Amount};
+use fedimint_core::{sats, secp256k1_29 as secp256k1, Amount};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
@@ -21,7 +22,7 @@ use fedimint_testing::ln::FakeLightningTest;
 use fedimint_testing::{Gateway, LightningModuleMode};
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use rand::rngs::OsRng;
-use secp256k1::KeyPair;
+use secp256k1::Keypair;
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
@@ -50,7 +51,9 @@ async fn pay_invoice(
     let ln_module = client.get_first_module::<LightningClientModule>()?;
     ln_module.update_gateway_cache().await?;
     let gateway = if let Some(gateway_id) = gateway_id {
-        ln_module.select_gateway(&gateway_id).await
+        ln_module
+            .select_gateway(&bitcoin32_to_bitcoin30_secp256k1_pubkey(&gateway_id))
+            .await
     } else {
         None
     };
@@ -322,7 +325,9 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     let gw = gateway(&fixtures, &fed).await;
 
     let ln_module = client1.get_first_module::<LightningClientModule>()?;
-    let ln_gateway = ln_module.select_gateway(&gw.gateway_id()).await;
+    let ln_gateway = ln_module
+        .select_gateway(&bitcoin32_to_bitcoin30_secp256k1_pubkey(&gw.gateway_id()))
+        .await;
     let desc = Description::new("with-gateway-hint".to_string())?;
     let (op, invoice, _) = ln_module
         .create_bolt11_invoice(
@@ -373,7 +378,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
     let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
 
     // generate a new keypair
-    let keypair = KeyPair::new_global(&mut OsRng);
+    let keypair = Keypair::new_global(&mut OsRng);
 
     // Print money for client2
     let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
@@ -436,10 +441,12 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
     let gw = gateway(&fixtures, &fed).await;
 
     // generate a new keypair
-    let keypair = KeyPair::new_global(&mut OsRng);
+    let keypair = Keypair::new_global(&mut OsRng);
 
     let ln_module = client1.get_first_module::<LightningClientModule>()?;
-    let ln_gateway = ln_module.select_gateway(&gw.gateway_id()).await;
+    let ln_gateway = ln_module
+        .select_gateway(&bitcoin32_to_bitcoin30_secp256k1_pubkey(&gw.gateway_id()))
+        .await;
     let desc = Description::new("with-gateway-hint".to_string())?;
     let (op, invoice, _) = ln_module
         .create_bolt11_invoice_for_user(
@@ -507,10 +514,12 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
     client2.await_primary_module_output(op, outpoint).await?;
 
     // generate a new keypair
-    let keypair = KeyPair::new_global(&mut OsRng);
+    let keypair = Keypair::new_global(&mut OsRng);
 
     let ln_module = client1.get_first_module::<LightningClientModule>()?;
-    let ln_gateway = ln_module.select_gateway(&gw.gateway_id()).await;
+    let ln_gateway = ln_module
+        .select_gateway(&bitcoin32_to_bitcoin30_secp256k1_pubkey(&gw.gateway_id()))
+        .await;
     let desc = Description::new("with-gateway-hint-tweaked".to_string())?;
     let (op, invoice, _) = ln_module
         .create_bolt11_invoice_for_user_tweaked(
@@ -604,9 +613,12 @@ mod fedimint_migration_tests {
     use std::time::Duration;
 
     use anyhow::ensure;
-    use bitcoin_hashes::{sha256, Hash};
+    use bitcoin_hashes::{sha256, Hash as BitcoinHash};
     use fedimint_client::module::init::DynClientModuleInit;
-    use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
+    use fedimint_core::bitcoin_migration::{
+        bitcoin30_to_bitcoin32_secp256k1_message, bitcoin32_to_bitcoin30_recoverable_signature,
+        bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_sha256_hash,
+    };
     use fedimint_core::config::FederationId;
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
@@ -614,8 +626,9 @@ mod fedimint_migration_tests {
     };
     use fedimint_core::encoding::Encodable;
     use fedimint_core::module::DynServerModuleInit;
+    use fedimint_core::secp256k1_29::hashes::Hash;
     use fedimint_core::util::SafeUrl;
-    use fedimint_core::{Amount, OutPoint, PeerId, TransactionId};
+    use fedimint_core::{secp256k1_29 as secp256k1, Amount, OutPoint, PeerId, TransactionId};
     use fedimint_ln_client::db::{PaymentResult, PaymentResultKey, PaymentResultPrefix};
     use fedimint_ln_client::pay::{
         LightningPayCommon, LightningPayStates, PayInvoicePayload, PaymentData,
@@ -658,7 +671,7 @@ mod fedimint_migration_tests {
     use rand::distributions::Standard;
     use rand::prelude::Distribution;
     use rand::rngs::OsRng;
-    use secp256k1::{All, KeyPair, Secp256k1, SecretKey};
+    use secp256k1::{All, Keypair, Secp256k1, SecretKey};
     use strum::IntoEnumIterator;
     use threshold_crypto::G1Projective;
     use tracing::info;
@@ -681,9 +694,11 @@ mod fedimint_migration_tests {
         let contract_id = ContractId::from_str(STRING_64).unwrap();
         let amount = fedimint_core::Amount { msats: 1000 };
         let threshold_key = threshold_crypto::PublicKey::from(G1Projective::identity());
-        let (_, pk) = secp256k1::generate_keypair(&mut OsRng);
+        let (_, pk) = fedimint_core::secp256k1_29::generate_keypair(&mut OsRng);
         let incoming_contract = IncomingContract {
-            hash: secp256k1::hashes::sha256::Hash::hash(&BYTE_8),
+            hash: bitcoin32_to_bitcoin30_sha256_hash(&secp256k1::hashes::sha256::Hash::hash(
+                &BYTE_8,
+            )),
             encrypted_preimage: EncryptedPreimage::new(&PreimageKey(BYTE_33), &threshold_key),
             decrypted_preimage: DecryptedPreimage::Some(PreimageKey(BYTE_33)),
             gateway_key: pk,
@@ -705,7 +720,9 @@ mod fedimint_migration_tests {
         )
         .await;
         let outgoing_contract = FundedContract::Outgoing(outgoing::OutgoingContract {
-            hash: secp256k1::hashes::sha256::Hash::hash(&[0, 2, 3, 4, 5, 6, 7, 8]),
+            hash: bitcoin32_to_bitcoin30_sha256_hash(&secp256k1::hashes::sha256::Hash::hash(&[
+                0, 2, 3, 4, 5, 6, 7, 8,
+            ])),
             gateway_key: pk,
             timelock: 1000000,
             user_key: pk,
@@ -722,7 +739,9 @@ mod fedimint_migration_tests {
 
         let incoming_offer = IncomingContractOffer {
             amount: fedimint_core::Amount { msats: 1000 },
-            hash: secp256k1::hashes::sha256::Hash::hash(&BYTE_8),
+            hash: bitcoin32_to_bitcoin30_sha256_hash(&secp256k1::hashes::sha256::Hash::hash(
+                &BYTE_8,
+            )),
             encrypted_preimage: EncryptedPreimage::new(&PreimageKey(BYTE_33), &threshold_key),
             expiry_time: None,
         };
@@ -765,14 +784,17 @@ mod fedimint_migration_tests {
                     base_msat: 0,
                     proportional_millionths: 0,
                 },
-                gateway_id: pk,
+                gateway_id: bitcoin32_to_bitcoin30_secp256k1_pubkey(&pk),
                 supports_private_payments: false,
             },
             valid_until: fedimint_core::time::now(),
             vetted: false,
         };
-        dbtx.insert_new_entry(&LightningGatewayKey(pk), &gateway)
-            .await;
+        dbtx.insert_new_entry(
+            &LightningGatewayKey(bitcoin32_to_bitcoin30_secp256k1_pubkey(&pk)),
+            &gateway,
+        )
+        .await;
 
         dbtx.insert_new_entry(&BlockCountVoteKey(PeerId::from(0)), &1)
             .await;
@@ -827,7 +849,7 @@ mod fedimint_migration_tests {
                 base_msat: 10,
                 proportional_millionths: 1000,
             },
-            gateway_id: pk,
+            gateway_id: bitcoin32_to_bitcoin30_secp256k1_pubkey(&pk),
             supports_private_payments: false,
         };
 
@@ -877,7 +899,12 @@ mod fedimint_migration_tests {
             .current_timestamp()
             .min_final_cltv_expiry_delta(18)
             .expiry_time(Duration::from_secs(86400))
-            .build_signed(|m| secp.sign_ecdsa_recoverable(m, &SecretKey::new(&mut OsRng)))
+            .build_signed(|m| {
+                bitcoin32_to_bitcoin30_recoverable_signature(&secp.sign_ecdsa_recoverable(
+                    &bitcoin30_to_bitcoin32_secp256k1_message(m),
+                    &SecretKey::new(&mut OsRng),
+                ))
+            })
             .expect("Invoice creation failed");
 
         // Create an active state and inactive state that will not be migrated.
@@ -890,9 +917,7 @@ mod fedimint_migration_tests {
             invoice
                 .consensus_encode(&mut submitted_offer_variant)
                 .expect("Invoice is encodable");
-            let receiving_key = ReceivingKey::Personal(bitcoin30_to_bitcoin32_keypair(
-                &KeyPair::new_global(&mut OsRng),
-            ));
+            let receiving_key = ReceivingKey::Personal(Keypair::new_global(&mut OsRng));
             receiving_key
                 .consensus_encode(&mut submitted_offer_variant)
                 .expect("ReceivingKey is encodable");
@@ -911,8 +936,8 @@ mod fedimint_migration_tests {
             invoice
                 .consensus_encode(&mut submitted_offer_variant)
                 .expect("Invoice is encodable");
-            let keypair = KeyPair::new_global(&mut OsRng);
-            bitcoin30_to_bitcoin32_keypair(&keypair)
+            let keypair = Keypair::new_global(&mut OsRng);
+            keypair
                 .consensus_encode(&mut submitted_offer_variant)
                 .expect("Keypair is encodable");
 
@@ -926,8 +951,8 @@ mod fedimint_migration_tests {
             invoice
                 .consensus_encode(&mut confirmed_variant)
                 .expect("Invoice is encodable");
-            let keypair = KeyPair::new_global(&mut OsRng);
-            bitcoin30_to_bitcoin32_keypair(&keypair)
+            let keypair = Keypair::new_global(&mut OsRng);
+            keypair
                 .consensus_encode(&mut confirmed_variant)
                 .expect("Keypair is encodable");
             confirmed_variant
@@ -948,7 +973,7 @@ mod fedimint_migration_tests {
             contract: outgoing_contract.clone(),
         };
         let contract = OutgoingContractData {
-            recovery_key: bitcoin30_to_bitcoin32_keypair(&KeyPair::from_secret_key(&secp, &sk)),
+            recovery_key: Keypair::from_secret_key(&secp, &sk),
             contract_account: outgoing_account,
         };
         let ln_common = LightningPayCommon {
@@ -1005,7 +1030,7 @@ mod fedimint_migration_tests {
                 base_msat: 10,
                 proportional_millionths: 1000,
             },
-            gateway_id: pk,
+            gateway_id: bitcoin32_to_bitcoin30_secp256k1_pubkey(&pk),
             supports_private_payments: false,
         }
         .consensus_encode(&mut funded_state)

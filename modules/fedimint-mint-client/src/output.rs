@@ -8,15 +8,12 @@ use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_client::module::ClientContext;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_secp256k1_pubkey,
-};
+use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::secp256k1::{Secp256k1, Signing};
-use fedimint_core::secp256k1_29::Keypair;
+use fedimint_core::secp256k1_29::{Keypair, Secp256k1, Signing};
 use fedimint_core::task::sleep;
 use fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
@@ -363,12 +360,14 @@ impl NoteIssuanceRequest {
         C: Signing,
     {
         let spend_key = secret.child_key(SPEND_KEY_CHILD_ID).to_secp_key(ctx);
-        let nonce = Nonce(spend_key.public_key());
+        let nonce = Nonce(bitcoin32_to_bitcoin30_secp256k1_pubkey(
+            &spend_key.public_key(),
+        ));
         let blinding_key = BlindingKey(secret.child_key(BLINDING_KEY_CHILD_ID).to_bls12_381_key());
         let blinded_nonce = blind_message(nonce.to_message(), blinding_key);
 
         let cr = NoteIssuanceRequest {
-            spend_key: bitcoin30_to_bitcoin32_keypair(&spend_key),
+            spend_key,
             blinding_key,
         };
 

@@ -32,7 +32,8 @@ use fedimint_client::transaction::{
 };
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_network,
+    bitcoin30_to_bitcoin32_keypair, bitcoin30_to_bitcoin32_secp256k1_pubkey,
+    bitcoin32_to_bitcoin30_keypair, bitcoin32_to_bitcoin30_network,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -250,9 +251,12 @@ impl ClientModuleInit for LightningClientInit {
             args.notifier().clone(),
             args.context(),
             args.module_api().clone(),
-            args.module_root_secret()
-                .clone()
-                .to_secp_key(secp256k1::SECP256K1),
+            bitcoin32_to_bitcoin30_keypair(
+                &args
+                    .module_root_secret()
+                    .clone()
+                    .to_secp_key(fedimint_core::secp256k1_29::SECP256K1),
+            ),
             self.gateway_conn.clone(),
             args.admin_auth().cloned(),
             args.task_group(),
@@ -411,8 +415,13 @@ impl LightningClientModule {
                     .routing_info(gateway.clone(), federation_id)
                     .await
                 {
-                    dbtx.insert_entry(&GatewayKey(routing_info.lightning_public_key), &gateway)
-                        .await;
+                    dbtx.insert_entry(
+                        &GatewayKey(bitcoin30_to_bitcoin32_secp256k1_pubkey(
+                            &routing_info.lightning_public_key,
+                        )),
+                        &gateway,
+                    )
+                    .await;
                 }
             }
 
@@ -442,7 +451,9 @@ impl LightningClientModule {
                 .module_db()
                 .begin_transaction_nc()
                 .await
-                .get_value(&GatewayKey(invoice.recover_payee_pub_key()))
+                .get_value(&GatewayKey(bitcoin30_to_bitcoin32_secp256k1_pubkey(
+                    &invoice.recover_payee_pub_key(),
+                )))
                 .await
                 .filter(|gateway| gateways.contains(gateway))
             {
