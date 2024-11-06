@@ -27,11 +27,13 @@ use fedimint_logging::LOG_DEVIMINT;
 use fedimint_portalloc::port_alloc;
 use fedimint_server::config::ConfigGenParams;
 use fedimint_testing::federation::local_config_gen_params;
+use fedimint_testing::gateway::LightningNodeType;
 use fedimint_wallet_client::config::WalletClientConfig;
 use fedimint_wallet_client::WalletClientModule;
 use fedimintd::envs::FM_EXTRA_DKG_META_ENV;
 use fs_lock::FileLock;
 use futures::future::{join_all, try_join_all};
+use ln_gateway::rpc::WithdrawResponse;
 use rand::Rng;
 use tokio::task::{spawn_blocking, JoinSet};
 use tokio::time::Instant;
@@ -726,6 +728,8 @@ impl Federation {
         Ok(())
     }
 
+    /// Inititates multiple peg-ins to the same federation for the set of
+    /// gateways to save on mining blocks in parallel.
     pub async fn pegin_gateways(
         &self,
         amount: u64,
@@ -760,6 +764,82 @@ impl Federation {
             })
         }))
         .await?;
+
+        Ok(())
+    }
+
+    /// Initiates multiple peg-outs from the same federation for the set of
+    /// gateways to save on mining blocks in parallel.
+    pub async fn pegout_gateways(
+        &self,
+        amount: u64,
+        gateways: Vec<&super::gatewayd::Gatewayd>,
+    ) -> Result<()> {
+        info!(amount, "Pegging-out gateway funds");
+        let fed_id = self.calculate_federation_id();
+        let mut peg_outs: BTreeMap<LightningNodeType, (Amount, WithdrawResponse)> = BTreeMap::new();
+        for gw in gateways.clone() {
+            let prev_fed_ecash_balance = gw
+                .get_balances()
+                .await?
+                .ecash_balances
+                .into_iter()
+                .find(|fed| fed.federation_id.to_string() == fed_id)
+                .expect("Gateway has not joined federation")
+                .ecash_balance_msats;
+
+            let pegout_address = self.bitcoind.get_new_address().await?;
+            let value = cmd!(
+                gw,
+                "withdraw",
+                "--federation-id",
+                fed_id,
+                "--amount",
+                amount,
+                "--address",
+                pegout_address
+            )
+            .out_json()
+            .await?;
+            let response: WithdrawResponse = serde_json::from_value(value)?;
+            peg_outs.insert(gw.ln_type(), (prev_fed_ecash_balance, response));
+        }
+        self.bitcoind.mine_blocks(21).await?;
+
+        try_join_all(
+            peg_outs
+                .values()
+                .map(|(_, pegout)| self.bitcoind.poll_get_transaction(pegout.txid)),
+        )
+        .await?;
+
+        for gw in gateways.clone() {
+            let after_fed_ecash_balance = gw
+                .get_balances()
+                .await?
+                .ecash_balances
+                .into_iter()
+                .find(|fed| fed.federation_id.to_string() == fed_id)
+                .expect("Gateway has not joined federation")
+                .ecash_balance_msats;
+            let ln_type = gw.ln_type();
+            let prev_balance = peg_outs
+                .get(&ln_type)
+                .expect("peg out does not exist")
+                .0
+                .msats;
+            let fees = peg_outs
+                .get(&ln_type)
+                .expect("peg out does not exist")
+                .1
+                .fees;
+            let total_fee = fees.amount().to_sat() * 1000;
+            assert_eq!(
+                prev_balance - amount - total_fee,
+                after_fed_ecash_balance.msats,
+                "new balance did not equal prev balance minus withdraw_amount minus fees"
+            );
+        }
 
         Ok(())
     }

@@ -3696,6 +3696,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-ln-gateway",
  "fedimint-testing",
+ "itertools 0.13.0",
  "serde_json",
  "tokio",
  "tracing",

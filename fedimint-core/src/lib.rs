@@ -133,6 +133,15 @@ pub enum BitcoinAmountOrAll {
     Amount(#[serde(with = "bitcoin30::amount::serde::as_sat")] bitcoin30::Amount),
 }
 
+impl std::fmt::Display for BitcoinAmountOrAll {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::All => write!(f, "all"),
+            Self::Amount(amount) => write!(f, "{amount}"),
+        }
+    }
+}
+
 impl FromStr for BitcoinAmountOrAll {
     type Err = anyhow::Error;
 
@@ -259,10 +268,19 @@ mod tests {
         let all: BitcoinAmountOrAll = serde_json::from_str("\"all\"").unwrap();
         assert_eq!(all, BitcoinAmountOrAll::All);
 
-        let all: BitcoinAmountOrAll = serde_json::from_str("12345").unwrap();
+        let amount: BitcoinAmountOrAll = serde_json::from_str("12345").unwrap();
         assert_eq!(
-            all,
+            amount,
             BitcoinAmountOrAll::Amount(bitcoin30::Amount::from_sat(12345))
         );
+
+        let all_string = all.to_string();
+        assert_eq!(all_string, "all");
+        let amount_string = amount.to_string();
+        assert_eq!(amount_string, "0.00012345 BTC");
+        let all_parsed = BitcoinAmountOrAll::from_str(&all_string).unwrap();
+        assert_eq!(all, all_parsed);
+        let amount_parsed = BitcoinAmountOrAll::from_str(&amount_string).unwrap();
+        assert_eq!(amount, amount_parsed);
     }
 }
