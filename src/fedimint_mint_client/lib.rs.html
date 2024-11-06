@@ -2722,7 +2722,32 @@
 <a href="#2721" id="2721">2721</a>
 <a href="#2722" id="2722">2722</a>
 <a href="#2723" id="2723">2723</a>
-<a href="#2724" id="2724">2724</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2724" id="2724">2724</a>
+<a href="#2725" id="2725">2725</a>
+<a href="#2726" id="2726">2726</a>
+<a href="#2727" id="2727">2727</a>
+<a href="#2728" id="2728">2728</a>
+<a href="#2729" id="2729">2729</a>
+<a href="#2730" id="2730">2730</a>
+<a href="#2731" id="2731">2731</a>
+<a href="#2732" id="2732">2732</a>
+<a href="#2733" id="2733">2733</a>
+<a href="#2734" id="2734">2734</a>
+<a href="#2735" id="2735">2735</a>
+<a href="#2736" id="2736">2736</a>
+<a href="#2737" id="2737">2737</a>
+<a href="#2738" id="2738">2738</a>
+<a href="#2739" id="2739">2739</a>
+<a href="#2740" id="2740">2740</a>
+<a href="#2741" id="2741">2741</a>
+<a href="#2742" id="2742">2742</a>
+<a href="#2743" id="2743">2743</a>
+<a href="#2744" id="2744">2744</a>
+<a href="#2745" id="2745">2745</a>
+<a href="#2746" id="2746">2746</a>
+<a href="#2747" id="2747">2747</a>
+<a href="#2748" id="2748">2748</a>
+<a href="#2749" id="2749">2749</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2750,6 +2775,7 @@
 <span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::io::Read;
+<span class="kw">use </span>std::ops::RangeInclusive;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -2802,6 +2828,7 @@
 <span class="kw">pub use </span>fedimint_mint_common::<span class="kw-2">*</span>;
 <span class="kw">use </span>futures::{pin_mut, StreamExt};
 <span class="kw">use </span>hex::ToHex;
+<span class="kw">use </span>input::MintInputStateCreatedBundle;
 <span class="kw">use </span>oob::MintOOBStatesCreatedMulti;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum::IntoEnumIterator;
@@ -2814,9 +2841,7 @@
     CancelledOOBSpendKey, CancelledOOBSpendKeyPrefix, NextECashNoteIndexKey,
     NextECashNoteIndexKeyPrefix, NoteKey,
 };
-<span class="kw">use </span><span class="kw">crate</span>::input::{
-    MintInputCommon, MintInputStateCreated, MintInputStateMachine, MintInputStates,
-};
+<span class="kw">use </span><span class="kw">crate</span>::input::{MintInputCommon, MintInputStateMachine, MintInputStates};
 <span class="kw">use </span><span class="kw">crate</span>::oob::{MintOOBStateMachine, MintOOBStates};
 <span class="kw">use </span><span class="kw">crate</span>::output::{
     MintOutputCommon, MintOutputStateMachine, MintOutputStates, MintOutputStatesCreated,
@@ -3483,45 +3508,40 @@
         ClientInputBundle&lt;MintInput, MintClientStateMachines&gt;,
         ClientOutputBundle&lt;MintOutput, MintClientStateMachines&gt;,
     )&gt; {
-        <span class="kw">let </span>consolidation_inputs = <span class="self">self</span>.consolidate_notes(dbtx, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>consolidation_inputs = <span class="self">self</span>.consolidate_notes(dbtx).<span class="kw">await</span><span class="question-mark">?</span>;
 
         input_amount += consolidation_inputs
-            .inputs()
             .iter()
-            .map(|input| input.amount)
+            .map(|input| input.<span class="number">0</span>.amount)
             .sum();
 
         output_amount += consolidation_inputs
-            .inputs()
             .iter()
-            .map(|input| <span class="self">self</span>.cfg.fee_consensus.fee(input.amount))
+            .map(|input| <span class="self">self</span>.cfg.fee_consensus.fee(input.<span class="number">0</span>.amount))
             .sum();
 
         <span class="kw">let </span>additional_inputs = <span class="self">self
-            </span>.create_sufficient_input(
-                dbtx,
-                operation_id,
-                output_amount.saturating_sub(input_amount),
-            )
+            </span>.create_sufficient_input(dbtx, output_amount.saturating_sub(input_amount))
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        input_amount += additional_inputs
-            .inputs()
-            .iter()
-            .map(|input| input.amount)
-            .sum();
+        input_amount += additional_inputs.iter().map(|input| input.<span class="number">0</span>.amount).sum();
 
         output_amount += additional_inputs
-            .inputs()
             .iter()
-            .map(|input| <span class="self">self</span>.cfg.fee_consensus.fee(input.amount))
+            .map(|input| <span class="self">self</span>.cfg.fee_consensus.fee(input.<span class="number">0</span>.amount))
             .sum();
 
         <span class="kw">let </span>outputs = <span class="self">self
             </span>.create_output(dbtx, operation_id, <span class="number">2</span>, input_amount - output_amount)
             .<span class="kw">await</span>;
 
-        <span class="prelude-val">Ok</span>((consolidation_inputs.with(additional_inputs), outputs))
+        <span class="prelude-val">Ok</span>((
+            create_bundle_for_inputs(
+                [consolidation_inputs, additional_inputs].concat(),
+                operation_id,
+            ),
+            outputs,
+        ))
     }
 
     <span class="kw">async fn </span>await_primary_module_output(
@@ -3541,18 +3561,17 @@
             <span class="self">self</span>.notifier
                 .subscribe_all_operations()
                 .filter_map(|state| <span class="kw">async move </span>{
-                    <span class="kw">match </span>state {
+                    <span class="attr">#[allow(deprecated)]
+                    </span><span class="kw">match </span>state {
                         MintClientStateMachines::Output(MintOutputStateMachine {
                             state: MintOutputStates::Succeeded(<span class="kw">_</span>),
                             ..
                         })
                         | MintClientStateMachines::Input(MintInputStateMachine {
-                            state: MintInputStates::Created(<span class="kw">_</span>),
+                            state: MintInputStates::Created(<span class="kw">_</span>) | MintInputStates::CreatedBundle(<span class="kw">_</span>),
                             ..
                         })
-                        <span class="comment">// We only trigger on created since refunds are already covered under the
-                        // output state
-                        </span>| MintClientStateMachines::OOB(MintOOBStateMachine {
+                        | MintClientStateMachines::OOB(MintOOBStateMachine {
                             state: MintOOBStates::Created(<span class="kw">_</span>),
                             ..
                         }) =&gt; <span class="prelude-val">Some</span>(()),
@@ -3706,11 +3725,10 @@
     <span class="kw">async fn </span>create_sufficient_input(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-        operation_id: OperationId,
         min_amount: Amount,
-    ) -&gt; anyhow::Result&lt;ClientInputBundle&lt;MintInput, MintClientStateMachines&gt;&gt; {
+    ) -&gt; anyhow::Result&lt;Vec&lt;(ClientInput&lt;MintInput&gt;, SpendableNote)&gt;&gt; {
         <span class="kw">if </span>min_amount == Amount::ZERO {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(ClientInputBundle::new(<span class="macro">vec!</span>[], <span class="macro">vec!</span>[]));
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[]);
         }
 
         <span class="kw">let </span>selected_notes = <span class="self">Self</span>::select_notes(
@@ -3726,10 +3744,9 @@
             MintClientModule::delete_spendable_note(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx, dbtx, amount, note).<span class="kw">await</span>;
         }
 
-        <span class="kw">let </span>inputs = <span class="self">self</span>.create_input_from_notes(operation_id, selected_notes)<span class="question-mark">?</span>;
+        <span class="kw">let </span>inputs = <span class="self">self</span>.create_input_from_notes(selected_notes)<span class="question-mark">?</span>;
 
-        <span class="macro">assert!</span>(!inputs.inputs().is_empty());
-        <span class="macro">assert!</span>(!inputs.sms().is_empty());
+        <span class="macro">assert!</span>(!inputs.is_empty());
 
         <span class="prelude-val">Ok</span>(inputs)
     }
@@ -3797,24 +3814,11 @@
         );
 
         <span class="kw">let </span><span class="kw-2">mut </span>outputs = Vec::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>output_sms = Vec::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>output_states = Vec::new();
 
         <span class="kw">for </span>(amount, num) <span class="kw">in </span>denominations.iter() {
             <span class="kw">for _ in </span><span class="number">0</span>..num {
                 <span class="kw">let </span>(issuance_request, blind_nonce) = <span class="self">self</span>.new_ecash_note(amount, dbtx).<span class="kw">await</span>;
-
-                <span class="kw">let </span>state_generator = Arc::new(<span class="kw">move </span>|txid, out_idx| {
-                    <span class="macro">vec!</span>[MintClientStateMachines::Output(MintOutputStateMachine {
-                        common: MintOutputCommon {
-                            operation_id,
-                            out_point: OutPoint { txid, out_idx },
-                        },
-                        state: MintOutputStates::Created(MintOutputStatesCreated {
-                            amount,
-                            issuance_request,
-                        }),
-                    })]
-                });
 
                 <span class="macro">debug!</span>(
                     %amount,
@@ -3825,13 +3829,39 @@
                     output: MintOutput::new_v0(amount, blind_nonce),
                     amount,
                 });
-                output_sms.push(ClientOutputSM {
-                    state_machines: state_generator,
+
+                output_states.push(MintOutputStatesCreated {
+                    amount,
+                    issuance_request,
                 });
             }
         }
 
-        ClientOutputBundle::new(outputs, output_sms)
+        <span class="kw">let </span>state_generator = Arc::new(<span class="kw">move </span>|txid, out_idxs: RangeInclusive&lt;u64&gt;| {
+            out_idxs
+                .clone()
+                .flat_map(|out_idx| {
+                    <span class="kw">let </span>output_i = (out_idx - out_idxs.clone().start()) <span class="kw">as </span>usize;
+                    <span class="kw">let </span>output_state = output_states.get(output_i).copied().unwrap();
+                    <span class="macro">vec!</span>[MintClientStateMachines::Output(MintOutputStateMachine {
+                        common: MintOutputCommon {
+                            operation_id,
+                            out_point: OutPoint { txid, out_idx },
+                        },
+                        state: MintOutputStates::Created(output_state),
+                    })]
+                })
+                .collect()
+        });
+
+        <span class="macro">assert!</span>(!outputs.is_empty());
+
+        ClientOutputBundle::new(
+            outputs,
+            <span class="macro">vec!</span>[ClientOutputSM {
+                state_machines: state_generator,
+            }],
+        )
     }
 
     <span class="doccomment">/// Returns the number of held e-cash notes per denomination
@@ -3893,8 +3923,7 @@
     </span><span class="kw">pub async fn </span>consolidate_notes(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-        operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;ClientInputBundle&lt;MintInput, MintClientStateMachines&gt;&gt; {
+    ) -&gt; anyhow::Result&lt;Vec&lt;(ClientInput&lt;MintInput&gt;, SpendableNote)&gt;&gt; {
         <span class="doccomment">/// At how many notes of the same denomination should we try to
         /// consolidate
         </span><span class="kw">const </span>MAX_NOTES_PER_TIER_TRIGGER: usize = <span class="number">8</span>;
@@ -3916,7 +3945,7 @@
             .any(|(<span class="kw">_</span>, count)| MAX_NOTES_PER_TIER_TRIGGER &lt; count);
 
         <span class="kw">if </span>!should_consolidate {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(ClientInputBundle::new(<span class="macro">vec!</span>[], <span class="macro">vec!</span>[]));
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[]);
         }
 
         <span class="kw">let </span><span class="kw-2">mut </span>max_count = MAX_NOTES_TO_CONSOLIDATE_IN_TX;
@@ -3953,18 +3982,16 @@
             selected_notes_decoded.push((amount, spendable_note_decoded));
         }
 
-        <span class="self">self</span>.create_input_from_notes(operation_id, selected_notes_decoded.into_iter().collect())
+        <span class="self">self</span>.create_input_from_notes(selected_notes_decoded.into_iter().collect())
     }
 
     <span class="doccomment">/// Create a mint input from external, potentially untrusted notes
     </span><span class="attr">#[allow(clippy::type_complexity)]
     </span><span class="kw">pub fn </span>create_input_from_notes(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        operation_id: OperationId,
         notes: TieredMulti&lt;SpendableNote&gt;,
-    ) -&gt; anyhow::Result&lt;ClientInputBundle&lt;MintInput, MintClientStateMachines&gt;&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>inputs = Vec::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>input_sms = Vec::new();
+    ) -&gt; anyhow::Result&lt;Vec&lt;(ClientInput&lt;MintInput&gt;, SpendableNote)&gt;&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>inputs_and_notes = Vec::new();
 
         <span class="kw">for </span>(amount, spendable_note) <span class="kw">in </span>notes.into_iter_items() {
             <span class="kw">let </span>key = <span class="self">self
@@ -3979,32 +4006,17 @@
                 <span class="macro">bail!</span>(<span class="string">"Invalid note"</span>);
             }
 
-            <span class="kw">let </span>sm_gen = Arc::new(<span class="kw">move </span>|txid, input_idx| {
-                <span class="macro">vec!</span>[MintClientStateMachines::Input(MintInputStateMachine {
-                    common: MintInputCommon {
-                        operation_id,
-                        txid,
-                        input_idx,
-                    },
-                    state: MintInputStates::Created(MintInputStateCreated {
-                        amount,
-                        spendable_note,
-                    }),
-                })]
-            });
-
-            inputs.push(ClientInput {
-                input: MintInput::new_v0(amount, note),
-                keys: <span class="macro">vec!</span>[spendable_note.spend_key],
-                amount,
-            });
-
-            input_sms.push(ClientInputSM {
-                state_machines: sm_gen,
-            });
+            inputs_and_notes.push((
+                ClientInput {
+                    input: MintInput::new_v0(amount, note),
+                    keys: <span class="macro">vec!</span>[spendable_note.spend_key],
+                    amount,
+                },
+                spendable_note,
+            ));
         }
 
-        <span class="prelude-val">Ok</span>(ClientInputBundle::new(inputs, input_sms))
+        <span class="prelude-val">Ok</span>(inputs_and_notes)
     }
 
     <span class="kw">async fn </span>spend_notes_oob(
@@ -4199,9 +4211,12 @@
         );
 
         <span class="kw">let </span>amount = notes.total_amount();
-        <span class="kw">let </span>mint_inputs = <span class="self">self</span>.create_input_from_notes(operation_id, notes)<span class="question-mark">?</span>;
+        <span class="kw">let </span>mint_inputs = <span class="self">self</span>.create_input_from_notes(notes)<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>tx = TransactionBuilder::new().with_inputs(<span class="self">self</span>.client_ctx.make_dyn(mint_inputs));
+        <span class="kw">let </span>tx = TransactionBuilder::new().with_inputs(
+            <span class="self">self</span>.client_ctx
+                .make_dyn(create_bundle_for_inputs(mint_inputs, operation_id)),
+        );
 
         <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta)
             .expect(<span class="string">"MintClientModule::reissue_external_notes extra_meta is serializable"</span>);
@@ -5082,6 +5097,41 @@
     <span class="macro">assert!</span>(represented + fee_consensus.fee(Amount::from_msats(<span class="number">1</span>)).msats &gt;= amount.msats);
 
     denominations
+}
+
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>create_bundle_for_inputs(
+    inputs_and_notes: Vec&lt;(ClientInput&lt;MintInput&gt;, SpendableNote)&gt;,
+    operation_id: OperationId,
+) -&gt; ClientInputBundle&lt;MintInput, MintClientStateMachines&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>inputs = Vec::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>input_states = Vec::new();
+
+    <span class="kw">for </span>(input, spendable_note) <span class="kw">in </span>inputs_and_notes {
+        input_states.push((input.amount, spendable_note));
+        inputs.push(input);
+    }
+
+    <span class="kw">let </span>input_sm = Arc::new(<span class="kw">move </span>|txid, input_idxs: RangeInclusive&lt;u64&gt;| {
+        <span class="macro">debug_assert_eq!</span>(input_idxs.clone().count(), input_states.len());
+
+        <span class="macro">vec!</span>[MintClientStateMachines::Input(MintInputStateMachine {
+            common: MintInputCommon {
+                operation_id,
+                txid,
+                input_idxs,
+            },
+            state: MintInputStates::CreatedBundle(MintInputStateCreatedBundle {
+                notes: input_states.clone(),
+            }),
+        })]
+    });
+
+    ClientInputBundle::new(
+        inputs,
+        <span class="macro">vec!</span>[ClientInputSM {
+            state_machines: input_sm,
+        }],
+    )
 }
 
 <span class="attr">#[cfg(test)]

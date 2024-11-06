@@ -3078,37 +3078,7 @@
 <a href="#3077" id="3077">3077</a>
 <a href="#3078" id="3078">3078</a>
 <a href="#3079" id="3079">3079</a>
-<a href="#3080" id="3080">3080</a>
-<a href="#3081" id="3081">3081</a>
-<a href="#3082" id="3082">3082</a>
-<a href="#3083" id="3083">3083</a>
-<a href="#3084" id="3084">3084</a>
-<a href="#3085" id="3085">3085</a>
-<a href="#3086" id="3086">3086</a>
-<a href="#3087" id="3087">3087</a>
-<a href="#3088" id="3088">3088</a>
-<a href="#3089" id="3089">3089</a>
-<a href="#3090" id="3090">3090</a>
-<a href="#3091" id="3091">3091</a>
-<a href="#3092" id="3092">3092</a>
-<a href="#3093" id="3093">3093</a>
-<a href="#3094" id="3094">3094</a>
-<a href="#3095" id="3095">3095</a>
-<a href="#3096" id="3096">3096</a>
-<a href="#3097" id="3097">3097</a>
-<a href="#3098" id="3098">3098</a>
-<a href="#3099" id="3099">3099</a>
-<a href="#3100" id="3100">3100</a>
-<a href="#3101" id="3101">3101</a>
-<a href="#3102" id="3102">3102</a>
-<a href="#3103" id="3103">3103</a>
-<a href="#3104" id="3104">3104</a>
-<a href="#3105" id="3105">3105</a>
-<a href="#3106" id="3106">3106</a>
-<a href="#3107" id="3107">3107</a>
-<a href="#3108" id="3108">3108</a>
-<a href="#3109" id="3109">3109</a>
-<a href="#3110" id="3110">3110</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#3080" id="3080">3080</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
@@ -3221,7 +3191,8 @@
     ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig, ModuleInitRegistry,
 };
 <span class="kw">use </span>fedimint_core::core::{
-    DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId,
+    DynInput, DynOutput, IInput, IOutput, IntoDynInstance <span class="kw">as _</span>, ModuleInstanceId, ModuleKind,
+    OperationId,
 };
 <span class="kw">use </span>fedimint_core::db::{
     AutocommitError, Database, DatabaseKey, DatabaseRecord, DatabaseTransaction,
@@ -3605,8 +3576,8 @@
 <span class="kw">fn </span>states_to_instanceless_dyn&lt;S: IState + MaybeSend + MaybeSync + <span class="lifetime">'static</span>&gt;(
     state_gen: StateGenerator&lt;S&gt;,
 ) -&gt; StateGenerator&lt;Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>)&gt;&gt; {
-    Arc::new(<span class="kw">move </span>|txid, out_idx| {
-        <span class="kw">let </span>states: Vec&lt;S&gt; = state_gen(txid, out_idx);
+    Arc::new(<span class="kw">move </span>|txid, out_idxs| {
+        <span class="kw">let </span>states: Vec&lt;S&gt; = state_gen(txid, out_idxs);
         states
             .into_iter()
             .map(|state| box_up_state(state))
@@ -3667,27 +3638,10 @@
     <span class="kw">async fn </span>claim_inputs_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-        InstancelessDynClientInputBundle { inputs, sms }: InstancelessDynClientInputBundle,
+        inputs: InstancelessDynClientInputBundle,
     ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>tx_builder = TransactionBuilder::new();
-
-        <span class="kw">for </span>input <span class="kw">in </span>inputs {
-            <span class="kw">let </span>instance_input = ClientInput {
-                input: DynInput::from_parts(<span class="self">self</span>.module_instance_id, input.input),
-                keys: input.keys,
-                amount: input.amount,
-            };
-            tx_builder = tx_builder.with_input(instance_input);
-        }
-        <span class="kw">for </span>input_sm <span class="kw">in </span>sms {
-            <span class="kw">let </span>instance_input_sm = ClientInputSM {
-                state_machines: states_add_instance(
-                    <span class="self">self</span>.module_instance_id,
-                    input_sm.state_machines,
-                ),
-            };
-            tx_builder = tx_builder.with_input_sm(instance_input_sm);
-        }
+        <span class="kw">let </span>tx_builder =
+            TransactionBuilder::new().with_inputs(inputs.into_dyn(<span class="self">self</span>.module_instance_id));
 
         <span class="self">self</span>.client
             .finalize_and_submit_transaction_inner(
@@ -3701,24 +3655,10 @@
     <span class="kw">async fn </span>fund_output_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-        InstancelessDynClientOutputBundle { outputs, sms }: InstancelessDynClientOutputBundle,
+        outputs: InstancelessDynClientOutputBundle,
     ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>tx_builder = TransactionBuilder::new();
-
-        <span class="kw">for </span>output <span class="kw">in </span>outputs {
-            <span class="kw">let </span>instance_output = ClientOutput {
-                output: DynOutput::from_parts(<span class="self">self</span>.module_instance_id, output.output),
-                amount: output.amount,
-            };
-            tx_builder = tx_builder.with_output(instance_output);
-        }
-
-        <span class="kw">for </span>sm <span class="kw">in </span>sms {
-            <span class="kw">let </span>instance_output_sm = ClientOutputSM {
-                state_machines: states_add_instance(<span class="self">self</span>.module_instance_id, sm.state_machines),
-            };
-            tx_builder = tx_builder.with_output_sm(instance_output_sm);
-        }
+        <span class="kw">let </span>tx_builder =
+            TransactionBuilder::new().with_outputs(outputs.into_dyn(<span class="self">self</span>.module_instance_id));
 
         <span class="self">self</span>.client
             .finalize_and_submit_transaction_inner(
@@ -4305,8 +4245,8 @@
         // in order to balance it. Notice that it may stay empty in case the transaction
         // is already balanced.
         </span><span class="kw">let </span>change_range = Range {
-            start: partial_transaction.outputs().len() <span class="kw">as </span>u64,
-            end: (partial_transaction.outputs().len() + change_outputs.outputs.len()) <span class="kw">as </span>u64,
+            start: partial_transaction.outputs().count() <span class="kw">as </span>u64,
+            end: (partial_transaction.outputs().count() + change_outputs.outputs.len()) <span class="kw">as </span>u64,
         };
 
         partial_transaction = partial_transaction

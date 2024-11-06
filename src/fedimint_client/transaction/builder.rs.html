@@ -443,7 +443,101 @@
 <a href="#442" id="442">442</a>
 <a href="#443" id="443">443</a>
 <a href="#444" id="444">444</a>
-<a href="#445" id="445">445</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
+<a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
+<a href="#501" id="501">501</a>
+<a href="#502" id="502">502</a>
+<a href="#503" id="503">503</a>
+<a href="#504" id="504">504</a>
+<a href="#505" id="505">505</a>
+<a href="#506" id="506">506</a>
+<a href="#507" id="507">507</a>
+<a href="#508" id="508">508</a>
+<a href="#509" id="509">509</a>
+<a href="#510" id="510">510</a>
+<a href="#511" id="511">511</a>
+<a href="#512" id="512">512</a>
+<a href="#513" id="513">513</a>
+<a href="#514" id="514">514</a>
+<a href="#515" id="515">515</a>
+<a href="#516" id="516">516</a>
+<a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a>
+<a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
+<a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
+<a href="#527" id="527">527</a>
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a>
+<a href="#535" id="535">535</a>
+<a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
+<span class="kw">use </span>std::ops::RangeInclusive;
+<span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin::key::Keypair;
 <span class="kw">use </span>bitcoin::secp256k1;
@@ -461,12 +555,12 @@
 <span class="kw">use </span><span class="kw">crate</span>::module::StateGenerator;
 <span class="kw">use </span><span class="kw">crate</span>::sm::{<span class="self">self</span>, DynState};
 <span class="kw">use crate</span>::{
-    states_to_instanceless_dyn, InstancelessDynClientInput, InstancelessDynClientInputBundle,
-    InstancelessDynClientInputSM, InstancelessDynClientOutput, InstancelessDynClientOutputBundle,
-    InstancelessDynClientOutputSM,
+    states_add_instance, states_to_instanceless_dyn, InstancelessDynClientInput,
+    InstancelessDynClientInputBundle, InstancelessDynClientInputSM, InstancelessDynClientOutput,
+    InstancelessDynClientOutputBundle, InstancelessDynClientOutputSM,
 };
 
-<span class="attr">#[derive(Clone)]
+<span class="attr">#[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>ClientInput&lt;I = DynInput&gt; {
     <span class="kw">pub </span>input: I,
     <span class="kw">pub </span>keys: Vec&lt;Keypair&gt;,
@@ -476,6 +570,12 @@
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>ClientInputSM&lt;S = DynState&gt; {
     <span class="kw">pub </span>state_machines: StateGenerator&lt;S&gt;,
+}
+
+<span class="kw">impl</span>&lt;S&gt; fmt::Debug <span class="kw">for </span>ClientInputSM&lt;S&gt; {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+        f.write_str(<span class="string">"ClientInputSM"</span>)
+    }
 }
 
 <span class="doccomment">/// A fake [`sm::Context`] for [`NeverClientStateMachine`]
@@ -519,7 +619,7 @@
 <span class="doccomment">/// A group of inputs and state machines responsible for driving their state
 ///
 /// These must be kept together as a whole when including in a transaction.
-</span><span class="attr">#[derive(Clone)]
+</span><span class="attr">#[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>ClientInputBundle&lt;I = DynInput, S = DynState&gt; {
     <span class="kw">pub</span>(<span class="kw">crate</span>) inputs: Vec&lt;ClientInput&lt;I&gt;&gt;,
     <span class="kw">pub</span>(<span class="kw">crate</span>) sms: Vec&lt;ClientInputSM&lt;S&gt;&gt;,
@@ -554,12 +654,6 @@
     <span class="kw">pub fn </span>sms(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[ClientInputSM&lt;S&gt;] {
         <span class="kw-2">&amp;</span><span class="self">self</span>.sms
     }
-
-    <span class="kw">pub fn </span>with(<span class="kw-2">mut </span><span class="self">self</span>, other: <span class="self">Self</span>) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.inputs.extend(other.inputs);
-        <span class="self">self</span>.sms.extend(other.sms);
-        <span class="self">self
-    </span>}
 
     <span class="kw">pub fn </span>into_instanceless(<span class="self">self</span>) -&gt; InstancelessDynClientInputBundle {
         InstancelessDynClientInputBundle {
@@ -635,13 +729,42 @@
     }
 }
 
-<span class="attr">#[derive(Clone)]
+<span class="kw">impl </span>IntoDynInstance <span class="kw">for </span>InstancelessDynClientInputBundle {
+    <span class="kw">type </span>DynType = ClientInputBundle;
+
+    <span class="kw">fn </span>into_dyn(<span class="self">self</span>, module_instance_id: ModuleInstanceId) -&gt; ClientInputBundle {
+        ClientInputBundle {
+            inputs: <span class="self">self
+                </span>.inputs
+                .into_iter()
+                .map(|input| ClientInput {
+                    input: DynInput::from_parts(module_instance_id, input.input),
+                    keys: input.keys,
+                    amount: input.amount,
+                })
+                .collect::&lt;Vec&lt;ClientInput&gt;&gt;(),
+
+            sms: <span class="self">self
+                </span>.sms
+                .into_iter()
+                .map(|input_sm| ClientInputSM {
+                    state_machines: states_add_instance(
+                        module_instance_id,
+                        input_sm.state_machines,
+                    ),
+                })
+                .collect::&lt;Vec&lt;ClientInputSM&gt;&gt;(),
+        }
+    }
+}
+
+<span class="attr">#[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>ClientOutputBundle&lt;O = DynOutput, S = DynState&gt; {
     <span class="kw">pub</span>(<span class="kw">crate</span>) outputs: Vec&lt;ClientOutput&lt;O&gt;&gt;,
     <span class="kw">pub</span>(<span class="kw">crate</span>) sms: Vec&lt;ClientOutputSM&lt;S&gt;&gt;,
 }
 
-<span class="attr">#[derive(Clone)]
+<span class="attr">#[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>ClientOutput&lt;O = DynOutput&gt; {
     <span class="kw">pub </span>output: O,
     <span class="kw">pub </span>amount: Amount,
@@ -652,6 +775,11 @@
     <span class="kw">pub </span>state_machines: StateGenerator&lt;S&gt;,
 }
 
+<span class="kw">impl</span>&lt;S&gt; fmt::Debug <span class="kw">for </span>ClientOutputSM&lt;S&gt; {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+        f.write_str(<span class="string">"ClientOutputSM"</span>)
+    }
+}
 <span class="kw">impl</span>&lt;O&gt; ClientOutputBundle&lt;O, NeverClientStateMachine&gt; {
     <span class="doccomment">/// A version of [`Self::new`] for times where output does not require any
     /// state machines
@@ -733,6 +861,34 @@
     }
 }
 
+<span class="kw">impl </span>IntoDynInstance <span class="kw">for </span>InstancelessDynClientOutputBundle {
+    <span class="kw">type </span>DynType = ClientOutputBundle;
+
+    <span class="kw">fn </span>into_dyn(<span class="self">self</span>, module_instance_id: ModuleInstanceId) -&gt; ClientOutputBundle {
+        ClientOutputBundle {
+            outputs: <span class="self">self
+                </span>.outputs
+                .into_iter()
+                .map(|output| ClientOutput {
+                    output: DynOutput::from_parts(module_instance_id, output.output),
+                    amount: output.amount,
+                })
+                .collect::&lt;Vec&lt;ClientOutput&gt;&gt;(),
+
+            sms: <span class="self">self
+                </span>.sms
+                .into_iter()
+                .map(|output_sm| ClientOutputSM {
+                    state_machines: states_add_instance(
+                        module_instance_id,
+                        output_sm.state_machines,
+                    ),
+                })
+                .collect::&lt;Vec&lt;ClientOutputSM&gt;&gt;(),
+        }
+    }
+}
+
 <span class="kw">impl</span>&lt;I&gt; IntoDynInstance <span class="kw">for </span>ClientOutput&lt;I&gt;
 <span class="kw">where
     </span>I: IntoDynInstance&lt;DynType = DynOutput&gt; + <span class="lifetime">'static</span>,
@@ -760,12 +916,10 @@
     }
 }
 
-<span class="attr">#[derive(Default, Clone)]
+<span class="attr">#[derive(Default, Clone, Debug)]
 </span><span class="kw">pub struct </span>TransactionBuilder {
-    inputs: Vec&lt;ClientInput&gt;,
-    input_sms: Vec&lt;ClientInputSM&gt;,
-    outputs: Vec&lt;ClientOutput&gt;,
-    output_sms: Vec&lt;ClientOutputSM&gt;,
+    inputs: Vec&lt;ClientInputBundle&gt;,
+    outputs: Vec&lt;ClientOutputBundle&gt;,
 }
 
 <span class="kw">impl </span>TransactionBuilder {
@@ -773,43 +927,13 @@
         <span class="self">Self</span>::default()
     }
 
-    <span class="kw">pub fn </span>inputs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[ClientInput] {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.inputs
-    }
-
-    <span class="kw">pub fn </span>outputs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[ClientOutput] {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.outputs
-    }
-
-    <span class="kw">pub fn </span>with_input(<span class="kw-2">mut </span><span class="self">self</span>, input: ClientInput) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.inputs.push(input);
-        <span class="self">self
-    </span>}
-
-    <span class="kw">pub fn </span>with_input_sm(<span class="kw-2">mut </span><span class="self">self</span>, input: ClientInputSM) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.input_sms.push(input);
-        <span class="self">self
-    </span>}
-
-    <span class="kw">pub fn </span>with_output(<span class="kw-2">mut </span><span class="self">self</span>, output: ClientOutput) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.outputs.push(output);
-        <span class="self">self
-    </span>}
-
-    <span class="kw">pub fn </span>with_output_sm(<span class="kw-2">mut </span><span class="self">self</span>, output: ClientOutputSM) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.output_sms.push(output);
-        <span class="self">self
-    </span>}
-
     <span class="kw">pub fn </span>with_inputs(<span class="kw-2">mut </span><span class="self">self</span>, inputs: ClientInputBundle) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.inputs.extend(inputs.inputs);
-        <span class="self">self</span>.input_sms.extend(inputs.sms);
+        <span class="self">self</span>.inputs.push(inputs);
         <span class="self">self
     </span>}
 
     <span class="kw">pub fn </span>with_outputs(<span class="kw-2">mut </span><span class="self">self</span>, outputs: ClientOutputBundle) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.outputs.extend(outputs.outputs);
-        <span class="self">self</span>.output_sms.extend(outputs.sms);
+        <span class="self">self</span>.outputs.push(outputs);
         <span class="self">self
     </span>}
 
@@ -821,29 +945,34 @@
     <span class="kw">where
         </span>C: secp256k1::Signing + secp256k1::Verification,
     {
-        <span class="kw">let </span>(inputs, input_keys): (Vec&lt;<span class="kw">_</span>&gt;, Vec&lt;<span class="kw">_</span>&gt;) = multiunzip(
+        <span class="comment">// `input_idx_to_bundle_idx[input_idx]` stores the index of a bundle the input
+        // at `input_idx` comes from, so we can call state machines of the
+        // corresponding bundle for every input bundle. It is always
+        // monotonically increasing, e.g. `[0, 0, 1, 2, 2, 2, 4]`
+        </span><span class="kw">let </span>(input_idx_to_bundle_idx, inputs, input_keys): (Vec&lt;<span class="kw">_</span>&gt;, Vec&lt;<span class="kw">_</span>&gt;, Vec&lt;<span class="kw">_</span>&gt;) = multiunzip(
             <span class="self">self</span>.inputs
-                .into_iter()
-                .map(|input| (input.input, input.keys)),
+                .iter()
+                .enumerate()
+                .flat_map(|(bundle_idx, bundle)| {
+                    bundle
+                        .inputs
+                        .iter()
+                        .map(<span class="kw">move </span>|input| (bundle_idx, input.input.clone(), input.keys.clone()))
+                }),
         );
-        <span class="kw">let </span>input_sms: Vec&lt;<span class="kw">_</span>&gt; = <span class="self">self
-            </span>.input_sms
-            .into_iter()
-            .map(|input_sm| (input_sm.state_machines))
-            .collect();
-
-        <span class="kw">let </span>outputs: Vec&lt;<span class="kw">_</span>&gt; = <span class="self">self
-            </span>.outputs
-            .into_iter()
-            .map(|output| output.output)
-            .collect();
-
-        <span class="kw">let </span>output_sms: Vec&lt;<span class="kw">_</span>&gt; = <span class="self">self
-            </span>.output_sms
-            .into_iter()
-            .map(|output_sm| (output_sm.state_machines))
-            .collect();
-
+        <span class="comment">// `output_idx_to_bundle` works exactly like `input_idx_to_bundle_idx` above,
+        // but for outputs.
+        </span><span class="kw">let </span>(output_idx_to_bundle_idx, outputs): (Vec&lt;<span class="kw">_</span>&gt;, Vec&lt;<span class="kw">_</span>&gt;) = multiunzip(
+            <span class="self">self</span>.outputs
+                .iter()
+                .enumerate()
+                .flat_map(|(bundle_idx, bundle)| {
+                    bundle
+                        .outputs
+                        .iter()
+                        .map(<span class="kw">move </span>|output| (bundle_idx, output.output.clone()))
+                }),
+        );
         <span class="kw">let </span>nonce: [u8; <span class="number">8</span>] = rng.gen();
 
         <span class="kw">let </span>txid = Transaction::tx_hash_from_parts(<span class="kw-2">&amp;</span>inputs, <span class="kw-2">&amp;</span>outputs, nonce);
@@ -862,15 +991,70 @@
             signatures: TransactionSignature::NaiveMultisig(signatures),
         };
 
-        <span class="kw">let </span>states = input_sms
+        <span class="kw">let </span>input_states = <span class="self">self
+            </span>.inputs
             .into_iter()
             .enumerate()
-            .chain(output_sms.into_iter().enumerate())
-            .flat_map(|(idx, state_gen)| state_gen(txid, idx <span class="kw">as </span>u64))
-            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+            .flat_map(|(bundle_idx, bundle)| {
+                <span class="kw">let </span>input_idxs = find_range_of_matching_items(<span class="kw-2">&amp;</span>input_idx_to_bundle_idx, bundle_idx);
+                bundle.sms.into_iter().flat_map(<span class="kw">move </span>|sm| {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(input_idxs) = input_idxs.as_ref() {
+                        (sm.state_machines)(txid, input_idxs.clone())
+                    } <span class="kw">else </span>{
+                        <span class="macro">vec!</span>[]
+                    }
+                })
+            });
 
-        (transaction, states)
+        <span class="kw">let </span>output_states =
+            <span class="self">self</span>.outputs
+                .into_iter()
+                .enumerate()
+                .flat_map(|(bundle_idx, bundle)| {
+                    <span class="kw">let </span>output_idxs =
+                        find_range_of_matching_items(<span class="kw-2">&amp;</span>output_idx_to_bundle_idx, bundle_idx);
+                    bundle.sms.into_iter().flat_map(<span class="kw">move </span>|sm| {
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(output_idxs) = output_idxs.as_ref() {
+                            (sm.state_machines)(txid, output_idxs.clone())
+                        } <span class="kw">else </span>{
+                            <span class="macro">vec!</span>[]
+                        }
+                    })
+                });
+        (transaction, input_states.chain(output_states).collect())
     }
+
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>inputs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>ClientInput&gt; {
+        <span class="self">self</span>.inputs.iter().flat_map(|i| i.inputs.iter())
+    }
+
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>outputs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>ClientOutput&gt; {
+        <span class="self">self</span>.outputs.iter().flat_map(|i| i.outputs.iter())
+    }
+}
+
+<span class="doccomment">/// Find the range of indexes in an monotonically increasing `arr`, that is
+/// equal to `item`
+</span><span class="kw">fn </span>find_range_of_matching_items(arr: <span class="kw-2">&amp;</span>[usize], item: usize) -&gt; <span class="prelude-ty">Option</span>&lt;RangeInclusive&lt;u64&gt;&gt; {
+    <span class="comment">// `arr` must be monotonically increasing
+    </span><span class="macro">debug_assert!</span>(arr.windows(<span class="number">2</span>).all(|w| w[<span class="number">0</span>] &lt;= w[<span class="number">1</span>]));
+
+    arr.iter()
+        .enumerate()
+        .filter_map(|(arr_idx, arr_item)| (<span class="kw-2">*</span>arr_item == item).then_some(arr_idx <span class="kw">as </span>u64))
+        .fold(<span class="prelude-val">None</span>, |cur: <span class="prelude-ty">Option</span>&lt;(u64, u64)&gt;, idx| {
+            <span class="prelude-val">Some</span>(cur.map_or((idx, idx), |cur| (cur.<span class="number">0</span>.min(idx), cur.<span class="number">1</span>.max(idx))))
+        })
+        .map(|(start, end)| start..=end)
+}
+
+<span class="attr">#[test]
+</span><span class="kw">fn </span>find_range_of_matching_items_sanity() {
+    <span class="macro">assert_eq!</span>(find_range_of_matching_items(<span class="kw-2">&amp;</span>[<span class="number">0</span>, <span class="number">0</span>], <span class="number">0</span>), <span class="prelude-val">Some</span>(<span class="number">0</span>..=<span class="number">1</span>));
+    <span class="macro">assert_eq!</span>(find_range_of_matching_items(<span class="kw-2">&amp;</span>[<span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>], <span class="number">0</span>), <span class="prelude-val">Some</span>(<span class="number">0</span>..=<span class="number">1</span>));
+    <span class="macro">assert_eq!</span>(find_range_of_matching_items(<span class="kw-2">&amp;</span>[<span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>], <span class="number">1</span>), <span class="prelude-val">Some</span>(<span class="number">2</span>..=<span class="number">2</span>));
+    <span class="macro">assert_eq!</span>(find_range_of_matching_items(<span class="kw-2">&amp;</span>[<span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>], <span class="number">2</span>), <span class="prelude-val">None</span>);
+    <span class="macro">assert_eq!</span>(find_range_of_matching_items(<span class="kw-2">&amp;</span>[], <span class="number">0</span>), <span class="prelude-val">None</span>);
 }
 
 <span class="kw">fn </span>state_gen_to_dyn&lt;S&gt;(

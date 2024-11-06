@@ -143,7 +143,22 @@
 <a href="#142" id="142">142</a>
 <a href="#143" id="143">143</a>
 <a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
 
 <span class="kw">use </span>fedimint_client::module::init::recovery::RecoveryFromHistoryCommon;
 <span class="kw">use </span>fedimint_core::core::OperationId;
@@ -156,6 +171,7 @@
 <span class="kw">use </span>strum_macros::EnumIter;
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::recovery::MintRecoveryState;
+<span class="kw">use </span><span class="kw">crate</span>::input::{MintInputCommon, MintInputStateMachine, MintInputStateMachineV1};
 <span class="kw">use </span><span class="kw">crate</span>::oob::{MintOOBStateMachine, MintOOBStateMachineV1, MintOOBStates, MintOOBStatesV1};
 <span class="kw">use crate</span>::{MintClientStateMachines, SpendableNoteUndecoded};
 
@@ -269,7 +285,19 @@
 
     <span class="kw">let </span>mint_client_state_machine_variant = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
-    <span class="kw">let </span>bytes = <span class="kw">match </span>mint_client_state_machine_variant {
+    <span class="kw">let </span>new_mint_state_machine = <span class="kw">match </span>mint_client_state_machine_variant {
+        <span class="number">1 </span>=&gt; {
+            <span class="kw">let </span>old_state = MintInputStateMachineV1::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+
+            MintClientStateMachines::Input(MintInputStateMachine {
+                common: MintInputCommon {
+                    operation_id: old_state.common.operation_id,
+                    txid: old_state.common.txid,
+                    input_idxs: old_state.common.input_idx..=old_state.common.input_idx,
+                },
+                state: old_state.state,
+            })
+        }
         <span class="number">2 </span>=&gt; {
             <span class="kw">let </span>old_state = MintOOBStateMachineV1::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
@@ -282,10 +310,12 @@
                 operation_id: old_state.operation_id,
                 state: new_state,
             })
-            .consensus_encode_to_vec()
         }
         <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
     };
-    <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>((bytes, operation_id)))
+    <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>((
+        new_mint_state_machine.consensus_encode_to_vec(),
+        operation_id,
+    )))
 }
 </code></pre></div></section></main></body></html>

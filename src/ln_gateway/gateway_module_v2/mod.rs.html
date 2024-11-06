@@ -539,7 +539,11 @@
 <a href="#538" id="538">538</a>
 <a href="#539" id="539">539</a>
 <a href="#540" id="540">540</a>
-<a href="#541" id="541">541</a></pre></div><pre class="rust"><code><span class="kw">mod </span>api;
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a></pre></div><pre class="rust"><code><span class="kw">mod </span>api;
 <span class="kw">mod </span>complete_sm;
 <span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
@@ -932,7 +936,9 @@
             amount: contract.commitment.amount,
         };
         <span class="kw">let </span>client_output_sm = ClientOutputSM::&lt;GatewayClientStateMachinesV2&gt; {
-            state_machines: Arc::new(<span class="kw">move </span>|txid, out_idx| {
+            state_machines: Arc::new(<span class="kw">move </span>|txid, out_idxs: std::ops::RangeInclusive&lt;u64&gt;| {
+                <span class="macro">assert_eq!</span>(out_idxs.clone().count(), <span class="number">1</span>);
+                <span class="kw">let </span>out_idx = <span class="kw-2">*</span>out_idxs.start();
                 <span class="macro">vec!</span>[
                     GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                         common: ReceiveSMCommon {
@@ -991,7 +997,9 @@
             amount: contract.commitment.amount,
         };
         <span class="kw">let </span>client_output_sm = ClientOutputSM::&lt;GatewayClientStateMachinesV2&gt; {
-            state_machines: Arc::new(<span class="kw">move </span>|txid, out_idx| {
+            state_machines: Arc::new(<span class="kw">move </span>|txid, out_idxs| {
+                <span class="macro">assert_eq!</span>(out_idxs.clone().count(), <span class="number">1</span>);
+                <span class="kw">let </span>out_idx = <span class="kw-2">*</span>out_idxs.start();
                 <span class="macro">vec!</span>[GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                     common: ReceiveSMCommon {
                         operation_id,

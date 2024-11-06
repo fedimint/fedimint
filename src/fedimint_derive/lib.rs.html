@@ -438,7 +438,9 @@
 <a href="#437" id="437">437</a>
 <a href="#438" id="438">438</a>
 <a href="#439" id="439">439</a>
-<a href="#440" id="440">440</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![cfg_attr(feature = <span class="string">"diagnostics"</span>, feature(proc_macro_diagnostic))]
 
 </span><span class="kw">use </span>itertools::Itertools;
@@ -499,7 +501,8 @@
 
     <span class="kw">let </span>output = <span class="macro">quote!</span> {
         <span class="kw">impl </span>#impl_generics ::fedimint_core::encoding::Encodable <span class="kw">for </span>#ident #ty_generics #where_clause {
-            <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::result::Result&lt;usize, std::io::Error&gt; {
+            <span class="attr">#[allow(deprecated)]
+            </span><span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::result::Result&lt;usize, std::io::Error&gt; {
                 #encode_inner
             }
         }
@@ -687,7 +690,8 @@
     };
 
     <span class="kw">let </span>output = <span class="macro">quote!</span> {
-        <span class="kw">impl </span>::fedimint_core::encoding::Decodable <span class="kw">for </span>#ident {
+        <span class="attr">#[allow(deprecated)]
+        </span><span class="kw">impl </span>::fedimint_core::encoding::Decodable <span class="kw">for </span>#ident {
             <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D, modules: <span class="kw-2">&amp;</span>::fedimint_core::module::registry::ModuleDecoderRegistry) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_core::encoding::DecodeError&gt; {
                 <span class="kw">use </span>::fedimint_core:: anyhow::Context;
                 #decode_inner
