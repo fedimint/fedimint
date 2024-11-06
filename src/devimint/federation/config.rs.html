@@ -90,7 +90,75 @@
 <a href="#89" id="89">89</a>
 <a href="#90" id="90">90</a>
 <a href="#91" id="91">91</a>
-<a href="#92" id="92">92</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoincore_rpc::bitcoin::Network;
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoincore_rpc::bitcoin::Network;
 <span class="kw">use </span>fedimint_core::config::{EmptyGenParams, ServerModuleConfigGenParamsRegistry};
 <span class="kw">use </span>fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig, FM_USE_UNKNOWN_MODULE_ENV};
 <span class="kw">use </span>fedimint_core::fee_consensus::FeeConsensus;
@@ -110,8 +178,9 @@
 <span class="kw">use </span>fedimint_wallet_server::WalletInit;
 <span class="kw">use </span>fedimintd::default_esplora_server;
 <span class="kw">use </span>fedimintd::envs::FM_DISABLE_META_MODULE_ENV;
+<span class="kw">use </span>legacy_types::{LegacyFeeConsensus, LegacyMintGenParams, LegacyMintGenParamsConsensus};
 
-<span class="kw">use </span><span class="kw">crate</span>::version_constants::VERSION_0_4_0_ALPHA;
+<span class="kw">use </span><span class="kw">crate</span>::version_constants::{VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA};
 
 <span class="doccomment">/// Duplicate default fedimint module setup
 </span><span class="kw">pub fn </span>attach_default_module_init_params(
@@ -121,39 +190,51 @@
     finality_delay: u32,
     fedimintd_version: <span class="kw-2">&amp;</span>semver::Version,
 ) {
-    module_init_params
-        .attach_config_gen_params(
-            LightningInit::kind(),
-            LightningGenParams {
-                local: LightningGenParamsLocal {
-                    bitcoin_rpc: bitcoin_rpc.clone(),
-                },
-                consensus: LightningGenParamsConsensus { network },
+    module_init_params.attach_config_gen_params(
+        LightningInit::kind(),
+        LightningGenParams {
+            local: LightningGenParamsLocal {
+                bitcoin_rpc: bitcoin_rpc.clone(),
             },
-        )
-        .attach_config_gen_params(
+            consensus: LightningGenParamsConsensus { network },
+        },
+    );
+
+    <span class="comment">// TODO(support:v0.4): v0.5 introduced relative fees for the mint module by
+    // changing the field names for FeeConsensus. We need to support the old fields
+    // in devimint since fedimint-cli uses JSON encoding for admin dkg
+    </span><span class="kw">if </span>fedimintd_version &gt;= <span class="kw-2">&amp;</span>VERSION_0_5_0_ALPHA {
+        module_init_params.attach_config_gen_params(
             MintInit::kind(),
             MintGenParams {
                 local: EmptyGenParams::default(),
                 consensus: MintGenParamsConsensus::new(<span class="number">2</span>, FeeConsensus::zero()),
             },
         )
-        .attach_config_gen_params(
-            WalletInit::kind(),
-            WalletGenParams {
-                local: WalletGenParamsLocal {
-                    bitcoin_rpc: bitcoin_rpc.clone(),
-                },
-                consensus: WalletGenParamsConsensus {
-                    network,
-                    <span class="comment">// TODO this is not very elegant, but I'm planning to get rid of it in a next
-                    // commit anyway
-                    </span>finality_delay,
-                    client_default_bitcoin_rpc: default_esplora_server(network),
-                    fee_consensus: fedimint_wallet_client::config::FeeConsensus::default(),
-                },
+    } <span class="kw">else </span>{
+        module_init_params.attach_config_gen_params(
+            MintInit::kind(),
+            LegacyMintGenParams {
+                local: EmptyGenParams::default(),
+                consensus: LegacyMintGenParamsConsensus::new(<span class="number">2</span>, LegacyFeeConsensus::default()),
             },
-        );
+        )
+    };
+
+    module_init_params.attach_config_gen_params(
+        WalletInit::kind(),
+        WalletGenParams {
+            local: WalletGenParamsLocal {
+                bitcoin_rpc: bitcoin_rpc.clone(),
+            },
+            consensus: WalletGenParamsConsensus {
+                network,
+                finality_delay,
+                client_default_bitcoin_rpc: default_esplora_server(network),
+                fee_consensus: fedimint_wallet_client::config::FeeConsensus::default(),
+            },
+        },
+    );
 
     <span class="comment">// TODO(support:v0.3): v0.4 introduced lnv2 modules, so we need to skip
     // attaching the module for old fedimintd versions
@@ -180,6 +261,61 @@
     <span class="kw">if </span>is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
         module_init_params
             .attach_config_gen_params(UnknownInit::kind(), UnknownGenParams::default());
+    }
+}
+
+<span class="kw">mod </span>legacy_types {
+    <span class="kw">use </span>fedimint_core::config::EmptyGenParams;
+    <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+    <span class="kw">use </span>serde::{Deserialize, Serialize};
+
+    <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+    </span><span class="kw">pub struct </span>LegacyMintGenParams {
+        <span class="kw">pub </span>local: EmptyGenParams,
+        <span class="kw">pub </span>consensus: LegacyMintGenParamsConsensus,
+    }
+
+    <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+    </span><span class="kw">pub struct </span>LegacyFeeConsensus {
+        <span class="kw">pub </span>note_issuance_abs: fedimint_core::Amount,
+        <span class="kw">pub </span>note_spend_abs: fedimint_core::Amount,
+    }
+
+    <span class="kw">impl </span>Default <span class="kw">for </span>LegacyFeeConsensus {
+        <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+            <span class="self">Self </span>{
+                note_issuance_abs: fedimint_core::Amount::ZERO,
+                note_spend_abs: fedimint_core::Amount::ZERO,
+            }
+        }
+    }
+
+    <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+    </span><span class="kw">pub struct </span>LegacyMintGenParamsConsensus {
+        denomination_base: u16,
+        fee_consensus: LegacyFeeConsensus,
+    }
+
+    <span class="kw">impl </span>LegacyMintGenParamsConsensus {
+        <span class="kw">pub fn </span>new(denomination_base: u16, fee_consensus: LegacyFeeConsensus) -&gt; <span class="self">Self </span>{
+            <span class="self">Self </span>{
+                denomination_base,
+                fee_consensus,
+            }
+        }
+    }
+
+    <span class="kw">impl </span>fedimint_core::config::ModuleInitParams <span class="kw">for </span>LegacyMintGenParams {
+        <span class="kw">type </span>Local = EmptyGenParams;
+        <span class="kw">type </span>Consensus = LegacyMintGenParamsConsensus;
+
+        <span class="kw">fn </span>from_parts(local: <span class="self">Self</span>::Local, consensus: <span class="self">Self</span>::Consensus) -&gt; <span class="self">Self </span>{
+            <span class="self">Self </span>{ local, consensus }
+        }
+
+        <span class="kw">fn </span>to_parts(<span class="self">self</span>) -&gt; (<span class="self">Self</span>::Local, <span class="self">Self</span>::Consensus) {
+            (<span class="self">self</span>.local, <span class="self">self</span>.consensus)
+        }
     }
 }
 </code></pre></div></section></main></body></html>
