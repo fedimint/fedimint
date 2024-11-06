@@ -20,6 +20,7 @@ use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 use fedimint_mint_common::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_mint_common::{BlindNonce, MintOutputOutcome, Nonce};
+use rayon::iter::{IndexedParallelIterator, IntoParallelIterator as _, ParallelIterator as _};
 use serde::{Deserialize, Serialize};
 use tbs::{
     aggregate_signature_shares, blind_message, unblind_signature, AggregatePublicKey,
@@ -359,8 +360,8 @@ impl MintOutputStatesCreatedMulti {
         module_decoder: Decoder,
         issuance_requests: BTreeMap<u64, (Amount, NoteIssuanceRequest)>,
         peer_tbs_pks: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
-    ) -> BTreeMap<u64, BTreeMap<PeerId, BlindedSignatureShare>> {
-        let mut ret = BTreeMap::new();
+    ) -> Vec<(u64, BTreeMap<PeerId, BlindedSignatureShare>)> {
+        let mut ret = vec![];
         // NOTE: We need a new api endpoint that can confirm multiple notes at once?
         // --dpc
         for (out_idx, (amount, issuance_request)) in issuance_requests {
@@ -401,7 +402,7 @@ impl MintOutputStatesCreatedMulti {
             .await
             .expect("Will retry forever");
 
-            ret.insert(out_idx, blinded_sig_share);
+            ret.push((out_idx, blinded_sig_share));
         }
 
         ret
@@ -410,7 +411,7 @@ impl MintOutputStatesCreatedMulti {
     async fn transition_outcome_ready(
         client_ctx: ClientContext<MintClientModule>,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        blinded_signature_shares: BTreeMap<u64, BTreeMap<PeerId, BlindedSignatureShare>>,
+        blinded_signature_shares: Vec<(u64, BTreeMap<PeerId, BlindedSignatureShare>)>,
         old_state: MintOutputStateMachine,
         tbs_pks: Tiered<AggregatePublicKey>,
     ) -> MintOutputStateMachine {
@@ -422,24 +423,34 @@ impl MintOutputStatesCreatedMulti {
             panic!("Unexpected prior state")
         };
 
-        for (out_idx, blinded_signature_shares) in blinded_signature_shares {
-            let agg_blind_signature = aggregate_signature_shares(
-                &blinded_signature_shares
-                    .into_iter()
-                    .map(|(peer, share)| (peer.to_usize() as u64 + 1, share))
-                    .collect(),
-            );
+        let mut spendable_notes: Vec<(Amount, SpendableNote)> = vec![];
 
-            // this implies that the mint client config's public keys are inconsistent
-            let (amount, issuance_request) =
-                created.issuance_requests.get(&out_idx).expect("Must have");
+        // Note verification is relatively slow and CPU-bound, so parallelize them
+        blinded_signature_shares
+            .into_par_iter()
+            .map(|(out_idx, blinded_signature_shares)| {
+                let agg_blind_signature = aggregate_signature_shares(
+                    &blinded_signature_shares
+                        .into_iter()
+                        .map(|(peer, share)| (peer.to_usize() as u64 + 1, share))
+                        .collect(),
+                );
 
-            let amount_key = tbs_pks.tier(amount).expect("Must have keys for any amount");
+                // this implies that the mint client config's public keys are inconsistent
+                let (amount, issuance_request) =
+                    created.issuance_requests.get(&out_idx).expect("Must have");
 
-            let spendable_note = issuance_request.finalize(agg_blind_signature);
+                let amount_key = tbs_pks.tier(amount).expect("Must have keys for any amount");
 
-            assert!(spendable_note.note().verify(*amount_key), "We checked all signature shares in the trigger future, so the combined signature has to be valid");
+                let spendable_note = issuance_request.finalize(agg_blind_signature);
 
+                assert!(spendable_note.note().verify(*amount_key), "We checked all signature shares in the trigger future, so the combined signature has to be valid");
+
+                (*amount, spendable_note)
+            })
+            .collect_into_vec(&mut spendable_notes);
+
+        for (amount, spendable_note) in spendable_notes {
             debug!(target: LOG_CLIENT_MODULE_MINT, amount = %amount, note=%spendable_note, "Adding new note from transaction output");
 
             client_ctx
@@ -451,12 +462,12 @@ impl MintOutputStatesCreatedMulti {
                 )
                 .await;
 
-            amount_total += *amount;
+            amount_total += amount;
             if let Some(note) = dbtx
                 .module_tx()
                 .insert_entry(
                     &NoteKey {
-                        amount: *amount,
+                        amount,
                         nonce: spendable_note.nonce(),
                     },
                     &spendable_note.to_undecoded(),
