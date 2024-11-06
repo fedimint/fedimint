@@ -32,7 +32,6 @@ bitcoin29 = { package = "bitcoin", version = "0.29.2", features = [
     "serde",
 ] }
 bitcoin30 = { workspace = true }
-bitcoin_hashes = { workspace = true }
 bitvec = "1.0.1"
 bls12_381 = { workspace = true }
 erased-serde = { workspace = true }

@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use bitcoin::consensus::{Decodable, Encodable};
 use bitcoin30::consensus::{Decodable as Bitcoin30Decodable, Encodable as Bitcoin30Encodable};
-use bitcoin_hashes::Hash;
+use bitcoin30::hashes::Hash;
 
 pub fn bitcoin29_to_bitcoin32_psbt(
     psbt: &bitcoin29::util::psbt::PartiallySignedTransaction,

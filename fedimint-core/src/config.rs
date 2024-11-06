@@ -7,8 +7,8 @@ use std::str::FromStr;
 
 use anyhow::{bail, format_err, Context};
 use bitcoin29::hashes::hex::format_hex;
-use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
-use bitcoin_hashes::{hex, sha256};
+use bitcoin30::hashes::sha256::{Hash as Sha256, HashEngine};
+use bitcoin30::hashes::{hex, sha256};
 use bls12_381::Scalar;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{DynRawFallback, Encodable};

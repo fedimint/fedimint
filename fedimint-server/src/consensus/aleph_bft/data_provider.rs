@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::time::Instant;
 
-use bitcoin_hashes::Hash;
+use bitcoin::hashes::Hash;
 use fedimint_core::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::epoch::ConsensusItem;
@@ -120,6 +120,6 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
 
 /// Calculate a cheap chesum of an encoded citem
 pub(crate) fn get_citem_bytes_chsum(bytes: &[u8]) -> u64 {
-    let chsum = bitcoin_hashes::sha256::Hash::hash(bytes);
+    let chsum = bitcoin::hashes::sha256::Hash::hash(bytes);
     u64::from_le_bytes(chsum[..8].try_into().expect("Can't fail"))
 }

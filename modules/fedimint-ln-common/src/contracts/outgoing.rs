@@ -1,4 +1,4 @@
-use bitcoin_hashes::Hash as BitcoinHash;
+use bitcoin30::hashes::Hash as BitcoinHash;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1_29::PublicKey;
 use fedimint_core::Amount;
@@ -19,7 +19,7 @@ const CANCELLATION_TAG: &str = "outgoing contract cancellation";
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct OutgoingContract {
     /// Hash that can be used to spend the output before the timelock expires
-    pub hash: bitcoin_hashes::sha256::Hash,
+    pub hash: bitcoin30::hashes::sha256::Hash,
     /// Public key of the LN gateway allowed to claim the HTLC before the
     /// timelock expires
     pub gateway_key: PublicKey,
@@ -45,12 +45,12 @@ impl IdentifiableContract for OutgoingContract {
 }
 
 impl OutgoingContract {
-    pub fn cancellation_message(&self) -> bitcoin_hashes::sha256::Hash {
-        let mut engine = bitcoin_hashes::sha256::Hash::engine();
+    pub fn cancellation_message(&self) -> bitcoin30::hashes::sha256::Hash {
+        let mut engine = bitcoin30::hashes::sha256::Hash::engine();
         Encodable::consensus_encode(&CANCELLATION_TAG.as_bytes(), &mut engine)
             .expect("Hashing never fails");
         Encodable::consensus_encode(&self.contract_id(), &mut engine).expect("Hashing never fails");
-        bitcoin_hashes::sha256::Hash::from_engine(engine)
+        bitcoin30::hashes::sha256::Hash::from_engine(engine)
     }
 }
 

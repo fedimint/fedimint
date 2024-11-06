@@ -24,7 +24,6 @@ async-trait = { workspace = true }
 base64 = { workspace = true }
 bincode = { workspace = true }
 bitcoin = { workspace = true }
-bitcoin_hashes = { workspace = true }
 bitcoincore-rpc = { workspace = true }
 bls12_381 = { workspace = true }
 bytes = { workspace = true }

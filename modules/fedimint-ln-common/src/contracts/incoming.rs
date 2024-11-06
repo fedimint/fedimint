@@ -1,7 +1,7 @@
 use std::io::Error;
 
-use bitcoin_hashes::sha256::Hash as Sha256;
-use bitcoin_hashes::{hash_newtype, Hash as BitcoinHash};
+use bitcoin30::hashes::sha256::Hash as Sha256;
+use bitcoin30::hashes::{hash_newtype, Hash as BitcoinHash};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{secp256k1_29 as secp256k1, Amount, OutPoint};
@@ -14,7 +14,7 @@ use crate::LightningInput;
 pub struct IncomingContractOffer {
     /// Amount for which the user is willing to sell the preimage
     pub amount: fedimint_core::Amount,
-    pub hash: bitcoin_hashes::sha256::Hash,
+    pub hash: bitcoin30::hashes::sha256::Hash,
     pub encrypted_preimage: EncryptedPreimage,
     pub expiry_time: Option<u64>,
 }
@@ -57,7 +57,7 @@ impl IncomingContractOffer {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct IncomingContract {
     /// Payment hash which's corresponding preimage is being sold
-    pub hash: bitcoin_hashes::sha256::Hash,
+    pub hash: bitcoin30::hashes::sha256::Hash,
     /// Encrypted preimage as specified in offer
     pub encrypted_preimage: EncryptedPreimage,
     /// Status of preimage decryption, will either end in failure or contain the

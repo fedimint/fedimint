@@ -1457,7 +1457,7 @@ impl MintClientModule {
 
         let operation_id = OperationId(
             notes
-                .consensus_hash_bitcoin30::<sha256t::Hash<OOBReissueTag>>()
+                .consensus_hash::<sha256t::Hash<OOBReissueTag>>()
                 .to_byte_array(),
         );
 
@@ -1864,7 +1864,7 @@ pub fn spendable_notes_to_operation_id(
 ) -> OperationId {
     OperationId(
         spendable_selected_notes
-            .consensus_hash_bitcoin30::<sha256t::Hash<OOBSpendTag>>()
+            .consensus_hash::<sha256t::Hash<OOBSpendTag>>()
             .to_byte_array(),
     )
 }
@@ -2393,14 +2393,17 @@ mod tests {
     use std::str::FromStr;
 
     use bitcoin_hashes::Hash;
-    use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
+    use fedimint_core::bitcoin_migration::{
+        bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_sha256_hash,
+    };
     use fedimint_core::config::FederationId;
     use fedimint_core::encoding::Decodable;
     use fedimint_core::invite_code::{InviteCode, InviteCodeV2};
     use fedimint_core::module::registry::ModuleRegistry;
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{
-        secp256k1, Amount, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId,
+        secp256k1, Amount, BitcoinHash, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti,
+        TransactionId,
     };
     use fedimint_mint_common::config::FeeConsensus;
     use itertools::Itertools;
@@ -2593,11 +2596,13 @@ mod tests {
 
     #[test]
     fn notes_encode_decode() {
-        let federation_id_1 =
-            FederationId(bitcoin_hashes::sha256::Hash::from_byte_array([0x21; 32]));
+        let federation_id_1 = FederationId(bitcoin32_to_bitcoin30_sha256_hash(
+            &bitcoin_hashes::sha256::Hash::from_byte_array([0x21; 32]),
+        ));
         let federation_id_prefix_1 = federation_id_1.to_prefix();
-        let federation_id_2 =
-            FederationId(bitcoin_hashes::sha256::Hash::from_byte_array([0x42; 32]));
+        let federation_id_2 = FederationId(bitcoin32_to_bitcoin30_sha256_hash(
+            &bitcoin_hashes::sha256::Hash::from_byte_array([0x42; 32]),
+        ));
         let federation_id_prefix_2 = federation_id_2.to_prefix();
 
         let notes = vec![(

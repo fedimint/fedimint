@@ -1,4 +1,4 @@
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin::hashes::{sha256, Hash};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::net::peers::IPeerConnections;
 use parity_scale_codec::{Decode, Encode, IoReader};
@@ -15,9 +15,7 @@ impl aleph_bft::Hasher for Hasher {
     type Hash = [u8; 32];
 
     fn hash(input: &[u8]) -> Self::Hash {
-        input
-            .consensus_hash_bitcoin30::<sha256::Hash>()
-            .to_byte_array()
+        input.consensus_hash::<sha256::Hash>().to_byte_array()
     }
 }
 

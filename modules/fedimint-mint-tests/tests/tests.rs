@@ -450,7 +450,6 @@ mod fedimint_migration_tests {
     use std::collections::BTreeMap;
 
     use anyhow::ensure;
-    use bitcoin_hashes::Hash;
     use bls12_381::Scalar;
     use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
     use fedimint_client::module::init::recovery::{RecoveryFromHistory, RecoveryFromHistoryCommon};
@@ -463,7 +462,7 @@ mod fedimint_migration_tests {
     use fedimint_core::module::DynServerModuleInit;
     use fedimint_core::time::now;
     use fedimint_core::{
-        secp256k1, secp256k1_29, Amount, OutPoint, Tiered, TieredMulti, TransactionId,
+        secp256k1, secp256k1_29, Amount, BitcoinHash, OutPoint, Tiered, TieredMulti, TransactionId,
     };
     use fedimint_logging::TracingSetup;
     use fedimint_mint_client::backup::recovery::{

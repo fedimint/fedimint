@@ -626,7 +626,7 @@ mod fedimint_migration_tests {
     };
     use fedimint_core::encoding::Encodable;
     use fedimint_core::module::DynServerModuleInit;
-    use fedimint_core::secp256k1_29::hashes::Hash;
+    use fedimint_core::secp256k1::hashes::Hash;
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{secp256k1_29 as secp256k1, Amount, OutPoint, PeerId, TransactionId};
     use fedimint_ln_client::db::{PaymentResult, PaymentResultKey, PaymentResultPrefix};
@@ -876,13 +876,14 @@ mod fedimint_migration_tests {
 
         dbtx.insert_new_entry(
             &PaymentResultKey {
-                payment_hash: sha256::Hash::hash(&BYTE_8),
+                payment_hash: bitcoin32_to_bitcoin30_sha256_hash(&sha256::Hash::hash(&BYTE_8)),
             },
             &PaymentResult {
                 index: 0,
                 completed_payment: Some(OutgoingLightningPayment {
                     payment_type: fedimint_ln_client::PayType::Lightning(OperationId(BYTE_32)),
-                    contract_id: sha256::Hash::hash(&BYTE_8).into(),
+                    contract_id: bitcoin32_to_bitcoin30_sha256_hash(&sha256::Hash::hash(&BYTE_8))
+                        .into(),
                     fee: Amount::from_sats(1000),
                 }),
             },
@@ -896,7 +897,9 @@ mod fedimint_migration_tests {
         let secp: Secp256k1<All> = Secp256k1::gen_new();
         let invoice = InvoiceBuilder::new(Currency::Regtest)
             .amount_milli_satoshis(1000)
-            .payment_hash(sha256::Hash::hash(&BYTE_32))
+            .payment_hash(bitcoin32_to_bitcoin30_sha256_hash(&sha256::Hash::hash(
+                &BYTE_32,
+            )))
             .description("".to_string())
             .payment_secret(PaymentSecret([0; 32]))
             .current_timestamp()
@@ -965,7 +968,7 @@ mod fedimint_migration_tests {
 
         let (sk, pk) = secp256k1::generate_keypair(&mut OsRng);
         let outgoing_contract = OutgoingContract {
-            hash: sha256::Hash::hash(&BYTE_32),
+            hash: bitcoin32_to_bitcoin30_sha256_hash(&sha256::Hash::hash(&BYTE_32)),
             gateway_key: pk,
             timelock: 1000,
             user_key: pk,
@@ -984,7 +987,7 @@ mod fedimint_migration_tests {
             federation_id: FederationId::dummy(),
             contract,
             gateway_fee: Amount::from_msats(1000),
-            preimage_auth: sha256::Hash::hash(&BYTE_32),
+            preimage_auth: bitcoin32_to_bitcoin30_sha256_hash(&sha256::Hash::hash(&BYTE_32)),
             invoice: invoice.clone(),
         };
 
@@ -1017,7 +1020,7 @@ mod fedimint_migration_tests {
             federation_id: FederationId::dummy(),
             contract_id: outgoing_contract.contract_id(),
             payment_data: PaymentData::Invoice(invoice),
-            preimage_auth: sha256::Hash::hash(&BYTE_32),
+            preimage_auth: bitcoin32_to_bitcoin30_sha256_hash(&sha256::Hash::hash(&BYTE_32)),
         }
         .consensus_encode(&mut funded_state)
         .expect("PayInvoicePayload is encodable");
