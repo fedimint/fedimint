@@ -18,7 +18,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-bitcoin_hashes = { workspace = true }
+bitcoin_hashes = { package = "bitcoin_hashes", version = "0.12.0" }
 erased-serde = { workspace = true }
 fedimint-bitcoind = { workspace = true }
 fedimint-core = { workspace = true }

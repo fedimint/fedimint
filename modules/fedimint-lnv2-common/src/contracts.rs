@@ -61,7 +61,7 @@ impl IncomingContract {
             &agg_pk,
             &encryption_seed,
             &preimage,
-            &commitment.consensus_hash_bitcoin30(),
+            &commitment.consensus_hash(),
         );
 
         IncomingContract {
@@ -75,10 +75,7 @@ impl IncomingContract {
     }
 
     pub fn verify(&self) -> bool {
-        verify_ciphertext(
-            &self.ciphertext,
-            &self.commitment.consensus_hash_bitcoin30(),
-        )
+        verify_ciphertext(&self.ciphertext, &self.commitment.consensus_hash())
     }
 
     pub fn verify_decryption_share(
@@ -90,7 +87,7 @@ impl IncomingContract {
             pk,
             dk_share,
             &self.ciphertext,
-            &self.commitment.consensus_hash_bitcoin30(),
+            &self.commitment.consensus_hash(),
         )
     }
 
@@ -103,7 +100,7 @@ impl IncomingContract {
             agg_pk,
             agg_decryption_key,
             &self.ciphertext,
-            &self.commitment.consensus_hash_bitcoin30(),
+            &self.commitment.consensus_hash(),
         )
     }
 
