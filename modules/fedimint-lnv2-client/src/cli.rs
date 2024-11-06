@@ -39,9 +39,10 @@ enum Opts {
 
 #[derive(Clone, Subcommand, Serialize)]
 enum GatewayOpts {
-    /// Update cache of gateway information to optimise gateway selection for a
-    /// given invoice.
-    Cache,
+    /// Update the mapping from lightning node public keys to gateway api
+    /// endpoints maintained in the module database to optimise gateway
+    /// selection for a given invoice; this command is intended for testing.
+    Map,
     /// Select an online vetted gateway; this command is intended for testing.
     Select {
         #[arg(long)]
@@ -91,7 +92,15 @@ pub(crate) async fn handle_cli_command(
         ),
         Opts::Gateway(gateway_opts) => match gateway_opts {
             #[allow(clippy::unit_arg)]
-            GatewayOpts::Cache => json(lightning.update_gateway_cache().await),
+            GatewayOpts::Map => json(
+                LightningClientModule::update_gateway_map(
+                    &lightning.federation_id,
+                    &lightning.client_ctx,
+                    &lightning.module_api,
+                    &lightning.gateway_conn,
+                )
+                .await,
+            ),
             GatewayOpts::Select { invoice } => json(lightning.select_gateway(invoice).await?.0),
             GatewayOpts::List { peer } => match peer {
                 Some(peer) => json(lightning.module_api.gateways_from_peer(peer).await?),

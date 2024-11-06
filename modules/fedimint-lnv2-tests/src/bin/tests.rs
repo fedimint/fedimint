@@ -109,7 +109,7 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
             .to_string()
     ));
 
-    cmd!(client, "module", "lnv2", "gateway", "cache")
+    cmd!(client, "module", "lnv2", "gateway", "map")
         .out_json()
         .await?;
 

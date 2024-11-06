@@ -13,6 +13,7 @@ mod send_sm;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_stream::stream;
 use bitcoin30::hashes::{sha256, Hash};
@@ -40,6 +41,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
+use fedimint_core::task::TaskGroup;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
@@ -241,19 +243,19 @@ impl ClientModuleInit for LightningClientInit {
     }
 
     async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
-        Ok(LightningClientModule {
-            federation_id: *args.federation_id(),
-            cfg: args.cfg().clone(),
-            notifier: args.notifier().clone(),
-            client_ctx: args.context(),
-            module_api: args.module_api().clone(),
-            keypair: args
-                .module_root_secret()
+        Ok(LightningClientModule::new(
+            *args.federation_id(),
+            args.cfg().clone(),
+            args.notifier().clone(),
+            args.context(),
+            args.module_api().clone(),
+            args.module_root_secret()
                 .clone()
                 .to_secp_key(secp256k1::SECP256K1),
-            admin_auth: args.admin_auth().cloned(),
-            gateway_conn: self.gateway_conn.clone(),
-        })
+            self.gateway_conn.clone(),
+            args.admin_auth().cloned(),
+            args.task_group(),
+        ))
     }
 }
 
@@ -329,19 +331,85 @@ fn generate_ephemeral_tweak(static_pk: PublicKey) -> ([u8; 32], PublicKey) {
 }
 
 impl LightningClientModule {
-    /// Updates the mapping from lightning node public keys to gateway api
-    /// endpoints maintained in the module database. When paying an invoice this
-    /// enables the client to select the gateway that has created the invoice,
-    /// if possible, such that the payment does not go over lightning, reducing
-    /// fees and latency.
-    ///
-    /// Client integrators are expected to call this function once a day.
-    pub async fn update_gateway_cache(&self) {
-        if let Ok(gateways) = self.module_api.gateways().await {
-            let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        federation_id: FederationId,
+        cfg: LightningClientConfig,
+        notifier: ModuleNotifier<LightningClientStateMachines>,
+        client_ctx: ClientContext<Self>,
+        module_api: DynModuleApi,
+        keypair: KeyPair,
+        gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+        admin_auth: Option<ApiAuth>,
+        task_group: &TaskGroup,
+    ) -> Self {
+        Self::spawn_gateway_map_update_task(
+            federation_id,
+            client_ctx.clone(),
+            module_api.clone(),
+            gateway_conn.clone(),
+            task_group,
+        );
+
+        Self {
+            federation_id,
+            cfg,
+            notifier,
+            client_ctx,
+            module_api,
+            keypair,
+            gateway_conn,
+            admin_auth,
+        }
+    }
+
+    fn spawn_gateway_map_update_task(
+        federation_id: FederationId,
+        client_ctx: ClientContext<Self>,
+        module_api: DynModuleApi,
+        gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+        task_group: &TaskGroup,
+    ) {
+        task_group.spawn("gateway_map_update_task", move |handle| async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(24 * 60 * 60));
+            let mut shutdown_rx = handle.make_shutdown_rx();
+
+            loop {
+                tokio::select! {
+                    _  = &mut Box::pin(interval.tick()) => {
+                        Self::update_gateway_map(
+                            &federation_id,
+                            &client_ctx,
+                            &module_api,
+                            &gateway_conn
+                        ).await;
+                    },
+                    () = &mut shutdown_rx => { break },
+                };
+            }
+        });
+    }
+
+    async fn update_gateway_map(
+        federation_id: &FederationId,
+        client_ctx: &ClientContext<Self>,
+        module_api: &DynModuleApi,
+        gateway_conn: &Arc<dyn GatewayConnection + Send + Sync>,
+    ) {
+        // Update the mapping from lightning node public keys to gateway api
+        // endpoints maintained in the module database. When paying an invoice this
+        // enables the client to select the gateway that has created the invoice,
+        // if possible, such that the payment does not go over lightning, reducing
+        // fees and latency.
+
+        if let Ok(gateways) = module_api.gateways().await {
+            let mut dbtx = client_ctx.module_db().begin_transaction().await;
 
             for gateway in gateways {
-                if let Ok(Some(routing_info)) = self.routing_info(&gateway).await {
+                if let Ok(Some(routing_info)) = gateway_conn
+                    .routing_info(gateway.clone(), federation_id)
+                    .await
+                {
                     dbtx.insert_entry(&GatewayKey(routing_info.lightning_public_key), &gateway)
                         .await;
                 }
