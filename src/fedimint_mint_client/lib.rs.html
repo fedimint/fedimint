@@ -2723,8 +2723,7 @@
 <a href="#2722" id="2722">2722</a>
 <a href="#2723" id="2723">2723</a>
 <a href="#2724" id="2724">2724</a>
-<a href="#2725" id="2725">2725</a>
-<a href="#2726" id="2726">2726</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2725" id="2725">2725</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2786,7 +2785,6 @@
     IDatabaseTransactionOpsCoreTyped,
 };
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
-<span class="kw">use </span>fedimint_core::fee_consensus::FeeConsensus;
 <span class="kw">use </span>fedimint_core::invite_code::{InviteCode, InviteCodeV2};
 <span class="kw">use </span>fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 <span class="kw">use </span>fedimint_core::module::{
@@ -2802,7 +2800,7 @@
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_MINT;
 <span class="kw">pub use </span>fedimint_mint_common <span class="kw">as </span>common;
-<span class="kw">use </span>fedimint_mint_common::config::MintClientConfig;
+<span class="kw">use </span>fedimint_mint_common::config::{FeeConsensus, MintClientConfig};
 <span class="kw">pub use </span>fedimint_mint_common::<span class="kw-2">*</span>;
 <span class="kw">use </span>futures::{pin_mut, StreamExt};
 <span class="kw">use </span>hex::ToHex;
@@ -5099,13 +5097,13 @@
     <span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
     <span class="kw">use </span>fedimint_core::config::FederationId;
     <span class="kw">use </span>fedimint_core::encoding::Decodable;
-    <span class="kw">use </span>fedimint_core::fee_consensus::FeeConsensus;
     <span class="kw">use </span>fedimint_core::invite_code::{InviteCode, InviteCodeV2};
     <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
     <span class="kw">use </span>fedimint_core::util::SafeUrl;
     <span class="kw">use </span>fedimint_core::{
         secp256k1, Amount, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId,
     };
+    <span class="kw">use </span>fedimint_mint_common::config::FeeConsensus;
     <span class="kw">use </span>itertools::Itertools;
     <span class="kw">use </span>secp256k1::rand::rngs::OsRng;
     <span class="kw">use </span>secp256k1::{SecretKey, SECP256K1};

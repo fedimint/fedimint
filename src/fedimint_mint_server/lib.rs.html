@@ -1505,10 +1505,10 @@
     };
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::Database;
-    <span class="kw">use </span>fedimint_core::fee_consensus::FeeConsensus;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
     <span class="kw">use </span>fedimint_core::module::{ModuleConsensusVersion, ServerModuleInit};
     <span class="kw">use </span>fedimint_core::{secp256k1, Amount, PeerId, ServerModule};
+    <span class="kw">use </span>fedimint_mint_common::config::FeeConsensus;
     <span class="kw">use </span>fedimint_mint_common::{MintInput, Nonce, Note};
     <span class="kw">use </span>tbs::blind_message;
 
@@ -1528,7 +1528,7 @@
                 local: EmptyGenParams::default(),
                 consensus: MintGenParamsConsensus::new(
                     <span class="number">2</span>,
-                    FeeConsensus::new_lnv2(<span class="number">1000</span>).expect(<span class="string">"Relative fee is within range"</span>),
+                    FeeConsensus::new(<span class="number">1000</span>).expect(<span class="string">"Relative fee is within range"</span>),
                 ),
             })
             .unwrap(),
@@ -1560,7 +1560,7 @@
                     .unwrap()
                     .consensus
                     .peer_tbs_pks,
-                fee_consensus: FeeConsensus::new_lnv2(<span class="number">1000</span>).expect(<span class="string">"Relative fee is within range"</span>),
+                fee_consensus: FeeConsensus::new(<span class="number">1000</span>).expect(<span class="string">"Relative fee is within range"</span>),
                 max_notes_per_denomination: <span class="number">0</span>,
             },
             private: MintConfigPrivate {
