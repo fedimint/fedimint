@@ -9,7 +9,9 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{runtime, Amount, TransactionId};
 use fedimint_mint_common::MintInput;
 
-use crate::input::{MintInputCommon, MintInputStateMachine, MintInputStateRefund, MintInputStates};
+use crate::input::{
+    MintInputCommon, MintInputStateMachine, MintInputStateRefundedBundle, MintInputStates,
+};
 use crate::{MintClientContext, MintClientStateMachines, SpendableNote};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -316,35 +318,39 @@ async fn try_cancel_oob_spend_multi(
     spendable_notes: Vec<(Amount, SpendableNote)>,
     global_context: DynGlobalClientContext,
 ) -> TransactionId {
-    let (inputs, input_sms) = spendable_notes
+    let inputs = spendable_notes
+        .clone()
         .into_iter()
-        .map(|(amount, spendable_note)| {
-            (
-                ClientInput {
-                    input: MintInput::new_v0(amount, spendable_note.note()),
-                    keys: vec![spendable_note.spend_key],
-                    amount,
-                },
-                ClientInputSM {
-                    state_machines: Arc::new(move |txid, input_idx| {
-                        vec![MintClientStateMachines::Input(MintInputStateMachine {
-                            common: MintInputCommon {
-                                operation_id,
-                                txid,
-                                input_idx,
-                            },
-                            state: MintInputStates::Refund(MintInputStateRefund {
-                                refund_txid: txid,
-                            }),
-                        })]
-                    }),
-                },
-            )
+        .map(|(amount, spendable_note)| ClientInput {
+            input: MintInput::new_v0(amount, spendable_note.note()),
+            keys: vec![spendable_note.spend_key],
+            amount,
         })
-        .unzip();
+        .collect();
+
+    let sm = ClientInputSM {
+        state_machines: Arc::new(move |txid, input_idxs| {
+            debug_assert_eq!(input_idxs.clone().count(), spendable_notes.len());
+            vec![MintClientStateMachines::Input(MintInputStateMachine {
+                common: MintInputCommon {
+                    operation_id,
+                    txid,
+                    input_idxs,
+                },
+                // When canceling OOB, we are reating the multi-refund input already here.
+                // So  we can cut straight to
+                // `MintInputStates::RefundedMulti` state. If the reund tx fails, it will
+                // retry using per-note refund again.
+                state: MintInputStates::RefundedBundle(MintInputStateRefundedBundle {
+                    refund_txid: txid,
+                    spendable_notes: spendable_notes.clone(),
+                }),
+            })]
+        }),
+    };
 
     global_context
-        .claim_inputs(dbtx, ClientInputBundle::new(inputs, input_sms))
+        .claim_inputs(dbtx, ClientInputBundle::new(inputs, vec![sm]))
         .await
         .expect("Cannot claim input, additional funding needed")
         .0

@@ -1,3 +1,5 @@
+use std::fmt;
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 
 use bitcoin::key::Keypair;
@@ -16,12 +18,12 @@ use secp256k1::Secp256k1;
 use crate::module::StateGenerator;
 use crate::sm::{self, DynState};
 use crate::{
-    states_to_instanceless_dyn, InstancelessDynClientInput, InstancelessDynClientInputBundle,
-    InstancelessDynClientInputSM, InstancelessDynClientOutput, InstancelessDynClientOutputBundle,
-    InstancelessDynClientOutputSM,
+    states_add_instance, states_to_instanceless_dyn, InstancelessDynClientInput,
+    InstancelessDynClientInputBundle, InstancelessDynClientInputSM, InstancelessDynClientOutput,
+    InstancelessDynClientOutputBundle, InstancelessDynClientOutputSM,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ClientInput<I = DynInput> {
     pub input: I,
     pub keys: Vec<Keypair>,
@@ -31,6 +33,12 @@ pub struct ClientInput<I = DynInput> {
 #[derive(Clone)]
 pub struct ClientInputSM<S = DynState> {
     pub state_machines: StateGenerator<S>,
+}
+
+impl<S> fmt::Debug for ClientInputSM<S> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("ClientInputSM")
+    }
 }
 
 /// A fake [`sm::Context`] for [`NeverClientStateMachine`]
@@ -74,7 +82,7 @@ impl sm::State for NeverClientStateMachine {
 /// A group of inputs and state machines responsible for driving their state
 ///
 /// These must be kept together as a whole when including in a transaction.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ClientInputBundle<I = DynInput, S = DynState> {
     pub(crate) inputs: Vec<ClientInput<I>>,
     pub(crate) sms: Vec<ClientInputSM<S>>,
@@ -108,12 +116,6 @@ where
 
     pub fn sms(&self) -> &[ClientInputSM<S>] {
         &self.sms
-    }
-
-    pub fn with(mut self, other: Self) -> Self {
-        self.inputs.extend(other.inputs);
-        self.sms.extend(other.sms);
-        self
     }
 
     pub fn into_instanceless(self) -> InstancelessDynClientInputBundle {
@@ -190,13 +192,42 @@ where
     }
 }
 
-#[derive(Clone)]
+impl IntoDynInstance for InstancelessDynClientInputBundle {
+    type DynType = ClientInputBundle;
+
+    fn into_dyn(self, module_instance_id: ModuleInstanceId) -> ClientInputBundle {
+        ClientInputBundle {
+            inputs: self
+                .inputs
+                .into_iter()
+                .map(|input| ClientInput {
+                    input: DynInput::from_parts(module_instance_id, input.input),
+                    keys: input.keys,
+                    amount: input.amount,
+                })
+                .collect::<Vec<ClientInput>>(),
+
+            sms: self
+                .sms
+                .into_iter()
+                .map(|input_sm| ClientInputSM {
+                    state_machines: states_add_instance(
+                        module_instance_id,
+                        input_sm.state_machines,
+                    ),
+                })
+                .collect::<Vec<ClientInputSM>>(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct ClientOutputBundle<O = DynOutput, S = DynState> {
     pub(crate) outputs: Vec<ClientOutput<O>>,
     pub(crate) sms: Vec<ClientOutputSM<S>>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ClientOutput<O = DynOutput> {
     pub output: O,
     pub amount: Amount,
@@ -207,6 +238,11 @@ pub struct ClientOutputSM<S = DynState> {
     pub state_machines: StateGenerator<S>,
 }
 
+impl<S> fmt::Debug for ClientOutputSM<S> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("ClientOutputSM")
+    }
+}
 impl<O> ClientOutputBundle<O, NeverClientStateMachine> {
     /// A version of [`Self::new`] for times where output does not require any
     /// state machines
@@ -288,6 +324,34 @@ where
     }
 }
 
+impl IntoDynInstance for InstancelessDynClientOutputBundle {
+    type DynType = ClientOutputBundle;
+
+    fn into_dyn(self, module_instance_id: ModuleInstanceId) -> ClientOutputBundle {
+        ClientOutputBundle {
+            outputs: self
+                .outputs
+                .into_iter()
+                .map(|output| ClientOutput {
+                    output: DynOutput::from_parts(module_instance_id, output.output),
+                    amount: output.amount,
+                })
+                .collect::<Vec<ClientOutput>>(),
+
+            sms: self
+                .sms
+                .into_iter()
+                .map(|output_sm| ClientOutputSM {
+                    state_machines: states_add_instance(
+                        module_instance_id,
+                        output_sm.state_machines,
+                    ),
+                })
+                .collect::<Vec<ClientOutputSM>>(),
+        }
+    }
+}
+
 impl<I> IntoDynInstance for ClientOutput<I>
 where
     I: IntoDynInstance<DynType = DynOutput> + 'static,
@@ -315,12 +379,10 @@ where
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct TransactionBuilder {
-    inputs: Vec<ClientInput>,
-    input_sms: Vec<ClientInputSM>,
-    outputs: Vec<ClientOutput>,
-    output_sms: Vec<ClientOutputSM>,
+    inputs: Vec<ClientInputBundle>,
+    outputs: Vec<ClientOutputBundle>,
 }
 
 impl TransactionBuilder {
@@ -328,43 +390,13 @@ impl TransactionBuilder {
         Self::default()
     }
 
-    pub fn inputs(&self) -> &[ClientInput] {
-        &self.inputs
-    }
-
-    pub fn outputs(&self) -> &[ClientOutput] {
-        &self.outputs
-    }
-
-    pub fn with_input(mut self, input: ClientInput) -> Self {
-        self.inputs.push(input);
-        self
-    }
-
-    pub fn with_input_sm(mut self, input: ClientInputSM) -> Self {
-        self.input_sms.push(input);
-        self
-    }
-
-    pub fn with_output(mut self, output: ClientOutput) -> Self {
-        self.outputs.push(output);
-        self
-    }
-
-    pub fn with_output_sm(mut self, output: ClientOutputSM) -> Self {
-        self.output_sms.push(output);
-        self
-    }
-
     pub fn with_inputs(mut self, inputs: ClientInputBundle) -> Self {
-        self.inputs.extend(inputs.inputs);
-        self.input_sms.extend(inputs.sms);
+        self.inputs.push(inputs);
         self
     }
 
     pub fn with_outputs(mut self, outputs: ClientOutputBundle) -> Self {
-        self.outputs.extend(outputs.outputs);
-        self.output_sms.extend(outputs.sms);
+        self.outputs.push(outputs);
         self
     }
 
@@ -376,29 +408,34 @@ impl TransactionBuilder {
     where
         C: secp256k1::Signing + secp256k1::Verification,
     {
-        let (inputs, input_keys): (Vec<_>, Vec<_>) = multiunzip(
+        // `input_idx_to_bundle_idx[input_idx]` stores the index of a bundle the input
+        // at `input_idx` comes from, so we can call state machines of the
+        // corresponding bundle for every input bundle. It is always
+        // monotonically increasing, e.g. `[0, 0, 1, 2, 2, 2, 4]`
+        let (input_idx_to_bundle_idx, inputs, input_keys): (Vec<_>, Vec<_>, Vec<_>) = multiunzip(
             self.inputs
-                .into_iter()
-                .map(|input| (input.input, input.keys)),
+                .iter()
+                .enumerate()
+                .flat_map(|(bundle_idx, bundle)| {
+                    bundle
+                        .inputs
+                        .iter()
+                        .map(move |input| (bundle_idx, input.input.clone(), input.keys.clone()))
+                }),
         );
-        let input_sms: Vec<_> = self
-            .input_sms
-            .into_iter()
-            .map(|input_sm| (input_sm.state_machines))
-            .collect();
-
-        let outputs: Vec<_> = self
-            .outputs
-            .into_iter()
-            .map(|output| output.output)
-            .collect();
-
-        let output_sms: Vec<_> = self
-            .output_sms
-            .into_iter()
-            .map(|output_sm| (output_sm.state_machines))
-            .collect();
-
+        // `output_idx_to_bundle` works exactly like `input_idx_to_bundle_idx` above,
+        // but for outputs.
+        let (output_idx_to_bundle_idx, outputs): (Vec<_>, Vec<_>) = multiunzip(
+            self.outputs
+                .iter()
+                .enumerate()
+                .flat_map(|(bundle_idx, bundle)| {
+                    bundle
+                        .outputs
+                        .iter()
+                        .map(move |output| (bundle_idx, output.output.clone()))
+                }),
+        );
         let nonce: [u8; 8] = rng.gen();
 
         let txid = Transaction::tx_hash_from_parts(&inputs, &outputs, nonce);
@@ -417,15 +454,70 @@ impl TransactionBuilder {
             signatures: TransactionSignature::NaiveMultisig(signatures),
         };
 
-        let states = input_sms
+        let input_states = self
+            .inputs
             .into_iter()
             .enumerate()
-            .chain(output_sms.into_iter().enumerate())
-            .flat_map(|(idx, state_gen)| state_gen(txid, idx as u64))
-            .collect::<Vec<_>>();
+            .flat_map(|(bundle_idx, bundle)| {
+                let input_idxs = find_range_of_matching_items(&input_idx_to_bundle_idx, bundle_idx);
+                bundle.sms.into_iter().flat_map(move |sm| {
+                    if let Some(input_idxs) = input_idxs.as_ref() {
+                        (sm.state_machines)(txid, input_idxs.clone())
+                    } else {
+                        vec![]
+                    }
+                })
+            });
 
-        (transaction, states)
+        let output_states =
+            self.outputs
+                .into_iter()
+                .enumerate()
+                .flat_map(|(bundle_idx, bundle)| {
+                    let output_idxs =
+                        find_range_of_matching_items(&output_idx_to_bundle_idx, bundle_idx);
+                    bundle.sms.into_iter().flat_map(move |sm| {
+                        if let Some(output_idxs) = output_idxs.as_ref() {
+                            (sm.state_machines)(txid, output_idxs.clone())
+                        } else {
+                            vec![]
+                        }
+                    })
+                });
+        (transaction, input_states.chain(output_states).collect())
     }
+
+    pub(crate) fn inputs(&self) -> impl Iterator<Item = &ClientInput> {
+        self.inputs.iter().flat_map(|i| i.inputs.iter())
+    }
+
+    pub(crate) fn outputs(&self) -> impl Iterator<Item = &ClientOutput> {
+        self.outputs.iter().flat_map(|i| i.outputs.iter())
+    }
+}
+
+/// Find the range of indexes in an monotonically increasing `arr`, that is
+/// equal to `item`
+fn find_range_of_matching_items(arr: &[usize], item: usize) -> Option<RangeInclusive<u64>> {
+    // `arr` must be monotonically increasing
+    debug_assert!(arr.windows(2).all(|w| w[0] <= w[1]));
+
+    arr.iter()
+        .enumerate()
+        .filter_map(|(arr_idx, arr_item)| (*arr_item == item).then_some(arr_idx as u64))
+        .fold(None, |cur: Option<(u64, u64)>, idx| {
+            Some(cur.map_or((idx, idx), |cur| (cur.0.min(idx), cur.1.max(idx))))
+        })
+        .map(|(start, end)| start..=end)
+}
+
+#[test]
+fn find_range_of_matching_items_sanity() {
+    assert_eq!(find_range_of_matching_items(&[0, 0], 0), Some(0..=1));
+    assert_eq!(find_range_of_matching_items(&[0, 0, 1], 0), Some(0..=1));
+    assert_eq!(find_range_of_matching_items(&[0, 0, 1], 1), Some(2..=2));
+    assert_eq!(find_range_of_matching_items(&[0, 0, 1], 2), None);
+    assert_eq!(find_range_of_matching_items(&[], 0), None);
 }
 
 fn state_gen_to_dyn<S>(

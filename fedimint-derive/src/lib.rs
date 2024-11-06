@@ -59,6 +59,7 @@ pub fn derive_encodable(input: TokenStream) -> TokenStream {
 
     let output = quote! {
         impl #impl_generics ::fedimint_core::encoding::Encodable for #ident #ty_generics #where_clause {
+            #[allow(deprecated)]
             fn consensus_encode<W: std::io::Write>(&self, mut writer: &mut W) -> std::result::Result<usize, std::io::Error> {
                 #encode_inner
             }
@@ -247,6 +248,7 @@ pub fn derive_decodable(input: TokenStream) -> TokenStream {
     };
 
     let output = quote! {
+        #[allow(deprecated)]
         impl ::fedimint_core::encoding::Decodable for #ident {
             fn consensus_decode_from_finite_reader<D: std::io::Read>(d: &mut D, modules: &::fedimint_core::module::registry::ModuleDecoderRegistry) -> std::result::Result<Self, ::fedimint_core::encoding::DecodeError> {
                 use ::fedimint_core:: anyhow::Context;

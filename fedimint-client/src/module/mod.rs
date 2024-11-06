@@ -31,11 +31,9 @@ use crate::db::event_log::Event;
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
 use crate::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use crate::sm::{self, ActiveStateMeta, Context, DynContext, DynState, State};
-use crate::transaction::{
-    ClientInput, ClientInputBundle, ClientInputSM, ClientOutputBundle, TransactionBuilder,
-};
+use crate::transaction::{ClientInputBundle, ClientOutputBundle, TransactionBuilder};
 use crate::{
-    oplog, states_add_instance, AddStateMachinesResult, Client, ClientStrong, ClientWeak,
+    oplog, AddStateMachinesResult, Client, ClientStrong, ClientWeak,
     InstancelessDynClientInputBundle, TransactionUpdates,
 };
 
@@ -485,28 +483,11 @@ where
     async fn claim_inputs_dyn(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        ClientInputBundle { inputs, sms }: InstancelessDynClientInputBundle,
+        inputs: InstancelessDynClientInputBundle,
         operation_id: OperationId,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
-        let mut tx_builder = TransactionBuilder::new();
-
-        for input in inputs {
-            let instance_input = ClientInput {
-                input: DynInput::from_parts(self.module_instance_id, input.input),
-                keys: input.keys,
-                amount: input.amount,
-            };
-            tx_builder = tx_builder.with_input(instance_input);
-        }
-        for input_sm in sms {
-            let instance_input_sm = ClientInputSM {
-                state_machines: states_add_instance(
-                    self.module_instance_id,
-                    input_sm.state_machines,
-                ),
-            };
-            tx_builder = tx_builder.with_input_sm(instance_input_sm);
-        }
+        let tx_builder =
+            TransactionBuilder::new().with_inputs(inputs.into_dyn(self.module_instance_id));
 
         self.client
             .get()
@@ -979,4 +960,4 @@ impl AsRef<maybe_add_send_sync!(dyn IClientModule + 'static)> for DynClientModul
 }
 
 pub type StateGenerator<S> =
-    Arc<maybe_add_send_sync!(dyn Fn(TransactionId, u64) -> Vec<S> + 'static)>;
+    Arc<maybe_add_send_sync!(dyn Fn(TransactionId, ops::RangeInclusive<u64>) -> Vec<S> + 'static)>;

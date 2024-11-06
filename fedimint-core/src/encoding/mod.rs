@@ -71,6 +71,15 @@ impl Encodable for Box<dyn DynEncodable> {
     }
 }
 
+impl<T> Encodable for &T
+where
+    T: Encodable,
+{
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+        (**self).consensus_encode(writer)
+    }
+}
+
 /// Data which can be encoded in a consensus-consistent way
 pub trait Encodable {
     /// Encode an object with a well-defined format.
@@ -321,6 +330,28 @@ macro_rules! impl_encode_decode_num_as_bigsize {
             }
         }
     };
+}
+
+impl<T> Encodable for std::ops::RangeInclusive<T>
+where
+    T: Encodable,
+{
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        (self.start(), self.end()).consensus_encode(writer)
+    }
+}
+
+impl<T> Decodable for std::ops::RangeInclusive<T>
+where
+    T: Decodable,
+{
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        _modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, crate::encoding::DecodeError> {
+        let r = <(T, T)>::consensus_decode(d, &ModuleRegistry::default())?;
+        Ok(Self::new(r.0, r.1))
+    }
 }
 
 impl_encode_decode_num_as_bigsize!(u64);

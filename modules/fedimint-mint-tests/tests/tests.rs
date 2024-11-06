@@ -318,7 +318,6 @@ async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "We want this to work eventually, but we need to rewrite the sm created by claim_input to impl the note-by-note refund"]
 async fn sends_ecash_out_of_band_cancel_partial() -> anyhow::Result<()> {
     let fed = fixtures().new_default_fed().await;
     let (client, client2) = fed.two_clients().await;

@@ -391,7 +391,9 @@ impl GatewayClientModuleV2 {
             amount: contract.commitment.amount,
         };
         let client_output_sm = ClientOutputSM::<GatewayClientStateMachinesV2> {
-            state_machines: Arc::new(move |txid, out_idx| {
+            state_machines: Arc::new(move |txid, out_idxs: std::ops::RangeInclusive<u64>| {
+                assert_eq!(out_idxs.clone().count(), 1);
+                let out_idx = *out_idxs.start();
                 vec![
                     GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                         common: ReceiveSMCommon {
@@ -450,7 +452,9 @@ impl GatewayClientModuleV2 {
             amount: contract.commitment.amount,
         };
         let client_output_sm = ClientOutputSM::<GatewayClientStateMachinesV2> {
-            state_machines: Arc::new(move |txid, out_idx| {
+            state_machines: Arc::new(move |txid, out_idxs| {
+                assert_eq!(out_idxs.clone().count(), 1);
+                let out_idx = *out_idxs.start();
                 vec![GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                     common: ReceiveSMCommon {
                         operation_id,

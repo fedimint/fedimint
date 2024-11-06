@@ -108,7 +108,7 @@ impl State for MintOutputStateMachine {
 }
 
 /// See [`MintOutputStates`]
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintOutputStatesCreated {
     pub(crate) amount: Amount,
     pub(crate) issuance_request: NoteIssuanceRequest,
