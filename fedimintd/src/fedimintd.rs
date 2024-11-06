@@ -326,7 +326,7 @@ impl Fedimintd {
                         2,
                         // TODO: wait for clients to support the relative fees and set them to
                         // non-zero in 0.6
-                        fedimint_core::fee_consensus::FeeConsensus::zero(),
+                        fedimint_mint_common::config::FeeConsensus::zero(),
                     ),
                 },
             )
@@ -359,9 +359,7 @@ impl Fedimintd {
                         },
                         consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
                             // TODO: actually make the relative fee configurable
-                            fee_consensus: fedimint_core::fee_consensus::FeeConsensus::new_lnv2(
-                                1_000,
-                            )?,
+                            fee_consensus: fedimint_lnv2_common::config::FeeConsensus::new(1_000)?,
                             network,
                         },
                     },

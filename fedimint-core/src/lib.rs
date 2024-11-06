@@ -82,8 +82,6 @@ pub mod endpoint_constants;
 /// Common environment variables
 pub mod envs;
 pub mod epoch;
-/// Fee structure shared across the v2 modules
-pub mod fee_consensus;
 /// Formatting helpers
 pub mod fmt_utils;
 /// Federation invite code

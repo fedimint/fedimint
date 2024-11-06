@@ -1,7 +1,6 @@
 use bitcoincore_rpc::bitcoin::Network;
 use fedimint_core::config::{EmptyGenParams, ServerModuleConfigGenParamsRegistry};
 use fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig, FM_USE_UNKNOWN_MODULE_ENV};
-use fedimint_core::fee_consensus::FeeConsensus;
 use fedimint_core::module::ServerModuleInit as _;
 use fedimint_ln_server::common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
@@ -48,7 +47,10 @@ pub fn attach_default_module_init_params(
             MintInit::kind(),
             MintGenParams {
                 local: EmptyGenParams::default(),
-                consensus: MintGenParamsConsensus::new(2, FeeConsensus::zero()),
+                consensus: MintGenParamsConsensus::new(
+                    2,
+                    fedimint_mint_common::config::FeeConsensus::zero(),
+                ),
             },
         )
     } else {
@@ -86,7 +88,7 @@ pub fn attach_default_module_init_params(
                     bitcoin_rpc: bitcoin_rpc.clone(),
                 },
                 consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
-                    fee_consensus: fedimint_core::fee_consensus::FeeConsensus::new_lnv2(1000)
+                    fee_consensus: fedimint_lnv2_common::config::FeeConsensus::new(1000)
                         .expect("Relative fee is within range"),
                     network,
                 },

@@ -685,10 +685,10 @@ mod test {
     };
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
-    use fedimint_core::fee_consensus::FeeConsensus;
     use fedimint_core::module::registry::ModuleRegistry;
     use fedimint_core::module::{ModuleConsensusVersion, ServerModuleInit};
     use fedimint_core::{secp256k1, Amount, PeerId, ServerModule};
+    use fedimint_mint_common::config::FeeConsensus;
     use fedimint_mint_common::{MintInput, Nonce, Note};
     use tbs::blind_message;
 
@@ -708,7 +708,7 @@ mod test {
                 local: EmptyGenParams::default(),
                 consensus: MintGenParamsConsensus::new(
                     2,
-                    FeeConsensus::new_lnv2(1000).expect("Relative fee is within range"),
+                    FeeConsensus::new(1000).expect("Relative fee is within range"),
                 ),
             })
             .unwrap(),
@@ -740,7 +740,7 @@ mod test {
                     .unwrap()
                     .consensus
                     .peer_tbs_pks,
-                fee_consensus: FeeConsensus::new_lnv2(1000).expect("Relative fee is within range"),
+                fee_consensus: FeeConsensus::new(1000).expect("Relative fee is within range"),
                 max_notes_per_denomination: 0,
             },
             private: MintConfigPrivate {
