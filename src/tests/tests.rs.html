@@ -481,7 +481,7 @@
     }
 
     <span class="macro">assert_eq!</span>(
-        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateway"</span>, <span class="string">"list"</span>)
+        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateways"</span>, <span class="string">"list"</span>)
             .out_json()
             .<span class="kw">await</span><span class="question-mark">?
             </span>.as_array()
@@ -491,7 +491,7 @@
     </span>);
 
     <span class="macro">assert_eq!</span>(
-        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateway"</span>, <span class="string">"list"</span>, <span class="string">"--peer"</span>, <span class="string">"0"</span>)
+        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateways"</span>, <span class="string">"list"</span>, <span class="string">"--peer"</span>, <span class="string">"0"</span>)
             .out_json()
             .<span class="kw">await</span><span class="question-mark">?
             </span>.as_array()
@@ -503,7 +503,7 @@
     <span class="macro">info!</span>(<span class="string">"Testing selection of gateways..."</span>);
 
     <span class="macro">assert!</span>(gateways.contains(
-        <span class="kw-2">&amp;</span><span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateway"</span>, <span class="string">"select"</span>)
+        <span class="kw-2">&amp;</span><span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateways"</span>, <span class="string">"select"</span>)
             .out_json()
             .<span class="kw">await</span><span class="question-mark">?
             </span>.as_str()
@@ -511,7 +511,7 @@
             .to_string()
     ));
 
-    <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateway"</span>, <span class="string">"cache"</span>)
+    <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateways"</span>, <span class="string">"map"</span>)
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -524,7 +524,7 @@
                     client,
                     <span class="string">"module"</span>,
                     <span class="string">"lnv2"</span>,
-                    <span class="string">"gateway"</span>,
+                    <span class="string">"gateways"</span>,
                     <span class="string">"select"</span>,
                     <span class="string">"--invoice"</span>,
                     invoice.to_string()
@@ -546,7 +546,7 @@
         }
     }
 
-    <span class="macro">assert!</span>(<span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateway"</span>, <span class="string">"list"</span>)
+    <span class="macro">assert!</span>(<span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateways"</span>, <span class="string">"list"</span>)
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?
         </span>.as_array()
@@ -554,7 +554,7 @@
         .is_empty(),);
 
     <span class="macro">assert!</span>(
-        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateway"</span>, <span class="string">"list"</span>, <span class="string">"--peer"</span>, <span class="string">"0"</span>)
+        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateways"</span>, <span class="string">"list"</span>, <span class="string">"--peer"</span>, <span class="string">"0"</span>)
             .out_json()
             .<span class="kw">await</span><span class="question-mark">?
             </span>.as_array()
@@ -700,7 +700,7 @@
         <span class="string">"pass"</span>,
         <span class="string">"module"</span>,
         <span class="string">"lnv2"</span>,
-        <span class="string">"gateway"</span>,
+        <span class="string">"gateways"</span>,
         <span class="string">"add"</span>,
         gateway
     )
@@ -719,7 +719,7 @@
         <span class="string">"pass"</span>,
         <span class="string">"module"</span>,
         <span class="string">"lnv2"</span>,
-        <span class="string">"gateway"</span>,
+        <span class="string">"gateways"</span>,
         <span class="string">"remove"</span>,
         gateway
     )

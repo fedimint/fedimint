@@ -1026,7 +1026,78 @@
 <a href="#1025" id="1025">1025</a>
 <a href="#1026" id="1026">1026</a>
 <a href="#1027" id="1027">1027</a>
-<a href="#1028" id="1028">1028</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1028" id="1028">1028</a>
+<a href="#1029" id="1029">1029</a>
+<a href="#1030" id="1030">1030</a>
+<a href="#1031" id="1031">1031</a>
+<a href="#1032" id="1032">1032</a>
+<a href="#1033" id="1033">1033</a>
+<a href="#1034" id="1034">1034</a>
+<a href="#1035" id="1035">1035</a>
+<a href="#1036" id="1036">1036</a>
+<a href="#1037" id="1037">1037</a>
+<a href="#1038" id="1038">1038</a>
+<a href="#1039" id="1039">1039</a>
+<a href="#1040" id="1040">1040</a>
+<a href="#1041" id="1041">1041</a>
+<a href="#1042" id="1042">1042</a>
+<a href="#1043" id="1043">1043</a>
+<a href="#1044" id="1044">1044</a>
+<a href="#1045" id="1045">1045</a>
+<a href="#1046" id="1046">1046</a>
+<a href="#1047" id="1047">1047</a>
+<a href="#1048" id="1048">1048</a>
+<a href="#1049" id="1049">1049</a>
+<a href="#1050" id="1050">1050</a>
+<a href="#1051" id="1051">1051</a>
+<a href="#1052" id="1052">1052</a>
+<a href="#1053" id="1053">1053</a>
+<a href="#1054" id="1054">1054</a>
+<a href="#1055" id="1055">1055</a>
+<a href="#1056" id="1056">1056</a>
+<a href="#1057" id="1057">1057</a>
+<a href="#1058" id="1058">1058</a>
+<a href="#1059" id="1059">1059</a>
+<a href="#1060" id="1060">1060</a>
+<a href="#1061" id="1061">1061</a>
+<a href="#1062" id="1062">1062</a>
+<a href="#1063" id="1063">1063</a>
+<a href="#1064" id="1064">1064</a>
+<a href="#1065" id="1065">1065</a>
+<a href="#1066" id="1066">1066</a>
+<a href="#1067" id="1067">1067</a>
+<a href="#1068" id="1068">1068</a>
+<a href="#1069" id="1069">1069</a>
+<a href="#1070" id="1070">1070</a>
+<a href="#1071" id="1071">1071</a>
+<a href="#1072" id="1072">1072</a>
+<a href="#1073" id="1073">1073</a>
+<a href="#1074" id="1074">1074</a>
+<a href="#1075" id="1075">1075</a>
+<a href="#1076" id="1076">1076</a>
+<a href="#1077" id="1077">1077</a>
+<a href="#1078" id="1078">1078</a>
+<a href="#1079" id="1079">1079</a>
+<a href="#1080" id="1080">1080</a>
+<a href="#1081" id="1081">1081</a>
+<a href="#1082" id="1082">1082</a>
+<a href="#1083" id="1083">1083</a>
+<a href="#1084" id="1084">1084</a>
+<a href="#1085" id="1085">1085</a>
+<a href="#1086" id="1086">1086</a>
+<a href="#1087" id="1087">1087</a>
+<a href="#1088" id="1088">1088</a>
+<a href="#1089" id="1089">1089</a>
+<a href="#1090" id="1090">1090</a>
+<a href="#1091" id="1091">1091</a>
+<a href="#1092" id="1092">1092</a>
+<a href="#1093" id="1093">1093</a>
+<a href="#1094" id="1094">1094</a>
+<a href="#1095" id="1095">1095</a>
+<a href="#1096" id="1096">1096</a>
+<a href="#1097" id="1097">1097</a>
+<a href="#1098" id="1098">1098</a>
+<a href="#1099" id="1099">1099</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -1041,6 +1112,7 @@
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>bitcoin30::hashes::{sha256, Hash};
@@ -1068,6 +1140,7 @@
 <span class="kw">use </span>fedimint_core::module::{
     ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::time::duration_since_epoch;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
@@ -1086,6 +1159,7 @@
 <span class="kw">use </span>serde_json::Value;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tpe::{derive_agg_decryption_key, AggregateDecryptionKey};
+<span class="kw">use </span>tracing::warn;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::LightningFederationApi;
 <span class="kw">use </span><span class="kw">crate</span>::receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
@@ -1269,19 +1343,19 @@
     }
 
     <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ClientModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
-        <span class="prelude-val">Ok</span>(LightningClientModule {
-            federation_id: <span class="kw-2">*</span>args.federation_id(),
-            cfg: args.cfg().clone(),
-            notifier: args.notifier().clone(),
-            client_ctx: args.context(),
-            module_api: args.module_api().clone(),
-            keypair: args
-                .module_root_secret()
+        <span class="prelude-val">Ok</span>(LightningClientModule::new(
+            <span class="kw-2">*</span>args.federation_id(),
+            args.cfg().clone(),
+            args.notifier().clone(),
+            args.context(),
+            args.module_api().clone(),
+            args.module_root_secret()
                 .clone()
                 .to_secp_key(secp256k1::SECP256K1),
-            admin_auth: args.admin_auth().cloned(),
-            gateway_conn: <span class="self">self</span>.gateway_conn.clone(),
-        })
+            <span class="self">self</span>.gateway_conn.clone(),
+            args.admin_auth().cloned(),
+            args.task_group(),
+        ))
     }
 }
 
@@ -1357,25 +1431,93 @@
 }
 
 <span class="kw">impl </span>LightningClientModule {
-    <span class="doccomment">/// Updates the mapping from lightning node public keys to gateway api
-    /// endpoints maintained in the module database. When paying an invoice this
-    /// enables the client to select the gateway that has created the invoice,
-    /// if possible, such that the payment does not go over lightning, reducing
-    /// fees and latency.
-    ///
-    /// Client integrators are expected to call this function once a day.
-    </span><span class="kw">pub async fn </span>update_gateway_cache(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="kw">if let </span><span class="prelude-val">Ok</span>(gateways) = <span class="self">self</span>.module_api.gateways().<span class="kw">await </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.client_ctx.module_db().begin_transaction().<span class="kw">await</span>;
+    <span class="attr">#[allow(clippy::too_many_arguments)]
+    </span><span class="kw">fn </span>new(
+        federation_id: FederationId,
+        cfg: LightningClientConfig,
+        notifier: ModuleNotifier&lt;LightningClientStateMachines&gt;,
+        client_ctx: ClientContext&lt;<span class="self">Self</span>&gt;,
+        module_api: DynModuleApi,
+        keypair: KeyPair,
+        gateway_conn: Arc&lt;<span class="kw">dyn </span>GatewayConnection + Send + Sync&gt;,
+        admin_auth: <span class="prelude-ty">Option</span>&lt;ApiAuth&gt;,
+        task_group: <span class="kw-2">&amp;</span>TaskGroup,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::spawn_gateway_map_update_task(
+            federation_id,
+            client_ctx.clone(),
+            module_api.clone(),
+            gateway_conn.clone(),
+            task_group,
+        );
+
+        <span class="self">Self </span>{
+            federation_id,
+            cfg,
+            notifier,
+            client_ctx,
+            module_api,
+            keypair,
+            gateway_conn,
+            admin_auth,
+        }
+    }
+
+    <span class="kw">fn </span>spawn_gateway_map_update_task(
+        federation_id: FederationId,
+        client_ctx: ClientContext&lt;<span class="self">Self</span>&gt;,
+        module_api: DynModuleApi,
+        gateway_conn: Arc&lt;<span class="kw">dyn </span>GatewayConnection + Send + Sync&gt;,
+        task_group: <span class="kw-2">&amp;</span>TaskGroup,
+    ) {
+        task_group.spawn(<span class="string">"gateway_map_update_task"</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>interval = tokio::time::interval(Duration::from_secs(<span class="number">24 </span>* <span class="number">60 </span>* <span class="number">60</span>));
+            <span class="kw">let </span><span class="kw-2">mut </span>shutdown_rx = handle.make_shutdown_rx();
+
+            <span class="kw">loop </span>{
+                <span class="macro">tokio::select!</span> {
+                    <span class="kw">_  </span>= <span class="kw-2">&amp;mut </span>Box::pin(interval.tick()) =&gt; {
+                        <span class="self">Self</span>::update_gateway_map(
+                            <span class="kw-2">&amp;</span>federation_id,
+                            <span class="kw-2">&amp;</span>client_ctx,
+                            <span class="kw-2">&amp;</span>module_api,
+                            <span class="kw-2">&amp;</span>gateway_conn
+                        ).<span class="kw">await</span>;
+                    },
+                    () = <span class="kw-2">&amp;mut </span>shutdown_rx =&gt; { <span class="kw">break </span>},
+                };
+            }
+        });
+    }
+
+    <span class="kw">async fn </span>update_gateway_map(
+        federation_id: <span class="kw-2">&amp;</span>FederationId,
+        client_ctx: <span class="kw-2">&amp;</span>ClientContext&lt;<span class="self">Self</span>&gt;,
+        module_api: <span class="kw-2">&amp;</span>DynModuleApi,
+        gateway_conn: <span class="kw-2">&amp;</span>Arc&lt;<span class="kw">dyn </span>GatewayConnection + Send + Sync&gt;,
+    ) {
+        <span class="comment">// Update the mapping from lightning node public keys to gateway api
+        // endpoints maintained in the module database. When paying an invoice this
+        // enables the client to select the gateway that has created the invoice,
+        // if possible, such that the payment does not go over lightning, reducing
+        // fees and latency.
+
+        </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(gateways) = module_api.gateways().<span class="kw">await </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client_ctx.module_db().begin_transaction().<span class="kw">await</span>;
 
             <span class="kw">for </span>gateway <span class="kw">in </span>gateways {
-                <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(routing_info)) = <span class="self">self</span>.routing_info(<span class="kw-2">&amp;</span>gateway).<span class="kw">await </span>{
+                <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(routing_info)) = gateway_conn
+                    .routing_info(gateway.clone(), federation_id)
+                    .<span class="kw">await
+                </span>{
                     dbtx.insert_entry(<span class="kw-2">&amp;</span>GatewayKey(routing_info.lightning_public_key), <span class="kw-2">&amp;</span>gateway)
                         .<span class="kw">await</span>;
                 }
             }
 
-            dbtx.commit_tx().<span class="kw">await</span>;
+            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = dbtx.commit_tx_result().<span class="kw">await </span>{
+                <span class="macro">warn!</span>(<span class="string">"Failed to commit the updated gateway mapping to the database: {e}"</span>);
+            }
         }
     }
 
@@ -1579,7 +1721,7 @@
             }
 
             <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self
-                </span>.subscribe_send_operation(operation_id)
+                </span>.subscribe_send_operation_state_updates(operation_id)
                 .<span class="kw">await
                 </span>.expect(<span class="string">"operation_id exists"</span>)
                 .into_stream();
@@ -1597,7 +1739,7 @@
     }
 
     <span class="doccomment">/// Subscribe to all state updates of the send operation.
-    </span><span class="kw">pub async fn </span>subscribe_send_operation(
+    </span><span class="kw">pub async fn </span>subscribe_send_operation_state_updates(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;SendOperationState&gt;&gt; {
@@ -1661,7 +1803,7 @@
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;FinalSendOperationState&gt; {
         <span class="kw">let </span>state = <span class="self">self
-            </span>.subscribe_send_operation(operation_id)
+            </span>.subscribe_send_operation_state_updates(operation_id)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.into_stream()
             .filter_map(|state| {
@@ -1890,7 +2032,7 @@
     }
 
     <span class="doccomment">/// Subscribe to all state updates of the receive operation.
-    </span><span class="kw">pub async fn </span>subscribe_receive_operation(
+    </span><span class="kw">pub async fn </span>subscribe_receive_operation_state_updates(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;ReceiveOperationState&gt;&gt; {
@@ -1931,7 +2073,7 @@
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;FinalReceiveOperationState&gt; {
         <span class="kw">let </span>state = <span class="self">self
-            </span>.subscribe_receive_operation(operation_id)
+            </span>.subscribe_receive_operation_state_updates(operation_id)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.into_stream()
             .filter_map(|state| {

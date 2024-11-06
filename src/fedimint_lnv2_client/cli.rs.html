@@ -122,7 +122,16 @@
 <a href="#121" id="121">121</a>
 <a href="#122" id="122">122</a>
 <a href="#123" id="123">123</a>
-<a href="#124" id="124">124</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::{ffi, iter};
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::{ffi, iter};
 
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::core::OperationId;
@@ -158,14 +167,15 @@
     </span>AwaitReceive { operation_id: OperationId },
     <span class="doccomment">/// Gateway subcommands
     </span><span class="attr">#[command(subcommand)]
-    </span>Gateway(GatewayOpts),
+    </span>Gateways(GatewaysOpts),
 }
 
 <span class="attr">#[derive(Clone, Subcommand, Serialize)]
-</span><span class="kw">enum </span>GatewayOpts {
-    <span class="doccomment">/// Update cache of gateway information to optimise gateway selection for a
-    /// given invoice.
-    </span>Cache,
+</span><span class="kw">enum </span>GatewaysOpts {
+    <span class="doccomment">/// Update the mapping from lightning node public keys to gateway api
+    /// endpoints maintained in the module database to optimise gateway
+    /// selection for a given invoice; this command is intended for testing.
+    </span>Map,
     <span class="doccomment">/// Select an online vetted gateway; this command is intended for testing.
     </span>Select {
         <span class="attr">#[arg(long)]
@@ -213,15 +223,23 @@
                 .await_final_receive_operation_state(operation_id)
                 .<span class="kw">await</span><span class="question-mark">?</span>,
         ),
-        Opts::Gateway(gateway_opts) =&gt; <span class="kw">match </span>gateway_opts {
+        Opts::Gateways(gateway_opts) =&gt; <span class="kw">match </span>gateway_opts {
             <span class="attr">#[allow(clippy::unit_arg)]
-            </span>GatewayOpts::Cache =&gt; json(lightning.update_gateway_cache().<span class="kw">await</span>),
-            GatewayOpts::Select { invoice } =&gt; json(lightning.select_gateway(invoice).<span class="kw">await</span><span class="question-mark">?</span>.<span class="number">0</span>),
-            GatewayOpts::List { peer } =&gt; <span class="kw">match </span>peer {
+            </span>GatewaysOpts::Map =&gt; json(
+                LightningClientModule::update_gateway_map(
+                    <span class="kw-2">&amp;</span>lightning.federation_id,
+                    <span class="kw-2">&amp;</span>lightning.client_ctx,
+                    <span class="kw-2">&amp;</span>lightning.module_api,
+                    <span class="kw-2">&amp;</span>lightning.gateway_conn,
+                )
+                .<span class="kw">await</span>,
+            ),
+            GatewaysOpts::Select { invoice } =&gt; json(lightning.select_gateway(invoice).<span class="kw">await</span><span class="question-mark">?</span>.<span class="number">0</span>),
+            GatewaysOpts::List { peer } =&gt; <span class="kw">match </span>peer {
                 <span class="prelude-val">Some</span>(peer) =&gt; json(lightning.module_api.gateways_from_peer(peer).<span class="kw">await</span><span class="question-mark">?</span>),
                 <span class="prelude-val">None </span>=&gt; json(lightning.module_api.gateways().<span class="kw">await</span><span class="question-mark">?</span>),
             },
-            GatewayOpts::Add { gateway } =&gt; {
+            GatewaysOpts::Add { gateway } =&gt; {
                 <span class="kw">let </span>auth = lightning
                     .admin_auth
                     .clone()
@@ -229,7 +247,7 @@
 
                 json(lightning.module_api.add_gateway(auth, gateway).<span class="kw">await</span><span class="question-mark">?</span>)
             }
-            GatewayOpts::Remove { gateway } =&gt; {
+            GatewaysOpts::Remove { gateway } =&gt; {
                 <span class="kw">let </span>auth = lightning
                     .admin_auth
                     .clone()
