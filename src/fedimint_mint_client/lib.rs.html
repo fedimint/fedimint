@@ -2739,11 +2739,7 @@
 <a href="#2738" id="2738">2738</a>
 <a href="#2739" id="2739">2739</a>
 <a href="#2740" id="2740">2740</a>
-<a href="#2741" id="2741">2741</a>
-<a href="#2742" id="2742">2742</a>
-<a href="#2743" id="2743">2743</a>
-<a href="#2744" id="2744">2744</a>
-<a href="#2745" id="2745">2745</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2741" id="2741">2741</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2825,6 +2821,7 @@
 <span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>input::MintInputStateCreatedBundle;
 <span class="kw">use </span>oob::MintOOBStatesCreatedMulti;
+<span class="kw">use </span>output::MintOutputStatesCreatedMulti;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>tbs::{AggregatePublicKey, Signature};
@@ -2839,8 +2836,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::input::{MintInputCommon, MintInputStateMachine, MintInputStates};
 <span class="kw">use </span><span class="kw">crate</span>::oob::{MintOOBStateMachine, MintOOBStates};
 <span class="kw">use </span><span class="kw">crate</span>::output::{
-    MintOutputCommon, MintOutputStateMachine, MintOutputStates, MintOutputStatesCreated,
-    NoteIssuanceRequest,
+    MintOutputCommon, MintOutputStateMachine, MintOutputStates, NoteIssuanceRequest,
 };
 
 <span class="kw">const </span>MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(<span class="number">0</span>);
@@ -3809,7 +3805,7 @@
         );
 
         <span class="kw">let </span><span class="kw-2">mut </span>outputs = Vec::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>output_states = Vec::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>issuance_requests = Vec::new();
 
         <span class="kw">for </span>(amount, num) <span class="kw">in </span>denominations.iter() {
             <span class="kw">for _ in </span><span class="number">0</span>..num {
@@ -3825,28 +3821,22 @@
                     amount,
                 });
 
-                output_states.push(MintOutputStatesCreated {
-                    amount,
-                    issuance_request,
-                });
+                issuance_requests.push((amount, issuance_request));
             }
         }
 
         <span class="kw">let </span>state_generator = Arc::new(<span class="kw">move </span>|txid, out_idxs: RangeInclusive&lt;u64&gt;| {
-            out_idxs
-                .clone()
-                .flat_map(|out_idx| {
-                    <span class="kw">let </span>output_i = (out_idx - out_idxs.clone().start()) <span class="kw">as </span>usize;
-                    <span class="kw">let </span>output_state = output_states.get(output_i).copied().unwrap();
-                    <span class="macro">vec!</span>[MintClientStateMachines::Output(MintOutputStateMachine {
-                        common: MintOutputCommon {
-                            operation_id,
-                            out_point: OutPoint { txid, out_idx },
-                        },
-                        state: MintOutputStates::Created(output_state),
-                    })]
-                })
-                .collect()
+            <span class="macro">assert_eq!</span>(out_idxs.clone().count(), issuance_requests.len());
+            <span class="macro">vec!</span>[MintClientStateMachines::Output(MintOutputStateMachine {
+                common: MintOutputCommon {
+                    operation_id,
+                    txid,
+                    out_idxs: out_idxs.clone(),
+                },
+                state: MintOutputStates::CreatedMulti(MintOutputStatesCreatedMulti {
+                    issuance_requests: out_idxs.zip(issuance_requests.clone()).collect(),
+                }),
+            })]
         });
 
         <span class="macro">assert!</span>(!outputs.is_empty());
@@ -3890,7 +3880,9 @@
                     <span class="kw">return </span><span class="prelude-val">None</span>;
                 };
 
-                <span class="kw">if </span>state.common.out_point != out_point {
+                <span class="kw">if </span>state.common.txid != out_point.txid
+                    || !state.common.out_idxs.contains(<span class="kw-2">&amp;</span>out_point.out_idx)
+                {
                     <span class="kw">return </span><span class="prelude-val">None</span>;
                 }
 
@@ -3901,7 +3893,7 @@
                         <span class="string">"Failed to finalize transaction: {}"</span>,
                         failed.error
                     ))),
-                    MintOutputStates::Created(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
+                    MintOutputStates::Created(<span class="kw">_</span>) | MintOutputStates::CreatedMulti(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
                 }
             });
         <span class="macro">pin_mut!</span>(stream);
