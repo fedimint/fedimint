@@ -54,15 +54,15 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-use fedimint_core::secp256k1_29::{
+use fedimint_core::secp256k1::{
     All, Keypair, PublicKey, Scalar, Secp256k1, SecretKey, Signing, Verification,
 };
 use fedimint_core::task::{timeout, MaybeSend, MaybeSync};
 use fedimint_core::util::update_merge::UpdateMerge;
 use fedimint_core::util::{backoff_util, retry, BoxStream};
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1, Amount, OutPoint,
-    TransactionId,
+    apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1_27 as secp256k1, Amount,
+    OutPoint, TransactionId,
 };
 use fedimint_ln_common::config::{FeeToAmount, LightningClientConfig};
 use fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
@@ -1009,7 +1009,9 @@ impl LightningClientModule {
             .map(|(_, gw)| gw.info)
             .collect::<Vec<_>>()
             .await;
-        gateways.into_iter().find(|g| g.gateway_id == *gateway_id)
+        gateways
+            .into_iter()
+            .find(|g| g.gateway_id == bitcoin30_to_bitcoin32_secp256k1_pubkey(gateway_id))
     }
 
     /// Updates the gateway cache by fetching the latest registered gateways
@@ -1027,9 +1029,7 @@ impl LightningClientModule {
 
                 for gw in &gateways {
                     dbtx.insert_entry(
-                        &LightningGatewayKey(bitcoin30_to_bitcoin32_secp256k1_pubkey(
-                            &gw.info.gateway_id,
-                        )),
+                        &LightningGatewayKey(gw.info.gateway_id),
                         &gw.clone().anchor(),
                     )
                     .await;
@@ -1109,7 +1109,9 @@ impl LightningClientModule {
         extra_meta: M,
     ) -> anyhow::Result<OutgoingLightningPayment> {
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-        let maybe_gateway_id = maybe_gateway.as_ref().map(|g| g.gateway_id);
+        let maybe_gateway_id = maybe_gateway
+            .as_ref()
+            .map(|g| bitcoin32_to_bitcoin30_secp256k1_pubkey(&g.gateway_id));
         let prev_payment_result = self
             .get_prev_payment_result(invoice.payment_hash(), &mut dbtx.to_ref_nc())
             .await;
@@ -1616,7 +1618,9 @@ impl LightningClientModule {
         extra_meta: M,
         gateway: Option<LightningGateway>,
     ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
-        let gateway_id = gateway.as_ref().map(|g| g.gateway_id);
+        let gateway_id = gateway
+            .as_ref()
+            .map(|g| bitcoin32_to_bitcoin30_secp256k1_pubkey(&g.gateway_id));
         let (src_node_id, short_channel_id, route_hints) = if let Some(current_gateway) = gateway {
             (
                 current_gateway.node_pub_key,
@@ -2186,7 +2190,7 @@ impl GatewayConnection for RealGatewayConnection {
 
         let text_gateway_id = response.text().await?;
         let gateway_id = PublicKey::from_str(&text_gateway_id[1..text_gateway_id.len() - 1])?;
-        if gateway_id != bitcoin30_to_bitcoin32_secp256k1_pubkey(&gateway.gateway_id) {
+        if gateway_id != gateway.gateway_id {
             return Err(anyhow!("Unexpected gateway id returned: {gateway_id}"));
         }
 

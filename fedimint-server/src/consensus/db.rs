@@ -101,7 +101,6 @@ mod fedimint_migration_tests {
     use anyhow::ensure;
     use bitcoin::key::Keypair;
     use bitcoin::secp256k1;
-    use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
     use fedimint_core::core::{DynInput, DynOutput};
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
@@ -162,14 +161,14 @@ mod fedimint_migration_tests {
                 0,
                 DummyInput {
                     amount: Amount::ZERO,
-                    account: bitcoin32_to_bitcoin30_secp256k1_pubkey(&key_pair.public_key()),
+                    account: key_pair.public_key(),
                 },
             )],
             outputs: vec![DynOutput::from_typed(
                 0,
                 DummyOutput {
                     amount: Amount::ZERO,
-                    account: bitcoin32_to_bitcoin30_secp256k1_pubkey(&key_pair.public_key()),
+                    account: key_pair.public_key(),
                 },
             )],
             nonce: [0x42; 8],

@@ -10,7 +10,6 @@ mod metrics;
 use std::collections::{BTreeMap, HashMap};
 
 use anyhow::bail;
-use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -25,9 +24,8 @@ use fedimint_core::module::{
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items,
-    secp256k1_29 as secp256k1, Amount, NumPeersExt, OutPoint, PeerId, ServerModule, Tiered,
-    TieredMulti,
+    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, secp256k1, Amount,
+    NumPeersExt, OutPoint, PeerId, ServerModule, Tiered, TieredMulti,
 };
 use fedimint_logging::LOG_MODULE_MINT;
 pub use fedimint_mint_common as common;
@@ -543,12 +541,7 @@ impl Mint {
             .map_err(|_| ApiError::bad_request("invalid request".into()))?;
 
         debug!(id = %request.id, len = request.payload.len(), "Received user e-cash backup request");
-        if let Some(prev) = dbtx
-            .get_value(&EcashBackupKey(bitcoin32_to_bitcoin30_secp256k1_pubkey(
-                &request.id,
-            )))
-            .await
-        {
+        if let Some(prev) = dbtx.get_value(&EcashBackupKey(request.id)).await {
             if request.timestamp <= prev.timestamp {
                 debug!(id = %request.id, len = request.payload.len(), "Received user e-cash backup request with old timestamp - ignoring");
                 return Err(ApiError::bad_request("timestamp too small".into()));
@@ -557,7 +550,7 @@ impl Mint {
 
         info!(id = %request.id, len = request.payload.len(), "Storing new user e-cash backup");
         dbtx.insert_entry(
-            &EcashBackupKey(bitcoin32_to_bitcoin30_secp256k1_pubkey(&request.id)),
+            &EcashBackupKey(request.id),
             &ECashUserBackupSnapshot {
                 timestamp: request.timestamp,
                 data: request.payload.clone(),
@@ -573,10 +566,7 @@ impl Mint {
         dbtx: &mut DatabaseTransaction<'_>,
         id: secp256k1::PublicKey,
     ) -> Option<ECashUserBackupSnapshot> {
-        dbtx.get_value(&EcashBackupKey(bitcoin32_to_bitcoin30_secp256k1_pubkey(
-            &id,
-        )))
-        .await
+        dbtx.get_value(&EcashBackupKey(id)).await
     }
 }
 
@@ -766,8 +756,8 @@ mod test {
     fn issue_note(
         server_cfgs: &[ServerModuleConfig],
         denomination: Amount,
-    ) -> (secp256k1::KeyPair, Note) {
-        let note_key = secp256k1::KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
+    ) -> (secp256k1::Keypair, Note) {
+        let note_key = secp256k1::Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
         let nonce = Nonce(note_key.public_key());
         let message = nonce.to_message();
         let blinding_key = tbs::BlindingKey::random();

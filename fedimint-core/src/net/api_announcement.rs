@@ -7,12 +7,10 @@ use fedimint_core::task::MaybeSend;
 use fedimint_core::PeerId;
 use futures::StreamExt;
 use jsonrpsee_core::Serialize;
-use secp256k1::{Message, Verification};
+use secp256k1_27::Message;
 use serde::Deserialize;
 
-use crate::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_message, bitcoin32_to_bitcoin30_schnorr_signature,
-};
+use crate::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_message;
 use crate::db::{
     Database, DatabaseKey, DatabaseKeyPrefix, DatabaseRecord, IDatabaseTransactionOpsCoreTyped,
 };
@@ -30,7 +28,7 @@ pub struct ApiAnnouncement {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq, Encodable, Decodable)]
 pub struct SignedApiAnnouncement {
     pub api_announcement: ApiAnnouncement,
-    pub signature: secp256k1_29::schnorr::Signature,
+    pub signature: secp256k1::schnorr::Signature,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq, Encodable, Decodable)]
@@ -52,10 +50,10 @@ impl ApiAnnouncement {
         sha256::Hash::hash(&msg)
     }
 
-    pub fn sign<C: secp256k1_29::Signing>(
+    pub fn sign<C: secp256k1::Signing>(
         &self,
-        ctx: &secp256k1_29::Secp256k1<C>,
-        key: &secp256k1_29::Keypair,
+        ctx: &secp256k1::Secp256k1<C>,
+        key: &secp256k1::Keypair,
     ) -> SignedApiAnnouncement {
         let msg = bitcoin30_to_bitcoin32_secp256k1_message(&self.tagged_hash().into());
         let signature = ctx.sign_schnorr(&msg, key);
@@ -68,15 +66,15 @@ impl ApiAnnouncement {
 
 impl SignedApiAnnouncement {
     /// Returns true if the signature is valid for the given public key.
-    pub fn verify<C: Verification>(
+    pub fn verify<C: secp256k1::Verification>(
         &self,
         ctx: &secp256k1::Secp256k1<C>,
         pk: &secp256k1::PublicKey,
     ) -> bool {
         let msg: Message = self.api_announcement.tagged_hash().into();
         ctx.verify_schnorr(
-            &bitcoin32_to_bitcoin30_schnorr_signature(&self.signature),
-            &msg,
+            &self.signature,
+            &bitcoin30_to_bitcoin32_secp256k1_message(&msg),
             &pk.x_only_public_key().0,
         )
         .is_ok()

@@ -627,7 +627,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     let module_instance_id = 1;
     let root_secret =
         PlainRootSecretStrategy::to_root_secret(&PlainRootSecretStrategy::random(&mut OsRng));
-    let secp = fedimint_core::secp256k1_29::Secp256k1::new();
+    let secp = fedimint_core::secp256k1::Secp256k1::new();
     let tweak_key = root_secret.to_secp_key(&secp);
     let pk = tweak_key.public_key();
     let wallet_config: WalletConfig = wallet_server_cfg[0].to_typed()?;

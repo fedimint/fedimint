@@ -2,10 +2,8 @@ use std::fmt::Debug;
 
 use bitcoin30::hashes::{sha256, Hash};
 use fedimint_core::encoding::{Decodable, Encodable};
-use secp256k1::{KeyPair, Message, Secp256k1, Signing, Verification};
+use secp256k1::{Keypair, Message, Secp256k1, Signing, Verification};
 use serde::{Deserialize, Serialize};
-
-use crate::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 
 /// Maximum payload size of a backup request
 ///
@@ -18,7 +16,7 @@ pub const BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES: usize = 128 * 1024;
 
 #[derive(Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct BackupRequest {
-    pub id: secp256k1_29::PublicKey,
+    pub id: secp256k1::PublicKey,
     #[serde(with = "fedimint_core::hex::serde")]
     pub payload: Vec<u8>,
     pub timestamp: std::time::SystemTime,
@@ -29,8 +27,9 @@ impl BackupRequest {
         self.consensus_hash_bitcoin30()
     }
 
-    pub fn sign(self, keypair: &KeyPair) -> anyhow::Result<SignedBackupRequest> {
-        let signature = secp256k1::SECP256K1.sign_schnorr(&Message::from(self.hash()), keypair);
+    pub fn sign(self, keypair: &Keypair) -> anyhow::Result<SignedBackupRequest> {
+        let signature = secp256k1::SECP256K1
+            .sign_schnorr(&Message::from_digest(*self.hash().as_ref()), keypair);
 
         Ok(SignedBackupRequest {
             request: self,
@@ -53,10 +52,9 @@ impl SignedBackupRequest {
     {
         ctx.verify_schnorr(
             &self.signature,
-            &Message::from_slice(&self.request.hash().to_byte_array()).expect("Can't fail"),
-            &bitcoin32_to_bitcoin30_secp256k1_pubkey(&self.request.id)
-                .x_only_public_key()
-                .0,
+            &secp256k1::Message::from_digest_slice(&self.request.hash().to_byte_array())
+                .expect("Can't fail"),
+            &self.request.id.x_only_public_key().0,
         )?;
 
         Ok(&self.request)

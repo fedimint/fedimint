@@ -8,7 +8,7 @@ use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Network};
 use fedimint_core::config::{FederationId, JsonClientConfig};
 use fedimint_core::core::OperationId;
-use fedimint_core::{secp256k1_29 as secp256k1, Amount, BitcoinAmountOrAll};
+use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::config::parse_routing_fees;
 use fedimint_mint_client::OOBNotes;
 use fedimint_wallet_client::PegOutFees;

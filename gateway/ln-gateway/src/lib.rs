@@ -48,8 +48,7 @@ use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_keypair,
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+    bitcoin30_to_bitcoin32_keypair, bitcoin30_to_bitcoin32_secp256k1_pubkey,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{
@@ -59,8 +58,8 @@ use fedimint_core::core::{
 use fedimint_core::db::{apply_migrations_server, Database, DatabaseTransaction};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
-use fedimint_core::secp256k1::schnorr::Signature;
-use fedimint_core::secp256k1_29::PublicKey;
+use fedimint_core::secp256k1::PublicKey;
+use fedimint_core::secp256k1_27::schnorr::Signature;
 use fedimint_core::task::{sleep, TaskGroup, TaskHandle, TaskShutdownToken};
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::{SafeUrl, Spanned};
@@ -932,9 +931,9 @@ impl Gateway {
                 (withdraw_amount.unwrap(), fees)
             }
             BitcoinAmountOrAll::Amount(amount) => (
-                bitcoin30_to_bitcoin32_amount(&amount),
+                amount,
                 wallet_module
-                    .get_withdraw_fees(address.clone(), bitcoin30_to_bitcoin32_amount(&amount))
+                    .get_withdraw_fees(address.clone(), amount)
                     .await?,
             ),
         };
@@ -1963,10 +1962,8 @@ impl Gateway {
             .public_key_v2(federation_id)
             .await
             .map(|module_public_key| RoutingInfo {
-                lightning_public_key: bitcoin32_to_bitcoin30_secp256k1_pubkey(
-                    &context.lightning_public_key,
-                ),
-                module_public_key: bitcoin32_to_bitcoin30_secp256k1_pubkey(&module_public_key),
+                lightning_public_key: context.lightning_public_key,
+                module_public_key,
                 send_fee_default: PaymentFee::SEND_FEE_LIMIT,
                 // The base fee ensures that the gateway does not loose sats sending the payment due
                 // to fees paid on the transaction claiming the outgoing contract or

@@ -23,7 +23,7 @@ use fedimint_core::bitcoin_migration::{
     bitcoin32_to_bitcoin30_network, bitcoin32_to_bitcoin30_recoverable_signature,
     bitcoin32_to_bitcoin30_secp256k1_pubkey,
 };
-use fedimint_core::secp256k1_29::{PublicKey, SecretKey, SECP256K1};
+use fedimint_core::secp256k1::{PublicKey, SecretKey, SECP256K1};
 use fedimint_core::task::timeout;
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll};
@@ -1049,7 +1049,7 @@ impl ClnRpcService {
             .await?
             .call(cln_rpc::Request::GetRoute(
                 model::requests::GetrouteRequest {
-                    id: pruned_invoice.destination,
+                    id: bitcoin32_to_bitcoin30_secp256k1_pubkey(&pruned_invoice.destination),
                     amount_msat: cln_rpc::primitives::Amount::from_msat(
                         pruned_invoice.amount.msats,
                     ),

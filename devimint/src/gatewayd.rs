@@ -6,7 +6,7 @@ use std::str::FromStr;
 use anyhow::{Context, Result};
 use esplora_client::Txid;
 use fedimint_core::config::FederationId;
-use fedimint_core::secp256k1_29::PublicKey;
+use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::BitcoinAmountOrAll;
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;

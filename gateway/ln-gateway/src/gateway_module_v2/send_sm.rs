@@ -6,7 +6,7 @@ use fedimint_client::DynGlobalClientContext;
 use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::secp256k1_29::Keypair;
+use fedimint_core::secp256k1::Keypair;
 use fedimint_core::{Amount, OutPoint};
 use fedimint_lnv2_common::contracts::{OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, LightningInvoice, OutgoingWitness};

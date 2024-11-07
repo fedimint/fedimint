@@ -35,7 +35,7 @@ use common::{
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_network,
-    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_unchecked_address,
+    bitcoin32_to_bitcoin30_unchecked_address,
 };
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -540,7 +540,7 @@ impl ServerModule for Wallet {
         calculate_pegin_metrics(dbtx, amount, fee);
         Ok(InputMeta {
             amount: TransactionItemAmount { amount, fee },
-            pub_key: bitcoin32_to_bitcoin30_secp256k1_pubkey(input.tweak_contract_key()),
+            pub_key: *input.tweak_contract_key(),
         })
     }
 

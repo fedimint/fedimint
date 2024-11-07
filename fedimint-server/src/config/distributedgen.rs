@@ -10,8 +10,7 @@ use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::secp256k1;
 use bls12_381::Scalar;
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin30_to_bitcoin32_sha256_hash,
-    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_sha256_hash,
+    bitcoin30_to_bitcoin32_sha256_hash, bitcoin32_to_bitcoin30_sha256_hash,
 };
 use fedimint_core::config::{
     DkgError, DkgGroup, DkgMessage, DkgPeerMsg, DkgResult, ISupportedDkgMessage,
@@ -551,7 +550,7 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
             .send(
                 &self.peers,
                 (self.module_instance_id, dkg_key.clone()),
-                DkgPeerMsg::PublicKey(bitcoin32_to_bitcoin30_secp256k1_pubkey(&key)),
+                DkgPeerMsg::PublicKey(key),
             )
             .await?;
 
@@ -563,7 +562,7 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
                 .await?
             {
                 (peer, DkgPeerMsg::PublicKey(key)) => {
-                    peer_peg_in_keys.insert(peer, bitcoin30_to_bitcoin32_secp256k1_pubkey(&key));
+                    peer_peg_in_keys.insert(peer, key);
                 }
                 (peer, msg) => {
                     return Err(

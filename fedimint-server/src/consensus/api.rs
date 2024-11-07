@@ -13,7 +13,6 @@ use fedimint_api_client::api::{
 };
 use fedimint_core::admin_client::ServerStatus;
 use fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_secret_key;
 use fedimint_core::config::{ClientConfig, JsonClientConfig};
 use fedimint_core::core::backup::{SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES};
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
@@ -40,15 +39,14 @@ use fedimint_core::module::{
 use fedimint_core::net::api_announcement::{
     ApiAnnouncement, SignedApiAnnouncement, SignedApiAnnouncementSubmission,
 };
-use fedimint_core::secp256k1::SECP256K1;
-use fedimint_core::secp256k1_29::PublicKey;
+use fedimint_core::secp256k1::{PublicKey, SECP256K1};
 use fedimint_core::server::DynServerModule;
 use fedimint_core::session_outcome::{SessionOutcome, SessionStatus, SignedSessionOutcome};
 use fedimint_core::transaction::{
     SerdeTransaction, Transaction, TransactionError, TransactionSubmissionOutcome,
 };
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{secp256k1_29, OutPoint, PeerId, TransactionId};
+use fedimint_core::{secp256k1, OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
 use futures::StreamExt;
 use tokio::sync::{watch, RwLock};
@@ -453,14 +451,9 @@ impl ConsensusApi {
                             api_url: new_url_inner,
                             nonce: new_nonce,
                         };
-                        let ctx = secp256k1_29::Secp256k1::new();
-                        let signed_announcement = announcement.sign(
-                            &ctx,
-                            &bitcoin30_to_bitcoin32_secp256k1_secret_key(
-                                &self.cfg.private.broadcast_secret_key,
-                            )
-                            .keypair(&ctx),
-                        );
+                        let ctx = secp256k1::Secp256k1::new();
+                        let signed_announcement = announcement
+                            .sign(&ctx, &self.cfg.private.broadcast_secret_key.keypair(&ctx));
 
                         dbtx.insert_entry(
                             &ApiAnnouncementKey(self.cfg.local.identity),

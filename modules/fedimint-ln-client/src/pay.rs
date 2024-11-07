@@ -4,6 +4,7 @@ use bitcoin30::hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_pubkey;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -628,10 +629,12 @@ impl PaymentData {
 
     pub fn destination(&self) -> secp256k1::PublicKey {
         match self {
-            PaymentData::Invoice(invoice) => invoice
-                .payee_pub_key()
-                .copied()
-                .unwrap_or_else(|| invoice.recover_payee_pub_key()),
+            PaymentData::Invoice(invoice) => bitcoin30_to_bitcoin32_secp256k1_pubkey(
+                &invoice
+                    .payee_pub_key()
+                    .copied()
+                    .unwrap_or_else(|| invoice.recover_payee_pub_key()),
+            ),
             PaymentData::PrunedInvoice(PrunedInvoice { destination, .. }) => *destination,
         }
     }

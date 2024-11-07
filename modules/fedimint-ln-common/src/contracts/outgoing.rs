@@ -1,6 +1,6 @@
 use bitcoin30::hashes::Hash as BitcoinHash;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::secp256k1_29::PublicKey;
+use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::Amount;
 use serde::{Deserialize, Serialize};
 

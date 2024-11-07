@@ -13,12 +13,12 @@ use fedimint_core::db::{
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
-use fedimint_core::{secp256k1_29, time};
+use fedimint_core::{secp256k1, time};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use fedimint_wallet_common::txoproof::PegInProof;
 use fedimint_wallet_common::WalletInput;
 use futures::StreamExt as _;
-use secp256k1_29::Keypair;
+use secp256k1::Keypair;
 use tokio::sync::watch;
 use tracing::{debug, instrument, trace, warn};
 

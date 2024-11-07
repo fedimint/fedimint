@@ -59,7 +59,7 @@ use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::util::backoff_util::background_backoff;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1_29, Amount, OutPoint,
+    apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1, Amount, OutPoint,
     TransactionId,
 };
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
@@ -68,7 +68,7 @@ use fedimint_wallet_common::tweakable::Tweakable;
 pub use fedimint_wallet_common::*;
 use futures::{Stream, StreamExt};
 use rand::{thread_rng, Rng};
-use secp256k1_29::Keypair;
+use secp256k1::Keypair;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tokio::sync::watch;
@@ -317,14 +317,14 @@ impl WalletClientModuleData {
     fn derive_deposit_address(
         &self,
         idx: TweakIdx,
-    ) -> (Keypair, secp256k1_29::PublicKey, Address, OperationId) {
+    ) -> (Keypair, secp256k1::PublicKey, Address, OperationId) {
         let idx = ChildId(idx.0);
 
         let secret_tweak_key = self
             .module_root_secret
             .child_key(WALLET_TWEAK_CHILD_ID)
             .child_key(idx)
-            .to_secp_key(fedimint_core::secp256k1_29::SECP256K1);
+            .to_secp_key(fedimint_core::secp256k1::SECP256K1);
 
         let public_tweak_key = secret_tweak_key.public_key();
 

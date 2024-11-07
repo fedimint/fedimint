@@ -1,5 +1,5 @@
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::secp256k1_29::PublicKey;
+use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{impl_db_lookup, impl_db_record};
 
