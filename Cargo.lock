@@ -3437,7 +3437,6 @@ version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
- "bitcoin 0.30.2",
  "bitcoin 0.32.4",
  "erased-serde",
  "fedimint-bitcoind",
