@@ -1403,16 +1403,16 @@
     CLN_CREATE_INVOICE_ENDPOINT, CLN_GET_BALANCES_ENDPOINT, CLN_INFO_ENDPOINT,
     CLN_LIST_ACTIVE_CHANNELS_ENDPOINT, CLN_LN_ONCHAIN_ADDRESS_ENDPOINT, CLN_OPEN_CHANNEL_ENDPOINT,
     CLN_PAY_INVOICE_ENDPOINT, CLN_PAY_PRUNED_INVOICE_ENDPOINT, CLN_ROUTE_HINTS_ENDPOINT,
-    CLN_ROUTE_HTLCS_ENDPOINT, CLN_WITHDRAW_ONCHAIN_ENDPOINT,
+    CLN_ROUTE_HTLCS_ENDPOINT, CLN_SEND_ONCHAIN_ENDPOINT,
 };
 <span class="kw">use </span>ln_gateway::lightning::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest,
     GetRouteHintsResponse, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
     ListActiveChannelsResponse, OpenChannelResponse, PayInvoiceRequest, PayInvoiceResponse,
-    PayPrunedInvoiceRequest, PaymentAction, WithdrawOnchainResponse,
+    PayPrunedInvoiceRequest, PaymentAction, SendOnchainResponse,
 };
-<span class="kw">use </span>ln_gateway::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, WithdrawOnchainPayload};
+<span class="kw">use </span>ln_gateway::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, SendOnchainPayload};
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>reqwest::StatusCode;
@@ -1507,7 +1507,7 @@
         .route(CLN_COMPLETE_PAYMENT_ENDPOINT, post(cln_complete_payment))
         .route(CLN_CREATE_INVOICE_ENDPOINT, post(cln_create_invoice))
         .route(CLN_LN_ONCHAIN_ADDRESS_ENDPOINT, get(cln_ln_onchain_address))
-        .route(CLN_WITHDRAW_ONCHAIN_ENDPOINT, post(cln_withdraw_onchain))
+        .route(CLN_SEND_ONCHAIN_ENDPOINT, post(cln_send_onchain))
         .route(CLN_OPEN_CHANNEL_ENDPOINT, post(cln_open_channel))
         .route(
             CLN_CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
@@ -1993,10 +1993,10 @@
 
 <span class="attr">#[instrument(skip_all, err)]
 #[axum_macros::debug_handler]
-</span><span class="kw">async fn </span>cln_withdraw_onchain(
+</span><span class="kw">async fn </span>cln_send_onchain(
     Extension(cln_service): Extension&lt;ClnRpcService&gt;,
-    Json(payload): Json&lt;WithdrawOnchainPayload&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;Json&lt;WithdrawOnchainResponse&gt;, ClnExtensionError&gt; {
+    Json(payload): Json&lt;SendOnchainPayload&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;Json&lt;SendOnchainResponse&gt;, ClnExtensionError&gt; {
     <span class="kw">let </span>txid = cln_service
         .rpc_client()
         .<span class="kw">await</span><span class="question-mark">?
@@ -2023,7 +2023,7 @@
             <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">"Unexpected response from Withdraw"</span>),
         })<span class="question-mark">?</span>;
 
-    <span class="prelude-val">Ok</span>(Json(WithdrawOnchainResponse { txid }))
+    <span class="prelude-val">Ok</span>(Json(SendOnchainResponse { txid }))
 }
 
 <span class="attr">#[instrument(skip_all, err)]

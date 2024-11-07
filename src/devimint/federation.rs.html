@@ -1436,8 +1436,7 @@
 <a href="#1435" id="1435">1435</a>
 <a href="#1436" id="1436">1436</a>
 <a href="#1437" id="1437">1437</a>
-<a href="#1438" id="1438">1438</a>
-<a href="#1439" id="1439">1439</a></pre></div><pre class="rust"><code><span class="kw">mod </span>config;
+<a href="#1438" id="1438">1438</a></pre></div><pre class="rust"><code><span class="kw">mod </span>config;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2193,12 +2192,10 @@
         <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">21</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         try_join_all(gateways.into_iter().map(|gw| {
             poll(<span class="string">"gateway pegin"</span>, || <span class="kw">async </span>{
-                <span class="kw">let </span>gateway_balance = <span class="macro">cmd!</span>(gw, <span class="string">"balance"</span>, <span class="string">"--federation-id={fed_id}"</span>)
-                    .out_json()
+                <span class="kw">let </span>gateway_balance = gw
+                    .ecash_balance(fed_id.clone())
                     .<span class="kw">await
-                    </span>.map_err(ControlFlow::Continue)<span class="question-mark">?
-                    </span>.as_u64()
-                    .unwrap();
+                    </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
                 <span class="macro">poll_eq!</span>(gateway_balance, amount * <span class="number">1000</span>)
             })
         }))
@@ -2230,7 +2227,8 @@
             <span class="kw">let </span>pegout_address = <span class="self">self</span>.bitcoind.get_new_address().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>value = <span class="macro">cmd!</span>(
                 gw,
-                <span class="string">"withdraw"</span>,
+                <span class="string">"ecash"</span>,
+                <span class="string">"pegout"</span>,
                 <span class="string">"--federation-id"</span>,
                 fed_id,
                 <span class="string">"--amount"</span>,

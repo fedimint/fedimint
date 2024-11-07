@@ -479,23 +479,7 @@
 <a href="#478" id="478">478</a>
 <a href="#479" id="479">479</a>
 <a href="#480" id="480">480</a>
-<a href="#481" id="481">481</a>
-<a href="#482" id="482">482</a>
-<a href="#483" id="483">483</a>
-<a href="#484" id="484">484</a>
-<a href="#485" id="485">485</a>
-<a href="#486" id="486">486</a>
-<a href="#487" id="487">487</a>
-<a href="#488" id="488">488</a>
-<a href="#489" id="489">489</a>
-<a href="#490" id="490">490</a>
-<a href="#491" id="491">491</a>
-<a href="#492" id="492">492</a>
-<a href="#493" id="493">493</a>
-<a href="#494" id="494">494</a>
-<a href="#495" id="495">495</a>
-<a href="#496" id="496">496</a>
-<a href="#497" id="497">497</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#481" id="481">481</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>axum::extract::Request;
 <span class="kw">use </span>axum::http::{header, StatusCode};
@@ -508,17 +492,17 @@
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_ln_common::gateway_endpoint_constants::{
-    ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
-    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT,
-    GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_GATEWAY_ID_ENDPOINT,
-    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
-    MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT, RECEIVE_ECASH_ENDPOINT,
-    SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, WITHDRAW_ENDPOINT,
+    ADDRESS_ENDPOINT, BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
+    CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
+    GET_GATEWAY_ID_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT,
+    LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT,
+    RECEIVE_ECASH_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
+    WITHDRAW_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_lnv2_common::endpoint_constants::{
     CREATE_BOLT11_INVOICE_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
-    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_PAYMENT_ENDPOINT,
-    WITHDRAW_ONCHAIN_ENDPOINT,
+    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_ONCHAIN_ENDPOINT,
+    SEND_PAYMENT_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_lnv2_common::gateway_api::{CreateBolt11InvoicePayload, SendPaymentPayload};
 <span class="kw">use </span>hex::ToHex;
@@ -528,11 +512,10 @@
 <span class="kw">use </span>tracing::{error, info, instrument};
 
 <span class="kw">use super</span>::{
-    BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
-    CreateInvoiceForOperatorPayload, DepositAddressPayload, GetLnOnchainAddressPayload,
-    InfoPayload, LeaveFedPayload, OpenChannelPayload, PayInvoiceForOperatorPayload,
-    ReceiveEcashPayload, SetConfigurationPayload, SpendEcashPayload, WithdrawOnchainPayload,
-    WithdrawPayload, V1_API_ENDPOINT,
+    BackupPayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
+    CreateInvoiceForOperatorPayload, DepositAddressPayload, InfoPayload, LeaveFedPayload,
+    OpenChannelPayload, PayInvoiceForOperatorPayload, ReceiveEcashPayload, SendOnchainPayload,
+    SetConfigurationPayload, SpendEcashPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 <span class="kw">use </span><span class="kw">crate</span>::error::{AdminGatewayError, PublicGatewayError};
 <span class="kw">use </span><span class="kw">crate</span>::rpc::ConfigPayload;
@@ -679,7 +662,6 @@
 
     <span class="comment">// Authenticated, public routes used for gateway administration
     </span><span class="kw">let </span>always_authenticated_routes = Router::new()
-        .route(BALANCE_ENDPOINT, post(balance))
         .route(ADDRESS_ENDPOINT, post(address))
         .route(WITHDRAW_ENDPOINT, post(withdraw))
         .route(CONNECT_FED_ENDPOINT, post(connect_fed))
@@ -693,17 +675,14 @@
             PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
             post(pay_invoice_operator),
         )
-        .route(
-            GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
-            post(get_ln_onchain_address),
-        )
+        .route(GET_LN_ONCHAIN_ADDRESS_ENDPOINT, get(get_ln_onchain_address))
         .route(OPEN_CHANNEL_ENDPOINT, post(open_channel))
         .route(
             CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
             post(close_channels_with_peer),
         )
         .route(LIST_ACTIVE_CHANNELS_ENDPOINT, get(list_active_channels))
-        .route(WITHDRAW_ONCHAIN_ENDPOINT, post(withdraw_onchain))
+        .route(SEND_ONCHAIN_ENDPOINT, post(send_onchain))
         .route(GET_BALANCES_ENDPOINT, get(get_balances))
         .route(SPEND_ECASH_ENDPOINT, post(spend_ecash))
         .route(MNEMONIC_ENDPOINT, get(mnemonic))
@@ -772,16 +751,6 @@
         .handle_get_federation_config(payload.federation_id)
         .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(gateway_fed_config)))
-}
-
-<span class="doccomment">/// Display gateway ecash note balance
-</span><span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
-</span><span class="kw">async fn </span>balance(
-    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
-    Json(payload): Json&lt;BalancePayload&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, AdminGatewayError&gt; {
-    <span class="kw">let </span>amount = gateway.handle_balance_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(amount)))
 }
 
 <span class="doccomment">/// Generate deposit address
@@ -875,7 +844,6 @@
 <span class="attr">#[instrument(skip_all, err)]
 </span><span class="kw">async fn </span>get_ln_onchain_address(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
-    Json(_payload): Json&lt;GetLnOnchainAddressPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, AdminGatewayError&gt; {
     <span class="kw">let </span>address = gateway.handle_get_ln_onchain_address_msg().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(address.to_string())))
@@ -908,11 +876,11 @@
 }
 
 <span class="attr">#[instrument(skip_all, err)]
-</span><span class="kw">async fn </span>withdraw_onchain(
+</span><span class="kw">async fn </span>send_onchain(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
-    Json(payload): Json&lt;WithdrawOnchainPayload&gt;,
+    Json(payload): Json&lt;SendOnchainPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, AdminGatewayError&gt; {
-    <span class="kw">let </span>txid = gateway.handle_withdraw_onchain_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>txid = gateway.handle_send_onchain_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(txid)))
 }
 

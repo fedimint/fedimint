@@ -633,9 +633,9 @@
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription, OpenChannelResponse,
-    PayInvoiceResponse, PaymentAction, WithdrawOnchainResponse,
+    PayInvoiceResponse, PaymentAction, SendOnchainResponse,
 };
-<span class="kw">use </span><span class="kw">crate</span>::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, WithdrawOnchainPayload};
+<span class="kw">use </span><span class="kw">crate</span>::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, SendOnchainPayload};
 
 <span class="kw">pub struct </span>GatewayLdkClient {
     <span class="doccomment">/// The underlying lightning node.
@@ -1049,17 +1049,17 @@
             })
     }
 
-    <span class="kw">async fn </span>withdraw_onchain(
+    <span class="kw">async fn </span>send_onchain(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        WithdrawOnchainPayload {
+        SendOnchainPayload {
             address,
             amount,
             <span class="comment">// TODO: Respect this fee rate once `ldk-node` supports setting a custom fee rate.
             // This work is planned to be in `ldk-node` v0.4 and is tracked here:
             // https://github.com/lightningdevkit/ldk-node/issues/176
             </span>fee_rate_sats_per_vbyte: <span class="kw">_</span>,
-        }: WithdrawOnchainPayload,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;WithdrawOnchainResponse, LightningRpcError&gt; {
+        }: SendOnchainPayload,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;SendOnchainResponse, LightningRpcError&gt; {
         <span class="kw">let </span>onchain = <span class="self">self</span>.node.onchain_payment();
 
         <span class="kw">let </span>txid = <span class="kw">match </span>amount {
@@ -1072,7 +1072,7 @@
             failure_reason: e.to_string(),
         })<span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(WithdrawOnchainResponse {
+        <span class="prelude-val">Ok</span>(SendOnchainResponse {
             txid: txid.to_string(),
         })
     }

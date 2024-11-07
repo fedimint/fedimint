@@ -66,18 +66,32 @@
 <a href="#65" id="65">65</a>
 <a href="#66" id="66">66</a>
 <a href="#67" id="67">67</a>
-<a href="#68" id="68">68</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic, clippy::nursery)]
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic, clippy::nursery)]
 
-</span><span class="kw">mod </span>general_commands;
+</span><span class="kw">mod </span>ecash_commands;
+<span class="kw">mod </span>general_commands;
 <span class="kw">mod </span>lightning_commands;
+<span class="kw">mod </span>onchain_commands;
 
 <span class="kw">use </span>clap::{CommandFactory, Parser, Subcommand};
+<span class="kw">use </span>ecash_commands::EcashCommands;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>general_commands::GeneralCommands;
 <span class="kw">use </span>lightning_commands::LightningCommands;
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
 <span class="kw">use </span>ln_gateway::rpc::V1_API_ENDPOINT;
+<span class="kw">use </span>onchain_commands::OnchainCommands;
 <span class="kw">use </span>serde::Serialize;
 
 <span class="attr">#[derive(Parser)]
@@ -99,6 +113,10 @@
     </span>General(GeneralCommands),
     <span class="attr">#[command(subcommand)]
     </span>Lightning(LightningCommands),
+    <span class="attr">#[command(subcommand)]
+    </span>Ecash(EcashCommands),
+    <span class="attr">#[command(subcommand)]
+    </span>Onchain(OnchainCommands),
     Completion {
         shell: clap_complete::Shell,
     },
@@ -115,6 +133,8 @@
     <span class="kw">match </span>cli.command {
         Commands::General(general_command) =&gt; general_command.handle(create_client).<span class="kw">await</span><span class="question-mark">?</span>,
         Commands::Lightning(lightning_command) =&gt; lightning_command.handle(create_client).<span class="kw">await</span><span class="question-mark">?</span>,
+        Commands::Ecash(ecash_command) =&gt; ecash_command.handle(create_client).<span class="kw">await</span><span class="question-mark">?</span>,
+        Commands::Onchain(onchain_command) =&gt; onchain_command.handle(create_client).<span class="kw">await</span><span class="question-mark">?</span>,
         Commands::Completion { shell } =&gt; {
             clap_complete::generate(
                 shell,

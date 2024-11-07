@@ -308,16 +308,16 @@
     CLN_CREATE_INVOICE_ENDPOINT, CLN_GET_BALANCES_ENDPOINT, CLN_INFO_ENDPOINT,
     CLN_LIST_ACTIVE_CHANNELS_ENDPOINT, CLN_LN_ONCHAIN_ADDRESS_ENDPOINT, CLN_OPEN_CHANNEL_ENDPOINT,
     CLN_PAY_PRUNED_INVOICE_ENDPOINT, CLN_ROUTE_HINTS_ENDPOINT, CLN_ROUTE_HTLCS_ENDPOINT,
-    CLN_WITHDRAW_ONCHAIN_ENDPOINT,
+    CLN_SEND_ONCHAIN_ENDPOINT,
 };
 <span class="kw">use </span><span class="kw">crate</span>::lightning::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest,
     GetRouteHintsResponse, InterceptPaymentRequest, InterceptPaymentResponse,
     ListActiveChannelsResponse, OpenChannelResponse, PayInvoiceResponse, PayPrunedInvoiceRequest,
-    WithdrawOnchainResponse,
+    SendOnchainResponse,
 };
-<span class="kw">use </span><span class="kw">crate</span>::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, WithdrawOnchainPayload};
+<span class="kw">use </span><span class="kw">crate</span>::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, SendOnchainPayload};
 
 <span class="doccomment">/// An `ILnRpcClient` that wraps around `GatewayLightningClient` for
 /// convenience, and makes real RPC requests over the wire to a remote lightning
@@ -508,13 +508,13 @@
             })
     }
 
-    <span class="kw">async fn </span>withdraw_onchain(
+    <span class="kw">async fn </span>send_onchain(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        payload: WithdrawOnchainPayload,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;WithdrawOnchainResponse, LightningRpcError&gt; {
+        payload: SendOnchainPayload,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;SendOnchainResponse, LightningRpcError&gt; {
         <span class="kw">let </span>url = <span class="self">self
             </span>.connection_url
-            .join(CLN_WITHDRAW_ONCHAIN_ENDPOINT)
+            .join(CLN_SEND_ONCHAIN_ENDPOINT)
             .expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, payload)
             .<span class="kw">await

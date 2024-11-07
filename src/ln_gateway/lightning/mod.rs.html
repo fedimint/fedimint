@@ -546,7 +546,7 @@
     FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV, FM_LDK_ESPLORA_SERVER_URL,
     FM_LDK_NETWORK, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
-<span class="kw">use </span><span class="kw">crate</span>::rpc::{CloseChannelsWithPeerPayload, WithdrawOnchainPayload};
+<span class="kw">use </span><span class="kw">crate</span>::rpc::{CloseChannelsWithPeerPayload, SendOnchainPayload};
 <span class="kw">use crate</span>::{OpenChannelPayload, Preimage};
 
 <span class="kw">pub const </span>MAX_LIGHTNING_RETRIES: u32 = <span class="number">10</span>;
@@ -715,10 +715,10 @@
 
     <span class="doccomment">/// Executes an onchain transaction using the lightning node's on-chain
     /// wallet.
-    </span><span class="kw">async fn </span>withdraw_onchain(
+    </span><span class="kw">async fn </span>send_onchain(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        payload: WithdrawOnchainPayload,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;WithdrawOnchainResponse, LightningRpcError&gt;;
+        payload: SendOnchainPayload,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;SendOnchainResponse, LightningRpcError&gt;;
 
     <span class="doccomment">/// Opens a channel with a peer lightning node.
     </span><span class="kw">async fn </span>open_channel(
@@ -999,7 +999,7 @@
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
-</span><span class="kw">pub struct </span>WithdrawOnchainResponse {
+</span><span class="kw">pub struct </span>SendOnchainResponse {
     <span class="kw">pub </span>txid: String,
 }
 

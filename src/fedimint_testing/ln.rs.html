@@ -313,7 +313,9 @@
 <a href="#312" id="312">312</a>
 <a href="#313" id="313">313</a>
 <a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -340,9 +342,9 @@
     ChannelInfo, CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse, LightningRpcError,
-    OpenChannelResponse, PayInvoiceResponse, RouteHtlcStream, WithdrawOnchainResponse,
+    OpenChannelResponse, PayInvoiceResponse, RouteHtlcStream, SendOnchainResponse,
 };
-<span class="kw">use </span>ln_gateway::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, WithdrawOnchainPayload};
+<span class="kw">use </span>ln_gateway::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, SendOnchainPayload};
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>tokio::sync::mpsc;
 <span class="kw">use </span>tracing::info;
@@ -586,10 +588,10 @@
         })
     }
 
-    <span class="kw">async fn </span>withdraw_onchain(
+    <span class="kw">async fn </span>send_onchain(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _payload: WithdrawOnchainPayload,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;WithdrawOnchainResponse, LightningRpcError&gt; {
+        _payload: SendOnchainPayload,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;SendOnchainResponse, LightningRpcError&gt; {
         <span class="prelude-val">Err</span>(LightningRpcError::FailedToWithdrawOnchain {
             failure_reason: <span class="string">"FakeLightningTest does not support withdrawing funds on-chain"
                 </span>.to_string(),
@@ -623,8 +625,10 @@
     }
 
     <span class="kw">async fn </span>get_balances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetBalancesResponse, LightningRpcError&gt; {
-        <span class="prelude-val">Err</span>(LightningRpcError::FailedToGetBalances {
-            failure_reason: <span class="string">"FakeLightningTest does not support getting balances"</span>.to_string(),
+        <span class="prelude-val">Ok</span>(GetBalancesResponse {
+            onchain_balance_sats: <span class="number">0</span>,
+            lightning_balance_msats: <span class="number">0</span>,
+            inbound_lightning_liquidity_msats: <span class="number">0</span>,
         })
     }
 }
