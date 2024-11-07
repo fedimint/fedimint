@@ -388,12 +388,7 @@
 <a href="#387" id="387">387</a>
 <a href="#388" id="388">388</a>
 <a href="#389" id="389">389</a>
-<a href="#390" id="390">390</a>
-<a href="#391" id="391">391</a>
-<a href="#392" id="392">392</a>
-<a href="#393" id="393">393</a>
-<a href="#394" id="394">394</a>
-<a href="#395" id="395">395</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#390" id="390">390</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::hash;
 <span class="kw">use </span>std::time::Duration;
 
@@ -403,12 +398,11 @@
 <span class="kw">use </span>fedimint_client::module::ClientContext;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 <span class="kw">use </span>fedimint_core::core::{Decoder, OperationId};
 <span class="kw">use </span>fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
-<span class="kw">use </span>fedimint_core::secp256k1_29::{Keypair, Secp256k1, Signing};
+<span class="kw">use </span>fedimint_core::secp256k1::{Keypair, Secp256k1, Signing};
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered};
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
@@ -755,9 +749,7 @@
         </span>C: Signing,
     {
         <span class="kw">let </span>spend_key = secret.child_key(SPEND_KEY_CHILD_ID).to_secp_key(ctx);
-        <span class="kw">let </span>nonce = Nonce(bitcoin32_to_bitcoin30_secp256k1_pubkey(
-            <span class="kw-2">&amp;</span>spend_key.public_key(),
-        ));
+        <span class="kw">let </span>nonce = Nonce(spend_key.public_key());
         <span class="kw">let </span>blinding_key = BlindingKey(secret.child_key(BLINDING_KEY_CHILD_ID).to_bls12_381_key());
         <span class="kw">let </span>blinded_nonce = blind_message(nonce.to_message(), blinding_key);
 
@@ -771,9 +763,7 @@
 
     <span class="doccomment">/// Return nonce of the e-cash note being requested
     </span><span class="kw">pub fn </span>nonce(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Nonce {
-        Nonce(bitcoin32_to_bitcoin30_secp256k1_pubkey(
-            <span class="kw-2">&amp;</span><span class="self">self</span>.spend_key.public_key(),
-        ))
+        Nonce(<span class="self">self</span>.spend_key.public_key())
     }
 
     <span class="kw">pub fn </span>blinded_message(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BlindedMessage {

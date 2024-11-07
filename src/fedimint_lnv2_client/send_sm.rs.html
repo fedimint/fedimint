@@ -290,28 +290,18 @@
 <a href="#289" id="289">289</a>
 <a href="#290" id="290">290</a>
 <a href="#291" id="291">291</a>
-<a href="#292" id="292">292</a>
-<a href="#293" id="293">293</a>
-<a href="#294" id="294">294</a>
-<a href="#295" id="295">295</a>
-<a href="#296" id="296">296</a>
-<a href="#297" id="297">297</a>
-<a href="#298" id="298">298</a>
-<a href="#299" id="299">299</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
+<a href="#292" id="292">292</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_schnorr_signature, bitcoin32_to_bitcoin30_schnorr_signature,
-};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
-<span class="kw">use </span>fedimint_core::{secp256k1_29 <span class="kw">as </span>secp256k1, OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_core::{secp256k1, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_lnv2_common::contracts::OutgoingContract;
 <span class="kw">use </span>fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
 <span class="kw">use </span>secp256k1::schnorr::Signature;
@@ -470,19 +460,15 @@
                     federation_id,
                     contract.clone(),
                     invoice.clone(),
-                    bitcoin32_to_bitcoin30_schnorr_signature(<span class="kw-2">&amp;</span>refund_keypair.sign_schnorr(
-                        secp256k1::Message::from_digest(
-                            <span class="kw-2">*</span>invoice.consensus_hash::&lt;sha256::Hash&gt;().as_ref(),
-                        ),
+                    refund_keypair.sign_schnorr(secp256k1::Message::from_digest(
+                        <span class="kw-2">*</span>invoice.consensus_hash::&lt;sha256::Hash&gt;().as_ref(),
                     )),
                 )
                 .<span class="kw">await
             </span>{
                 <span class="prelude-val">Ok</span>(send_result) =&gt; {
                     <span class="kw">if </span>contract.verify_gateway_response(<span class="kw-2">&amp;</span>send_result) {
-                        <span class="kw">return </span>send_result.map_err(|signature| {
-                            bitcoin30_to_bitcoin32_schnorr_signature(<span class="kw-2">&amp;</span>signature)
-                        });
+                        <span class="kw">return </span>send_result;
                     }
 
                     <span class="macro">error!</span>(

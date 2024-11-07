@@ -518,12 +518,12 @@
 <span class="kw">use </span>fedimint_core::envs::is_running_in_test_env;
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
-<span class="kw">use </span>fedimint_core::{secp256k1_29, time};
+<span class="kw">use </span>fedimint_core::{secp256k1, time};
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 <span class="kw">use </span>fedimint_wallet_common::txoproof::PegInProof;
 <span class="kw">use </span>fedimint_wallet_common::WalletInput;
 <span class="kw">use </span>futures::StreamExt <span class="kw">as _</span>;
-<span class="kw">use </span>secp256k1_29::Keypair;
+<span class="kw">use </span>secp256k1::Keypair;
 <span class="kw">use </span>tokio::sync::watch;
 <span class="kw">use </span>tracing::{debug, instrument, trace, warn};
 

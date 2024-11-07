@@ -522,7 +522,7 @@
     }
 }
 
-<span class="kw">impl </span>TryFrom&lt;Amount&gt; <span class="kw">for </span>bitcoin30::Amount {
+<span class="kw">impl </span>TryFrom&lt;Amount&gt; <span class="kw">for </span>bitcoin::Amount {
     <span class="kw">type </span>Error = anyhow::Error;
 
     <span class="kw">fn </span>try_from(value: Amount) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {

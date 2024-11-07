@@ -794,25 +794,13 @@
 <a href="#793" id="793">793</a>
 <a href="#794" id="794">794</a>
 <a href="#795" id="795">795</a>
-<a href="#796" id="796">796</a>
-<a href="#797" id="797">797</a>
-<a href="#798" id="798">798</a>
-<a href="#799" id="799">799</a>
-<a href="#800" id="800">800</a>
-<a href="#801" id="801">801</a>
-<a href="#802" id="802">802</a>
-<a href="#803" id="803">803</a>
-<a href="#804" id="804">804</a>
-<a href="#805" id="805">805</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
+<a href="#796" id="796">796</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{bail, format_err};
 <span class="kw">use </span>fedimint_core::admin_client::ConfigGenParamsConsensus;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_secp256k1_pubkey,
-};
 <span class="kw">pub use </span>fedimint_core::config::{
     serde_binary_human_readable, ClientConfig, DkgError, DkgPeerMsg, DkgResult, FederationId,
     GlobalClientConfig, JsonWithKind, ModuleInitRegistry, PeerUrl, ServerModuleConfig,
@@ -1267,10 +1255,7 @@
         <span class="kw">let </span>(broadcast_sk, broadcast_pk) = secp256k1::generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
 
         <span class="kw">let </span>broadcast_public_keys = broadcast_keys_exchange
-            .exchange_pubkeys(
-                <span class="string">"broadcast"</span>.to_string(),
-                bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>broadcast_pk),
-            )
+            .exchange_pubkeys(<span class="string">"broadcast"</span>.to_string(), broadcast_pk)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// in case we are running by ourselves, avoid DKG
@@ -1367,10 +1352,7 @@
         <span class="kw">let </span>server = ServerConfig::from(
             params.clone(),
             <span class="kw-2">*</span>our_id,
-            broadcast_public_keys
-                .into_iter()
-                .map(|(k, v)| (k, bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>v)))
-                .collect(),
+            broadcast_public_keys,
             broadcast_sk,
             module_cfgs,
             code_version_str,

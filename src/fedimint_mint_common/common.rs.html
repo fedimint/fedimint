@@ -56,7 +56,7 @@
 
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::secp256k1_29 <span class="kw">as </span>secp256k1;
+<span class="kw">use </span>fedimint_core::secp256k1;
 <span class="kw">use </span>secp256k1::{Keypair, Message, PublicKey, Secp256k1, Signing, Verification, SECP256K1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
@@ -89,7 +89,7 @@
     <span class="attr">#[serde(flatten)]
     </span>request: BackupRequest,
     <span class="attr">#[serde(with = <span class="string">"::fedimint_core::encoding::as_hex"</span>)]
-    </span><span class="kw">pub </span>signature: fedimint_core::secp256k1_29::schnorr::Signature,
+    </span><span class="kw">pub </span>signature: fedimint_core::secp256k1::schnorr::Signature,
 }
 
 <span class="kw">impl </span>SignedBackupRequest {

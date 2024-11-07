@@ -2256,7 +2256,11 @@
 <a href="#2255" id="2255">2255</a>
 <a href="#2256" id="2256">2256</a>
 <a href="#2257" id="2257">2257</a>
-<a href="#2258" id="2258">2258</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2258" id="2258">2258</a>
+<a href="#2259" id="2259">2259</a>
+<a href="#2260" id="2260">2260</a>
+<a href="#2261" id="2261">2261</a>
+<a href="#2262" id="2262">2262</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2312,15 +2316,15 @@
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-<span class="kw">use </span>fedimint_core::secp256k1_29::{
+<span class="kw">use </span>fedimint_core::secp256k1::{
     All, Keypair, PublicKey, Scalar, Secp256k1, SecretKey, Signing, Verification,
 };
 <span class="kw">use </span>fedimint_core::task::{timeout, MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::util::update_merge::UpdateMerge;
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry, BoxStream};
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1, Amount, OutPoint,
-    TransactionId,
+    apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1_27 <span class="kw">as </span>secp256k1, Amount,
+    OutPoint, TransactionId,
 };
 <span class="kw">use </span>fedimint_ln_common::config::{FeeToAmount, LightningClientConfig};
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
@@ -3267,7 +3271,9 @@
             </span>.map(|(<span class="kw">_</span>, gw)| gw.info)
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
             .<span class="kw">await</span>;
-        gateways.into_iter().find(|g| g.gateway_id == <span class="kw-2">*</span>gateway_id)
+        gateways
+            .into_iter()
+            .find(|g| g.gateway_id == bitcoin30_to_bitcoin32_secp256k1_pubkey(gateway_id))
     }
 
     <span class="doccomment">/// Updates the gateway cache by fetching the latest registered gateways
@@ -3285,9 +3291,7 @@
 
                 <span class="kw">for </span>gw <span class="kw">in </span><span class="kw-2">&amp;</span>gateways {
                     dbtx.insert_entry(
-                        <span class="kw-2">&amp;</span>LightningGatewayKey(bitcoin30_to_bitcoin32_secp256k1_pubkey(
-                            <span class="kw-2">&amp;</span>gw.info.gateway_id,
-                        )),
+                        <span class="kw-2">&amp;</span>LightningGatewayKey(gw.info.gateway_id),
                         <span class="kw-2">&amp;</span>gw.clone().anchor(),
                     )
                     .<span class="kw">await</span>;
@@ -3367,7 +3371,9 @@
         extra_meta: M,
     ) -&gt; anyhow::Result&lt;OutgoingLightningPayment&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.client_ctx.module_db().begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span>maybe_gateway_id = maybe_gateway.as_ref().map(|g| g.gateway_id);
+        <span class="kw">let </span>maybe_gateway_id = maybe_gateway
+            .as_ref()
+            .map(|g| bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>g.gateway_id));
         <span class="kw">let </span>prev_payment_result = <span class="self">self
             </span>.get_prev_payment_result(invoice.payment_hash(), <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc())
             .<span class="kw">await</span>;
@@ -3874,7 +3880,9 @@
         extra_meta: M,
         gateway: <span class="prelude-ty">Option</span>&lt;LightningGateway&gt;,
     ) -&gt; anyhow::Result&lt;(OperationId, Bolt11Invoice, [u8; <span class="number">32</span>])&gt; {
-        <span class="kw">let </span>gateway_id = gateway.as_ref().map(|g| g.gateway_id);
+        <span class="kw">let </span>gateway_id = gateway
+            .as_ref()
+            .map(|g| bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>g.gateway_id));
         <span class="kw">let </span>(src_node_id, short_channel_id, route_hints) = <span class="kw">if let </span><span class="prelude-val">Some</span>(current_gateway) = gateway {
             (
                 current_gateway.node_pub_key,
@@ -4444,7 +4452,7 @@
 
         <span class="kw">let </span>text_gateway_id = response.text().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>gateway_id = PublicKey::from_str(<span class="kw-2">&amp;</span>text_gateway_id[<span class="number">1</span>..text_gateway_id.len() - <span class="number">1</span>])<span class="question-mark">?</span>;
-        <span class="kw">if </span>gateway_id != bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>gateway.gateway_id) {
+        <span class="kw">if </span>gateway_id != gateway.gateway_id {
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">"Unexpected gateway id returned: {gateway_id}"</span>));
         }
 

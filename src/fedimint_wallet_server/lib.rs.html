@@ -1992,7 +1992,7 @@
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_network,
-    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_unchecked_address,
+    bitcoin32_to_bitcoin30_unchecked_address,
 };
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -2497,7 +2497,7 @@
         calculate_pegin_metrics(dbtx, amount, fee);
         <span class="prelude-val">Ok</span>(InputMeta {
             amount: TransactionItemAmount { amount, fee },
-            pub_key: bitcoin32_to_bitcoin30_secp256k1_pubkey(input.tweak_contract_key()),
+            pub_key: <span class="kw-2">*</span>input.tweak_contract_key(),
         })
     }
 

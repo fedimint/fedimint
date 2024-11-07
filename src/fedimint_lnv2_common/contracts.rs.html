@@ -203,8 +203,8 @@
 <a href="#202" id="202">202</a>
 <a href="#203" id="203">203</a>
 <a href="#204" id="204">204</a>
-<a href="#205" id="205">205</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin30::hashes::sha256;
-<span class="kw">use </span>bitcoin30::secp256k1;
+<a href="#205" id="205">205</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::secp256k1;
+<span class="kw">use </span>bitcoin30::hashes::sha256;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>secp256k1::schnorr::Signature;
@@ -347,7 +347,7 @@
     }
 
     <span class="kw">pub fn </span>forfeit_message(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Message {
-        Message::from(<span class="self">self</span>.contract_id().<span class="number">0</span>)
+        Message::from_digest(<span class="kw-2">*</span><span class="self">self</span>.contract_id().<span class="number">0</span>.as_ref())
     }
 
     <span class="kw">pub fn </span>verify_preimage(<span class="kw-2">&amp;</span><span class="self">self</span>, preimage: <span class="kw-2">&amp;</span>[u8; <span class="number">32</span>]) -&gt; bool {
@@ -375,7 +375,7 @@
         secp256k1::global::SECP256K1
             .verify_schnorr(
                 signature,
-                <span class="kw-2">&amp;</span>message.into(),
+                <span class="kw-2">&amp;</span>Message::from_digest(<span class="kw-2">*</span>message.as_ref()),
                 <span class="kw-2">&amp;</span><span class="self">self</span>.refund_pk.x_only_public_key().<span class="number">0</span>,
             )
             .is_ok()

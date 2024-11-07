@@ -1099,16 +1099,7 @@
 <a href="#1098" id="1098">1098</a>
 <a href="#1099" id="1099">1099</a>
 <a href="#1100" id="1100">1100</a>
-<a href="#1101" id="1101">1101</a>
-<a href="#1102" id="1102">1102</a>
-<a href="#1103" id="1103">1103</a>
-<a href="#1104" id="1104">1104</a>
-<a href="#1105" id="1105">1105</a>
-<a href="#1106" id="1106">1106</a>
-<a href="#1107" id="1107">1107</a>
-<a href="#1108" id="1108">1108</a>
-<a href="#1109" id="1109">1109</a>
-<a href="#1110" id="1110">1110</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1101" id="1101">1101</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -1126,9 +1117,8 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_stream::stream;
+<span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>bitcoin30::hashes::{sha256, Hash};
-<span class="kw">use </span>bitcoin30::secp256k1;
-<span class="kw">use </span>bitcoin30::secp256k1::{ecdh, KeyPair, PublicKey, Scalar, SecretKey};
 <span class="kw">use </span>db::GatewayKey;
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -1142,8 +1132,7 @@
 };
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin30_to_bitcoin32_secp256k1_pubkey,
-    bitcoin32_to_bitcoin30_keypair, bitcoin32_to_bitcoin30_network,
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_network,
 };
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -1167,6 +1156,7 @@
 };
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning_invoice::{Bolt11Invoice, Currency};
+<span class="kw">use </span>secp256k1::{ecdh, Keypair, PublicKey, Scalar, SecretKey};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::Value;
 <span class="kw">use </span>thiserror::Error;
@@ -1361,12 +1351,9 @@
             args.notifier().clone(),
             args.context(),
             args.module_api().clone(),
-            bitcoin32_to_bitcoin30_keypair(
-                <span class="kw-2">&amp;</span>args
-                    .module_root_secret()
-                    .clone()
-                    .to_secp_key(fedimint_core::secp256k1_29::SECP256K1),
-            ),
+            args.module_root_secret()
+                .clone()
+                .to_secp_key(fedimint_core::secp256k1::SECP256K1),
             <span class="self">self</span>.gateway_conn.clone(),
             args.admin_auth().cloned(),
             args.task_group(),
@@ -1391,7 +1378,7 @@
     notifier: ModuleNotifier&lt;LightningClientStateMachines&gt;,
     client_ctx: ClientContext&lt;<span class="self">Self</span>&gt;,
     module_api: DynModuleApi,
-    keypair: KeyPair,
+    keypair: Keypair,
     gateway_conn: Arc&lt;<span class="kw">dyn </span>GatewayConnection + Send + Sync&gt;,
     <span class="attr">#[allow(unused)] </span><span class="comment">// The field is only used by the cli feature
     </span>admin_auth: <span class="prelude-ty">Option</span>&lt;ApiAuth&gt;,
@@ -1438,7 +1425,7 @@
 }
 
 <span class="kw">fn </span>generate_ephemeral_tweak(static_pk: PublicKey) -&gt; ([u8; <span class="number">32</span>], PublicKey) {
-    <span class="kw">let </span>keypair = KeyPair::new(secp256k1::SECP256K1, <span class="kw-2">&amp;mut </span>rand::thread_rng());
+    <span class="kw">let </span>keypair = Keypair::new(secp256k1::SECP256K1, <span class="kw-2">&amp;mut </span>rand::thread_rng());
 
     <span class="kw">let </span>tweak = ecdh::SharedSecret::new(<span class="kw-2">&amp;</span>static_pk, <span class="kw-2">&amp;</span>keypair.secret_key());
 
@@ -1453,7 +1440,7 @@
         notifier: ModuleNotifier&lt;LightningClientStateMachines&gt;,
         client_ctx: ClientContext&lt;<span class="self">Self</span>&gt;,
         module_api: DynModuleApi,
-        keypair: KeyPair,
+        keypair: Keypair,
         gateway_conn: Arc&lt;<span class="kw">dyn </span>GatewayConnection + Send + Sync&gt;,
         admin_auth: <span class="prelude-ty">Option</span>&lt;ApiAuth&gt;,
         task_group: <span class="kw-2">&amp;</span>TaskGroup,
@@ -1525,13 +1512,8 @@
                     .routing_info(gateway.clone(), federation_id)
                     .<span class="kw">await
                 </span>{
-                    dbtx.insert_entry(
-                        <span class="kw-2">&amp;</span>GatewayKey(bitcoin30_to_bitcoin32_secp256k1_pubkey(
-                            <span class="kw-2">&amp;</span>routing_info.lightning_public_key,
-                        )),
-                        <span class="kw-2">&amp;</span>gateway,
-                    )
-                    .<span class="kw">await</span>;
+                    dbtx.insert_entry(<span class="kw-2">&amp;</span>GatewayKey(routing_info.lightning_public_key), <span class="kw-2">&amp;</span>gateway)
+                        .<span class="kw">await</span>;
                 }
             }
 
@@ -1692,7 +1674,7 @@
                         gateway_api: gateway_api_clone.clone(),
                         contract: contract_clone.clone(),
                         invoice: LightningInvoice::Bolt11(invoice_clone.clone()),
-                        refund_keypair: bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>refund_keypair),
+                        refund_keypair,
                     },
                     state: SendSMState::Funding,
                 })]
@@ -1991,7 +1973,7 @@
             common: ReceiveSMCommon {
                 operation_id,
                 contract: contract.clone(),
-                claim_keypair: bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>claim_keypair),
+                claim_keypair,
                 agg_decryption_key,
             },
             state: ReceiveSMState::Pending,
@@ -2020,7 +2002,7 @@
     <span class="kw">fn </span>recover_contract_keys(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         contract: <span class="kw-2">&amp;</span>IncomingContract,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;(KeyPair, AggregateDecryptionKey)&gt; {
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;(Keypair, AggregateDecryptionKey)&gt; {
         <span class="kw">let </span>ephemeral_tweak = ecdh::SharedSecret::new(
             <span class="kw-2">&amp;</span>contract.commitment.ephemeral_pk,
             <span class="kw-2">&amp;</span><span class="self">self</span>.keypair.secret_key(),

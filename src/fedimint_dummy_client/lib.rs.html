@@ -421,17 +421,7 @@
 <a href="#420" id="420">420</a>
 <a href="#421" id="421">421</a>
 <a href="#422" id="422">422</a>
-<a href="#423" id="423">423</a>
-<a href="#424" id="424">424</a>
-<a href="#425" id="425">425</a>
-<a href="#426" id="426">426</a>
-<a href="#427" id="427">427</a>
-<a href="#428" id="428">428</a>
-<a href="#429" id="429">429</a>
-<a href="#430" id="430">430</a>
-<a href="#431" id="431">431</a>
-<a href="#432" id="432">432</a>
-<a href="#433" id="433">433</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#423" id="423">423</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -454,9 +444,6 @@
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
     ClientOutputSM, TransactionBuilder,
 };
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_secp256k1_pubkey,
-};
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
@@ -464,7 +451,7 @@
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-<span class="kw">use </span>fedimint_core::secp256k1_29::{Keypair, PublicKey, Secp256k1};
+<span class="kw">use </span>fedimint_core::secp256k1::{Keypair, PublicKey, Secp256k1};
 <span class="kw">use </span>fedimint_core::util::{BoxStream, NextOrPending};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
 <span class="kw">pub use </span>fedimint_dummy_common <span class="kw">as </span>common;
@@ -565,7 +552,7 @@
                 <span class="kw">let </span>input = ClientInput {
                     input: DummyInput {
                         amount: missing_input_amount,
-                        account: bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span><span class="self">self</span>.key.public_key()),
+                        account: <span class="self">self</span>.key.public_key(),
                     },
                     amount: missing_input_amount,
                     keys: <span class="macro">vec!</span>[<span class="self">self</span>.key],
@@ -594,7 +581,7 @@
                 <span class="kw">let </span>output = ClientOutput {
                     output: DummyOutput {
                         amount: missing_output_amount,
-                        account: bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span><span class="self">self</span>.key.public_key()),
+                        account: <span class="self">self</span>.key.public_key(),
                     },
                     amount: missing_output_amount,
                 };
@@ -679,7 +666,7 @@
         </span><span class="kw">let </span>input = ClientInput {
             input: DummyInput {
                 amount,
-                account: bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>account_kp.public_key()),
+                account: account_kp.public_key(),
             },
             amount,
             keys: <span class="macro">vec!</span>[account_kp],
@@ -708,18 +695,14 @@
 
     <span class="doccomment">/// Request the federation prints money for us
     </span><span class="kw">pub async fn </span>print_money(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; anyhow::Result&lt;(OperationId, OutPoint)&gt; {
-        <span class="self">self</span>.print_using_account(amount, bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>fed_key_pair()))
-            .<span class="kw">await
+        <span class="self">self</span>.print_using_account(amount, fed_key_pair()).<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Use a broken printer to print a liability instead of money
     /// If the federation is honest, should always fail
     </span><span class="kw">pub async fn </span>print_liability(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; anyhow::Result&lt;(OperationId, OutPoint)&gt; {
-        <span class="self">self</span>.print_using_account(
-            amount,
-            bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>broken_fed_key_pair()),
-        )
-        .<span class="kw">await
+        <span class="self">self</span>.print_using_account(amount, broken_fed_key_pair())
+            .<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Send money to another user
@@ -730,10 +713,7 @@
 
         <span class="comment">// Create output using another account
         </span><span class="kw">let </span>output = ClientOutput {
-            output: DummyOutput {
-                amount,
-                account: bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>account),
-            },
+            output: DummyOutput { amount, account },
             amount,
         };
 
@@ -768,7 +748,7 @@
             .await_output_outcome(outpoint, Duration::from_secs(<span class="number">10</span>), <span class="kw-2">&amp;</span><span class="self">self</span>.decoder())
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">if </span>account != bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span><span class="self">self</span>.key.public_key()) {
+        <span class="kw">if </span>account != <span class="self">self</span>.key.public_key() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">"Wrong account id"</span>));
         }
 

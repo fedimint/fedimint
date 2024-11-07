@@ -586,7 +586,9 @@
 <a href="#585" id="585">585</a>
 <a href="#586" id="586">586</a>
 <a href="#587" id="587">587</a>
-<a href="#588" id="588">588</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#588" id="588">588</a>
+<a href="#589" id="589">589</a>
+<a href="#590" id="590">590</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>bitcoin_hashes::sha256;
@@ -600,8 +602,10 @@
 };
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
-<span class="kw">use </span>fedimint_core::secp256k1_29::Keypair;
-<span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1, Amount};
+<span class="kw">use </span>fedimint_core::secp256k1::Keypair;
+<span class="kw">use </span>fedimint_core::{
+    impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1_27 <span class="kw">as </span>secp256k1, Amount,
+};
 <span class="kw">use </span>fedimint_ln_common::serde_routing_fees;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 <span class="kw">use </span>futures::{FutureExt, StreamExt};

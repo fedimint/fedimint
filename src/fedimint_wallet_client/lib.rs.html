@@ -1424,7 +1424,7 @@
 <span class="kw">use </span>fedimint_core::util::backoff_util::background_backoff;
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1_29, Amount, OutPoint,
+    apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1, Amount, OutPoint,
     TransactionId,
 };
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_WALLET;
@@ -1433,7 +1433,7 @@
 <span class="kw">pub use </span>fedimint_wallet_common::<span class="kw-2">*</span>;
 <span class="kw">use </span>futures::{Stream, StreamExt};
 <span class="kw">use </span>rand::{thread_rng, Rng};
-<span class="kw">use </span>secp256k1_29::Keypair;
+<span class="kw">use </span>secp256k1::Keypair;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>tokio::sync::watch;
@@ -1682,14 +1682,14 @@
     <span class="kw">fn </span>derive_deposit_address(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         idx: TweakIdx,
-    ) -&gt; (Keypair, secp256k1_29::PublicKey, Address, OperationId) {
+    ) -&gt; (Keypair, secp256k1::PublicKey, Address, OperationId) {
         <span class="kw">let </span>idx = ChildId(idx.<span class="number">0</span>);
 
         <span class="kw">let </span>secret_tweak_key = <span class="self">self
             </span>.module_root_secret
             .child_key(WALLET_TWEAK_CHILD_ID)
             .child_key(idx)
-            .to_secp_key(fedimint_core::secp256k1_29::SECP256K1);
+            .to_secp_key(fedimint_core::secp256k1::SECP256K1);
 
         <span class="kw">let </span>public_tweak_key = secret_tweak_key.public_key();
 

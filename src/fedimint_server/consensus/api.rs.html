@@ -715,14 +715,7 @@
 <a href="#714" id="714">714</a>
 <a href="#715" id="715">715</a>
 <a href="#716" id="716">716</a>
-<a href="#717" id="717">717</a>
-<a href="#718" id="718">718</a>
-<a href="#719" id="719">719</a>
-<a href="#720" id="720">720</a>
-<a href="#721" id="721">721</a>
-<a href="#722" id="722">722</a>
-<a href="#723" id="723">723</a>
-<a href="#724" id="724">724</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
+<a href="#717" id="717">717</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -737,7 +730,6 @@
 };
 <span class="kw">use </span>fedimint_core::admin_client::ServerStatus;
 <span class="kw">use </span>fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_secret_key;
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, JsonClientConfig};
 <span class="kw">use </span>fedimint_core::core::backup::{SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES};
 <span class="kw">use </span>fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
@@ -764,15 +756,14 @@
 <span class="kw">use </span>fedimint_core::net::api_announcement::{
     ApiAnnouncement, SignedApiAnnouncement, SignedApiAnnouncementSubmission,
 };
-<span class="kw">use </span>fedimint_core::secp256k1::SECP256K1;
-<span class="kw">use </span>fedimint_core::secp256k1_29::PublicKey;
+<span class="kw">use </span>fedimint_core::secp256k1::{PublicKey, SECP256K1};
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::session_outcome::{SessionOutcome, SessionStatus, SignedSessionOutcome};
 <span class="kw">use </span>fedimint_core::transaction::{
     SerdeTransaction, Transaction, TransactionError, TransactionSubmissionOutcome,
 };
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
-<span class="kw">use </span>fedimint_core::{secp256k1_29, OutPoint, PeerId, TransactionId};
+<span class="kw">use </span>fedimint_core::{secp256k1, OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_logging::LOG_NET_API;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>tokio::sync::{watch, RwLock};
@@ -1177,14 +1168,9 @@
                             api_url: new_url_inner,
                             nonce: new_nonce,
                         };
-                        <span class="kw">let </span>ctx = secp256k1_29::Secp256k1::new();
-                        <span class="kw">let </span>signed_announcement = announcement.sign(
-                            <span class="kw-2">&amp;</span>ctx,
-                            <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_secp256k1_secret_key(
-                                <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.private.broadcast_secret_key,
-                            )
-                            .keypair(<span class="kw-2">&amp;</span>ctx),
-                        );
+                        <span class="kw">let </span>ctx = secp256k1::Secp256k1::new();
+                        <span class="kw">let </span>signed_announcement = announcement
+                            .sign(<span class="kw-2">&amp;</span>ctx, <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.private.broadcast_secret_key.keypair(<span class="kw-2">&amp;</span>ctx));
 
                         dbtx.insert_entry(
                             <span class="kw-2">&amp;</span>ApiAnnouncementKey(<span class="self">self</span>.cfg.local.identity),

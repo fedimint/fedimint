@@ -942,9 +942,7 @@
 <a href="#941" id="941">941</a>
 <a href="#942" id="942">942</a>
 <a href="#943" id="943">943</a>
-<a href="#944" id="944">944</a>
-<a href="#945" id="945">945</a>
-<a href="#946" id="946">946</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
+<a href="#944" id="944">944</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -952,14 +950,12 @@
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle,
 };
 <span class="kw">use </span>fedimint_client::{ClientHandleArc, DynGlobalClientContext};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_schnorr_signature,
-};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::util::Spanned;
-<span class="kw">use </span>fedimint_core::{secp256k1_29 <span class="kw">as </span>secp256k1, Amount, OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_core::{secp256k1, Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_client::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 <span class="kw">use </span>fedimint_ln_common::config::FeeToAmount;
@@ -1853,7 +1849,7 @@
         );
         <span class="kw">let </span>cancel_output = LightningOutput::new_v0_cancel_outgoing(
             contract.contract.contract_id(),
-            bitcoin32_to_bitcoin30_schnorr_signature(<span class="kw-2">&amp;</span>cancel_signature),
+            cancel_signature,
         );
         <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutput&gt; {
             output: cancel_output,

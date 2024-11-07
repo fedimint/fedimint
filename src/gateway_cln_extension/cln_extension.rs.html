@@ -1387,7 +1387,7 @@
     bitcoin32_to_bitcoin30_network, bitcoin32_to_bitcoin30_recoverable_signature,
     bitcoin32_to_bitcoin30_secp256k1_pubkey,
 };
-<span class="kw">use </span>fedimint_core::secp256k1_29::{PublicKey, SecretKey, SECP256K1};
+<span class="kw">use </span>fedimint_core::secp256k1::{PublicKey, SecretKey, SECP256K1};
 <span class="kw">use </span>fedimint_core::task::timeout;
 <span class="kw">use </span>fedimint_core::util::handle_version_hash_command;
 <span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll};
@@ -2413,7 +2413,7 @@
             .<span class="kw">await</span><span class="question-mark">?
             </span>.call(cln_rpc::Request::GetRoute(
                 model::requests::GetrouteRequest {
-                    id: pruned_invoice.destination,
+                    id: bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>pruned_invoice.destination),
                     amount_msat: cln_rpc::primitives::Amount::from_msat(
                         pruned_invoice.amount.msats,
                     ),

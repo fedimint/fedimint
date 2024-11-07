@@ -528,10 +528,10 @@
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::envs::is_env_var_set;
-<span class="kw">use </span>fedimint_core::secp256k1_29::PublicKey;
+<span class="kw">use </span>fedimint_core::secp256k1::PublicKey;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry, SafeUrl};
-<span class="kw">use </span>fedimint_core::{secp256k1_29 <span class="kw">as </span>secp256k1, Amount};
+<span class="kw">use </span>fedimint_core::{secp256k1, Amount};
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
 <span class="kw">use </span>fedimint_ln_common::PrunedInvoice;
 <span class="kw">use </span>futures::stream::BoxStream;

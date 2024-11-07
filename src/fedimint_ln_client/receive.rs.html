@@ -449,7 +449,15 @@
 <a href="#448" id="448">448</a>
 <a href="#449" id="449">449</a>
 <a href="#450" id="450">450</a>
-<a href="#451" id="451">451</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin30::key::KeyPair;
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
@@ -461,7 +469,7 @@
 };
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::secp256k1_29::Keypair;
+<span class="kw">use </span>fedimint_core::secp256k1::Keypair;
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::{OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::IncomingContractAccount;
@@ -851,6 +859,9 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>bitcoin30::hashes::{sha256, Hash};
+    <span class="kw">use </span>fedimint_core::bitcoin_migration::{
+        bitcoin30_to_bitcoin32_secp256k1_message, bitcoin32_to_bitcoin30_recoverable_signature,
+    };
     <span class="kw">use </span>fedimint_core::secp256k1::{Secp256k1, SecretKey};
     <span class="kw">use </span>lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
 
@@ -897,7 +908,12 @@
             .payment_secret(PaymentSecret([<span class="number">0</span>; <span class="number">32</span>]))
             .amount_milli_satoshis(<span class="number">1000</span>)
             .expiry_time(expiry_time)
-            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span>secret_key))<span class="question-mark">?</span>)
+            .build_signed(|m| {
+                bitcoin32_to_bitcoin30_recoverable_signature(<span class="kw-2">&amp;</span>ctx.sign_ecdsa_recoverable(
+                    <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_secp256k1_message(m),
+                    <span class="kw-2">&amp;</span>secret_key,
+                ))
+            })<span class="question-mark">?</span>)
     }
 }
 </code></pre></div></section></main></body></html>

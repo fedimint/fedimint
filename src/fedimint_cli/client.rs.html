@@ -699,9 +699,7 @@
 <a href="#698" id="698">698</a>
 <a href="#699" id="699">699</a>
 <a href="#700" id="700">700</a>
-<a href="#701" id="701">701</a>
-<a href="#702" id="702">702</a>
-<a href="#703" id="703">703</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#701" id="701">701</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -713,9 +711,7 @@
 <span class="kw">use </span>fedimint_bip39::Mnemonic;
 <span class="kw">use </span>fedimint_client::backup::Metadata;
 <span class="kw">use </span>fedimint_client::ClientHandleArc;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_amount, bitcoin32_to_bitcoin30_secp256k1_pubkey,
-};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 <span class="kw">use </span>fedimint_core::config::{ClientModuleConfig, FederationId};
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
@@ -1268,9 +1264,9 @@
                     (amount.unwrap(), fees)
                 }
                 BitcoinAmountOrAll::Amount(amount) =&gt; (
-                    bitcoin30_to_bitcoin32_amount(<span class="kw-2">&amp;</span>amount),
+                    amount,
                     wallet_module
-                        .get_withdraw_fees(address.clone(), bitcoin30_to_bitcoin32_amount(<span class="kw-2">&amp;</span>amount))
+                        .get_withdraw_fees(address.clone(), amount)
                         .<span class="kw">await</span><span class="question-mark">?</span>,
                 ),
             };

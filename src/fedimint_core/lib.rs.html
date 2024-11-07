@@ -340,7 +340,7 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">pub use </span>tiered::Tiered;
 <span class="kw">pub use </span>tiered_multi::<span class="kw-2">*</span>;
-<span class="kw">pub use </span>{hex, secp256k1, secp256k1_29};
+<span class="kw">pub use </span>{hex, secp256k1, secp256k1_27};
 
 <span class="kw">pub use </span><span class="kw">crate</span>::core::server;
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
@@ -416,7 +416,7 @@
 </span><span class="kw">pub enum </span>BitcoinAmountOrAll {
     All,
     <span class="attr">#[serde(untagged)]
-    </span>Amount(<span class="attr">#[serde(with = <span class="string">"bitcoin30::amount::serde::as_sat"</span>)] </span>bitcoin30::Amount),
+    </span>Amount(<span class="attr">#[serde(with = <span class="string">"bitcoin::amount::serde::as_sat"</span>)] </span>bitcoin::Amount),
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>BitcoinAmountOrAll {
@@ -557,7 +557,7 @@
         <span class="kw">let </span>amount: BitcoinAmountOrAll = serde_json::from_str(<span class="string">"12345"</span>).unwrap();
         <span class="macro">assert_eq!</span>(
             amount,
-            BitcoinAmountOrAll::Amount(bitcoin30::Amount::from_sat(<span class="number">12345</span>))
+            BitcoinAmountOrAll::Amount(bitcoin::Amount::from_sat(<span class="number">12345</span>))
         );
 
         <span class="kw">let </span>all_string = all.to_string();

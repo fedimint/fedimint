@@ -516,7 +516,7 @@
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::secp256k1_29::{Keypair, PublicKey};
+<span class="kw">use </span>fedimint_core::secp256k1::{Keypair, PublicKey};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_common::{LightningGateway, LightningGatewayRegistration};
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
@@ -779,7 +779,7 @@
     <span class="kw">use </span>fedimint_client::db::migrate_state;
     <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, OperationId};
     <span class="kw">use </span>fedimint_core::encoding::Encodable;
-    <span class="kw">use </span>fedimint_core::secp256k1_29::{Keypair, SECP256K1};
+    <span class="kw">use </span>fedimint_core::secp256k1::{Keypair, SECP256K1};
     <span class="kw">use </span>fedimint_core::{BitcoinHash, TransactionId};
     <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
     <span class="kw">use </span>rand::thread_rng;

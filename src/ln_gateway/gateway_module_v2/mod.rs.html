@@ -543,7 +543,11 @@
 <a href="#542" id="542">542</a>
 <a href="#543" id="543">543</a>
 <a href="#544" id="544">544</a>
-<a href="#545" id="545">545</a></pre></div><pre class="rust"><code><span class="kw">mod </span>api;
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a>
+<a href="#549" id="549">549</a></pre></div><pre class="rust"><code><span class="kw">mod </span>api;
 <span class="kw">mod </span>complete_sm;
 <span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
@@ -565,7 +569,7 @@
 };
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_keypair,
+    bitcoin32_to_bitcoin30_schnorr_signature, bitcoin32_to_bitcoin30_secp256k1_pubkey,
 };
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -574,8 +578,10 @@
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-<span class="kw">use </span>fedimint_core::secp256k1_29::Keypair;
-<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint, PeerId};
+<span class="kw">use </span>fedimint_core::secp256k1::Keypair;
+<span class="kw">use </span>fedimint_core::{
+    apply, async_trait_maybe_send, secp256k1_27 <span class="kw">as </span>secp256k1, Amount, OutPoint, PeerId,
+};
 <span class="kw">use </span>fedimint_lnv2_common::config::LightningClientConfig;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 <span class="kw">use </span>fedimint_lnv2_common::gateway_api::SendPaymentPayload;
@@ -637,7 +643,7 @@
             keypair: args
                 .module_root_secret()
                 .clone()
-                .to_secp_key(fedimint_core::secp256k1_29::SECP256K1),
+                .to_secp_key(fedimint_core::secp256k1::SECP256K1),
             gateway: <span class="self">self</span>.gateway.clone(),
         })
     }
@@ -803,8 +809,7 @@
         // programming error we do not have to enable cancellation and can check
         // them before we start the state machine.
         </span><span class="macro">ensure!</span>(
-            bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>payload.contract.claim_pk)
-                == <span class="self">self</span>.keypair.public_key(),
+            payload.contract.claim_pk == <span class="self">self</span>.keypair.public_key(),
             <span class="string">"The outgoing contract is keyed to another gateway"
         </span>);
 
@@ -812,12 +817,14 @@
         </span><span class="macro">ensure!</span>(
             secp256k1::SECP256K1
                 .verify_schnorr(
-                    <span class="kw-2">&amp;</span>payload.auth,
+                    <span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_schnorr_signature(<span class="kw-2">&amp;</span>payload.auth),
                     <span class="kw-2">&amp;</span>payload
                         .invoice
                         .consensus_hash_bitcoin30::&lt;sha256::Hash&gt;()
                         .into(),
-                    <span class="kw-2">&amp;</span>payload.contract.refund_pk.x_only_public_key().<span class="number">0</span>,
+                    <span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>payload.contract.refund_pk)
+                        .x_only_public_key()
+                        .<span class="number">0</span>,
                 )
                 .is_ok(),
             <span class="string">"Invalid auth signature for the invoice data"
@@ -904,12 +911,13 @@
                     SendSMState::Cancelled(cancelled) =&gt; {
                         <span class="macro">warn!</span>(<span class="string">"Outgoing lightning payment is cancelled {:?}"</span>, cancelled);
 
-                        <span class="kw">let </span>signature = bitcoin32_to_bitcoin30_keypair(<span class="kw-2">&amp;</span><span class="self">self</span>.keypair)
+                        <span class="kw">let </span>signature = <span class="self">self
+                            </span>.keypair
                             .sign_schnorr(state.common.contract.forfeit_message());
 
                         <span class="macro">assert!</span>(state.common.contract.verify_forfeit_signature(<span class="kw-2">&amp;</span>signature));
 
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(signature);
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(bitcoin32_to_bitcoin30_schnorr_signature(<span class="kw-2">&amp;</span>signature));
                     }
                 }
             }

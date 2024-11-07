@@ -666,12 +666,16 @@
 <a href="#665" id="665">665</a>
 <a href="#666" id="666">666</a>
 <a href="#667" id="667">667</a>
-<a href="#668" id="668">668</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::{Duration, SystemTime};
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>bitcoin30::hashes::sha256;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_pubkey;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -1296,10 +1300,12 @@
 
     <span class="kw">pub fn </span>destination(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; secp256k1::PublicKey {
         <span class="kw">match </span><span class="self">self </span>{
-            PaymentData::Invoice(invoice) =&gt; invoice
-                .payee_pub_key()
-                .copied()
-                .unwrap_or_else(|| invoice.recover_payee_pub_key()),
+            PaymentData::Invoice(invoice) =&gt; bitcoin30_to_bitcoin32_secp256k1_pubkey(
+                <span class="kw-2">&amp;</span>invoice
+                    .payee_pub_key()
+                    .copied()
+                    .unwrap_or_else(|| invoice.recover_payee_pub_key()),
+            ),
             PaymentData::PrunedInvoice(PrunedInvoice { destination, .. }) =&gt; <span class="kw-2">*</span>destination,
         }
     }
