@@ -3,7 +3,9 @@ use std::hash;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail};
-use fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
+use fedimint_api_client::api::{
+    deserialize_outcome, DynGlobalApi, FederationApiExt, SerdeOutputOutcome,
+};
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_client::module::{ClientContext, OutPointRange};
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -19,6 +21,7 @@ use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 use fedimint_mint_common::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_mint_common::{BlindNonce, MintOutputOutcome, Nonce};
+use futures::future::join_all;
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator as _, ParallelIterator as _};
 use serde::{Deserialize, Serialize};
 use tbs::{
@@ -388,46 +391,55 @@ impl MintOutputStatesCreatedMulti {
         let mut ret = vec![];
         // NOTE: We need a new api endpoint that can confirm multiple notes at once?
         // --dpc
-        for (out_idx, (amount, issuance_request)) in issuance_requests {
-            let blinded_sig_share = fedimint_core::util::retry(
-                "await and fetch output sigs",
-                fedimint_core::util::backoff_util::custom_backoff(RETRY_DELAY, RETRY_DELAY, None),
-                || async {
-                    let decoder = module_decoder.clone();
-                    let pks = peer_tbs_pks.clone();
+        let api = global_context.api();
+        let mut issuance_requests_iter = issuance_requests.into_iter();
 
-                    Ok(global_context
-                        .api()
-                        .request_with_strategy(
-                            // this query collects a threshold of 2f + 1 valid blind signature
-                            // shares
-                            FilterMapThreshold::new(
-                                move |peer, outcome| {
-                                    verify_blind_share(
-                                        peer,
-                                        &outcome,
-                                        amount,
-                                        issuance_request.blinded_message(),
-                                        &decoder,
-                                        &pks,
-                                    )
-                                },
-                                global_context.api().all_peers().to_num_peers(),
-                            ),
-                            AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
-                            ApiRequestErased::new(OutPoint {
-                                txid: common.txid(),
-                                out_idx,
-                            }),
-                        )
-                        .await?)
-                },
+        // Wait for the result of the first output only, to save of server side
+        // resources
+        if let Some((out_idx, (amount, issuance_request))) = issuance_requests_iter.next() {
+            let blinded_sig_share = retry_await_output_outcome(
+                api,
+                &module_decoder,
+                &peer_tbs_pks,
+                common.txid(),
+                out_idx,
+                amount,
+                issuance_request,
             )
-            .await
-            .expect("Will retry forever");
+            .await;
 
             ret.push((out_idx, blinded_sig_share));
+        } else {
+            // no outputs, just return nothing
+            return vec![];
         }
+
+        // We know the tx outcomes are ready, get all of them at once
+        ret.extend(
+            join_all(
+                issuance_requests_iter.map(|(out_idx, (amount, issuance_request))| {
+                    // let issuance_request = issuance_request;
+                    let module_decoder = module_decoder.clone();
+                    let peer_tbs_pks = peer_tbs_pks.clone();
+                    async move {
+                        (
+                            out_idx,
+                            retry_await_output_outcome(
+                                api,
+                                &module_decoder,
+                                &peer_tbs_pks,
+                                common.txid(),
+                                out_idx,
+                                amount,
+                                issuance_request,
+                            )
+                            .await,
+                        )
+                    }
+                }),
+            )
+            .await,
+        );
 
         ret
     }
@@ -508,6 +520,49 @@ impl MintOutputStatesCreatedMulti {
             }),
         }
     }
+}
+
+async fn retry_await_output_outcome(
+    api: &DynGlobalApi,
+    module_decoder: &Decoder,
+    peer_tbs_pks: &BTreeMap<PeerId, Tiered<PublicKeyShare>>,
+    txid: TransactionId,
+    out_idx: u64,
+    amount: Amount,
+    issuance_request: NoteIssuanceRequest,
+) -> BTreeMap<PeerId, BlindedSignatureShare> {
+    fedimint_core::util::retry(
+        "await and fetch output sigs",
+        fedimint_core::util::backoff_util::custom_backoff(RETRY_DELAY, RETRY_DELAY * 10, None),
+        || async {
+            let decoder = module_decoder.clone();
+            let pks = peer_tbs_pks.clone();
+
+            Ok(api
+                .request_with_strategy(
+                    // this query collects a threshold of 2f + 1 valid blind signature
+                    // shares
+                    FilterMapThreshold::new(
+                        move |peer, outcome| {
+                            verify_blind_share(
+                                peer,
+                                &outcome,
+                                amount,
+                                issuance_request.blinded_message(),
+                                &decoder,
+                                &pks,
+                            )
+                        },
+                        api.all_peers().to_num_peers(),
+                    ),
+                    AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
+                    ApiRequestErased::new(OutPoint { txid, out_idx }),
+                )
+                .await?)
+        },
+    )
+    .await
+    .expect("Will retry forever")
 }
 
 /// # Panics
