@@ -11,17 +11,17 @@ use fedimint_core::config::FederationId;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::TaskGroup;
 use fedimint_ln_common::gateway_endpoint_constants::{
-    ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
-    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT,
-    GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_GATEWAY_ID_ENDPOINT,
-    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
-    MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT, RECEIVE_ECASH_ENDPOINT,
-    SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, WITHDRAW_ENDPOINT,
+    ADDRESS_ENDPOINT, BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
+    CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
+    GET_GATEWAY_ID_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT,
+    LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT,
+    RECEIVE_ECASH_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
+    WITHDRAW_ENDPOINT,
 };
 use fedimint_lnv2_common::endpoint_constants::{
     CREATE_BOLT11_INVOICE_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
-    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_PAYMENT_ENDPOINT,
-    WITHDRAW_ONCHAIN_ENDPOINT,
+    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_ONCHAIN_ENDPOINT,
+    SEND_PAYMENT_ENDPOINT,
 };
 use fedimint_lnv2_common::gateway_api::{CreateBolt11InvoicePayload, SendPaymentPayload};
 use hex::ToHex;
@@ -31,11 +31,10 @@ use tower_http::cors::CorsLayer;
 use tracing::{error, info, instrument};
 
 use super::{
-    BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
-    CreateInvoiceForOperatorPayload, DepositAddressPayload, GetLnOnchainAddressPayload,
-    InfoPayload, LeaveFedPayload, OpenChannelPayload, PayInvoiceForOperatorPayload,
-    ReceiveEcashPayload, SetConfigurationPayload, SpendEcashPayload, WithdrawOnchainPayload,
-    WithdrawPayload, V1_API_ENDPOINT,
+    BackupPayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
+    CreateInvoiceForOperatorPayload, DepositAddressPayload, InfoPayload, LeaveFedPayload,
+    OpenChannelPayload, PayInvoiceForOperatorPayload, ReceiveEcashPayload, SendOnchainPayload,
+    SetConfigurationPayload, SpendEcashPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 use crate::error::{AdminGatewayError, PublicGatewayError};
 use crate::rpc::ConfigPayload;
@@ -182,7 +181,6 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
 
     // Authenticated, public routes used for gateway administration
     let always_authenticated_routes = Router::new()
-        .route(BALANCE_ENDPOINT, post(balance))
         .route(ADDRESS_ENDPOINT, post(address))
         .route(WITHDRAW_ENDPOINT, post(withdraw))
         .route(CONNECT_FED_ENDPOINT, post(connect_fed))
@@ -196,17 +194,14 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
             PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
             post(pay_invoice_operator),
         )
-        .route(
-            GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
-            post(get_ln_onchain_address),
-        )
+        .route(GET_LN_ONCHAIN_ADDRESS_ENDPOINT, get(get_ln_onchain_address))
         .route(OPEN_CHANNEL_ENDPOINT, post(open_channel))
         .route(
             CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
             post(close_channels_with_peer),
         )
         .route(LIST_ACTIVE_CHANNELS_ENDPOINT, get(list_active_channels))
-        .route(WITHDRAW_ONCHAIN_ENDPOINT, post(withdraw_onchain))
+        .route(SEND_ONCHAIN_ENDPOINT, post(send_onchain))
         .route(GET_BALANCES_ENDPOINT, get(get_balances))
         .route(SPEND_ECASH_ENDPOINT, post(spend_ecash))
         .route(MNEMONIC_ENDPOINT, get(mnemonic))
@@ -275,16 +270,6 @@ async fn configuration(
         .handle_get_federation_config(payload.federation_id)
         .await?;
     Ok(Json(json!(gateway_fed_config)))
-}
-
-/// Display gateway ecash note balance
-#[instrument(skip_all, err, fields(?payload))]
-async fn balance(
-    Extension(gateway): Extension<Arc<Gateway>>,
-    Json(payload): Json<BalancePayload>,
-) -> Result<impl IntoResponse, AdminGatewayError> {
-    let amount = gateway.handle_balance_msg(payload).await?;
-    Ok(Json(json!(amount)))
 }
 
 /// Generate deposit address
@@ -378,7 +363,6 @@ async fn set_configuration(
 #[instrument(skip_all, err)]
 async fn get_ln_onchain_address(
     Extension(gateway): Extension<Arc<Gateway>>,
-    Json(_payload): Json<GetLnOnchainAddressPayload>,
 ) -> Result<impl IntoResponse, AdminGatewayError> {
     let address = gateway.handle_get_ln_onchain_address_msg().await?;
     Ok(Json(json!(address.to_string())))
@@ -411,11 +395,11 @@ async fn list_active_channels(
 }
 
 #[instrument(skip_all, err)]
-async fn withdraw_onchain(
+async fn send_onchain(
     Extension(gateway): Extension<Arc<Gateway>>,
-    Json(payload): Json<WithdrawOnchainPayload>,
+    Json(payload): Json<SendOnchainPayload>,
 ) -> Result<impl IntoResponse, AdminGatewayError> {
-    let txid = gateway.handle_withdraw_onchain_msg(payload).await?;
+    let txid = gateway.handle_send_onchain_msg(payload).await?;
     Ok(Json(json!(txid)))
 }
 

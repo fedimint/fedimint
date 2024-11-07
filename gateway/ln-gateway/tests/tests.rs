@@ -50,7 +50,7 @@ use futures::Future;
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use ln_gateway::config::LightningModuleMode;
 use ln_gateway::gateway_module_v2::{FinalReceiveState, GatewayClientModuleV2};
-use ln_gateway::rpc::{BalancePayload, FederationRoutingFees, SetConfigurationPayload};
+use ln_gateway::rpc::{FederationRoutingFees, SetConfigurationPayload};
 use ln_gateway::state_machine::pay::{
     OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
 };
@@ -861,7 +861,7 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
         }
 
         // Check gateway balances before facilitating direct swap between federations
-        let pre_balances = get_balances(&gateway, &[id1, id2]).await;
+        let pre_balances = get_balances(&gateway, [id1, id2].to_vec()).await;
         assert_eq!(pre_balances[0], 10_000);
         assert_eq!(pre_balances[1], 10_000);
 
@@ -939,18 +939,22 @@ fn routing_fees_in_msats(routing_fees: &FederationRoutingFees, amount: &Amount) 
 }
 
 /// Retrieves the balance of each federation the gateway is connected to.
-async fn get_balances(gw: &Gateway, ids: impl IntoIterator<Item = &FederationId>) -> Vec<u64> {
-    let mut balances = vec![];
-    for id in ids.into_iter() {
-        let balance_payload = BalancePayload { federation_id: *id };
-        let balance = gw
-            .handle_balance_msg(balance_payload)
-            .await
-            .expect("Could not get balance");
-        balances.push(balance.msats);
-    }
-
+async fn get_balances(gw: &Gateway, ids: Vec<FederationId>) -> Vec<u64> {
+    let balances = gw
+        .handle_get_balances_msg()
+        .await
+        .expect("Could not get balances");
     balances
+        .ecash_balances
+        .into_iter()
+        .filter_map(|info| {
+            if ids.contains(&info.federation_id) {
+                Some(info.ecash_balance_msats.msats)
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 /// Prints msats for the gateway using the dummy module.

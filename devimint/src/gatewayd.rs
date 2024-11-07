@@ -256,7 +256,7 @@ impl Gatewayd {
 
     pub async fn backup_to_fed(&self, fed: &Federation) -> Result<()> {
         let federation_id = fed.calculate_federation_id();
-        cmd!(self, "backup", "--federation-id", federation_id)
+        cmd!(self, "ecash", "backup", "--federation-id", federation_id)
             .run()
             .await?;
         Ok(())
@@ -270,7 +270,7 @@ impl Gatewayd {
     }
 
     pub async fn get_pegin_addr(&self, fed_id: &str) -> Result<String> {
-        Ok(cmd!(self, "address", "--federation-id={fed_id}")
+        Ok(cmd!(self, "ecash", "pegin", "--federation-id={fed_id}")
             .out_json()
             .await?
             .as_str()
@@ -285,9 +285,7 @@ impl Gatewayd {
                 .out_string()
                 .await?
         } else {
-            cmd!(self, "lightning", "get-ln-onchain-address")
-                .out_string()
-                .await?
+            cmd!(self, "onchain", "address").out_string().await?
         };
 
         Ok(address)
@@ -331,7 +329,8 @@ impl Gatewayd {
     pub async fn send_ecash(&self, federation_id: String, amount_msats: u64) -> Result<String> {
         let value = cmd!(
             self,
-            "spend-ecash",
+            "ecash",
+            "send",
             "--federation-id",
             federation_id,
             amount_msats
@@ -348,7 +347,9 @@ impl Gatewayd {
     }
 
     pub async fn receive_ecash(&self, ecash: String) -> Result<()> {
-        cmd!(self, "receive-ecash", "--notes", ecash).run().await?;
+        cmd!(self, "ecash", "receive", "--notes", ecash)
+            .run()
+            .await?;
         Ok(())
     }
 
@@ -370,7 +371,7 @@ impl Gatewayd {
         Ok(ecash_balance)
     }
 
-    pub async fn withdraw_onchain(
+    pub async fn send_onchain(
         &self,
         bitcoind: &Bitcoind,
         amount: BitcoinAmountOrAll,
@@ -379,8 +380,8 @@ impl Gatewayd {
         let withdraw_address = bitcoind.get_new_address().await?;
         let value = cmd!(
             self,
-            "lightning",
-            "withdraw-onchain",
+            "onchain",
+            "send",
             "--address",
             withdraw_address,
             "--amount",

@@ -754,12 +754,10 @@ impl Federation {
         self.bitcoind.mine_blocks(21).await?;
         try_join_all(gateways.into_iter().map(|gw| {
             poll("gateway pegin", || async {
-                let gateway_balance = cmd!(gw, "balance", "--federation-id={fed_id}")
-                    .out_json()
+                let gateway_balance = gw
+                    .ecash_balance(fed_id.clone())
                     .await
-                    .map_err(ControlFlow::Continue)?
-                    .as_u64()
-                    .unwrap();
+                    .map_err(ControlFlow::Continue)?;
                 poll_eq!(gateway_balance, amount * 1000)
             })
         }))
@@ -791,7 +789,8 @@ impl Federation {
             let pegout_address = self.bitcoind.get_new_address().await?;
             let value = cmd!(
                 gw,
-                "withdraw",
+                "ecash",
+                "pegout",
                 "--federation-id",
                 fed_id,
                 "--amount",

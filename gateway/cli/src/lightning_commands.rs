@@ -1,12 +1,7 @@
-use bitcoin::address::NetworkUnchecked;
 use clap::Subcommand;
-use fedimint_core::BitcoinAmountOrAll;
 use lightning_invoice::Bolt11Invoice;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
-use ln_gateway::rpc::{
-    CloseChannelsWithPeerPayload, GetLnOnchainAddressPayload, OpenChannelPayload,
-    WithdrawOnchainPayload,
-};
+use ln_gateway::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload};
 
 use crate::print_response;
 
@@ -27,9 +22,6 @@ pub enum LightningCommands {
     },
     /// Pay a lightning invoice as the gateway (i.e. no e-cash exchange).
     PayInvoice { invoice: Bolt11Invoice },
-    /// Get a Bitcoin address from the gateway's lightning node's onchain
-    /// wallet.
-    GetLnOnchainAddress,
     /// Open a channel with another lightning node.
     OpenChannel {
         /// The public key of the node to open a channel with
@@ -56,24 +48,6 @@ pub enum LightningCommands {
     },
     /// List active channels.
     ListActiveChannels,
-    /// Withdraw funds from the lightning node's on-chain wallet to a specified
-    /// address.
-    WithdrawOnchain {
-        /// The address to withdraw funds to.
-        #[clap(long)]
-        address: bitcoin::Address<NetworkUnchecked>,
-
-        /// The amount to withdraw.
-        /// Can be "all" to withdraw all funds, an amount + unit (e.g. "1000
-        /// sats"), or a raw amount (e.g. "1000") which is denominated in
-        /// millisats.
-        #[clap(long)]
-        amount: BitcoinAmountOrAll,
-
-        /// The fee rate to use in satoshis per vbyte.
-        #[clap(long)]
-        fee_rate_sats_per_vbyte: u64,
-    },
 }
 
 impl LightningCommands {
@@ -103,13 +77,6 @@ impl LightningCommands {
                     .await?;
                 println!("{response}");
             }
-            Self::GetLnOnchainAddress => {
-                let response = create_client()
-                    .get_ln_onchain_address(GetLnOnchainAddressPayload {})
-                    .await?
-                    .assume_checked();
-                println!("{response}");
-            }
             Self::OpenChannel {
                 pubkey,
                 host,
@@ -134,20 +101,6 @@ impl LightningCommands {
             }
             Self::ListActiveChannels => {
                 let response = create_client().list_active_channels().await?;
-                print_response(response);
-            }
-            Self::WithdrawOnchain {
-                address,
-                amount,
-                fee_rate_sats_per_vbyte,
-            } => {
-                let response = create_client()
-                    .withdraw_onchain(WithdrawOnchainPayload {
-                        address,
-                        amount,
-                        fee_rate_sats_per_vbyte,
-                    })
-                    .await?;
                 print_response(response);
             }
         };

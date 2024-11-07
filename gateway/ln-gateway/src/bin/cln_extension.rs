@@ -39,16 +39,16 @@ use ln_gateway::lightning::extension::{
     CLN_CREATE_INVOICE_ENDPOINT, CLN_GET_BALANCES_ENDPOINT, CLN_INFO_ENDPOINT,
     CLN_LIST_ACTIVE_CHANNELS_ENDPOINT, CLN_LN_ONCHAIN_ADDRESS_ENDPOINT, CLN_OPEN_CHANNEL_ENDPOINT,
     CLN_PAY_INVOICE_ENDPOINT, CLN_PAY_PRUNED_INVOICE_ENDPOINT, CLN_ROUTE_HINTS_ENDPOINT,
-    CLN_ROUTE_HTLCS_ENDPOINT, CLN_WITHDRAW_ONCHAIN_ENDPOINT,
+    CLN_ROUTE_HTLCS_ENDPOINT, CLN_SEND_ONCHAIN_ENDPOINT,
 };
 use ln_gateway::lightning::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest,
     GetRouteHintsResponse, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
     ListActiveChannelsResponse, OpenChannelResponse, PayInvoiceRequest, PayInvoiceResponse,
-    PayPrunedInvoiceRequest, PaymentAction, WithdrawOnchainResponse,
+    PayPrunedInvoiceRequest, PaymentAction, SendOnchainResponse,
 };
-use ln_gateway::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, WithdrawOnchainPayload};
+use ln_gateway::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, SendOnchainPayload};
 use rand::rngs::OsRng;
 use rand::Rng;
 use reqwest::StatusCode;
@@ -143,7 +143,7 @@ fn routes(cln_service: ClnRpcService, interceptor: Arc<ClnHtlcInterceptor>) -> R
         .route(CLN_COMPLETE_PAYMENT_ENDPOINT, post(cln_complete_payment))
         .route(CLN_CREATE_INVOICE_ENDPOINT, post(cln_create_invoice))
         .route(CLN_LN_ONCHAIN_ADDRESS_ENDPOINT, get(cln_ln_onchain_address))
-        .route(CLN_WITHDRAW_ONCHAIN_ENDPOINT, post(cln_withdraw_onchain))
+        .route(CLN_SEND_ONCHAIN_ENDPOINT, post(cln_send_onchain))
         .route(CLN_OPEN_CHANNEL_ENDPOINT, post(cln_open_channel))
         .route(
             CLN_CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
@@ -629,10 +629,10 @@ async fn cln_ln_onchain_address(
 
 #[instrument(skip_all, err)]
 #[axum_macros::debug_handler]
-async fn cln_withdraw_onchain(
+async fn cln_send_onchain(
     Extension(cln_service): Extension<ClnRpcService>,
-    Json(payload): Json<WithdrawOnchainPayload>,
-) -> Result<Json<WithdrawOnchainResponse>, ClnExtensionError> {
+    Json(payload): Json<SendOnchainPayload>,
+) -> Result<Json<SendOnchainResponse>, ClnExtensionError> {
     let txid = cln_service
         .rpc_client()
         .await?
@@ -659,7 +659,7 @@ async fn cln_withdraw_onchain(
             _ => unreachable!("Unexpected response from Withdraw"),
         })?;
 
-    Ok(Json(WithdrawOnchainResponse { txid }))
+    Ok(Json(SendOnchainResponse { txid }))
 }
 
 #[instrument(skip_all, err)]

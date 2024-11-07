@@ -90,8 +90,8 @@ use rand::{thread_rng, Rng};
 use rpc::{
     CloseChannelsWithPeerPayload, CreateInvoiceForOperatorPayload, FederationInfo,
     GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelPayload,
-    PayInvoiceForOperatorPayload, ReceiveEcashPayload, ReceiveEcashResponse,
-    SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, WithdrawOnchainPayload,
+    PayInvoiceForOperatorPayload, ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainPayload,
+    SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, WithdrawResponse,
     V1_API_ENDPOINT,
 };
 use state_machine::{GatewayClientModule, GatewayExtPayStates};
@@ -106,8 +106,8 @@ use crate::gateway_module_v2::GatewayClientModuleV2;
 use crate::lightning::{GatewayLightningBuilder, LightningContext, LightningMode, RouteHtlcStream};
 use crate::rpc::rpc_server::{hash_password, run_webserver};
 use crate::rpc::{
-    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
-    GatewayBalances, WithdrawPayload, WithdrawResponse,
+    BackupPayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
+    GatewayBalances, WithdrawPayload,
 };
 use crate::types::PrettyInterceptPaymentRequest;
 
@@ -870,18 +870,6 @@ impl Gateway {
         Ok(GatewayFedConfig { federations })
     }
 
-    /// Returns the balance of the requested federation that the Gateway is
-    /// connected to.
-    pub async fn handle_balance_msg(&self, payload: BalancePayload) -> AdminResult<Amount> {
-        // no need for instrument, it is done on api layer
-        Ok(self
-            .select_client(payload.federation_id)
-            .await?
-            .value()
-            .get_balance()
-            .await)
-    }
-
     /// Returns a Bitcoin deposit on-chain address for pegging in Bitcoin for a
     /// specific connected federation.
     pub async fn handle_address_msg(&self, payload: DepositAddressPayload) -> AdminResult<Address> {
@@ -1461,13 +1449,10 @@ impl Gateway {
         Ok(channels)
     }
 
-    /// Withdraws funds from the gateway's lightning node on-chain wallet.
-    pub async fn handle_withdraw_onchain_msg(
-        &self,
-        payload: WithdrawOnchainPayload,
-    ) -> AdminResult<Txid> {
+    /// Send funds from the gateway's lightning node on-chain wallet.
+    pub async fn handle_send_onchain_msg(&self, payload: SendOnchainPayload) -> AdminResult<Txid> {
         let context = self.get_lightning_context().await?;
-        let response = context.lnrpc.withdraw_onchain(payload).await?;
+        let response = context.lnrpc.send_onchain(payload).await?;
         Txid::from_str(&response.txid).map_err(|e| AdminGatewayError::WithdrawError {
             failure_reason: format!("Failed to parse withdrawal TXID: {e}"),
         })

@@ -30,9 +30,9 @@ use crate::lightning::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription, OpenChannelResponse,
-    PayInvoiceResponse, PaymentAction, WithdrawOnchainResponse,
+    PayInvoiceResponse, PaymentAction, SendOnchainResponse,
 };
-use crate::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, WithdrawOnchainPayload};
+use crate::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, SendOnchainPayload};
 
 pub struct GatewayLdkClient {
     /// The underlying lightning node.
@@ -446,17 +446,17 @@ impl ILnRpcClient for GatewayLdkClient {
             })
     }
 
-    async fn withdraw_onchain(
+    async fn send_onchain(
         &self,
-        WithdrawOnchainPayload {
+        SendOnchainPayload {
             address,
             amount,
             // TODO: Respect this fee rate once `ldk-node` supports setting a custom fee rate.
             // This work is planned to be in `ldk-node` v0.4 and is tracked here:
             // https://github.com/lightningdevkit/ldk-node/issues/176
             fee_rate_sats_per_vbyte: _,
-        }: WithdrawOnchainPayload,
-    ) -> Result<WithdrawOnchainResponse, LightningRpcError> {
+        }: SendOnchainPayload,
+    ) -> Result<SendOnchainResponse, LightningRpcError> {
         let onchain = self.node.onchain_payment();
 
         let txid = match amount {
@@ -469,7 +469,7 @@ impl ILnRpcClient for GatewayLdkClient {
             failure_reason: e.to_string(),
         })?;
 
-        Ok(WithdrawOnchainResponse {
+        Ok(SendOnchainResponse {
             txid: txid.to_string(),
         })
     }

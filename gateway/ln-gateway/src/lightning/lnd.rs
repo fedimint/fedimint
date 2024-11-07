@@ -47,9 +47,9 @@ use crate::lightning::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription, OpenChannelResponse,
-    PayInvoiceResponse, PaymentAction, WithdrawOnchainResponse,
+    PayInvoiceResponse, PaymentAction, SendOnchainResponse,
 };
-use crate::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, WithdrawOnchainPayload};
+use crate::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, SendOnchainPayload};
 
 type HtlcSubscriptionSender = mpsc::Sender<InterceptPaymentRequest>;
 
@@ -1110,14 +1110,14 @@ impl ILnRpcClient for GatewayLndClient {
         }
     }
 
-    async fn withdraw_onchain(
+    async fn send_onchain(
         &self,
-        WithdrawOnchainPayload {
+        SendOnchainPayload {
             address,
             amount,
             fee_rate_sats_per_vbyte,
-        }: WithdrawOnchainPayload,
-    ) -> Result<WithdrawOnchainResponse, LightningRpcError> {
+        }: SendOnchainPayload,
+    ) -> Result<SendOnchainResponse, LightningRpcError> {
         #[allow(deprecated)]
         let request = match amount {
             BitcoinAmountOrAll::All => SendCoinsRequest {
@@ -1145,7 +1145,7 @@ impl ILnRpcClient for GatewayLndClient {
         };
 
         match self.connect().await?.lightning().send_coins(request).await {
-            Ok(res) => Ok(WithdrawOnchainResponse {
+            Ok(res) => Ok(SendOnchainResponse {
                 txid: res.into_inner().txid,
             }),
             Err(e) => Err(LightningRpcError::FailedToWithdrawOnchain {

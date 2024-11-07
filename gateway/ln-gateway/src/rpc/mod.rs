@@ -48,11 +48,6 @@ pub struct ConfigPayload {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct BalancePayload {
-    pub federation_id: FederationId,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DepositAddressPayload {
     pub federation_id: FederationId,
 }
@@ -167,9 +162,6 @@ pub struct PayInvoiceForOperatorPayload {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GetLnOnchainAddressPayload;
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OpenChannelPayload {
     pub pubkey: secp256k1::PublicKey,
     pub host: String,
@@ -183,7 +175,7 @@ pub struct CloseChannelsWithPeerPayload {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct WithdrawOnchainPayload {
+pub struct SendOnchainPayload {
     pub address: Address<NetworkUnchecked>,
     pub amount: BitcoinAmountOrAll,
     pub fee_rate_sats_per_vbyte: u64,
