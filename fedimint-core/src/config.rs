@@ -19,7 +19,6 @@ use fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
 use fedimint_logging::LOG_CORE;
 use hex::FromHex;
 use secp256k1::PublicKey;
-use secp256k1_27 as secp256k1;
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};

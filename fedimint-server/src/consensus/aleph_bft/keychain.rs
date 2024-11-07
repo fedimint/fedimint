@@ -2,11 +2,12 @@ use std::collections::BTreeMap;
 use std::io::Write;
 
 use aleph_bft::Keychain as KeychainTrait;
+use bitcoin::hashes::Hash;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::session_outcome::SchnorrSignature;
-use fedimint_core::{secp256k1_27 as secp256k1, BitcoinHash, NumPeersExt, PeerId};
+use fedimint_core::{secp256k1, NumPeersExt, PeerId};
 use secp256k1::hashes::sha256;
-use secp256k1::{schnorr, KeyPair, Message, PublicKey};
+use secp256k1::{schnorr, Keypair, Message, PublicKey};
 
 use crate::config::ServerConfig;
 
@@ -15,7 +16,7 @@ pub struct Keychain {
     identity: PeerId,
     pks: BTreeMap<PeerId, PublicKey>,
     message_tag: sha256::Hash,
-    keypair: KeyPair,
+    keypair: Keypair,
 }
 
 impl Keychain {
@@ -23,10 +24,7 @@ impl Keychain {
         Keychain {
             identity: cfg.local.identity,
             pks: cfg.consensus.broadcast_public_keys.clone(),
-            message_tag: cfg
-                .consensus
-                .broadcast_public_keys
-                .consensus_hash_bitcoin30(),
+            message_tag: cfg.consensus.broadcast_public_keys.consensus_hash(),
             keypair: cfg
                 .private
                 .broadcast_secret_key
@@ -50,7 +48,7 @@ impl Keychain {
 
         let hash = sha256::Hash::from_engine(engine);
 
-        Message::from(hash)
+        Message::from_digest(*hash.as_ref())
     }
 }
 

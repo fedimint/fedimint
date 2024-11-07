@@ -4,12 +4,11 @@ use std::time::Duration;
 use bls12_381::G1Affine;
 use fedimint_client::backup::{ClientBackup, Metadata};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::OperationId;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending;
-use fedimint_core::{sats, secp256k1_27 as secp256k1, Amount, TieredMulti};
+use fedimint_core::{sats, secp256k1, Amount, TieredMulti};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
@@ -23,7 +22,7 @@ use fedimint_mint_common::{MintInput, MintInputV0, Nonce};
 use fedimint_mint_server::MintInit;
 use fedimint_testing::fixtures::{Fixtures, TIMEOUT};
 use futures::StreamExt;
-use secp256k1::KeyPair;
+use secp256k1::Keypair;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
@@ -53,7 +52,7 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
     let fed = fixtures.new_default_fed().await;
     let client = fed.new_client().await;
 
-    let keypair = KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
+    let keypair = Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
 
     let client_input = ClientInput::<MintInput> {
         input: MintInput::V0(MintInputV0 {
@@ -64,7 +63,7 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
             },
         }),
         amount: Amount::from_msats(1024),
-        keys: vec![bitcoin30_to_bitcoin32_keypair(&keypair)],
+        keys: vec![keypair],
     };
 
     let operation_id = OperationId::new_random();
@@ -454,7 +453,6 @@ mod fedimint_migration_tests {
     use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
     use fedimint_client::module::init::recovery::{RecoveryFromHistory, RecoveryFromHistoryCommon};
     use fedimint_client::module::init::DynClientModuleInit;
-    use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
@@ -462,7 +460,7 @@ mod fedimint_migration_tests {
     use fedimint_core::module::DynServerModuleInit;
     use fedimint_core::time::now;
     use fedimint_core::{
-        secp256k1, secp256k1_27, Amount, BitcoinHash, OutPoint, Tiered, TieredMulti, TransactionId,
+        secp256k1, Amount, BitcoinHash, OutPoint, Tiered, TieredMulti, TransactionId,
     };
     use fedimint_logging::TracingSetup;
     use fedimint_mint_client::backup::recovery::{
@@ -489,7 +487,7 @@ mod fedimint_migration_tests {
     use ff::Field;
     use futures::StreamExt;
     use rand::rngs::OsRng;
-    use secp256k1_27::KeyPair;
+    use secp256k1::Keypair;
     use strum::IntoEnumIterator;
     use tbs::{
         blind_message, sign_blinded_msg, AggregatePublicKey, BlindingKey, Message, PublicKeyShare,
@@ -513,7 +511,7 @@ mod fedimint_migration_tests {
         dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))
             .await;
 
-        let (_, pk) = secp256k1_27::generate_keypair(&mut OsRng);
+        let (_, pk) = secp256k1::generate_keypair(&mut OsRng);
         let nonce_key = NonceKey(Nonce(pk));
         dbtx.insert_new_entry(&nonce_key, &()).await;
 
@@ -564,14 +562,14 @@ mod fedimint_migration_tests {
         dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))
             .await;
 
-        let (_, pubkey) = secp256k1_27::generate_keypair(&mut OsRng);
-        let keypair = KeyPair::new_global(&mut OsRng);
+        let (_, pubkey) = secp256k1::generate_keypair(&mut OsRng);
+        let keypair = Keypair::new_global(&mut OsRng);
 
         let sig = Signature(G1Affine::generator());
 
         let spendable_note = SpendableNote {
             signature: sig,
-            spend_key: bitcoin30_to_bitcoin32_keypair(&keypair),
+            spend_key: keypair,
         };
 
         dbtx.insert_new_entry(

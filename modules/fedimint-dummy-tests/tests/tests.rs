@@ -2,9 +2,6 @@ use anyhow::bail;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_secp256k1_pubkey,
-};
 use fedimint_core::config::ClientModuleConfig;
 use fedimint_core::core::{IntoDynInstance, ModuleKind, OperationId};
 use fedimint_core::db::mem_impl::MemDatabase;
@@ -94,7 +91,7 @@ async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Resul
             account: account_kp.public_key(),
         },
         amount: sats(1000),
-        keys: vec![bitcoin30_to_bitcoin32_keypair(&account_kp)],
+        keys: vec![account_kp],
     };
 
     let tx = TransactionBuilder::new()
@@ -123,7 +120,7 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
     let output = ClientOutput {
         output: DummyOutput {
             amount: sats(1000),
-            account: bitcoin32_to_bitcoin30_secp256k1_pubkey(&dummy_module.account()),
+            account: dummy_module.account(),
         },
         amount: sats(1000),
     };
@@ -157,7 +154,7 @@ mod fedimint_migration_tests {
     };
     use fedimint_core::encoding::Encodable;
     use fedimint_core::module::DynServerModuleInit;
-    use fedimint_core::{secp256k1_27 as secp256k1, Amount, BitcoinHash, OutPoint, TransactionId};
+    use fedimint_core::{secp256k1, Amount, BitcoinHash, OutPoint, TransactionId};
     use fedimint_dummy_client::db::{
         DummyClientFundsKeyV0, DummyClientFundsKeyV1, DummyClientNameKey,
     };

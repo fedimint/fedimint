@@ -24,8 +24,8 @@ use fedimint_client::transaction::{
 };
 use fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin30_to_bitcoin32_secp256k1_pubkey,
-    bitcoin32_to_bitcoin30_keypair, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+    bitcoin30_to_bitcoin32_keypair, bitcoin30_to_bitcoin32_schnorr_signature,
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_keypair,
 };
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction};
@@ -263,7 +263,7 @@ impl GatewayClientModule {
                 api: self.gateway.versioned_api.clone(),
                 route_hints,
                 fees,
-                gateway_id: bitcoin32_to_bitcoin30_secp256k1_pubkey(&self.gateway.gateway_id),
+                gateway_id: self.gateway.gateway_id,
                 supports_private_payments: lightning_context.lnrpc.supports_private_payments(),
             },
             ttl,
@@ -417,7 +417,7 @@ impl GatewayClientModule {
         let gateway_id = gateway_keypair.public_key();
         let challenges = self
             .module_api
-            .get_remove_gateway_challenge(gateway_id)
+            .get_remove_gateway_challenge(bitcoin30_to_bitcoin32_secp256k1_pubkey(&gateway_id))
             .await;
 
         let fed_public_key = self.cfg.threshold_pub_key;
@@ -425,13 +425,14 @@ impl GatewayClientModule {
             .into_iter()
             .filter_map(|(peer_id, challenge)| {
                 let msg = create_gateway_remove_message(fed_public_key, peer_id, challenge?);
-                let signature = gateway_keypair.sign_schnorr(msg);
+                let signature =
+                    bitcoin30_to_bitcoin32_schnorr_signature(&gateway_keypair.sign_schnorr(msg));
                 Some((peer_id, signature))
             })
             .collect::<BTreeMap<_, _>>();
 
         let remove_gateway_request = RemoveGatewayRequest {
-            gateway_id,
+            gateway_id: bitcoin30_to_bitcoin32_secp256k1_pubkey(&gateway_id),
             signatures,
         };
 

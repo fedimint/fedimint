@@ -1049,7 +1049,7 @@ impl ClnRpcService {
             .await?
             .call(cln_rpc::Request::GetRoute(
                 model::requests::GetrouteRequest {
-                    id: pruned_invoice.destination,
+                    id: bitcoin32_to_bitcoin30_secp256k1_pubkey(&pruned_invoice.destination),
                     amount_msat: cln_rpc::primitives::Amount::from_msat(
                         pruned_invoice.amount.msats,
                     ),

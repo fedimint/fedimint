@@ -57,7 +57,7 @@ use crate::{
 #[derive(Debug, PartialEq, Eq)]
 pub struct InputMeta {
     pub amount: TransactionItemAmount,
-    pub pub_key: secp256k1_27::PublicKey,
+    pub pub_key: secp256k1::PublicKey,
 }
 
 /// Information about the amount represented by an input or output.

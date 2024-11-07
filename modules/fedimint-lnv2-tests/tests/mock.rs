@@ -2,10 +2,13 @@ use std::time::Duration;
 
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::{SecretKey, SECP256K1};
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_secp256k1_secret_key,
+};
 use fedimint_core::config::FederationId;
-use fedimint_core::secp256k1_27::rand::rngs::OsRng;
-use fedimint_core::secp256k1_27::schnorr::Signature;
-use fedimint_core::secp256k1_27::KeyPair;
+use fedimint_core::secp256k1::rand::rngs::OsRng;
+use fedimint_core::secp256k1::schnorr::Signature;
+use fedimint_core::secp256k1::Keypair;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Amount};
 use fedimint_ln_common::bitcoin;
@@ -32,10 +35,12 @@ pub fn gateway() -> SafeUrl {
     SafeUrl::parse("https://gateway.xyz").expect("Valid Url")
 }
 
-pub fn gateway_keypair() -> KeyPair {
-    SecretKey::from_slice(&GATEWAY_SECRET)
-        .expect("32 bytes; within curve order")
-        .keypair(SECP256K1)
+pub fn gateway_keypair() -> Keypair {
+    bitcoin30_to_bitcoin32_keypair(
+        &SecretKey::from_slice(&GATEWAY_SECRET)
+            .expect("32 bytes; within curve order")
+            .keypair(SECP256K1),
+    )
 }
 
 pub fn payable_invoice() -> Bolt11Invoice {
@@ -72,7 +77,7 @@ pub fn signet_bolt_11_invoice() -> Bolt11Invoice {
 
 #[derive(Debug)]
 pub struct MockGatewayConnection {
-    keypair: KeyPair,
+    keypair: Keypair,
 }
 
 impl Default for MockGatewayConnection {
@@ -126,7 +131,12 @@ impl GatewayConnection for MockGatewayConnection {
             .payment_secret(PaymentSecret([0; 32]))
             .amount_milli_satoshis(invoice_amount.msats)
             .expiry_time(Duration::from_secs(expiry_time as u64))
-            .build_signed(|m| SECP256K1.sign_ecdsa_recoverable(m, &self.keypair.secret_key()))
+            .build_signed(|m| {
+                SECP256K1.sign_ecdsa_recoverable(
+                    m,
+                    &bitcoin32_to_bitcoin30_secp256k1_secret_key(&self.keypair.secret_key()),
+                )
+            })
             .unwrap())
     }
 

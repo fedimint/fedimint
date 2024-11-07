@@ -6,9 +6,7 @@ use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle,
 };
 use fedimint_client::{ClientHandleArc, DynGlobalClientContext};
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_schnorr_signature,
-};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -907,7 +905,7 @@ impl GatewayPayCancelContract {
         );
         let cancel_output = LightningOutput::new_v0_cancel_outgoing(
             contract.contract.contract_id(),
-            bitcoin32_to_bitcoin30_schnorr_signature(&cancel_signature),
+            cancel_signature,
         );
         let client_output = ClientOutput::<LightningOutput> {
             output: cancel_output,

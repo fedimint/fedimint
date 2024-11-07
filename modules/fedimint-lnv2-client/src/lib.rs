@@ -16,9 +16,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_stream::stream;
+use bitcoin::secp256k1;
 use bitcoin30::hashes::{sha256, Hash};
-use bitcoin30::secp256k1;
-use bitcoin30::secp256k1::{ecdh, KeyPair, PublicKey, Scalar, SecretKey};
 use db::GatewayKey;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -32,8 +31,7 @@ use fedimint_client::transaction::{
 };
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin30_to_bitcoin32_secp256k1_pubkey,
-    bitcoin32_to_bitcoin30_keypair, bitcoin32_to_bitcoin30_network,
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_network,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -57,6 +55,7 @@ use fedimint_lnv2_common::{
 };
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Currency};
+use secp256k1::{ecdh, Keypair, PublicKey, Scalar, SecretKey};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
@@ -251,12 +250,9 @@ impl ClientModuleInit for LightningClientInit {
             args.notifier().clone(),
             args.context(),
             args.module_api().clone(),
-            bitcoin32_to_bitcoin30_keypair(
-                &args
-                    .module_root_secret()
-                    .clone()
-                    .to_secp_key(fedimint_core::secp256k1::SECP256K1),
-            ),
+            args.module_root_secret()
+                .clone()
+                .to_secp_key(fedimint_core::secp256k1::SECP256K1),
             self.gateway_conn.clone(),
             args.admin_auth().cloned(),
             args.task_group(),
@@ -281,7 +277,7 @@ pub struct LightningClientModule {
     notifier: ModuleNotifier<LightningClientStateMachines>,
     client_ctx: ClientContext<Self>,
     module_api: DynModuleApi,
-    keypair: KeyPair,
+    keypair: Keypair,
     gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
     #[allow(unused)] // The field is only used by the cli feature
     admin_auth: Option<ApiAuth>,
@@ -328,7 +324,7 @@ impl ClientModule for LightningClientModule {
 }
 
 fn generate_ephemeral_tweak(static_pk: PublicKey) -> ([u8; 32], PublicKey) {
-    let keypair = KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
+    let keypair = Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
 
     let tweak = ecdh::SharedSecret::new(&static_pk, &keypair.secret_key());
 
@@ -343,7 +339,7 @@ impl LightningClientModule {
         notifier: ModuleNotifier<LightningClientStateMachines>,
         client_ctx: ClientContext<Self>,
         module_api: DynModuleApi,
-        keypair: KeyPair,
+        keypair: Keypair,
         gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
         admin_auth: Option<ApiAuth>,
         task_group: &TaskGroup,
@@ -415,13 +411,8 @@ impl LightningClientModule {
                     .routing_info(gateway.clone(), federation_id)
                     .await
                 {
-                    dbtx.insert_entry(
-                        &GatewayKey(bitcoin30_to_bitcoin32_secp256k1_pubkey(
-                            &routing_info.lightning_public_key,
-                        )),
-                        &gateway,
-                    )
-                    .await;
+                    dbtx.insert_entry(&GatewayKey(routing_info.lightning_public_key), &gateway)
+                        .await;
                 }
             }
 
@@ -582,7 +573,7 @@ impl LightningClientModule {
                         gateway_api: gateway_api_clone.clone(),
                         contract: contract_clone.clone(),
                         invoice: LightningInvoice::Bolt11(invoice_clone.clone()),
-                        refund_keypair: bitcoin30_to_bitcoin32_keypair(&refund_keypair),
+                        refund_keypair,
                     },
                     state: SendSMState::Funding,
                 })]
@@ -881,7 +872,7 @@ impl LightningClientModule {
             common: ReceiveSMCommon {
                 operation_id,
                 contract: contract.clone(),
-                claim_keypair: bitcoin30_to_bitcoin32_keypair(&claim_keypair),
+                claim_keypair,
                 agg_decryption_key,
             },
             state: ReceiveSMState::Pending,
@@ -910,7 +901,7 @@ impl LightningClientModule {
     fn recover_contract_keys(
         &self,
         contract: &IncomingContract,
-    ) -> Option<(KeyPair, AggregateDecryptionKey)> {
+    ) -> Option<(Keypair, AggregateDecryptionKey)> {
         let ephemeral_tweak = ecdh::SharedSecret::new(
             &contract.commitment.ephemeral_pk,
             &self.keypair.secret_key(),

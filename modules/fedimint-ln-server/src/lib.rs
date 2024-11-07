@@ -13,7 +13,6 @@ use bitcoin_hashes::{sha256, Hash as BitcoinHash};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_secp256k1_message, bitcoin30_to_bitcoin32_secp256k1_pubkey,
-    bitcoin32_to_bitcoin30_secp256k1_pubkey,
 };
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -601,7 +600,7 @@ impl ServerModule for Lightning {
                 amount: input.amount,
                 fee: self.cfg.consensus.fee_consensus.contract_input,
             },
-            pub_key: bitcoin32_to_bitcoin30_secp256k1_pubkey(&pub_key),
+            pub_key,
         })
     }
 
@@ -1185,12 +1184,7 @@ impl Lightning {
         gateway_id: PublicKey,
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> Option<sha256::Hash> {
-        if let Some(gateway) = dbtx
-            .get_value(&LightningGatewayKey(
-                bitcoin32_to_bitcoin30_secp256k1_pubkey(&gateway_id),
-            ))
-            .await
-        {
+        if let Some(gateway) = dbtx.get_value(&LightningGatewayKey(gateway_id)).await {
             let mut valid_until_bytes = gateway.valid_until.to_bytes();
             let mut challenge_bytes = gateway_id.to_bytes();
             challenge_bytes.append(&mut valid_until_bytes);
@@ -1222,10 +1216,7 @@ impl Lightning {
         // If there is no challenge, the gateway does not exist in the database and
         // there is nothing to do
         let challenge = self
-            .get_gateway_remove_challenge(
-                bitcoin30_to_bitcoin32_secp256k1_pubkey(&gateway_id),
-                dbtx,
-            )
+            .get_gateway_remove_challenge(gateway_id, dbtx)
             .await
             .ok_or(anyhow::anyhow!(
                 "Gateway {gateway_id} is not registered with peer {our_peer_id}"
@@ -1233,7 +1224,10 @@ impl Lightning {
 
         // Verify the supplied schnorr signature is valid
         let msg = create_gateway_remove_message(fed_public_key, our_peer_id, challenge);
-        signature.verify(&msg, &gateway_id.x_only_public_key().0)?;
+        signature.verify(
+            &bitcoin30_to_bitcoin32_secp256k1_message(&msg),
+            &gateway_id.x_only_public_key().0,
+        )?;
 
         dbtx.remove_entry(&LightningGatewayKey(gateway_id)).await;
         info!("Successfully removed gateway: {gateway_id}");
@@ -1262,7 +1256,7 @@ mod tests {
     use fedimint_core::envs::BitcoinRpcConfig;
     use fedimint_core::module::registry::ModuleRegistry;
     use fedimint_core::module::{InputMeta, ServerModuleInit, TransactionItemAmount};
-    use fedimint_core::secp256k1_27::{generate_keypair, PublicKey};
+    use fedimint_core::secp256k1::{generate_keypair, PublicKey};
     use fedimint_core::task::TaskGroup;
     use fedimint_core::{Amount, OutPoint, PeerId, ServerModule, TransactionId};
     use fedimint_ln_common::config::{
@@ -1402,7 +1396,7 @@ mod tests {
                     client_cfg.threshold_pub_key.encrypt(preimage.0),
                 ),
                 decrypted_preimage: DecryptedPreimage::Some(preimage.clone()),
-                gateway_key: bitcoin30_to_bitcoin32_secp256k1_pubkey(&random_pub_key()),
+                gateway_key: random_pub_key(),
             },
             out_point: OutPoint {
                 txid: TransactionId::all_zeros(),
@@ -1435,9 +1429,11 @@ mod tests {
                 amount,
                 fee: Amount { msats: 0 },
             },
-            pub_key: preimage
-                .to_public_key()
-                .expect("should create Schnorr pubkey from preimage"),
+            pub_key: bitcoin30_to_bitcoin32_secp256k1_pubkey(
+                &preimage
+                    .to_public_key()
+                    .expect("should create Schnorr pubkey from preimage"),
+            ),
         };
 
         assert_eq!(processed_input_meta, expected_input_meta);
@@ -1459,9 +1455,9 @@ mod tests {
         let gateway_key = random_pub_key();
         let outgoing_contract = FundedContract::Outgoing(OutgoingContract {
             hash: preimage.consensus_hash_bitcoin30(),
-            gateway_key: bitcoin30_to_bitcoin32_secp256k1_pubkey(&gateway_key),
+            gateway_key,
             timelock: 1_000_000,
-            user_key: bitcoin30_to_bitcoin32_secp256k1_pubkey(&random_pub_key()),
+            user_key: random_pub_key(),
             cancelled: false,
         });
         let contract_id = outgoing_contract.contract_id();

@@ -13,15 +13,14 @@ use fedimint_client::transaction::{
 };
 use fedimint_client::ClientHandleArc;
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_keypair,
-    bitcoin32_to_bitcoin30_secp256k1_pubkey,
+    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_secp256k1_pubkey,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending;
-use fedimint_core::{msats, sats, secp256k1_27 as secp256k1, Amount, OutPoint, TransactionId};
+use fedimint_core::{msats, sats, secp256k1, Amount, OutPoint, TransactionId};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
@@ -59,7 +58,7 @@ use ln_gateway::state_machine::{
     GatewayClientModule, GatewayExtPayStates, GatewayExtReceiveStates, GatewayMeta, Htlc,
 };
 use ln_gateway::Gateway;
-use secp256k1::{KeyPair, PublicKey};
+use secp256k1::{Keypair, PublicKey};
 use tpe::G1Affine;
 use tracing::info;
 
@@ -68,7 +67,9 @@ async fn user_pay_invoice(
     invoice: Bolt11Invoice,
     gateway_id: &PublicKey,
 ) -> anyhow::Result<OutgoingLightningPayment> {
-    let gateway = ln_module.select_gateway(gateway_id).await;
+    let gateway = ln_module
+        .select_gateway(&bitcoin32_to_bitcoin30_secp256k1_pubkey(gateway_id))
+        .await;
     ln_module.pay_bolt11_invoice(gateway, invoice, ()).await
 }
 
@@ -167,7 +168,9 @@ async fn gateway_pay_valid_invoice(
     gateway_id: &PublicKey,
 ) -> anyhow::Result<()> {
     let user_lightning_module = &user_client.get_first_module::<LightningClientModule>()?;
-    let gateway = user_lightning_module.select_gateway(gateway_id).await;
+    let gateway = user_lightning_module
+        .select_gateway(&bitcoin32_to_bitcoin30_secp256k1_pubkey(gateway_id))
+        .await;
 
     // User client pays test invoice
     let OutgoingLightningPayment {
@@ -236,7 +239,7 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
                 invoice,
                 &user_client,
                 &gateway_client,
-                &bitcoin32_to_bitcoin30_secp256k1_pubkey(&gateway.gateway_id()),
+                &gateway.gateway_id(),
             )
             .await?;
 
@@ -370,7 +373,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
                     .get_first_module::<LightningClientModule>()
                     .unwrap(),
                 invoice.clone(),
-                &bitcoin32_to_bitcoin30_secp256k1_pubkey(&gateway_id),
+                &gateway_id,
             )
             .await?;
 
@@ -448,12 +451,7 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
                 payment_type,
                 contract_id,
                 fee: _,
-            } = user_pay_invoice(
-                &lightning_module,
-                invoice.clone(),
-                &bitcoin32_to_bitcoin30_secp256k1_pubkey(&gateway_id),
-            )
-            .await?;
+            } = user_pay_invoice(&lightning_module, invoice.clone(), &gateway_id).await?;
             match payment_type {
                 PayType::Lightning(pay_op) => {
                     let mut pay_sub = lightning_module
@@ -782,12 +780,7 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
                 payment_type,
                 contract_id,
                 fee: _,
-            } = user_pay_invoice(
-                &lightning_module,
-                invoice.clone(),
-                &bitcoin32_to_bitcoin30_secp256k1_pubkey(&gateway_id),
-            )
-            .await?;
+            } = user_pay_invoice(&lightning_module, invoice.clone(), &gateway_id).await?;
             match payment_type {
                 PayType::Lightning(pay_op) => {
                     let mut pay_sub = lightning_module
@@ -901,13 +894,8 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
 
         // A client pays invoice in federation 1
         let gateway_client = gateway.select_client(id1).await?.into_value();
-        gateway_pay_valid_invoice(
-            invoice,
-            &client1,
-            &gateway_client,
-            &bitcoin32_to_bitcoin30_secp256k1_pubkey(&gateway.gateway_id()),
-        )
-        .await?;
+        gateway_pay_valid_invoice(invoice, &client1, &gateway_client, &gateway.gateway_id())
+            .await?;
 
         // A client receives cash via swap in federation 2
         assert_eq!(receive_sub.ok().await?, LnReceiveState::Created);
@@ -1011,12 +999,12 @@ async fn lnv2_incoming_contract_with_invalid_preimage_is_refunded() -> anyhow::R
         PaymentImage::Hash([0_u8; 32].consensus_hash_bitcoin30()),
         Amount::from_sats(1000),
         u64::MAX,
-        KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
-        bitcoin32_to_bitcoin30_keypair(
-            &client.get_first_module::<GatewayClientModuleV2>()?.keypair,
-        )
-        .public_key(),
-        KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+        client
+            .get_first_module::<GatewayClientModuleV2>()?
+            .keypair
+            .public_key(),
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
     );
 
     assert!(contract.verify());
@@ -1055,12 +1043,12 @@ async fn lnv2_expired_incoming_contract_is_rejected() -> anyhow::Result<()> {
         PaymentImage::Hash([0_u8; 32].consensus_hash_bitcoin30()),
         Amount::from_sats(1000),
         0, // this incoming contract expired on the 1st of January 1970
-        KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
-        bitcoin32_to_bitcoin30_keypair(
-            &client.get_first_module::<GatewayClientModuleV2>()?.keypair,
-        )
-        .public_key(),
-        KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+        client
+            .get_first_module::<GatewayClientModuleV2>()?
+            .keypair
+            .public_key(),
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
     );
 
     assert!(contract.verify());
@@ -1099,12 +1087,12 @@ async fn lnv2_malleated_incoming_contract_is_rejected() -> anyhow::Result<()> {
         PaymentImage::Hash([0_u8; 32].consensus_hash_bitcoin30()),
         Amount::from_sats(1000),
         u64::MAX,
-        KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
-        bitcoin32_to_bitcoin30_keypair(
-            &client.get_first_module::<GatewayClientModuleV2>()?.keypair,
-        )
-        .public_key(),
-        KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+        client
+            .get_first_module::<GatewayClientModuleV2>()?
+            .keypair
+            .public_key(),
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
     );
 
     assert!(contract.verify());

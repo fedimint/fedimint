@@ -2,8 +2,9 @@ use std::{ffi, iter};
 
 use anyhow::Context as _;
 use clap::Parser;
+use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 use fedimint_core::core::OperationId;
-use fedimint_core::secp256k1_27::PublicKey;
+use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::Amount;
 use lightning_invoice::{Bolt11InvoiceDescription, Description};
 use serde::{Deserialize, Serialize};
@@ -66,7 +67,12 @@ pub(crate) async fn handle_cli_command(
             gateway_id,
             force_internal,
         } => {
-            let ln_gateway = module.get_gateway(gateway_id, force_internal).await?;
+            let ln_gateway = module
+                .get_gateway(
+                    gateway_id.map(|pk| bitcoin32_to_bitcoin30_secp256k1_pubkey(&pk)),
+                    force_internal,
+                )
+                .await?;
 
             let desc = Description::new(description)?;
             let (operation_id, invoice, _) = module
@@ -94,7 +100,12 @@ pub(crate) async fn handle_cli_command(
         } => {
             let bolt11 = crate::get_invoice(&payment_info, amount, lnurl_comment).await?;
             info!("Paying invoice: {bolt11}");
-            let ln_gateway = module.get_gateway(gateway_id, force_internal).await?;
+            let ln_gateway = module
+                .get_gateway(
+                    gateway_id.map(|pk| bitcoin32_to_bitcoin30_secp256k1_pubkey(&pk)),
+                    force_internal,
+                )
+                .await?;
 
             let OutgoingLightningPayment {
                 payment_type,

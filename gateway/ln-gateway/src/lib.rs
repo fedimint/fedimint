@@ -49,7 +49,7 @@ use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_keypair,
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+    bitcoin30_to_bitcoin32_secp256k1_pubkey,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{
@@ -1963,10 +1963,8 @@ impl Gateway {
             .public_key_v2(federation_id)
             .await
             .map(|module_public_key| RoutingInfo {
-                lightning_public_key: bitcoin32_to_bitcoin30_secp256k1_pubkey(
-                    &context.lightning_public_key,
-                ),
-                module_public_key: bitcoin32_to_bitcoin30_secp256k1_pubkey(&module_public_key),
+                lightning_public_key: context.lightning_public_key,
+                module_public_key,
                 send_fee_default: PaymentFee::SEND_FEE_LIMIT,
                 // The base fee ensures that the gateway does not loose sats sending the payment due
                 // to fees paid on the transaction claiming the outgoing contract or

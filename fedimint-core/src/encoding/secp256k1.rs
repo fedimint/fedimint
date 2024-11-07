@@ -21,25 +21,6 @@ impl Decodable for secp256k1::ecdsa::Signature {
     }
 }
 
-// TODO(#5200): Remove this implementation in favor of the `secp256k1` v0.29
-// implementation below.
-impl Encodable for secp256k1_27::PublicKey {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        self.serialize().consensus_encode(writer)
-    }
-}
-
-// TODO(#5200): Remove this implementation in favor of the `secp256k1` v0.29
-// implementation below.
-impl Decodable for secp256k1_27::PublicKey {
-    fn consensus_decode<D: std::io::Read>(
-        d: &mut D,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        Self::from_slice(&<[u8; 33]>::consensus_decode(d, modules)?).map_err(DecodeError::from_err)
-    }
-}
-
 impl Encodable for secp256k1::PublicKey {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         self.serialize().consensus_encode(writer)

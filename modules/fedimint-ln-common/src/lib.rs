@@ -30,20 +30,19 @@ use bitcoin30::hashes::sha256;
 use config::LightningClientConfig;
 use fedimint_client::oplog::OperationLogEntry;
 use fedimint_client::ClientHandleArc;
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_schnorr_signature;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_pubkey;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
+use fedimint_core::secp256k1_27::Message;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
-    extensible_associated_module_type, plugin_types_trait_impl_common, secp256k1_27 as secp256k1,
-    Amount, PeerId,
+    extensible_associated_module_type, plugin_types_trait_impl_common, secp256k1, Amount, PeerId,
 };
 use lightning::util::ser::{WithoutLength, Writeable};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use secp256k1::schnorr::Signature;
-use secp256k1::Message;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use threshold_crypto::PublicKey;
@@ -120,7 +119,7 @@ impl LightningOutput {
     ) -> LightningOutput {
         LightningOutput::V0(LightningOutputV0::CancelOutgoing {
             contract,
-            gateway_signature: bitcoin30_to_bitcoin32_schnorr_signature(&gateway_signature),
+            gateway_signature,
         })
     }
 }
@@ -628,7 +627,7 @@ pub enum LightningOutputError {
     #[error("The incoming LN account requires more funding (need {0} got {1})")]
     InsufficientIncomingFunding(Amount, Amount),
     #[error("No offer found for payment hash {0}")]
-    NoOffer(secp256k1::hashes::sha256::Hash),
+    NoOffer(fedimint_core::secp256k1_27::hashes::sha256::Hash),
     #[error("Only outgoing contracts support cancellation")]
     NotOutgoingContract,
     #[error("Cancellation request wasn't properly signed")]
@@ -691,10 +690,12 @@ impl PrunedInvoice {
 
         PrunedInvoice {
             amount,
-            destination: invoice
-                .payee_pub_key()
-                .copied()
-                .unwrap_or_else(|| invoice.recover_payee_pub_key()),
+            destination: bitcoin30_to_bitcoin32_secp256k1_pubkey(
+                &invoice
+                    .payee_pub_key()
+                    .copied()
+                    .unwrap_or_else(|| invoice.recover_payee_pub_key()),
+            ),
             destination_features,
             payment_hash: *invoice.payment_hash(),
             payment_secret: invoice.payment_secret().0,

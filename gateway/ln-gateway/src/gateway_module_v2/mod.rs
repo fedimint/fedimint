@@ -20,7 +20,7 @@ use fedimint_client::transaction::{
 };
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_keypair,
+    bitcoin32_to_bitcoin30_schnorr_signature, bitcoin32_to_bitcoin30_secp256k1_pubkey,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -260,8 +260,7 @@ impl GatewayClientModuleV2 {
         // programming error we do not have to enable cancellation and can check
         // them before we start the state machine.
         ensure!(
-            bitcoin30_to_bitcoin32_secp256k1_pubkey(&payload.contract.claim_pk)
-                == self.keypair.public_key(),
+            payload.contract.claim_pk == self.keypair.public_key(),
             "The outgoing contract is keyed to another gateway"
         );
 
@@ -269,12 +268,14 @@ impl GatewayClientModuleV2 {
         ensure!(
             secp256k1::SECP256K1
                 .verify_schnorr(
-                    &payload.auth,
+                    &bitcoin32_to_bitcoin30_schnorr_signature(&payload.auth),
                     &payload
                         .invoice
                         .consensus_hash_bitcoin30::<sha256::Hash>()
                         .into(),
-                    &payload.contract.refund_pk.x_only_public_key().0,
+                    &bitcoin32_to_bitcoin30_secp256k1_pubkey(&payload.contract.refund_pk)
+                        .x_only_public_key()
+                        .0,
                 )
                 .is_ok(),
             "Invalid auth signature for the invoice data"
@@ -361,12 +362,13 @@ impl GatewayClientModuleV2 {
                     SendSMState::Cancelled(cancelled) => {
                         warn!("Outgoing lightning payment is cancelled {:?}", cancelled);
 
-                        let signature = bitcoin32_to_bitcoin30_keypair(&self.keypair)
+                        let signature = self
+                            .keypair
                             .sign_schnorr(state.common.contract.forfeit_message());
 
                         assert!(state.common.contract.verify_forfeit_signature(&signature));
 
-                        return Err(signature);
+                        return Err(bitcoin32_to_bitcoin30_schnorr_signature(&signature));
                     }
                 }
             }

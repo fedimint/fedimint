@@ -21,9 +21,6 @@ use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
     ClientOutputSM, TransactionBuilder,
 };
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_secp256k1_pubkey,
-};
 use fedimint_core::core::{Decoder, ModuleKind, OperationId};
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
@@ -132,7 +129,7 @@ impl ClientModule for DummyClientModule {
                 let input = ClientInput {
                     input: DummyInput {
                         amount: missing_input_amount,
-                        account: bitcoin32_to_bitcoin30_secp256k1_pubkey(&self.key.public_key()),
+                        account: self.key.public_key(),
                     },
                     amount: missing_input_amount,
                     keys: vec![self.key],
@@ -161,7 +158,7 @@ impl ClientModule for DummyClientModule {
                 let output = ClientOutput {
                     output: DummyOutput {
                         amount: missing_output_amount,
-                        account: bitcoin32_to_bitcoin30_secp256k1_pubkey(&self.key.public_key()),
+                        account: self.key.public_key(),
                     },
                     amount: missing_output_amount,
                 };
@@ -246,7 +243,7 @@ impl DummyClientModule {
         let input = ClientInput {
             input: DummyInput {
                 amount,
-                account: bitcoin32_to_bitcoin30_secp256k1_pubkey(&account_kp.public_key()),
+                account: account_kp.public_key(),
             },
             amount,
             keys: vec![account_kp],
@@ -275,18 +272,14 @@ impl DummyClientModule {
 
     /// Request the federation prints money for us
     pub async fn print_money(&self, amount: Amount) -> anyhow::Result<(OperationId, OutPoint)> {
-        self.print_using_account(amount, bitcoin30_to_bitcoin32_keypair(&fed_key_pair()))
-            .await
+        self.print_using_account(amount, fed_key_pair()).await
     }
 
     /// Use a broken printer to print a liability instead of money
     /// If the federation is honest, should always fail
     pub async fn print_liability(&self, amount: Amount) -> anyhow::Result<(OperationId, OutPoint)> {
-        self.print_using_account(
-            amount,
-            bitcoin30_to_bitcoin32_keypair(&broken_fed_key_pair()),
-        )
-        .await
+        self.print_using_account(amount, broken_fed_key_pair())
+            .await
     }
 
     /// Send money to another user
@@ -297,10 +290,7 @@ impl DummyClientModule {
 
         // Create output using another account
         let output = ClientOutput {
-            output: DummyOutput {
-                amount,
-                account: bitcoin32_to_bitcoin30_secp256k1_pubkey(&account),
-            },
+            output: DummyOutput { amount, account },
             amount,
         };
 
@@ -335,7 +325,7 @@ impl DummyClientModule {
             .await_output_outcome(outpoint, Duration::from_secs(10), &self.decoder())
             .await?;
 
-        if account != bitcoin32_to_bitcoin30_secp256k1_pubkey(&self.key.public_key()) {
+        if account != self.key.public_key() {
             return Err(format_err!("Wrong account id"));
         }
 

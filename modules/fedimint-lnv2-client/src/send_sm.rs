@@ -4,9 +4,6 @@ use bitcoin::hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_schnorr_signature, bitcoin32_to_bitcoin30_schnorr_signature,
-};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -171,19 +168,15 @@ impl SendStateMachine {
                     federation_id,
                     contract.clone(),
                     invoice.clone(),
-                    bitcoin32_to_bitcoin30_schnorr_signature(&refund_keypair.sign_schnorr(
-                        secp256k1::Message::from_digest(
-                            *invoice.consensus_hash::<sha256::Hash>().as_ref(),
-                        ),
+                    refund_keypair.sign_schnorr(secp256k1::Message::from_digest(
+                        *invoice.consensus_hash::<sha256::Hash>().as_ref(),
                     )),
                 )
                 .await
             {
                 Ok(send_result) => {
                     if contract.verify_gateway_response(&send_result) {
-                        return send_result.map_err(|signature| {
-                            bitcoin30_to_bitcoin32_schnorr_signature(&signature)
-                        });
+                        return send_result;
                     }
 
                     error!(

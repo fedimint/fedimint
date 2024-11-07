@@ -3,7 +3,6 @@ use std::time::Duration;
 
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::DynGlobalApi;
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_secret_key;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::net::api_announcement::{
@@ -108,11 +107,8 @@ async fn insert_signed_api_announcement_if_not_present(db: &Database, cfg: &Serv
         0,
     );
     let ctx = secp256k1::Secp256k1::new();
-    let signed_announcement = api_announcement.sign(
-        &ctx,
-        &bitcoin30_to_bitcoin32_secp256k1_secret_key(&cfg.private.broadcast_secret_key)
-            .keypair(&ctx),
-    );
+    let signed_announcement =
+        api_announcement.sign(&ctx, &cfg.private.broadcast_secret_key.keypair(&ctx));
 
     dbtx.insert_entry(
         &ApiAnnouncementKey(cfg.local.identity),

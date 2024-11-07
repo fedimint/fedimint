@@ -10,7 +10,9 @@ use std::time::Duration;
 use anyhow::{anyhow, ensure, Context};
 use bls12_381::{G1Projective, Scalar};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
-use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_schnorr_signature;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_secp256k1_pubkey,
+};
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -417,9 +419,7 @@ impl ServerModule for Lightning {
                         contract.refund_pk
                     }
                     OutgoingWitness::Cancel(forfeit_signature) => {
-                        if !contract.verify_forfeit_signature(
-                            &bitcoin32_to_bitcoin30_schnorr_signature(forfeit_signature),
-                        ) {
+                        if !contract.verify_forfeit_signature(forfeit_signature) {
                             return Err(LightningInputError::InvalidForfeitSignature);
                         }
 
@@ -427,7 +427,10 @@ impl ServerModule for Lightning {
                     }
                 };
 
-                (pub_key, contract.amount)
+                (
+                    bitcoin32_to_bitcoin30_secp256k1_pubkey(&pub_key),
+                    contract.amount,
+                )
             }
             LightningInputV0::Incoming(contract_id, agg_decryption_key) => {
                 let contract = dbtx
@@ -446,7 +449,10 @@ impl ServerModule for Lightning {
                     None => contract.commitment.refund_pk,
                 };
 
-                (pub_key, contract.commitment.amount)
+                (
+                    bitcoin32_to_bitcoin30_secp256k1_pubkey(&pub_key),
+                    contract.commitment.amount,
+                )
             }
         };
 
@@ -455,7 +461,7 @@ impl ServerModule for Lightning {
                 amount,
                 fee: self.cfg.consensus.fee_consensus.fee(amount),
             },
-            pub_key,
+            pub_key: bitcoin30_to_bitcoin32_secp256k1_pubkey(&pub_key),
         })
     }
 

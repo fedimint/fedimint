@@ -9,8 +9,7 @@ use bitcoin::key::Keypair;
 use bitcoin::secp256k1::{self, PublicKey, SecretKey};
 use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_secp256k1_message, bitcoin32_to_bitcoin30_recoverable_signature,
-    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_secp256k1_secret_key,
-    bitcoin32_to_bitcoin30_sha256_hash,
+    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_sha256_hash,
 };
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::BoxStream;
@@ -231,7 +230,7 @@ impl ILnRpcClient for FakeLightningTest {
         &self,
         create_invoice_request: CreateInvoiceRequest,
     ) -> Result<CreateInvoiceResponse, LightningRpcError> {
-        let ctx = fedimint_core::secp256k1_27::Secp256k1::new();
+        let ctx = fedimint_core::secp256k1::Secp256k1::new();
 
         let invoice = match create_invoice_request.payment_hash {
             Some(payment_hash) => InvoiceBuilder::new(Currency::Regtest)
@@ -245,10 +244,10 @@ impl ILnRpcClient for FakeLightningTest {
                     create_invoice_request.expiry_secs,
                 )))
                 .build_signed(|m| {
-                    ctx.sign_ecdsa_recoverable(
-                        m,
-                        &bitcoin32_to_bitcoin30_secp256k1_secret_key(&self.gateway_node_sec_key),
-                    )
+                    bitcoin32_to_bitcoin30_recoverable_signature(&ctx.sign_ecdsa_recoverable(
+                        &bitcoin30_to_bitcoin32_secp256k1_message(m),
+                        &self.gateway_node_sec_key,
+                    ))
                 })
                 .unwrap(),
             None => {

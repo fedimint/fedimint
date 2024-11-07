@@ -9,7 +9,7 @@ use config::DummyClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-use fedimint_core::secp256k1_27::{KeyPair, PublicKey, Secp256k1};
+use fedimint_core::secp256k1::{Keypair, PublicKey, Secp256k1};
 use fedimint_core::{plugin_types_trait_impl_common, Amount};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -128,8 +128,8 @@ pub fn fed_public_key() -> PublicKey {
     fed_key_pair().public_key()
 }
 
-pub fn fed_key_pair() -> KeyPair {
-    KeyPair::from_seckey_slice(&Secp256k1::new(), FED_SECRET_PHRASE.as_bytes()).expect("32 bytes")
+pub fn fed_key_pair() -> Keypair {
+    Keypair::from_seckey_slice(&Secp256k1::new(), FED_SECRET_PHRASE.as_bytes()).expect("32 bytes")
 }
 
 pub fn broken_fed_public_key() -> PublicKey {
@@ -137,7 +137,7 @@ pub fn broken_fed_public_key() -> PublicKey {
 }
 
 // Like fed, but with a broken accounting
-pub fn broken_fed_key_pair() -> KeyPair {
-    KeyPair::from_seckey_slice(&Secp256k1::new(), BROKEN_FED_SECRET_PHRASE.as_bytes())
+pub fn broken_fed_key_pair() -> Keypair {
+    Keypair::from_seckey_slice(&Secp256k1::new(), BROKEN_FED_SECRET_PHRASE.as_bytes())
         .expect("32 bytes")
 }

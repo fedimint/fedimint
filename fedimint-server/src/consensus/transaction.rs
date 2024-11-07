@@ -1,4 +1,3 @@
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_pubkey;
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::TransactionItemAmount;
@@ -52,7 +51,7 @@ pub async fn process_transaction_with_dbtx(
             .map_err(TransactionError::Input)?;
 
         funding_verifier.add_input(meta.amount);
-        public_keys.push(bitcoin30_to_bitcoin32_secp256k1_pubkey(&meta.pub_key));
+        public_keys.push(meta.pub_key);
     }
 
     transaction.validate_signatures(&public_keys)?;

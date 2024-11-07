@@ -400,7 +400,10 @@ impl LightningReceiveFunded {
 #[cfg(test)]
 mod tests {
     use bitcoin30::hashes::{sha256, Hash};
-    use fedimint_core::secp256k1_27::{Secp256k1, SecretKey};
+    use fedimint_core::bitcoin_migration::{
+        bitcoin30_to_bitcoin32_secp256k1_message, bitcoin32_to_bitcoin30_recoverable_signature,
+    };
+    use fedimint_core::secp256k1::{Secp256k1, SecretKey};
     use lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
 
     use super::*;
@@ -446,6 +449,11 @@ mod tests {
             .payment_secret(PaymentSecret([0; 32]))
             .amount_milli_satoshis(1000)
             .expiry_time(expiry_time)
-            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &secret_key))?)
+            .build_signed(|m| {
+                bitcoin32_to_bitcoin30_recoverable_signature(&ctx.sign_ecdsa_recoverable(
+                    &bitcoin30_to_bitcoin32_secp256k1_message(m),
+                    &secret_key,
+                ))
+            })?)
     }
 }

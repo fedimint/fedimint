@@ -617,7 +617,7 @@ mod fedimint_migration_tests {
     use fedimint_client::module::init::DynClientModuleInit;
     use fedimint_core::bitcoin_migration::{
         bitcoin30_to_bitcoin32_secp256k1_message, bitcoin32_to_bitcoin30_recoverable_signature,
-        bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_sha256_hash,
+        bitcoin32_to_bitcoin30_sha256_hash,
     };
     use fedimint_core::config::FederationId;
     use fedimint_core::core::OperationId;
@@ -784,17 +784,14 @@ mod fedimint_migration_tests {
                     base_msat: 0,
                     proportional_millionths: 0,
                 },
-                gateway_id: bitcoin32_to_bitcoin30_secp256k1_pubkey(&pk),
+                gateway_id: pk,
                 supports_private_payments: false,
             },
             valid_until: fedimint_core::time::now(),
             vetted: false,
         };
-        dbtx.insert_new_entry(
-            &LightningGatewayKey(bitcoin32_to_bitcoin30_secp256k1_pubkey(&pk)),
-            &gateway,
-        )
-        .await;
+        dbtx.insert_new_entry(&LightningGatewayKey(pk), &gateway)
+            .await;
 
         dbtx.insert_new_entry(&BlockCountVoteKey(PeerId::from(0)), &1)
             .await;
@@ -852,7 +849,7 @@ mod fedimint_migration_tests {
                 base_msat: 10,
                 proportional_millionths: 1000,
             },
-            gateway_id: bitcoin32_to_bitcoin30_secp256k1_pubkey(&pk),
+            gateway_id: pk,
             supports_private_payments: false,
         };
 
@@ -1036,7 +1033,7 @@ mod fedimint_migration_tests {
                 base_msat: 10,
                 proportional_millionths: 1000,
             },
-            gateway_id: bitcoin32_to_bitcoin30_secp256k1_pubkey(&pk),
+            gateway_id: pk,
             supports_private_payments: false,
         }
         .consensus_encode(&mut funded_state)

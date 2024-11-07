@@ -5,9 +5,6 @@ use std::time::Duration;
 
 use anyhow::{bail, format_err};
 use fedimint_core::admin_client::ConfigGenParamsConsensus;
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_secp256k1_pubkey,
-};
 pub use fedimint_core::config::{
     serde_binary_human_readable, ClientConfig, DkgError, DkgPeerMsg, DkgResult, FederationId,
     GlobalClientConfig, JsonWithKind, ModuleInitRegistry, PeerUrl, ServerModuleConfig,
@@ -22,7 +19,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
 use fedimint_core::task::{timeout, Cancelled, Elapsed, TaskGroup};
-use fedimint_core::{secp256k1_27 as secp256k1, timing, PeerId};
+use fedimint_core::{secp256k1, timing, PeerId};
 use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 use futures::future::join_all;
 use rand::rngs::OsRng;
@@ -462,10 +459,7 @@ impl ServerConfig {
         let (broadcast_sk, broadcast_pk) = secp256k1::generate_keypair(&mut OsRng);
 
         let broadcast_public_keys = broadcast_keys_exchange
-            .exchange_pubkeys(
-                "broadcast".to_string(),
-                bitcoin30_to_bitcoin32_secp256k1_pubkey(&broadcast_pk),
-            )
+            .exchange_pubkeys("broadcast".to_string(), broadcast_pk)
             .await?;
 
         // in case we are running by ourselves, avoid DKG
@@ -562,10 +556,7 @@ impl ServerConfig {
         let server = ServerConfig::from(
             params.clone(),
             *our_id,
-            broadcast_public_keys
-                .into_iter()
-                .map(|(k, v)| (k, bitcoin32_to_bitcoin30_secp256k1_pubkey(&v)))
-                .collect(),
+            broadcast_public_keys,
             broadcast_sk,
             module_cfgs,
             code_version_str,
