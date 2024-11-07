@@ -1259,7 +1259,7 @@
         .host_str()
         .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Missing host in {url}"</span>))<span class="question-mark">?</span>;
     <span class="kw">let </span>port = url
-        .port()
+        .port_or_known_default()
         .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Missing port in {url}"</span>))<span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">"{host}:{port}"</span>))
