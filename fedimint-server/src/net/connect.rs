@@ -237,7 +237,7 @@ pub fn parse_host_port(url: &SafeUrl) -> anyhow::Result<String> {
         .host_str()
         .ok_or_else(|| format_err!("Missing host in {url}"))?;
     let port = url
-        .port()
+        .port_or_known_default()
         .ok_or_else(|| format_err!("Missing port in {url}"))?;
 
     Ok(format!("{host}:{port}"))
