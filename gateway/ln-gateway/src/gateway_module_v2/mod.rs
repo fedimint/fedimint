@@ -8,7 +8,8 @@ use std::fmt;
 use std::sync::Arc;
 
 use anyhow::{anyhow, ensure};
-use bitcoin_hashes::sha256;
+use bitcoin::hashes::sha256;
+use bitcoin::secp256k1::Message;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
@@ -19,9 +20,6 @@ use fedimint_client::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-use fedimint_core::bitcoin_migration::{
-    bitcoin32_to_bitcoin30_schnorr_signature, bitcoin32_to_bitcoin30_secp256k1_pubkey,
-};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::DatabaseTransaction;
@@ -30,9 +28,7 @@ use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::secp256k1::Keypair;
-use fedimint_core::{
-    apply, async_trait_maybe_send, secp256k1_27 as secp256k1, Amount, OutPoint, PeerId,
-};
+use fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint, PeerId};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::SendPaymentPayload;
@@ -268,14 +264,11 @@ impl GatewayClientModuleV2 {
         ensure!(
             secp256k1::SECP256K1
                 .verify_schnorr(
-                    &bitcoin32_to_bitcoin30_schnorr_signature(&payload.auth),
-                    &payload
-                        .invoice
-                        .consensus_hash_bitcoin30::<sha256::Hash>()
-                        .into(),
-                    &bitcoin32_to_bitcoin30_secp256k1_pubkey(&payload.contract.refund_pk)
-                        .x_only_public_key()
-                        .0,
+                    &payload.auth,
+                    &Message::from_digest(
+                        *payload.invoice.consensus_hash::<sha256::Hash>().as_ref()
+                    ),
+                    &payload.contract.refund_pk.x_only_public_key().0,
                 )
                 .is_ok(),
             "Invalid auth signature for the invoice data"
@@ -368,7 +361,7 @@ impl GatewayClientModuleV2 {
 
                         assert!(state.common.contract.verify_forfeit_signature(&signature));
 
-                        return Err(bitcoin32_to_bitcoin30_schnorr_signature(&signature));
+                        return Err(signature);
                     }
                 }
             }

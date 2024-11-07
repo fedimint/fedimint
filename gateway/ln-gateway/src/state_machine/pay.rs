@@ -6,7 +6,6 @@ use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle,
 };
 use fedimint_client::{ClientHandleArc, DynGlobalClientContext};
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -378,7 +377,7 @@ impl GatewayPayInvoice {
 
             let payment_parameters = Self::validate_outgoing_account(
                 &outgoing_contract_account,
-                bitcoin30_to_bitcoin32_keypair(&context.redeem_key),
+                context.redeem_key,
                 context.timelock_delta,
                 consensus_block_count.unwrap(),
                 &payment_data,
@@ -714,7 +713,7 @@ impl GatewayPayClaimOutgoingContract {
         let client_input = ClientInput::<LightningInput> {
             input: claim_input,
             amount: contract.amount,
-            keys: vec![bitcoin30_to_bitcoin32_keypair(&context.redeem_key)],
+            keys: vec![context.redeem_key],
         };
 
         let out_points = global_context
@@ -901,7 +900,7 @@ impl GatewayPayCancelContract {
             &bitcoin::secp256k1::Message::from_digest(
                 *contract.contract.cancellation_message().as_ref(),
             ),
-            &bitcoin30_to_bitcoin32_keypair(&context.redeem_key),
+            &context.redeem_key,
         );
         let cancel_output = LightningOutput::new_v0_cancel_outgoing(
             contract.contract.contract_id(),

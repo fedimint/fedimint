@@ -7,7 +7,7 @@ use bitcoin30::hashes::sha256::Hash as Sha256;
 use bitcoin30::hashes::{hash_newtype, Hash as BitcoinHash};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::{secp256k1_27 as secp256k1, OutPoint};
+use fedimint_core::{secp256k1, OutPoint};
 use serde::{Deserialize, Serialize};
 
 /// Anything representing a contract which thus has an associated [`ContractId`]
