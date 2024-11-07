@@ -14,11 +14,12 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::secp256k1::{Keypair, Secp256k1, Signing};
 use fedimint_core::task::sleep;
-use fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered};
+use fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 use fedimint_mint_common::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_mint_common::{BlindNonce, MintOutputOutcome, Nonce};
+use rayon::iter::{IndexedParallelIterator, IntoParallelIterator as _, ParallelIterator as _};
 use serde::{Deserialize, Serialize};
 use tbs::{
     aggregate_signature_shares, blind_message, unblind_signature, AggregatePublicKey,
@@ -67,12 +68,27 @@ pub enum MintOutputStates {
     /// The issuance was completed successfully and the e-cash notes added to
     /// our wallet
     Succeeded(MintOutputStatesSucceeded),
+    /// Issuance request was created, we are waiting for blind signatures
+    CreatedMulti(MintOutputStatesCreatedMulti),
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-pub struct MintOutputCommon {
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct MintOutputCommonV1 {
     pub(crate) operation_id: OperationId,
     pub(crate) out_point: OutPoint,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct MintOutputCommon {
+    pub(crate) operation_id: OperationId,
+    pub(crate) txid: TransactionId,
+    pub(crate) out_idxs: std::ops::RangeInclusive<u64>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct MintOutputStateMachineV1 {
+    pub(crate) common: MintOutputCommonV1,
+    pub(crate) state: MintOutputStates,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -91,7 +107,10 @@ impl State for MintOutputStateMachine {
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
             MintOutputStates::Created(created) => {
-                created.transitions(context, global_context, self.common)
+                created.transitions(context, global_context, &self.common)
+            }
+            MintOutputStates::CreatedMulti(created) => {
+                created.transitions(context, global_context, &self.common)
             }
             MintOutputStates::Aborted(_)
             | MintOutputStates::Failed(_)
@@ -119,7 +138,7 @@ impl MintOutputStatesCreated {
         // TODO: make cheaper to clone (Arc?)
         context: &MintClientContext,
         global_context: &DynGlobalClientContext,
-        common: MintOutputCommon,
+        common: &MintOutputCommon,
     ) -> Vec<StateTransition<MintOutputStateMachine>> {
         let tbs_pks = context.tbs_pks.clone();
         let client_ctx = context.client_ctx.clone();
@@ -127,14 +146,14 @@ impl MintOutputStatesCreated {
         vec![
             // Check if transaction was rejected
             StateTransition::new(
-                Self::await_tx_rejected(global_context.clone(), common),
+                Self::await_tx_rejected(global_context.clone(), common.clone()),
                 |_dbtx, (), state| Box::pin(async move { Self::transition_tx_rejected(&state) }),
             ),
             // Check for output outcome
             StateTransition::new(
                 Self::await_outcome_ready(
                     global_context.clone(),
-                    common,
+                    common.clone(),
                     context.mint_decoder.clone(),
                     self.amount,
                     self.issuance_request.blinded_message(),
@@ -154,11 +173,7 @@ impl MintOutputStatesCreated {
     }
 
     async fn await_tx_rejected(global_context: DynGlobalClientContext, common: MintOutputCommon) {
-        if global_context
-            .await_tx_accepted(common.out_point.txid)
-            .await
-            .is_err()
-        {
+        if global_context.await_tx_accepted(common.txid).await.is_err() {
             return;
         }
         std::future::pending::<()>().await;
@@ -168,7 +183,7 @@ impl MintOutputStatesCreated {
         assert!(matches!(old_state.state, MintOutputStates::Created(_)));
 
         MintOutputStateMachine {
-            common: old_state.common,
+            common: old_state.common.clone(),
             state: MintOutputStates::Aborted(MintOutputStatesAborted),
         }
     }
@@ -196,7 +211,10 @@ impl MintOutputStatesCreated {
                         global_context.api().all_peers().to_num_peers(),
                     ),
                     AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
-                    ApiRequestErased::new(common.out_point),
+                    ApiRequestErased::new(OutPoint {
+                        txid: common.txid,
+                        out_idx: *common.out_idxs.start(),
+                    }),
                 )
                 .await
             {
@@ -281,6 +299,199 @@ impl MintOutputStatesCreated {
             common: old_state.common,
             state: MintOutputStates::Succeeded(MintOutputStatesSucceeded {
                 amount: created.amount,
+            }),
+        }
+    }
+}
+
+/// See [`MintOutputStates`]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct MintOutputStatesCreatedMulti {
+    pub(crate) issuance_requests: BTreeMap<u64, (Amount, NoteIssuanceRequest)>,
+}
+
+impl MintOutputStatesCreatedMulti {
+    fn transitions(
+        &self,
+        // TODO: make cheaper to clone (Arc?)
+        context: &MintClientContext,
+        global_context: &DynGlobalClientContext,
+        common: &MintOutputCommon,
+    ) -> Vec<StateTransition<MintOutputStateMachine>> {
+        let tbs_pks = context.tbs_pks.clone();
+        let client_ctx = context.client_ctx.clone();
+
+        vec![
+            // Check if transaction was rejected
+            StateTransition::new(
+                Self::await_tx_rejected(global_context.clone(), common.clone()),
+                |_dbtx, (), state| Box::pin(async move { Self::transition_tx_rejected(&state) }),
+            ),
+            // Check for output outcome
+            StateTransition::new(
+                Self::await_outcome_ready(
+                    global_context.clone(),
+                    common.clone(),
+                    context.mint_decoder.clone(),
+                    self.issuance_requests.clone(),
+                    context.peer_tbs_pks.clone(),
+                ),
+                move |dbtx, blinded_signature_shares, old_state| {
+                    Box::pin(Self::transition_outcome_ready(
+                        client_ctx.clone(),
+                        dbtx,
+                        blinded_signature_shares,
+                        old_state,
+                        tbs_pks.clone(),
+                    ))
+                },
+            ),
+        ]
+    }
+
+    async fn await_tx_rejected(global_context: DynGlobalClientContext, common: MintOutputCommon) {
+        if global_context.await_tx_accepted(common.txid).await.is_err() {
+            return;
+        }
+        std::future::pending::<()>().await;
+    }
+
+    fn transition_tx_rejected(old_state: &MintOutputStateMachine) -> MintOutputStateMachine {
+        assert!(matches!(old_state.state, MintOutputStates::CreatedMulti(_)));
+
+        MintOutputStateMachine {
+            common: old_state.common.clone(),
+            state: MintOutputStates::Aborted(MintOutputStatesAborted),
+        }
+    }
+
+    async fn await_outcome_ready(
+        global_context: DynGlobalClientContext,
+        common: MintOutputCommon,
+        module_decoder: Decoder,
+        issuance_requests: BTreeMap<u64, (Amount, NoteIssuanceRequest)>,
+        peer_tbs_pks: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
+    ) -> Vec<(u64, BTreeMap<PeerId, BlindedSignatureShare>)> {
+        let mut ret = vec![];
+        // NOTE: We need a new api endpoint that can confirm multiple notes at once?
+        // --dpc
+        for (out_idx, (amount, issuance_request)) in issuance_requests {
+            let blinded_sig_share = fedimint_core::util::retry(
+                "await and fetch output sigs",
+                fedimint_core::util::backoff_util::custom_backoff(RETRY_DELAY, RETRY_DELAY, None),
+                || async {
+                    let decoder = module_decoder.clone();
+                    let pks = peer_tbs_pks.clone();
+
+                    Ok(global_context
+                        .api()
+                        .request_with_strategy(
+                            // this query collects a threshold of 2f + 1 valid blind signature
+                            // shares
+                            FilterMapThreshold::new(
+                                move |peer, outcome| {
+                                    verify_blind_share(
+                                        peer,
+                                        &outcome,
+                                        amount,
+                                        issuance_request.blinded_message(),
+                                        &decoder,
+                                        &pks,
+                                    )
+                                },
+                                global_context.api().all_peers().to_num_peers(),
+                            ),
+                            AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
+                            ApiRequestErased::new(OutPoint {
+                                txid: common.txid,
+                                out_idx,
+                            }),
+                        )
+                        .await?)
+                },
+            )
+            .await
+            .expect("Will retry forever");
+
+            ret.push((out_idx, blinded_sig_share));
+        }
+
+        ret
+    }
+
+    async fn transition_outcome_ready(
+        client_ctx: ClientContext<MintClientModule>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        blinded_signature_shares: Vec<(u64, BTreeMap<PeerId, BlindedSignatureShare>)>,
+        old_state: MintOutputStateMachine,
+        tbs_pks: Tiered<AggregatePublicKey>,
+    ) -> MintOutputStateMachine {
+        // we combine the shares, finalize the issuance request with the blind signature
+        // and store the resulting note in the database
+
+        let mut amount_total = Amount::ZERO;
+        let MintOutputStates::CreatedMulti(created) = old_state.state else {
+            panic!("Unexpected prior state")
+        };
+
+        let mut spendable_notes: Vec<(Amount, SpendableNote)> = vec![];
+
+        // Note verification is relatively slow and CPU-bound, so parallelize them
+        blinded_signature_shares
+            .into_par_iter()
+            .map(|(out_idx, blinded_signature_shares)| {
+                let agg_blind_signature = aggregate_signature_shares(
+                    &blinded_signature_shares
+                        .into_iter()
+                        .map(|(peer, share)| (peer.to_usize() as u64 + 1, share))
+                        .collect(),
+                );
+
+                // this implies that the mint client config's public keys are inconsistent
+                let (amount, issuance_request) =
+                    created.issuance_requests.get(&out_idx).expect("Must have");
+
+                let amount_key = tbs_pks.tier(amount).expect("Must have keys for any amount");
+
+                let spendable_note = issuance_request.finalize(agg_blind_signature);
+
+                assert!(spendable_note.note().verify(*amount_key), "We checked all signature shares in the trigger future, so the combined signature has to be valid");
+
+                (*amount, spendable_note)
+            })
+            .collect_into_vec(&mut spendable_notes);
+
+        for (amount, spendable_note) in spendable_notes {
+            debug!(target: LOG_CLIENT_MODULE_MINT, amount = %amount, note=%spendable_note, "Adding new note from transaction output");
+
+            client_ctx
+                .log_event(
+                    &mut dbtx.module_tx(),
+                    NoteCreated {
+                        nonce: spendable_note.nonce(),
+                    },
+                )
+                .await;
+
+            amount_total += amount;
+            if let Some(note) = dbtx
+                .module_tx()
+                .insert_entry(
+                    &NoteKey {
+                        amount,
+                        nonce: spendable_note.nonce(),
+                    },
+                    &spendable_note.to_undecoded(),
+                )
+                .await
+            {
+                error!(?note, "E-cash note was replaced in DB");
+            }
+        }
+        MintOutputStateMachine {
+            common: old_state.common,
+            state: MintOutputStates::Succeeded(MintOutputStatesSucceeded {
+                amount: amount_total,
             }),
         }
     }

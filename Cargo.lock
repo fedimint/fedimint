@@ -2902,6 +2902,7 @@ dependencies = [
  "futures",
  "hex",
  "itertools 0.13.0",
+ "rayon",
  "serde",
  "serde-big-array",
  "serde_json",
