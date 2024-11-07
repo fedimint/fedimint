@@ -225,7 +225,7 @@ impl From<bitcoin::Amount> for Amount {
     }
 }
 
-impl TryFrom<Amount> for bitcoin30::Amount {
+impl TryFrom<Amount> for bitcoin::Amount {
     type Error = anyhow::Error;
 
     fn try_from(value: Amount) -> anyhow::Result<Self> {

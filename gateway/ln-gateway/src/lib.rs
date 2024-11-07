@@ -48,8 +48,7 @@ use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_keypair,
-    bitcoin30_to_bitcoin32_secp256k1_pubkey,
+    bitcoin30_to_bitcoin32_keypair, bitcoin30_to_bitcoin32_secp256k1_pubkey,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{
@@ -932,9 +931,9 @@ impl Gateway {
                 (withdraw_amount.unwrap(), fees)
             }
             BitcoinAmountOrAll::Amount(amount) => (
-                bitcoin30_to_bitcoin32_amount(&amount),
+                amount,
                 wallet_module
-                    .get_withdraw_fees(address.clone(), bitcoin30_to_bitcoin32_amount(&amount))
+                    .get_withdraw_fees(address.clone(), amount)
                     .await?,
             ),
         };

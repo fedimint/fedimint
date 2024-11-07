@@ -130,7 +130,7 @@ hash_newtype!(
 pub enum BitcoinAmountOrAll {
     All,
     #[serde(untagged)]
-    Amount(#[serde(with = "bitcoin30::amount::serde::as_sat")] bitcoin30::Amount),
+    Amount(#[serde(with = "bitcoin::amount::serde::as_sat")] bitcoin::Amount),
 }
 
 impl std::fmt::Display for BitcoinAmountOrAll {
@@ -271,7 +271,7 @@ mod tests {
         let amount: BitcoinAmountOrAll = serde_json::from_str("12345").unwrap();
         assert_eq!(
             amount,
-            BitcoinAmountOrAll::Amount(bitcoin30::Amount::from_sat(12345))
+            BitcoinAmountOrAll::Amount(bitcoin::Amount::from_sat(12345))
         );
 
         let all_string = all.to_string();

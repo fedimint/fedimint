@@ -10,9 +10,7 @@ use clap::Subcommand;
 use fedimint_bip39::Mnemonic;
 use fedimint_client::backup::Metadata;
 use fedimint_client::ClientHandleArc;
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_amount, bitcoin32_to_bitcoin30_secp256k1_pubkey,
-};
+use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 use fedimint_core::config::{ClientModuleConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::Encodable;
@@ -565,9 +563,9 @@ pub async fn handle_command(
                     (amount.unwrap(), fees)
                 }
                 BitcoinAmountOrAll::Amount(amount) => (
-                    bitcoin30_to_bitcoin32_amount(&amount),
+                    amount,
                     wallet_module
-                        .get_withdraw_fees(address.clone(), bitcoin30_to_bitcoin32_amount(&amount))
+                        .get_withdraw_fees(address.clone(), amount)
                         .await?,
                 ),
             };
