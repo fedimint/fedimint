@@ -330,7 +330,7 @@ impl Gatewayd {
         let value = cmd!(
             self,
             "ecash",
-            "spend-ecash",
+            "send",
             "--federation-id",
             federation_id,
             amount_msats
@@ -347,7 +347,7 @@ impl Gatewayd {
     }
 
     pub async fn receive_ecash(&self, ecash: String) -> Result<()> {
-        cmd!(self, "ecash", "receive-ecash", "--notes", ecash)
+        cmd!(self, "ecash", "receive", "--notes", ecash)
             .run()
             .await?;
         Ok(())

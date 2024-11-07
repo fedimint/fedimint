@@ -35,8 +35,8 @@ pub enum EcashCommands {
         #[clap(long)]
         address: Address<NetworkUnchecked>,
     },
-    /// Spend e-cash
-    SpendEcash {
+    /// Send e-cash out of band
+    Send {
         #[clap(long)]
         federation_id: FederationId,
         amount: Amount,
@@ -47,8 +47,8 @@ pub enum EcashCommands {
         #[clap(long)]
         include_invite: bool,
     },
-    /// Receive e-cash
-    ReceiveEcash {
+    /// Receive e-cash out of band
+    Receive {
         #[clap(long)]
         notes: OOBNotes,
         #[arg(long = "no-wait", action = clap::ArgAction::SetFalse)]
@@ -89,7 +89,7 @@ impl EcashCommands {
 
                 print_response(response);
             }
-            Self::SpendEcash {
+            Self::Send {
                 federation_id,
                 amount,
                 allow_overpay,
@@ -108,7 +108,7 @@ impl EcashCommands {
 
                 print_response(response);
             }
-            Self::ReceiveEcash { notes, wait } => {
+            Self::Receive { notes, wait } => {
                 let response = create_client()
                     .receive_ecash(ReceiveEcashPayload { notes, wait })
                     .await?;
