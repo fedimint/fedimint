@@ -5,7 +5,7 @@ use std::time::Duration;
 use anyhow::{anyhow, bail};
 use fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
 use fedimint_api_client::query::FilterMapThreshold;
-use fedimint_client::module::ClientContext;
+use fedimint_client::module::{ClientContext, IdxRange};
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::{Decoder, OperationId};
@@ -82,7 +82,7 @@ pub struct MintOutputCommonV1 {
 pub struct MintOutputCommon {
     pub(crate) operation_id: OperationId,
     pub(crate) txid: TransactionId,
-    pub(crate) out_idxs: std::ops::RangeInclusive<u64>,
+    pub(crate) out_idxs: IdxRange,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -213,7 +213,7 @@ impl MintOutputStatesCreated {
                     AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
                     ApiRequestErased::new(OutPoint {
                         txid: common.txid,
-                        out_idx: *common.out_idxs.start(),
+                        out_idx: common.out_idxs.start(),
                     }),
                 )
                 .await

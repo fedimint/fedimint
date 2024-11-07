@@ -13,7 +13,7 @@ use bitcoin::secp256k1::Message;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
-use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
+use fedimint_client::module::{ClientContext, ClientModule, IClientModule, IdxRange};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{
@@ -388,9 +388,9 @@ impl GatewayClientModuleV2 {
             amount: contract.commitment.amount,
         };
         let client_output_sm = ClientOutputSM::<GatewayClientStateMachinesV2> {
-            state_machines: Arc::new(move |txid, out_idxs: std::ops::RangeInclusive<u64>| {
-                assert_eq!(out_idxs.clone().count(), 1);
-                let out_idx = *out_idxs.start();
+            state_machines: Arc::new(move |txid, out_idxs: IdxRange| {
+                assert_eq!(out_idxs.count(), 1);
+                let out_idx = out_idxs.start();
                 vec![
                     GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                         common: ReceiveSMCommon {
@@ -450,8 +450,8 @@ impl GatewayClientModuleV2 {
         };
         let client_output_sm = ClientOutputSM::<GatewayClientStateMachinesV2> {
             state_machines: Arc::new(move |txid, out_idxs| {
-                assert_eq!(out_idxs.clone().count(), 1);
-                let out_idx = *out_idxs.start();
+                assert_eq!(out_idxs.count(), 1);
+                let out_idx = out_idxs.start();
                 vec![GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                     common: ReceiveSMCommon {
                         operation_id,

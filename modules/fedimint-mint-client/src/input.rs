@@ -1,3 +1,4 @@
+use fedimint_client::module::IdxRange;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
@@ -55,7 +56,7 @@ pub struct MintInputCommonV1 {
 pub struct MintInputCommon {
     pub(crate) operation_id: OperationId,
     pub(crate) txid: TransactionId,
-    pub(crate) input_idxs: std::ops::RangeInclusive<u64>,
+    pub(crate) input_idxs: IdxRange,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]

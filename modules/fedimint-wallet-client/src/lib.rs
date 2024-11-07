@@ -21,7 +21,6 @@ mod withdraw;
 
 use std::collections::BTreeMap;
 use std::future;
-use std::ops::RangeInclusive;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -38,7 +37,7 @@ use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 use fedimint_client::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
-use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
+use fedimint_client::module::{ClientContext, ClientModule, IClientModule, IdxRange};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
@@ -575,9 +574,9 @@ impl WalletClientModule {
 
         let amount = output.maybe_v0_ref().expect("v0 output").amount().into();
 
-        let sm_gen = move |txid, out_idxs: RangeInclusive<u64>| {
-            assert_eq!(out_idxs.clone().count(), 1);
-            let out_idx = *out_idxs.start();
+        let sm_gen = move |txid, out_idxs: IdxRange| {
+            assert_eq!(out_idxs.count(), 1);
+            let out_idx = out_idxs.start();
             vec![WalletClientStates::Withdraw(WithdrawStateMachine {
                 operation_id,
                 state: WithdrawStates::Created(CreatedWithdrawState {
@@ -603,9 +602,9 @@ impl WalletClientModule {
 
         let amount = output.maybe_v0_ref().expect("v0 output").amount().into();
 
-        let sm_gen = move |txid, out_idxs: RangeInclusive<u64>| {
-            assert_eq!(out_idxs.clone().count(), 1);
-            let out_idx = *out_idxs.start();
+        let sm_gen = move |txid, out_idxs: IdxRange| {
+            assert_eq!(out_idxs.count(), 1);
+            let out_idx = out_idxs.start();
             vec![WalletClientStates::Withdraw(WithdrawStateMachine {
                 operation_id,
                 state: WithdrawStates::Created(CreatedWithdrawState {

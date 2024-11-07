@@ -330,7 +330,7 @@ async fn try_cancel_oob_spend_multi(
 
     let sm = ClientInputSM {
         state_machines: Arc::new(move |txid, input_idxs| {
-            debug_assert_eq!(input_idxs.clone().count(), spendable_notes.len());
+            debug_assert_eq!(input_idxs.count(), spendable_notes.len());
             vec![MintClientStateMachines::Input(MintInputStateMachine {
                 common: MintInputCommon {
                     operation_id,

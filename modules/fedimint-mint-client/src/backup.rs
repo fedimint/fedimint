@@ -97,7 +97,7 @@ impl MintClientModule {
                     OutPoint {
                         txid: common.txid,
                         // MintOutputStates::Created always has one out_idx
-                        out_idx: *common.out_idxs.start(),
+                        out_idx: common.out_idxs.start(),
                     },
                     created_state.amount,
                     created_state.issuance_request,
@@ -108,6 +108,7 @@ impl MintClientModule {
                 }) => Some(
                     common
                         .out_idxs
+                        .into_iter()
                         .map(|out_idx| {
                             let issuance_request = created_state
                                 .issuance_requests
