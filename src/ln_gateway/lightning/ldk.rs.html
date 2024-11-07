@@ -601,8 +601,7 @@
 <a href="#600" id="600">600</a>
 <a href="#601" id="601">601</a>
 <a href="#602" id="602">602</a>
-<a href="#603" id="603">603</a>
-<a href="#604" id="604">604</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
+<a href="#603" id="603">603</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -613,7 +612,6 @@
 <span class="kw">use </span>fedimint_bip39::Mnemonic;
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_invoice, bitcoin30_to_bitcoin32_payment_preimage,
-    bitcoin32_to_bitcoin30_txid,
 };
 <span class="kw">use </span>fedimint_core::task::{TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll};
@@ -785,7 +783,7 @@
     </span><span class="kw">async fn </span>outpoint_to_scid(<span class="kw-2">&amp;</span><span class="self">self</span>, funding_txo: OutPoint) -&gt; anyhow::Result&lt;u64&gt; {
         <span class="kw">let </span>block_height = <span class="self">self
             </span>.esplora_client
-            .get_merkle_proof(<span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_txid(<span class="kw-2">&amp;</span>funding_txo.txid))
+            .get_merkle_proof(<span class="kw-2">&amp;</span>funding_txo.txid)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Failed to get merkle proof"</span>))<span class="question-mark">?
             </span>.block_height;
@@ -802,7 +800,7 @@
             .txdata
             .iter()
             .enumerate()
-            .find(|(<span class="kw">_</span>, tx)| tx.txid() == bitcoin32_to_bitcoin30_txid(<span class="kw-2">&amp;</span>funding_txo.txid))
+            .find(|(<span class="kw">_</span>, tx)| tx.compute_txid() == funding_txo.txid)
             .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Failed to find transaction"</span>))<span class="question-mark">?
             </span>.<span class="number">0 </span><span class="kw">as </span>u32;
 
