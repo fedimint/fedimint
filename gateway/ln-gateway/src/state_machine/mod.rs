@@ -8,9 +8,9 @@ use std::time::Duration;
 
 use anyhow::ensure;
 use async_stream::stream;
+use bitcoin::hashes::{sha256, Hash};
 use bitcoin::key::Secp256k1;
 use bitcoin::secp256k1::All;
-use bitcoin_hashes::{sha256, Hash};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::derivable_secret::ChildId;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};

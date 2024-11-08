@@ -33,8 +33,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context};
+use bitcoin::hashes::sha256;
 use bitcoin::{Address, Network, Txid};
-use bitcoin_hashes::sha256;
 use clap::Parser;
 use client::GatewayClientBuilder;
 use config::GatewayOpts;

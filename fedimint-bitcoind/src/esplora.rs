@@ -2,9 +2,6 @@ use std::collections::HashMap;
 
 use anyhow::{bail, format_err};
 use bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
-use fedimint_core::bitcoin_migration::{
-    bitcoin32_to_bitcoin30_block_header, bitcoin32_to_bitcoin30_partial_merkle_tree,
-};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::TaskHandle;
 use fedimint_core::txoproof::TxOutProof;
@@ -164,8 +161,8 @@ impl IBitcoindRpc for EsploraClient {
             .ok_or(format_err!("No merkle proof found"))?;
 
         Ok(TxOutProof {
-            block_header: bitcoin32_to_bitcoin30_block_header(&proof.header),
-            merkle_proof: bitcoin32_to_bitcoin30_partial_merkle_tree(&proof.txn),
+            block_header: proof.header,
+            merkle_proof: proof.txn,
         })
     }
 

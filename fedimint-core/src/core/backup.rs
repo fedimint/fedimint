@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use bitcoin30::hashes::{sha256, Hash};
+use bitcoin::hashes::{sha256, Hash};
 use fedimint_core::encoding::{Decodable, Encodable};
 use secp256k1::{Keypair, Message, Secp256k1, Signing, Verification};
 use serde::{Deserialize, Serialize};
@@ -24,7 +24,7 @@ pub struct BackupRequest {
 
 impl BackupRequest {
     fn hash(&self) -> sha256::Hash {
-        self.consensus_hash_bitcoin30()
+        self.consensus_hash()
     }
 
     pub fn sign(self, keypair: &Keypair) -> anyhow::Result<SignedBackupRequest> {

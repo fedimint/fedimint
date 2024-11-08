@@ -1,4 +1,4 @@
-use bitcoin30::hashes::Hash as BitcoinHash;
+use bitcoin::hashes::Hash;
 use fedimint_core::core::{DynInput, DynOutput};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::SerdeModuleEncoding;

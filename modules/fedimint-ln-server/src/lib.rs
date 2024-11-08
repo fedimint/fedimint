@@ -11,7 +11,6 @@ use std::time::Duration;
 use anyhow::{bail, Context};
 use bitcoin_hashes::{sha256, Hash as BitcoinHash};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_message;
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -25,7 +24,7 @@ use fedimint_core::module::{
     ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
     SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
-use fedimint_core::secp256k1::{PublicKey, SECP256K1};
+use fedimint_core::secp256k1::{Message, PublicKey, SECP256K1};
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::{
@@ -707,9 +706,7 @@ impl ServerModule for Lightning {
                 // Check that each preimage is only offered for sale once, see #1397
                 if dbtx
                     .insert_entry(
-                        &EncryptedPreimageIndexKey(
-                            offer.encrypted_preimage.consensus_hash_bitcoin30(),
-                        ),
+                        &EncryptedPreimageIndexKey(offer.encrypted_preimage.consensus_hash()),
                         &(),
                     )
                     .await
@@ -753,9 +750,7 @@ impl ServerModule for Lightning {
                 SECP256K1
                     .verify_schnorr(
                         gateway_signature,
-                        &bitcoin30_to_bitcoin32_secp256k1_message(
-                            &outgoing_contract.cancellation_message().into(),
-                        ),
+                        &Message::from_digest(*outgoing_contract.cancellation_message().as_ref()),
                         &outgoing_contract.gateway_key.x_only_public_key().0,
                     )
                     .map_err(|_| LightningOutputError::InvalidCancellationSignature)?;
@@ -1323,7 +1318,7 @@ mod tests {
         let preimage = [42u8; 32];
         let encrypted_preimage = EncryptedPreimage(client_cfg.threshold_pub_key.encrypt([42; 32]));
 
-        let hash = preimage.consensus_hash_bitcoin30();
+        let hash = preimage.consensus_hash();
         let offer = IncomingContractOffer {
             amount: Amount::from_sats(10),
             hash,
@@ -1348,7 +1343,7 @@ mod tests {
             .await
             .expect("First time works");
 
-        let hash2 = [21u8, 32].consensus_hash_bitcoin30();
+        let hash2 = [21u8, 32].consensus_hash();
         let offer2 = IncomingContractOffer {
             amount: Amount::from_sats(1),
             hash: hash2,
@@ -1446,7 +1441,7 @@ mod tests {
         let preimage = Preimage([42u8; 32]);
         let gateway_key = random_pub_key();
         let outgoing_contract = FundedContract::Outgoing(OutgoingContract {
-            hash: preimage.consensus_hash_bitcoin30(),
+            hash: preimage.consensus_hash(),
             gateway_key,
             timelock: 1_000_000,
             user_key: random_pub_key(),

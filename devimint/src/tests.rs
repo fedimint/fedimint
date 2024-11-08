@@ -8,9 +8,6 @@ use std::{env, ffi};
 use anyhow::{anyhow, bail, Context, Result};
 use bitcoin::Txid;
 use clap::Subcommand;
-use fedimint_core::bitcoin_migration::{
-    bitcoin32_to_bitcoin30_script_buf, bitcoin32_to_bitcoin30_tx,
-};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::envs::is_env_var_set;
@@ -1055,13 +1052,11 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     let tx_hex = bitcoind.poll_get_transaction(txid).await?;
 
-    let tx = bitcoin32_to_bitcoin30_tx(&bitcoin::Transaction::consensus_decode_hex(
-        &tx_hex,
-        &ModuleRegistry::default(),
-    )?);
-    assert!(tx.output.iter().any(|o| o.script_pubkey
-        == bitcoin32_to_bitcoin30_script_buf(&address.script_pubkey())
-        && o.value == 50000));
+    let tx = bitcoin::Transaction::consensus_decode_hex(&tx_hex, &ModuleRegistry::default())?;
+    assert!(tx
+        .output
+        .iter()
+        .any(|o| o.script_pubkey == address.script_pubkey() && o.value.to_sat() == 50000));
 
     let post_withdraw_walletng_balance = client.balance().await?;
     let expected_wallet_balance = initial_walletng_balance - 50_000_000 - (fees_sat * 1000);
@@ -2000,25 +1995,19 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
             .expect("txid should be parsable");
         let tx_hex = bitcoind.poll_get_transaction(txid).await?;
 
-        let tx = bitcoin32_to_bitcoin30_tx(&bitcoin::Transaction::consensus_decode_hex(
-            &tx_hex,
-            &ModuleRegistry::default(),
-        )?);
+        let tx = bitcoin::Transaction::consensus_decode_hex(&tx_hex, &ModuleRegistry::default())?;
         assert_eq!(tx.input.len(), 1);
         assert_eq!(tx.output.len(), 2);
 
         let change_output = tx
             .output
             .iter()
-            .find(|o| {
-                o.to_owned().script_pubkey
-                    != bitcoin32_to_bitcoin30_script_buf(&withdrawal_address.script_pubkey())
-            })
+            .find(|o| o.to_owned().script_pubkey != withdrawal_address.script_pubkey())
             .expect("withdrawal must have change output");
-        assert!(fed_utxos_sats.insert(change_output.value));
+        assert!(fed_utxos_sats.insert(change_output.value.to_sat()));
 
         // Remove the utxo consumed from the withdrawal tx
-        let total_output_sats = tx.output.iter().map(|o| o.value).sum::<u64>();
+        let total_output_sats = tx.output.iter().map(|o| o.value.to_sat()).sum::<u64>();
         let input_sats = total_output_sats + fees_sat;
         assert!(fed_utxos_sats.remove(&input_sats));
 

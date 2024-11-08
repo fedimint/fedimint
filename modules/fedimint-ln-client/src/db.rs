@@ -1,6 +1,6 @@
 use std::io::Cursor;
 
-use bitcoin30::hashes::sha256;
+use bitcoin::hashes::sha256;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;

@@ -11,7 +11,6 @@ use bitcoin::address::NetworkUnchecked;
 use bitcoin::psbt::raw::ProprietaryKey;
 use bitcoin::{secp256k1, Address, Amount, BlockHash, Network, Txid};
 use config::WalletClientConfig;
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_amount;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
@@ -231,7 +230,7 @@ impl PegOutFees {
     }
 
     pub fn amount(&self) -> Amount {
-        bitcoin30_to_bitcoin32_amount(&self.fee_rate.calculate_fee(self.total_weight))
+        self.fee_rate.calculate_fee(self.total_weight)
     }
 }
 

@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use anyhow::ensure;
 use async_trait::async_trait;
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin::hashes::{sha256, Hash};
 use fedimint_core::db::Database;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};

@@ -19,9 +19,8 @@ use bls12_381::Scalar;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::{Keypair, Secp256k1, Signing};
-use fedimint_core::BitcoinHash;
 use hkdf::hashes::Sha512;
-use hkdf::Hkdf;
+use hkdf::{BitcoinHash, Hkdf};
 use ring::aead;
 
 const CHILD_TAG: &[u8; 8] = b"childkey";

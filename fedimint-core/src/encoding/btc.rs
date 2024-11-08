@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 use anyhow::format_err;
 use bitcoin::address::NetworkUnchecked;
-use bitcoin30::hashes::Hash as BitcoinHash;
+use bitcoin::hashes::Hash as BitcoinHash;
 use hex::{FromHex, ToHex};
 use miniscript::{Descriptor, MiniscriptKey};
 
@@ -234,13 +234,13 @@ impl Decodable for bitcoin::Address<NetworkUnchecked> {
     }
 }
 
-impl Encodable for bitcoin30::hashes::sha256::Hash {
+impl Encodable for bitcoin::hashes::sha256::Hash {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         self.to_byte_array().consensus_encode(writer)
     }
 }
 
-impl Decodable for bitcoin30::hashes::sha256::Hash {
+impl Decodable for bitcoin::hashes::sha256::Hash {
     fn consensus_decode<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
@@ -256,17 +256,17 @@ mod tests {
     use std::io::Cursor;
     use std::str::FromStr;
 
-    use bitcoin30::hashes::Hash as BitcoinHash;
+    use bitcoin::hashes::Hash as BitcoinHash;
 
     use crate::encoding::{Decodable, Encodable};
     use crate::ModuleDecoderRegistry;
 
     #[test_log::test]
     fn sha256_roundtrip() {
-        let hash = bitcoin30::hashes::sha256::Hash::hash(b"Hello world!");
+        let hash = bitcoin::hashes::sha256::Hash::hash(b"Hello world!");
         let mut encoded = Vec::new();
         hash.consensus_encode(&mut encoded).unwrap();
-        let hash_decoded = bitcoin30::hashes::sha256::Hash::consensus_decode(
+        let hash_decoded = bitcoin::hashes::sha256::Hash::consensus_decode(
             &mut Cursor::new(encoded),
             &ModuleDecoderRegistry::default(),
         )

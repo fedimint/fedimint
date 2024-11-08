@@ -6,9 +6,6 @@ use bitcoincore_rpc::bitcoin::address::Address;
 use bitcoincore_rpc::bitcoin::Txid;
 use devimint::cmd;
 use devimint::federation::Client;
-use fedimint_core::bitcoin_migration::{
-    bitcoin32_to_bitcoin30_script_buf, bitcoin32_to_bitcoin30_tx,
-};
 use fedimint_core::encoding::Decodable;
 use tokio::try_join;
 
@@ -46,15 +43,10 @@ async fn assert_withdrawal(
     let tx_hex = bitcoind.poll_get_transaction(txid).await?;
 
     let parsed_address = Address::from_str(&deposit_address)?;
-    let tx = bitcoin32_to_bitcoin30_tx(&Transaction::consensus_decode_hex(
-        &tx_hex,
-        &Default::default(),
-    )?);
+    let tx = Transaction::consensus_decode_hex(&tx_hex, &Default::default())?;
     assert!(tx.output.iter().any(|o| o.script_pubkey
-        == bitcoin32_to_bitcoin30_script_buf(
-            &parsed_address.clone().assume_checked().script_pubkey()
-        )
-        && o.value == withdrawal_amount_sats));
+        == parsed_address.clone().assume_checked().script_pubkey()
+        && o.value.to_sat() == withdrawal_amount_sats));
 
     // Verify the receive client gets the deposit
     try_join!(

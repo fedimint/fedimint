@@ -9,9 +9,6 @@ use bitcoin::hashes::sha256::{Hash as Sha256, HashEngine};
 use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::secp256k1;
 use bls12_381::Scalar;
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_sha256_hash, bitcoin32_to_bitcoin30_sha256_hash,
-};
 use fedimint_core::config::{
     DkgError, DkgGroup, DkgMessage, DkgPeerMsg, DkgResult, ISupportedDkgMessage,
 };
@@ -92,9 +89,7 @@ impl<G: DkgGroup> Dkg<G> {
         let hashed = Dkg::hash(&commit);
         dkg.commitments.insert(our_id, commit);
         dkg.hashed_commits.insert(our_id, hashed);
-        let step = dkg.broadcast(&DkgMessage::HashedCommit(
-            bitcoin32_to_bitcoin30_sha256_hash(&hashed),
-        ));
+        let step = dkg.broadcast(&DkgMessage::HashedCommit(hashed));
 
         (dkg, step)
     }
@@ -104,12 +99,10 @@ impl<G: DkgGroup> Dkg<G> {
         match msg {
             DkgMessage::HashedCommit(hashed) => {
                 match self.hashed_commits.get(&peer) {
-                    Some(old) if *old != bitcoin30_to_bitcoin32_sha256_hash(&hashed) => {
+                    Some(old) if *old != hashed => {
                         return Err(format_err!("{peer} sent us two hashes!"))
                     }
-                    _ => self
-                        .hashed_commits
-                        .insert(peer, bitcoin30_to_bitcoin32_sha256_hash(&hashed)),
+                    _ => self.hashed_commits.insert(peer, hashed),
                 };
 
                 if self.hashed_commits.len() == self.peers.len() {

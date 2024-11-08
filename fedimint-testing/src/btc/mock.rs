@@ -18,9 +18,6 @@ use fedimint_bitcoind::{
     register_bitcoind, DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory,
     Result as BitcoinRpcResult,
 };
-use fedimint_core::bitcoin_migration::{
-    bitcoin32_to_bitcoin30_block_header, bitcoin32_to_bitcoin30_partial_merkle_tree,
-};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::{sleep_in_test, TaskHandle};
 use fedimint_core::txoproof::TxOutProof;
@@ -235,8 +232,8 @@ impl BitcoinTest for FakeBitcoinTest {
         FakeBitcoinTest::mine_block(addresses, blocks, pending, txid_to_block_height);
         let block_header = inner.blocks.last().unwrap().header;
         let proof = TxOutProof {
-            block_header: bitcoin32_to_bitcoin30_block_header(&block_header),
-            merkle_proof: bitcoin32_to_bitcoin30_partial_merkle_tree(&merkle_proof),
+            block_header,
+            merkle_proof,
         };
         inner
             .proofs
