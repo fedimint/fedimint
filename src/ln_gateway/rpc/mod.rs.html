@@ -247,7 +247,29 @@
 <a href="#246" id="246">246</a>
 <a href="#247" id="247">247</a>
 <a href="#248" id="248">248</a>
-<a href="#249" id="249">249</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
 <span class="kw">pub mod </span>rpc_server;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -268,6 +290,28 @@
 <span class="kw">use </span><span class="kw">crate</span>::SafeUrl;
 
 <span class="kw">pub const </span>V1_API_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"v1"</span>;
+
+<span class="kw">pub const </span>ADDRESS_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/address"</span>;
+<span class="kw">pub const </span>BACKUP_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/backup"</span>;
+<span class="kw">pub const </span>CONFIGURATION_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/config"</span>;
+<span class="kw">pub const </span>CONNECT_FED_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/connect_fed"</span>;
+<span class="kw">pub const </span>CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/create_bolt11_invoice_for_operator"</span>;
+<span class="kw">pub const </span>GATEWAY_INFO_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/info"</span>;
+<span class="kw">pub const </span>GET_BALANCES_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/balances"</span>;
+<span class="kw">pub const </span>GATEWAY_INFO_POST_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/info"</span>;
+<span class="kw">pub const </span>GET_LN_ONCHAIN_ADDRESS_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/get_ln_onchain_address"</span>;
+<span class="kw">pub const </span>LEAVE_FED_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/leave_fed"</span>;
+<span class="kw">pub const </span>LIST_ACTIVE_CHANNELS_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/list_active_channels"</span>;
+<span class="kw">pub const </span>MNEMONIC_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/mnemonic"</span>;
+<span class="kw">pub const </span>OPEN_CHANNEL_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/open_channel"</span>;
+<span class="kw">pub const </span>CLOSE_CHANNELS_WITH_PEER_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/close_channels_with_peer"</span>;
+<span class="kw">pub const </span>PAY_INVOICE_FOR_OPERATOR_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/pay_invoice_for_operator"</span>;
+<span class="kw">pub const </span>RECEIVE_ECASH_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/receive_ecash"</span>;
+<span class="kw">pub const </span>SET_CONFIGURATION_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/set_configuration"</span>;
+<span class="kw">pub const </span>STOP_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/stop"</span>;
+<span class="kw">pub const </span>SEND_ONCHAIN_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/send_onchain"</span>;
+<span class="kw">pub const </span>SPEND_ECASH_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/spend_ecash"</span>;
+<span class="kw">pub const </span>WITHDRAW_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/withdraw"</span>;
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>ConnectFedPayload {
