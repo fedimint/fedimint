@@ -13,7 +13,7 @@ use bitcoin::secp256k1::Message;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
-use fedimint_client::module::{ClientContext, ClientModule, IClientModule, IdxRange};
+use fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{
@@ -388,15 +388,18 @@ impl GatewayClientModuleV2 {
             amount: contract.commitment.amount,
         };
         let client_output_sm = ClientOutputSM::<GatewayClientStateMachinesV2> {
-            state_machines: Arc::new(move |txid, out_idxs: IdxRange| {
-                assert_eq!(out_idxs.count(), 1);
-                let out_idx = out_idxs.start();
+            state_machines: Arc::new(move |out_point_range: OutPointRange| {
+                assert_eq!(out_point_range.count(), 1);
+                let out_idx = out_point_range.start_idx();
                 vec![
                     GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                         common: ReceiveSMCommon {
                             operation_id,
                             contract: contract.clone(),
-                            out_point: OutPoint { txid, out_idx },
+                            out_point: OutPoint {
+                                txid: out_point_range.txid(),
+                                out_idx,
+                            },
                             refund_keypair,
                         },
                         state: ReceiveSMState::Funding,
@@ -449,14 +452,17 @@ impl GatewayClientModuleV2 {
             amount: contract.commitment.amount,
         };
         let client_output_sm = ClientOutputSM::<GatewayClientStateMachinesV2> {
-            state_machines: Arc::new(move |txid, out_idxs| {
-                assert_eq!(out_idxs.count(), 1);
-                let out_idx = out_idxs.start();
+            state_machines: Arc::new(move |out_point_range| {
+                assert_eq!(out_point_range.count(), 1);
+                let out_idx = out_point_range.start_idx();
                 vec![GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                     common: ReceiveSMCommon {
                         operation_id,
                         contract: contract.clone(),
-                        out_point: OutPoint { txid, out_idx },
+                        out_point: OutPoint {
+                            txid: out_point_range.txid(),
+                            out_idx,
+                        },
                         refund_keypair,
                     },
                     state: ReceiveSMState::Funding,

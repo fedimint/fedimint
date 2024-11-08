@@ -15,7 +15,7 @@ use itertools::multiunzip;
 use rand::{CryptoRng, Rng, RngCore};
 use secp256k1::Secp256k1;
 
-use crate::module::{IdxRange, StateGenerator};
+use crate::module::{IdxRange, OutPointRange, StateGenerator};
 use crate::sm::{self, DynState};
 use crate::{
     states_add_instance, states_to_instanceless_dyn, InstancelessDynClientInput,
@@ -462,7 +462,10 @@ impl TransactionBuilder {
                 let input_idxs = find_range_of_matching_items(&input_idx_to_bundle_idx, bundle_idx);
                 bundle.sms.into_iter().flat_map(move |sm| {
                     if let Some(input_idxs) = input_idxs.as_ref() {
-                        (sm.state_machines)(txid, IdxRange::from(input_idxs.clone()))
+                        (sm.state_machines)(OutPointRange::new(
+                            txid,
+                            IdxRange::from(input_idxs.clone()),
+                        ))
                     } else {
                         vec![]
                     }
@@ -478,7 +481,10 @@ impl TransactionBuilder {
                         find_range_of_matching_items(&output_idx_to_bundle_idx, bundle_idx);
                     bundle.sms.into_iter().flat_map(move |sm| {
                         if let Some(output_idxs) = output_idxs.as_ref() {
-                            (sm.state_machines)(txid, IdxRange::from(output_idxs.clone()))
+                            (sm.state_machines)(OutPointRange::new(
+                                txid,
+                                IdxRange::from(output_idxs.clone()),
+                            ))
                         } else {
                             vec![]
                         }
@@ -527,8 +533,8 @@ fn state_gen_to_dyn<S>(
 where
     S: IntoDynInstance<DynType = DynState> + 'static,
 {
-    Arc::new(move |txid, index| {
-        let states = state_gen(txid, index);
+    Arc::new(move |out_point_range| {
+        let states = state_gen(out_point_range);
         states
             .into_iter()
             .map(|state| state.into_dyn(module_instance))

@@ -15,7 +15,7 @@ use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::derivable_secret::ChildId;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
-use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
+use fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State};
@@ -287,7 +287,8 @@ impl GatewayClientModule {
             amount,
         };
         let client_output_sm = ClientOutputSM::<GatewayClientStateMachines> {
-            state_machines: Arc::new(move |txid, _| {
+            state_machines: Arc::new(move |out_point_range: OutPointRange| {
+                assert_eq!(out_point_range.count(), 1);
                 vec![
                     GatewayClientStateMachines::Receive(IncomingStateMachine {
                         common: IncomingSmCommon {
@@ -295,7 +296,9 @@ impl GatewayClientModule {
                             contract_id,
                             payment_hash: htlc.payment_hash,
                         },
-                        state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
+                        state: IncomingSmStates::FundingOffer(FundingOfferState {
+                            txid: out_point_range.txid(),
+                        }),
                     }),
                     GatewayClientStateMachines::Complete(GatewayCompleteStateMachine {
                         common: GatewayCompleteCommon {
@@ -338,14 +341,17 @@ impl GatewayClientModule {
             amount,
         };
         let client_output_sm = ClientOutputSM::<GatewayClientStateMachines> {
-            state_machines: Arc::new(move |txid, _| {
+            state_machines: Arc::new(move |out_point_range| {
+                assert_eq!(out_point_range.count(), 1);
                 vec![GatewayClientStateMachines::Receive(IncomingStateMachine {
                     common: IncomingSmCommon {
                         operation_id,
                         contract_id,
                         payment_hash,
                     },
-                    state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
+                    state: IncomingSmStates::FundingOffer(FundingOfferState {
+                        txid: out_point_range.txid(),
+                    }),
                 })]
             }),
         };

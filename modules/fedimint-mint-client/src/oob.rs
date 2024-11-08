@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use fedimint_client::module::OutPointRange;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle, ClientInputSM};
 use fedimint_client::DynGlobalClientContext;
@@ -329,20 +330,19 @@ async fn try_cancel_oob_spend_multi(
         .collect();
 
     let sm = ClientInputSM {
-        state_machines: Arc::new(move |txid, input_idxs| {
-            debug_assert_eq!(input_idxs.count(), spendable_notes.len());
+        state_machines: Arc::new(move |out_point_range: OutPointRange| {
+            debug_assert_eq!(out_point_range.count(), spendable_notes.len());
             vec![MintClientStateMachines::Input(MintInputStateMachine {
                 common: MintInputCommon {
                     operation_id,
-                    txid,
-                    input_idxs,
+                    out_point_range,
                 },
                 // When canceling OOB, we are reating the multi-refund input already here.
                 // So  we can cut straight to
                 // `MintInputStates::RefundedMulti` state. If the reund tx fails, it will
                 // retry using per-note refund again.
                 state: MintInputStates::RefundedBundle(MintInputStateRefundedBundle {
-                    refund_txid: txid,
+                    refund_txid: out_point_range.txid(),
                     spendable_notes: spendable_notes.clone(),
                 }),
             })]

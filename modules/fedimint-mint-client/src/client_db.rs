@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
 use fedimint_client::module::init::recovery::RecoveryFromHistoryCommon;
-use fedimint_client::module::IdxRange;
+use fedimint_client::module::{IdxRange, OutPointRange};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -133,8 +133,10 @@ pub(crate) fn migrate_state_to_v2(
             MintClientStateMachines::Output(MintOutputStateMachine {
                 common: MintOutputCommon {
                     operation_id: old_state.common.operation_id,
-                    txid: old_state.common.out_point.txid,
-                    out_idxs: IdxRange::new_single(old_state.common.out_point.out_idx),
+                    out_point_range: OutPointRange::new_single(
+                        old_state.common.out_point.txid,
+                        old_state.common.out_point.out_idx,
+                    ),
                 },
                 state: old_state.state,
             })
@@ -145,8 +147,10 @@ pub(crate) fn migrate_state_to_v2(
             MintClientStateMachines::Input(MintInputStateMachine {
                 common: MintInputCommon {
                     operation_id: old_state.common.operation_id,
-                    txid: old_state.common.txid,
-                    input_idxs: IdxRange::new_single(old_state.common.input_idx),
+                    out_point_range: OutPointRange::new(
+                        old_state.common.txid,
+                        IdxRange::new_single(old_state.common.input_idx),
+                    ),
                 },
                 state: old_state.state,
             })

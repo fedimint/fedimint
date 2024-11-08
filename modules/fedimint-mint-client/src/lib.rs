@@ -43,7 +43,7 @@ use fedimint_client::db::{migrate_state, ClientMigrationFn};
 use fedimint_client::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
-use fedimint_client::module::{ClientContext, ClientModule, IClientModule, IdxRange};
+use fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
 use fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
@@ -78,6 +78,7 @@ pub use fedimint_mint_common::*;
 use futures::{pin_mut, StreamExt};
 use hex::ToHex;
 use input::MintInputStateCreatedBundle;
+use itertools::Itertools as _;
 use oob::MintOOBStatesCreatedMulti;
 use output::MintOutputStatesCreatedMulti;
 use serde::{Deserialize, Serialize};
@@ -1083,17 +1084,17 @@ impl MintClientModule {
             }
         }
 
-        let state_generator = Arc::new(move |txid, out_idxs: IdxRange| {
-            assert_eq!(out_idxs.into_iter().count(), issuance_requests.len());
+        let state_generator = Arc::new(move |out_point_range: OutPointRange| {
+            assert_eq!(out_point_range.into_iter().count(), issuance_requests.len());
             vec![MintClientStateMachines::Output(MintOutputStateMachine {
                 common: MintOutputCommon {
                     operation_id,
-                    txid,
-                    out_idxs,
+                    out_point_range,
                 },
                 state: MintOutputStates::CreatedMulti(MintOutputStatesCreatedMulti {
-                    issuance_requests: out_idxs
+                    issuance_requests: out_point_range
                         .into_iter()
+                        .map(|(_, out_idx)| out_idx)
                         .zip(issuance_requests.clone())
                         .collect(),
                 }),
@@ -1141,11 +1142,11 @@ impl MintClientModule {
                     return None;
                 };
 
-                if state.common.txid != out_point.txid
+                if state.common.txid() != out_point.txid
                     || !state
                         .common
-                        .out_idxs
-                        .into_iter()
+                        .out_point_range
+                        .out_idx_iter()
                         .contains(&out_point.out_idx)
                 {
                     return None;
@@ -2357,14 +2358,13 @@ pub(crate) fn create_bundle_for_inputs(
         inputs.push(input);
     }
 
-    let input_sm = Arc::new(move |txid, input_idxs: IdxRange| {
-        debug_assert_eq!(input_idxs.into_iter().count(), input_states.len());
+    let input_sm = Arc::new(move |out_point_range: OutPointRange| {
+        debug_assert_eq!(out_point_range.into_iter().count(), input_states.len());
 
         vec![MintClientStateMachines::Input(MintInputStateMachine {
             common: MintInputCommon {
                 operation_id,
-                txid,
-                input_idxs,
+                out_point_range,
             },
             state: MintInputStates::CreatedBundle(MintInputStateCreatedBundle {
                 notes: input_states.clone(),

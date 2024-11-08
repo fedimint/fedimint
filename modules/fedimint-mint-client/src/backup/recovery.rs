@@ -4,7 +4,7 @@ use std::fmt;
 
 use fedimint_client::module::init::recovery::{RecoveryFromHistory, RecoveryFromHistoryCommon};
 use fedimint_client::module::init::ClientModuleRecoverArgs;
-use fedimint_client::module::{ClientContext, IdxRange};
+use fedimint_client::module::{ClientContext, OutPointRange};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -217,8 +217,10 @@ impl RecoveryFromHistory for MintRecovery {
                             MintOutputStateMachine {
                                 common: MintOutputCommon {
                                     operation_id: OperationId::new_random(),
-                                    txid: out_point.txid,
-                                    out_idxs: IdxRange::new_single(out_point.out_idx),
+                                    out_point_range: OutPointRange::new_single(
+                                        out_point.txid,
+                                        out_point.out_idx,
+                                    ),
                                 },
                                 state: crate::output::MintOutputStates::Created(
                                     MintOutputStatesCreated {

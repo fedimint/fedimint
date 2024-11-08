@@ -135,10 +135,10 @@ impl ClientModule for DummyClientModule {
                     keys: vec![self.key],
                 };
                 let input_sm = ClientInputSM {
-                    state_machines: Arc::new(move |txid, _| {
+                    state_machines: Arc::new(move |out_point_range| {
                         vec![DummyStateMachine::Input(
                             missing_input_amount,
-                            txid,
+                            out_point_range.txid(),
                             operation_id,
                         )]
                     }),
@@ -164,10 +164,10 @@ impl ClientModule for DummyClientModule {
                 };
 
                 let output_sm = ClientOutputSM {
-                    state_machines: Arc::new(move |txid, _| {
+                    state_machines: Arc::new(move |out_point_range| {
                         vec![DummyStateMachine::Output(
                             missing_output_amount,
-                            txid,
+                            out_point_range.txid(),
                             operation_id,
                         )]
                     }),

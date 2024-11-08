@@ -496,8 +496,8 @@ impl DynGlobalClientContext {
 fn states_to_instanceless_dyn<S: IState + MaybeSend + MaybeSync + 'static>(
     state_gen: StateGenerator<S>,
 ) -> StateGenerator<Box<maybe_add_send_sync!(dyn IState + 'static)>> {
-    Arc::new(move |txid, out_idxs| {
-        let states: Vec<S> = state_gen(txid, out_idxs);
+    Arc::new(move |out_point_range| {
+        let states: Vec<S> = state_gen(out_point_range);
         states
             .into_iter()
             .map(|state| box_up_state(state))
@@ -630,8 +630,8 @@ fn states_add_instance(
     module_instance_id: ModuleInstanceId,
     state_gen: StateGenerator<Box<maybe_add_send_sync!(dyn IState + 'static)>>,
 ) -> StateGenerator<DynState> {
-    Arc::new(move |txid, out_idx| {
-        let states = state_gen(txid, out_idx);
+    Arc::new(move |out_point_range| {
+        let states = state_gen(out_point_range);
         Iterator::collect(
             states
                 .into_iter()

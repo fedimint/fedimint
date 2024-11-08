@@ -95,9 +95,9 @@ impl MintClientModule {
                     state: crate::output::MintOutputStates::Created(created_state),
                 }) => Some(vec![(
                     OutPoint {
-                        txid: common.txid,
+                        txid: common.out_point_range.txid(),
                         // MintOutputStates::Created always has one out_idx
-                        out_idx: common.out_idxs.start(),
+                        out_idx: common.out_point_range.start_idx(),
                     },
                     created_state.amount,
                     created_state.issuance_request,
@@ -107,18 +107,15 @@ impl MintClientModule {
                     state: crate::output::MintOutputStates::CreatedMulti(created_state),
                 }) => Some(
                     common
-                        .out_idxs
+                        .out_point_range
                         .into_iter()
-                        .map(|out_idx| {
+                        .map(|(txid, out_idx)| {
                             let issuance_request = created_state
                                 .issuance_requests
                                 .get(&out_idx)
                                 .expect("Must have corresponding out_idx");
                             (
-                                OutPoint {
-                                    txid: common.txid,
-                                    out_idx,
-                                },
+                                OutPoint { txid, out_idx },
                                 issuance_request.0,
                                 issuance_request.1,
                             )
