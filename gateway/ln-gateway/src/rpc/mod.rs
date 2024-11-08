@@ -91,6 +91,7 @@ pub struct WithdrawResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FederationInfo {
     pub federation_id: FederationId,
+    pub federation_name: Option<String>,
     pub balance_msat: Amount,
     pub federation_index: u64,
     pub routing_fees: Option<FederationRoutingFees>,

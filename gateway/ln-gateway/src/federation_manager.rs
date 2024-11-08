@@ -234,12 +234,19 @@ impl FederationManager {
 
                 Ok(FederationInfo {
                     federation_id,
+                    federation_name: self.federation_name(client).await,
                     balance_msat,
                     federation_index,
                     routing_fees,
                 })
             })
             .await
+    }
+
+    pub async fn federation_name(&self, client: &ClientHandleArc) -> Option<String> {
+        let client_config = client.config().await;
+        let federation_name = client_config.global.federation_name();
+        federation_name.map(String::from)
     }
 
     pub async fn federation_info_all_federations(
@@ -259,6 +266,7 @@ impl FederationManager {
 
             federation_infos.push(FederationInfo {
                 federation_id: *federation_id,
+                federation_name: self.federation_name(client.value()).await,
                 balance_msat,
                 federation_index,
                 routing_fees,
