@@ -7,9 +7,7 @@ use assert_matches::assert_matches;
 use bitcoin::secp256k1;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::ClientHandleArc;
-use fedimint_core::bitcoin_migration::{
-    bitcoin32_checked_address_to_unchecked_address, bitcoin32_to_bitcoin30_block_hash,
-};
+use fedimint_core::bitcoin_migration::bitcoin32_checked_address_to_unchecked_address;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
 use fedimint_core::envs::BitcoinRpcConfig;
@@ -148,11 +146,9 @@ async fn sanity_check_bitcoin_blocks() -> anyhow::Result<()> {
         bitcoin.get_tx_block_height(&tx.compute_txid()).await,
         Some(expected_transaction_height),
     );
-    let expected_transaction_block_hash = bitcoin32_to_bitcoin30_block_hash(
-        &dyn_bitcoin_rpc
-            .get_block_hash(expected_transaction_height)
-            .await?,
-    );
+    let expected_transaction_block_hash = dyn_bitcoin_rpc
+        .get_block_hash(expected_transaction_height)
+        .await?;
     assert_eq!(proof.block(), expected_transaction_block_hash);
 
     Ok(())
@@ -1008,7 +1004,7 @@ mod fedimint_migration_tests {
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
     use fedimint_core::module::DynServerModuleInit;
-    use fedimint_core::{BitcoinHash, Feerate, OutPoint, PeerId, TransactionId};
+    use fedimint_core::{Feerate, OutPoint, PeerId, TransactionId};
     use fedimint_logging::TracingSetup;
     use fedimint_testing::db::{
         snapshot_db_migrations, snapshot_db_migrations_client, validate_migrations_client,

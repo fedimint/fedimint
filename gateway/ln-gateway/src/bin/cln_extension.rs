@@ -10,7 +10,7 @@ use axum::body::{Body, Bytes};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
-use bitcoin_hashes::sha256;
+use bitcoin::hashes::sha256;
 use clap::Parser;
 use cln_plugin::options::{self, StringConfigOption};
 use cln_plugin::{Builder, Plugin};
@@ -21,7 +21,7 @@ use cln_rpc::primitives::{AmountOrAll, ChannelState, ShortChannelId};
 use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_secp256k1_message, bitcoin30_to_bitcoin32_secp256k1_pubkey,
     bitcoin32_to_bitcoin30_network, bitcoin32_to_bitcoin30_recoverable_signature,
-    bitcoin32_to_bitcoin30_secp256k1_pubkey,
+    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_sha256_hash,
 };
 use fedimint_core::secp256k1::{PublicKey, SecretKey, SECP256K1};
 use fedimint_core::task::timeout;
@@ -558,7 +558,7 @@ async fn cln_create_invoice(
 
     let invoice_builder = InvoiceBuilder::new(Currency::from(network))
         .amount_milli_satoshis(amount_msat)
-        .payment_hash(payment_hash)
+        .payment_hash(bitcoin32_to_bitcoin30_sha256_hash(&payment_hash))
         .payment_secret(PaymentSecret(OsRng.gen()))
         .duration_since_epoch(fedimint_core::time::duration_since_epoch())
         .min_final_cltv_expiry_delta(18)
@@ -570,9 +570,11 @@ async fn cln_create_invoice(
                 &lightning_invoice::Description::new(description).expect("Description is valid"),
             ),
         ),
-        InvoiceDescription::Hash(hash) => invoice_builder.invoice_description(
-            lightning_invoice::Bolt11InvoiceDescription::Hash(&lightning_invoice::Sha256(hash)),
-        ),
+        InvoiceDescription::Hash(hash) => {
+            invoice_builder.invoice_description(lightning_invoice::Bolt11InvoiceDescription::Hash(
+                &lightning_invoice::Sha256(bitcoin32_to_bitcoin30_sha256_hash(&hash)),
+            ))
+        }
     };
 
     let invoice = invoice_builder
@@ -892,7 +894,7 @@ struct Htlc {
     // TODO: use these to validate we can actually redeem the HTLC in time
     cltv_expiry: u32,
     cltv_expiry_relative: u32,
-    payment_hash: bitcoin_hashes::sha256::Hash,
+    payment_hash: bitcoin::hashes::sha256::Hash,
     // The short channel id of the incoming channel
     short_channel_id: String,
     // The ID of the HTLC
@@ -1112,7 +1114,7 @@ impl ClnRpcService {
                 partid: None,
                 payment_metadata: None,
                 payment_secret,
-                payment_hash,
+                payment_hash: bitcoin32_to_bitcoin30_sha256_hash(&payment_hash),
                 route,
             }))
             .await?;
@@ -1132,7 +1134,7 @@ impl ClnRpcService {
                     groupid: None,
                     partid: None,
                     timeout: None,
-                    payment_hash,
+                    payment_hash: bitcoin32_to_bitcoin30_sha256_hash(&payment_hash),
                 },
             ))
             .await;

@@ -54,7 +54,7 @@ impl fmt::Display for CompleteStateMachine {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct CompleteSMCommon {
     pub operation_id: OperationId,
-    pub payment_hash: bitcoin_hashes::sha256::Hash,
+    pub payment_hash: bitcoin::hashes::sha256::Hash,
     pub incoming_chan_id: u64,
     pub htlc_id: u64,
 }
@@ -127,7 +127,7 @@ impl CompleteStateMachine {
 
     async fn await_completion(
         context: GatewayClientContextV2,
-        payment_hash: bitcoin_hashes::sha256::Hash,
+        payment_hash: bitcoin::hashes::sha256::Hash,
         final_receive_state: FinalReceiveState,
         incoming_chan_id: u64,
         htlc_id: u64,

@@ -847,7 +847,7 @@ impl LightningClientModule {
             .await
             .map_err(ReceiveError::GatewayConnectionError)?;
 
-        if invoice.payment_hash() != &preimage.consensus_hash_bitcoin30() {
+        if bitcoin30_to_bitcoin32_sha256_hash(invoice.payment_hash()) != preimage.consensus_hash() {
             return Err(ReceiveError::InvalidInvoicePaymentHash);
         }
 

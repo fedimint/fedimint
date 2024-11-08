@@ -2388,8 +2388,7 @@ mod tests {
     use fedimint_core::module::registry::ModuleRegistry;
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{
-        secp256k1, Amount, BitcoinHash, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti,
-        TransactionId,
+        secp256k1, Amount, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId,
     };
     use fedimint_mint_common::config::FeeConsensus;
     use itertools::Itertools;

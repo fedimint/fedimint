@@ -6,7 +6,7 @@ use axum::middleware::{self, Next};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin::hashes::{sha256, Hash};
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::TaskGroup;

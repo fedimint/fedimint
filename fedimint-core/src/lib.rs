@@ -44,9 +44,7 @@ use std::str::FromStr;
 pub use amount::*;
 /// Mostly re-exported for [`Decodable`] macros.
 pub use anyhow;
-use bitcoin30::hashes::hash_newtype;
-use bitcoin30::hashes::sha256::Hash as Sha256;
-pub use bitcoin30::hashes::Hash as BitcoinHash;
+pub use bitcoin::hashes::Hash as BitcoinHash;
 pub use macro_rules_attribute::apply;
 pub use module::ServerModule;
 pub use peer_id::*;
@@ -119,10 +117,19 @@ pub mod version;
 /// Atomic BFT unit containing consensus items
 pub mod session_outcome;
 
-hash_newtype!(
-    /// A transaction id for peg-ins, peg-outs and reissuances
-    pub struct TransactionId(Sha256);
-);
+// It's necessary to wrap `hash_newtype!` in a module because the generated code
+// references a module called "core", but we export a conflicting module in this
+// file.
+mod txid {
+    use bitcoin::hashes::hash_newtype;
+    use bitcoin::hashes::sha256::Hash as Sha256;
+
+    hash_newtype!(
+        /// A transaction id for peg-ins, peg-outs and reissuances
+        pub struct TransactionId(Sha256);
+    );
+}
+pub use txid::TransactionId;
 
 /// Amount of bitcoin to send, or `All` to send all available funds
 #[derive(Debug, Eq, PartialEq, Copy, Hash, Clone, Serialize, Deserialize)]
@@ -224,13 +231,13 @@ pub struct Feerate {
 }
 
 impl Feerate {
-    pub fn calculate_fee(&self, weight: u64) -> bitcoin30::Amount {
+    pub fn calculate_fee(&self, weight: u64) -> bitcoin::Amount {
         let sats = weight_to_vbytes(weight) * self.sats_per_kvb / 1000;
-        bitcoin30::Amount::from_sat(sats)
+        bitcoin::Amount::from_sat(sats)
     }
 }
 
-const WITNESS_SCALE_FACTOR: u64 = bitcoin30::constants::WITNESS_SCALE_FACTOR as u64;
+const WITNESS_SCALE_FACTOR: u64 = bitcoin::constants::WITNESS_SCALE_FACTOR as u64;
 
 /// Converts weight to virtual bytes, defined in [BIP-141] as weight / 4
 /// (rounded up to the next integer).
@@ -259,8 +266,8 @@ mod tests {
     #[test]
     fn calculate_fee() {
         let feerate = Feerate { sats_per_kvb: 1000 };
-        assert_eq!(bitcoin30::Amount::from_sat(25), feerate.calculate_fee(100));
-        assert_eq!(bitcoin30::Amount::from_sat(26), feerate.calculate_fee(101));
+        assert_eq!(bitcoin::Amount::from_sat(25), feerate.calculate_fee(100));
+        assert_eq!(bitcoin::Amount::from_sat(26), feerate.calculate_fee(101));
     }
 
     #[test]

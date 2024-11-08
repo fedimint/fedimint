@@ -10,7 +10,7 @@
 use core::fmt;
 use std::time::Duration;
 
-use bitcoin30::hashes::sha256;
+use bitcoin::hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;

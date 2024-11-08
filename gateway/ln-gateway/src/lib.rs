@@ -33,8 +33,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context};
+use bitcoin::hashes::sha256;
 use bitcoin::{Address, Network, Txid};
-use bitcoin_hashes::sha256;
 use clap::Parser;
 use client::GatewayClientBuilder;
 use config::GatewayOpts;
@@ -47,9 +47,6 @@ use fedimint_bip39::{Bip39RootSecretStrategy, Language, Mnemonic};
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{Client, ClientHandleArc};
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_sha256_hash, bitcoin32_to_bitcoin30_sha256_hash,
-};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -668,9 +665,7 @@ impl Gateway {
         // not a Fedimint.
         let (contract, client) = self
             .get_registered_incoming_contract_and_client_v2(
-                PaymentImage::Hash(bitcoin30_to_bitcoin32_sha256_hash(
-                    &htlc_request.payment_hash,
-                )),
+                PaymentImage::Hash(htlc_request.payment_hash),
                 htlc_request.amount_msat,
             )
             .await?;
@@ -2042,7 +2037,7 @@ impl Gateway {
 
         let invoice = self
             .create_invoice_via_lnrpc_v2(
-                bitcoin32_to_bitcoin30_sha256_hash(&payment_hash),
+                payment_hash,
                 payload.amount,
                 payload.description.clone(),
                 payload.expiry_secs,
@@ -2102,9 +2097,7 @@ impl Gateway {
                         payment_hash: Some(payment_hash),
                         amount_msat: amount.msats,
                         expiry_secs: expiry_time,
-                        description: Some(InvoiceDescription::Hash(
-                            bitcoin32_to_bitcoin30_sha256_hash(&hash),
-                        )),
+                        description: Some(InvoiceDescription::Hash(hash)),
                     })
                     .await?
             }

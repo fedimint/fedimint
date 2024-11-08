@@ -7,11 +7,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use assert_matches::assert_matches;
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin::hashes::{sha256, Hash};
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
 use fedimint_client::ClientHandleArc;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_sha256_hash;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::encoding::Encodable;
@@ -395,7 +396,9 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
                 ClientInputBundle::new_no_sm(vec![client_input]).into_dyn(gateway_module.id),
             );
             let operation_meta_gen = |_: TransactionId, _: Vec<OutPoint>| GatewayMeta::Pay {};
-            let operation_id = OperationId(invoice.payment_hash().to_byte_array());
+            let operation_id = OperationId(
+                bitcoin30_to_bitcoin32_sha256_hash(invoice.payment_hash()).to_byte_array(),
+            );
             let (txid, _) = gateway_client
                 .finalize_and_submit_transaction(
                     operation_id,
@@ -508,7 +511,7 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
 
         // Run gateway state machine
         let htlc = Htlc {
-            payment_hash: *invoice.payment_hash(),
+            payment_hash: bitcoin30_to_bitcoin32_sha256_hash(invoice.payment_hash()),
             incoming_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
             outgoing_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
             incoming_expiry: u32::MAX,
@@ -599,7 +602,7 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
 
         // Run gateway state machine
         let htlc = Htlc {
-            payment_hash: *invoice.payment_hash(),
+            payment_hash: bitcoin30_to_bitcoin32_sha256_hash(invoice.payment_hash()),
             incoming_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
             outgoing_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
             incoming_expiry: u32::MAX,
@@ -648,7 +651,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
             let preimage = BYTE_33;
             let ln_output = LightningOutput::new_v0_offer(IncomingContractOffer {
                 amount,
-                hash: *invoice.payment_hash(),
+                hash: bitcoin30_to_bitcoin32_sha256_hash(invoice.payment_hash()),
                 encrypted_preimage: EncryptedPreimage::new(
                     &PreimageKey(preimage),
                     &user_lightning_module.cfg.threshold_pub_key,
@@ -675,7 +678,9 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
                     .expect("Failed to serialize string into json"),
             };
 
-            let operation_id = OperationId(invoice.payment_hash().to_byte_array());
+            let operation_id = OperationId(
+                bitcoin30_to_bitcoin32_sha256_hash(invoice.payment_hash()).to_byte_array(),
+            );
             let (txid, _) = user_client
                 .finalize_and_submit_transaction(
                     operation_id,
@@ -693,7 +698,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
 
             // Run gateway state machine
             let htlc = Htlc {
-                payment_hash: *invoice.payment_hash(),
+                payment_hash: bitcoin30_to_bitcoin32_sha256_hash(invoice.payment_hash()),
                 incoming_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
                 outgoing_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
                 incoming_expiry: u32::MAX,

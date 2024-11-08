@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
+use bitcoin::hashes::sha256;
 use bitcoin::Network;
-use bitcoin_hashes::sha256;
 use fedimint_api_client::api::net::Connector;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{
@@ -447,7 +447,7 @@ mod fedimint_migration_tests {
     use std::str::FromStr;
 
     use anyhow::ensure;
-    use bitcoin_hashes::Hash;
+    use bitcoin::hashes::Hash;
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::util::SafeUrl;

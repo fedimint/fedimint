@@ -4,9 +4,6 @@ use std::hash::Hash;
 use anyhow::format_err;
 use bitcoin::secp256k1::{PublicKey, Secp256k1, Signing, Verification};
 use bitcoin::{Amount, BlockHash, OutPoint, Transaction};
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_block_hash, bitcoin32_to_bitcoin30_txid,
-};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::txoproof::TxOutProof;
@@ -68,7 +65,7 @@ impl PegInProof {
         tweak_contract_key: PublicKey,
     ) -> Result<PegInProof, PegInProofError> {
         // TODO: remove redundancy with serde validation
-        if !txout_proof.contains_tx(bitcoin32_to_bitcoin30_txid(&transaction.compute_txid())) {
+        if !txout_proof.contains_tx(transaction.compute_txid()) {
             return Err(PegInProofError::TransactionNotInProof);
         }
 
@@ -114,7 +111,7 @@ impl PegInProof {
     }
 
     pub fn proof_block(&self) -> BlockHash {
-        bitcoin30_to_bitcoin32_block_hash(&self.txout_proof.block())
+        self.txout_proof.block()
     }
 
     pub fn tweak_contract_key(&self) -> &PublicKey {
@@ -174,9 +171,10 @@ impl Tweakable for Descriptor<CompressedPublicKey> {
 }
 
 fn validate_peg_in_proof(proof: &PegInProof) -> Result<(), anyhow::Error> {
-    if !proof.txout_proof.contains_tx(bitcoin32_to_bitcoin30_txid(
-        &proof.transaction.compute_txid(),
-    )) {
+    if !proof
+        .txout_proof
+        .contains_tx(proof.transaction.compute_txid())
+    {
         return Err(format_err!("Supplied transaction is not included in proof",));
     }
 

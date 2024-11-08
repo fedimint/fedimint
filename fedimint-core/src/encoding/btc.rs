@@ -10,10 +10,9 @@ use miniscript::{Descriptor, MiniscriptKey};
 use super::SimpleBitcoinRead;
 use crate::bitcoin_migration::{
     bitcoin29_to_bitcoin32_network_magic, bitcoin29_to_bitcoin32_psbt,
-    bitcoin30_to_bitcoin32_network, bitcoin30_to_bitcoin32_sha256_hash,
-    bitcoin32_checked_address_to_unchecked_address, bitcoin32_to_bitcoin29_network_magic,
-    bitcoin32_to_bitcoin29_psbt, bitcoin32_to_bitcoin30_address,
-    bitcoin32_to_bitcoin30_sha256_hash,
+    bitcoin30_to_bitcoin32_network, bitcoin32_checked_address_to_unchecked_address,
+    bitcoin32_to_bitcoin29_network_magic, bitcoin32_to_bitcoin29_psbt,
+    bitcoin32_to_bitcoin30_address,
 };
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
@@ -232,23 +231,6 @@ impl Decodable for bitcoin::Address<NetworkUnchecked> {
             .map_err(|e| DecodeError::new_custom(e.into()))?;
 
         Ok(bitcoin32_checked_address_to_unchecked_address(&address))
-    }
-}
-
-impl Encodable for bitcoin30::hashes::sha256::Hash {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        bitcoin30_to_bitcoin32_sha256_hash(self).consensus_encode(writer)
-    }
-}
-
-impl Decodable for bitcoin30::hashes::sha256::Hash {
-    fn consensus_decode<D: std::io::Read>(
-        d: &mut D,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        Ok(bitcoin32_to_bitcoin30_sha256_hash(
-            &Decodable::consensus_decode(d, modules)?,
-        ))
     }
 }
 

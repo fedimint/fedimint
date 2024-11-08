@@ -118,22 +118,6 @@ pub trait Encodable {
     ///
     /// Can be used to validate all federation members agree on state without
     /// revealing the object
-    fn consensus_hash_bitcoin30<H>(&self) -> H
-    where
-        H: bitcoin30::hashes::Hash,
-        H::Engine: std::io::Write,
-    {
-        let mut engine = H::engine();
-        self.consensus_encode(&mut engine)
-            .expect("writing to HashEngine cannot fail");
-        H::from_engine(engine)
-    }
-
-    /// Generate a SHA256 hash of the consensus encoding using the default hash
-    /// engine for `H`.
-    ///
-    /// Can be used to validate all federation members agree on state without
-    /// revealing the object
     fn consensus_hash<H>(&self) -> H
     where
         H: bitcoin::hashes::Hash,
@@ -1222,7 +1206,6 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use crate::bitcoin_migration::bitcoin30_to_bitcoin32_txid;
     use crate::db::DatabaseValue;
     use crate::encoding::{Decodable, Encodable};
 
@@ -1531,12 +1514,12 @@ mod tests {
     #[test]
     fn test_bitcoin_consensus_encoding() {
         // encodings should follow the bitcoin consensus encoding
-        let txid = bitcoin30::Txid::from_str(
+        let txid = bitcoin::Txid::from_str(
             "51f7ed2f23e58cc6e139e715e9ce304a1e858416edc9079dd7b74fa8d2efc09a",
         )
         .unwrap();
         test_roundtrip_expected(
-            &bitcoin30_to_bitcoin32_txid(&txid),
+            &txid,
             &[
                 154, 192, 239, 210, 168, 79, 183, 215, 157, 7, 201, 237, 22, 132, 133, 30, 74, 48,
                 206, 233, 21, 231, 57, 225, 198, 140, 229, 35, 47, 237, 247, 81,

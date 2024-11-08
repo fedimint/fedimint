@@ -22,7 +22,6 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 bitcoin = { workspace = true }
-bitcoin30 = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 lightning = { workspace = true }

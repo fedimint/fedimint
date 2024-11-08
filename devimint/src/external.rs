@@ -12,12 +12,13 @@ use bitcoincore_rpc::jsonrpc::error::RpcError;
 use bitcoincore_rpc::RpcApi;
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::ClnRpc;
-use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_sha256_hash;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_sha256_hash, bitcoin32_to_bitcoin30_sha256_hash,
+};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_core::task::{block_in_place, block_on, sleep, timeout};
 use fedimint_core::util::write_overwrite_async;
-use fedimint_core::BitcoinHash;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing::gateway::LightningNodeType;
 use futures::StreamExt;
@@ -812,7 +813,9 @@ impl Lnd {
             .invoices_client_lock()
             .await?
             .subscribe_single_invoice(tonic_lnd::invoicesrpc::SubscribeSingleInvoiceRequest {
-                r_hash: payment_hash.to_byte_array().to_vec(),
+                r_hash: bitcoin30_to_bitcoin32_sha256_hash(&payment_hash)
+                    .to_byte_array()
+                    .to_vec(),
             })
             .await?
             .into_inner();

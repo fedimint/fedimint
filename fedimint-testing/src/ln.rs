@@ -235,7 +235,7 @@ impl ILnRpcClient for FakeLightningTest {
         let invoice = match create_invoice_request.payment_hash {
             Some(payment_hash) => InvoiceBuilder::new(Currency::Regtest)
                 .description(String::new())
-                .payment_hash(payment_hash)
+                .payment_hash(bitcoin32_to_bitcoin30_sha256_hash(&payment_hash))
                 .current_timestamp()
                 .min_final_cltv_expiry_delta(0)
                 .payment_secret(PaymentSecret([0; 32]))

@@ -1,6 +1,6 @@
 use std::fmt::{self, Display};
 
-use bitcoin_hashes::sha256;
+use bitcoin::hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle,

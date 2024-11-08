@@ -34,8 +34,7 @@ use common::{
 };
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_network,
-    bitcoin32_to_bitcoin30_unchecked_address,
+    bitcoin30_to_bitcoin32_network, bitcoin32_to_bitcoin30_unchecked_address,
 };
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -1544,11 +1543,7 @@ impl<'a> StatelessWallet<'a> {
         let mut selected_utxos: Vec<(UTXOKey, SpendableUTXO)> = vec![];
         let mut fees = fee_rate.calculate_fee(total_weight);
 
-        while total_selected_value
-            < peg_out_amount
-                + change_script.minimal_non_dust()
-                + bitcoin30_to_bitcoin32_amount(&fees)
-        {
+        while total_selected_value < peg_out_amount + change_script.minimal_non_dust() + fees {
             match included_utxos.pop() {
                 Some((utxo_key, utxo)) => {
                     total_selected_value += utxo.amount;
@@ -1562,7 +1557,7 @@ impl<'a> StatelessWallet<'a> {
 
         // We always pay ourselves change back to ensure that we don't lose anything due
         // to dust
-        let change = total_selected_value - bitcoin30_to_bitcoin32_amount(&fees) - peg_out_amount;
+        let change = total_selected_value - fees - peg_out_amount;
         let output: Vec<TxOut> = vec![
             TxOut {
                 value: peg_out_amount,

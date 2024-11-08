@@ -4,8 +4,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use bitcoin::hashes::Hash;
 use bitcoin::{Network, OutPoint};
-use bitcoin_hashes::Hash;
 use fedimint_bip39::Mnemonic;
 use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_invoice, bitcoin30_to_bitcoin32_payment_preimage,

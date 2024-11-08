@@ -30,7 +30,9 @@ use bitcoin::hashes::{sha256, Hash};
 use config::LightningClientConfig;
 use fedimint_client::oplog::OperationLogEntry;
 use fedimint_client::ClientHandleArc;
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_pubkey;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin30_to_bitcoin32_sha256_hash,
+};
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -47,7 +49,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use threshold_crypto::PublicKey;
 use tracing::error;
-pub use {bitcoin30 as bitcoin, lightning_invoice};
+pub use {bitcoin, lightning_invoice};
 
 use crate::contracts::incoming::OfferId;
 use crate::contracts::{Contract, ContractId, ContractOutcome, Preimage, PreimageDecryptionShare};
@@ -627,7 +629,7 @@ pub enum LightningOutputError {
     #[error("The incoming LN account requires more funding (need {0} got {1})")]
     InsufficientIncomingFunding(Amount, Amount),
     #[error("No offer found for payment hash {0}")]
-    NoOffer(bitcoin30::secp256k1::hashes::sha256::Hash),
+    NoOffer(bitcoin::secp256k1::hashes::sha256::Hash),
     #[error("Only outgoing contracts support cancellation")]
     NotOutgoingContract,
     #[error("Cancellation request wasn't properly signed")]
@@ -697,7 +699,7 @@ impl PrunedInvoice {
                     .unwrap_or_else(|| invoice.recover_payee_pub_key()),
             ),
             destination_features,
-            payment_hash: *invoice.payment_hash(),
+            payment_hash: bitcoin30_to_bitcoin32_sha256_hash(invoice.payment_hash()),
             payment_secret: invoice.payment_secret().0,
             route_hints: invoice.route_hints().into_iter().map(Into::into).collect(),
             min_final_cltv_delta: invoice.min_final_cltv_expiry_delta(),

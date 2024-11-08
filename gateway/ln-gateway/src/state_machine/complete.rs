@@ -60,7 +60,7 @@ impl fmt::Display for GatewayCompleteStates {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct GatewayCompleteCommon {
     pub operation_id: OperationId,
-    pub payment_hash: bitcoin_hashes::sha256::Hash,
+    pub payment_hash: bitcoin::hashes::sha256::Hash,
     pub incoming_chan_id: u64,
     pub htlc_id: u64,
 }

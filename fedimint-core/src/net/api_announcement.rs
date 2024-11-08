@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-use bitcoin30::hashes::{sha256, Hash};
-use bitcoin30::secp256k1::Message;
+use bitcoin::hashes::{sha256, Hash};
+use bitcoin::secp256k1::Message;
 use fedimint_core::db::DatabaseLookup;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::MaybeSend;
@@ -10,7 +10,6 @@ use futures::StreamExt;
 use jsonrpsee_core::Serialize;
 use serde::Deserialize;
 
-use crate::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_message;
 use crate::db::{
     Database, DatabaseKey, DatabaseKeyPrefix, DatabaseRecord, IDatabaseTransactionOpsCoreTyped,
 };
@@ -55,7 +54,7 @@ impl ApiAnnouncement {
         ctx: &secp256k1::Secp256k1<C>,
         key: &secp256k1::Keypair,
     ) -> SignedApiAnnouncement {
-        let msg = bitcoin30_to_bitcoin32_secp256k1_message(&self.tagged_hash().into());
+        let msg = Message::from_digest(*self.tagged_hash().as_ref());
         let signature = ctx.sign_schnorr(&msg, key);
         SignedApiAnnouncement {
             api_announcement: self.clone(),
@@ -71,13 +70,9 @@ impl SignedApiAnnouncement {
         ctx: &secp256k1::Secp256k1<C>,
         pk: &secp256k1::PublicKey,
     ) -> bool {
-        let msg: Message = self.api_announcement.tagged_hash().into();
-        ctx.verify_schnorr(
-            &self.signature,
-            &bitcoin30_to_bitcoin32_secp256k1_message(&msg),
-            &pk.x_only_public_key().0,
-        )
-        .is_ok()
+        let msg = Message::from_digest(*self.api_announcement.tagged_hash().as_ref());
+        ctx.verify_schnorr(&self.signature, &msg, &pk.x_only_public_key().0)
+            .is_ok()
     }
 }
 

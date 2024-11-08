@@ -4,25 +4,18 @@ use std::io::Cursor;
 
 use bitcoin::block::Header as BlockHeader;
 use bitcoin::merkle_tree::PartialMerkleTree;
-use bitcoin30::block::Header as BlockHeader30;
-use bitcoin30::consensus::Encodable as Encodable30;
-use bitcoin30::merkle_tree::PartialMerkleTree as PartialMerkleTree30;
-use bitcoin30::{BlockHash, Txid};
+use bitcoin::{BlockHash, Txid};
 use hex::{FromHex, ToHex};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_block_header, bitcoin32_to_bitcoin30_block_header,
-    bitcoin32_to_bitcoin30_partial_merkle_tree,
-};
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
 
 #[derive(Clone, Debug)]
 pub struct TxOutProof {
-    pub block_header: BlockHeader30,
-    pub merkle_proof: PartialMerkleTree30,
+    pub block_header: BlockHeader,
+    pub merkle_proof: PartialMerkleTree,
 }
 
 impl TxOutProof {
@@ -49,11 +42,8 @@ impl Decodable for TxOutProof {
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let block_header =
-            bitcoin32_to_bitcoin30_block_header(&BlockHeader::consensus_decode(d, modules)?);
-        let merkle_proof = bitcoin32_to_bitcoin30_partial_merkle_tree(
-            &PartialMerkleTree::consensus_decode(d, modules)?,
-        );
+        let block_header = BlockHeader::consensus_decode(d, modules)?;
+        let merkle_proof = PartialMerkleTree::consensus_decode(d, modules)?;
 
         let mut transactions = Vec::new();
         let mut indices = Vec::new();
@@ -78,8 +68,7 @@ impl Encodable for TxOutProof {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         let mut written = 0;
 
-        written +=
-            bitcoin30_to_bitcoin32_block_header(&self.block_header).consensus_encode(writer)?;
+        written += self.block_header.consensus_encode(writer)?;
         written += self.merkle_proof.consensus_encode(writer)?;
 
         Ok(written)

@@ -7,7 +7,6 @@ use std::time::Duration;
 use anyhow::ensure;
 use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash};
-use bitcoin_hashes::Hash as Bitcoin30Hash;
 use fedimint_core::db::Database;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
@@ -176,7 +175,7 @@ impl GatewayLndClient {
 
                 if hold.state() == InvoiceState::Accepted {
                     let intercept = InterceptPaymentRequest {
-                        payment_hash: Bitcoin30Hash::from_slice(&hold.r_hash.clone())
+                        payment_hash: Hash::from_slice(&hold.r_hash.clone())
                             .expect("Failed to convert to Hash"),
                         amount_msat: hold.amt_paid_msat as u64,
                         // The rest of the fields are not used in LNv2 and can be removed once LNv1
@@ -422,7 +421,7 @@ impl GatewayLndClient {
 
                     // Forward all HTLCs to gatewayd, gatewayd will filter them based on scid
                     let intercept = InterceptPaymentRequest {
-                        payment_hash: Bitcoin30Hash::from_slice(&htlc.payment_hash).expect("Failed to convert payment Hash"),
+                        payment_hash: Hash::from_slice(&htlc.payment_hash).expect("Failed to convert payment Hash"),
                         amount_msat: htlc.outgoing_amount_msat,
                         expiry: htlc.incoming_expiry,
                         short_channel_id: Some(htlc.outgoing_requested_chan_id),
