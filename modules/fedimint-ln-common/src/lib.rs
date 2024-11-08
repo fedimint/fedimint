@@ -37,9 +37,9 @@ use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersi
 use fedimint_core::secp256k1::Message;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
-    extensible_associated_module_type, plugin_types_trait_impl_common, secp256k1, Amount, PeerId,
+    encode_bolt11_invoice_features_without_length, extensible_associated_module_type,
+    plugin_types_trait_impl_common, secp256k1, Amount, PeerId,
 };
-use lightning::util::ser::Writeable;
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use secp256k1::schnorr::Signature;
 use serde::{Deserialize, Serialize};
@@ -675,12 +675,7 @@ impl PrunedInvoice {
         let expiry_timestamp = invoice.expires_at().map_or(u64::MAX, |t| t.as_secs());
 
         let destination_features = if let Some(features) = invoice.features() {
-            let mut feature_bytes = vec![];
-            for f in features.le_flags().iter().rev() {
-                f.write(&mut feature_bytes)
-                    .expect("Writing to byte vec can't fail");
-            }
-            feature_bytes
+            encode_bolt11_invoice_features_without_length(features)
         } else {
             vec![]
         };
