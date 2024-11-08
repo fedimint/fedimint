@@ -36,7 +36,7 @@ use crate::util::{
     poll, poll_with_timeout, ClnLightningCli, GatewayClnExtension, ProcessHandle, ProcessManager,
 };
 use crate::vars::utf8;
-use crate::version_constants::VERSION_0_4_0_ALPHA;
+use crate::version_constants::{VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA};
 use crate::{cmd, poll_eq, Gatewayd};
 
 #[derive(Clone)]
@@ -776,12 +776,21 @@ impl Lnd {
             bitcoin::hashes::HashEngine::input(&mut engine, &preimage);
             bitcoin::hashes::sha256::Hash::from_engine(engine)
         };
+        // TODO(support:v0.5): LNv1 cannot pay HOLD invoices with a CLTV expiry greater
+        // than 500 before v0.5
+        let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+        let cltv_expiry = if fedimint_cli_version >= *VERSION_0_5_0_ALPHA {
+            650
+        } else {
+            100
+        };
         let hold_request = self
             .invoices_client_lock()
             .await?
             .add_hold_invoice(tonic_lnd::invoicesrpc::AddHoldInvoiceRequest {
                 value_msat: amount as i64,
                 hash: hash.to_byte_array().to_vec(),
+                cltv_expiry,
                 ..Default::default()
             })
             .await?

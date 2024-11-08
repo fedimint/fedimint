@@ -714,7 +714,12 @@ impl LightningClientModule {
             .fetch_consensus_block_count()
             .await?
             .ok_or(format_err!("Cannot get consensus block count"))?;
-        let absolute_timelock = consensus_count + OUTGOING_LN_CONTRACT_TIMELOCK - 1;
+
+        // Add the timelock to the current block count and the invoice's
+        // `min_cltv_delta`
+        let min_final_cltv = invoice.min_final_cltv_expiry_delta();
+        let absolute_timelock =
+            consensus_count + min_final_cltv + OUTGOING_LN_CONTRACT_TIMELOCK - 1;
 
         // Compute amount to lock in the outgoing contract
         let invoice_amount = Amount::from_msats(
