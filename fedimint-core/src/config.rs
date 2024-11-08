@@ -6,16 +6,16 @@ use std::path::Path;
 use std::str::FromStr;
 
 use anyhow::{bail, format_err, Context};
+use bitcoin::hashes::sha256::{Hash as Sha256, HashEngine};
+use bitcoin::hashes::{hex, sha256, Hash as BitcoinHash};
 use bitcoin29::hashes::hex::format_hex;
-use bitcoin30::hashes::sha256::{Hash as Sha256, HashEngine};
-use bitcoin30::hashes::{hex, sha256};
 use bls12_381::Scalar;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{DynRawFallback, Encodable};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::task::Cancelled;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
+use fedimint_core::ModuleDecoderRegistry;
 use fedimint_logging::LOG_CORE;
 use hex::FromHex;
 use secp256k1::PublicKey;
@@ -216,7 +216,7 @@ impl GlobalClientConfig {
     /// 0.4.0 and later uses a hash of broadcast public keys to calculate the
     /// federation id. 0.3.x and earlier use a hash of api endpoints
     pub fn calculate_federation_id(&self) -> FederationId {
-        FederationId(self.api_endpoints.consensus_hash_bitcoin30())
+        FederationId(self.api_endpoints.consensus_hash())
     }
 
     /// Federation name from config metadata (if set)

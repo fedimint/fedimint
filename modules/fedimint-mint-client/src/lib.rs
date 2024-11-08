@@ -2382,7 +2382,6 @@ mod tests {
     use std::str::FromStr;
 
     use bitcoin_hashes::Hash;
-    use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_sha256_hash;
     use fedimint_core::config::FederationId;
     use fedimint_core::encoding::Decodable;
     use fedimint_core::invite_code::{InviteCode, InviteCodeV2};
@@ -2583,13 +2582,11 @@ mod tests {
 
     #[test]
     fn notes_encode_decode() {
-        let federation_id_1 = FederationId(bitcoin32_to_bitcoin30_sha256_hash(
-            &bitcoin_hashes::sha256::Hash::from_byte_array([0x21; 32]),
-        ));
+        let federation_id_1 =
+            FederationId(bitcoin_hashes::sha256::Hash::from_byte_array([0x21; 32]));
         let federation_id_prefix_1 = federation_id_1.to_prefix();
-        let federation_id_2 = FederationId(bitcoin32_to_bitcoin30_sha256_hash(
-            &bitcoin_hashes::sha256::Hash::from_byte_array([0x42; 32]),
-        ));
+        let federation_id_2 =
+            FederationId(bitcoin_hashes::sha256::Hash::from_byte_array([0x42; 32]));
         let federation_id_prefix_2 = federation_id_2.to_prefix();
 
         let notes = vec![(
