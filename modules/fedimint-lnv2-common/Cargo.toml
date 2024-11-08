@@ -18,7 +18,6 @@ path = "src/lib.rs"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
-bitcoin30 = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-ln-common = { workspace = true }

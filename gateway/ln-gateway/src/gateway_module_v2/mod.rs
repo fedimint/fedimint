@@ -20,6 +20,7 @@ use fedimint_client::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_sha256_hash;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::DatabaseTransaction;
@@ -294,7 +295,8 @@ impl GatewayClientModuleV2 {
         };
 
         ensure!(
-            PaymentImage::Hash(*payment_hash) == payload.contract.payment_image,
+            PaymentImage::Hash(bitcoin30_to_bitcoin32_sha256_hash(payment_hash))
+                == payload.contract.payment_image,
             "The invoices payment hash does not match the contracts payment hash"
         );
 

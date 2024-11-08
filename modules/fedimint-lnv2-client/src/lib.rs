@@ -16,8 +16,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_stream::stream;
+use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1;
-use bitcoin30::hashes::{sha256, Hash};
 use db::GatewayKey;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -31,7 +31,8 @@ use fedimint_client::transaction::{
 };
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_network,
+    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin30_to_bitcoin32_sha256_hash,
+    bitcoin32_to_bitcoin30_network,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -548,7 +549,9 @@ impl LightningClientModule {
             .map_err(|e| SendPaymentError::FederationError(e.to_string()))?;
 
         let contract = OutgoingContract {
-            payment_image: PaymentImage::Hash(*invoice.payment_hash()),
+            payment_image: PaymentImage::Hash(bitcoin30_to_bitcoin32_sha256_hash(
+                invoice.payment_hash(),
+            )),
             amount: send_fee.add_to(amount),
             expiration: consensus_block_count + expiration_delta + CONTRACT_CONFIRMATION_BUFFER,
             claim_pk: routing_info.module_public_key,
@@ -775,11 +778,11 @@ impl LightningClientModule {
         let (ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(recipient_static_pk);
 
         let encryption_seed = ephemeral_tweak
-            .consensus_hash_bitcoin30::<sha256::Hash>()
+            .consensus_hash::<sha256::Hash>()
             .to_byte_array();
 
         let preimage = encryption_seed
-            .consensus_hash_bitcoin30::<sha256::Hash>()
+            .consensus_hash::<sha256::Hash>()
             .to_byte_array();
 
         let (gateway, routing_info) = match gateway {
@@ -823,7 +826,7 @@ impl LightningClientModule {
             self.cfg.tpe_agg_pk,
             encryption_seed,
             preimage,
-            PaymentImage::Hash(preimage.consensus_hash_bitcoin30()),
+            PaymentImage::Hash(preimage.consensus_hash()),
             contract_amount,
             expiration,
             claim_pk,
@@ -909,7 +912,7 @@ impl LightningClientModule {
         .secret_bytes();
 
         let encryption_seed = ephemeral_tweak
-            .consensus_hash_bitcoin30::<sha256::Hash>()
+            .consensus_hash::<sha256::Hash>()
             .to_byte_array();
 
         let claim_keypair = self

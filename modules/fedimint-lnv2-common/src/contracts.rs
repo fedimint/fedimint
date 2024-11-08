@@ -1,5 +1,5 @@
+use bitcoin::hashes::sha256;
 use bitcoin::secp256k1;
-use bitcoin30::hashes::sha256;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::Amount;
 use secp256k1::schnorr::Signature;
@@ -71,7 +71,7 @@ impl IncomingContract {
     }
 
     pub fn contract_id(&self) -> ContractId {
-        ContractId(self.consensus_hash_bitcoin30())
+        ContractId(self.consensus_hash())
     }
 
     pub fn verify(&self) -> bool {
@@ -138,7 +138,7 @@ pub struct OutgoingContract {
 
 impl OutgoingContract {
     pub fn contract_id(&self) -> ContractId {
-        ContractId(self.consensus_hash_bitcoin30())
+        ContractId(self.consensus_hash())
     }
 
     pub fn forfeit_message(&self) -> Message {
@@ -179,7 +179,7 @@ impl OutgoingContract {
 
 fn verify_preimage(payment_image: &PaymentImage, preimage: &[u8; 32]) -> bool {
     match payment_image {
-        PaymentImage::Hash(hash) => preimage.consensus_hash_bitcoin30::<sha256::Hash>() == *hash,
+        PaymentImage::Hash(hash) => preimage.consensus_hash::<sha256::Hash>() == *hash,
         PaymentImage::Point(pk) => match SecretKey::from_slice(preimage) {
             Ok(sk) => sk.public_key(secp256k1::SECP256K1) == *pk,
             Err(..) => false,
@@ -189,10 +189,10 @@ fn verify_preimage(payment_image: &PaymentImage, preimage: &[u8; 32]) -> bool {
 
 #[test]
 fn test_verify_preimage() {
-    use bitcoin30::hashes::Hash;
+    use bitcoin::hashes::Hash;
 
     assert!(verify_preimage(
-        &PaymentImage::Hash(bitcoin30::hashes::sha256::Hash::hash(&[42; 32])),
+        &PaymentImage::Hash(bitcoin::hashes::sha256::Hash::hash(&[42; 32])),
         &[42; 32]
     ));
 

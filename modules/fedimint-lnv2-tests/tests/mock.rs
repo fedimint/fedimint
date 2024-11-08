@@ -4,6 +4,7 @@ use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::{SecretKey, SECP256K1};
 use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_secp256k1_secret_key,
+    bitcoin32_to_bitcoin30_sha256_hash,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::secp256k1::rand::rngs::OsRng;
@@ -119,7 +120,7 @@ impl GatewayConnection for MockGatewayConnection {
         expiry_time: u32,
     ) -> Result<Bolt11Invoice, GatewayConnectionError> {
         let payment_hash = match contract.commitment.payment_image {
-            PaymentImage::Hash(payment_hash) => payment_hash,
+            PaymentImage::Hash(payment_hash) => bitcoin32_to_bitcoin30_sha256_hash(&payment_hash),
             PaymentImage::Point(..) => panic!("PaymentImage is not a payment hash"),
         };
 
