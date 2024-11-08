@@ -1561,24 +1561,7 @@
 <a href="#1560" id="1560">1560</a>
 <a href="#1561" id="1561">1561</a>
 <a href="#1562" id="1562">1562</a>
-<a href="#1563" id="1563">1563</a>
-<a href="#1564" id="1564">1564</a>
-<a href="#1565" id="1565">1565</a>
-<a href="#1566" id="1566">1566</a>
-<a href="#1567" id="1567">1567</a>
-<a href="#1568" id="1568">1568</a>
-<a href="#1569" id="1569">1569</a>
-<a href="#1570" id="1570">1570</a>
-<a href="#1571" id="1571">1571</a>
-<a href="#1572" id="1572">1572</a>
-<a href="#1573" id="1573">1573</a>
-<a href="#1574" id="1574">1574</a>
-<a href="#1575" id="1575">1575</a>
-<a href="#1576" id="1576">1576</a>
-<a href="#1577" id="1577">1577</a>
-<a href="#1578" id="1578">1578</a>
-<a href="#1579" id="1579">1579</a>
-<a href="#1580" id="1580">1580</a></pre></div><pre class="rust"><code><span class="doccomment">//! Binary encoding interface suitable for
+<a href="#1563" id="1563">1563</a></pre></div><pre class="rust"><code><span class="doccomment">//! Binary encoding interface suitable for
 //! consensus critical encoding.
 //!
 //! Over time all structs that ! need to be encoded to binary will be migrated
@@ -1691,22 +1674,6 @@
     </span><span class="kw">fn </span>consensus_encode_to_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>io::sink())
             .expect(<span class="string">"encoding to bytes can't fail for io reasons"</span>)
-    }
-
-    <span class="doccomment">/// Generate a SHA256 hash of the consensus encoding using the default hash
-    /// engine for `H`.
-    ///
-    /// Can be used to validate all federation members agree on state without
-    /// revealing the object
-    </span><span class="kw">fn </span>consensus_hash_bitcoin30&lt;H&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; H
-    <span class="kw">where
-        </span>H: bitcoin30::hashes::Hash,
-        H::Engine: std::io::Write,
-    {
-        <span class="kw">let </span><span class="kw-2">mut </span>engine = H::engine();
-        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>engine)
-            .expect(<span class="string">"writing to HashEngine cannot fail"</span>);
-        H::from_engine(engine)
     }
 
     <span class="doccomment">/// Generate a SHA256 hash of the consensus encoding using the default hash
@@ -2802,7 +2769,6 @@
     <span class="kw">use </span>std::str::FromStr;
 
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
-    <span class="kw">use </span><span class="kw">crate</span>::bitcoin_migration::bitcoin30_to_bitcoin32_txid;
     <span class="kw">use </span><span class="kw">crate</span>::db::DatabaseValue;
     <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
 
@@ -3111,12 +3077,12 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_bitcoin_consensus_encoding() {
         <span class="comment">// encodings should follow the bitcoin consensus encoding
-        </span><span class="kw">let </span>txid = bitcoin30::Txid::from_str(
+        </span><span class="kw">let </span>txid = bitcoin::Txid::from_str(
             <span class="string">"51f7ed2f23e58cc6e139e715e9ce304a1e858416edc9079dd7b74fa8d2efc09a"</span>,
         )
         .unwrap();
         test_roundtrip_expected(
-            <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_txid(<span class="kw-2">&amp;</span>txid),
+            <span class="kw-2">&amp;</span>txid,
             <span class="kw-2">&amp;</span>[
                 <span class="number">154</span>, <span class="number">192</span>, <span class="number">239</span>, <span class="number">210</span>, <span class="number">168</span>, <span class="number">79</span>, <span class="number">183</span>, <span class="number">215</span>, <span class="number">157</span>, <span class="number">7</span>, <span class="number">201</span>, <span class="number">237</span>, <span class="number">22</span>, <span class="number">132</span>, <span class="number">133</span>, <span class="number">30</span>, <span class="number">74</span>, <span class="number">48</span>,
                 <span class="number">206</span>, <span class="number">233</span>, <span class="number">21</span>, <span class="number">231</span>, <span class="number">57</span>, <span class="number">225</span>, <span class="number">198</span>, <span class="number">140</span>, <span class="number">229</span>, <span class="number">35</span>, <span class="number">47</span>, <span class="number">237</span>, <span class="number">247</span>, <span class="number">81</span>,

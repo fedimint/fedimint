@@ -2513,18 +2513,7 @@
 <a href="#2512" id="2512">2512</a>
 <a href="#2513" id="2513">2513</a>
 <a href="#2514" id="2514">2514</a>
-<a href="#2515" id="2515">2515</a>
-<a href="#2516" id="2516">2516</a>
-<a href="#2517" id="2517">2517</a>
-<a href="#2518" id="2518">2518</a>
-<a href="#2519" id="2519">2519</a>
-<a href="#2520" id="2520">2520</a>
-<a href="#2521" id="2521">2521</a>
-<a href="#2522" id="2522">2522</a>
-<a href="#2523" id="2523">2523</a>
-<a href="#2524" id="2524">2524</a>
-<a href="#2525" id="2525">2525</a>
-<a href="#2526" id="2526">2526</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
+<a href="#2515" id="2515">2515</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -2534,9 +2523,6 @@
 <span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>bitcoin::Txid;
 <span class="kw">use </span>clap::Subcommand;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin32_to_bitcoin30_script_buf, bitcoin32_to_bitcoin30_tx,
-};
 <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::envs::is_env_var_set;
@@ -3581,13 +3567,11 @@
 
     <span class="kw">let </span>tx_hex = bitcoind.poll_get_transaction(txid).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>tx = bitcoin32_to_bitcoin30_tx(<span class="kw-2">&amp;</span>bitcoin::Transaction::consensus_decode_hex(
-        <span class="kw-2">&amp;</span>tx_hex,
-        <span class="kw-2">&amp;</span>ModuleRegistry::default(),
-    )<span class="question-mark">?</span>);
-    <span class="macro">assert!</span>(tx.output.iter().any(|o| o.script_pubkey
-        == bitcoin32_to_bitcoin30_script_buf(<span class="kw-2">&amp;</span>address.script_pubkey())
-        &amp;&amp; o.value == <span class="number">50000</span>));
+    <span class="kw">let </span>tx = bitcoin::Transaction::consensus_decode_hex(<span class="kw-2">&amp;</span>tx_hex, <span class="kw-2">&amp;</span>ModuleRegistry::default())<span class="question-mark">?</span>;
+    <span class="macro">assert!</span>(tx
+        .output
+        .iter()
+        .any(|o| o.script_pubkey == address.script_pubkey() &amp;&amp; o.value.to_sat() == <span class="number">50000</span>));
 
     <span class="kw">let </span>post_withdraw_walletng_balance = client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>expected_wallet_balance = initial_walletng_balance - <span class="number">50_000_000 </span>- (fees_sat * <span class="number">1000</span>);
@@ -4526,25 +4510,19 @@
             .expect(<span class="string">"txid should be parsable"</span>);
         <span class="kw">let </span>tx_hex = bitcoind.poll_get_transaction(txid).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>tx = bitcoin32_to_bitcoin30_tx(<span class="kw-2">&amp;</span>bitcoin::Transaction::consensus_decode_hex(
-            <span class="kw-2">&amp;</span>tx_hex,
-            <span class="kw-2">&amp;</span>ModuleRegistry::default(),
-        )<span class="question-mark">?</span>);
+        <span class="kw">let </span>tx = bitcoin::Transaction::consensus_decode_hex(<span class="kw-2">&amp;</span>tx_hex, <span class="kw-2">&amp;</span>ModuleRegistry::default())<span class="question-mark">?</span>;
         <span class="macro">assert_eq!</span>(tx.input.len(), <span class="number">1</span>);
         <span class="macro">assert_eq!</span>(tx.output.len(), <span class="number">2</span>);
 
         <span class="kw">let </span>change_output = tx
             .output
             .iter()
-            .find(|o| {
-                o.to_owned().script_pubkey
-                    != bitcoin32_to_bitcoin30_script_buf(<span class="kw-2">&amp;</span>withdrawal_address.script_pubkey())
-            })
+            .find(|o| o.to_owned().script_pubkey != withdrawal_address.script_pubkey())
             .expect(<span class="string">"withdrawal must have change output"</span>);
-        <span class="macro">assert!</span>(fed_utxos_sats.insert(change_output.value));
+        <span class="macro">assert!</span>(fed_utxos_sats.insert(change_output.value.to_sat()));
 
         <span class="comment">// Remove the utxo consumed from the withdrawal tx
-        </span><span class="kw">let </span>total_output_sats = tx.output.iter().map(|o| o.value).sum::&lt;u64&gt;();
+        </span><span class="kw">let </span>total_output_sats = tx.output.iter().map(|o| o.value.to_sat()).sum::&lt;u64&gt;();
         <span class="kw">let </span>input_sats = total_output_sats + fees_sat;
         <span class="macro">assert!</span>(fed_utxos_sats.remove(<span class="kw-2">&amp;</span>input_sats));
 

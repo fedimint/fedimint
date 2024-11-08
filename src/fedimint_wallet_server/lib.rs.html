@@ -1950,12 +1950,7 @@
 <a href="#1949" id="1949">1949</a>
 <a href="#1950" id="1950">1950</a>
 <a href="#1951" id="1951">1951</a>
-<a href="#1952" id="1952">1952</a>
-<a href="#1953" id="1953">1953</a>
-<a href="#1954" id="1954">1954</a>
-<a href="#1955" id="1955">1955</a>
-<a href="#1956" id="1956">1956</a>
-<a href="#1957" id="1957">1957</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1952" id="1952">1952</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -1991,8 +1986,7 @@
 };
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_amount, bitcoin30_to_bitcoin32_network,
-    bitcoin32_to_bitcoin30_unchecked_address,
+    bitcoin30_to_bitcoin32_network, bitcoin32_to_bitcoin30_unchecked_address,
 };
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -3501,11 +3495,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>selected_utxos: Vec&lt;(UTXOKey, SpendableUTXO)&gt; = <span class="macro">vec!</span>[];
         <span class="kw">let </span><span class="kw-2">mut </span>fees = fee_rate.calculate_fee(total_weight);
 
-        <span class="kw">while </span>total_selected_value
-            &lt; peg_out_amount
-                + change_script.minimal_non_dust()
-                + bitcoin30_to_bitcoin32_amount(<span class="kw-2">&amp;</span>fees)
-        {
+        <span class="kw">while </span>total_selected_value &lt; peg_out_amount + change_script.minimal_non_dust() + fees {
             <span class="kw">match </span>included_utxos.pop() {
                 <span class="prelude-val">Some</span>((utxo_key, utxo)) =&gt; {
                     total_selected_value += utxo.amount;
@@ -3519,7 +3509,7 @@
 
         <span class="comment">// We always pay ourselves change back to ensure that we don't lose anything due
         // to dust
-        </span><span class="kw">let </span>change = total_selected_value - bitcoin30_to_bitcoin32_amount(<span class="kw-2">&amp;</span>fees) - peg_out_amount;
+        </span><span class="kw">let </span>change = total_selected_value - fees - peg_out_amount;
         <span class="kw">let </span>output: Vec&lt;TxOut&gt; = <span class="macro">vec!</span>[
             TxOut {
                 value: peg_out_amount,

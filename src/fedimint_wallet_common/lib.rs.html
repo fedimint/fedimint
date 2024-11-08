@@ -468,8 +468,7 @@
 <a href="#467" id="467">467</a>
 <a href="#468" id="468">468</a>
 <a href="#469" id="469">469</a>
-<a href="#470" id="470">470</a>
-<a href="#471" id="471">471</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#470" id="470">470</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -482,7 +481,6 @@
 <span class="kw">use </span>bitcoin::psbt::raw::ProprietaryKey;
 <span class="kw">use </span>bitcoin::{secp256k1, Address, Amount, BlockHash, Network, Txid};
 <span class="kw">use </span>config::WalletClientConfig;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_amount;
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
@@ -702,7 +700,7 @@
     }
 
     <span class="kw">pub fn </span>amount(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
-        bitcoin30_to_bitcoin32_amount(<span class="kw-2">&amp;</span><span class="self">self</span>.fee_rate.calculate_fee(<span class="self">self</span>.total_weight))
+        <span class="self">self</span>.fee_rate.calculate_fee(<span class="self">self</span>.total_weight)
     }
 }
 

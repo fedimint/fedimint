@@ -228,7 +228,7 @@
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>CompleteSMCommon {
     <span class="kw">pub </span>operation_id: OperationId,
-    <span class="kw">pub </span>payment_hash: bitcoin_hashes::sha256::Hash,
+    <span class="kw">pub </span>payment_hash: bitcoin::hashes::sha256::Hash,
     <span class="kw">pub </span>incoming_chan_id: u64,
     <span class="kw">pub </span>htlc_id: u64,
 }
@@ -301,7 +301,7 @@
 
     <span class="kw">async fn </span>await_completion(
         context: GatewayClientContextV2,
-        payment_hash: bitcoin_hashes::sha256::Hash,
+        payment_hash: bitcoin::hashes::sha256::Hash,
         final_receive_state: FinalReceiveState,
         incoming_chan_id: u64,
         htlc_id: u64,

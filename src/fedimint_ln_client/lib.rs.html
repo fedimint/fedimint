@@ -2259,7 +2259,9 @@
 <a href="#2258" id="2258">2258</a>
 <a href="#2259" id="2259">2259</a>
 <a href="#2260" id="2260">2260</a>
-<a href="#2261" id="2261">2261</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2261" id="2261">2261</a>
+<a href="#2262" id="2262">2262</a>
+<a href="#2263" id="2263">2263</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2284,9 +2286,8 @@
 <span class="kw">use </span>anyhow::{anyhow, bail, ensure, format_err, Context};
 <span class="kw">use </span>api::LnFederationApi;
 <span class="kw">use </span>async_stream::{stream, try_stream};
-<span class="kw">use </span>bitcoin30::hashes::{sha256, Hash, HashEngine, Hmac, HmacEngine};
-<span class="kw">use </span>bitcoin30::secp256k1::ThirtyTwoByteHash;
-<span class="kw">use </span>bitcoin30::Network;
+<span class="kw">use </span>bitcoin::hashes::{sha256, Hash, HashEngine, Hmac, HmacEngine};
+<span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>db::{
     DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
 };
@@ -2305,9 +2306,9 @@
 };
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_message, bitcoin30_to_bitcoin32_secp256k1_pubkey,
+    bitcoin30_to_bitcoin32_secp256k1_message, bitcoin30_to_bitcoin32_sha256_hash,
     bitcoin32_to_bitcoin30_network, bitcoin32_to_bitcoin30_recoverable_signature,
-    bitcoin32_to_bitcoin30_secp256k1_pubkey,
+    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_sha256_hash,
 };
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -2994,8 +2995,8 @@
 
         <span class="kw">let </span>user_sk = Keypair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;mut </span>rng);
 
-        <span class="kw">let </span>preimage_auth = <span class="self">self</span>.get_preimage_authentication(invoice.payment_hash());
-        <span class="kw">let </span>payment_hash = <span class="kw-2">*</span>invoice.payment_hash();
+        <span class="kw">let </span>payment_hash = bitcoin30_to_bitcoin32_sha256_hash(invoice.payment_hash());
+        <span class="kw">let </span>preimage_auth = <span class="self">self</span>.get_preimage_authentication(<span class="kw-2">&amp;</span>payment_hash);
         <span class="kw">let </span>contract = OutgoingContract {
             hash: payment_hash,
             gateway_key: gateway.gateway_redeem_key,
@@ -3064,7 +3065,7 @@
         ClientOutputSM&lt;LightningClientStateMachines&gt;,
         ContractId,
     )&gt; {
-        <span class="kw">let </span>payment_hash = invoice.payment_hash();
+        <span class="kw">let </span>payment_hash = bitcoin30_to_bitcoin32_sha256_hash(invoice.payment_hash());
         <span class="kw">let </span>invoice_amount = Amount {
             msats: invoice
                 .amount_milli_satoshis()
@@ -3075,7 +3076,7 @@
 
         <span class="kw">let </span>(incoming_output, amount, contract_id) = create_incoming_contract_output(
             <span class="kw-2">&amp;</span><span class="self">self</span>.module_api,
-            <span class="kw-2">*</span>payment_hash,
+            payment_hash,
             invoice_amount,
             <span class="kw-2">&amp;</span><span class="self">self</span>.redeem_key,
         )
@@ -3093,7 +3094,7 @@
                         common: IncomingSmCommon {
                             operation_id,
                             contract_id,
-                            payment_hash: <span class="kw-2">*</span>invoice.payment_hash(),
+                            payment_hash,
                         },
                         state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
                     },
@@ -3200,17 +3201,18 @@
 
         <span class="kw">let </span>duration_since_epoch = fedimint_core::time::duration_since_epoch();
 
-        <span class="kw">let </span><span class="kw-2">mut </span>invoice_builder = InvoiceBuilder::new(network.into())
-            .amount_milli_satoshis(amount.msats)
-            .invoice_description(description)
-            .payment_hash(payment_hash)
-            .payment_secret(PaymentSecret(rng.gen()))
-            .duration_since_epoch(duration_since_epoch)
-            .min_final_cltv_expiry_delta(<span class="number">18</span>)
-            .payee_pub_key(bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>node_public_key))
-            .expiry_time(Duration::from_secs(
-                expiry_time.unwrap_or(DEFAULT_INVOICE_EXPIRY_TIME.as_secs()),
-            ));
+        <span class="kw">let </span><span class="kw-2">mut </span>invoice_builder =
+            InvoiceBuilder::new(bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span>network).into())
+                .amount_milli_satoshis(amount.msats)
+                .invoice_description(description)
+                .payment_hash(bitcoin32_to_bitcoin30_sha256_hash(<span class="kw-2">&amp;</span>payment_hash))
+                .payment_secret(PaymentSecret(rng.gen()))
+                .duration_since_epoch(duration_since_epoch)
+                .min_final_cltv_expiry_delta(<span class="number">18</span>)
+                .payee_pub_key(bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>node_public_key))
+                .expiry_time(Duration::from_secs(
+                    expiry_time.unwrap_or(DEFAULT_INVOICE_EXPIRY_TIME.as_secs()),
+                ));
 
         <span class="kw">for </span>rh <span class="kw">in </span>final_route_hints {
             invoice_builder = invoice_builder.private_route(rh);
@@ -3223,7 +3225,8 @@
             ))
         })<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>operation_id = OperationId(invoice.payment_hash().to_byte_array());
+        <span class="kw">let </span>operation_id =
+            OperationId(bitcoin30_to_bitcoin32_sha256_hash(invoice.payment_hash()).to_byte_array());
 
         <span class="kw">let </span>sm_invoice = invoice.clone();
         <span class="kw">let </span>sm_gen = Arc::new(<span class="kw">move </span>|txid: TransactionId, <span class="kw">_</span>| {
@@ -3261,7 +3264,7 @@
                     state_machines: sm_gen,
                 }],
             ),
-            preimage.into_32(),
+            <span class="kw-2">*</span>preimage.as_ref(),
         ))
     }
 
@@ -3376,11 +3379,12 @@
         extra_meta: M,
     ) -&gt; anyhow::Result&lt;OutgoingLightningPayment&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.client_ctx.module_db().begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span>maybe_gateway_id = maybe_gateway
-            .as_ref()
-            .map(|g| bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>g.gateway_id));
+        <span class="kw">let </span>maybe_gateway_id = maybe_gateway.as_ref().map(|g| g.gateway_id);
         <span class="kw">let </span>prev_payment_result = <span class="self">self
-            </span>.get_prev_payment_result(invoice.payment_hash(), <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc())
+            </span>.get_prev_payment_result(
+                <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_sha256_hash(invoice.payment_hash()),
+                <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(),
+            )
             .<span class="kw">await</span>;
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(completed_payment) = prev_payment_result.completed_payment {
@@ -3389,7 +3393,7 @@
 
         <span class="comment">// Verify that no previous payment attempt is still running
         </span><span class="kw">let </span>prev_operation_id = LightningClientModule::get_payment_operation_id(
-            invoice.payment_hash(),
+            <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_sha256_hash(invoice.payment_hash()),
             prev_payment_result.index,
         );
         <span class="kw">if </span><span class="self">self</span>.client_ctx.has_active_states(prev_operation_id).<span class="kw">await </span>{
@@ -3401,8 +3405,10 @@
         }
 
         <span class="kw">let </span>next_index = prev_payment_result.index + <span class="number">1</span>;
-        <span class="kw">let </span>operation_id =
-            LightningClientModule::get_payment_operation_id(invoice.payment_hash(), next_index);
+        <span class="kw">let </span>operation_id = LightningClientModule::get_payment_operation_id(
+            <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_sha256_hash(invoice.payment_hash()),
+            next_index,
+        );
 
         <span class="kw">let </span>new_payment_result = PaymentResult {
             index: next_index,
@@ -3411,7 +3417,7 @@
 
         dbtx.insert_entry(
             <span class="kw-2">&amp;</span>PaymentResultKey {
-                payment_hash: <span class="kw-2">*</span>invoice.payment_hash(),
+                payment_hash: bitcoin30_to_bitcoin32_sha256_hash(invoice.payment_hash()),
             },
             <span class="kw-2">&amp;</span>new_payment_result,
         )
@@ -3507,7 +3513,7 @@
                 change,
                 is_internal_payment,
                 contract_id,
-                gateway_id: maybe_gateway_id.map(|pk| bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>pk)),
+                gateway_id: maybe_gateway_id,
             }),
             extra_meta: extra_meta.clone(),
         };
@@ -3879,9 +3885,7 @@
         extra_meta: M,
         gateway: <span class="prelude-ty">Option</span>&lt;LightningGateway&gt;,
     ) -&gt; anyhow::Result&lt;(OperationId, Bolt11Invoice, [u8; <span class="number">32</span>])&gt; {
-        <span class="kw">let </span>gateway_id = gateway
-            .as_ref()
-            .map(|g| bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>g.gateway_id));
+        <span class="kw">let </span>gateway_id = gateway.as_ref().map(|g| g.gateway_id);
         <span class="kw">let </span>(src_node_id, short_channel_id, route_hints) = <span class="kw">if let </span><span class="prelude-val">Some</span>(current_gateway) = gateway {
             (
                 current_gateway.node_pub_key,
@@ -3905,7 +3909,7 @@
             src_node_id,
             short_channel_id,
             <span class="kw-2">&amp;</span>route_hints,
-            bitcoin32_to_bitcoin30_network(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.network),
+            <span class="self">self</span>.cfg.network,
         )<span class="question-mark">?</span>;
 
         <span class="kw">let </span>tx =
@@ -3915,7 +3919,7 @@
             variant: LightningOperationMetaVariant::Receive {
                 out_point: OutPoint { txid, out_idx: <span class="number">0 </span>},
                 invoice: invoice.clone(),
-                gateway_id: gateway_id.map(|pk| bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>pk)),
+                gateway_id,
             },
             extra_meta: extra_meta.clone(),
         };

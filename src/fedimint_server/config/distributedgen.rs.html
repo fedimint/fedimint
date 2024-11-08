@@ -677,14 +677,7 @@
 <a href="#676" id="676">676</a>
 <a href="#677" id="677">677</a>
 <a href="#678" id="678">678</a>
-<a href="#679" id="679">679</a>
-<a href="#680" id="680">680</a>
-<a href="#681" id="681">681</a>
-<a href="#682" id="682">682</a>
-<a href="#683" id="683">683</a>
-<a href="#684" id="684">684</a>
-<a href="#685" id="685">685</a>
-<a href="#686" id="686">686</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<a href="#679" id="679">679</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::io::Write;
@@ -695,9 +688,6 @@
 <span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>bls12_381::Scalar;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_sha256_hash, bitcoin32_to_bitcoin30_sha256_hash,
-};
 <span class="kw">use </span>fedimint_core::config::{
     DkgError, DkgGroup, DkgMessage, DkgPeerMsg, DkgResult, ISupportedDkgMessage,
 };
@@ -778,9 +768,7 @@
         <span class="kw">let </span>hashed = Dkg::hash(<span class="kw-2">&amp;</span>commit);
         dkg.commitments.insert(our_id, commit);
         dkg.hashed_commits.insert(our_id, hashed);
-        <span class="kw">let </span>step = dkg.broadcast(<span class="kw-2">&amp;</span>DkgMessage::HashedCommit(
-            bitcoin32_to_bitcoin30_sha256_hash(<span class="kw-2">&amp;</span>hashed),
-        ));
+        <span class="kw">let </span>step = dkg.broadcast(<span class="kw-2">&amp;</span>DkgMessage::HashedCommit(hashed));
 
         (dkg, step)
     }
@@ -790,12 +778,10 @@
         <span class="kw">match </span>msg {
             DkgMessage::HashedCommit(hashed) =&gt; {
                 <span class="kw">match </span><span class="self">self</span>.hashed_commits.get(<span class="kw-2">&amp;</span>peer) {
-                    <span class="prelude-val">Some</span>(old) <span class="kw">if </span><span class="kw-2">*</span>old != bitcoin30_to_bitcoin32_sha256_hash(<span class="kw-2">&amp;</span>hashed) =&gt; {
+                    <span class="prelude-val">Some</span>(old) <span class="kw">if </span><span class="kw-2">*</span>old != hashed =&gt; {
                         <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">"{peer} sent us two hashes!"</span>))
                     }
-                    <span class="kw">_ </span>=&gt; <span class="self">self
-                        </span>.hashed_commits
-                        .insert(peer, bitcoin30_to_bitcoin32_sha256_hash(<span class="kw-2">&amp;</span>hashed)),
+                    <span class="kw">_ </span>=&gt; <span class="self">self</span>.hashed_commits.insert(peer, hashed),
                 };
 
                 <span class="kw">if </span><span class="self">self</span>.hashed_commits.len() == <span class="self">self</span>.peers.len() {

@@ -270,17 +270,12 @@
 <a href="#269" id="269">269</a>
 <a href="#270" id="270">270</a>
 <a href="#271" id="271">271</a>
-<a href="#272" id="272">272</a>
-<a href="#273" id="273">273</a>
-<a href="#274" id="274">274</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::convert::Infallible;
+<a href="#272" id="272">272</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::hash::Hash;
 
 <span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>bitcoin::secp256k1::{PublicKey, Secp256k1, Signing, Verification};
 <span class="kw">use </span>bitcoin::{Amount, BlockHash, OutPoint, Transaction};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_block_hash, bitcoin32_to_bitcoin30_txid,
-};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
@@ -342,7 +337,7 @@
         tweak_contract_key: PublicKey,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PegInProof, PegInProofError&gt; {
         <span class="comment">// TODO: remove redundancy with serde validation
-        </span><span class="kw">if </span>!txout_proof.contains_tx(bitcoin32_to_bitcoin30_txid(<span class="kw-2">&amp;</span>transaction.compute_txid())) {
+        </span><span class="kw">if </span>!txout_proof.contains_tx(transaction.compute_txid()) {
             <span class="kw">return </span><span class="prelude-val">Err</span>(PegInProofError::TransactionNotInProof);
         }
 
@@ -388,7 +383,7 @@
     }
 
     <span class="kw">pub fn </span>proof_block(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BlockHash {
-        bitcoin30_to_bitcoin32_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>.txout_proof.block())
+        <span class="self">self</span>.txout_proof.block()
     }
 
     <span class="kw">pub fn </span>tweak_contract_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>PublicKey {
@@ -448,9 +443,10 @@
 }
 
 <span class="kw">fn </span>validate_peg_in_proof(proof: <span class="kw-2">&amp;</span>PegInProof) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
-    <span class="kw">if </span>!proof.txout_proof.contains_tx(bitcoin32_to_bitcoin30_txid(
-        <span class="kw-2">&amp;</span>proof.transaction.compute_txid(),
-    )) {
+    <span class="kw">if </span>!proof
+        .txout_proof
+        .contains_tx(proof.transaction.compute_txid())
+    {
         <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">"Supplied transaction is not included in proof"</span>,));
     }
 

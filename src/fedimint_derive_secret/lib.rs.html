@@ -160,8 +160,7 @@
 <a href="#159" id="159">159</a>
 <a href="#160" id="160">160</a>
 <a href="#161" id="161">161</a>
-<a href="#162" id="162">162</a>
-<a href="#163" id="163">163</a></pre></div><pre class="rust"><code><span class="doccomment">//! Scheme for deriving deterministic secret keys
+<a href="#162" id="162">162</a></pre></div><pre class="rust"><code><span class="doccomment">//! Scheme for deriving deterministic secret keys
 //!
 //! `DerivableSecret` represents a secret key that can be used to derive child
 //! secret keys. A root key secret can be used to derives child
@@ -182,9 +181,8 @@
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::secp256k1::{Keypair, Secp256k1, Signing};
-<span class="kw">use </span>fedimint_core::BitcoinHash;
 <span class="kw">use </span>hkdf::hashes::Sha512;
-<span class="kw">use </span>hkdf::Hkdf;
+<span class="kw">use </span>hkdf::{BitcoinHash, Hkdf};
 <span class="kw">use </span>ring::aead;
 
 <span class="kw">const </span>CHILD_TAG: <span class="kw-2">&amp;</span>[u8; <span class="number">8</span>] = <span class="string">b"childkey"</span>;

@@ -420,10 +420,7 @@
 <a href="#419" id="419">419</a>
 <a href="#420" id="420">420</a>
 <a href="#421" id="421">421</a>
-<a href="#422" id="422">422</a>
-<a href="#423" id="423">423</a>
-<a href="#424" id="424">424</a>
-<a href="#425" id="425">425</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#422" id="422">422</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::repeat;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -442,9 +439,6 @@
 <span class="kw">use </span>fedimint_bitcoind::{
     register_bitcoind, DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory,
     <span class="prelude-ty">Result </span><span class="kw">as </span>BitcoinRpcResult,
-};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin32_to_bitcoin30_block_header, bitcoin32_to_bitcoin30_partial_merkle_tree,
 };
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::task::{sleep_in_test, TaskHandle};
@@ -660,8 +654,8 @@
         FakeBitcoinTest::mine_block(addresses, blocks, pending, txid_to_block_height);
         <span class="kw">let </span>block_header = inner.blocks.last().unwrap().header;
         <span class="kw">let </span>proof = TxOutProof {
-            block_header: bitcoin32_to_bitcoin30_block_header(<span class="kw-2">&amp;</span>block_header),
-            merkle_proof: bitcoin32_to_bitcoin30_partial_merkle_tree(<span class="kw-2">&amp;</span>merkle_proof),
+            block_header,
+            merkle_proof,
         };
         inner
             .proofs

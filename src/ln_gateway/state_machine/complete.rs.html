@@ -307,7 +307,7 @@
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>GatewayCompleteCommon {
     <span class="kw">pub </span>operation_id: OperationId,
-    <span class="kw">pub </span>payment_hash: bitcoin_hashes::sha256::Hash,
+    <span class="kw">pub </span>payment_hash: bitcoin::hashes::sha256::Hash,
     <span class="kw">pub </span>incoming_chan_id: u64,
     <span class="kw">pub </span>htlc_id: u64,
 }

@@ -203,8 +203,8 @@
 <a href="#202" id="202">202</a>
 <a href="#203" id="203">203</a>
 <a href="#204" id="204">204</a>
-<a href="#205" id="205">205</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::secp256k1;
-<span class="kw">use </span>bitcoin30::hashes::sha256;
+<a href="#205" id="205">205</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::sha256;
+<span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>secp256k1::schnorr::Signature;
@@ -276,7 +276,7 @@
     }
 
     <span class="kw">pub fn </span>contract_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContractId {
-        ContractId(<span class="self">self</span>.consensus_hash_bitcoin30())
+        ContractId(<span class="self">self</span>.consensus_hash())
     }
 
     <span class="kw">pub fn </span>verify(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
@@ -343,7 +343,7 @@
 
 <span class="kw">impl </span>OutgoingContract {
     <span class="kw">pub fn </span>contract_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContractId {
-        ContractId(<span class="self">self</span>.consensus_hash_bitcoin30())
+        ContractId(<span class="self">self</span>.consensus_hash())
     }
 
     <span class="kw">pub fn </span>forfeit_message(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Message {
@@ -384,7 +384,7 @@
 
 <span class="kw">fn </span>verify_preimage(payment_image: <span class="kw-2">&amp;</span>PaymentImage, preimage: <span class="kw-2">&amp;</span>[u8; <span class="number">32</span>]) -&gt; bool {
     <span class="kw">match </span>payment_image {
-        PaymentImage::Hash(hash) =&gt; preimage.consensus_hash_bitcoin30::&lt;sha256::Hash&gt;() == <span class="kw-2">*</span>hash,
+        PaymentImage::Hash(hash) =&gt; preimage.consensus_hash::&lt;sha256::Hash&gt;() == <span class="kw-2">*</span>hash,
         PaymentImage::Point(pk) =&gt; <span class="kw">match </span>SecretKey::from_slice(preimage) {
             <span class="prelude-val">Ok</span>(sk) =&gt; sk.public_key(secp256k1::SECP256K1) == <span class="kw-2">*</span>pk,
             <span class="prelude-val">Err</span>(..) =&gt; <span class="bool-val">false</span>,
@@ -394,10 +394,10 @@
 
 <span class="attr">#[test]
 </span><span class="kw">fn </span>test_verify_preimage() {
-    <span class="kw">use </span>bitcoin30::hashes::Hash;
+    <span class="kw">use </span>bitcoin::hashes::Hash;
 
     <span class="macro">assert!</span>(verify_preimage(
-        <span class="kw-2">&amp;</span>PaymentImage::Hash(bitcoin30::hashes::sha256::Hash::hash(<span class="kw-2">&amp;</span>[<span class="number">42</span>; <span class="number">32</span>])),
+        <span class="kw-2">&amp;</span>PaymentImage::Hash(bitcoin::hashes::sha256::Hash::hash(<span class="kw-2">&amp;</span>[<span class="number">42</span>; <span class="number">32</span>])),
         <span class="kw-2">&amp;</span>[<span class="number">42</span>; <span class="number">32</span>]
     ));
 

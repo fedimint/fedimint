@@ -2190,8 +2190,8 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{anyhow, Context};
+<span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>bitcoin::{Address, Network, Txid};
-<span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>client::GatewayClientBuilder;
 <span class="kw">use </span>config::GatewayOpts;

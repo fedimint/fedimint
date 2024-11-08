@@ -1064,7 +1064,7 @@
     }
 
     <span class="kw">pub fn </span>calculate_federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationId {
-        FederationId(<span class="self">self</span>.consensus.api_endpoints.consensus_hash_bitcoin30())
+        FederationId(<span class="self">self</span>.consensus.api_endpoints.consensus_hash())
     }
 
     <span class="kw">pub fn </span>add_modules(<span class="kw-2">&amp;mut </span><span class="self">self</span>, modules: BTreeMap&lt;ModuleInstanceId, ServerModuleConfig&gt;) {
