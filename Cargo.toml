@@ -102,7 +102,10 @@ clap = { version = "4.5.20", features = ["derive", "env"] }
 cln-rpc = "0.2.0"
 criterion = "0.5.1"
 devimint = { path = "./devimint", version = "=0.5.0-alpha" }
-electrum-client = { version = "0.18.0", features = ["use-rustls"] }
+electrum-client = { version = "0.21.0", default-features = false, features = [
+    "proxy",
+    "use-rustls-ring",
+] }
 erased-serde = "0.4"
 esplora-client = { version = "0.10.0", default-features = false, features = [
     "async-https-rustls",

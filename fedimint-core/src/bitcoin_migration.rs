@@ -1,7 +1,5 @@
 use std::str::FromStr;
 
-use bitcoin::consensus::Decodable;
-use bitcoin30::consensus::Encodable;
 use bitcoin30::hashes::Hash;
 
 pub fn bitcoin29_to_bitcoin32_psbt(
@@ -80,77 +78,6 @@ pub fn bitcoin32_to_bitcoin30_address(address: &bitcoin::Address) -> bitcoin30::
         .assume_checked()
 }
 
-fn bitcoin30_to_bitcoin32_witness(witness: &bitcoin30::Witness) -> bitcoin::Witness {
-    let mut bytes = vec![];
-    witness
-        .consensus_encode(&mut bytes)
-        .expect("Failed to consensus-encode bitcoin30 witness");
-    let mut cursor = bitcoin::io::Cursor::new(bytes);
-    bitcoin::Witness::consensus_decode(&mut cursor)
-        .expect("Failed to convert bitcoin30 witness to bitcoin32 witness")
-}
-
-fn bitcoin30_to_bitcoin32_txin(txin: &bitcoin30::TxIn) -> bitcoin::TxIn {
-    bitcoin::TxIn {
-        previous_output: bitcoin30_to_bitcoin32_outpoint(&txin.previous_output),
-        script_sig: bitcoin30_to_bitcoin32_script_buf(&txin.script_sig),
-        sequence: bitcoin::Sequence(txin.sequence.0),
-        witness: bitcoin30_to_bitcoin32_witness(&txin.witness),
-    }
-}
-
-fn bitcoin30_to_bitcoin32_txout(txout: &bitcoin30::TxOut) -> bitcoin::TxOut {
-    bitcoin::TxOut {
-        value: bitcoin::Amount::from_sat(txout.value),
-        script_pubkey: bitcoin30_to_bitcoin32_script_buf(&txout.script_pubkey),
-    }
-}
-
-fn bitcoin30_to_bitcoin32_locktime(
-    locktime: bitcoin30::blockdata::locktime::absolute::LockTime,
-) -> bitcoin::blockdata::locktime::absolute::LockTime {
-    match locktime {
-        bitcoin30::blockdata::locktime::absolute::LockTime::Blocks(height) => {
-            bitcoin::blockdata::locktime::absolute::LockTime::Blocks(
-                bitcoin::blockdata::locktime::absolute::Height::from_consensus(
-                    height.to_consensus_u32(),
-                )
-                .expect("Failed to convert bitcoin30 block height locktime to bitcoin32 block height locktime"),
-            )
-        }
-        bitcoin30::blockdata::locktime::absolute::LockTime::Seconds(time) => {
-            bitcoin::blockdata::locktime::absolute::LockTime::Seconds(
-                bitcoin::blockdata::locktime::absolute::Time::from_consensus(time.to_consensus_u32()).expect("Failed to convert bitcoin30 timestamp locktime to bitcoin32 timestamp locktime"),
-            )
-        }
-    }
-}
-
-pub fn bitcoin30_to_bitcoin32_tx(tx: &bitcoin30::Transaction) -> bitcoin::Transaction {
-    bitcoin::Transaction {
-        version: bitcoin::blockdata::transaction::Version(tx.version),
-        lock_time: bitcoin30_to_bitcoin32_locktime(tx.lock_time),
-        input: tx.input.iter().map(bitcoin30_to_bitcoin32_txin).collect(),
-        output: tx.output.iter().map(bitcoin30_to_bitcoin32_txout).collect(),
-    }
-}
-
-fn bitcoin30_to_bitcoin32_script_buf(script: &bitcoin30::ScriptBuf) -> bitcoin::ScriptBuf {
-    bitcoin::ScriptBuf::from(script.as_bytes().to_vec())
-}
-
-pub fn bitcoin32_to_bitcoin30_script_buf(script: &bitcoin::ScriptBuf) -> bitcoin30::ScriptBuf {
-    bitcoin30::ScriptBuf::from(script.as_bytes().to_vec())
-}
-
-pub fn bitcoin30_to_bitcoin32_block_hash(
-    hash: &bitcoin30::block::BlockHash,
-) -> bitcoin::block::BlockHash {
-    bitcoin::block::BlockHash::from_raw_hash(bitcoin30_to_bitcoin32_sha256d_hash(
-        &hash.to_raw_hash(),
-    ))
-}
-
 pub fn bitcoin32_to_bitcoin30_block_hash(
     hash: &bitcoin::block::BlockHash,
 ) -> bitcoin30::block::BlockHash {
@@ -188,23 +115,6 @@ pub fn bitcoin32_to_bitcoin30_network(network: &bitcoin::Network) -> bitcoin30::
     }
 }
 
-fn bitcoin30_to_bitcoin32_txid(txid: &bitcoin30::Txid) -> bitcoin::Txid {
-    bitcoin::Txid::from_str(&txid.to_string())
-        .expect("Failed to convert bitcoin30 txid to bitcoin32 txid")
-}
-
-pub fn bitcoin32_to_bitcoin30_txid(txid: &bitcoin::Txid) -> bitcoin30::Txid {
-    bitcoin30::Txid::from_str(&txid.to_string())
-        .expect("Failed to convert bitcoin32 txid to bitcoin30 txid")
-}
-
-fn bitcoin30_to_bitcoin32_outpoint(outpoint: &bitcoin30::OutPoint) -> bitcoin::OutPoint {
-    bitcoin::OutPoint {
-        txid: bitcoin30_to_bitcoin32_txid(&outpoint.txid),
-        vout: outpoint.vout,
-    }
-}
-
 pub fn bitcoin30_to_bitcoin32_payment_preimage(
     preimage: &lightning::ln::PaymentPreimage,
 ) -> lightning_types::payment::PaymentPreimage {
@@ -221,12 +131,6 @@ pub fn bitcoin32_to_bitcoin30_sha256_hash(
     hash: &bitcoin::hashes::sha256::Hash,
 ) -> bitcoin30::hashes::sha256::Hash {
     bitcoin30::hashes::sha256::Hash::from_slice(hash.as_ref()).expect("Invalid hash length")
-}
-
-fn bitcoin30_to_bitcoin32_sha256d_hash(
-    hash: &bitcoin30::hashes::sha256d::Hash,
-) -> bitcoin::hashes::sha256d::Hash {
-    *bitcoin::hashes::sha256d::Hash::from_bytes_ref(hash.as_ref())
 }
 
 fn bitcoin32_to_bitcoin30_sha256d_hash(
