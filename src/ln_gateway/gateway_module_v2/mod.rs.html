@@ -540,9 +540,7 @@
 <a href="#539" id="539">539</a>
 <a href="#540" id="540">540</a>
 <a href="#541" id="541">541</a>
-<a href="#542" id="542">542</a>
-<a href="#543" id="543">543</a>
-<a href="#544" id="544">544</a></pre></div><pre class="rust"><code><span class="kw">mod </span>api;
+<a href="#542" id="542">542</a></pre></div><pre class="rust"><code><span class="kw">mod </span>api;
 <span class="kw">mod </span>complete_sm;
 <span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
@@ -564,7 +562,6 @@
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_sha256_hash;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
@@ -839,8 +836,7 @@
         };
 
         <span class="macro">ensure!</span>(
-            PaymentImage::Hash(bitcoin30_to_bitcoin32_sha256_hash(payment_hash))
-                == payload.contract.payment_image,
+            PaymentImage::Hash(<span class="kw-2">*</span>payment_hash) == payload.contract.payment_image,
             <span class="string">"The invoices payment hash does not match the contracts payment hash"
         </span>);
 

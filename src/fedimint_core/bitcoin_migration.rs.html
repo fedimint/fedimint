@@ -153,64 +153,7 @@
 <a href="#152" id="152">152</a>
 <a href="#153" id="153">153</a>
 <a href="#154" id="154">154</a>
-<a href="#155" id="155">155</a>
-<a href="#156" id="156">156</a>
-<a href="#157" id="157">157</a>
-<a href="#158" id="158">158</a>
-<a href="#159" id="159">159</a>
-<a href="#160" id="160">160</a>
-<a href="#161" id="161">161</a>
-<a href="#162" id="162">162</a>
-<a href="#163" id="163">163</a>
-<a href="#164" id="164">164</a>
-<a href="#165" id="165">165</a>
-<a href="#166" id="166">166</a>
-<a href="#167" id="167">167</a>
-<a href="#168" id="168">168</a>
-<a href="#169" id="169">169</a>
-<a href="#170" id="170">170</a>
-<a href="#171" id="171">171</a>
-<a href="#172" id="172">172</a>
-<a href="#173" id="173">173</a>
-<a href="#174" id="174">174</a>
-<a href="#175" id="175">175</a>
-<a href="#176" id="176">176</a>
-<a href="#177" id="177">177</a>
-<a href="#178" id="178">178</a>
-<a href="#179" id="179">179</a>
-<a href="#180" id="180">180</a>
-<a href="#181" id="181">181</a>
-<a href="#182" id="182">182</a>
-<a href="#183" id="183">183</a>
-<a href="#184" id="184">184</a>
-<a href="#185" id="185">185</a>
-<a href="#186" id="186">186</a>
-<a href="#187" id="187">187</a>
-<a href="#188" id="188">188</a>
-<a href="#189" id="189">189</a>
-<a href="#190" id="190">190</a>
-<a href="#191" id="191">191</a>
-<a href="#192" id="192">192</a>
-<a href="#193" id="193">193</a>
-<a href="#194" id="194">194</a>
-<a href="#195" id="195">195</a>
-<a href="#196" id="196">196</a>
-<a href="#197" id="197">197</a>
-<a href="#198" id="198">198</a>
-<a href="#199" id="199">199</a>
-<a href="#200" id="200">200</a>
-<a href="#201" id="201">201</a>
-<a href="#202" id="202">202</a>
-<a href="#203" id="203">203</a>
-<a href="#204" id="204">204</a>
-<a href="#205" id="205">205</a>
-<a href="#206" id="206">206</a>
-<a href="#207" id="207">207</a>
-<a href="#208" id="208">208</a>
-<a href="#209" id="209">209</a>
-<a href="#210" id="210">210</a>
-<a href="#211" id="211">211</a>
-<a href="#212" id="212">212</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
+<a href="#155" id="155">155</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>bitcoin30::hashes::Hash;
 
@@ -260,13 +203,6 @@
     address.as_unchecked().clone()
 }
 
-<span class="kw">pub fn </span>bitcoin30_to_bitcoin32_invoice(
-    invoice: <span class="kw-2">&amp;</span>lightning_invoice::Bolt11Invoice,
-) -&gt; lightning_invoice32::Bolt11Invoice {
-    lightning_invoice32::Bolt11Invoice::from_str(<span class="kw-2">&amp;</span>invoice.to_string())
-        .expect(<span class="string">"Failed to convert bitcoin30 invoice to bitcoin32 invoice"</span>)
-}
-
 <span class="kw">pub fn </span>bitcoin30_to_bitcoin32_secp256k1_pubkey(
     pubkey: <span class="kw-2">&amp;</span>bitcoin30::secp256k1::PublicKey,
 ) -&gt; bitcoin::secp256k1::PublicKey {
@@ -290,14 +226,6 @@
         .assume_checked()
 }
 
-<span class="kw">pub fn </span>bitcoin32_to_bitcoin30_block_hash(
-    hash: <span class="kw-2">&amp;</span>bitcoin::block::BlockHash,
-) -&gt; bitcoin30::block::BlockHash {
-    bitcoin30::block::BlockHash::from_raw_hash(bitcoin32_to_bitcoin30_sha256d_hash(
-        <span class="kw-2">&amp;</span>hash.to_raw_hash(),
-    ))
-}
-
 <span class="kw">pub fn </span>bitcoin32_to_bitcoin30_unchecked_address(
     address: <span class="kw-2">&amp;</span>bitcoin::Address&lt;bitcoin::address::NetworkUnchecked&gt;,
 ) -&gt; bitcoin30::Address&lt;bitcoin30::address::NetworkUnchecked&gt; {
@@ -317,22 +245,6 @@
     }
 }
 
-<span class="kw">pub fn </span>bitcoin32_to_bitcoin30_network(network: <span class="kw-2">&amp;</span>bitcoin::Network) -&gt; bitcoin30::Network {
-    <span class="kw">match </span><span class="kw-2">*</span>network {
-        bitcoin::Network::Bitcoin =&gt; bitcoin30::Network::Bitcoin,
-        bitcoin::Network::Testnet =&gt; bitcoin30::Network::Testnet,
-        bitcoin::Network::Signet =&gt; bitcoin30::Network::Signet,
-        bitcoin::Network::Regtest =&gt; bitcoin30::Network::Regtest,
-        <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"There are no other enum cases, this should never be hit."</span>),
-    }
-}
-
-<span class="kw">pub fn </span>bitcoin30_to_bitcoin32_payment_preimage(
-    preimage: <span class="kw-2">&amp;</span>lightning::ln::PaymentPreimage,
-) -&gt; lightning_types::payment::PaymentPreimage {
-    lightning_types::payment::PaymentPreimage(preimage.<span class="number">0</span>)
-}
-
 <span class="kw">pub fn </span>bitcoin30_to_bitcoin32_sha256_hash(
     hash: <span class="kw-2">&amp;</span>bitcoin30::hashes::sha256::Hash,
 ) -&gt; bitcoin::hashes::sha256::Hash {
@@ -343,32 +255,6 @@
     hash: <span class="kw-2">&amp;</span>bitcoin::hashes::sha256::Hash,
 ) -&gt; bitcoin30::hashes::sha256::Hash {
     bitcoin30::hashes::sha256::Hash::from_slice(hash.as_ref()).expect(<span class="string">"Invalid hash length"</span>)
-}
-
-<span class="kw">fn </span>bitcoin32_to_bitcoin30_sha256d_hash(
-    hash: <span class="kw-2">&amp;</span>bitcoin::hashes::sha256d::Hash,
-) -&gt; bitcoin30::hashes::sha256d::Hash {
-    bitcoin30::hashes::sha256d::Hash::from_byte_array(<span class="kw-2">*</span>hash.as_ref())
-}
-
-<span class="kw">pub fn </span>bitcoin32_to_bitcoin30_recoverable_signature(
-    signature: <span class="kw-2">&amp;</span>bitcoin::secp256k1::ecdsa::RecoverableSignature,
-) -&gt; bitcoin30::secp256k1::ecdsa::RecoverableSignature {
-    <span class="kw">let </span>(recovery_id, data) = signature.serialize_compact();
-
-    bitcoin30::secp256k1::ecdsa::RecoverableSignature::from_compact(
-        <span class="kw-2">&amp;</span>data,
-        bitcoin30::secp256k1::ecdsa::RecoveryId::from_i32(recovery_id.to_i32())
-            .expect(<span class="string">"Invalid recovery id"</span>),
-    )
-    .expect(<span class="string">"Failed to convert bitcoin32 recoverable signature to bitcoin30 recoverable signature"</span>)
-}
-
-<span class="kw">pub fn </span>bitcoin30_to_bitcoin32_secp256k1_message(
-    message: <span class="kw-2">&amp;</span>bitcoin30::secp256k1::Message,
-) -&gt; bitcoin::secp256k1::Message {
-    bitcoin::secp256k1::Message::from_digest_slice(message.as_ref())
-        .expect(<span class="string">"Failed to convert bitcoin30 message to bitcoin32 message"</span>)
 }
 
 <span class="attr">#[cfg(test)]

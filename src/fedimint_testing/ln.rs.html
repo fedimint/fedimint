@@ -296,26 +296,7 @@
 <a href="#295" id="295">295</a>
 <a href="#296" id="296">296</a>
 <a href="#297" id="297">297</a>
-<a href="#298" id="298">298</a>
-<a href="#299" id="299">299</a>
-<a href="#300" id="300">300</a>
-<a href="#301" id="301">301</a>
-<a href="#302" id="302">302</a>
-<a href="#303" id="303">303</a>
-<a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
+<a href="#298" id="298">298</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -324,10 +305,6 @@
 <span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
 <span class="kw">use </span>bitcoin::key::Keypair;
 <span class="kw">use </span>bitcoin::secp256k1::{<span class="self">self</span>, PublicKey, SecretKey};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_message, bitcoin32_to_bitcoin30_recoverable_signature,
-    bitcoin32_to_bitcoin30_secp256k1_pubkey, bitcoin32_to_bitcoin30_sha256_hash,
-};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::BoxStream;
 <span class="kw">use </span>fedimint_core::Amount;
@@ -392,7 +369,7 @@
 
         <span class="prelude-val">Ok</span>(InvoiceBuilder::new(Currency::Regtest)
             .description(String::new())
-            .payment_hash(bitcoin32_to_bitcoin30_sha256_hash(<span class="kw-2">&amp;</span>payment_hash))
+            .payment_hash(payment_hash)
             .current_timestamp()
             .min_final_cltv_expiry_delta(<span class="number">0</span>)
             .payment_secret(PaymentSecret([<span class="number">0</span>; <span class="number">32</span>]))
@@ -400,12 +377,7 @@
             .expiry_time(Duration::from_secs(
                 expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
             ))
-            .build_signed(|m| {
-                bitcoin32_to_bitcoin30_recoverable_signature(<span class="kw-2">&amp;</span>ctx.sign_ecdsa_recoverable(
-                    <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_secp256k1_message(m),
-                    <span class="kw-2">&amp;</span><span class="self">self</span>.gateway_node_sec_key,
-                ))
-            })
+            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span><span class="self">self</span>.gateway_node_sec_key))
             .unwrap())
     }
 
@@ -422,9 +394,9 @@
         <span class="comment">// `FakeLightningTest` will fail to pay any invoice with
         // `INVALID_INVOICE_DESCRIPTION` in the description of the invoice.
         </span>InvoiceBuilder::new(Currency::Regtest)
-            .payee_pub_key(bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>kp.public_key()))
+            .payee_pub_key(kp.public_key())
             .description(<span class="string">"INVALID INVOICE DESCRIPTION"</span>.to_string())
-            .payment_hash(bitcoin32_to_bitcoin30_sha256_hash(<span class="kw-2">&amp;</span>payment_hash))
+            .payment_hash(payment_hash)
             .current_timestamp()
             .min_final_cltv_expiry_delta(<span class="number">0</span>)
             .payment_secret(PaymentSecret(INVALID_INVOICE_PAYMENT_SECRET))
@@ -432,12 +404,7 @@
             .expiry_time(Duration::from_secs(
                 expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
             ))
-            .build_signed(|m| {
-                bitcoin32_to_bitcoin30_recoverable_signature(<span class="kw-2">&amp;</span>ctx.sign_ecdsa_recoverable(
-                    <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_secp256k1_message(m),
-                    <span class="kw-2">&amp;</span>SecretKey::from_keypair(<span class="kw-2">&amp;</span>kp),
-                ))
-            })
+            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span>SecretKey::from_keypair(<span class="kw-2">&amp;</span>kp)))
             .expect(<span class="string">"Invoice creation failed"</span>)
     }
 
@@ -547,12 +514,12 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         create_invoice_request: CreateInvoiceRequest,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CreateInvoiceResponse, LightningRpcError&gt; {
-        <span class="kw">let </span>ctx = fedimint_core::secp256k1::Secp256k1::new();
+        <span class="kw">let </span>ctx = secp256k1::Secp256k1::new();
 
         <span class="kw">let </span>invoice = <span class="kw">match </span>create_invoice_request.payment_hash {
             <span class="prelude-val">Some</span>(payment_hash) =&gt; InvoiceBuilder::new(Currency::Regtest)
                 .description(String::new())
-                .payment_hash(bitcoin32_to_bitcoin30_sha256_hash(<span class="kw-2">&amp;</span>payment_hash))
+                .payment_hash(payment_hash)
                 .current_timestamp()
                 .min_final_cltv_expiry_delta(<span class="number">0</span>)
                 .payment_secret(PaymentSecret([<span class="number">0</span>; <span class="number">32</span>]))
@@ -560,12 +527,7 @@
                 .expiry_time(Duration::from_secs(u64::from(
                     create_invoice_request.expiry_secs,
                 )))
-                .build_signed(|m| {
-                    bitcoin32_to_bitcoin30_recoverable_signature(<span class="kw-2">&amp;</span>ctx.sign_ecdsa_recoverable(
-                        <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_secp256k1_message(m),
-                        <span class="kw-2">&amp;</span><span class="self">self</span>.gateway_node_sec_key,
-                    ))
-                })
+                .build_signed(|m| ctx.sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span><span class="self">self</span>.gateway_node_sec_key))
                 .unwrap(),
             <span class="prelude-val">None </span>=&gt; {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedToGetInvoice {

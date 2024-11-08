@@ -291,7 +291,23 @@
 <a href="#290" id="290">290</a>
 <a href="#291" id="291">291</a>
 <a href="#292" id="292">292</a>
-<a href="#293" id="293">293</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic, clippy::nursery)]
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_precision_loss)]
@@ -338,6 +354,8 @@
 <span class="doccomment">/// Mostly re-exported for [`Decodable`] macros.
 </span><span class="kw">pub use </span>anyhow;
 <span class="kw">pub use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
+<span class="kw">use </span>lightning::util::ser::Writeable;
+<span class="kw">use </span>lightning_types::features::Bolt11InvoiceFeatures;
 <span class="kw">pub use </span>macro_rules_attribute::apply;
 <span class="kw">pub use </span>module::ServerModule;
 <span class="kw">pub use </span>peer_id::<span class="kw-2">*</span>;
@@ -544,6 +562,20 @@
 </span><span class="kw">pub enum </span>CoreError {
     <span class="attr">#[error(<span class="string">"Mismatching outcome variant: expected {0}, got {1}"</span>)]
     </span>MismatchingVariant(<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str),
+}
+
+<span class="comment">// Encode features for a bolt11 invoice without encoding the length.
+// This functionality was available in `lightning` v0.0.123, but has since been
+// removed. See the original code here:
+// https://docs.rs/lightning/0.0.123/src/lightning/ln/features.rs.html#745-750
+// https://docs.rs/lightning/0.0.123/src/lightning/ln/features.rs.html#1008-1012
+</span><span class="kw">pub fn </span>encode_bolt11_invoice_features_without_length(features: <span class="kw-2">&amp;</span>Bolt11InvoiceFeatures) -&gt; Vec&lt;u8&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>feature_bytes = <span class="macro">vec!</span>[];
+    <span class="kw">for </span>f <span class="kw">in </span>features.le_flags().iter().rev() {
+        f.write(<span class="kw-2">&amp;mut </span>feature_bytes)
+            .expect(<span class="string">"Writing to byte vec can't fail"</span>);
+    }
+    feature_bytes
 }
 
 <span class="attr">#[cfg(test)]

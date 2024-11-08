@@ -594,14 +594,7 @@
 <a href="#593" id="593">593</a>
 <a href="#594" id="594">594</a>
 <a href="#595" id="595">595</a>
-<a href="#596" id="596">596</a>
-<a href="#597" id="597">597</a>
-<a href="#598" id="598">598</a>
-<a href="#599" id="599">599</a>
-<a href="#600" id="600">600</a>
-<a href="#601" id="601">601</a>
-<a href="#602" id="602">602</a>
-<a href="#603" id="603">603</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
+<a href="#596" id="596">596</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -610,9 +603,6 @@
 <span class="kw">use </span>bitcoin::hashes::Hash;
 <span class="kw">use </span>bitcoin::{Network, OutPoint};
 <span class="kw">use </span>fedimint_bip39::Mnemonic;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_invoice, bitcoin30_to_bitcoin32_payment_preimage,
-};
 <span class="kw">use </span>fedimint_core::task::{TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll};
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
@@ -889,7 +879,7 @@
         max_fee: Amount,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, LightningRpcError&gt; {
         <span class="kw">let </span>payment_id = <span class="kw">match </span><span class="self">self</span>.node.bolt11_payment().send(
-            <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_invoice(<span class="kw-2">&amp;</span>invoice),
+            <span class="kw-2">&amp;</span>invoice,
             <span class="prelude-val">Some</span>(SendingParameters {
                 max_total_routing_fee_msat: <span class="prelude-val">Some</span>(<span class="prelude-val">Some</span>(max_fee.msats)),
                 max_total_cltv_expiry_delta: <span class="prelude-val">Some</span>(max_delay <span class="kw">as </span>u32),
@@ -973,11 +963,7 @@
         <span class="kw">if let </span>PaymentAction::Settle(preimage) = action {
             <span class="self">self</span>.node
                 .bolt11_payment()
-                .claim_for_hash(
-                    ph,
-                    claimable_amount_msat,
-                    bitcoin30_to_bitcoin32_payment_preimage(<span class="kw-2">&amp;</span>PaymentPreimage(preimage.<span class="number">0</span>)),
-                )
+                .claim_for_hash(ph, claimable_amount_msat, PaymentPreimage(preimage.<span class="number">0</span>))
                 .map_err(|<span class="kw">_</span>| LightningRpcError::FailedToCompleteHtlc {
                     failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to claim LDK payment with hash {ph_hex_str}"</span>),
                 })<span class="question-mark">?</span>;

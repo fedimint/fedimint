@@ -230,12 +230,8 @@
 <a href="#229" id="229">229</a>
 <a href="#230" id="230">230</a>
 <a href="#231" id="231">231</a>
-<a href="#232" id="232">232</a>
-<a href="#233" id="233">233</a>
-<a href="#234" id="234">234</a>
-<a href="#235" id="235">235</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::secp256k1::schnorr::Signature;
+<a href="#232" id="232">232</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::secp256k1::schnorr::Signature;
 <span class="kw">use </span>bitcoin::secp256k1::PublicKey;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount};
@@ -420,9 +416,7 @@
 
 <span class="kw">impl </span>RoutingInfo {
     <span class="kw">pub fn </span>send_parameters(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: <span class="kw-2">&amp;</span>Bolt11Invoice) -&gt; (PaymentFee, u64) {
-        <span class="kw">if </span>invoice.recover_payee_pub_key()
-            == bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span><span class="self">self</span>.lightning_public_key)
-        {
+        <span class="kw">if </span>invoice.recover_payee_pub_key() == <span class="self">self</span>.lightning_public_key {
             (<span class="self">self</span>.send_fee_minimum.clone(), <span class="self">self</span>.expiration_delta_minimum)
         } <span class="kw">else </span>{
             (<span class="self">self</span>.send_fee_default.clone(), <span class="self">self</span>.expiration_delta_default)

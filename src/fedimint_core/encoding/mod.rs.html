@@ -1830,7 +1830,7 @@
         r: <span class="kw-2">&amp;mut </span>R,
         _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="self">Self</span>::read(r)
+        <span class="self">Self</span>::read(<span class="kw-2">&amp;mut </span>SimpleBitcoinRead(r))
             .map_err(|e| DecodeError::new_custom(<span class="macro">anyhow::anyhow!</span>(<span class="string">"BigSize decoding error: {e:?}"</span>)))
     }
 }
@@ -2603,15 +2603,15 @@
     }
 }
 
-<span class="kw">impl</span>&lt;W: Write&gt; Write <span class="kw">for </span>CountWrite&lt;W&gt; {
-    <span class="kw">fn </span>write(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;</span>[u8]) -&gt; io::Result&lt;usize&gt; {
+<span class="kw">impl</span>&lt;W: Write&gt; bitcoin_io::Write <span class="kw">for </span>CountWrite&lt;W&gt; {
+    <span class="kw">fn </span>write(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;</span>[u8]) -&gt; bitcoin_io::Result&lt;usize&gt; {
         <span class="kw">let </span>written = <span class="self">self</span>.inner.write(buf)<span class="question-mark">?</span>;
         <span class="self">self</span>.count += written <span class="kw">as </span>u64;
         <span class="prelude-val">Ok</span>(written)
     }
 
-    <span class="kw">fn </span>flush(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;()&gt; {
-        <span class="self">self</span>.inner.flush()
+    <span class="kw">fn </span>flush(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; bitcoin_io::Result&lt;()&gt; {
+        <span class="self">self</span>.inner.flush().map_err(bitcoin_io::Error::from)
     }
 }
 
