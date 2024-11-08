@@ -315,19 +315,12 @@
 <a href="#314" id="314">314</a>
 <a href="#315" id="315">315</a>
 <a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
-<a href="#318" id="318">318</a>
-<a href="#319" id="319">319</a>
-<a href="#320" id="320">320</a>
-<a href="#321" id="321">321</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#317" id="317">317</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin::secp256k1::Keypair;
 <span class="kw">use </span>fedimint_client::ClientHandleArc;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_keypair,
-};
 <span class="kw">use </span>fedimint_core::config::{FederationId, FederationIdPrefix, JsonClientConfig};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, NonCommittable};
 <span class="kw">use </span>fedimint_core::util::Spanned;
@@ -389,8 +382,7 @@
     ) -&gt; AdminResult&lt;FederationInfo&gt; {
         <span class="kw">let </span>federation_info = <span class="self">self</span>.federation_info(federation_id, dbtx).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>gateway_keypair =
-            bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>dbtx.load_gateway_keypair_assert_exists().<span class="kw">await</span>);
+        <span class="kw">let </span>gateway_keypair = dbtx.load_gateway_keypair_assert_exists().<span class="kw">await</span>;
 
         <span class="self">self</span>.unannounce_from_federation(federation_id, gateway_keypair)
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -466,7 +458,7 @@
         client
             .value()
             .get_first_module::&lt;GatewayClientModule&gt;()<span class="question-mark">?
-            </span>.remove_from_federation(bitcoin32_to_bitcoin30_keypair(<span class="kw-2">&amp;</span>gateway_keypair))
+            </span>.remove_from_federation(gateway_keypair)
             .<span class="kw">await</span>;
 
         <span class="prelude-val">Ok</span>(())
@@ -483,7 +475,7 @@
                     .value()
                     .get_first_module::&lt;GatewayClientModule&gt;()
                     .expect(<span class="string">"Must have client module"</span>)
-                    .remove_from_federation(bitcoin32_to_bitcoin30_keypair(<span class="kw-2">&amp;</span>gateway_keypair))
+                    .remove_from_federation(gateway_keypair)
                     .<span class="kw">await</span>;
             })
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();

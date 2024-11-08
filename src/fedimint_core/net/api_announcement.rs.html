@@ -115,13 +115,13 @@
 <a href="#114" id="114">114</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin30::hashes::{sha256, Hash};
+<span class="kw">use </span>bitcoin30::secp256k1::Message;
 <span class="kw">use </span>fedimint_core::db::DatabaseLookup;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::MaybeSend;
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>jsonrpsee_core::Serialize;
-<span class="kw">use </span>secp256k1_27::Message;
 <span class="kw">use </span>serde::Deserialize;
 
 <span class="kw">use </span><span class="kw">crate</span>::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_message;

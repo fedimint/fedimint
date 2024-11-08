@@ -540,14 +540,7 @@
 <a href="#539" id="539">539</a>
 <a href="#540" id="540">540</a>
 <a href="#541" id="541">541</a>
-<a href="#542" id="542">542</a>
-<a href="#543" id="543">543</a>
-<a href="#544" id="544">544</a>
-<a href="#545" id="545">545</a>
-<a href="#546" id="546">546</a>
-<a href="#547" id="547">547</a>
-<a href="#548" id="548">548</a>
-<a href="#549" id="549">549</a></pre></div><pre class="rust"><code><span class="kw">mod </span>api;
+<a href="#542" id="542">542</a></pre></div><pre class="rust"><code><span class="kw">mod </span>api;
 <span class="kw">mod </span>complete_sm;
 <span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
@@ -557,7 +550,8 @@
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::{anyhow, ensure};
-<span class="kw">use </span>bitcoin_hashes::sha256;
+<span class="kw">use </span>bitcoin::hashes::sha256;
+<span class="kw">use </span>bitcoin::secp256k1::Message;
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
@@ -568,9 +562,6 @@
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin32_to_bitcoin30_schnorr_signature, bitcoin32_to_bitcoin30_secp256k1_pubkey,
-};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
@@ -579,9 +570,7 @@
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 <span class="kw">use </span>fedimint_core::secp256k1::Keypair;
-<span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, secp256k1_27 <span class="kw">as </span>secp256k1, Amount, OutPoint, PeerId,
-};
+<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint, PeerId};
 <span class="kw">use </span>fedimint_lnv2_common::config::LightningClientConfig;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 <span class="kw">use </span>fedimint_lnv2_common::gateway_api::SendPaymentPayload;
@@ -817,14 +806,11 @@
         </span><span class="macro">ensure!</span>(
             secp256k1::SECP256K1
                 .verify_schnorr(
-                    <span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_schnorr_signature(<span class="kw-2">&amp;</span>payload.auth),
-                    <span class="kw-2">&amp;</span>payload
-                        .invoice
-                        .consensus_hash_bitcoin30::&lt;sha256::Hash&gt;()
-                        .into(),
-                    <span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_secp256k1_pubkey(<span class="kw-2">&amp;</span>payload.contract.refund_pk)
-                        .x_only_public_key()
-                        .<span class="number">0</span>,
+                    <span class="kw-2">&amp;</span>payload.auth,
+                    <span class="kw-2">&amp;</span>Message::from_digest(
+                        <span class="kw-2">*</span>payload.invoice.consensus_hash::&lt;sha256::Hash&gt;().as_ref()
+                    ),
+                    <span class="kw-2">&amp;</span>payload.contract.refund_pk.x_only_public_key().<span class="number">0</span>,
                 )
                 .is_ok(),
             <span class="string">"Invalid auth signature for the invoice data"
@@ -917,7 +903,7 @@
 
                         <span class="macro">assert!</span>(state.common.contract.verify_forfeit_signature(<span class="kw-2">&amp;</span>signature));
 
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(bitcoin32_to_bitcoin30_schnorr_signature(<span class="kw-2">&amp;</span>signature));
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(signature);
                     }
                 }
             }

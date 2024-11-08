@@ -1487,15 +1487,7 @@
 <a href="#1486" id="1486">1486</a>
 <a href="#1487" id="1487">1487</a>
 <a href="#1488" id="1488">1488</a>
-<a href="#1489" id="1489">1489</a>
-<a href="#1490" id="1490">1490</a>
-<a href="#1491" id="1491">1491</a>
-<a href="#1492" id="1492">1492</a>
-<a href="#1493" id="1493">1493</a>
-<a href="#1494" id="1494">1494</a>
-<a href="#1495" id="1495">1495</a>
-<a href="#1496" id="1496">1496</a>
-<a href="#1497" id="1497">1497</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1489" id="1489">1489</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -1508,9 +1500,7 @@
 <span class="kw">use </span>anyhow::{bail, Context};
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash};
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_message, bitcoin30_to_bitcoin32_secp256k1_pubkey,
-};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_message;
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -2069,7 +2059,7 @@
                 }
                 <span class="comment">// … either the user may spend the funds since they sold a valid preimage …
                 </span>DecryptedPreimage::Some(preimage) =&gt; <span class="kw">match </span>preimage.to_public_key() {
-                    <span class="prelude-val">Ok</span>(pub_key) =&gt; bitcoin30_to_bitcoin32_secp256k1_pubkey(<span class="kw-2">&amp;</span>pub_key),
+                    <span class="prelude-val">Ok</span>(pub_key) =&gt; pub_key,
                     <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(LightningInputError::InvalidPreimage),
                 },
                 <span class="comment">// … or the gateway may claim back funds for not receiving the advertised preimage.
@@ -2721,10 +2711,7 @@
 
         <span class="comment">// Verify the supplied schnorr signature is valid
         </span><span class="kw">let </span>msg = create_gateway_remove_message(fed_public_key, our_peer_id, challenge);
-        signature.verify(
-            <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_secp256k1_message(<span class="kw-2">&amp;</span>msg),
-            <span class="kw-2">&amp;</span>gateway_id.x_only_public_key().<span class="number">0</span>,
-        )<span class="question-mark">?</span>;
+        signature.verify(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>gateway_id.x_only_public_key().<span class="number">0</span>)<span class="question-mark">?</span>;
 
         dbtx.remove_entry(<span class="kw-2">&amp;</span>LightningGatewayKey(gateway_id)).<span class="kw">await</span>;
         <span class="macro">info!</span>(<span class="string">"Successfully removed gateway: {gateway_id}"</span>);
@@ -2745,7 +2732,6 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>assert_matches::assert_matches;
     <span class="kw">use </span>bitcoin_hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash};
-    <span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_pubkey;
     <span class="kw">use </span>fedimint_core::config::ConfigGenModuleParams;
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
@@ -2926,11 +2912,9 @@
                 amount,
                 fee: Amount { msats: <span class="number">0 </span>},
             },
-            pub_key: bitcoin30_to_bitcoin32_secp256k1_pubkey(
-                <span class="kw-2">&amp;</span>preimage
-                    .to_public_key()
-                    .expect(<span class="string">"should create Schnorr pubkey from preimage"</span>),
-            ),
+            pub_key: preimage
+                .to_public_key()
+                .expect(<span class="string">"should create Schnorr pubkey from preimage"</span>),
         };
 
         <span class="macro">assert_eq!</span>(processed_input_meta, expected_input_meta);

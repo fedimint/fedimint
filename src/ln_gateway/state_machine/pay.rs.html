@@ -941,8 +941,7 @@
 <a href="#940" id="940">940</a>
 <a href="#941" id="941">941</a>
 <a href="#942" id="942">942</a>
-<a href="#943" id="943">943</a>
-<a href="#944" id="944">944</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
+<a href="#943" id="943">943</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -950,7 +949,6 @@
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle,
 };
 <span class="kw">use </span>fedimint_client::{ClientHandleArc, DynGlobalClientContext};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_keypair;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -1322,7 +1320,7 @@
 
             <span class="kw">let </span>payment_parameters = <span class="self">Self</span>::validate_outgoing_account(
                 <span class="kw-2">&amp;</span>outgoing_contract_account,
-                bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>context.redeem_key),
+                context.redeem_key,
                 context.timelock_delta,
                 consensus_block_count.unwrap(),
                 <span class="kw-2">&amp;</span>payment_data,
@@ -1658,7 +1656,7 @@
         <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput&gt; {
             input: claim_input,
             amount: contract.amount,
-            keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>context.redeem_key)],
+            keys: <span class="macro">vec!</span>[context.redeem_key],
         };
 
         <span class="kw">let </span>out_points = global_context
@@ -1845,7 +1843,7 @@
             <span class="kw-2">&amp;</span>bitcoin::secp256k1::Message::from_digest(
                 <span class="kw-2">*</span>contract.contract.cancellation_message().as_ref(),
             ),
-            <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin32_keypair(<span class="kw-2">&amp;</span>context.redeem_key),
+            <span class="kw-2">&amp;</span>context.redeem_key,
         );
         <span class="kw">let </span>cancel_output = LightningOutput::new_v0_cancel_outgoing(
             contract.contract.contract_id(),

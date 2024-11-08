@@ -778,7 +778,7 @@
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>anyhow::{bail, Context <span class="kw">as </span>AnyhowContext};
-<span class="kw">use </span>bitcoin30::hashes::sha256;
+<span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
 <span class="kw">use </span>config::LightningClientConfig;
 <span class="kw">use </span>fedimint_client::oplog::OperationLogEntry;
 <span class="kw">use </span>fedimint_client::ClientHandleArc;
@@ -787,7 +787,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-<span class="kw">use </span>fedimint_core::secp256k1_27::Message;
+<span class="kw">use </span>fedimint_core::secp256k1::Message;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{
     extensible_associated_module_type, plugin_types_trait_impl_common, secp256k1, Amount, PeerId,
@@ -1379,7 +1379,7 @@
     <span class="attr">#[error(<span class="string">"The incoming LN account requires more funding (need {0} got {1})"</span>)]
     </span>InsufficientIncomingFunding(Amount, Amount),
     <span class="attr">#[error(<span class="string">"No offer found for payment hash {0}"</span>)]
-    </span>NoOffer(fedimint_core::secp256k1_27::hashes::sha256::Hash),
+    </span>NoOffer(bitcoin30::secp256k1::hashes::sha256::Hash),
     <span class="attr">#[error(<span class="string">"Only outgoing contracts support cancellation"</span>)]
     </span>NotOutgoingContract,
     <span class="attr">#[error(<span class="string">"Cancellation request wasn't properly signed"</span>)]
@@ -1500,6 +1500,6 @@
     <span class="kw">let </span>guardian_id: u16 = peer_id.into();
     message_preimage.append(<span class="kw-2">&amp;mut </span>guardian_id.consensus_encode_to_vec());
     message_preimage.append(<span class="kw-2">&amp;mut </span>challenge.consensus_encode_to_vec());
-    Message::from_hashed_data::&lt;sha256::Hash&gt;(message_preimage.as_slice())
+    Message::from_digest(<span class="kw-2">*</span>sha256::Hash::hash(message_preimage.as_slice()).as_ref())
 }
 </code></pre></div></section></main></body></html>
