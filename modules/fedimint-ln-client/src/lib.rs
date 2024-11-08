@@ -57,7 +57,6 @@ use fedimint_core::module::{
 use fedimint_core::secp256k1::{
     All, Keypair, PublicKey, Scalar, Secp256k1, SecretKey, Signing, Verification,
 };
-use fedimint_core::secp256k1_27::ThirtyTwoByteHash;
 use fedimint_core::task::{timeout, MaybeSend, MaybeSync};
 use fedimint_core::util::update_merge::UpdateMerge;
 use fedimint_core::util::{backoff_util, retry, BoxStream};
@@ -1002,7 +1001,7 @@ impl LightningClientModule {
                     state_machines: sm_gen,
                 }],
             ),
-            bitcoin32_to_bitcoin30_sha256_hash(&preimage).into_32(),
+            *preimage.as_ref(),
         ))
     }
 
