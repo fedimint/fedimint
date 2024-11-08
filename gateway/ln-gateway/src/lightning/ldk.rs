@@ -7,7 +7,8 @@ use async_trait::async_trait;
 use bitcoin::hashes::Hash;
 use bitcoin::{Network, OutPoint};
 use fedimint_bip39::Mnemonic;
-use fedimint_core::task::{TaskGroup, TaskHandle};
+use fedimint_core::envs::is_env_var_set;
+use fedimint_core::task::{block_in_place, TaskGroup, TaskHandle};
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::contracts::Preimage;
 use ldk_node::config::EsploraSyncConfig;
@@ -225,6 +226,13 @@ impl Drop for GatewayLdkClient {
 #[async_trait]
 impl ILnRpcClient for GatewayLdkClient {
     async fn info(&self) -> Result<GetNodeInfoResponse, LightningRpcError> {
+        // HACK: https://github.com/lightningdevkit/ldk-node/issues/339 when running in devimint
+        // to speed up tests
+        if is_env_var_set("FM_IN_DEVIMINT") {
+            block_in_place(|| {
+                let _ = self.node.sync_wallets();
+            });
+        }
         let node_status = self.node.status();
 
         let Some(esplora_chain_tip_block_summary) = self
