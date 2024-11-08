@@ -1272,7 +1272,16 @@
 <a href="#1271" id="1271">1271</a>
 <a href="#1272" id="1272">1272</a>
 <a href="#1273" id="1273">1273</a>
-<a href="#1274" id="1274">1274</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
+<a href="#1274" id="1274">1274</a>
+<a href="#1275" id="1275">1275</a>
+<a href="#1276" id="1276">1276</a>
+<a href="#1277" id="1277">1277</a>
+<a href="#1278" id="1278">1278</a>
+<a href="#1279" id="1279">1279</a>
+<a href="#1280" id="1280">1280</a>
+<a href="#1281" id="1281">1281</a>
+<a href="#1282" id="1282">1282</a>
+<a href="#1283" id="1283">1283</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -1310,7 +1319,7 @@
     poll, poll_with_timeout, ClnLightningCli, GatewayClnExtension, ProcessHandle, ProcessManager,
 };
 <span class="kw">use </span><span class="kw">crate</span>::vars::utf8;
-<span class="kw">use </span><span class="kw">crate</span>::version_constants::VERSION_0_4_0_ALPHA;
+<span class="kw">use </span><span class="kw">crate</span>::version_constants::{VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA};
 <span class="kw">use crate</span>::{cmd, poll_eq, Gatewayd};
 
 <span class="attr">#[derive(Clone)]
@@ -2050,12 +2059,21 @@
             bitcoin::hashes::HashEngine::input(<span class="kw-2">&amp;mut </span>engine, <span class="kw-2">&amp;</span>preimage);
             bitcoin::hashes::sha256::Hash::from_engine(engine)
         };
+        <span class="comment">// TODO(support:v0.5): LNv1 cannot pay HOLD invoices with a CLTV expiry greater
+        // than 500 before v0.5
+        </span><span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
+        <span class="kw">let </span>cltv_expiry = <span class="kw">if </span>fedimint_cli_version &gt;= <span class="kw-2">*</span>VERSION_0_5_0_ALPHA {
+            <span class="number">650
+        </span>} <span class="kw">else </span>{
+            <span class="number">100
+        </span>};
         <span class="kw">let </span>hold_request = <span class="self">self
             </span>.invoices_client_lock()
             .<span class="kw">await</span><span class="question-mark">?
             </span>.add_hold_invoice(tonic_lnd::invoicesrpc::AddHoldInvoiceRequest {
                 value_msat: amount <span class="kw">as </span>i64,
                 hash: hash.to_byte_array().to_vec(),
+                cltv_expiry,
                 ..Default::default()
             })
             .<span class="kw">await</span><span class="question-mark">?
