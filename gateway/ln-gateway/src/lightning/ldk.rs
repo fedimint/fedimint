@@ -7,9 +7,6 @@ use async_trait::async_trait;
 use bitcoin::hashes::Hash;
 use bitcoin::{Network, OutPoint};
 use fedimint_bip39::Mnemonic;
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_invoice, bitcoin30_to_bitcoin32_payment_preimage,
-};
 use fedimint_core::task::{TaskGroup, TaskHandle};
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::contracts::Preimage;
@@ -286,7 +283,7 @@ impl ILnRpcClient for GatewayLdkClient {
         max_fee: Amount,
     ) -> Result<PayInvoiceResponse, LightningRpcError> {
         let payment_id = match self.node.bolt11_payment().send(
-            &bitcoin30_to_bitcoin32_invoice(&invoice),
+            &invoice,
             Some(SendingParameters {
                 max_total_routing_fee_msat: Some(Some(max_fee.msats)),
                 max_total_cltv_expiry_delta: Some(max_delay as u32),
@@ -370,11 +367,7 @@ impl ILnRpcClient for GatewayLdkClient {
         if let PaymentAction::Settle(preimage) = action {
             self.node
                 .bolt11_payment()
-                .claim_for_hash(
-                    ph,
-                    claimable_amount_msat,
-                    bitcoin30_to_bitcoin32_payment_preimage(&PaymentPreimage(preimage.0)),
-                )
+                .claim_for_hash(ph, claimable_amount_msat, PaymentPreimage(preimage.0))
                 .map_err(|_| LightningRpcError::FailedToCompleteHtlc {
                     failure_reason: format!("Failed to claim LDK payment with hash {ph_hex_str}"),
                 })?;

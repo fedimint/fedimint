@@ -30,9 +30,6 @@ use bitcoin::hashes::{sha256, Hash};
 use config::LightningClientConfig;
 use fedimint_client::oplog::OperationLogEntry;
 use fedimint_client::ClientHandleArc;
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin30_to_bitcoin32_sha256_hash,
-};
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -40,9 +37,9 @@ use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersi
 use fedimint_core::secp256k1::Message;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
-    extensible_associated_module_type, plugin_types_trait_impl_common, secp256k1, Amount, PeerId,
+    encode_bolt11_invoice_features_without_length, extensible_associated_module_type,
+    plugin_types_trait_impl_common, secp256k1, Amount, PeerId,
 };
-use lightning::util::ser::{WithoutLength, Writeable};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use secp256k1::schnorr::Signature;
 use serde::{Deserialize, Serialize};
@@ -432,9 +429,6 @@ plugin_types_trait_impl_common!(
 // TODO: upstream serde support to LDK
 /// Hack to get a route hint that implements `serde` traits.
 pub mod route_hints {
-    use fedimint_core::bitcoin_migration::{
-        bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_secp256k1_pubkey,
-    };
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::secp256k1::PublicKey;
     use lightning_invoice::RoutingFees;
@@ -470,7 +464,7 @@ pub mod route_hints {
                 self.0
                     .iter()
                     .map(|hop| lightning_invoice::RouteHintHop {
-                        src_node_id: bitcoin32_to_bitcoin30_secp256k1_pubkey(&hop.src_node_id),
+                        src_node_id: hop.src_node_id,
                         short_channel_id: hop.short_channel_id,
                         fees: RoutingFees {
                             base_msat: hop.base_msat,
@@ -494,7 +488,7 @@ pub mod route_hints {
     impl From<lightning_invoice::RouteHintHop> for RouteHintHop {
         fn from(rhh: lightning_invoice::RouteHintHop) -> Self {
             RouteHintHop {
-                src_node_id: bitcoin30_to_bitcoin32_secp256k1_pubkey(&rhh.src_node_id),
+                src_node_id: rhh.src_node_id,
                 short_channel_id: rhh.short_channel_id,
                 base_msat: rhh.fees.base_msat,
                 proportional_millionths: rhh.fees.proportional_millionths,
@@ -681,25 +675,19 @@ impl PrunedInvoice {
         let expiry_timestamp = invoice.expires_at().map_or(u64::MAX, |t| t.as_secs());
 
         let destination_features = if let Some(features) = invoice.features() {
-            let mut feature_bytes = vec![];
-            WithoutLength(features)
-                .write(&mut feature_bytes)
-                .expect("Writing to byte vec can't fail");
-            feature_bytes
+            encode_bolt11_invoice_features_without_length(features)
         } else {
             vec![]
         };
 
         PrunedInvoice {
             amount,
-            destination: bitcoin30_to_bitcoin32_secp256k1_pubkey(
-                &invoice
-                    .payee_pub_key()
-                    .copied()
-                    .unwrap_or_else(|| invoice.recover_payee_pub_key()),
-            ),
+            destination: invoice
+                .payee_pub_key()
+                .copied()
+                .unwrap_or_else(|| invoice.recover_payee_pub_key()),
             destination_features,
-            payment_hash: bitcoin30_to_bitcoin32_sha256_hash(invoice.payment_hash()),
+            payment_hash: *invoice.payment_hash(),
             payment_secret: invoice.payment_secret().0,
             route_hints: invoice.route_hints().into_iter().map(Into::into).collect(),
             min_final_cltv_delta: invoice.min_final_cltv_expiry_delta(),

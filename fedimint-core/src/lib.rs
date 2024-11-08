@@ -45,6 +45,8 @@ pub use amount::*;
 /// Mostly re-exported for [`Decodable`] macros.
 pub use anyhow;
 pub use bitcoin::hashes::Hash as BitcoinHash;
+use lightning::util::ser::Writeable;
+use lightning_types::features::Bolt11InvoiceFeatures;
 pub use macro_rules_attribute::apply;
 pub use module::ServerModule;
 pub use peer_id::*;
@@ -251,6 +253,20 @@ pub fn weight_to_vbytes(weight: u64) -> u64 {
 pub enum CoreError {
     #[error("Mismatching outcome variant: expected {0}, got {1}")]
     MismatchingVariant(&'static str, &'static str),
+}
+
+// Encode features for a bolt11 invoice without encoding the length.
+// This functionality was available in `lightning` v0.0.123, but has since been
+// removed. See the original code here:
+// https://docs.rs/lightning/0.0.123/src/lightning/ln/features.rs.html#745-750
+// https://docs.rs/lightning/0.0.123/src/lightning/ln/features.rs.html#1008-1012
+pub fn encode_bolt11_invoice_features_without_length(features: &Bolt11InvoiceFeatures) -> Vec<u8> {
+    let mut feature_bytes = vec![];
+    for f in features.le_flags().iter().rev() {
+        f.write(&mut feature_bytes)
+            .expect("Writing to byte vec can't fail");
+    }
+    feature_bytes
 }
 
 #[cfg(test)]

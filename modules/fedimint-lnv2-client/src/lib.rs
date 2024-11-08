@@ -30,10 +30,6 @@ use fedimint_client::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin30_to_bitcoin32_sha256_hash,
-    bitcoin32_to_bitcoin30_network,
-};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
@@ -443,9 +439,7 @@ impl LightningClientModule {
                 .module_db()
                 .begin_transaction_nc()
                 .await
-                .get_value(&GatewayKey(bitcoin30_to_bitcoin32_secp256k1_pubkey(
-                    &invoice.recover_payee_pub_key(),
-                )))
+                .get_value(&GatewayKey(invoice.recover_payee_pub_key()))
                 .await
                 .filter(|gateway| gateways.contains(gateway))
             {
@@ -503,10 +497,10 @@ impl LightningClientModule {
             return Err(SendPaymentError::InvoiceExpired);
         }
 
-        if bitcoin32_to_bitcoin30_network(&self.cfg.network) != invoice.currency().into() {
+        if self.cfg.network != invoice.currency().into() {
             return Err(SendPaymentError::WrongCurrency {
                 invoice_currency: invoice.currency(),
-                federation_currency: bitcoin32_to_bitcoin30_network(&self.cfg.network).into(),
+                federation_currency: self.cfg.network.into(),
             });
         }
 
@@ -549,9 +543,7 @@ impl LightningClientModule {
             .map_err(|e| SendPaymentError::FederationError(e.to_string()))?;
 
         let contract = OutgoingContract {
-            payment_image: PaymentImage::Hash(bitcoin30_to_bitcoin32_sha256_hash(
-                invoice.payment_hash(),
-            )),
+            payment_image: PaymentImage::Hash(*invoice.payment_hash()),
             amount: send_fee.add_to(amount),
             expiration: consensus_block_count + expiration_delta + CONTRACT_CONFIRMATION_BUFFER,
             claim_pk: routing_info.module_public_key,
@@ -847,7 +839,7 @@ impl LightningClientModule {
             .await
             .map_err(ReceiveError::GatewayConnectionError)?;
 
-        if bitcoin30_to_bitcoin32_sha256_hash(invoice.payment_hash()) != preimage.consensus_hash() {
+        if invoice.payment_hash() != &preimage.consensus_hash() {
             return Err(ReceiveError::InvalidInvoicePaymentHash);
         }
 

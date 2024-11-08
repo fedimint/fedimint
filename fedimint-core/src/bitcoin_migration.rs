@@ -48,13 +48,6 @@ pub fn bitcoin32_checked_address_to_unchecked_address(
     address.as_unchecked().clone()
 }
 
-pub fn bitcoin30_to_bitcoin32_invoice(
-    invoice: &lightning_invoice::Bolt11Invoice,
-) -> lightning_invoice32::Bolt11Invoice {
-    lightning_invoice32::Bolt11Invoice::from_str(&invoice.to_string())
-        .expect("Failed to convert bitcoin30 invoice to bitcoin32 invoice")
-}
-
 pub fn bitcoin30_to_bitcoin32_secp256k1_pubkey(
     pubkey: &bitcoin30::secp256k1::PublicKey,
 ) -> bitcoin::secp256k1::PublicKey {
@@ -78,14 +71,6 @@ pub fn bitcoin32_to_bitcoin30_address(address: &bitcoin::Address) -> bitcoin30::
         .assume_checked()
 }
 
-pub fn bitcoin32_to_bitcoin30_block_hash(
-    hash: &bitcoin::block::BlockHash,
-) -> bitcoin30::block::BlockHash {
-    bitcoin30::block::BlockHash::from_raw_hash(bitcoin32_to_bitcoin30_sha256d_hash(
-        &hash.to_raw_hash(),
-    ))
-}
-
 pub fn bitcoin32_to_bitcoin30_unchecked_address(
     address: &bitcoin::Address<bitcoin::address::NetworkUnchecked>,
 ) -> bitcoin30::Address<bitcoin30::address::NetworkUnchecked> {
@@ -105,22 +90,6 @@ pub fn bitcoin30_to_bitcoin32_network(network: &bitcoin30::Network) -> bitcoin::
     }
 }
 
-pub fn bitcoin32_to_bitcoin30_network(network: &bitcoin::Network) -> bitcoin30::Network {
-    match *network {
-        bitcoin::Network::Bitcoin => bitcoin30::Network::Bitcoin,
-        bitcoin::Network::Testnet => bitcoin30::Network::Testnet,
-        bitcoin::Network::Signet => bitcoin30::Network::Signet,
-        bitcoin::Network::Regtest => bitcoin30::Network::Regtest,
-        _ => panic!("There are no other enum cases, this should never be hit."),
-    }
-}
-
-pub fn bitcoin30_to_bitcoin32_payment_preimage(
-    preimage: &lightning::ln::PaymentPreimage,
-) -> lightning_types::payment::PaymentPreimage {
-    lightning_types::payment::PaymentPreimage(preimage.0)
-}
-
 pub fn bitcoin30_to_bitcoin32_sha256_hash(
     hash: &bitcoin30::hashes::sha256::Hash,
 ) -> bitcoin::hashes::sha256::Hash {
@@ -131,32 +100,6 @@ pub fn bitcoin32_to_bitcoin30_sha256_hash(
     hash: &bitcoin::hashes::sha256::Hash,
 ) -> bitcoin30::hashes::sha256::Hash {
     bitcoin30::hashes::sha256::Hash::from_slice(hash.as_ref()).expect("Invalid hash length")
-}
-
-fn bitcoin32_to_bitcoin30_sha256d_hash(
-    hash: &bitcoin::hashes::sha256d::Hash,
-) -> bitcoin30::hashes::sha256d::Hash {
-    bitcoin30::hashes::sha256d::Hash::from_byte_array(*hash.as_ref())
-}
-
-pub fn bitcoin32_to_bitcoin30_recoverable_signature(
-    signature: &bitcoin::secp256k1::ecdsa::RecoverableSignature,
-) -> bitcoin30::secp256k1::ecdsa::RecoverableSignature {
-    let (recovery_id, data) = signature.serialize_compact();
-
-    bitcoin30::secp256k1::ecdsa::RecoverableSignature::from_compact(
-        &data,
-        bitcoin30::secp256k1::ecdsa::RecoveryId::from_i32(recovery_id.to_i32())
-            .expect("Invalid recovery id"),
-    )
-    .expect("Failed to convert bitcoin32 recoverable signature to bitcoin30 recoverable signature")
-}
-
-pub fn bitcoin30_to_bitcoin32_secp256k1_message(
-    message: &bitcoin30::secp256k1::Message,
-) -> bitcoin::secp256k1::Message {
-    bitcoin::secp256k1::Message::from_digest_slice(message.as_ref())
-        .expect("Failed to convert bitcoin30 message to bitcoin32 message")
 }
 
 #[cfg(test)]
