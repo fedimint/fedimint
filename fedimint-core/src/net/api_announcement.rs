@@ -1,13 +1,13 @@
 use std::collections::BTreeMap;
 
 use bitcoin30::hashes::{sha256, Hash};
+use bitcoin30::secp256k1::Message;
 use fedimint_core::db::DatabaseLookup;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::MaybeSend;
 use fedimint_core::PeerId;
 use futures::StreamExt;
 use jsonrpsee_core::Serialize;
-use secp256k1_27::Message;
 use serde::Deserialize;
 
 use crate::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_message;

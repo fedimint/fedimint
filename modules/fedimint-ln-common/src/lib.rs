@@ -26,7 +26,7 @@ use std::io::{Error, ErrorKind, Read, Write};
 use std::time::{Duration, SystemTime};
 
 use anyhow::{bail, Context as AnyhowContext};
-use bitcoin30::hashes::sha256;
+use bitcoin::hashes::{sha256, Hash};
 use config::LightningClientConfig;
 use fedimint_client::oplog::OperationLogEntry;
 use fedimint_client::ClientHandleArc;
@@ -35,7 +35,7 @@ use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-use fedimint_core::secp256k1_27::Message;
+use fedimint_core::secp256k1::Message;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
     extensible_associated_module_type, plugin_types_trait_impl_common, secp256k1, Amount, PeerId,
@@ -627,7 +627,7 @@ pub enum LightningOutputError {
     #[error("The incoming LN account requires more funding (need {0} got {1})")]
     InsufficientIncomingFunding(Amount, Amount),
     #[error("No offer found for payment hash {0}")]
-    NoOffer(fedimint_core::secp256k1_27::hashes::sha256::Hash),
+    NoOffer(bitcoin30::secp256k1::hashes::sha256::Hash),
     #[error("Only outgoing contracts support cancellation")]
     NotOutgoingContract,
     #[error("Cancellation request wasn't properly signed")]
@@ -748,5 +748,5 @@ pub fn create_gateway_remove_message(
     let guardian_id: u16 = peer_id.into();
     message_preimage.append(&mut guardian_id.consensus_encode_to_vec());
     message_preimage.append(&mut challenge.consensus_encode_to_vec());
-    Message::from_hashed_data::<sha256::Hash>(message_preimage.as_slice())
+    Message::from_digest(*sha256::Hash::hash(message_preimage.as_slice()).as_ref())
 }

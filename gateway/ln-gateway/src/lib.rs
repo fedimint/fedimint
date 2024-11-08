@@ -47,9 +47,6 @@ use fedimint_bip39::{Bip39RootSecretStrategy, Language, Mnemonic};
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{Client, ClientHandleArc};
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin30_to_bitcoin32_secp256k1_pubkey,
-};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -58,8 +55,8 @@ use fedimint_core::core::{
 use fedimint_core::db::{apply_migrations_server, Database, DatabaseTransaction};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
+use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::secp256k1::PublicKey;
-use fedimint_core::secp256k1_27::schnorr::Signature;
 use fedimint_core::task::{sleep, TaskGroup, TaskHandle, TaskShutdownToken};
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::{SafeUrl, Spanned};
@@ -382,7 +379,7 @@ impl Gateway {
         let mut dbtx = gateway_db.begin_transaction().await;
         let keypair = dbtx.load_or_create_gateway_keypair().await;
         dbtx.commit_tx().await;
-        bitcoin30_to_bitcoin32_secp256k1_pubkey(&keypair.public_key())
+        keypair.public_key()
     }
 
     pub fn gateway_id(&self) -> PublicKey {
@@ -1910,7 +1907,7 @@ impl Gateway {
         self.federation_manager
             .read()
             .await
-            .unannounce_from_all_federations(bitcoin30_to_bitcoin32_keypair(&gateway_keypair))
+            .unannounce_from_all_federations(gateway_keypair)
             .await;
     }
 }

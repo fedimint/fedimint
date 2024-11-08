@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use assert_matches::assert_matches;
 use fedimint_client::Client;
-use fedimint_core::bitcoin_migration::bitcoin32_to_bitcoin30_secp256k1_pubkey;
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{sats, secp256k1, Amount};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
@@ -51,9 +50,7 @@ async fn pay_invoice(
     let ln_module = client.get_first_module::<LightningClientModule>()?;
     ln_module.update_gateway_cache().await?;
     let gateway = if let Some(gateway_id) = gateway_id {
-        ln_module
-            .select_gateway(&bitcoin32_to_bitcoin30_secp256k1_pubkey(&gateway_id))
-            .await
+        ln_module.select_gateway(&gateway_id).await
     } else {
         None
     };
@@ -325,9 +322,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     let gw = gateway(&fixtures, &fed).await;
 
     let ln_module = client1.get_first_module::<LightningClientModule>()?;
-    let ln_gateway = ln_module
-        .select_gateway(&bitcoin32_to_bitcoin30_secp256k1_pubkey(&gw.gateway_id()))
-        .await;
+    let ln_gateway = ln_module.select_gateway(&gw.gateway_id()).await;
     let desc = Description::new("with-gateway-hint".to_string())?;
     let (op, invoice, _) = ln_module
         .create_bolt11_invoice(
@@ -444,9 +439,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
     let keypair = Keypair::new_global(&mut OsRng);
 
     let ln_module = client1.get_first_module::<LightningClientModule>()?;
-    let ln_gateway = ln_module
-        .select_gateway(&bitcoin32_to_bitcoin30_secp256k1_pubkey(&gw.gateway_id()))
-        .await;
+    let ln_gateway = ln_module.select_gateway(&gw.gateway_id()).await;
     let desc = Description::new("with-gateway-hint".to_string())?;
     let (op, invoice, _) = ln_module
         .create_bolt11_invoice_for_user(
@@ -517,9 +510,7 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
     let keypair = Keypair::new_global(&mut OsRng);
 
     let ln_module = client1.get_first_module::<LightningClientModule>()?;
-    let ln_gateway = ln_module
-        .select_gateway(&bitcoin32_to_bitcoin30_secp256k1_pubkey(&gw.gateway_id()))
-        .await;
+    let ln_gateway = ln_module.select_gateway(&gw.gateway_id()).await;
     let desc = Description::new("with-gateway-hint-tweaked".to_string())?;
     let (op, invoice, _) = ln_module
         .create_bolt11_invoice_for_user_tweaked(

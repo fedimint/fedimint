@@ -3,26 +3,20 @@ use std::collections::BTreeMap;
 use bitcoin::Network;
 use bitcoin_hashes::sha256;
 use fedimint_api_client::api::net::Connector;
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_keypair, bitcoin32_to_bitcoin30_keypair,
-};
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{
     CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
-use fedimint_core::secp256k1::Keypair;
-use fedimint_core::{
-    impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1_27 as secp256k1, Amount,
-};
+use fedimint_core::{impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1, Amount};
 use fedimint_ln_common::serde_routing_fees;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use futures::{FutureExt, StreamExt};
 use lightning_invoice::RoutingFees;
 use rand::rngs::OsRng;
 use rand::Rng;
-use secp256k1::{KeyPair, Secp256k1};
+use secp256k1::{Keypair, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
@@ -40,18 +34,18 @@ pub trait GatewayDbtxNcExt {
     async fn remove_federation_config(&mut self, federation_id: FederationId);
 
     /// Returns the keypair that uniquely identifies the gateway.
-    async fn load_gateway_keypair(&mut self) -> Option<KeyPair>;
+    async fn load_gateway_keypair(&mut self) -> Option<Keypair>;
 
     /// Returns the keypair that uniquely identifies the gateway.
     ///
     /// # Panics
     /// Gateway keypair does not exist.
-    async fn load_gateway_keypair_assert_exists(&mut self) -> KeyPair;
+    async fn load_gateway_keypair_assert_exists(&mut self) -> Keypair;
 
     /// Returns the keypair that uniquely identifies the gateway, creating it if
     /// it does not exist. Remember to commit the transaction after calling this
     /// method.
-    async fn load_or_create_gateway_keypair(&mut self) -> KeyPair;
+    async fn load_or_create_gateway_keypair(&mut self) -> Keypair;
 
     async fn load_gateway_config(&mut self) -> Option<GatewayConfiguration>;
 
@@ -124,33 +118,24 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
             .await;
     }
 
-    async fn load_gateway_keypair(&mut self) -> Option<KeyPair> {
+    async fn load_gateway_keypair(&mut self) -> Option<Keypair> {
+        self.get_value(&GatewayPublicKey).await
+    }
+
+    async fn load_gateway_keypair_assert_exists(&mut self) -> Keypair {
         self.get_value(&GatewayPublicKey)
             .await
-            .map(|kp| bitcoin32_to_bitcoin30_keypair(&kp))
+            .expect("Gateway keypair does not exist")
     }
 
-    async fn load_gateway_keypair_assert_exists(&mut self) -> KeyPair {
-        bitcoin32_to_bitcoin30_keypair(
-            &self
-                .get_value(&GatewayPublicKey)
-                .await
-                .expect("Gateway keypair does not exist"),
-        )
-    }
-
-    async fn load_or_create_gateway_keypair(&mut self) -> KeyPair {
+    async fn load_or_create_gateway_keypair(&mut self) -> Keypair {
         if let Some(key_pair) = self.get_value(&GatewayPublicKey).await {
-            bitcoin32_to_bitcoin30_keypair(&key_pair)
+            key_pair
         } else {
             let context = Secp256k1::new();
             let (secret_key, _public_key) = context.generate_keypair(&mut OsRng);
-            let key_pair = KeyPair::from_secret_key(&context, &secret_key);
-            self.insert_new_entry(
-                &GatewayPublicKey,
-                &bitcoin30_to_bitcoin32_keypair(&key_pair),
-            )
-            .await;
+            let key_pair = Keypair::from_secret_key(&context, &secret_key);
+            self.insert_new_entry(&GatewayPublicKey, &key_pair).await;
             key_pair
         }
     }
@@ -497,12 +482,8 @@ mod fedimint_migration_tests {
 
         let context = secp256k1::Secp256k1::new();
         let (secret, _) = context.generate_keypair(&mut OsRng);
-        let key_pair = secp256k1::KeyPair::from_secret_key(&context, &secret);
-        dbtx.insert_new_entry(
-            &GatewayPublicKey,
-            &bitcoin30_to_bitcoin32_keypair(&key_pair),
-        )
-        .await;
+        let key_pair = secp256k1::Keypair::from_secret_key(&context, &secret);
+        dbtx.insert_new_entry(&GatewayPublicKey, &key_pair).await;
 
         let gateway_configuration = GatewayConfigurationV0 {
             password: "EXAMPLE".to_string(),

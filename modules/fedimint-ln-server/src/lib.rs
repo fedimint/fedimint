@@ -11,9 +11,7 @@ use std::time::Duration;
 use anyhow::{bail, Context};
 use bitcoin_hashes::{sha256, Hash as BitcoinHash};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_message, bitcoin30_to_bitcoin32_secp256k1_pubkey,
-};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_message;
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -572,7 +570,7 @@ impl ServerModule for Lightning {
                 }
                 // … either the user may spend the funds since they sold a valid preimage …
                 DecryptedPreimage::Some(preimage) => match preimage.to_public_key() {
-                    Ok(pub_key) => bitcoin30_to_bitcoin32_secp256k1_pubkey(&pub_key),
+                    Ok(pub_key) => pub_key,
                     Err(_) => return Err(LightningInputError::InvalidPreimage),
                 },
                 // … or the gateway may claim back funds for not receiving the advertised preimage.
@@ -1224,10 +1222,7 @@ impl Lightning {
 
         // Verify the supplied schnorr signature is valid
         let msg = create_gateway_remove_message(fed_public_key, our_peer_id, challenge);
-        signature.verify(
-            &bitcoin30_to_bitcoin32_secp256k1_message(&msg),
-            &gateway_id.x_only_public_key().0,
-        )?;
+        signature.verify(&msg, &gateway_id.x_only_public_key().0)?;
 
         dbtx.remove_entry(&LightningGatewayKey(gateway_id)).await;
         info!("Successfully removed gateway: {gateway_id}");
@@ -1248,7 +1243,6 @@ fn record_funded_contract_metric(updated_contract_account: &ContractAccount) {
 mod tests {
     use assert_matches::assert_matches;
     use bitcoin_hashes::{sha256, Hash as BitcoinHash};
-    use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin32_secp256k1_pubkey;
     use fedimint_core::config::ConfigGenModuleParams;
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
@@ -1429,11 +1423,9 @@ mod tests {
                 amount,
                 fee: Amount { msats: 0 },
             },
-            pub_key: bitcoin30_to_bitcoin32_secp256k1_pubkey(
-                &preimage
-                    .to_public_key()
-                    .expect("should create Schnorr pubkey from preimage"),
-            ),
+            pub_key: preimage
+                .to_public_key()
+                .expect("should create Schnorr pubkey from preimage"),
         };
 
         assert_eq!(processed_input_meta, expected_input_meta);
