@@ -540,7 +540,13 @@
 <a href="#539" id="539">539</a>
 <a href="#540" id="540">540</a>
 <a href="#541" id="541">541</a>
-<a href="#542" id="542">542</a></pre></div><pre class="rust"><code><span class="kw">mod </span>api;
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a></pre></div><pre class="rust"><code><span class="kw">mod </span>api;
 <span class="kw">mod </span>complete_sm;
 <span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
@@ -555,7 +561,7 @@
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
-<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
+<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{
@@ -930,15 +936,18 @@
             amount: contract.commitment.amount,
         };
         <span class="kw">let </span>client_output_sm = ClientOutputSM::&lt;GatewayClientStateMachinesV2&gt; {
-            state_machines: Arc::new(<span class="kw">move </span>|txid, out_idxs: std::ops::RangeInclusive&lt;u64&gt;| {
-                <span class="macro">assert_eq!</span>(out_idxs.clone().count(), <span class="number">1</span>);
-                <span class="kw">let </span>out_idx = <span class="kw-2">*</span>out_idxs.start();
+            state_machines: Arc::new(<span class="kw">move </span>|out_point_range: OutPointRange| {
+                <span class="macro">assert_eq!</span>(out_point_range.count(), <span class="number">1</span>);
+                <span class="kw">let </span>out_idx = out_point_range.start_idx();
                 <span class="macro">vec!</span>[
                     GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                         common: ReceiveSMCommon {
                             operation_id,
                             contract: contract.clone(),
-                            out_point: OutPoint { txid, out_idx },
+                            out_point: OutPoint {
+                                txid: out_point_range.txid(),
+                                out_idx,
+                            },
                             refund_keypair,
                         },
                         state: ReceiveSMState::Funding,
@@ -991,14 +1000,17 @@
             amount: contract.commitment.amount,
         };
         <span class="kw">let </span>client_output_sm = ClientOutputSM::&lt;GatewayClientStateMachinesV2&gt; {
-            state_machines: Arc::new(<span class="kw">move </span>|txid, out_idxs| {
-                <span class="macro">assert_eq!</span>(out_idxs.clone().count(), <span class="number">1</span>);
-                <span class="kw">let </span>out_idx = <span class="kw-2">*</span>out_idxs.start();
+            state_machines: Arc::new(<span class="kw">move </span>|out_point_range| {
+                <span class="macro">assert_eq!</span>(out_point_range.count(), <span class="number">1</span>);
+                <span class="kw">let </span>out_idx = out_point_range.start_idx();
                 <span class="macro">vec!</span>[GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                     common: ReceiveSMCommon {
                         operation_id,
                         contract: contract.clone(),
-                        out_point: OutPoint { txid, out_idx },
+                        out_point: OutPoint {
+                            txid: out_point_range.txid(),
+                            out_idx,
+                        },
                         refund_keypair,
                     },
                     state: ReceiveSMState::Funding,

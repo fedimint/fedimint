@@ -471,7 +471,14 @@
 <a href="#470" id="470">470</a>
 <a href="#471" id="471">471</a>
 <a href="#472" id="472">472</a>
-<a href="#473" id="473">473</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::module::OutPointRange;
+<span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::OperationId;
@@ -524,11 +531,10 @@
     <span class="kw">pub</span>(<span class="kw">crate</span>) input_idx: u64,
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, Hash, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Copy, Clone, Eq, Hash, PartialEq, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>MintInputCommon {
     <span class="kw">pub</span>(<span class="kw">crate</span>) operation_id: OperationId,
-    <span class="kw">pub</span>(<span class="kw">crate</span>) txid: TransactionId,
-    <span class="kw">pub</span>(<span class="kw">crate</span>) input_idxs: std::ops::RangeInclusive&lt;u64&gt;,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) out_point_range: OutPointRange,
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -554,13 +560,13 @@
     ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.state {
             MintInputStates::Created(<span class="kw">_</span>) =&gt; {
-                MintInputStateCreated::transitions(<span class="kw-2">&amp;</span><span class="self">self</span>.common, global_context)
+                MintInputStateCreated::transitions(<span class="self">self</span>.common, global_context)
             }
             MintInputStates::CreatedBundle(<span class="kw">_</span>) =&gt; {
-                MintInputStateCreatedBundle::transitions(<span class="kw-2">&amp;</span><span class="self">self</span>.common, global_context)
+                MintInputStateCreatedBundle::transitions(<span class="self">self</span>.common, global_context)
             }
             MintInputStates::RefundedBundle(<span class="kw">_</span>) =&gt; {
-                MintInputStateRefundedBundle::transitions(<span class="kw-2">&amp;</span><span class="self">self</span>.common, global_context)
+                MintInputStateRefundedBundle::transitions(<span class="self">self</span>.common, global_context)
             }
             MintInputStates::Refund(refund) =&gt; refund.transitions(global_context),
             MintInputStates::Success(<span class="kw">_</span>)
@@ -587,12 +593,12 @@
 
 <span class="kw">impl </span>MintInputStateCreated {
     <span class="kw">fn </span>transitions(
-        common: <span class="kw-2">&amp;</span>MintInputCommon,
+        common: MintInputCommon,
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;MintInputStateMachine&gt;&gt; {
         <span class="kw">let </span>global_context = global_context.clone();
         <span class="macro">vec!</span>[StateTransition::new(
-            <span class="self">Self</span>::await_success(common.clone(), global_context.clone()),
+            <span class="self">Self</span>::await_success(common, global_context.clone()),
             <span class="kw">move </span>|dbtx, result, old_state| {
                 Box::pin(<span class="self">Self</span>::transition_success(
                     result,
@@ -608,7 +614,9 @@
         common: MintInputCommon,
         global_context: DynGlobalClientContext,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
-        global_context.await_tx_accepted(common.txid).<span class="kw">await
+        global_context
+            .await_tx_accepted(common.out_point_range.txid())
+            .<span class="kw">await
     </span>}
 
     <span class="attr">#[allow(deprecated)]
@@ -677,12 +685,12 @@
 
 <span class="kw">impl </span>MintInputStateCreatedBundle {
     <span class="kw">fn </span>transitions(
-        common: <span class="kw-2">&amp;</span>MintInputCommon,
+        common: MintInputCommon,
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;MintInputStateMachine&gt;&gt; {
         <span class="kw">let </span>global_context = global_context.clone();
         <span class="macro">vec!</span>[StateTransition::new(
-            <span class="self">Self</span>::await_success(common.clone(), global_context.clone()),
+            <span class="self">Self</span>::await_success(common, global_context.clone()),
             <span class="kw">move </span>|dbtx, result, old_state| {
                 Box::pin(<span class="self">Self</span>::transition_success(
                     result,
@@ -698,7 +706,9 @@
         common: MintInputCommon,
         global_context: DynGlobalClientContext,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
-        global_context.await_tx_accepted(common.txid).<span class="kw">await
+        global_context
+            .await_tx_accepted(common.out_point_range.txid())
+            .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>transition_success(
@@ -779,12 +789,12 @@
 
 <span class="kw">impl </span>MintInputStateRefundedBundle {
     <span class="kw">fn </span>transitions(
-        common: <span class="kw-2">&amp;</span>MintInputCommon,
+        common: MintInputCommon,
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;MintInputStateMachine&gt;&gt; {
         <span class="kw">let </span>global_context = global_context.clone();
         <span class="macro">vec!</span>[StateTransition::new(
-            <span class="self">Self</span>::await_success(common.clone(), global_context.clone()),
+            <span class="self">Self</span>::await_success(common, global_context.clone()),
             <span class="kw">move </span>|dbtx, result, old_state| {
                 Box::pin(<span class="self">Self</span>::transition_success(
                     result,
@@ -800,7 +810,9 @@
         common: MintInputCommon,
         global_context: DynGlobalClientContext,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
-        global_context.await_tx_accepted(common.txid).<span class="kw">await
+        global_context
+            .await_tx_accepted(common.out_point_range.txid())
+            .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>transition_success(

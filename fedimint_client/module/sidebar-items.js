@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["init","recovery"],"struct":["ClientContext","ClientContextSelfRef","DynClientModule","FinalClient"],"trait":["ClientModule","IClientModule"],"type":["ClientModuleRegistry","StateGenerator"]};
+window.SIDEBAR_ITEMS = {"mod":["init","recovery"],"struct":["ClientContext","ClientContextSelfRef","DynClientModule","FinalClient","IdxRange","OutPointRange","OutPointRangeIter"],"trait":["ClientModule","IClientModule"],"type":["ClientModuleRegistry","StateGenerator"]};

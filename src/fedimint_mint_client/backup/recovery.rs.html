@@ -556,14 +556,13 @@
 <a href="#555" id="555">555</a>
 <a href="#556" id="556">556</a>
 <a href="#557" id="557">557</a>
-<a href="#558" id="558">558</a>
-<a href="#559" id="559">559</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::max;
+<a href="#558" id="558">558</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::max;
 <span class="kw">use </span>std::collections::BTreeMap;
-<span class="kw">use </span>std::{fmt, ops};
+<span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>fedimint_client::module::init::recovery::{RecoveryFromHistory, RecoveryFromHistoryCommon};
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleRecoverArgs;
-<span class="kw">use </span>fedimint_client::module::ClientContext;
+<span class="kw">use </span>fedimint_client::module::{ClientContext, OutPointRange};
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped <span class="kw">as _</span>};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -776,9 +775,8 @@
                             MintOutputStateMachine {
                                 common: MintOutputCommon {
                                     operation_id: OperationId::new_random(),
-                                    txid: out_point.txid,
-                                    out_idxs: ops::RangeInclusive::new(
-                                        out_point.out_idx,
+                                    out_point_range: OutPointRange::new_single(
+                                        out_point.txid,
                                         out_point.out_idx,
                                     ),
                                 },

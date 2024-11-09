@@ -599,14 +599,27 @@
 <a href="#598" id="598">598</a>
 <a href="#599" id="599">599</a>
 <a href="#600" id="600">600</a>
-<a href="#601" id="601">601</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::hash;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
 <span class="kw">use </span>fedimint_api_client::query::FilterMapThreshold;
-<span class="kw">use </span>fedimint_client::module::ClientContext;
+<span class="kw">use </span>fedimint_client::module::{ClientContext, OutPointRange};
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::{Decoder, OperationId};
@@ -679,11 +692,16 @@
     <span class="kw">pub</span>(<span class="kw">crate</span>) out_point: OutPoint,
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>MintOutputCommon {
     <span class="kw">pub</span>(<span class="kw">crate</span>) operation_id: OperationId,
-    <span class="kw">pub</span>(<span class="kw">crate</span>) txid: TransactionId,
-    <span class="kw">pub</span>(<span class="kw">crate</span>) out_idxs: std::ops::RangeInclusive&lt;u64&gt;,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) out_point_range: OutPointRange,
+}
+
+<span class="kw">impl </span>MintOutputCommon {
+    <span class="kw">pub fn </span>txid(<span class="self">self</span>) -&gt; TransactionId {
+        <span class="self">self</span>.out_point_range.txid()
+    }
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -708,10 +726,10 @@
     ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.state {
             MintOutputStates::Created(created) =&gt; {
-                created.transitions(context, global_context, <span class="kw-2">&amp;</span><span class="self">self</span>.common)
+                created.transitions(context, global_context, <span class="self">self</span>.common)
             }
             MintOutputStates::CreatedMulti(created) =&gt; {
-                created.transitions(context, global_context, <span class="kw-2">&amp;</span><span class="self">self</span>.common)
+                created.transitions(context, global_context, <span class="self">self</span>.common)
             }
             MintOutputStates::Aborted(<span class="kw">_</span>)
             | MintOutputStates::Failed(<span class="kw">_</span>)
@@ -739,7 +757,7 @@
         <span class="comment">// TODO: make cheaper to clone (Arc?)
         </span>context: <span class="kw-2">&amp;</span>MintClientContext,
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
-        common: <span class="kw-2">&amp;</span>MintOutputCommon,
+        common: MintOutputCommon,
     ) -&gt; Vec&lt;StateTransition&lt;MintOutputStateMachine&gt;&gt; {
         <span class="kw">let </span>tbs_pks = context.tbs_pks.clone();
         <span class="kw">let </span>client_ctx = context.client_ctx.clone();
@@ -747,14 +765,14 @@
         <span class="macro">vec!</span>[
             <span class="comment">// Check if transaction was rejected
             </span>StateTransition::new(
-                <span class="self">Self</span>::await_tx_rejected(global_context.clone(), common.clone()),
+                <span class="self">Self</span>::await_tx_rejected(global_context.clone(), common),
                 |_dbtx, (), state| Box::pin(<span class="kw">async move </span>{ <span class="self">Self</span>::transition_tx_rejected(<span class="kw-2">&amp;</span>state) }),
             ),
             <span class="comment">// Check for output outcome
             </span>StateTransition::new(
                 <span class="self">Self</span>::await_outcome_ready(
                     global_context.clone(),
-                    common.clone(),
+                    common,
                     context.mint_decoder.clone(),
                     <span class="self">self</span>.amount,
                     <span class="self">self</span>.issuance_request.blinded_message(),
@@ -774,7 +792,11 @@
     }
 
     <span class="kw">async fn </span>await_tx_rejected(global_context: DynGlobalClientContext, common: MintOutputCommon) {
-        <span class="kw">if </span>global_context.await_tx_accepted(common.txid).<span class="kw">await</span>.is_err() {
+        <span class="kw">if </span>global_context
+            .await_tx_accepted(common.txid())
+            .<span class="kw">await
+            </span>.is_err()
+        {
             <span class="kw">return</span>;
         }
         std::future::pending::&lt;()&gt;().<span class="kw">await</span>;
@@ -784,7 +806,7 @@
         <span class="macro">assert!</span>(<span class="macro">matches!</span>(old_state.state, MintOutputStates::Created(<span class="kw">_</span>)));
 
         MintOutputStateMachine {
-            common: old_state.common.clone(),
+            common: old_state.common,
             state: MintOutputStates::Aborted(MintOutputStatesAborted),
         }
     }
@@ -813,8 +835,8 @@
                     ),
                     AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
                     ApiRequestErased::new(OutPoint {
-                        txid: common.txid,
-                        out_idx: <span class="kw-2">*</span>common.out_idxs.start(),
+                        txid: common.txid(),
+                        out_idx: common.out_point_range.start_idx(),
                     }),
                 )
                 .<span class="kw">await
@@ -917,7 +939,7 @@
         <span class="comment">// TODO: make cheaper to clone (Arc?)
         </span>context: <span class="kw-2">&amp;</span>MintClientContext,
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
-        common: <span class="kw-2">&amp;</span>MintOutputCommon,
+        common: MintOutputCommon,
     ) -&gt; Vec&lt;StateTransition&lt;MintOutputStateMachine&gt;&gt; {
         <span class="kw">let </span>tbs_pks = context.tbs_pks.clone();
         <span class="kw">let </span>client_ctx = context.client_ctx.clone();
@@ -925,14 +947,14 @@
         <span class="macro">vec!</span>[
             <span class="comment">// Check if transaction was rejected
             </span>StateTransition::new(
-                <span class="self">Self</span>::await_tx_rejected(global_context.clone(), common.clone()),
+                <span class="self">Self</span>::await_tx_rejected(global_context.clone(), common),
                 |_dbtx, (), state| Box::pin(<span class="kw">async move </span>{ <span class="self">Self</span>::transition_tx_rejected(<span class="kw-2">&amp;</span>state) }),
             ),
             <span class="comment">// Check for output outcome
             </span>StateTransition::new(
                 <span class="self">Self</span>::await_outcome_ready(
                     global_context.clone(),
-                    common.clone(),
+                    common,
                     context.mint_decoder.clone(),
                     <span class="self">self</span>.issuance_requests.clone(),
                     context.peer_tbs_pks.clone(),
@@ -951,7 +973,11 @@
     }
 
     <span class="kw">async fn </span>await_tx_rejected(global_context: DynGlobalClientContext, common: MintOutputCommon) {
-        <span class="kw">if </span>global_context.await_tx_accepted(common.txid).<span class="kw">await</span>.is_err() {
+        <span class="kw">if </span>global_context
+            .await_tx_accepted(common.txid())
+            .<span class="kw">await
+            </span>.is_err()
+        {
             <span class="kw">return</span>;
         }
         std::future::pending::&lt;()&gt;().<span class="kw">await</span>;
@@ -961,7 +987,7 @@
         <span class="macro">assert!</span>(<span class="macro">matches!</span>(old_state.state, MintOutputStates::CreatedMulti(<span class="kw">_</span>)));
 
         MintOutputStateMachine {
-            common: old_state.common.clone(),
+            common: old_state.common,
             state: MintOutputStates::Aborted(MintOutputStatesAborted),
         }
     }
@@ -1004,7 +1030,7 @@
                             ),
                             AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
                             ApiRequestErased::new(OutPoint {
-                                txid: common.txid,
+                                txid: common.txid(),
                                 out_idx,
                             }),
                         )

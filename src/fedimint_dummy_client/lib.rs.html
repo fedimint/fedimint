@@ -558,10 +558,10 @@
                     keys: <span class="macro">vec!</span>[<span class="self">self</span>.key],
                 };
                 <span class="kw">let </span>input_sm = ClientInputSM {
-                    state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
+                    state_machines: Arc::new(<span class="kw">move </span>|out_point_range| {
                         <span class="macro">vec!</span>[DummyStateMachine::Input(
                             missing_input_amount,
-                            txid,
+                            out_point_range.txid(),
                             operation_id,
                         )]
                     }),
@@ -587,10 +587,10 @@
                 };
 
                 <span class="kw">let </span>output_sm = ClientOutputSM {
-                    state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
+                    state_machines: Arc::new(<span class="kw">move </span>|out_point_range| {
                         <span class="macro">vec!</span>[DummyStateMachine::Output(
                             missing_output_amount,
-                            txid,
+                            out_point_range.txid(),
                             operation_id,
                         )]
                     }),

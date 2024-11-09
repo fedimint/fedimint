@@ -3576,8 +3576,8 @@
 <span class="kw">fn </span>states_to_instanceless_dyn&lt;S: IState + MaybeSend + MaybeSync + <span class="lifetime">'static</span>&gt;(
     state_gen: StateGenerator&lt;S&gt;,
 ) -&gt; StateGenerator&lt;Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>)&gt;&gt; {
-    Arc::new(<span class="kw">move </span>|txid, out_idxs| {
-        <span class="kw">let </span>states: Vec&lt;S&gt; = state_gen(txid, out_idxs);
+    Arc::new(<span class="kw">move </span>|out_point_range| {
+        <span class="kw">let </span>states: Vec&lt;S&gt; = state_gen(out_point_range);
         states
             .into_iter()
             .map(|state| box_up_state(state))
@@ -3710,8 +3710,8 @@
     module_instance_id: ModuleInstanceId,
     state_gen: StateGenerator&lt;Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>)&gt;&gt;,
 ) -&gt; StateGenerator&lt;DynState&gt; {
-    Arc::new(<span class="kw">move </span>|txid, out_idx| {
-        <span class="kw">let </span>states = state_gen(txid, out_idx);
+    Arc::new(<span class="kw">move </span>|out_point_range| {
+        <span class="kw">let </span>states = state_gen(out_point_range);
         Iterator::collect(
             states
                 .into_iter()

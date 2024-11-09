@@ -2735,7 +2735,13 @@
 <a href="#2734" id="2734">2734</a>
 <a href="#2735" id="2735">2735</a>
 <a href="#2736" id="2736">2736</a>
-<a href="#2737" id="2737">2737</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2737" id="2737">2737</a>
+<a href="#2738" id="2738">2738</a>
+<a href="#2739" id="2739">2739</a>
+<a href="#2740" id="2740">2740</a>
+<a href="#2741" id="2741">2741</a>
+<a href="#2742" id="2742">2742</a>
+<a href="#2743" id="2743">2743</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2763,7 +2769,6 @@
 <span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::io::Read;
-<span class="kw">use </span>std::ops::RangeInclusive;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -2781,7 +2786,7 @@
 <span class="kw">use </span>fedimint_client::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
-<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
+<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
 <span class="kw">use </span>fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
@@ -2816,6 +2821,7 @@
 <span class="kw">use </span>futures::{pin_mut, StreamExt};
 <span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>input::MintInputStateCreatedBundle;
+<span class="kw">use </span>itertools::Itertools <span class="kw">as _</span>;
 <span class="kw">use </span>oob::MintOOBStatesCreatedMulti;
 <span class="kw">use </span>output::MintOutputStatesCreatedMulti;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -3821,16 +3827,19 @@
             }
         }
 
-        <span class="kw">let </span>state_generator = Arc::new(<span class="kw">move </span>|txid, out_idxs: RangeInclusive&lt;u64&gt;| {
-            <span class="macro">assert_eq!</span>(out_idxs.clone().count(), issuance_requests.len());
+        <span class="kw">let </span>state_generator = Arc::new(<span class="kw">move </span>|out_point_range: OutPointRange| {
+            <span class="macro">assert_eq!</span>(out_point_range.into_iter().count(), issuance_requests.len());
             <span class="macro">vec!</span>[MintClientStateMachines::Output(MintOutputStateMachine {
                 common: MintOutputCommon {
                     operation_id,
-                    txid,
-                    out_idxs: out_idxs.clone(),
+                    out_point_range,
                 },
                 state: MintOutputStates::CreatedMulti(MintOutputStatesCreatedMulti {
-                    issuance_requests: out_idxs.zip(issuance_requests.clone()).collect(),
+                    issuance_requests: out_point_range
+                        .into_iter()
+                        .map(|(<span class="kw">_</span>, out_idx)| out_idx)
+                        .zip(issuance_requests.clone())
+                        .collect(),
                 }),
             })]
         });
@@ -3876,8 +3885,12 @@
                     <span class="kw">return </span><span class="prelude-val">None</span>;
                 };
 
-                <span class="kw">if </span>state.common.txid != out_point.txid
-                    || !state.common.out_idxs.contains(<span class="kw-2">&amp;</span>out_point.out_idx)
+                <span class="kw">if </span>state.common.txid() != out_point.txid
+                    || !state
+                        .common
+                        .out_point_range
+                        .out_idx_iter()
+                        .contains(<span class="kw-2">&amp;</span>out_point.out_idx)
                 {
                     <span class="kw">return </span><span class="prelude-val">None</span>;
                 }
@@ -5088,14 +5101,13 @@
         inputs.push(input);
     }
 
-    <span class="kw">let </span>input_sm = Arc::new(<span class="kw">move </span>|txid, input_idxs: RangeInclusive&lt;u64&gt;| {
-        <span class="macro">debug_assert_eq!</span>(input_idxs.clone().count(), input_states.len());
+    <span class="kw">let </span>input_sm = Arc::new(<span class="kw">move </span>|out_point_range: OutPointRange| {
+        <span class="macro">debug_assert_eq!</span>(out_point_range.into_iter().count(), input_states.len());
 
         <span class="macro">vec!</span>[MintClientStateMachines::Input(MintInputStateMachine {
             common: MintInputCommon {
                 operation_id,
-                txid,
-                input_idxs,
+                out_point_range,
             },
             state: MintInputStates::CreatedBundle(MintInputStateCreatedBundle {
                 notes: input_states.clone(),

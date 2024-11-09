@@ -358,6 +358,7 @@
 <a href="#357" id="357">357</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::SystemTime;
 
+<span class="kw">use </span>fedimint_client::module::OutPointRange;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle, ClientInputSM};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
@@ -686,20 +687,19 @@
         .collect();
 
     <span class="kw">let </span>sm = ClientInputSM {
-        state_machines: Arc::new(<span class="kw">move </span>|txid, input_idxs| {
-            <span class="macro">debug_assert_eq!</span>(input_idxs.clone().count(), spendable_notes.len());
+        state_machines: Arc::new(<span class="kw">move </span>|out_point_range: OutPointRange| {
+            <span class="macro">debug_assert_eq!</span>(out_point_range.count(), spendable_notes.len());
             <span class="macro">vec!</span>[MintClientStateMachines::Input(MintInputStateMachine {
                 common: MintInputCommon {
                     operation_id,
-                    txid,
-                    input_idxs,
+                    out_point_range,
                 },
                 <span class="comment">// When canceling OOB, we are reating the multi-refund input already here.
                 // So  we can cut straight to
                 // `MintInputStates::RefundedMulti` state. If the reund tx fails, it will
                 // retry using per-note refund again.
                 </span>state: MintInputStates::RefundedBundle(MintInputStateRefundedBundle {
-                    refund_txid: txid,
+                    refund_txid: out_point_range.txid(),
                     spendable_notes: spendable_notes.clone(),
                 }),
             })]

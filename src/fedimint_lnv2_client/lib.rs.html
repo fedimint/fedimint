@@ -1118,7 +1118,7 @@
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
-<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule};
+<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, OutPointRange};
 <span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
@@ -1656,11 +1656,11 @@
             amount: contract.amount,
         };
         <span class="kw">let </span>client_output_sm = ClientOutputSM::&lt;LightningClientStateMachines&gt; {
-            state_machines: Arc::new(<span class="kw">move </span>|funding_txid, <span class="kw">_</span>| {
+            state_machines: Arc::new(<span class="kw">move </span>|out_point_range: OutPointRange| {
                 <span class="macro">vec!</span>[LightningClientStateMachines::Send(SendStateMachine {
                     common: SendSMCommon {
                         operation_id,
-                        funding_txid,
+                        funding_txid: out_point_range.txid(),
                         gateway_api: gateway_api_clone.clone(),
                         contract: contract_clone.clone(),
                         invoice: LightningInvoice::Bolt11(invoice_clone.clone()),

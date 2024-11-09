@@ -1363,7 +1363,12 @@
 <a href="#1362" id="1362">1362</a>
 <a href="#1363" id="1363">1363</a>
 <a href="#1364" id="1364">1364</a>
-<a href="#1365" id="1365">1365</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1365" id="1365">1365</a>
+<a href="#1366" id="1366">1366</a>
+<a href="#1367" id="1367">1367</a>
+<a href="#1368" id="1368">1368</a>
+<a href="#1369" id="1369">1369</a>
+<a href="#1370" id="1370">1370</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1386,7 +1391,6 @@
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::future;
-<span class="kw">use </span>std::ops::RangeInclusive;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::SystemTime;
 
@@ -1403,7 +1407,7 @@
 <span class="kw">use </span>fedimint_client::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
-<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
+<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
 <span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
@@ -1940,13 +1944,16 @@
 
         <span class="kw">let </span>amount = output.maybe_v0_ref().expect(<span class="string">"v0 output"</span>).amount().into();
 
-        <span class="kw">let </span>sm_gen = <span class="kw">move </span>|txid, out_idxs: RangeInclusive&lt;u64&gt;| {
-            <span class="macro">assert_eq!</span>(out_idxs.clone().count(), <span class="number">1</span>);
-            <span class="kw">let </span>out_idx = <span class="kw-2">*</span>out_idxs.start();
+        <span class="kw">let </span>sm_gen = <span class="kw">move </span>|out_point_range: OutPointRange| {
+            <span class="macro">assert_eq!</span>(out_point_range.count(), <span class="number">1</span>);
+            <span class="kw">let </span>out_idx = out_point_range.start_idx();
             <span class="macro">vec!</span>[WalletClientStates::Withdraw(WithdrawStateMachine {
                 operation_id,
                 state: WithdrawStates::Created(CreatedWithdrawState {
-                    fm_outpoint: OutPoint { txid, out_idx },
+                    fm_outpoint: OutPoint {
+                        txid: out_point_range.txid(),
+                        out_idx,
+                    },
                 }),
             })]
         };
@@ -1968,13 +1975,16 @@
 
         <span class="kw">let </span>amount = output.maybe_v0_ref().expect(<span class="string">"v0 output"</span>).amount().into();
 
-        <span class="kw">let </span>sm_gen = <span class="kw">move </span>|txid, out_idxs: RangeInclusive&lt;u64&gt;| {
-            <span class="macro">assert_eq!</span>(out_idxs.clone().count(), <span class="number">1</span>);
-            <span class="kw">let </span>out_idx = <span class="kw-2">*</span>out_idxs.start();
+        <span class="kw">let </span>sm_gen = <span class="kw">move </span>|out_point_range: OutPointRange| {
+            <span class="macro">assert_eq!</span>(out_point_range.count(), <span class="number">1</span>);
+            <span class="kw">let </span>out_idx = out_point_range.start_idx();
             <span class="macro">vec!</span>[WalletClientStates::Withdraw(WithdrawStateMachine {
                 operation_id,
                 state: WithdrawStates::Created(CreatedWithdrawState {
-                    fm_outpoint: OutPoint { txid, out_idx },
+                    fm_outpoint: OutPoint {
+                        txid: out_point_range.txid(),
+                        out_idx,
+                    },
                 }),
             })]
         };

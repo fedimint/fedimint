@@ -535,7 +535,13 @@
 <a href="#534" id="534">534</a>
 <a href="#535" id="535">535</a>
 <a href="#536" id="536">536</a>
-<a href="#537" id="537">537</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::ops::RangeInclusive;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -552,7 +558,7 @@
 <span class="kw">use </span>rand::{CryptoRng, Rng, RngCore};
 <span class="kw">use </span>secp256k1::Secp256k1;
 
-<span class="kw">use </span><span class="kw">crate</span>::module::StateGenerator;
+<span class="kw">use </span><span class="kw">crate</span>::module::{IdxRange, OutPointRange, StateGenerator};
 <span class="kw">use </span><span class="kw">crate</span>::sm::{<span class="self">self</span>, DynState};
 <span class="kw">use crate</span>::{
     states_add_instance, states_to_instanceless_dyn, InstancelessDynClientInput,
@@ -999,7 +1005,10 @@
                 <span class="kw">let </span>input_idxs = find_range_of_matching_items(<span class="kw-2">&amp;</span>input_idx_to_bundle_idx, bundle_idx);
                 bundle.sms.into_iter().flat_map(<span class="kw">move </span>|sm| {
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(input_idxs) = input_idxs.as_ref() {
-                        (sm.state_machines)(txid, input_idxs.clone())
+                        (sm.state_machines)(OutPointRange::new(
+                            txid,
+                            IdxRange::from(input_idxs.clone()),
+                        ))
                     } <span class="kw">else </span>{
                         <span class="macro">vec!</span>[]
                     }
@@ -1015,7 +1024,10 @@
                         find_range_of_matching_items(<span class="kw-2">&amp;</span>output_idx_to_bundle_idx, bundle_idx);
                     bundle.sms.into_iter().flat_map(<span class="kw">move </span>|sm| {
                         <span class="kw">if let </span><span class="prelude-val">Some</span>(output_idxs) = output_idxs.as_ref() {
-                            (sm.state_machines)(txid, output_idxs.clone())
+                            (sm.state_machines)(OutPointRange::new(
+                                txid,
+                                IdxRange::from(output_idxs.clone()),
+                            ))
                         } <span class="kw">else </span>{
                             <span class="macro">vec!</span>[]
                         }
@@ -1064,8 +1076,8 @@
 <span class="kw">where
     </span>S: IntoDynInstance&lt;DynType = DynState&gt; + <span class="lifetime">'static</span>,
 {
-    Arc::new(<span class="kw">move </span>|txid, index| {
-        <span class="kw">let </span>states = state_gen(txid, index);
+    Arc::new(<span class="kw">move </span>|out_point_range| {
+        <span class="kw">let </span>states = state_gen(out_point_range);
         states
             .into_iter()
             .map(|state| state.into_dyn(module_instance))

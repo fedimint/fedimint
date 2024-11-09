@@ -830,7 +830,13 @@
 <a href="#829" id="829">829</a>
 <a href="#830" id="830">830</a>
 <a href="#831" id="831">831</a>
-<a href="#832" id="832">832</a></pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a></pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -847,7 +853,7 @@
 <span class="kw">use </span>fedimint_client::derivable_secret::ChildId;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
-<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
+<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
 <span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State};
@@ -1119,7 +1125,8 @@
             amount,
         };
         <span class="kw">let </span>client_output_sm = ClientOutputSM::&lt;GatewayClientStateMachines&gt; {
-            state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
+            state_machines: Arc::new(<span class="kw">move </span>|out_point_range: OutPointRange| {
+                <span class="macro">assert_eq!</span>(out_point_range.count(), <span class="number">1</span>);
                 <span class="macro">vec!</span>[
                     GatewayClientStateMachines::Receive(IncomingStateMachine {
                         common: IncomingSmCommon {
@@ -1127,7 +1134,9 @@
                             contract_id,
                             payment_hash: htlc.payment_hash,
                         },
-                        state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
+                        state: IncomingSmStates::FundingOffer(FundingOfferState {
+                            txid: out_point_range.txid(),
+                        }),
                     }),
                     GatewayClientStateMachines::Complete(GatewayCompleteStateMachine {
                         common: GatewayCompleteCommon {
@@ -1170,14 +1179,17 @@
             amount,
         };
         <span class="kw">let </span>client_output_sm = ClientOutputSM::&lt;GatewayClientStateMachines&gt; {
-            state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
+            state_machines: Arc::new(<span class="kw">move </span>|out_point_range| {
+                <span class="macro">assert_eq!</span>(out_point_range.count(), <span class="number">1</span>);
                 <span class="macro">vec!</span>[GatewayClientStateMachines::Receive(IncomingStateMachine {
                     common: IncomingSmCommon {
                         operation_id,
                         contract_id,
                         payment_hash,
                     },
-                    state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
+                    state: IncomingSmStates::FundingOffer(FundingOfferState {
+                        txid: out_point_range.txid(),
+                    }),
                 })]
             }),
         };

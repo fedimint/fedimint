@@ -2238,7 +2238,8 @@
 <a href="#2237" id="2237">2237</a>
 <a href="#2238" id="2238">2238</a>
 <a href="#2239" id="2239">2239</a>
-<a href="#2240" id="2240">2240</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2240" id="2240">2240</a>
+<a href="#2241" id="2241">2241</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2273,7 +2274,7 @@
 <span class="kw">use </span>fedimint_client::derivable_secret::ChildId;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
-<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
+<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
 <span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
@@ -2297,7 +2298,6 @@
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry, BoxStream};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1, Amount, OutPoint,
-    TransactionId,
 };
 <span class="kw">use </span>fedimint_ln_common::config::{FeeToAmount, LightningClientConfig};
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
@@ -2979,7 +2979,7 @@
         };
 
         <span class="kw">let </span>contract_id = contract.contract_id();
-        <span class="kw">let </span>sm_gen = Arc::new(<span class="kw">move </span>|funding_txid: TransactionId, <span class="kw">_</span>| {
+        <span class="kw">let </span>sm_gen = Arc::new(<span class="kw">move </span>|out_point_range: OutPointRange| {
             <span class="macro">vec!</span>[LightningClientStateMachines::LightningPay(
                 LightningPayStateMachine {
                     common: LightningPayCommon {
@@ -2992,7 +2992,7 @@
                     },
                     state: LightningPayStates::CreatedOutgoingLnContract(
                         LightningPayCreatedOutgoingLnContract {
-                            funding_txid,
+                            funding_txid: out_point_range.txid(),
                             contract_id,
                             gateway: gateway.clone(),
                         },
@@ -3053,7 +3053,7 @@
         };
 
         <span class="kw">let </span>client_output_sm = ClientOutputSM::&lt;LightningClientStateMachines&gt; {
-            state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
+            state_machines: Arc::new(<span class="kw">move </span>|out_point_range| {
                 <span class="macro">vec!</span>[LightningClientStateMachines::InternalPay(
                     IncomingStateMachine {
                         common: IncomingSmCommon {
@@ -3061,7 +3061,9 @@
                             contract_id,
                             payment_hash,
                         },
-                        state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
+                        state: IncomingSmStates::FundingOffer(FundingOfferState {
+                            txid: out_point_range.txid(),
+                        }),
                     },
                 )]
             }),
@@ -3188,12 +3190,12 @@
         <span class="kw">let </span>operation_id = OperationId(<span class="kw-2">*</span>invoice.payment_hash().as_ref());
 
         <span class="kw">let </span>sm_invoice = invoice.clone();
-        <span class="kw">let </span>sm_gen = Arc::new(<span class="kw">move </span>|txid: TransactionId, <span class="kw">_</span>| {
+        <span class="kw">let </span>sm_gen = Arc::new(<span class="kw">move </span>|out_point_range: OutPointRange| {
             <span class="macro">vec!</span>[LightningClientStateMachines::Receive(
                 LightningReceiveStateMachine {
                     operation_id,
                     state: LightningReceiveStates::SubmittedOffer(LightningReceiveSubmittedOffer {
-                        offer_txid: txid,
+                        offer_txid: out_point_range.txid(),
                         invoice: sm_invoice.clone(),
                         receiving_key,
                     }),

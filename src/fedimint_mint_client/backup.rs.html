@@ -144,9 +144,7 @@
 <a href="#143" id="143">143</a>
 <a href="#144" id="144">144</a>
 <a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
-<a href="#147" id="147">147</a>
-<a href="#148" id="148">148</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::module::recovery::{DynModuleBackup, ModuleBackup};
+<a href="#146" id="146">146</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::module::recovery::{DynModuleBackup, ModuleBackup};
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -243,9 +241,9 @@
                     state: <span class="kw">crate</span>::output::MintOutputStates::Created(created_state),
                 }) =&gt; <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[(
                     OutPoint {
-                        txid: common.txid,
+                        txid: common.out_point_range.txid(),
                         <span class="comment">// MintOutputStates::Created always has one out_idx
-                        </span>out_idx: <span class="kw-2">*</span>common.out_idxs.start(),
+                        </span>out_idx: common.out_point_range.start_idx(),
                     },
                     created_state.amount,
                     created_state.issuance_request,
@@ -255,17 +253,15 @@
                     state: <span class="kw">crate</span>::output::MintOutputStates::CreatedMulti(created_state),
                 }) =&gt; <span class="prelude-val">Some</span>(
                     common
-                        .out_idxs
-                        .map(|out_idx| {
+                        .out_point_range
+                        .into_iter()
+                        .map(|(txid, out_idx)| {
                             <span class="kw">let </span>issuance_request = created_state
                                 .issuance_requests
                                 .get(<span class="kw-2">&amp;</span>out_idx)
                                 .expect(<span class="string">"Must have corresponding out_idx"</span>);
                             (
-                                OutPoint {
-                                    txid: common.txid,
-                                    out_idx,
-                                },
+                                OutPoint { txid, out_idx },
                                 issuance_request.<span class="number">0</span>,
                                 issuance_request.<span class="number">1</span>,
                             )
