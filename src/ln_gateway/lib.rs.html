@@ -2155,7 +2155,8 @@
 <a href="#2154" id="2154">2154</a>
 <a href="#2155" id="2155">2155</a>
 <a href="#2156" id="2156">2156</a>
-<a href="#2157" id="2157">2157</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2157" id="2157">2157</a>
+<a href="#2158" id="2158">2158</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -3321,6 +3322,7 @@
         // federation info here because short channel id is not yet persisted.
         </span><span class="kw">let </span>federation_info = FederationInfo {
             federation_id,
+            federation_name: federation_manager.federation_name(<span class="kw-2">&amp;</span>client).<span class="kw">await</span>,
             balance_msat: client.get_balance().<span class="kw">await</span>,
             federation_index,
             routing_fees: <span class="prelude-val">Some</span>(gateway_config.routing_fees.into()),

@@ -269,7 +269,8 @@
 <a href="#268" id="268">268</a>
 <a href="#269" id="269">269</a>
 <a href="#270" id="270">270</a>
-<a href="#271" id="271">271</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
 <span class="kw">pub mod </span>rpc_server;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -362,6 +363,7 @@
 </span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 </span><span class="kw">pub struct </span>FederationInfo {
     <span class="kw">pub </span>federation_id: FederationId,
+    <span class="kw">pub </span>federation_name: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="kw">pub </span>balance_msat: Amount,
     <span class="kw">pub </span>federation_index: u64,
     <span class="kw">pub </span>routing_fees: <span class="prelude-ty">Option</span>&lt;FederationRoutingFees&gt;,
