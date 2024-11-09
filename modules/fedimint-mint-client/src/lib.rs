@@ -803,7 +803,9 @@ impl ClientModule for MintClientModule {
     }
 
     async fn get_balance(&self, dbtx: &mut DatabaseTransaction<'_>) -> Amount {
-        self.get_notes_tier_counts(dbtx).await.total_amount()
+        self.get_note_counts_by_denomination(dbtx)
+            .await
+            .total_amount()
     }
 
     async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()> {
@@ -1002,17 +1004,12 @@ impl MintClientModule {
     }
 
     /// Returns the number of held e-cash notes per denomination
+    #[deprecated(
+        since = "0.5.0",
+        note = "Use `get_note_counts_by_denomination` instead"
+    )]
     pub async fn get_notes_tier_counts(&self, dbtx: &mut DatabaseTransaction<'_>) -> TieredCounts {
-        dbtx.find_by_prefix(&NoteKeyPrefix)
-            .await
-            .fold(
-                TieredCounts::default(),
-                |mut acc, (key, _note)| async move {
-                    acc.inc(key.amount, 1);
-                    acc
-                },
-            )
-            .await
+        self.get_note_counts_by_denomination(dbtx).await
     }
 
     /// Pick [`SpendableNote`]s by given counts, when available
@@ -1057,7 +1054,7 @@ impl MintClientModule {
 
         let denominations = represent_amount(
             exact_amount,
-            &self.get_notes_tier_counts(dbtx).await,
+            &self.get_note_counts_by_denomination(dbtx).await,
             &self.cfg.tbs_pks,
             notes_per_denomination,
             &self.cfg.fee_consensus,
@@ -1112,7 +1109,10 @@ impl MintClientModule {
     }
 
     /// Returns the number of held e-cash notes per denomination
-    pub async fn get_wallet_summary(&self, dbtx: &mut DatabaseTransaction<'_>) -> TieredCounts {
+    pub async fn get_note_counts_by_denomination(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> TieredCounts {
         dbtx.find_by_prefix(&NoteKeyPrefix)
             .await
             .fold(
@@ -1123,6 +1123,15 @@ impl MintClientModule {
                 },
             )
             .await
+    }
+
+    /// Returns the number of held e-cash notes per denomination
+    #[deprecated(
+        since = "0.5.0",
+        note = "Use `get_note_counts_by_denomination` instead"
+    )]
+    pub async fn get_wallet_summary(&self, dbtx: &mut DatabaseTransaction<'_>) -> TieredCounts {
+        self.get_note_counts_by_denomination(dbtx).await
     }
 
     /// Wait for the e-cash notes to be retrieved. If this is not possible
@@ -1191,7 +1200,7 @@ impl MintClientModule {
             assert!(MIN_NOTES_PER_TIER <= MAX_NOTES_PER_TIER_TRIGGER);
         }
 
-        let counts = self.get_notes_tier_counts(dbtx).await;
+        let counts = self.get_note_counts_by_denomination(dbtx).await;
 
         let should_consolidate = counts
             .iter()

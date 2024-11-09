@@ -645,7 +645,7 @@ async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json
     let mint_client = client.get_first_module::<MintClientModule>()?;
     let wallet_client = client.get_first_module::<WalletClientModule>()?;
     let summary = mint_client
-        .get_notes_tier_counts(
+        .get_note_counts_by_denomination(
             &mut client
                 .db()
                 .begin_transaction_nc()
