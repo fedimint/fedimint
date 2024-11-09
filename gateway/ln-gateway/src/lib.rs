@@ -1164,6 +1164,7 @@ impl Gateway {
         // federation info here because short channel id is not yet persisted.
         let federation_info = FederationInfo {
             federation_id,
+            federation_name: federation_manager.federation_name(&client).await,
             balance_msat: client.get_balance().await,
             federation_index,
             routing_fees: Some(gateway_config.routing_fees.into()),
