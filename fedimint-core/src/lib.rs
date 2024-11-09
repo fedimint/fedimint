@@ -269,6 +269,25 @@ pub fn encode_bolt11_invoice_features_without_length(features: &Bolt11InvoiceFea
     feature_bytes
 }
 
+/// Outputs hex into an object implementing `fmt::Write`.
+///
+/// Vendored from `bitcoin_hashes` v0.11.0:
+/// <https://docs.rs/bitcoin_hashes/0.11.0/src/bitcoin_hashes/hex.rs.html#173-189>
+pub fn format_hex(data: &[u8], f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    let prec = f.precision().unwrap_or(2 * data.len());
+    let width = f.width().unwrap_or(2 * data.len());
+    for _ in (2 * data.len())..width {
+        f.write_str("0")?;
+    }
+    for ch in data.iter().take(prec / 2) {
+        write!(f, "{:02x}", *ch)?;
+    }
+    if prec < 2 * data.len() && prec % 2 == 1 {
+        write!(f, "{:x}", data[prec / 2] / 16)?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
