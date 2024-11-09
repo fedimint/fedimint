@@ -1,19 +1,5 @@
 use std::str::FromStr;
 
-pub fn bitcoin29_to_bitcoin32_psbt(
-    psbt: &bitcoin29::util::psbt::PartiallySignedTransaction,
-) -> bitcoin::psbt::Psbt {
-    bincode::deserialize(&bincode::serialize(psbt).expect("Failed to serialize bitcoin29 psbt"))
-        .expect("Failed to convert bitcoin29 psbt to bitcoin32 psbt")
-}
-
-pub fn bitcoin32_to_bitcoin29_psbt(
-    psbt: &bitcoin::psbt::Psbt,
-) -> bitcoin29::util::psbt::PartiallySignedTransaction {
-    bincode::deserialize(&bincode::serialize(psbt).expect("Failed to serialize bitcoin32 psbt"))
-        .expect("Failed to convert bitcoin32 psbt to bitcoin29 psbt")
-}
-
 pub fn bitcoin29_to_bitcoin32_network_magic(magic: u32) -> bitcoin::p2p::Magic {
     // Invert the byte order when converting from v0.32 to v0.29.
     // See the following bitcoin v0.29 and v0.32 code:
