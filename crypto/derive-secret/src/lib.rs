@@ -152,7 +152,7 @@ fn tagged_derive(tag: &[u8; 8], derivation: ChildId) -> [u8; 16] {
 impl std::fmt::Debug for DerivableSecret {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DerivableSecret#")?;
-        bitcoin_hashes::hex::format_hex(
+        fedimint_core::format_hex(
             &self
                 .kdf
                 .derive::<8>(b"just a debug fingerprint derivation salt"),
