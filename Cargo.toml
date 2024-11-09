@@ -183,7 +183,7 @@ strum_macros = "0.26"
 subtle = "2.6.1"
 test-log = { version = "0.2", features = ["trace"], default-features = false }
 tbs = { package = "fedimint-tbs", path = "./crypto/tbs", version = "=0.5.0-alpha" }
-thiserror = "1.0.66"
+thiserror = "1.0.68"
 threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
 tokio = "1.41.0"
 tokio-rustls = "0.24.1"
