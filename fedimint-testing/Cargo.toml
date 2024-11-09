@@ -39,7 +39,7 @@ fs-lock = { workspace = true }
 lightning-invoice = { workspace = true }
 ln-gateway = { package = "fedimint-ln-gateway", path = "../gateway/ln-gateway", version = "=0.5.0-alpha", default-features = false }
 rand = { workspace = true }
-tempfile = "3.13.0"
+tempfile = "3.14.0"
 tokio = { workspace = true }
 tokio-rustls = { workspace = true }
 tracing = { workspace = true }

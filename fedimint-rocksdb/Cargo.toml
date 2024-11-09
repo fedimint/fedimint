@@ -24,7 +24,7 @@ rocksdb = { version = "0.22.0" }
 tracing = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3.13.0"
+tempfile = "3.14.0"
 
 [target.'cfg(not(target_family="wasm"))'.dependencies]
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time"] }
