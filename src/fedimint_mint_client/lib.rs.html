@@ -2741,7 +2741,16 @@
 <a href="#2740" id="2740">2740</a>
 <a href="#2741" id="2741">2741</a>
 <a href="#2742" id="2742">2742</a>
-<a href="#2743" id="2743">2743</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2743" id="2743">2743</a>
+<a href="#2744" id="2744">2744</a>
+<a href="#2745" id="2745">2745</a>
+<a href="#2746" id="2746">2746</a>
+<a href="#2747" id="2747">2747</a>
+<a href="#2748" id="2748">2748</a>
+<a href="#2749" id="2749">2749</a>
+<a href="#2750" id="2750">2750</a>
+<a href="#2751" id="2751">2751</a>
+<a href="#2752" id="2752">2752</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -3546,7 +3555,9 @@
     </span>}
 
     <span class="kw">async fn </span>get_balance(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; Amount {
-        <span class="self">self</span>.get_notes_tier_counts(dbtx).<span class="kw">await</span>.total_amount()
+        <span class="self">self</span>.get_note_counts_by_denomination(dbtx)
+            .<span class="kw">await
+            </span>.total_amount()
     }
 
     <span class="kw">async fn </span>subscribe_balance_changes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">'static</span>, ()&gt; {
@@ -3745,17 +3756,12 @@
     }
 
     <span class="doccomment">/// Returns the number of held e-cash notes per denomination
+    </span><span class="attr">#[deprecated(
+        since = <span class="string">"0.5.0"</span>,
+        note = <span class="string">"Use `get_note_counts_by_denomination` instead"
+    </span>)]
     </span><span class="kw">pub async fn </span>get_notes_tier_counts(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; TieredCounts {
-        dbtx.find_by_prefix(<span class="kw-2">&amp;</span>NoteKeyPrefix)
-            .<span class="kw">await
-            </span>.fold(
-                TieredCounts::default(),
-                |<span class="kw-2">mut </span>acc, (key, _note)| <span class="kw">async move </span>{
-                    acc.inc(key.amount, <span class="number">1</span>);
-                    acc
-                },
-            )
-            .<span class="kw">await
+        <span class="self">self</span>.get_note_counts_by_denomination(dbtx).<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Pick [`SpendableNote`]s by given counts, when available
@@ -3800,7 +3806,7 @@
 
         <span class="kw">let </span>denominations = represent_amount(
             exact_amount,
-            <span class="kw-2">&amp;</span><span class="self">self</span>.get_notes_tier_counts(dbtx).<span class="kw">await</span>,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.get_note_counts_by_denomination(dbtx).<span class="kw">await</span>,
             <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.tbs_pks,
             notes_per_denomination,
             <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.fee_consensus,
@@ -3855,7 +3861,10 @@
     }
 
     <span class="doccomment">/// Returns the number of held e-cash notes per denomination
-    </span><span class="kw">pub async fn </span>get_wallet_summary(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; TieredCounts {
+    </span><span class="kw">pub async fn </span>get_note_counts_by_denomination(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
+    ) -&gt; TieredCounts {
         dbtx.find_by_prefix(<span class="kw-2">&amp;</span>NoteKeyPrefix)
             .<span class="kw">await
             </span>.fold(
@@ -3866,6 +3875,15 @@
                 },
             )
             .<span class="kw">await
+    </span>}
+
+    <span class="doccomment">/// Returns the number of held e-cash notes per denomination
+    </span><span class="attr">#[deprecated(
+        since = <span class="string">"0.5.0"</span>,
+        note = <span class="string">"Use `get_note_counts_by_denomination` instead"
+    </span>)]
+    </span><span class="kw">pub async fn </span>get_wallet_summary(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; TieredCounts {
+        <span class="self">self</span>.get_note_counts_by_denomination(dbtx).<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Wait for the e-cash notes to be retrieved. If this is not possible
@@ -3934,7 +3952,7 @@
             <span class="macro">assert!</span>(MIN_NOTES_PER_TIER &lt;= MAX_NOTES_PER_TIER_TRIGGER);
         }
 
-        <span class="kw">let </span>counts = <span class="self">self</span>.get_notes_tier_counts(dbtx).<span class="kw">await</span>;
+        <span class="kw">let </span>counts = <span class="self">self</span>.get_note_counts_by_denomination(dbtx).<span class="kw">await</span>;
 
         <span class="kw">let </span>should_consolidate = counts
             .iter()
