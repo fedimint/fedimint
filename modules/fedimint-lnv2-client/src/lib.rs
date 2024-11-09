@@ -22,7 +22,7 @@ use db::GatewayKey;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
-use fedimint_client::module::{ClientContext, ClientModule};
+use fedimint_client::module::{ClientContext, ClientModule, OutPointRange};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
@@ -560,11 +560,11 @@ impl LightningClientModule {
             amount: contract.amount,
         };
         let client_output_sm = ClientOutputSM::<LightningClientStateMachines> {
-            state_machines: Arc::new(move |funding_txid, _| {
+            state_machines: Arc::new(move |out_point_range: OutPointRange| {
                 vec![LightningClientStateMachines::Send(SendStateMachine {
                     common: SendSMCommon {
                         operation_id,
-                        funding_txid,
+                        funding_txid: out_point_range.txid(),
                         gateway_api: gateway_api_clone.clone(),
                         contract: contract_clone.clone(),
                         invoice: LightningInvoice::Bolt11(invoice_clone.clone()),

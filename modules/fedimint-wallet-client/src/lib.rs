@@ -21,7 +21,6 @@ mod withdraw;
 
 use std::collections::BTreeMap;
 use std::future;
-use std::ops::RangeInclusive;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -38,7 +37,7 @@ use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 use fedimint_client::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
-use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
+use fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
@@ -575,13 +574,16 @@ impl WalletClientModule {
 
         let amount = output.maybe_v0_ref().expect("v0 output").amount().into();
 
-        let sm_gen = move |txid, out_idxs: RangeInclusive<u64>| {
-            assert_eq!(out_idxs.clone().count(), 1);
-            let out_idx = *out_idxs.start();
+        let sm_gen = move |out_point_range: OutPointRange| {
+            assert_eq!(out_point_range.count(), 1);
+            let out_idx = out_point_range.start_idx();
             vec![WalletClientStates::Withdraw(WithdrawStateMachine {
                 operation_id,
                 state: WithdrawStates::Created(CreatedWithdrawState {
-                    fm_outpoint: OutPoint { txid, out_idx },
+                    fm_outpoint: OutPoint {
+                        txid: out_point_range.txid(),
+                        out_idx,
+                    },
                 }),
             })]
         };
@@ -603,13 +605,16 @@ impl WalletClientModule {
 
         let amount = output.maybe_v0_ref().expect("v0 output").amount().into();
 
-        let sm_gen = move |txid, out_idxs: RangeInclusive<u64>| {
-            assert_eq!(out_idxs.clone().count(), 1);
-            let out_idx = *out_idxs.start();
+        let sm_gen = move |out_point_range: OutPointRange| {
+            assert_eq!(out_point_range.count(), 1);
+            let out_idx = out_point_range.start_idx();
             vec![WalletClientStates::Withdraw(WithdrawStateMachine {
                 operation_id,
                 state: WithdrawStates::Created(CreatedWithdrawState {
-                    fm_outpoint: OutPoint { txid, out_idx },
+                    fm_outpoint: OutPoint {
+                        txid: out_point_range.txid(),
+                        out_idx,
+                    },
                 }),
             })]
         };

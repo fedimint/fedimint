@@ -5,7 +5,7 @@ use std::time::Duration;
 use anyhow::{anyhow, bail};
 use fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
 use fedimint_api_client::query::FilterMapThreshold;
-use fedimint_client::module::ClientContext;
+use fedimint_client::module::{ClientContext, OutPointRange};
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::{Decoder, OperationId};
@@ -78,11 +78,16 @@ pub struct MintOutputCommonV1 {
     pub(crate) out_point: OutPoint,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintOutputCommon {
     pub(crate) operation_id: OperationId,
-    pub(crate) txid: TransactionId,
-    pub(crate) out_idxs: std::ops::RangeInclusive<u64>,
+    pub(crate) out_point_range: OutPointRange,
+}
+
+impl MintOutputCommon {
+    pub fn txid(self) -> TransactionId {
+        self.out_point_range.txid()
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -107,10 +112,10 @@ impl State for MintOutputStateMachine {
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
             MintOutputStates::Created(created) => {
-                created.transitions(context, global_context, &self.common)
+                created.transitions(context, global_context, self.common)
             }
             MintOutputStates::CreatedMulti(created) => {
-                created.transitions(context, global_context, &self.common)
+                created.transitions(context, global_context, self.common)
             }
             MintOutputStates::Aborted(_)
             | MintOutputStates::Failed(_)
@@ -138,7 +143,7 @@ impl MintOutputStatesCreated {
         // TODO: make cheaper to clone (Arc?)
         context: &MintClientContext,
         global_context: &DynGlobalClientContext,
-        common: &MintOutputCommon,
+        common: MintOutputCommon,
     ) -> Vec<StateTransition<MintOutputStateMachine>> {
         let tbs_pks = context.tbs_pks.clone();
         let client_ctx = context.client_ctx.clone();
@@ -146,14 +151,14 @@ impl MintOutputStatesCreated {
         vec![
             // Check if transaction was rejected
             StateTransition::new(
-                Self::await_tx_rejected(global_context.clone(), common.clone()),
+                Self::await_tx_rejected(global_context.clone(), common),
                 |_dbtx, (), state| Box::pin(async move { Self::transition_tx_rejected(&state) }),
             ),
             // Check for output outcome
             StateTransition::new(
                 Self::await_outcome_ready(
                     global_context.clone(),
-                    common.clone(),
+                    common,
                     context.mint_decoder.clone(),
                     self.amount,
                     self.issuance_request.blinded_message(),
@@ -173,7 +178,11 @@ impl MintOutputStatesCreated {
     }
 
     async fn await_tx_rejected(global_context: DynGlobalClientContext, common: MintOutputCommon) {
-        if global_context.await_tx_accepted(common.txid).await.is_err() {
+        if global_context
+            .await_tx_accepted(common.txid())
+            .await
+            .is_err()
+        {
             return;
         }
         std::future::pending::<()>().await;
@@ -183,7 +192,7 @@ impl MintOutputStatesCreated {
         assert!(matches!(old_state.state, MintOutputStates::Created(_)));
 
         MintOutputStateMachine {
-            common: old_state.common.clone(),
+            common: old_state.common,
             state: MintOutputStates::Aborted(MintOutputStatesAborted),
         }
     }
@@ -212,8 +221,8 @@ impl MintOutputStatesCreated {
                     ),
                     AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
                     ApiRequestErased::new(OutPoint {
-                        txid: common.txid,
-                        out_idx: *common.out_idxs.start(),
+                        txid: common.txid(),
+                        out_idx: common.out_point_range.start_idx(),
                     }),
                 )
                 .await
@@ -316,7 +325,7 @@ impl MintOutputStatesCreatedMulti {
         // TODO: make cheaper to clone (Arc?)
         context: &MintClientContext,
         global_context: &DynGlobalClientContext,
-        common: &MintOutputCommon,
+        common: MintOutputCommon,
     ) -> Vec<StateTransition<MintOutputStateMachine>> {
         let tbs_pks = context.tbs_pks.clone();
         let client_ctx = context.client_ctx.clone();
@@ -324,14 +333,14 @@ impl MintOutputStatesCreatedMulti {
         vec![
             // Check if transaction was rejected
             StateTransition::new(
-                Self::await_tx_rejected(global_context.clone(), common.clone()),
+                Self::await_tx_rejected(global_context.clone(), common),
                 |_dbtx, (), state| Box::pin(async move { Self::transition_tx_rejected(&state) }),
             ),
             // Check for output outcome
             StateTransition::new(
                 Self::await_outcome_ready(
                     global_context.clone(),
-                    common.clone(),
+                    common,
                     context.mint_decoder.clone(),
                     self.issuance_requests.clone(),
                     context.peer_tbs_pks.clone(),
@@ -350,7 +359,11 @@ impl MintOutputStatesCreatedMulti {
     }
 
     async fn await_tx_rejected(global_context: DynGlobalClientContext, common: MintOutputCommon) {
-        if global_context.await_tx_accepted(common.txid).await.is_err() {
+        if global_context
+            .await_tx_accepted(common.txid())
+            .await
+            .is_err()
+        {
             return;
         }
         std::future::pending::<()>().await;
@@ -360,7 +373,7 @@ impl MintOutputStatesCreatedMulti {
         assert!(matches!(old_state.state, MintOutputStates::CreatedMulti(_)));
 
         MintOutputStateMachine {
-            common: old_state.common.clone(),
+            common: old_state.common,
             state: MintOutputStates::Aborted(MintOutputStatesAborted),
         }
     }
@@ -403,7 +416,7 @@ impl MintOutputStatesCreatedMulti {
                             ),
                             AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
                             ApiRequestErased::new(OutPoint {
-                                txid: common.txid,
+                                txid: common.txid(),
                                 out_idx,
                             }),
                         )

@@ -33,7 +33,7 @@ use fedimint_client::db::{migrate_state, ClientMigrationFn};
 use fedimint_client::derivable_secret::ChildId;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
-use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
+use fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
@@ -57,7 +57,6 @@ use fedimint_core::util::update_merge::UpdateMerge;
 use fedimint_core::util::{backoff_util, retry, BoxStream};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1, Amount, OutPoint,
-    TransactionId,
 };
 use fedimint_ln_common::config::{FeeToAmount, LightningClientConfig};
 use fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
@@ -739,7 +738,7 @@ impl LightningClientModule {
         };
 
         let contract_id = contract.contract_id();
-        let sm_gen = Arc::new(move |funding_txid: TransactionId, _| {
+        let sm_gen = Arc::new(move |out_point_range: OutPointRange| {
             vec![LightningClientStateMachines::LightningPay(
                 LightningPayStateMachine {
                     common: LightningPayCommon {
@@ -752,7 +751,7 @@ impl LightningClientModule {
                     },
                     state: LightningPayStates::CreatedOutgoingLnContract(
                         LightningPayCreatedOutgoingLnContract {
-                            funding_txid,
+                            funding_txid: out_point_range.txid(),
                             contract_id,
                             gateway: gateway.clone(),
                         },
@@ -813,7 +812,7 @@ impl LightningClientModule {
         };
 
         let client_output_sm = ClientOutputSM::<LightningClientStateMachines> {
-            state_machines: Arc::new(move |txid, _| {
+            state_machines: Arc::new(move |out_point_range| {
                 vec![LightningClientStateMachines::InternalPay(
                     IncomingStateMachine {
                         common: IncomingSmCommon {
@@ -821,7 +820,9 @@ impl LightningClientModule {
                             contract_id,
                             payment_hash,
                         },
-                        state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
+                        state: IncomingSmStates::FundingOffer(FundingOfferState {
+                            txid: out_point_range.txid(),
+                        }),
                     },
                 )]
             }),
@@ -948,12 +949,12 @@ impl LightningClientModule {
         let operation_id = OperationId(*invoice.payment_hash().as_ref());
 
         let sm_invoice = invoice.clone();
-        let sm_gen = Arc::new(move |txid: TransactionId, _| {
+        let sm_gen = Arc::new(move |out_point_range: OutPointRange| {
             vec![LightningClientStateMachines::Receive(
                 LightningReceiveStateMachine {
                     operation_id,
                     state: LightningReceiveStates::SubmittedOffer(LightningReceiveSubmittedOffer {
-                        offer_txid: txid,
+                        offer_txid: out_point_range.txid(),
                         invoice: sm_invoice.clone(),
                         receiving_key,
                     }),

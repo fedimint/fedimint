@@ -13,6 +13,7 @@ use fedimint_core::core::{
     OperationId,
 };
 use fedimint_core::db::{Database, DatabaseTransaction, GlobalDBTxAccessToken};
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleInit};
@@ -959,5 +960,111 @@ impl AsRef<maybe_add_send_sync!(dyn IClientModule + 'static)> for DynClientModul
     }
 }
 
-pub type StateGenerator<S> =
-    Arc<maybe_add_send_sync!(dyn Fn(TransactionId, ops::RangeInclusive<u64>) -> Vec<S> + 'static)>;
+/// A contiguous range of input/output indexes
+#[derive(Copy, Clone, Encodable, Decodable, PartialEq, Eq, Hash, Debug)]
+pub struct IdxRange {
+    start: u64,
+    end_inclusive: u64,
+}
+
+impl IdxRange {
+    pub fn new_single(start: u64) -> Self {
+        Self {
+            start,
+            end_inclusive: start,
+        }
+    }
+
+    pub fn start(self) -> u64 {
+        self.start
+    }
+
+    pub fn count(self) -> usize {
+        self.into_iter().count()
+    }
+}
+
+impl IntoIterator for IdxRange {
+    type Item = u64;
+
+    type IntoIter = ops::RangeInclusive<u64>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        ops::RangeInclusive::new(self.start, self.end_inclusive)
+    }
+}
+
+impl From<ops::RangeInclusive<u64>> for IdxRange {
+    fn from(value: ops::RangeInclusive<u64>) -> Self {
+        Self {
+            start: *value.start(),
+            end_inclusive: *value.end(),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Encodable, Decodable, PartialEq, Eq, Hash, Debug)]
+pub struct OutPointRange {
+    txid: TransactionId,
+    idx_range: IdxRange,
+}
+
+impl OutPointRange {
+    pub fn new(txid: TransactionId, idx_range: IdxRange) -> Self {
+        Self { txid, idx_range }
+    }
+
+    pub fn new_single(txid: TransactionId, idx: u64) -> Self {
+        Self {
+            txid,
+            idx_range: IdxRange::new_single(idx),
+        }
+    }
+
+    pub fn start_idx(self) -> u64 {
+        self.idx_range.start()
+    }
+
+    pub fn out_idx_iter(self) -> impl Iterator<Item = u64> {
+        self.idx_range.into_iter()
+    }
+
+    pub fn count(self) -> usize {
+        self.idx_range.count()
+    }
+}
+
+impl IntoIterator for OutPointRange {
+    type Item = (TransactionId, u64);
+
+    type IntoIter = OutPointRangeIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        OutPointRangeIter {
+            txid: self.txid,
+            inner: self.idx_range.into_iter(),
+        }
+    }
+}
+
+pub struct OutPointRangeIter {
+    txid: TransactionId,
+
+    inner: ops::RangeInclusive<u64>,
+}
+
+impl OutPointRange {
+    pub fn txid(&self) -> TransactionId {
+        self.txid
+    }
+}
+
+impl Iterator for OutPointRangeIter {
+    type Item = (TransactionId, u64);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|idx| (self.txid, idx))
+    }
+}
+
+pub type StateGenerator<S> = Arc<maybe_add_send_sync!(dyn Fn(OutPointRange) -> Vec<S> + 'static)>;
