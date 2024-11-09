@@ -12,9 +12,6 @@ use bitcoincore_rpc::jsonrpc::error::RpcError;
 use bitcoincore_rpc::RpcApi;
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::ClnRpc;
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_sha256_hash, bitcoin32_to_bitcoin30_sha256_hash,
-};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_core::task::{block_in_place, block_on, sleep, timeout};
@@ -797,11 +794,7 @@ impl Lnd {
             .await?
             .into_inner();
         let payment_request = hold_request.payment_request;
-        Ok((
-            preimage,
-            payment_request,
-            bitcoin32_to_bitcoin30_sha256_hash(&hash),
-        ))
+        Ok((preimage, payment_request, hash))
     }
 
     pub async fn settle_hold_invoice(
@@ -813,9 +806,7 @@ impl Lnd {
             .invoices_client_lock()
             .await?
             .subscribe_single_invoice(tonic_lnd::invoicesrpc::SubscribeSingleInvoiceRequest {
-                r_hash: bitcoin30_to_bitcoin32_sha256_hash(&payment_hash)
-                    .to_byte_array()
-                    .to_vec(),
+                r_hash: payment_hash.to_byte_array().to_vec(),
             })
             .await?
             .into_inner();

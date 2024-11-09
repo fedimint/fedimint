@@ -99,7 +99,7 @@ bitcoin_hashes = "0.14.0"
 bls12_381 = "0.8.0"
 bytes = "1.7.2"
 clap = { version = "4.5.20", features = ["derive", "env"] }
-cln-rpc = "0.2.0"
+cln-rpc = { package = "fedimint-cln-rpc", version = "0.5.0" }
 criterion = "0.5.1"
 devimint = { path = "./devimint", version = "=0.5.0-alpha" }
 electrum-client = { version = "0.21.0", default-features = false, features = [

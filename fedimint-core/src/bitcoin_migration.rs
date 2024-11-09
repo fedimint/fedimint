@@ -1,7 +1,5 @@
 use std::str::FromStr;
 
-use bitcoin30::hashes::Hash;
-
 pub fn bitcoin29_to_bitcoin32_psbt(
     psbt: &bitcoin29::util::psbt::PartiallySignedTransaction,
 ) -> bitcoin::psbt::Psbt {
@@ -48,20 +46,6 @@ pub fn bitcoin32_checked_address_to_unchecked_address(
     address.as_unchecked().clone()
 }
 
-pub fn bitcoin30_to_bitcoin32_secp256k1_pubkey(
-    pubkey: &bitcoin30::secp256k1::PublicKey,
-) -> bitcoin::secp256k1::PublicKey {
-    bitcoin::secp256k1::PublicKey::from_slice(&pubkey.serialize())
-        .expect("Failed to convert bitcoin30 secp256k1 pubkey to bitcoin32 secp256k1 pubkey")
-}
-
-pub fn bitcoin32_to_bitcoin30_secp256k1_pubkey(
-    pubkey: &bitcoin::secp256k1::PublicKey,
-) -> bitcoin30::secp256k1::PublicKey {
-    bitcoin30::secp256k1::PublicKey::from_slice(&pubkey.serialize())
-        .expect("Failed to convert bitcoin32 secp256k1 pubkey to bitcoin30 secp256k1 pubkey")
-}
-
 pub fn bitcoin32_to_bitcoin30_address(address: &bitcoin::Address) -> bitcoin30::Address {
     // The bitcoin crate only allows for deserializing an address as unchecked.
     // However, we can safely call `assume_checked()` since the input address is
@@ -88,18 +72,6 @@ pub fn bitcoin30_to_bitcoin32_network(network: &bitcoin30::Network) -> bitcoin::
         bitcoin30::Network::Regtest => bitcoin::Network::Regtest,
         _ => panic!("There are no other enum cases, this should never be hit."),
     }
-}
-
-pub fn bitcoin30_to_bitcoin32_sha256_hash(
-    hash: &bitcoin30::hashes::sha256::Hash,
-) -> bitcoin::hashes::sha256::Hash {
-    *bitcoin::hashes::sha256::Hash::from_bytes_ref(hash.as_ref())
-}
-
-pub fn bitcoin32_to_bitcoin30_sha256_hash(
-    hash: &bitcoin::hashes::sha256::Hash,
-) -> bitcoin30::hashes::sha256::Hash {
-    bitcoin30::hashes::sha256::Hash::from_slice(hash.as_ref()).expect("Invalid hash length")
 }
 
 #[cfg(test)]

@@ -18,10 +18,6 @@ use cln_rpc::model;
 use cln_rpc::model::requests::SendpayRoute;
 use cln_rpc::model::responses::ListpeerchannelsChannels;
 use cln_rpc::primitives::{AmountOrAll, ChannelState, ShortChannelId};
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_secp256k1_pubkey, bitcoin32_to_bitcoin30_secp256k1_pubkey,
-    bitcoin32_to_bitcoin30_sha256_hash,
-};
 use fedimint_core::secp256k1::{PublicKey, SecretKey, SECP256K1};
 use fedimint_core::task::timeout;
 use fedimint_core::util::handle_version_hash_command;
@@ -251,9 +247,11 @@ async fn cln_route_hints(
 
         let channel = match channels_response {
             cln_rpc::Response::ListChannels(channels) => {
-                let Some(channel) = channels.channels.into_iter().find(|chan| {
-                    chan.destination == bitcoin32_to_bitcoin30_secp256k1_pubkey(&node_info.0)
-                }) else {
+                let Some(channel) = channels
+                    .channels
+                    .into_iter()
+                    .find(|chan| chan.destination == node_info.0)
+                else {
                     warn!(?scid, "Channel not found in graph");
                     continue;
                 };
@@ -263,7 +261,7 @@ async fn cln_route_hints(
         };
 
         let route_hint_hop = RouteHintHop {
-            src_node_id: bitcoin30_to_bitcoin32_secp256k1_pubkey(&peer_id),
+            src_node_id: peer_id,
             short_channel_id: scid_to_u64(scid),
             base_msat: channel.base_fee_millisatoshi,
             proportional_millionths: channel.fee_per_millionth,
@@ -675,7 +673,7 @@ async fn cln_open_channel(
         .await?
         .call(cln_rpc::Request::FundChannel(
             model::requests::FundchannelRequest {
-                id: bitcoin32_to_bitcoin30_secp256k1_pubkey(&payload.pubkey),
+                id: payload.pubkey,
                 amount: cln_rpc::primitives::AmountOrAll::Amount(
                     cln_rpc::primitives::Amount::from_sat(payload.channel_size_sats),
                 ),
@@ -716,7 +714,7 @@ async fn cln_close_channels_with_peer(
         .await?
         .call(cln_rpc::Request::ListPeerChannels(
             model::requests::ListpeerchannelsRequest {
-                id: Some(bitcoin32_to_bitcoin30_secp256k1_pubkey(&payload.pubkey)),
+                id: Some(payload.pubkey),
             },
         ))
         .await
@@ -783,9 +781,7 @@ async fn cln_list_active_channels(
                         )
                     {
                         Some(ln_gateway::lightning::ChannelInfo {
-                            remote_pubkey: bitcoin30_to_bitcoin32_secp256k1_pubkey(
-                                &channel.peer_id,
-                            ),
+                            remote_pubkey: channel.peer_id,
                             channel_size_sats: channel
                                 .total_msat
                                 .map(|value| value.msat() / 1000)
@@ -1015,13 +1011,7 @@ impl ClnRpcService {
                     let alias = alias.unwrap_or_default();
                     let synced_to_chain =
                         warning_bitcoind_sync.is_none() && warning_lightningd_sync.is_none();
-                    (
-                        bitcoin30_to_bitcoin32_secp256k1_pubkey(&id),
-                        alias,
-                        network,
-                        blockheight,
-                        synced_to_chain,
-                    )
+                    (id, alias, network, blockheight, synced_to_chain)
                 }
                 _ => unreachable!("Unexpected response from Getinfo"),
             })
@@ -1041,7 +1031,7 @@ impl ClnRpcService {
             .await?
             .call(cln_rpc::Request::GetRoute(
                 model::requests::GetrouteRequest {
-                    id: bitcoin32_to_bitcoin30_secp256k1_pubkey(&pruned_invoice.destination),
+                    id: pruned_invoice.destination,
                     amount_msat: cln_rpc::primitives::Amount::from_msat(
                         pruned_invoice.amount.msats,
                     ),
@@ -1104,7 +1094,7 @@ impl ClnRpcService {
                 partid: None,
                 payment_metadata: None,
                 payment_secret,
-                payment_hash: bitcoin32_to_bitcoin30_sha256_hash(&payment_hash),
+                payment_hash,
                 route,
             }))
             .await?;
@@ -1124,7 +1114,7 @@ impl ClnRpcService {
                     groupid: None,
                     partid: None,
                     timeout: None,
-                    payment_hash: bitcoin32_to_bitcoin30_sha256_hash(&payment_hash),
+                    payment_hash,
                 },
             ))
             .await;
