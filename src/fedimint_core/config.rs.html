@@ -1115,8 +1115,7 @@
 <a href="#1114" id="1114">1114</a>
 <a href="#1115" id="1115">1115</a>
 <a href="#1116" id="1116">1116</a>
-<a href="#1117" id="1117">1117</a>
-<a href="#1118" id="1118">1118</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
+<a href="#1117" id="1117">1117</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::ops::Mul;
@@ -1126,14 +1125,13 @@
 <span class="kw">use </span>anyhow::{bail, format_err, Context};
 <span class="kw">use </span>bitcoin::hashes::sha256::{Hash <span class="kw">as </span>Sha256, HashEngine};
 <span class="kw">use </span>bitcoin::hashes::{hex, sha256, Hash <span class="kw">as </span>BitcoinHash};
-<span class="kw">use </span>bitcoin29::hashes::hex::format_hex;
 <span class="kw">use </span>bls12_381::Scalar;
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::encoding::{DynRawFallback, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
 <span class="kw">use </span>fedimint_core::task::Cancelled;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
-<span class="kw">use </span>fedimint_core::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::{format_hex, ModuleDecoderRegistry};
 <span class="kw">use </span>fedimint_logging::LOG_CORE;
 <span class="kw">use </span>hex::FromHex;
 <span class="kw">use </span>secp256k1::PublicKey;
