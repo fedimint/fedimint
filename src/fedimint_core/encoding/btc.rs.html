@@ -295,13 +295,7 @@
 <a href="#294" id="294">294</a>
 <a href="#295" id="295">295</a>
 <a href="#296" id="296">296</a>
-<a href="#297" id="297">297</a>
-<a href="#298" id="298">298</a>
-<a href="#299" id="299">299</a>
-<a href="#300" id="300">300</a>
-<a href="#301" id="301">301</a>
-<a href="#302" id="302">302</a>
-<a href="#303" id="303">303</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
+<a href="#297" id="297">297</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::format_err;
@@ -310,11 +304,10 @@
 <span class="kw">use </span>hex::{FromHex, ToHex};
 <span class="kw">use </span>miniscript::{Descriptor, MiniscriptKey};
 
-<span class="kw">use </span><span class="kw">super</span>::SimpleBitcoinRead;
+<span class="kw">use super</span>::{BufBitcoinReader, CountWrite, SimpleBitcoinRead};
 <span class="kw">use </span><span class="kw">crate</span>::bitcoin_migration::{
-    bitcoin29_to_bitcoin32_network_magic, bitcoin29_to_bitcoin32_psbt,
-    bitcoin30_to_bitcoin32_network, bitcoin32_checked_address_to_unchecked_address,
-    bitcoin32_to_bitcoin29_network_magic, bitcoin32_to_bitcoin29_psbt,
+    bitcoin29_to_bitcoin32_network_magic, bitcoin30_to_bitcoin32_network,
+    bitcoin32_checked_address_to_unchecked_address, bitcoin32_to_bitcoin29_network_magic,
     bitcoin32_to_bitcoin30_address,
 };
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
@@ -357,10 +350,7 @@
 
 <span class="kw">impl </span><span class="kw">crate</span>::encoding::Encodable <span class="kw">for </span>bitcoin::psbt::Psbt {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
-        bitcoin29::consensus::Encodable::consensus_encode(
-            <span class="kw-2">&amp;</span>bitcoin32_to_bitcoin29_psbt(<span class="self">self</span>),
-            writer,
-        )
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.serialize_to_writer(<span class="kw-2">&amp;mut </span>CountWrite::from(writer))<span class="question-mark">?</span>)
     }
 }
 
@@ -369,10 +359,8 @@
         d: <span class="kw-2">&amp;mut </span>D,
         _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(bitcoin29_to_bitcoin32_psbt(
-            <span class="kw-2">&amp;</span>bitcoin29::consensus::Decodable::consensus_decode_from_finite_reader(d)
-                .map_err(<span class="kw">crate</span>::encoding::DecodeError::from_err)<span class="question-mark">?</span>,
-        ))
+        <span class="self">Self</span>::deserialize_from_reader(<span class="kw-2">&amp;mut </span>BufBitcoinReader::new(d))
+            .map_err(<span class="kw">crate</span>::encoding::DecodeError::from_err)
     }
 }
 

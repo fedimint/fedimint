@@ -111,35 +111,7 @@
 <a href="#110" id="110">110</a>
 <a href="#111" id="111">111</a>
 <a href="#112" id="112">112</a>
-<a href="#113" id="113">113</a>
-<a href="#114" id="114">114</a>
-<a href="#115" id="115">115</a>
-<a href="#116" id="116">116</a>
-<a href="#117" id="117">117</a>
-<a href="#118" id="118">118</a>
-<a href="#119" id="119">119</a>
-<a href="#120" id="120">120</a>
-<a href="#121" id="121">121</a>
-<a href="#122" id="122">122</a>
-<a href="#123" id="123">123</a>
-<a href="#124" id="124">124</a>
-<a href="#125" id="125">125</a>
-<a href="#126" id="126">126</a>
-<a href="#127" id="127">127</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
-
-<span class="kw">pub fn </span>bitcoin29_to_bitcoin32_psbt(
-    psbt: <span class="kw-2">&amp;</span>bitcoin29::util::psbt::PartiallySignedTransaction,
-) -&gt; bitcoin::psbt::Psbt {
-    bincode::deserialize(<span class="kw-2">&amp;</span>bincode::serialize(psbt).expect(<span class="string">"Failed to serialize bitcoin29 psbt"</span>))
-        .expect(<span class="string">"Failed to convert bitcoin29 psbt to bitcoin32 psbt"</span>)
-}
-
-<span class="kw">pub fn </span>bitcoin32_to_bitcoin29_psbt(
-    psbt: <span class="kw-2">&amp;</span>bitcoin::psbt::Psbt,
-) -&gt; bitcoin29::util::psbt::PartiallySignedTransaction {
-    bincode::deserialize(<span class="kw-2">&amp;</span>bincode::serialize(psbt).expect(<span class="string">"Failed to serialize bitcoin32 psbt"</span>))
-        .expect(<span class="string">"Failed to convert bitcoin32 psbt to bitcoin29 psbt"</span>)
-}
+<a href="#113" id="113">113</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">pub fn </span>bitcoin29_to_bitcoin32_network_magic(magic: u32) -&gt; bitcoin::p2p::Magic {
     <span class="comment">// Invert the byte order when converting from v0.32 to v0.29.
