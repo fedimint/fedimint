@@ -118,9 +118,11 @@ impl TracingSetup {
             // We prefix everything with a default general log level and
             // good per-module specific default. User provided RUST_LOG
             // can override one or both
-            "{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{},{}",
             self.base_level.as_deref().unwrap_or("info"),
             "jsonrpsee_core::client::async_client=off",
+            "hyper=off",
+            "h2=off",
             "jsonrpsee_server=warn,jsonrpsee_server::transport=off",
             "AlephBFT-=error",
             var,

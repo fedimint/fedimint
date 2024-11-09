@@ -171,6 +171,7 @@ impl ProcessManager {
 
     /// Logs to $FM_LOGS_DIR/{name}.{out,err}
     pub async fn spawn_daemon(&self, name: &str, mut cmd: Command) -> Result<ProcessHandle> {
+        debug!(target: LOG_DEVIMINT, %name, "Spawning daemon");
         let logs_dir = env::var(FM_LOGS_DIR_ENV)?;
         let path = format!("{logs_dir}/{name}.log");
         let log = OpenOptions::new()
