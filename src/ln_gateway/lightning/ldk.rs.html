@@ -594,7 +594,15 @@
 <a href="#593" id="593">593</a>
 <a href="#594" id="594">594</a>
 <a href="#595" id="595">595</a>
-<a href="#596" id="596">596</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
+<a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a>
+<a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -603,7 +611,8 @@
 <span class="kw">use </span>bitcoin::hashes::Hash;
 <span class="kw">use </span>bitcoin::{Network, OutPoint};
 <span class="kw">use </span>fedimint_bip39::Mnemonic;
-<span class="kw">use </span>fedimint_core::task::{TaskGroup, TaskHandle};
+<span class="kw">use </span>fedimint_core::envs::is_env_var_set;
+<span class="kw">use </span>fedimint_core::task::{block_in_place, TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll};
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
 <span class="kw">use </span>ldk_node::config::EsploraSyncConfig;
@@ -821,6 +830,13 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ILnRpcClient <span class="kw">for </span>GatewayLdkClient {
     <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse, LightningRpcError&gt; {
+        <span class="comment">// HACK: https://github.com/lightningdevkit/ldk-node/issues/339 when running in devimint
+        // to speed up tests
+        </span><span class="kw">if </span>is_env_var_set(<span class="string">"FM_IN_DEVIMINT"</span>) {
+            block_in_place(|| {
+                <span class="kw">let _ </span>= <span class="self">self</span>.node.sync_wallets();
+            });
+        }
         <span class="kw">let </span>node_status = <span class="self">self</span>.node.status();
 
         <span class="kw">let </span><span class="prelude-val">Some</span>(esplora_chain_tip_block_summary) = <span class="self">self

@@ -1197,7 +1197,8 @@
 <a href="#1196" id="1196">1196</a>
 <a href="#1197" id="1197">1197</a>
 <a href="#1198" id="1198">1198</a>
-<a href="#1199" id="1199">1199</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#1199" id="1199">1199</a>
+<a href="#1200" id="1200">1200</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -1370,6 +1371,7 @@
 
     <span class="doccomment">/// Logs to $FM_LOGS_DIR/{name}.{out,err}
     </span><span class="kw">pub async fn </span>spawn_daemon(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str, <span class="kw-2">mut </span>cmd: Command) -&gt; <span class="prelude-ty">Result</span>&lt;ProcessHandle&gt; {
+        <span class="macro">debug!</span>(target: LOG_DEVIMINT, %name, <span class="string">"Spawning daemon"</span>);
         <span class="kw">let </span>logs_dir = env::var(FM_LOGS_DIR_ENV)<span class="question-mark">?</span>;
         <span class="kw">let </span>path = <span class="macro">format!</span>(<span class="string">"{logs_dir}/{name}.log"</span>);
         <span class="kw">let </span>log = OpenOptions::new()

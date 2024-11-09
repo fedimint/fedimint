@@ -180,7 +180,9 @@
 <a href="#179" id="179">179</a>
 <a href="#180" id="180">180</a>
 <a href="#181" id="181">181</a>
-<a href="#182" id="182">182</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 
@@ -300,9 +302,11 @@
             <span class="comment">// We prefix everything with a default general log level and
             // good per-module specific default. User provided RUST_LOG
             // can override one or both
-            </span><span class="string">"{},{},{},{},{},{}"</span>,
+            </span><span class="string">"{},{},{},{},{},{},{},{}"</span>,
             <span class="self">self</span>.base_level.as_deref().unwrap_or(<span class="string">"info"</span>),
             <span class="string">"jsonrpsee_core::client::async_client=off"</span>,
+            <span class="string">"hyper=off"</span>,
+            <span class="string">"h2=off"</span>,
             <span class="string">"jsonrpsee_server=warn,jsonrpsee_server::transport=off"</span>,
             <span class="string">"AlephBFT-=error"</span>,
             var,
