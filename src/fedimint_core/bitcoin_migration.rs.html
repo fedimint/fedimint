@@ -125,37 +125,7 @@
 <a href="#124" id="124">124</a>
 <a href="#125" id="125">125</a>
 <a href="#126" id="126">126</a>
-<a href="#127" id="127">127</a>
-<a href="#128" id="128">128</a>
-<a href="#129" id="129">129</a>
-<a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
-<a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
-<a href="#147" id="147">147</a>
-<a href="#148" id="148">148</a>
-<a href="#149" id="149">149</a>
-<a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a>
-<a href="#152" id="152">152</a>
-<a href="#153" id="153">153</a>
-<a href="#154" id="154">154</a>
-<a href="#155" id="155">155</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
-
-<span class="kw">use </span>bitcoin30::hashes::Hash;
+<a href="#127" id="127">127</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">pub fn </span>bitcoin29_to_bitcoin32_psbt(
     psbt: <span class="kw-2">&amp;</span>bitcoin29::util::psbt::PartiallySignedTransaction,
@@ -203,20 +173,6 @@
     address.as_unchecked().clone()
 }
 
-<span class="kw">pub fn </span>bitcoin30_to_bitcoin32_secp256k1_pubkey(
-    pubkey: <span class="kw-2">&amp;</span>bitcoin30::secp256k1::PublicKey,
-) -&gt; bitcoin::secp256k1::PublicKey {
-    bitcoin::secp256k1::PublicKey::from_slice(<span class="kw-2">&amp;</span>pubkey.serialize())
-        .expect(<span class="string">"Failed to convert bitcoin30 secp256k1 pubkey to bitcoin32 secp256k1 pubkey"</span>)
-}
-
-<span class="kw">pub fn </span>bitcoin32_to_bitcoin30_secp256k1_pubkey(
-    pubkey: <span class="kw-2">&amp;</span>bitcoin::secp256k1::PublicKey,
-) -&gt; bitcoin30::secp256k1::PublicKey {
-    bitcoin30::secp256k1::PublicKey::from_slice(<span class="kw-2">&amp;</span>pubkey.serialize())
-        .expect(<span class="string">"Failed to convert bitcoin32 secp256k1 pubkey to bitcoin30 secp256k1 pubkey"</span>)
-}
-
 <span class="kw">pub fn </span>bitcoin32_to_bitcoin30_address(address: <span class="kw-2">&amp;</span>bitcoin::Address) -&gt; bitcoin30::Address {
     <span class="comment">// The bitcoin crate only allows for deserializing an address as unchecked.
     // However, we can safely call `assume_checked()` since the input address is
@@ -243,18 +199,6 @@
         bitcoin30::Network::Regtest =&gt; bitcoin::Network::Regtest,
         <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"There are no other enum cases, this should never be hit."</span>),
     }
-}
-
-<span class="kw">pub fn </span>bitcoin30_to_bitcoin32_sha256_hash(
-    hash: <span class="kw-2">&amp;</span>bitcoin30::hashes::sha256::Hash,
-) -&gt; bitcoin::hashes::sha256::Hash {
-    <span class="kw-2">*</span>bitcoin::hashes::sha256::Hash::from_bytes_ref(hash.as_ref())
-}
-
-<span class="kw">pub fn </span>bitcoin32_to_bitcoin30_sha256_hash(
-    hash: <span class="kw-2">&amp;</span>bitcoin::hashes::sha256::Hash,
-) -&gt; bitcoin30::hashes::sha256::Hash {
-    bitcoin30::hashes::sha256::Hash::from_slice(hash.as_ref()).expect(<span class="string">"Invalid hash length"</span>)
 }
 
 <span class="attr">#[cfg(test)]
