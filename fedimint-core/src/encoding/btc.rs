@@ -7,11 +7,10 @@ use bitcoin::hashes::Hash as BitcoinHash;
 use hex::{FromHex, ToHex};
 use miniscript::{Descriptor, MiniscriptKey};
 
-use super::SimpleBitcoinRead;
+use super::{BufBitcoinReader, CountWrite, SimpleBitcoinRead};
 use crate::bitcoin_migration::{
-    bitcoin29_to_bitcoin32_network_magic, bitcoin29_to_bitcoin32_psbt,
-    bitcoin30_to_bitcoin32_network, bitcoin32_checked_address_to_unchecked_address,
-    bitcoin32_to_bitcoin29_network_magic, bitcoin32_to_bitcoin29_psbt,
+    bitcoin29_to_bitcoin32_network_magic, bitcoin30_to_bitcoin32_network,
+    bitcoin32_checked_address_to_unchecked_address, bitcoin32_to_bitcoin29_network_magic,
     bitcoin32_to_bitcoin30_address,
 };
 use crate::encoding::{Decodable, DecodeError, Encodable};
@@ -54,10 +53,7 @@ impl_encode_decode_bridge!(bitcoin::merkle_tree::PartialMerkleTree);
 
 impl crate::encoding::Encodable for bitcoin::psbt::Psbt {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        bitcoin29::consensus::Encodable::consensus_encode(
-            &bitcoin32_to_bitcoin29_psbt(self),
-            writer,
-        )
+        Ok(self.serialize_to_writer(&mut CountWrite::from(writer))?)
     }
 }
 
@@ -66,10 +62,8 @@ impl crate::encoding::Decodable for bitcoin::psbt::Psbt {
         d: &mut D,
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, crate::encoding::DecodeError> {
-        Ok(bitcoin29_to_bitcoin32_psbt(
-            &bitcoin29::consensus::Decodable::consensus_decode_from_finite_reader(d)
-                .map_err(crate::encoding::DecodeError::from_err)?,
-        ))
+        Self::deserialize_from_reader(&mut BufBitcoinReader::new(d))
+            .map_err(crate::encoding::DecodeError::from_err)
     }
 }
 
