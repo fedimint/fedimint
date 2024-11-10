@@ -348,13 +348,7 @@
 <a href="#347" id="347">347</a>
 <a href="#348" id="348">348</a>
 <a href="#349" id="349">349</a>
-<a href="#350" id="350">350</a>
-<a href="#351" id="351">351</a>
-<a href="#352" id="352">352</a>
-<a href="#353" id="353">353</a>
-<a href="#354" id="354">354</a>
-<a href="#355" id="355">355</a>
-<a href="#356" id="356">356</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
+<a href="#350" id="350">350</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::format_err;
@@ -365,8 +359,7 @@
 
 <span class="kw">use super</span>::{BufBitcoinReader, CountWrite, SimpleBitcoinRead};
 <span class="kw">use </span><span class="kw">crate</span>::bitcoin_migration::{
-    bitcoin29_to_bitcoin32_network_magic, bitcoin30_to_bitcoin32_network,
-    bitcoin32_checked_address_to_unchecked_address, bitcoin32_to_bitcoin29_network_magic,
+    bitcoin30_to_bitcoin32_network, bitcoin32_checked_address_to_unchecked_address,
     bitcoin32_to_bitcoin30_address,
 };
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
@@ -498,10 +491,7 @@
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>bitcoin::p2p::Magic {
     <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="comment">// The encoding format for bitcoin v0.32 is different from bitcoin v0.29. We're
-        // converting before encoding to maintain backwards compatibility.
-        </span><span class="kw">let </span>num = bitcoin32_to_bitcoin29_network_magic(<span class="self">self</span>);
-        num.consensus_encode(writer)
+        u32::from_le_bytes(<span class="self">self</span>.to_bytes()).consensus_encode(writer)
     }
 }
 
@@ -510,10 +500,8 @@
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="comment">// The encoding format for bitcoin v0.32 is different from bitcoin v0.29. We're
-        // converting after decoding to maintain backwards compatibility.
-        </span><span class="kw">let </span>num = u32::consensus_decode(d, modules)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(bitcoin29_to_bitcoin32_network_magic(num))
+        <span class="kw">let </span>num = u32::consensus_decode(d, modules)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::from_bytes(num.to_le_bytes()))
     }
 }
 

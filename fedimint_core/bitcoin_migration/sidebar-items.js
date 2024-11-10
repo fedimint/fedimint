@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["bitcoin29_to_bitcoin32_network_magic","bitcoin30_to_bitcoin32_network","bitcoin32_checked_address_to_unchecked_address","bitcoin32_to_bitcoin29_network_magic","bitcoin32_to_bitcoin30_address","bitcoin32_to_bitcoin30_unchecked_address"]};
+window.SIDEBAR_ITEMS = {"fn":["bitcoin30_to_bitcoin32_network","bitcoin32_checked_address_to_unchecked_address","bitcoin32_to_bitcoin30_address","bitcoin32_to_bitcoin30_unchecked_address"]};
