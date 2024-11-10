@@ -27,7 +27,6 @@ bincode = { workspace = true }
 bitcoin = { workspace = true }
 bitcoin-io = "0.1.2"
 bitcoin-units = "0.1.2"
-bitcoin30 = { workspace = true }
 bitvec = "1.0.1"
 bls12_381 = { workspace = true }
 erased-serde = { workspace = true }

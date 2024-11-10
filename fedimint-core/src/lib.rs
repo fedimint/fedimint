@@ -44,7 +44,9 @@ use std::str::FromStr;
 pub use amount::*;
 /// Mostly re-exported for [`Decodable`] macros.
 pub use anyhow;
+use bitcoin::address::NetworkUnchecked;
 pub use bitcoin::hashes::Hash as BitcoinHash;
+use bitcoin::{Address, Network};
 use lightning::util::ser::Writeable;
 use lightning_types::features::Bolt11InvoiceFeatures;
 pub use macro_rules_attribute::apply;
@@ -66,8 +68,6 @@ pub mod admin_client;
 mod amount;
 /// Federation-stored client backups
 pub mod backup;
-/// Gradual bitcoin dependency migration helpers
-pub mod bitcoin_migration;
 /// Legacy serde encoding for `bls12_381`
 pub mod bls12_381_serde;
 /// Federation configuration
@@ -286,6 +286,30 @@ pub fn format_hex(data: &[u8], f: &mut std::fmt::Formatter) -> std::fmt::Result 
         write!(f, "{:x}", data[prec / 2] / 16)?;
     }
     Ok(())
+}
+
+/// Gets the (approximate) network from a bitcoin address.
+///
+/// This function mimics how `Address.network` is calculated in bitcoin v0.30.
+/// However, that field was removed in more recent versions in part because it
+/// can only distinguish between `Bitcoin`, `Testnet` and `Regtest`.
+///
+/// As of bitcoin v0.32.4, `Address::is_valid_for_network()` performs equality
+/// checks using `NetworkKind` and `KnownHrp`, which only distinguish between
+/// `Bitcoin`, `Testnet` and `Regtest`.
+/// <https://docs.rs/bitcoin/0.32.4/src/bitcoin/address/mod.rs.html#709-716>
+/// <https://docs.rs/bitcoin/0.32.4/src/bitcoin/network.rs.html#51-58>
+/// <https://docs.rs/bitcoin/0.32.4/src/bitcoin/address/mod.rs.html#200-209>
+pub fn get_network_for_address(address: &Address<NetworkUnchecked>) -> Network {
+    if address.is_valid_for_network(Network::Bitcoin) {
+        Network::Bitcoin
+    } else if address.is_valid_for_network(Network::Testnet) {
+        Network::Testnet
+    } else if address.is_valid_for_network(Network::Regtest) {
+        Network::Regtest
+    } else {
+        panic!("Address is not valid for any network");
+    }
 }
 
 #[cfg(test)]
