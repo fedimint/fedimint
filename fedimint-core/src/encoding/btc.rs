@@ -9,8 +9,7 @@ use miniscript::{Descriptor, MiniscriptKey};
 
 use super::{BufBitcoinReader, CountWrite, SimpleBitcoinRead};
 use crate::bitcoin_migration::{
-    bitcoin29_to_bitcoin32_network_magic, bitcoin30_to_bitcoin32_network,
-    bitcoin32_checked_address_to_unchecked_address, bitcoin32_to_bitcoin29_network_magic,
+    bitcoin30_to_bitcoin32_network, bitcoin32_checked_address_to_unchecked_address,
     bitcoin32_to_bitcoin30_address,
 };
 use crate::encoding::{Decodable, DecodeError, Encodable};
@@ -142,10 +141,7 @@ where
 
 impl Encodable for bitcoin::p2p::Magic {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        // The encoding format for bitcoin v0.32 is different from bitcoin v0.29. We're
-        // converting before encoding to maintain backwards compatibility.
-        let num = bitcoin32_to_bitcoin29_network_magic(self);
-        num.consensus_encode(writer)
+        u32::from_le_bytes(self.to_bytes()).consensus_encode(writer)
     }
 }
 
@@ -154,10 +150,8 @@ impl Decodable for bitcoin::p2p::Magic {
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        // The encoding format for bitcoin v0.32 is different from bitcoin v0.29. We're
-        // converting after decoding to maintain backwards compatibility.
         let num = u32::consensus_decode(d, modules)?;
-        Ok(bitcoin29_to_bitcoin32_network_magic(num))
+        Ok(Self::from_bytes(num.to_le_bytes()))
     }
 }
 
