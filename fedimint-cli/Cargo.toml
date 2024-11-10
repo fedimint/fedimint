@@ -28,7 +28,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
 clap = { workspace = true }
-clap_complete = "4.5.36"
+clap_complete = "4.5.37"
 fedimint-aead = { workspace = true }
 fedimint-api-client = { path = "../fedimint-api-client", version = "=0.5.0-alpha", default-features = false }
 fedimint-bip39 = { workspace = true }

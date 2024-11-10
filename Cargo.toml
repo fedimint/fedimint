@@ -83,7 +83,7 @@ keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
 name = "fedimint"
 
 [workspace.dependencies]
-anyhow = "1.0.92"
+anyhow = "1.0.93"
 aquamarine = "0.5.0"
 assert_matches = "1.5.0"
 async-stream = "0.3.6"
@@ -148,7 +148,7 @@ fedimint-unknown-server = { path = "./modules/fedimint-unknown-server", version 
 fedimint-wallet-client = { path = "./modules/fedimint-wallet-client", version = "=0.5.0-alpha" }
 fedimint-wallet-common = { path = "./modules/fedimint-wallet-common", version = "=0.5.0-alpha" }
 fedimint-wallet-server = { path = "./modules/fedimint-wallet-server", version = "=0.5.0-alpha" }
-fs-lock = "0.1.5"
+fs-lock = "0.1.6"
 futures = "0.3.31"
 futures-util = "0.3.30"
 group = "0.13.0"
@@ -185,7 +185,7 @@ test-log = { version = "0.2", features = ["trace"], default-features = false }
 tbs = { package = "fedimint-tbs", path = "./crypto/tbs", version = "=0.5.0-alpha" }
 thiserror = "1.0.68"
 threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
-tokio = "1.41.0"
+tokio = "1.41.1"
 tokio-rustls = "0.24.1"
 tokio-stream = "0.1.16"
 tonic_lnd = { version = "0.2.0", package = "fedimint-tonic-lnd", features = [
@@ -195,7 +195,7 @@ tonic_lnd = { version = "0.2.0", package = "fedimint-tonic-lnd", features = [
 tpe = { package = "fedimint-tpe", path = "./crypto/tpe", version = "=0.5.0-alpha" }
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
-url = "2.5.2"
+url = "2.5.3"
 
 # Workaround: https://github.com/rust-lang/cargo/issues/12457 which causes
 #             https://github.com/ipetkov/crane/issues/370
