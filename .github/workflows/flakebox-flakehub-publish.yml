@@ -12,7 +12,7 @@ jobs:
         ref: ${{ (inputs.tag != null) && format('refs/tags/{0}', inputs.tag) || ''
           }}
     - name: Install Nix
-      uses: DeterminateSystems/nix-installer-action@v14
+      uses: DeterminateSystems/nix-installer-action@v15
     - name: Flakehub Push
       uses: DeterminateSystems/flakehub-push@main
       with:
