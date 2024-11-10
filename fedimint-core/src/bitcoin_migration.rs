@@ -1,11 +1,5 @@
 use std::str::FromStr;
 
-pub fn bitcoin32_checked_address_to_unchecked_address(
-    address: &bitcoin::Address,
-) -> bitcoin::Address<bitcoin::address::NetworkUnchecked> {
-    address.as_unchecked().clone()
-}
-
 pub fn bitcoin32_to_bitcoin30_address(address: &bitcoin::Address) -> bitcoin30::Address {
     // The bitcoin crate only allows for deserializing an address as unchecked.
     // However, we can safely call `assume_checked()` since the input address is

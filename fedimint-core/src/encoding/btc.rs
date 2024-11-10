@@ -8,10 +8,7 @@ use hex::{FromHex, ToHex};
 use miniscript::{Descriptor, MiniscriptKey};
 
 use super::{BufBitcoinReader, CountWrite, SimpleBitcoinRead};
-use crate::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_network, bitcoin32_checked_address_to_unchecked_address,
-    bitcoin32_to_bitcoin30_address,
-};
+use crate::bitcoin_migration::{bitcoin30_to_bitcoin32_network, bitcoin32_to_bitcoin30_address};
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
 
@@ -218,7 +215,7 @@ impl Decodable for bitcoin::Address<NetworkUnchecked> {
         let address = bitcoin::Address::from_script(&script_pk, network)
             .map_err(|e| DecodeError::new_custom(e.into()))?;
 
-        Ok(bitcoin32_checked_address_to_unchecked_address(&address))
+        Ok(address.as_unchecked().clone())
     }
 }
 
