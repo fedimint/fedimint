@@ -269,6 +269,65 @@ mod tests {
     }
 
     #[test_log::test]
+    fn network_roundtrip() {
+        let networks: [(bitcoin::Network, bitcoin::p2p::Magic, [u8; 5]); 5] = [
+            (
+                bitcoin::Network::Bitcoin,
+                bitcoin::p2p::Magic::BITCOIN,
+                [0xFE, 0xD9, 0xB4, 0xBE, 0xF9],
+            ),
+            (
+                bitcoin::Network::Testnet,
+                bitcoin::p2p::Magic::TESTNET3,
+                [0xFE, 0x07, 0x09, 0x11, 0x0B],
+            ),
+            (
+                bitcoin::Network::Testnet4,
+                bitcoin::p2p::Magic::TESTNET4,
+                [0xFE, 0x28, 0x3F, 0x16, 0x1C],
+            ),
+            (
+                bitcoin::Network::Signet,
+                bitcoin::p2p::Magic::SIGNET,
+                [0xFE, 0x40, 0xCF, 0x03, 0x0A],
+            ),
+            (
+                bitcoin::Network::Regtest,
+                bitcoin::p2p::Magic::REGTEST,
+                [0xFE, 0xDA, 0xB5, 0xBF, 0xFA],
+            ),
+        ];
+
+        for (network, network_magic, magic_bytes) in networks {
+            let mut network_encoded = Vec::new();
+            network.consensus_encode(&mut network_encoded).unwrap();
+
+            let mut network_magic_encoded = Vec::new();
+            network_magic
+                .consensus_encode(&mut network_magic_encoded)
+                .unwrap();
+
+            let network_decoded = bitcoin::Network::consensus_decode(
+                &mut Cursor::new(network_encoded.clone()),
+                &ModuleDecoderRegistry::default(),
+            )
+            .unwrap();
+
+            let network_magic_decoded = bitcoin::p2p::Magic::consensus_decode(
+                &mut Cursor::new(network_magic_encoded.clone()),
+                &ModuleDecoderRegistry::default(),
+            )
+            .unwrap();
+
+            assert_eq!(magic_bytes, *network_encoded);
+            assert_eq!(magic_bytes, *network_magic_encoded);
+
+            assert_eq!(network, network_decoded);
+            assert_eq!(network_magic, network_magic_decoded);
+        }
+    }
+
+    #[test_log::test]
     fn address_roundtrip() {
         let addresses = [
             "bc1p2wsldez5mud2yam29q22wgfh9439spgduvct83k3pm50fcxa5dps59h4z5",
