@@ -22,7 +22,7 @@ path = "src/main.rs"
 anyhow = { workspace = true }
 bitcoin = { workspace = true }
 clap = { workspace = true }
-clap_complete = "4.5.36"
+clap_complete = "4.5.37"
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-mint-client = { workspace = true }
