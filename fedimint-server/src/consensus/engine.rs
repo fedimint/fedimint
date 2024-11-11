@@ -768,7 +768,8 @@ impl ConsensusEngine {
                     target: LOG_CONSENSUS,
                     "Minor consensus version mismatch: unexpected consensus item type: {variant}"
                 );
-                bail!("Unexpected consensus item type: {variant}")
+
+                panic!("Unexpected consensus item type: {variant}")
             }
         }
     }
