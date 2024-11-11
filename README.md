@@ -108,6 +108,8 @@ the [Contributing Guidelines](CONTRIBUTING.md).
   Bitcoin, Lightning, and Chaumian Ecash. You can write custom modules that define further consensus items and
   transaction types leveraging the payments modules to build your own federated applications. We are always looking for
   developers to help build custom modules and to help improve the module system.
+- [Fedimint Web SDK](https://github.com/fedimint/fedimint-web-sdk): The Fedimint Web SDK is a Typescript library for 
+  building Fedimint applications. We are looking for developers to help improve the SDK and add support for more features.
 
 ## Spinning up the Fedimint Developer Environment
 
