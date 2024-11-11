@@ -2,7 +2,7 @@ use std::time::SystemTime;
 
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint};
-use fedimint_mint_common::{MintOutputOutcome, Nonce};
+use fedimint_mint_common::{BlindNonce, MintOutputOutcome, Nonce};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
@@ -13,6 +13,7 @@ pub enum DbKeyPrefix {
     OutputOutcome = 0x13,
     MintAuditItem = 0x14,
     EcashBackup = 0x15,
+    BlindNonce = 0x16,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -21,6 +22,8 @@ impl std::fmt::Display for DbKeyPrefix {
     }
 }
 
+/// Index for all the spent e-cash note nonces to prevent double spends.
+/// **Extremely safety critical!**
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
 pub struct NonceKey(pub Nonce);
 
@@ -33,6 +36,21 @@ impl_db_record!(
     db_prefix = DbKeyPrefix::NoteNonce,
 );
 impl_db_lookup!(key = NonceKey, query_prefix = NonceKeyPrefix);
+
+/// Index for all the previously used blind nonces. Just a safety net for
+/// clients to not accidentally burn money.
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct BlindNonceKey(pub BlindNonce);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct BlindNonceKeyPrefix;
+
+impl_db_record!(
+    key = BlindNonceKey,
+    value = (),
+    db_prefix = DbKeyPrefix::BlindNonce,
+);
+impl_db_lookup!(key = BlindNonceKey, query_prefix = BlindNonceKeyPrefix);
 
 /// Transaction id and output index identifying an output outcome
 #[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]

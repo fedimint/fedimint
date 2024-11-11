@@ -73,9 +73,7 @@
           overlays = [
             overlayAll
 
-            (final: prev: {
-              cargo-deluxe = cargo-deluxe.packages.${system}.default;
-            })
+            (final: prev: { cargo-deluxe = cargo-deluxe.packages.${system}.default; })
           ];
         };
 

@@ -7,12 +7,14 @@ use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBu
 use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::OperationId;
 use fedimint_core::task::sleep_in_test;
-use fedimint_core::util::NextOrPending;
+use fedimint_core::util::backoff_util::aggressive_backoff;
+use fedimint_core::util::{retry, NextOrPending};
 use fedimint_core::{sats, secp256k1, Amount, TieredMulti};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_logging::LOG_TEST;
+use fedimint_mint_client::api::MintFederationApi;
 use fedimint_mint_client::{
     MintClientInit, MintClientModule, Note, OOBNotes, ReissueExternalNotesState,
     SelectNotesWithAtleastAmount, SpendOOBState,
@@ -129,6 +131,70 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
 
     assert!(client1.get_balance().await >= sats(250) - EXPECTED_MAXIMUM_FEE);
     assert!(client2.get_balance().await >= sats(750) - EXPECTED_MAXIMUM_FEE);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn blind_nonce_index() -> anyhow::Result<()> {
+    // Print notes for client1
+    let fed = fixtures().new_default_fed().await;
+    let client = fed.new_client().await;
+    let client_dummy_module = client.get_first_module::<DummyClientModule>()?;
+    let (op, outpoint) = client_dummy_module.print_money(sats(1000)).await?;
+    client.await_primary_module_output(op, outpoint).await?;
+
+    // Issue e-cash and check if the blind nonce is added to the index
+    let client_mint = client.get_first_module::<MintClientModule>()?;
+
+    let mut dbtx = client_mint.db.begin_transaction().await;
+    let operation_id = OperationId::new_random();
+    let issuance_req = client_mint
+        .create_output(
+            &mut dbtx.to_ref_nc(),
+            operation_id,
+            1,
+            Amount::from_msats(1),
+        )
+        .await;
+    dbtx.commit_tx().await;
+
+    let blind_nonce = issuance_req
+        .outputs()
+        .first()
+        .expect("There should be exactly one note in here")
+        .output
+        .ensure_v0_ref()?
+        .blind_nonce;
+
+    assert!(
+        !client_mint.api.check_blind_nonce_used(blind_nonce).await?,
+        "Blind nonce should not be used yet"
+    );
+
+    let tx = TransactionBuilder::new().with_outputs(client_mint.client_ctx.make_dyn(issuance_req));
+
+    let (txid, _) = client_mint
+        .client_ctx
+        .finalize_and_submit_transaction(operation_id, "mint", |_, _| (), tx)
+        .await?;
+    retry(
+        "Waiting for tx confirmation",
+        aggressive_backoff(),
+        || async {
+            client
+                .api()
+                .await_transaction(txid)
+                .await
+                .map_err(anyhow::Error::new)
+        },
+    )
+    .await?;
+
+    assert!(
+        client_mint.api.check_blind_nonce_used(blind_nonce).await?,
+        "Blind nonce should be used now"
+    );
+
     Ok(())
 }
 
@@ -720,6 +786,10 @@ mod fedimint_migration_tests {
                             "validate_migrations was not able to read any EcashBackups"
                         );
                         info!("Validated EcashBackup");
+                    }
+                    DbKeyPrefix::BlindNonce => {
+                        // Would require an entire re-design of the way we test
+                        // here, manually testing instead for now
                     }
                 }
             }
