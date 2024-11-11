@@ -2449,7 +2449,7 @@
                 }
             }
             WalletConsensusItem::Default { variant, .. } =&gt; {
-                <span class="macro">bail!</span>(<span class="string">"Received wallet consensus item with unknown variant {variant}"</span>);
+                <span class="macro">panic!</span>(<span class="string">"Received wallet consensus item with unknown variant {variant}"</span>);
             }
         }
 
