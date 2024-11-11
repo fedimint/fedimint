@@ -1085,7 +1085,7 @@ impl MintClientModule {
         }
 
         let state_generator = Arc::new(move |out_point_range: OutPointRange| {
-            assert_eq!(out_point_range.into_iter().count(), issuance_requests.len());
+            assert_eq!(out_point_range.count(), issuance_requests.len());
             vec![MintClientStateMachines::Output(MintOutputStateMachine {
                 common: MintOutputCommon {
                     operation_id,
@@ -1094,7 +1094,7 @@ impl MintClientModule {
                 state: MintOutputStates::CreatedMulti(MintOutputStatesCreatedMulti {
                     issuance_requests: out_point_range
                         .into_iter()
-                        .map(|(_, out_idx)| out_idx)
+                        .map(|out_point| out_point.out_idx)
                         .zip(issuance_requests.clone())
                         .collect(),
                 }),

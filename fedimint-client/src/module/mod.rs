@@ -1035,7 +1035,7 @@ impl OutPointRange {
 }
 
 impl IntoIterator for OutPointRange {
-    type Item = (TransactionId, u64);
+    type Item = OutPoint;
 
     type IntoIter = OutPointRangeIter;
 
@@ -1060,10 +1060,13 @@ impl OutPointRange {
 }
 
 impl Iterator for OutPointRangeIter {
-    type Item = (TransactionId, u64);
+    type Item = OutPoint;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next().map(|idx| (self.txid, idx))
+        self.inner.next().map(|idx| OutPoint {
+            txid: self.txid,
+            out_idx: idx,
+        })
     }
 }
 
