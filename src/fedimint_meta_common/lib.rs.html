@@ -266,7 +266,18 @@
 <a href="#265" id="265">265</a>
 <a href="#266" id="266">266</a>
 <a href="#267" id="267">267</a>
-<a href="#268" id="268">268</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -284,7 +295,7 @@
 <span class="kw">use </span>serde::de::{<span class="self">self</span>, Visitor};
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
 <span class="kw">use </span>thiserror::Error;
-
+<span class="kw">use </span>tracing::warn;
 <span class="comment">// Common contains types shared by both the client and server
 
 // The client and server configuration
@@ -373,6 +384,17 @@
 
     <span class="kw">pub fn </span>to_json(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
         <span class="prelude-val">Ok</span>(serde_json::from_slice(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>)<span class="question-mark">?</span>)
+    }
+
+    <span class="doccomment">/// Converts the value to a JSON value, ignoring invalid utf-8.
+    </span><span class="kw">pub fn </span>to_json_lossy(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
+        <span class="kw">let </span>maybe_lossy_str = String::from_utf8_lossy(<span class="self">self</span>.as_slice());
+
+        <span class="kw">if </span>maybe_lossy_str.as_bytes() != <span class="self">self</span>.as_slice() {
+            <span class="macro">warn!</span>(<span class="string">"Value contains invalid utf-8, converting to lossy string"</span>);
+        }
+
+        <span class="prelude-val">Ok</span>(serde_json::from_str(<span class="kw-2">&amp;</span>maybe_lossy_str)<span class="question-mark">?</span>)
     }
 }
 

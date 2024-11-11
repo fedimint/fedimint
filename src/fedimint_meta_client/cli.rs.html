@@ -115,7 +115,8 @@
 <a href="#114" id="114">114</a>
 <a href="#115" id="115">115</a>
 <a href="#116" id="116">116</a>
-<a href="#117" id="117">117</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr <span class="kw">as _</span>;
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr <span class="kw">as _</span>;
 <span class="kw">use </span>std::{ffi, iter};
 
 <span class="kw">use </span>anyhow::Context <span class="kw">as _</span>;
@@ -172,8 +173,9 @@
                 <span class="kw">let </span>value = <span class="kw">if </span>hex {
                     serde_json::to_value(value).expect(<span class="string">"can't fail"</span>)
                 } <span class="kw">else </span>{
-                    serde_json::from_slice(value.as_slice())
-                        .context(<span class="string">"deserializating consensus value as json"</span>)<span class="question-mark">?
+                    value
+                        .to_json_lossy()
+                        .context(<span class="string">"deserializing consensus value as json"</span>)<span class="question-mark">?
                 </span>};
                 <span class="macro">json!</span>({
                     <span class="string">"revision"</span>: revision,
