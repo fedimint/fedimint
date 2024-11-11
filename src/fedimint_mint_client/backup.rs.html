@@ -140,11 +140,7 @@
 <a href="#139" id="139">139</a>
 <a href="#140" id="140">140</a>
 <a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::module::recovery::{DynModuleBackup, ModuleBackup};
+<a href="#142" id="142">142</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::module::recovery::{DynModuleBackup, ModuleBackup};
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -255,16 +251,12 @@
                     common
                         .out_point_range
                         .into_iter()
-                        .map(|(txid, out_idx)| {
+                        .map(|out_point| {
                             <span class="kw">let </span>issuance_request = created_state
                                 .issuance_requests
-                                .get(<span class="kw-2">&amp;</span>out_idx)
+                                .get(<span class="kw-2">&amp;</span>out_point.out_idx)
                                 .expect(<span class="string">"Must have corresponding out_idx"</span>);
-                            (
-                                OutPoint { txid, out_idx },
-                                issuance_request.<span class="number">0</span>,
-                                issuance_request.<span class="number">1</span>,
-                            )
+                            (out_point, issuance_request.<span class="number">0</span>, issuance_request.<span class="number">1</span>)
                         })
                         .collect(),
                 ),

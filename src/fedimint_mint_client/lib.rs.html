@@ -3840,7 +3840,7 @@
         }
 
         <span class="kw">let </span>state_generator = Arc::new(<span class="kw">move </span>|out_point_range: OutPointRange| {
-            <span class="macro">assert_eq!</span>(out_point_range.into_iter().count(), issuance_requests.len());
+            <span class="macro">assert_eq!</span>(out_point_range.count(), issuance_requests.len());
             <span class="macro">vec!</span>[MintClientStateMachines::Output(MintOutputStateMachine {
                 common: MintOutputCommon {
                     operation_id,
@@ -3849,7 +3849,7 @@
                 state: MintOutputStates::CreatedMulti(MintOutputStatesCreatedMulti {
                     issuance_requests: out_point_range
                         .into_iter()
-                        .map(|(<span class="kw">_</span>, out_idx)| out_idx)
+                        .map(|out_point| out_point.out_idx)
                         .zip(issuance_requests.clone())
                         .collect(),
                 }),
