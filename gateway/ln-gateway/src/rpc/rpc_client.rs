@@ -8,16 +8,18 @@ use serde::Serialize;
 use thiserror::Error;
 
 use super::{
-    BackupPayload, CloseChannelsWithPeerPayload, ConfigPayload, ConnectFedPayload,
-    CreateInvoiceForOperatorPayload, DepositAddressPayload, FederationInfo, GatewayBalances,
-    GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelPayload,
-    PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentLogResponse, ReceiveEcashPayload,
-    ReceiveEcashResponse, SendOnchainPayload, SetConfigurationPayload, SpendEcashPayload,
-    SpendEcashResponse, WithdrawPayload, WithdrawResponse, ADDRESS_ENDPOINT, BACKUP_ENDPOINT,
-    CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
-    CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT,
-    GET_BALANCES_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT,
-    LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAYMENT_LOG_ENDPOINT,
+    AuthChallengePayload, AuthChallengeResponse, BackupPayload, CloseChannelsWithPeerPayload,
+    ConfigPayload, ConnectFedPayload, CreateInvoiceForOperatorPayload, DepositAddressPayload,
+    FederationInfo, GatewayBalances, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
+    MnemonicResponse, OpenChannelPayload, PayInvoiceForOperatorPayload, PaymentLogPayload,
+    PaymentLogResponse, ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainPayload,
+    SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, WithdrawPayload,
+    WithdrawResponse, ADDRESS_ENDPOINT, AUTH_CHALLENGE_ENDPOINT, AUTH_SESSION_ENDPOINT,
+    AUTH_SIGN_CHALLENGE_ENDPOINT, BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
+    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
+    GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
+    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
+    MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAYMENT_LOG_ENDPOINT,
     PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT, SEND_ONCHAIN_ENDPOINT,
     SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, WITHDRAW_ENDPOINT,
 };
@@ -31,19 +33,26 @@ pub struct GatewayRpcClient {
     client: reqwest::Client,
     /// Optional gateway password
     password: Option<String>,
+    /// Optional gateway JWT
+    pub jwt_code: Option<String>,
 }
 
 impl GatewayRpcClient {
-    pub fn new(versioned_api: SafeUrl, password: Option<String>) -> Self {
+    pub fn new(versioned_api: SafeUrl, password: Option<String>, jwt_code: Option<String>) -> Self {
         Self {
             base_url: versioned_api,
             client: reqwest::Client::new(),
             password,
+            jwt_code,
         }
     }
 
     pub fn with_password(&self, password: Option<String>) -> Self {
-        GatewayRpcClient::new(self.base_url.clone(), password)
+        GatewayRpcClient::new(self.base_url.clone(), password, self.jwt_code.clone())
+    }
+
+    pub fn with_jwt_code(&self, jwt_code: Option<String>) -> Self {
+        GatewayRpcClient::new(self.base_url.clone(), self.password.clone(), jwt_code)
     }
 
     pub async fn get_info(&self) -> GatewayRpcResult<GatewayInfo> {
@@ -247,6 +256,33 @@ impl GatewayRpcClient {
             .base_url
             .join(PAYMENT_LOG_ENDPOINT)
             .expect("Invalid base url");
+
+        self.call_post(url, payload).await
+    }
+    pub async fn challenge_auth(&self) -> GatewayRpcResult<String> {
+        let url = self
+            .base_url
+            .join(AUTH_CHALLENGE_ENDPOINT)
+            .expect("invalid base url");
+        self.call_get(url).await
+    }
+
+    pub async fn sign_challenge_auth(
+        &self,
+        auth_challenge_payload: AuthChallengeResponse,
+    ) -> GatewayRpcResult<bitcoin::secp256k1::schnorr::Signature> {
+        let url = self
+            .base_url
+            .join(AUTH_SIGN_CHALLENGE_ENDPOINT)
+            .expect("invalid base url");
+        self.call_post(url, auth_challenge_payload).await
+    }
+
+    pub async fn session_auth(&self, payload: AuthChallengePayload) -> GatewayRpcResult<String> {
+        let url = self
+            .base_url
+            .join(AUTH_SESSION_ENDPOINT)
+            .expect("invalid base url");
         self.call_post(url, payload).await
     }
 
@@ -257,9 +293,13 @@ impl GatewayRpcClient {
         payload: Option<P>,
     ) -> Result<T, GatewayRpcError> {
         let mut builder = self.client.request(method, url.clone().to_unsafe());
-        if let Some(password) = self.password.clone() {
+
+        if let Some(jwt_code) = self.jwt_code.clone() {
+            builder = builder.bearer_auth(jwt_code);
+        } else if let Some(password) = self.password.clone() {
             builder = builder.bearer_auth(password);
         }
+
         if let Some(payload) = payload {
             builder = builder
                 .json(&payload)

@@ -50,6 +50,7 @@ fedimint-wallet-client = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
 hex = { workspace = true }
+jsonwebtoken = { version = "9.3.0", default-features = false }
 ldk-node = "0.4.2"
 lightning = { workspace = true }
 lightning-invoice = { workspace = true }
@@ -71,6 +72,8 @@ tower-http = { version = "0.6.1", features = ["cors", "auth"] }
 tpe = { workspace = true }
 tracing = { workspace = true, features = ["log"] }
 url = { workspace = true, features = ["serde"] }
+urlencoding = "2.1.3"
+uuid = { version = "1.11.0", features = ["serde", "v4"] }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
