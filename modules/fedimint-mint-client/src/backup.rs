@@ -109,16 +109,12 @@ impl MintClientModule {
                     common
                         .out_point_range
                         .into_iter()
-                        .map(|(txid, out_idx)| {
+                        .map(|out_point| {
                             let issuance_request = created_state
                                 .issuance_requests
-                                .get(&out_idx)
+                                .get(&out_point.out_idx)
                                 .expect("Must have corresponding out_idx");
-                            (
-                                OutPoint { txid, out_idx },
-                                issuance_request.0,
-                                issuance_request.1,
-                            )
+                            (out_point, issuance_request.0, issuance_request.1)
                         })
                         .collect(),
                 ),
