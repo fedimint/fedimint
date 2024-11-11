@@ -345,10 +345,7 @@
 <a href="#344" id="344">344</a>
 <a href="#345" id="345">345</a>
 <a href="#346" id="346">346</a>
-<a href="#347" id="347">347</a>
-<a href="#348" id="348">348</a>
-<a href="#349" id="349">349</a>
-<a href="#350" id="350">350</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
+<a href="#347" id="347">347</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::format_err;
@@ -358,10 +355,7 @@
 <span class="kw">use </span>miniscript::{Descriptor, MiniscriptKey};
 
 <span class="kw">use super</span>::{BufBitcoinReader, CountWrite, SimpleBitcoinRead};
-<span class="kw">use </span><span class="kw">crate</span>::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_network, bitcoin32_checked_address_to_unchecked_address,
-    bitcoin32_to_bitcoin30_address,
-};
+<span class="kw">use </span><span class="kw">crate</span>::bitcoin_migration::{bitcoin30_to_bitcoin32_network, bitcoin32_to_bitcoin30_address};
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
 
@@ -568,7 +562,7 @@
         <span class="kw">let </span>address = bitcoin::Address::from_script(<span class="kw-2">&amp;</span>script_pk, network)
             .map_err(|e| DecodeError::new_custom(e.into()))<span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(bitcoin32_checked_address_to_unchecked_address(<span class="kw-2">&amp;</span>address))
+        <span class="prelude-val">Ok</span>(address.as_unchecked().clone())
     }
 }
 

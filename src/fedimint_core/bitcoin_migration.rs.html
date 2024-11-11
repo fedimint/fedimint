@@ -27,19 +27,7 @@
 <a href="#26" id="26">26</a>
 <a href="#27" id="27">27</a>
 <a href="#28" id="28">28</a>
-<a href="#29" id="29">29</a>
-<a href="#30" id="30">30</a>
-<a href="#31" id="31">31</a>
-<a href="#32" id="32">32</a>
-<a href="#33" id="33">33</a>
-<a href="#34" id="34">34</a>
-<a href="#35" id="35">35</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
-
-<span class="kw">pub fn </span>bitcoin32_checked_address_to_unchecked_address(
-    address: <span class="kw-2">&amp;</span>bitcoin::Address,
-) -&gt; bitcoin::Address&lt;bitcoin::address::NetworkUnchecked&gt; {
-    address.as_unchecked().clone()
-}
+<a href="#29" id="29">29</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">pub fn </span>bitcoin32_to_bitcoin30_address(address: <span class="kw-2">&amp;</span>bitcoin::Address) -&gt; bitcoin30::Address {
     <span class="comment">// The bitcoin crate only allows for deserializing an address as unchecked.
