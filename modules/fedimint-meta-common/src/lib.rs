@@ -16,7 +16,7 @@ use fedimint_core::plugin_types_trait_impl_common;
 use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
-
+use tracing::warn;
 // Common contains types shared by both the client and server
 
 // The client and server configuration
@@ -105,6 +105,17 @@ impl MetaValue {
 
     pub fn to_json(&self) -> anyhow::Result<serde_json::Value> {
         Ok(serde_json::from_slice(&self.0)?)
+    }
+
+    /// Converts the value to a JSON value, ignoring invalid utf-8.
+    pub fn to_json_lossy(&self) -> anyhow::Result<serde_json::Value> {
+        let maybe_lossy_str = String::from_utf8_lossy(self.as_slice());
+
+        if maybe_lossy_str.as_bytes() != self.as_slice() {
+            warn!("Value contains invalid utf-8, converting to lossy string");
+        }
+
+        Ok(serde_json::from_str(&maybe_lossy_str)?)
     }
 }
 

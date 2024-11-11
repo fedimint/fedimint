@@ -55,8 +55,9 @@ pub(crate) async fn handle_cli_command(
                 let value = if hex {
                     serde_json::to_value(value).expect("can't fail")
                 } else {
-                    serde_json::from_slice(value.as_slice())
-                        .context("deserializating consensus value as json")?
+                    value
+                        .to_json_lossy()
+                        .context("deserializing consensus value as json")?
                 };
                 json!({
                     "revision": revision,
