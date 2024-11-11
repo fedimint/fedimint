@@ -85,7 +85,8 @@
 <a href="#84" id="84">84</a>
 <a href="#85" id="85">85</a>
 <a href="#86" id="86">86</a>
-<a href="#87" id="87">87</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::db::{IDatabaseTransactionOpsCoreTyped, MigrationContext};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::secp256k1::PublicKey;
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint};
@@ -140,7 +141,8 @@
 <span class="macro">impl_db_lookup!</span>(key = DummyFundsKeyV1, query_prefix = DummyFundsPrefixV1);
 
 <span class="doccomment">/// Example DB migration from version 0 to version 1
-</span><span class="kw">pub async fn </span>migrate_to_v1(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+</span><span class="kw">pub async fn </span>migrate_to_v1(<span class="kw-2">mut </span>ctx: MigrationContext&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = ctx.dbtx();
     <span class="comment">// Select old entries
     </span><span class="kw">let </span>v0_entries = dbtx
         .find_by_prefix(<span class="kw-2">&amp;</span>DummyFundsKeyPrefixV0)

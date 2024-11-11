@@ -769,7 +769,9 @@
 <a href="#768" id="768">768</a>
 <a href="#769" id="769">769</a>
 <a href="#770" id="770">770</a>
-<a href="#771" id="771">771</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>event_log;
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>event_log;
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::Cursor;
@@ -1176,8 +1178,10 @@
 
 <span class="kw">pub fn </span>get_core_client_database_migrations() -&gt; BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>migrations: BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt; = BTreeMap::new();
-    migrations.insert(DatabaseVersion(<span class="number">0</span>), |dbtx| {
-        Box::pin(<span class="kw">async </span>{
+    migrations.insert(DatabaseVersion(<span class="number">0</span>), |<span class="kw-2">mut </span>ctx| {
+        Box::pin(<span class="kw">async move </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = ctx.dbtx();
+
             <span class="kw">let </span>config_v0 = dbtx
                 .find_by_prefix(<span class="kw-2">&amp;</span>ClientConfigKeyPrefixV0)
                 .<span class="kw">await

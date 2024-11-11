@@ -569,7 +569,12 @@
 <a href="#568" id="568">568</a>
 <a href="#569" id="569">569</a>
 <a href="#570" id="570">570</a>
-<a href="#571" id="571">571</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>bitcoin::Network;
@@ -577,6 +582,7 @@
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::db::{
     CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+    MigrationContext,
 };
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
@@ -946,12 +952,14 @@
 
 <span class="kw">pub fn </span>get_gatewayd_database_migrations() -&gt; BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>migrations: BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt; = BTreeMap::new();
-    migrations.insert(DatabaseVersion(<span class="number">0</span>), |dbtx| migrate_to_v1(dbtx).boxed());
-    migrations.insert(DatabaseVersion(<span class="number">1</span>), |dbtx| migrate_to_v2(dbtx).boxed());
+    migrations.insert(DatabaseVersion(<span class="number">0</span>), |ctx| migrate_to_v1(ctx).boxed());
+    migrations.insert(DatabaseVersion(<span class="number">1</span>), |ctx| migrate_to_v2(ctx).boxed());
     migrations
 }
 
-<span class="kw">async fn </span>migrate_to_v1(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+<span class="kw">async fn </span>migrate_to_v1(<span class="kw-2">mut </span>ctx: MigrationContext&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = ctx.dbtx();
+
     <span class="comment">// If there is no old gateway configuration, there is nothing to do.
     </span><span class="kw">if let </span><span class="prelude-val">Some</span>(old_gateway_config) = dbtx.remove_entry(<span class="kw-2">&amp;</span>GatewayConfigurationKeyV0).<span class="kw">await </span>{
         <span class="kw">let </span>password_salt: [u8; <span class="number">16</span>] = rand::thread_rng().gen();
@@ -970,7 +978,9 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">async fn </span>migrate_to_v2(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+<span class="kw">async fn </span>migrate_to_v2(<span class="kw-2">mut </span>ctx: MigrationContext&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = ctx.dbtx();
+
     <span class="comment">// If there is no old federation configuration, there is nothing to do.
     </span><span class="kw">for </span>(old_federation_id, _old_federation_config) <span class="kw">in </span>dbtx.load_federation_configs_v0().<span class="kw">await </span>{
         <span class="kw">if let </span><span class="prelude-val">Some</span>(old_federation_config) = dbtx

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["calculate_mint_issued_ecash_metrics","calculate_mint_redeemed_ecash_metrics","dealer_keygen","eval_polynomial"],"mod":["db","metrics"],"struct":["BackupRequest","Mint","MintInit","SignedBackupRequest"]};
+window.SIDEBAR_ITEMS = {"fn":["calculate_mint_issued_ecash_metrics","calculate_mint_redeemed_ecash_metrics","dealer_keygen","eval_polynomial","migrate_db_v0"],"mod":["db","metrics"],"struct":["BackupRequest","Mint","MintInit","SignedBackupRequest"]};

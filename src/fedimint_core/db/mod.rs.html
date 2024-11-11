@@ -3566,7 +3566,25 @@
 <a href="#3565" id="3565">3565</a>
 <a href="#3566" id="3566">3566</a>
 <a href="#3567" id="3567">3567</a>
-<a href="#3568" id="3568">3568</a></pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
+<a href="#3568" id="3568">3568</a>
+<a href="#3569" id="3569">3569</a>
+<a href="#3570" id="3570">3570</a>
+<a href="#3571" id="3571">3571</a>
+<a href="#3572" id="3572">3572</a>
+<a href="#3573" id="3573">3573</a>
+<a href="#3574" id="3574">3574</a>
+<a href="#3575" id="3575">3575</a>
+<a href="#3576" id="3576">3576</a>
+<a href="#3577" id="3577">3577</a>
+<a href="#3578" id="3578">3578</a>
+<a href="#3579" id="3579">3579</a>
+<a href="#3580" id="3580">3580</a>
+<a href="#3581" id="3581">3581</a>
+<a href="#3582" id="3582">3582</a>
+<a href="#3583" id="3583">3583</a>
+<a href="#3584" id="3584">3584</a>
+<a href="#3585" id="3585">3585</a>
+<a href="#3586" id="3586">3586</a></pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! This module provides the core key-value database for Fedimint.
 //!
@@ -5748,10 +5766,10 @@
 
 <span class="doccomment">/// `CoreMigrationFn` that modules can implement to "migrate" the database
 /// to the next database version.
-</span><span class="kw">pub type </span>CoreMigrationFn = <span class="kw">for</span>&lt;<span class="lifetime">'r</span>, <span class="lifetime">'tx</span>&gt; <span class="kw">fn</span>(
-    <span class="kw-2">&amp;</span><span class="lifetime">'r </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">'tx</span>&gt;,
+</span><span class="kw">pub type </span>CoreMigrationFn = <span class="kw">for</span>&lt;<span class="lifetime">'tx</span>&gt; <span class="kw">fn</span>(
+    MigrationContext&lt;<span class="lifetime">'tx</span>&gt;,
 ) -&gt; Pin&lt;
-    Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>futures::Future&lt;Output = anyhow::Result&lt;()&gt;&gt; + <span class="lifetime">'r</span>)&gt;,
+    Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>futures::Future&lt;Output = anyhow::Result&lt;()&gt;&gt; + <span class="lifetime">'tx</span>)&gt;,
 &gt;;
 
 <span class="doccomment">/// Verifies that all database migrations are defined contiguously and returns
@@ -5853,17 +5871,11 @@
         <span class="kw">while </span>current_db_version &lt; target_db_version {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(migration) = migrations.get(<span class="kw-2">&amp;</span>current_db_version) {
                 <span class="macro">info!</span>(target: LOG_DB, <span class="question-mark">?</span>kind, <span class="question-mark">?</span>current_db_version, <span class="question-mark">?</span>target_db_version, <span class="string">"Migrating module..."</span>);
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(module_instance_id) = module_instance_id {
-                    migration(
-                        <span class="kw-2">&amp;mut </span>global_dbtx
-                            .to_ref_with_prefix_module_id(module_instance_id)
-                            .<span class="number">0
-                            </span>.into_nc(),
-                    )
-                    .<span class="kw">await</span><span class="question-mark">?</span>;
-                } <span class="kw">else </span>{
-                    migration(<span class="kw-2">&amp;mut </span>global_dbtx.to_ref_nc()).<span class="kw">await</span><span class="question-mark">?</span>;
-                }
+                migration(MigrationContext {
+                    dbtx: global_dbtx.to_ref_nc(),
+                    module_instance_id,
+                })
+                .<span class="kw">await</span><span class="question-mark">?</span>;
             } <span class="kw">else </span>{
                 <span class="macro">warn!</span>(target: LOG_DB, <span class="question-mark">?</span>current_db_version, <span class="string">"Missing server db migration"</span>);
             }
@@ -5979,11 +5991,36 @@
     )
 }
 
+<span class="kw">pub struct </span>MigrationContext&lt;<span class="lifetime">'tx</span>&gt; {
+    dbtx: DatabaseTransaction&lt;<span class="lifetime">'tx</span>&gt;,
+    module_instance_id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'tx</span>&gt; MigrationContext&lt;<span class="lifetime">'tx</span>&gt; {
+    <span class="kw">pub fn </span>dbtx(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; DatabaseTransaction {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(module_instance_id) = <span class="self">self</span>.module_instance_id {
+            <span class="self">self</span>.dbtx.to_ref_with_prefix_module_id(module_instance_id).<span class="number">0
+        </span>} <span class="kw">else </span>{
+            <span class="self">self</span>.dbtx.to_ref_nc()
+        }
+    }
+
+    <span class="kw">pub fn </span>module_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt; {
+        <span class="self">self</span>.module_instance_id
+    }
+
+    <span class="attr">#[doc(hidden)]
+    </span><span class="kw">pub fn </span>__global_dbtx(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'tx</span>&gt; {
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>.dbtx
+    }
+}
+
 <span class="attr">#[allow(unused_imports)]
 </span><span class="kw">mod </span>test_utils {
     <span class="kw">use </span>std::collections::BTreeMap;
     <span class="kw">use </span>std::time::Duration;
 
+    <span class="kw">use </span>fedimint_core::db::MigrationContext;
     <span class="kw">use </span>futures::future::ready;
     <span class="kw">use </span>futures::{Future, FutureExt, StreamExt};
     <span class="kw">use </span>rand::Rng;
@@ -6723,8 +6760,8 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>migrations: BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt; = BTreeMap::new();
 
-        migrations.insert(DatabaseVersion(<span class="number">0</span>), |dbtx| {
-            migrate_test_db_version_0(dbtx).boxed()
+        migrations.insert(DatabaseVersion(<span class="number">0</span>), |ctx| {
+            migrate_test_db_version_0(ctx).boxed()
         });
 
         apply_migrations(<span class="kw-2">&amp;</span>db, <span class="string">"TestModule"</span>.to_string(), migrations, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>)
@@ -6755,9 +6792,8 @@
     }
 
     <span class="attr">#[allow(dead_code)]
-    </span><span class="kw">async fn </span>migrate_test_db_version_0&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>&gt;(
-        dbtx: <span class="kw-2">&amp;</span><span class="lifetime">'b </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">'a</span>&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+    </span><span class="kw">async fn </span>migrate_test_db_version_0(<span class="kw-2">mut </span>ctx: MigrationContext&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = ctx.dbtx();
         <span class="kw">let </span>example_keys_v0 = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefixV0)
             .<span class="kw">await
