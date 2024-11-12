@@ -824,7 +824,7 @@ where
             .inner
             .raw_find_by_range(Range {
                 start: &range.start,
-                end: &range.start,
+                end: &range.end,
             })
             .await?;
         Ok(Self::adapt_prefix_stream(stream, self.prefix.len()))
@@ -2612,10 +2612,18 @@ mod test_utils {
 
         dbtx.insert_entry(&AltTestKey(55), &TestVal(7777)).await;
         dbtx.insert_entry(&AltTestKey(54), &TestVal(6666)).await;
+
+        {
+            let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(2).0;
+            module_dbtx
+                .insert_entry(&TestKey(300), &TestVal(3000))
+                .await;
+        }
+
         dbtx.commit_tx().await;
 
         // Verify finding by prefix returns the correct set of key pairs
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_transaction_nc().await;
 
         let returned_keys = dbtx
             .find_by_range(TestKey(55)..TestKey(56))
@@ -2648,6 +2656,14 @@ mod test_utils {
             (TestKey(56), TestVal(7777)),
         ];
         assert_eq!(returned_keys, expected);
+
+        let mut module_dbtx = dbtx.with_prefix_module_id(2).0;
+        let test_range = module_dbtx
+            .find_by_range(TestKey(300)..TestKey(301))
+            .await
+            .collect::<Vec<_>>()
+            .await;
+        assert!(test_range.len() == 1);
     }
 
     pub async fn verify_find_by_prefix(db: Database) {
