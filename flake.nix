@@ -3,6 +3,9 @@
     nixpkgs = {
       url = "github:nixos/nixpkgs/nixos-24.05";
     };
+    nixpkgs-unstable = {
+      url = "github:nixos/nixpkgs/nixos-unstable";
+    };
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
       url = "github:nix-community/fenix";
@@ -23,19 +26,22 @@
     };
   };
 
-  outputs = { self, nixpkgs, flake-utils, flakebox, advisory-db, bundlers, ... }:
+  outputs = { self, nixpkgs, nixpkgs-unstable, flake-utils, flakebox, advisory-db, bundlers, ... }:
     let
       # overlay combining all overlays we use
       overlayAll =
         nixpkgs.lib.composeManyExtensions
           [
-            (import ./nix/overlays/rocksdb.nix)
             (import ./nix/overlays/wasm-bindgen.nix)
             (import ./nix/overlays/cargo-nextest.nix)
             (import ./nix/overlays/esplora-electrs.nix)
             (import ./nix/overlays/clightning.nix)
             (import ./nix/overlays/darwin-compile-fixes.nix)
             (import ./nix/overlays/cargo-honggfuzz.nix)
+
+            (final: prev: {
+              rocksdb = nixpkgs-unstable.legacyPackages.${final.system}.rocksdb_8_11;
+            })
           ];
     in
     {
