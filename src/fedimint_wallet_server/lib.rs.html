@@ -1945,12 +1945,7 @@
 <a href="#1944" id="1944">1944</a>
 <a href="#1945" id="1945">1945</a>
 <a href="#1946" id="1946">1946</a>
-<a href="#1947" id="1947">1947</a>
-<a href="#1948" id="1948">1948</a>
-<a href="#1949" id="1949">1949</a>
-<a href="#1950" id="1950">1950</a>
-<a href="#1951" id="1951">1951</a>
-<a href="#1952" id="1952">1952</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1947" id="1947">1947</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -1985,9 +1980,6 @@
     DEPRECATED_RBF_ERROR, FEERATE_MULTIPLIER,
 };
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_network, bitcoin32_to_bitcoin30_unchecked_address,
-};
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -2009,8 +2001,8 @@
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Feerate, NumPeersExt,
-    OutPoint, PeerId, ServerModule,
+    apply, async_trait_maybe_send, get_network_for_address, push_db_key_items, push_db_pair_items,
+    Feerate, NumPeersExt, OutPoint, PeerId, ServerModule,
 };
 <span class="kw">use </span>fedimint_logging::LOG_MODULE_WALLET;
 <span class="kw">use </span>fedimint_server::config::distributedgen::PeerHandleOps;
@@ -3391,9 +3383,7 @@
             <span class="kw">if </span>!peg_out.recipient.is_valid_for_network(network) {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(WalletOutputError::WrongNetwork(
                     network,
-                    bitcoin30_to_bitcoin32_network(
-                        <span class="kw-2">&amp;</span>bitcoin32_to_bitcoin30_unchecked_address(<span class="kw-2">&amp;</span>peg_out.recipient).network,
-                    ),
+                    get_network_for_address(<span class="kw-2">&amp;</span>peg_out.recipient),
                 ));
             }
         }
