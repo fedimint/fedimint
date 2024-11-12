@@ -497,10 +497,10 @@ impl LightningClientModule {
             return Err(SendPaymentError::InvoiceExpired);
         }
 
-        if self.cfg.network != invoice.currency().into() {
+        if self.cfg.network.0 != invoice.currency().into() {
             return Err(SendPaymentError::WrongCurrency {
                 invoice_currency: invoice.currency(),
-                federation_currency: self.cfg.network.into(),
+                federation_currency: self.cfg.network.0.into(),
             });
         }
 

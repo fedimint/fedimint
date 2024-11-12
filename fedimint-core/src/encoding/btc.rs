@@ -6,6 +6,7 @@ use bitcoin::address::NetworkUnchecked;
 use bitcoin::hashes::Hash as BitcoinHash;
 use hex::{FromHex, ToHex};
 use miniscript::{Descriptor, MiniscriptKey};
+use serde::{Deserialize, Serialize};
 
 use super::{BufBitcoinReader, CountWrite, SimpleBitcoinRead};
 use crate::bitcoin_migration::{bitcoin30_to_bitcoin32_network, bitcoin32_to_bitcoin30_address};
@@ -167,6 +168,29 @@ impl Decodable for bitcoin::Network {
         Self::from_magic(magic).ok_or_else(|| {
             DecodeError::new_custom(format_err!("Unknown network magic: {:x}", magic))
         })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct NetworkSaneEncodingWrapper(pub bitcoin::Network);
+
+impl Encodable for NetworkSaneEncodingWrapper {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        self.0.magic().to_bytes().consensus_encode(writer)
+    }
+}
+
+impl Decodable for NetworkSaneEncodingWrapper {
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self(
+            bitcoin::Network::from_magic(bitcoin::p2p::Magic::from_bytes(
+                Decodable::consensus_decode(d, modules)?,
+            ))
+            .ok_or_else(|| DecodeError::new_custom(format_err!("Unknown network magic")))?,
+        ))
     }
 }
 
