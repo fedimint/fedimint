@@ -33,9 +33,6 @@ use common::{
     DEPRECATED_RBF_ERROR, FEERATE_MULTIPLIER,
 };
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
-use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin32_network, bitcoin32_to_bitcoin30_unchecked_address,
-};
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -57,8 +54,8 @@ use fedimint_core::task::{TaskGroup, TaskHandle};
 use fedimint_core::time::now;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Feerate, NumPeersExt,
-    OutPoint, PeerId, ServerModule,
+    apply, async_trait_maybe_send, get_network_for_address, push_db_key_items, push_db_pair_items,
+    Feerate, NumPeersExt, OutPoint, PeerId, ServerModule,
 };
 use fedimint_logging::LOG_MODULE_WALLET;
 use fedimint_server::config::distributedgen::PeerHandleOps;
@@ -1439,9 +1436,7 @@ impl<'a> StatelessWallet<'a> {
             if !peg_out.recipient.is_valid_for_network(network) {
                 return Err(WalletOutputError::WrongNetwork(
                     network,
-                    bitcoin30_to_bitcoin32_network(
-                        &bitcoin32_to_bitcoin30_unchecked_address(&peg_out.recipient).network,
-                    ),
+                    get_network_for_address(&peg_out.recipient),
                 ));
             }
         }

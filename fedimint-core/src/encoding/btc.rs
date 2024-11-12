@@ -9,8 +9,8 @@ use miniscript::{Descriptor, MiniscriptKey};
 use serde::{Deserialize, Serialize};
 
 use super::{BufBitcoinReader, CountWrite, SimpleBitcoinRead};
-use crate::bitcoin_migration::{bitcoin30_to_bitcoin32_network, bitcoin32_to_bitcoin30_address};
 use crate::encoding::{Decodable, DecodeError, Encodable};
+use crate::get_network_for_address;
 use crate::module::registry::ModuleDecoderRegistry;
 
 macro_rules! impl_encode_decode_bridge {
@@ -212,7 +212,7 @@ impl Decodable for bitcoin::Amount {
 impl Encodable for bitcoin::Address {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         let mut len = 0;
-        len += bitcoin30_to_bitcoin32_network(&bitcoin32_to_bitcoin30_address(self).network)
+        len += get_network_for_address(self.as_unchecked())
             .magic()
             .consensus_encode(writer)?;
         len += self.script_pubkey().consensus_encode(writer)?;
