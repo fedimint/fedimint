@@ -345,7 +345,31 @@
 <a href="#344" id="344">344</a>
 <a href="#345" id="345">345</a>
 <a href="#346" id="346">346</a>
-<a href="#347" id="347">347</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::format_err;
@@ -353,6 +377,7 @@
 <span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>hex::{FromHex, ToHex};
 <span class="kw">use </span>miniscript::{Descriptor, MiniscriptKey};
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use super</span>::{BufBitcoinReader, CountWrite, SimpleBitcoinRead};
 <span class="kw">use </span><span class="kw">crate</span>::bitcoin_migration::{bitcoin30_to_bitcoin32_network, bitcoin32_to_bitcoin30_address};
@@ -514,6 +539,29 @@
         <span class="self">Self</span>::from_magic(magic).ok_or_else(|| {
             DecodeError::new_custom(<span class="macro">format_err!</span>(<span class="string">"Unknown network magic: {:x}"</span>, magic))
         })
+    }
+}
+
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>NetworkSaneEncodingWrapper(<span class="kw">pub </span>bitcoin::Network);
+
+<span class="kw">impl </span>Encodable <span class="kw">for </span>NetworkSaneEncodingWrapper {
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.magic().to_bytes().consensus_encode(writer)
+    }
+}
+
+<span class="kw">impl </span>Decodable <span class="kw">for </span>NetworkSaneEncodingWrapper {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+        d: <span class="kw-2">&amp;mut </span>D,
+        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>(
+            bitcoin::Network::from_magic(bitcoin::p2p::Magic::from_bytes(
+                Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>,
+            ))
+            .ok_or_else(|| DecodeError::new_custom(<span class="macro">format_err!</span>(<span class="string">"Unknown network magic"</span>)))<span class="question-mark">?</span>,
+        ))
     }
 }
 

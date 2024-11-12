@@ -1593,10 +1593,10 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::InvoiceExpired);
         }
 
-        <span class="kw">if </span><span class="self">self</span>.cfg.network != invoice.currency().into() {
+        <span class="kw">if </span><span class="self">self</span>.cfg.network.<span class="number">0 </span>!= invoice.currency().into() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::WrongCurrency {
                 invoice_currency: invoice.currency(),
-                federation_currency: <span class="self">self</span>.cfg.network.into(),
+                federation_currency: <span class="self">self</span>.cfg.network.<span class="number">0</span>.into(),
             });
         }
 

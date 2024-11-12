@@ -4030,15 +4030,15 @@
             </span>))))<span class="question-mark">?</span>;
         <span class="kw">let </span>ln_cfg: <span class="kw-2">&amp;</span>fedimint_lnv2_common::config::LightningClientConfig = cfg.cast()<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>ln_cfg.network != network {
+        <span class="kw">if </span>ln_cfg.network.<span class="number">0 </span>!= network {
             <span class="macro">error!</span>(
                 <span class="string">"Federation {federation_id} runs on {} but this gateway supports {network}"</span>,
-                ln_cfg.network,
+                ln_cfg.network.<span class="number">0</span>,
             );
             <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::ClientCreationError(<span class="macro">anyhow!</span>(<span class="macro">format!</span>(
                 <span class="string">"Unsupported network {}"</span>,
-                ln_cfg.network
-            ))));
+                ln_cfg.network.<span class="number">0
+            </span>))));
         }
 
         <span class="prelude-val">Ok</span>(())

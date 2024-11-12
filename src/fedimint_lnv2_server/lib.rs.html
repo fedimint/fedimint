@@ -791,7 +791,8 @@
 <a href="#790" id="790">790</a>
 <a href="#791" id="791">791</a>
 <a href="#792" id="792">792</a>
-<a href="#793" id="793">793</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 
@@ -809,6 +810,7 @@
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+<span class="kw">use </span>fedimint_core::encoding::btc::NetworkSaneEncodingWrapper;
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
@@ -998,7 +1000,7 @@
                             tpe_agg_pk,
                             tpe_pks: tpe_pks.clone(),
                             fee_consensus: params.consensus.fee_consensus.clone(),
-                            network: params.consensus.network,
+                            network: NetworkSaneEncodingWrapper(params.consensus.network),
                         },
                         private: LightningConfigPrivate {
                             sk: sks[peer.to_usize()],
@@ -1040,7 +1042,7 @@
                     })
                     .collect(),
                 fee_consensus: params.consensus.fee_consensus.clone(),
-                network: params.consensus.network,
+                network: NetworkSaneEncodingWrapper(params.consensus.network),
             },
             private: LightningConfigPrivate {
                 sk: SecretKeyShare(sk),
