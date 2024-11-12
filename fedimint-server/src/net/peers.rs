@@ -9,6 +9,7 @@ use std::cmp::{max, min};
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -62,6 +63,7 @@ pub struct ReconnectPeerConnections<T> {
 #[derive(Clone)]
 struct PeerConnection<T> {
     outgoing: async_channel::Sender<T>,
+    outgoing_send_err_count: Arc<AtomicU64>,
     incoming: async_channel::Receiver<T>,
 }
 
@@ -653,13 +655,22 @@ where
 
         PeerConnection {
             outgoing: outgoing_sender,
+            outgoing_send_err_count: Arc::new(AtomicU64::new(0)),
             incoming: incoming_receiver,
         }
     }
 
     fn send(&self, msg: M) {
         if self.outgoing.try_send(msg).is_err() {
-            debug!(target: LOG_NET_PEER, "Could not send outgoing message since the channel is full");
+            let count = self
+                .outgoing_send_err_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if count % 100 == 0 {
+                debug!(target: LOG_NET_PEER, count, "Could not send outgoing message since the channel is full");
+            }
+        } else {
+            self.outgoing_send_err_count
+                .store(0, std::sync::atomic::Ordering::Relaxed);
         }
     }
 
