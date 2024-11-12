@@ -90,7 +90,7 @@ pub fn attach_default_module_init_params(
                 consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
                     fee_consensus: fedimint_lnv2_common::config::FeeConsensus::new(1000)
                         .expect("Relative fee is within range"),
-                    network,
+                    mainnet: network == Network::Bitcoin,
                 },
             },
         );

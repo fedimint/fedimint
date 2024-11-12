@@ -1872,14 +1872,11 @@ impl Gateway {
             ))))?;
         let ln_cfg: &fedimint_lnv2_common::config::LightningClientConfig = cfg.cast()?;
 
-        if ln_cfg.network != network {
-            error!(
-                "Federation {federation_id} runs on {} but this gateway supports {network}",
-                ln_cfg.network,
-            );
+        if ln_cfg.mainnet != (network == Network::Bitcoin) {
+            error!("Federation {federation_id} and gateway are on different networks");
+
             return Err(AdminGatewayError::ClientCreationError(anyhow!(format!(
-                "Unsupported network {}",
-                ln_cfg.network
+                "Federation {federation_id} and gateway are on different networks"
             ))));
         }
 

@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::{bail, format_err, Context};
+use bitcoin::Network;
 use clap::{Parser, Subcommand};
 use fedimint_core::admin_client::ConfigGenParamsRequest;
 use fedimint_core::config::{
@@ -360,7 +361,7 @@ impl Fedimintd {
                         consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
                             // TODO: actually make the relative fee configurable
                             fee_consensus: fedimint_lnv2_common::config::FeeConsensus::new(1_000)?,
-                            network,
+                            mainnet: network == Network::Bitcoin,
                         },
                     },
                 )

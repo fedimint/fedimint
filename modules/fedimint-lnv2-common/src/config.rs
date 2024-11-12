@@ -24,7 +24,7 @@ impl LightningGenParams {
             local: LightningGenParamsLocal { bitcoin_rpc },
             consensus: LightningGenParamsConsensus {
                 fee_consensus: FeeConsensus::new(1000).expect("Relative fee is within range"),
-                network: Network::Regtest,
+                mainnet: false,
             },
         }
     }
@@ -33,7 +33,7 @@ impl LightningGenParams {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningGenParamsConsensus {
     pub fee_consensus: FeeConsensus,
-    pub network: Network,
+    pub mainnet: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,7 +58,7 @@ pub struct LightningConfigConsensus {
     pub tpe_agg_pk: AggregatePublicKey,
     pub tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
     pub fee_consensus: FeeConsensus,
-    pub network: Network,
+    pub mainnet: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,7 +71,7 @@ pub struct LightningClientConfig {
     pub tpe_agg_pk: AggregatePublicKey,
     pub tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
     pub fee_consensus: FeeConsensus,
-    pub network: Network,
+    pub mainnet: bool,
 }
 
 impl std::fmt::Display for LightningClientConfig {
@@ -188,7 +188,7 @@ fn migrate_config_consensus(
             })
             .collect(),
         fee_consensus: FeeConsensus::new(1000).expect("Relative fee is within range"),
-        network: config.network,
+        mainnet: true,
     }
 }
 

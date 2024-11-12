@@ -205,7 +205,7 @@ impl ServerModuleInit for LightningInit {
                             tpe_agg_pk,
                             tpe_pks: tpe_pks.clone(),
                             fee_consensus: params.consensus.fee_consensus.clone(),
-                            network: params.consensus.network,
+                            mainnet: params.consensus.mainnet,
                         },
                         private: LightningConfigPrivate {
                             sk: sks[peer.to_usize()],
@@ -247,7 +247,7 @@ impl ServerModuleInit for LightningInit {
                     })
                     .collect(),
                 fee_consensus: params.consensus.fee_consensus.clone(),
-                network: params.consensus.network,
+                mainnet: params.consensus.mainnet,
             },
             private: LightningConfigPrivate {
                 sk: SecretKeyShare(sk),
@@ -282,7 +282,7 @@ impl ServerModuleInit for LightningInit {
             tpe_agg_pk: config.tpe_agg_pk,
             tpe_pks: config.tpe_pks,
             fee_consensus: config.fee_consensus,
-            network: config.network,
+            mainnet: config.mainnet,
         })
     }
 }

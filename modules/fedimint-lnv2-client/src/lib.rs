@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use async_stream::stream;
 use bitcoin::hashes::{sha256, Hash};
-use bitcoin::secp256k1;
+use bitcoin::{secp256k1, Network};
 use db::GatewayKey;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -51,7 +51,7 @@ use fedimint_lnv2_common::{
     LightningOutput, LightningOutputV0, KIND,
 };
 use futures::StreamExt;
-use lightning_invoice::{Bolt11Invoice, Currency};
+use lightning_invoice::Bolt11Invoice;
 use secp256k1::{ecdh, Keypair, PublicKey, Scalar, SecretKey};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -497,11 +497,8 @@ impl LightningClientModule {
             return Err(SendPaymentError::InvoiceExpired);
         }
 
-        if self.cfg.network != invoice.currency().into() {
-            return Err(SendPaymentError::WrongCurrency {
-                invoice_currency: invoice.currency(),
-                federation_currency: self.cfg.network.into(),
-            });
+        if self.cfg.mainnet != (invoice.network() == Network::Bitcoin) {
+            return Err(SendPaymentError::WrongNetwork);
         }
 
         let operation_id = self.get_next_operation_id(&invoice).await?;
@@ -1024,11 +1021,8 @@ pub enum SendPaymentError {
     FederationError(String),
     #[error("We failed to finalize the funding transaction")]
     FinalizationError(String),
-    #[error("The invoice was for the wrong currency. Invoice currency={invoice_currency} Federation Currency={federation_currency}")]
-    WrongCurrency {
-        invoice_currency: Currency,
-        federation_currency: Currency,
-    },
+    #[error("The invoice is not for a different network")]
+    WrongNetwork,
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]

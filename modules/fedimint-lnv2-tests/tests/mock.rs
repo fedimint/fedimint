@@ -66,8 +66,8 @@ fn bolt_11_invoice(payment_secret: [u8; 32], currency: Currency) -> Bolt11Invoic
         .expect("Invoice creation failed")
 }
 
-pub fn signet_bolt_11_invoice() -> Bolt11Invoice {
-    bolt_11_invoice(PAYABLE_PAYMENT_SECRET, Currency::Signet)
+pub fn mainnet_bolt_11_invoice() -> Bolt11Invoice {
+    bolt_11_invoice(PAYABLE_PAYMENT_SECRET, Currency::Bitcoin)
 }
 
 #[derive(Debug)]

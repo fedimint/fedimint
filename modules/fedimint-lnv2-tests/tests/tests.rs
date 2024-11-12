@@ -271,16 +271,13 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
         client
             .get_first_module::<LightningClientModule>()?
             .send(
-                mock::signet_bolt_11_invoice(),
+                mock::mainnet_bolt_11_invoice(),
                 Some(mock::gateway()),
                 Value::Null
             )
             .await
             .expect_err("send did not fail due to incorrect Currency"),
-        SendPaymentError::WrongCurrency {
-            invoice_currency: lightning_invoice::Currency::Signet,
-            federation_currency: lightning_invoice::Currency::Regtest
-        }
+        SendPaymentError::WrongNetwork
     );
 
     Ok(())
