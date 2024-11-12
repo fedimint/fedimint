@@ -1,7 +1,11 @@
 use bitcoin::secp256k1::ecdsa::Signature;
-use bitcoin::{BlockHash, Txid};
+use bitcoin::{BlockHash, OutPoint, Txid};
+use fedimint_core::db::{IDatabaseTransactionOpsCoreTyped, MigrationContext};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
+use fedimint_server::consensus::db::{MigrationContextExt, TypedModuleHistoryItem};
+use fedimint_wallet_common::WalletModuleTypes;
+use futures::StreamExt;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
@@ -19,6 +23,7 @@ pub enum DbKeyPrefix {
     PegOutTxSigCi = 0x36,
     PegOutBitcoinOutPoint = 0x37,
     PegOutNonce = 0x38,
+    ClaimedPegInOutpoint = 0x39,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -154,3 +159,51 @@ impl_db_record!(
     value = u64,
     db_prefix = DbKeyPrefix::PegOutNonce
 );
+
+#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize)]
+pub struct ClaimedPegInOutpointKey(pub OutPoint);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct ClaimedPegInOutpointPrefixKey;
+
+impl_db_record!(
+    key = ClaimedPegInOutpointKey,
+    value = (),
+    db_prefix = DbKeyPrefix::ClaimedPegInOutpoint,
+);
+impl_db_lookup!(
+    key = ClaimedPegInOutpointKey,
+    query_prefix = ClaimedPegInOutpointPrefixKey
+);
+
+/// Migrate to v1, backfilling all previously pegged-in outpoints
+pub async fn migrate_to_v1(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Error> {
+    let outpoints =
+        ctx.get_typed_module_history_stream::<WalletModuleTypes>()
+            .await
+            .filter_map(|item| async {
+                match item {
+                    TypedModuleHistoryItem::Input(input) => {
+                        let outpoint = input
+                            .ensure_v0_ref()
+                            .expect("can only support V0 wallet inputs")
+                            .0
+                            .outpoint();
+
+                        Some(outpoint)
+                    }
+                    TypedModuleHistoryItem::Output(_)
+                    | TypedModuleHistoryItem::ConsensusItem(_) => None,
+                }
+            })
+            .collect::<Vec<_>>()
+            .await;
+
+    let mut dbtx = ctx.dbtx();
+    for outpoint in outpoints {
+        dbtx.insert_new_entry(&ClaimedPegInOutpointKey(outpoint), &())
+            .await;
+    }
+
+    Ok(())
+}

@@ -999,8 +999,10 @@ mod fedimint_migration_tests {
         WPubkeyHash,
     };
     use fedimint_client::module::init::DynClientModuleInit;
+    use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
     use fedimint_core::db::{
-        Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
+        Database, DatabaseVersion, DatabaseVersionKey, DatabaseVersionKeyV0,
+        IDatabaseTransactionOpsCoreTyped,
     };
     use fedimint_core::module::DynServerModuleInit;
     use fedimint_core::{Feerate, OutPoint, PeerId, TransactionId};
@@ -1015,11 +1017,12 @@ mod fedimint_migration_tests {
         PegOutFees, Rbf, SpendableUTXO, WalletCommonInit, WalletOutputOutcome,
     };
     use fedimint_wallet_server::db::{
-        BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix,
-        FeeRateVoteKey, FeeRateVotePrefix, PegOutBitcoinTransaction,
-        PegOutBitcoinTransactionPrefix, PegOutNonceKey, PegOutTxSignatureCI,
-        PegOutTxSignatureCIPrefix, PendingTransactionKey, PendingTransactionPrefixKey, UTXOKey,
-        UTXOPrefixKey, UnsignedTransactionKey, UnsignedTransactionPrefixKey,
+        BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix,
+        ClaimedPegInOutpointKey, ClaimedPegInOutpointPrefixKey, DbKeyPrefix, FeeRateVoteKey,
+        FeeRateVotePrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix,
+        PegOutNonceKey, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
+        PendingTransactionPrefixKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
+        UnsignedTransactionPrefixKey,
     };
     use fedimint_wallet_server::{PendingTransaction, UnsignedTransaction};
     use futures::StreamExt;
@@ -1204,11 +1207,27 @@ mod fedimint_migration_tests {
         dbtx.commit_tx().await;
     }
 
+    async fn create_server_db_with_v1_data(db: Database) {
+        let mut dbtx = db.begin_transaction().await;
+
+        dbtx.insert_new_entry(
+            &DatabaseVersionKey(LEGACY_HARDCODED_INSTANCE_ID_WALLET),
+            &DatabaseVersion(1),
+        )
+        .await;
+
+        dbtx.insert_new_entry(&ClaimedPegInOutpointKey(bitcoin::OutPoint::null()), &())
+            .await;
+
+        dbtx.commit_tx().await;
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn snapshot_server_db_migrations() -> anyhow::Result<()> {
         snapshot_db_migrations::<_, WalletCommonInit>("wallet-server-v0", |db| {
             Box::pin(async {
-                create_server_db_with_v0_data(db).await;
+                create_server_db_with_v0_data(db.clone()).await;
+                create_server_db_with_v1_data(db).await;
             })
         })
         .await
@@ -1337,6 +1356,19 @@ mod fedimint_migration_tests {
                                 "validate_migrations was not able to read any fee rate votes"
                             );
                             info!("Validated FeeRateVote");
+                        }
+                        DbKeyPrefix::ClaimedPegInOutpoint => {
+                            let claimed_peg_ins = dbtx
+                                .find_by_prefix(&ClaimedPegInOutpointPrefixKey)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_peg_ins = claimed_peg_ins.len();
+                            ensure!(
+                                num_peg_ins > 0,
+                                "validate_migrations was not able to read any claimed peg-in outpoints"
+                            );
+                            info!("Validated PeggedInOutpoint");
                         }
                     }
                 }

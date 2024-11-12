@@ -5,11 +5,11 @@
 #
 
 [Version]
-  rocksdb_version=8.3.2
+  rocksdb_version=8.10.0
   options_file_version=1.1
 
 [DBOptions]
-  compaction_readahead_size=0
+  compaction_readahead_size=2097152
   strict_bytes_per_sync=false
   bytes_per_sync=0
   max_background_jobs=2
@@ -40,11 +40,12 @@
   avoid_unnecessary_blocking_io=false
   skip_checking_sst_file_sizes_on_db_open=false
   flush_verify_memtable_count=true
-  fail_if_options_file_error=false
+  fail_if_options_file_error=true
   atomic_flush=false
   verify_sst_unique_id_in_manifest=true
   skip_stats_update_on_db_open=false
   track_and_verify_wals_in_manifest=false
+  compaction_verify_record_count=true
   paranoid_checks=true
   create_if_missing=true
   max_write_batch_group_size_bytes=1048576
@@ -59,15 +60,15 @@
   WAL_size_limit_MB=0
   use_direct_reads=false
   persist_stats_to_disk=false
-  allow_mmap_reads=false
-  allow_mmap_writes=false
-  use_adaptive_mutex=false
   allow_2pc=false
   is_fd_close_on_exec=true
   max_log_file_size=0
   access_hint_on_compaction_start=NORMAL
   max_file_opening_threads=16
   wal_filter=nullptr
+  allow_mmap_reads=false
+  allow_mmap_writes=false
+  use_adaptive_mutex=false
   use_fsync=false
   table_cache_numshardbits=6
   dump_malloc_stats=false
@@ -82,7 +83,7 @@
   enable_write_thread_adaptive_yield=true
   WAL_ttl_seconds=0
   max_manifest_file_size=1073741824
-  wal_recovery_mode=kPointInTimeRecovery
+  wal_recovery_mode=kAbsoluteConsistency
   enable_pipelined_write=false
   write_thread_slow_yield_usec=3
   unordered_write=false
@@ -92,8 +93,10 @@
   
 
 [CFOptions "default"]
-  compression_opts={max_dict_buffer_bytes=0;enabled=false;max_dict_bytes=0;max_compressed_bytes_per_kb=896;parallel_threads=1;zstd_max_train_bytes=0;level=32767;use_zstd_dict_trainer=true;strategy=0;window_bits=-14;}
+  memtable_max_range_deletions=0
+  compression_opts={checksum=false;max_dict_buffer_bytes=0;enabled=false;max_dict_bytes=0;max_compressed_bytes_per_kb=896;parallel_threads=1;zstd_max_train_bytes=0;level=32767;use_zstd_dict_trainer=true;strategy=0;window_bits=-14;}
   block_protection_bytes_per_key=0
+  bottommost_file_compaction_delay=0
   memtable_protection_bytes_per_key=0
   target_file_size_multiplier=1
   report_bg_io_stats=false
@@ -102,7 +105,7 @@
   max_successive_merges=0
   max_write_buffer_number=2
   prefix_extractor=nullptr
-  bottommost_compression_opts={max_dict_buffer_bytes=0;enabled=false;max_dict_bytes=0;max_compressed_bytes_per_kb=896;parallel_threads=1;zstd_max_train_bytes=0;level=32767;use_zstd_dict_trainer=true;strategy=0;window_bits=-14;}
+  bottommost_compression_opts={checksum=false;max_dict_buffer_bytes=0;enabled=false;max_dict_bytes=0;max_compressed_bytes_per_kb=896;parallel_threads=1;zstd_max_train_bytes=0;level=32767;use_zstd_dict_trainer=true;strategy=0;window_bits=-14;}
   paranoid_file_checks=false
   blob_garbage_collection_force_threshold=1.000000
   enable_blob_files=false
@@ -142,7 +145,6 @@
   experimental_mempurge_threshold=0.000000
   bottommost_compression=kDisableCompressionOption
   persist_user_defined_timestamps=true
-  min_write_buffer_number_to_merge=1
   preserve_internal_time_seconds=0
   preclude_last_level_data_seconds=0
   sst_partitioner_factory=nullptr
@@ -150,20 +152,22 @@
   force_consistency_checks=true
   memtable_insert_with_hint_prefix_extractor=nullptr
   memtable_factory=SkipListFactory
+  compaction_pri=kMinOverlappingRatio
+  max_write_buffer_size_to_maintain=134217728
   level_compaction_dynamic_file_size=true
   max_write_buffer_number_to_maintain=0
   optimize_filters_for_hits=false
-  level_compaction_dynamic_level_bytes=false
-  compaction_style=kCompactionStyleLevel
-  compaction_filter=nullptr
+  level_compaction_dynamic_level_bytes=true
+  default_temperature=kUnknown
   inplace_update_support=false
   merge_operator=nullptr
   table_factory=BlockBasedTable
+  min_write_buffer_number_to_merge=1
+  compaction_filter=nullptr
+  compaction_style=kCompactionStyleLevel
   bloom_locality=0
   comparator=leveldb.BytewiseComparator
   compaction_filter_factory=nullptr
-  max_write_buffer_size_to_maintain=134217728
-  compaction_pri=kMinOverlappingRatio
   
 [TableOptions/BlockBasedTable "default"]
   initial_auto_readahead_size=8192

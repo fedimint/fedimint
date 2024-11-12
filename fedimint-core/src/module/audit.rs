@@ -18,12 +18,12 @@ pub struct Audit {
 }
 
 impl Audit {
-    pub fn net_assets(&self) -> AuditItem {
-        AuditItem {
+    pub fn net_assets(&self) -> Option<AuditItem> {
+        Some(AuditItem {
             name: "Net assets (sats)".to_string(),
-            milli_sat: calculate_net_assets(self.items.iter()),
+            milli_sat: calculate_net_assets(self.items.iter())?,
             module_instance_id: None,
-        }
+        })
     }
 
     pub async fn add_items<KP, F>(
@@ -61,7 +61,11 @@ impl Display for Audit {
         for item in &self.items {
             formatter.write_fmt(format_args!("\n{item}"))?;
         }
-        formatter.write_fmt(format_args!("\n{}", self.net_assets()))
+        formatter.write_fmt(format_args!(
+            "\n{}",
+            self.net_assets()
+                .expect("We'd have crashed already if there was an overflow")
+        ))
     }
 }
 
@@ -100,7 +104,8 @@ impl AuditSummary {
             .map(|(id, _)| create_empty_module_placeholder(*id))
             .collect::<Vec<_>>();
         Self {
-            net_assets: calculate_net_assets(audit.items.iter()),
+            net_assets: calculate_net_assets(audit.items.iter())
+                .expect("We'd have crashed already if there was an overflow"),
             module_summaries: generate_module_summaries(
                 audit.items.iter().chain(&empty_module_placeholders),
                 module_instance_id_to_kind,
@@ -129,7 +134,8 @@ fn generate_module_summaries<'a>(
             (
                 *module_instance_id,
                 ModuleSummary {
-                    net_assets: calculate_net_assets(module_audit_items.into_iter()),
+                    net_assets: calculate_net_assets(module_audit_items.into_iter())
+                        .expect("We'd have crashed already if there was an overflow"),
                     kind,
                 },
             )
@@ -137,8 +143,10 @@ fn generate_module_summaries<'a>(
         .collect()
 }
 
-fn calculate_net_assets<'a>(items: impl Iterator<Item = &'a AuditItem>) -> i64 {
-    items.map(|item| item.milli_sat).sum()
+fn calculate_net_assets<'a>(items: impl Iterator<Item = &'a AuditItem>) -> Option<i64> {
+    items
+        .map(|item| item.milli_sat)
+        .try_fold(0i64, i64::checked_add)
 }
 
 // Adding a placeholder ensures that a ModuleSummary exists even if the module
