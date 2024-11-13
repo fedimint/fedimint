@@ -3584,7 +3584,23 @@
 <a href="#3583" id="3583">3583</a>
 <a href="#3584" id="3584">3584</a>
 <a href="#3585" id="3585">3585</a>
-<a href="#3586" id="3586">3586</a></pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
+<a href="#3586" id="3586">3586</a>
+<a href="#3587" id="3587">3587</a>
+<a href="#3588" id="3588">3588</a>
+<a href="#3589" id="3589">3589</a>
+<a href="#3590" id="3590">3590</a>
+<a href="#3591" id="3591">3591</a>
+<a href="#3592" id="3592">3592</a>
+<a href="#3593" id="3593">3593</a>
+<a href="#3594" id="3594">3594</a>
+<a href="#3595" id="3595">3595</a>
+<a href="#3596" id="3596">3596</a>
+<a href="#3597" id="3597">3597</a>
+<a href="#3598" id="3598">3598</a>
+<a href="#3599" id="3599">3599</a>
+<a href="#3600" id="3600">3600</a>
+<a href="#3601" id="3601">3601</a>
+<a href="#3602" id="3602">3602</a></pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! This module provides the core key-value database for Fedimint.
 //!
@@ -4410,7 +4426,7 @@
             </span>.inner
             .raw_find_by_range(Range {
                 start: <span class="kw-2">&amp;</span>range.start,
-                end: <span class="kw-2">&amp;</span>range.start,
+                end: <span class="kw-2">&amp;</span>range.end,
             })
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="self">Self</span>::adapt_prefix_stream(stream, <span class="self">self</span>.prefix.len()))
@@ -6198,10 +6214,18 @@
 
         dbtx.insert_entry(<span class="kw-2">&amp;</span>AltTestKey(<span class="number">55</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">7777</span>)).<span class="kw">await</span>;
         dbtx.insert_entry(<span class="kw-2">&amp;</span>AltTestKey(<span class="number">54</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">6666</span>)).<span class="kw">await</span>;
+
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.to_ref_with_prefix_module_id(<span class="number">2</span>).<span class="number">0</span>;
+            module_dbtx
+                .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">300</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">3000</span>))
+                .<span class="kw">await</span>;
+        }
+
         dbtx.commit_tx().<span class="kw">await</span>;
 
         <span class="comment">// Verify finding by prefix returns the correct set of key pairs
-        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
 
         <span class="kw">let </span>returned_keys = dbtx
             .find_by_range(TestKey(<span class="number">55</span>)..TestKey(<span class="number">56</span>))
@@ -6234,6 +6258,14 @@
             (TestKey(<span class="number">56</span>), TestVal(<span class="number">7777</span>)),
         ];
         <span class="macro">assert_eq!</span>(returned_keys, expected);
+
+        <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.with_prefix_module_id(<span class="number">2</span>).<span class="number">0</span>;
+        <span class="kw">let </span>test_range = module_dbtx
+            .find_by_range(TestKey(<span class="number">300</span>)..TestKey(<span class="number">301</span>))
+            .<span class="kw">await
+            </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+            .<span class="kw">await</span>;
+        <span class="macro">assert!</span>(test_range.len() == <span class="number">1</span>);
     }
 
     <span class="kw">pub async fn </span>verify_find_by_prefix(db: Database) {
