@@ -3,10 +3,11 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+use fedimint_bitcoind::create_bitcoind;
 use fedimint_client::module::init::{
     ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
+use fedimint_core::bitcoin_rpc::DynBitcoindRpc;
 use fedimint_core::config::{
     ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
@@ -152,6 +153,7 @@ impl Fixtures {
             self.params.clone(),
             ServerModuleInitRegistry::from(self.servers.clone()),
             ClientModuleInitRegistry::from(self.clients.clone()),
+            self.dyn_bitcoin_rpc(),
         )
     }
 

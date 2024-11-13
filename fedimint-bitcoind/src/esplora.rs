@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::{bail, format_err};
 use bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
+use fedimint_core::bitcoin_rpc::{DynBitcoindRpc, IBitcoindRpc};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::TaskHandle;
 use fedimint_core::txoproof::TxOutProof;
@@ -9,7 +10,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Feerate};
 use tracing::info;
 
-use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, RetryClient};
+use crate::{IBitcoindRpcFactory, RetryClient};
 
 #[derive(Debug)]
 pub struct EsploraFactory;

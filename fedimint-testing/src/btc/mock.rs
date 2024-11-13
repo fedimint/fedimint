@@ -14,10 +14,8 @@ use bitcoin::merkle_tree::PartialMerkleTree;
 use bitcoin::{
     Address, Block, BlockHash, CompactTarget, Network, OutPoint, ScriptBuf, Transaction, TxOut,
 };
-use fedimint_bitcoind::{
-    register_bitcoind, DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory,
-    Result as BitcoinRpcResult,
-};
+use fedimint_bitcoind::{register_bitcoind, IBitcoindRpcFactory, Result as BitcoinRpcResult};
+use fedimint_core::bitcoin_rpc::{DynBitcoindRpc, IBitcoindRpc};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::{sleep_in_test, TaskHandle};
 use fedimint_core::txoproof::TxOutProof;

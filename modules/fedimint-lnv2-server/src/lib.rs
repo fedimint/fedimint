@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, ensure, Context};
 use bls12_381::{G1Projective, Scalar};
-use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+use fedimint_core::bitcoin_rpc::DynBitcoindRpc;
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -24,7 +24,7 @@ use fedimint_core::module::{
     TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
 use fedimint_core::server::DynServerModule;
-use fedimint_core::task::{timeout, TaskGroup};
+use fedimint_core::task::timeout;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
@@ -179,7 +179,7 @@ impl ServerModuleInit for LightningInit {
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
-        Ok(Lightning::new(args.cfg().to_typed()?, &args.task_group().clone())?.into())
+        Ok(Lightning::new(args.cfg().to_typed()?, args.dyn_bitcoin_rpc())?.into())
     }
 
     fn trusted_dealer_gen(
@@ -632,9 +632,7 @@ impl ServerModule for Lightning {
 }
 
 impl Lightning {
-    fn new(cfg: LightningConfig, task_group: &TaskGroup) -> anyhow::Result<Self> {
-        let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc, task_group.make_handle())?;
-
+    fn new(cfg: LightningConfig, btc_rpc: DynBitcoindRpc) -> anyhow::Result<Self> {
         Ok(Lightning { cfg, btc_rpc })
     }
 

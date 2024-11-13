@@ -4,6 +4,7 @@ use anyhow::{anyhow as format_err, bail};
 use bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 use electrum_client::ElectrumApi;
 use electrum_client::Error::Protocol;
+use fedimint_core::bitcoin_rpc::{DynBitcoindRpc, IBitcoindRpc};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::runtime::block_in_place;
 use fedimint_core::task::TaskHandle;
@@ -14,7 +15,7 @@ use hex::ToHex;
 use serde_json::{Map, Value};
 use tracing::info;
 
-use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, RetryClient};
+use crate::{IBitcoindRpcFactory, RetryClient};
 
 #[derive(Debug)]
 pub struct ElectrumFactory;
