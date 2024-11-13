@@ -94,6 +94,14 @@ fn get_default_options() -> anyhow::Result<rocksdb::Options> {
         opts.set_db_write_buffer_size(16 * 1024 * 1024);
     }
     opts.create_if_missing(true);
+
+    let mut block_opts = rocksdb::BlockBasedOptions::default();
+    block_opts.set_optimize_filters_for_memory(true);
+    // counterintuitively, this limits amount of memory used as these will now be
+    // part of the block cache.
+    block_opts.set_cache_index_and_filter_blocks(true);
+    block_opts.set_ribbon_filter(10.0);
+    opts.set_block_based_table_factory(&block_opts);
     Ok(opts)
 }
 
