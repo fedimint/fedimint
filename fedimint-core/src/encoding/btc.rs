@@ -269,19 +269,6 @@ mod tests {
     use crate::ModuleDecoderRegistry;
 
     #[test_log::test]
-    fn sha256_roundtrip() {
-        let hash = bitcoin::hashes::sha256::Hash::hash(b"Hello world!");
-        let mut encoded = Vec::new();
-        hash.consensus_encode(&mut encoded).unwrap();
-        let hash_decoded = bitcoin::hashes::sha256::Hash::consensus_decode(
-            &mut Cursor::new(encoded),
-            &ModuleDecoderRegistry::default(),
-        )
-        .unwrap();
-        assert_eq!(hash, hash_decoded);
-    }
-
-    #[test_log::test]
     fn network_roundtrip() {
         let networks: [(bitcoin::Network, bitcoin::p2p::Magic, [u8; 5]); 5] = [
             (
@@ -365,5 +352,18 @@ mod tests {
 
             assert_eq!(address, parsed_address);
         }
+    }
+
+    #[test_log::test]
+    fn sha256_roundtrip() {
+        let hash = bitcoin::hashes::sha256::Hash::hash(b"Hello world!");
+        let mut encoded = Vec::new();
+        hash.consensus_encode(&mut encoded).unwrap();
+        let hash_decoded = bitcoin::hashes::sha256::Hash::consensus_decode(
+            &mut Cursor::new(encoded),
+            &ModuleDecoderRegistry::default(),
+        )
+        .unwrap();
+        assert_eq!(hash, hash_decoded);
     }
 }
