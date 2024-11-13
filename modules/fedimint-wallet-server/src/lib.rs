@@ -821,6 +821,7 @@ pub struct Wallet {
     block_count_rx: watch::Receiver<Option<u32>>,
     /// Fee rate updated periodically by a background task
     fee_rate_rx: watch::Receiver<Feerate>,
+    task_group: TaskGroup,
 }
 
 impl Wallet {
@@ -866,6 +867,7 @@ impl Wallet {
             our_peer_id,
             block_count_rx,
             fee_rate_rx,
+            task_group: task_group.clone(),
         };
 
         Ok(wallet)
@@ -1042,6 +1044,10 @@ impl Wallet {
             blocks_to_go = new_count - old_count,
             "New consensus count, syncing up",
         );
+
+        // Before we can safely call our bitcoin backend to process the new consensus
+        // count, we need to ensure we observed enough confirmations
+        self.wait_for_finality_confs_or_shutdown(new_count).await;
 
         for height in old_count..new_count {
             if height % 100 == 0 {
@@ -1398,6 +1404,53 @@ impl Wallet {
             }
         });
         (block_count_rx, fee_rate_rx)
+    }
+
+    /// Shutdown the task group shared throughout fedimintd, giving 60 seconds
+    /// for other services to gracefully shutdown.
+    async fn graceful_shutdown(&self) {
+        if let Err(e) = self
+            .task_group
+            .clone()
+            .shutdown_join_all(Some(Duration::from_secs(60)))
+            .await
+        {
+            panic!("Error while shutting down fedimintd task group: {e}");
+        }
+    }
+
+    /// Returns once our bitcoin backend observes finality delay confirmations
+    /// of the consensus block count. If we don't observe enough confirmations
+    /// after one hour, we gracefully shutdown fedimintd. This is necessary
+    /// since we can no longer participate in consensus if our bitcoin backend
+    /// is unable to observe the same chain tip as our peers.
+    async fn wait_for_finality_confs_or_shutdown(&self, consensus_block_count: u32) {
+        let backoff = if is_running_in_test_env() {
+            // every 100ms for 60s
+            backoff_util::custom_constant_backoff(Duration::from_millis(100), Some(10 * 60))
+        } else {
+            // every 10s for 1 hour
+            backoff_util::custom_constant_backoff(Duration::from_secs(10), Some(6 * 60))
+        };
+
+        let wait_for_finality_confs = || async {
+            let our_chain_tip_block_count = self.get_block_count()?;
+            let consensus_chain_tip_block_count =
+                consensus_block_count + self.cfg.consensus.finality_delay;
+
+            if consensus_chain_tip_block_count <= our_chain_tip_block_count {
+                Ok(())
+            } else {
+                Err(anyhow::anyhow!("not enough confirmations"))
+            }
+        };
+
+        if retry("wait_for_finality_confs", backoff, wait_for_finality_confs)
+            .await
+            .is_err()
+        {
+            self.graceful_shutdown().await;
+        }
     }
 }
 

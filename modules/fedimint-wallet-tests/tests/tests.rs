@@ -625,6 +625,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     let pk = tweak_key.public_key();
     let wallet_config: WalletConfig = wallet_server_cfg[0].to_typed()?;
     let peg_in_descriptor = wallet_config.consensus.peg_in_descriptor;
+    let finality_delay = wallet_config.consensus.finality_delay;
 
     let peg_in_address = peg_in_descriptor
         .tweak(&pk, secp256k1::SECP256K1)
@@ -642,18 +643,17 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     let mut dbtx = db.begin_transaction().await;
 
     // Generate a minimum number of blocks before sending transactions
-    bitcoin
-        .mine_blocks(wallet_config.consensus.finality_delay.into())
-        .await;
+    bitcoin.mine_blocks(finality_delay.into()).await;
 
-    let block_count = dyn_bitcoin_rpc.get_block_count().await?;
+    let block_count = dyn_bitcoin_rpc.get_block_count().await? as u32;
+    let consensus_block_count = block_count - finality_delay;
     sync_wallet_to_block(
         &mut dbtx
             .to_ref_with_prefix_module_id(module_instance_id)
             .0
             .into_nc(),
         &mut wallet,
-        block_count.try_into()?,
+        consensus_block_count,
     )
     .await?;
 
@@ -700,14 +700,15 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     bitcoin
         .mine_blocks((wallet_config.consensus.finality_delay).into())
         .await;
-    let block_count = dyn_bitcoin_rpc.get_block_count().await?;
+    let block_count = dyn_bitcoin_rpc.get_block_count().await? as u32;
+    let consensus_block_count = block_count - finality_delay;
     sync_wallet_to_block(
         &mut dbtx
             .to_ref_with_prefix_module_id(module_instance_id)
             .0
             .into_nc(),
         &mut wallet,
-        block_count.try_into()?,
+        consensus_block_count,
     )
     .await?;
 
