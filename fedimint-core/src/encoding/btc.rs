@@ -137,25 +137,9 @@ where
     }
 }
 
-impl Encodable for bitcoin::p2p::Magic {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        u32::from_le_bytes(self.to_bytes()).consensus_encode(writer)
-    }
-}
-
-impl Decodable for bitcoin::p2p::Magic {
-    fn consensus_decode<D: std::io::Read>(
-        d: &mut D,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        let num = u32::consensus_decode(d, modules)?;
-        Ok(Self::from_bytes(num.to_le_bytes()))
-    }
-}
-
 impl Encodable for bitcoin::Network {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        self.magic().consensus_encode(writer)
+        u32::from_le_bytes(self.magic().to_bytes()).consensus_encode(writer)
     }
 }
 
@@ -164,7 +148,8 @@ impl Decodable for bitcoin::Network {
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let magic = bitcoin::p2p::Magic::consensus_decode(d, modules)?;
+        let num = u32::consensus_decode(d, modules)?;
+        let magic = bitcoin::p2p::Magic::from_bytes(num.to_le_bytes());
         Self::from_magic(magic).ok_or_else(|| {
             DecodeError::new_custom(format_err!("Unknown network magic: {:x}", magic))
         })
@@ -212,9 +197,7 @@ impl Decodable for bitcoin::Amount {
 impl Encodable for bitcoin::Address<NetworkUnchecked> {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         let mut len = 0;
-        len += get_network_for_address(self.as_unchecked())
-            .magic()
-            .consensus_encode(writer)?;
+        len += get_network_for_address(self.as_unchecked()).consensus_encode(writer)?;
         len += self
             .clone()
             .assume_checked()
@@ -229,9 +212,7 @@ impl Decodable for bitcoin::Address<NetworkUnchecked> {
         mut d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let network =
-            bitcoin::Network::from_magic(bitcoin::p2p::Magic::consensus_decode(&mut d, modules)?)
-                .ok_or_else(|| DecodeError::from_str("Unknown network"))?;
+        let network = bitcoin::Network::consensus_decode(&mut d, modules)?;
         let script_pk = bitcoin::ScriptBuf::consensus_decode(&mut d, modules)?;
 
         let address = bitcoin::Address::from_script(&script_pk, network)
@@ -265,59 +246,48 @@ mod tests {
 
     use bitcoin::hashes::Hash as BitcoinHash;
 
+    use crate::encoding::btc::NetworkSaneEncodingWrapper;
+    use crate::encoding::tests::test_roundtrip_expected;
     use crate::encoding::{Decodable, Encodable};
     use crate::ModuleDecoderRegistry;
 
     #[test_log::test]
-    fn sha256_roundtrip() {
-        let hash = bitcoin::hashes::sha256::Hash::hash(b"Hello world!");
-        let mut encoded = Vec::new();
-        hash.consensus_encode(&mut encoded).unwrap();
-        let hash_decoded = bitcoin::hashes::sha256::Hash::consensus_decode(
-            &mut Cursor::new(encoded),
-            &ModuleDecoderRegistry::default(),
-        )
-        .unwrap();
-        assert_eq!(hash, hash_decoded);
-    }
-
-    #[test_log::test]
     fn network_roundtrip() {
-        let networks: [(bitcoin::Network, bitcoin::p2p::Magic, [u8; 5]); 5] = [
+        let networks: [(bitcoin::Network, [u8; 5], [u8; 4]); 5] = [
             (
                 bitcoin::Network::Bitcoin,
-                bitcoin::p2p::Magic::BITCOIN,
                 [0xFE, 0xD9, 0xB4, 0xBE, 0xF9],
+                [0xF9, 0xBE, 0xB4, 0xD9],
             ),
             (
                 bitcoin::Network::Testnet,
-                bitcoin::p2p::Magic::TESTNET3,
                 [0xFE, 0x07, 0x09, 0x11, 0x0B],
+                [0x0B, 0x11, 0x09, 0x07],
             ),
             (
                 bitcoin::Network::Testnet4,
-                bitcoin::p2p::Magic::TESTNET4,
                 [0xFE, 0x28, 0x3F, 0x16, 0x1C],
+                [0x1C, 0x16, 0x3F, 0x28],
             ),
             (
                 bitcoin::Network::Signet,
-                bitcoin::p2p::Magic::SIGNET,
                 [0xFE, 0x40, 0xCF, 0x03, 0x0A],
+                [0x0A, 0x03, 0xCF, 0x40],
             ),
             (
                 bitcoin::Network::Regtest,
-                bitcoin::p2p::Magic::REGTEST,
                 [0xFE, 0xDA, 0xB5, 0xBF, 0xFA],
+                [0xFA, 0xBF, 0xB5, 0xDA],
             ),
         ];
 
-        for (network, network_magic, magic_bytes) in networks {
+        for (network, magic_bytes, magic_sane_bytes) in networks {
             let mut network_encoded = Vec::new();
             network.consensus_encode(&mut network_encoded).unwrap();
 
-            let mut network_magic_encoded = Vec::new();
-            network_magic
-                .consensus_encode(&mut network_magic_encoded)
+            let mut network_sane_encoded = Vec::new();
+            NetworkSaneEncodingWrapper(network)
+                .consensus_encode(&mut network_sane_encoded)
                 .unwrap();
 
             let network_decoded = bitcoin::Network::consensus_decode(
@@ -326,17 +296,16 @@ mod tests {
             )
             .unwrap();
 
-            let network_magic_decoded = bitcoin::p2p::Magic::consensus_decode(
-                &mut Cursor::new(network_magic_encoded.clone()),
+            let network_sane_decoded = NetworkSaneEncodingWrapper::consensus_decode(
+                &mut Cursor::new(network_sane_encoded.clone()),
                 &ModuleDecoderRegistry::default(),
             )
             .unwrap();
 
             assert_eq!(magic_bytes, *network_encoded);
-            assert_eq!(magic_bytes, *network_magic_encoded);
-
+            assert_eq!(magic_sane_bytes, *network_sane_encoded);
             assert_eq!(network, network_decoded);
-            assert_eq!(network_magic, network_magic_decoded);
+            assert_eq!(network, network_sane_decoded.0);
         }
     }
 
@@ -365,5 +334,16 @@ mod tests {
 
             assert_eq!(address, parsed_address);
         }
+    }
+
+    #[test_log::test]
+    fn sha256_roundtrip() {
+        test_roundtrip_expected(
+            &bitcoin::hashes::sha256::Hash::hash(b"Hello world!"),
+            &[
+                192, 83, 94, 75, 226, 183, 159, 253, 147, 41, 19, 5, 67, 107, 248, 137, 49, 78, 74,
+                63, 174, 192, 94, 207, 252, 187, 125, 243, 26, 217, 229, 26,
+            ],
+        );
     }
 }
