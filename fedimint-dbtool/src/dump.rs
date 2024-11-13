@@ -3,8 +3,9 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use erased_serde::Serialize;
-use fedimint_client::db::ClientConfigKey;
+use fedimint_client::db::{ClientConfigKey, OperationLogKeyPrefix};
 use fedimint_client::module::init::ClientModuleInitRegistry;
+use fedimint_client::oplog::OperationLogEntry;
 use fedimint_core::config::{ClientConfig, CommonModuleInitRegistry, ServerModuleInitRegistry};
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::{
@@ -13,6 +14,7 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
+use fedimint_core::push_db_pair_items;
 use fedimint_rocksdb::RocksDbReadOnly;
 use fedimint_server::config::io::read_server_config;
 use fedimint_server::config::ServerConfig;
@@ -221,6 +223,9 @@ impl DatabaseDump {
         }
 
         if let Some(cfg) = self.client_cfg.clone() {
+            self.serialized
+                .insert("Client Config".into(), Box::new(cfg.clone()));
+
             for (module_id, module_cfg) in &cfg.modules {
                 let kind = &module_cfg.kind;
                 let mut modules = Vec::new();
@@ -230,6 +235,11 @@ impl DatabaseDump {
 
                 let registry = CommonModuleInitRegistry::from(modules);
                 self.serialize_module(module_id, kind, registry).await?;
+            }
+
+            {
+                let mut dbtx = self.read_only_db.begin_transaction_nc().await;
+                Self::write_serialized_client_operation_log(&mut self.serialized, &mut dbtx).await;
             }
 
             self.print_database();
@@ -318,5 +328,18 @@ impl DatabaseDump {
                 );
             }
         }
+    }
+    async fn write_serialized_client_operation_log(
+        serialized: &mut BTreeMap<String, Box<dyn Serialize>>,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) {
+        push_db_pair_items!(
+            dbtx,
+            OperationLogKeyPrefix,
+            OperationLogKey,
+            OperationLogEntry,
+            serialized,
+            "Operations"
+        );
     }
 }
