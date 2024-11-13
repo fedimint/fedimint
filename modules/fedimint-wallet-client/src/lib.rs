@@ -33,7 +33,7 @@ use bitcoin::secp256k1::{All, Secp256k1, SECP256K1};
 use bitcoin::{Address, Network, ScriptBuf};
 use client_db::{DbKeyPrefix, PegInTweakIndexKey, TweakIdx};
 use fedimint_api_client::api::{DynModuleApi, FederationResult};
-use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+use fedimint_bitcoind::create_bitcoind;
 use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 use fedimint_client::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
@@ -46,6 +46,7 @@ use fedimint_client::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_core::bitcoin_rpc::DynBitcoindRpc;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
