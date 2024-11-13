@@ -246,22 +246,48 @@ mod tests {
 
     use bitcoin::hashes::Hash as BitcoinHash;
 
+    use crate::encoding::btc::NetworkSaneEncodingWrapper;
     use crate::encoding::{Decodable, Encodable};
     use crate::ModuleDecoderRegistry;
 
     #[test_log::test]
     fn network_roundtrip() {
-        let networks: [(bitcoin::Network, [u8; 5]); 5] = [
-            (bitcoin::Network::Bitcoin, [0xFE, 0xD9, 0xB4, 0xBE, 0xF9]),
-            (bitcoin::Network::Testnet, [0xFE, 0x07, 0x09, 0x11, 0x0B]),
-            (bitcoin::Network::Testnet4, [0xFE, 0x28, 0x3F, 0x16, 0x1C]),
-            (bitcoin::Network::Signet, [0xFE, 0x40, 0xCF, 0x03, 0x0A]),
-            (bitcoin::Network::Regtest, [0xFE, 0xDA, 0xB5, 0xBF, 0xFA]),
+        let networks: [(bitcoin::Network, [u8; 5], [u8; 4]); 5] = [
+            (
+                bitcoin::Network::Bitcoin,
+                [0xFE, 0xD9, 0xB4, 0xBE, 0xF9],
+                [0xF9, 0xBE, 0xB4, 0xD9],
+            ),
+            (
+                bitcoin::Network::Testnet,
+                [0xFE, 0x07, 0x09, 0x11, 0x0B],
+                [0x0B, 0x11, 0x09, 0x07],
+            ),
+            (
+                bitcoin::Network::Testnet4,
+                [0xFE, 0x28, 0x3F, 0x16, 0x1C],
+                [0x1C, 0x16, 0x3F, 0x28],
+            ),
+            (
+                bitcoin::Network::Signet,
+                [0xFE, 0x40, 0xCF, 0x03, 0x0A],
+                [0x0A, 0x03, 0xCF, 0x40],
+            ),
+            (
+                bitcoin::Network::Regtest,
+                [0xFE, 0xDA, 0xB5, 0xBF, 0xFA],
+                [0xFA, 0xBF, 0xB5, 0xDA],
+            ),
         ];
 
-        for (network, magic_bytes) in networks {
+        for (network, magic_bytes, magic_sane_bytes) in networks {
             let mut network_encoded = Vec::new();
             network.consensus_encode(&mut network_encoded).unwrap();
+
+            let mut network_sane_encoded = Vec::new();
+            NetworkSaneEncodingWrapper(network)
+                .consensus_encode(&mut network_sane_encoded)
+                .unwrap();
 
             let network_decoded = bitcoin::Network::consensus_decode(
                 &mut Cursor::new(network_encoded.clone()),
@@ -269,8 +295,16 @@ mod tests {
             )
             .unwrap();
 
+            let network_sane_decoded = NetworkSaneEncodingWrapper::consensus_decode(
+                &mut Cursor::new(network_sane_encoded.clone()),
+                &ModuleDecoderRegistry::default(),
+            )
+            .unwrap();
+
             assert_eq!(magic_bytes, *network_encoded);
+            assert_eq!(magic_sane_bytes, *network_sane_encoded);
             assert_eq!(network, network_decoded);
+            assert_eq!(network, network_sane_decoded.0);
         }
     }
 
