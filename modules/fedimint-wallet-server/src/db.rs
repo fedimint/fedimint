@@ -205,7 +205,7 @@ pub async fn migrate_to_v1(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::
                 match item {
                     TypedModuleHistoryItem::Input(input) => {
                         let outpoint = input
-                            .ensure_v0_ref()
+                            .maybe_v0_ref()
                             .expect("can only support V0 wallet inputs")
                             .0
                             .outpoint();

@@ -73,7 +73,8 @@ use fedimint_wallet_common::endpoint_constants::{
 use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::{
-    Rbf, WalletInputError, WalletOutputError, WalletOutputV0, MODULE_CONSENSUS_VERSION,
+    Rbf, UnknownWalletInputVariantError, WalletInputError, WalletOutputError, WalletOutputV0,
+    MODULE_CONSENSUS_VERSION,
 };
 use futures::{FutureExt, StreamExt};
 use metrics::{
@@ -570,41 +571,76 @@ impl ServerModule for Wallet {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b WalletInput,
     ) -> Result<InputMeta, WalletInputError> {
-        let input = input.ensure_v0_ref()?;
+        let (outpoint, value, pub_key) = match input {
+            WalletInput::V0(input) => {
+                if !self.block_is_known(dbtx, input.proof_block()).await {
+                    return Err(WalletInputError::UnknownPegInProofBlock(
+                        input.proof_block(),
+                    ));
+                }
 
-        if !self.block_is_known(dbtx, input.proof_block()).await {
-            return Err(WalletInputError::UnknownPegInProofBlock(
-                input.proof_block(),
-            ));
-        }
+                input.verify(&self.secp, &self.cfg.consensus.peg_in_descriptor)?;
 
-        input.verify(&self.secp, &self.cfg.consensus.peg_in_descriptor)?;
+                debug!(outpoint = %input.outpoint(), "Claiming peg-in");
 
-        debug!(outpoint = %input.outpoint(), "Claiming peg-in");
+                (
+                    input.0.outpoint(),
+                    input.tx_output().value,
+                    *input.tweak_contract_key(),
+                )
+            }
+            WalletInput::V1(input) => {
+                let input_tx_out = dbtx
+                    .get_value(&UnspentTxOutKey(input.outpoint))
+                    .await
+                    .ok_or(WalletInputError::UnknownUTXO)?;
+
+                if input_tx_out.script_pubkey
+                    != self
+                        .cfg
+                        .consensus
+                        .peg_in_descriptor
+                        .tweak(&input.tweak_contract_key, secp256k1::SECP256K1)
+                        .script_pubkey()
+                {
+                    return Err(WalletInputError::WrongOutputScript);
+                }
+
+                (input.outpoint, input_tx_out.value, input.tweak_contract_key)
+            }
+            WalletInput::Default { variant, .. } => {
+                return Err(WalletInputError::UnknownInputVariant(
+                    UnknownWalletInputVariantError { variant: *variant },
+                ));
+            }
+        };
 
         if dbtx
-            .insert_entry(&ClaimedPegInOutpointKey(input.outpoint()), &())
+            .insert_entry(&ClaimedPegInOutpointKey(outpoint), &())
             .await
             .is_some()
         {
             return Err(WalletInputError::PegInAlreadyClaimed);
         }
 
-        dbtx.insert_entry(
-            &UTXOKey(input.outpoint()),
+        dbtx.insert_new_entry(
+            &UTXOKey(outpoint),
             &SpendableUTXO {
-                tweak: input.tweak_contract_key().serialize(),
-                amount: input.tx_output().value,
+                tweak: pub_key.serialize(),
+                amount: value,
             },
         )
         .await;
 
-        let amount = input.tx_output().value.into();
+        let amount = value.into();
+
         let fee = self.cfg.consensus.fee_consensus.peg_in_abs;
+
         calculate_pegin_metrics(dbtx, amount, fee);
+
         Ok(InputMeta {
             amount: TransactionItemAmount { amount, fee },
-            pub_key: *input.tweak_contract_key(),
+            pub_key,
         })
     }
 
