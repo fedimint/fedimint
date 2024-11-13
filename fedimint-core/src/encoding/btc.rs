@@ -209,20 +209,18 @@ impl Decodable for bitcoin::Amount {
     }
 }
 
-impl Encodable for bitcoin::Address {
+impl Encodable for bitcoin::Address<NetworkUnchecked> {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         let mut len = 0;
         len += get_network_for_address(self.as_unchecked())
             .magic()
             .consensus_encode(writer)?;
-        len += self.script_pubkey().consensus_encode(writer)?;
+        len += self
+            .clone()
+            .assume_checked()
+            .script_pubkey()
+            .consensus_encode(writer)?;
         Ok(len)
-    }
-}
-
-impl Encodable for bitcoin::Address<NetworkUnchecked> {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        self.clone().assume_checked().consensus_encode(writer)
     }
 }
 
