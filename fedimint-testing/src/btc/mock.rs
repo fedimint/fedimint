@@ -3,7 +3,7 @@ use std::iter::repeat;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::format_err;
+use anyhow::{bail, format_err};
 use async_trait::async_trait;
 use bitcoin::absolute::LockTime;
 use bitcoin::block::{Header as BlockHeader, Version};
@@ -335,6 +335,18 @@ impl IBitcoindRpc for FakeBitcoinTest {
         Ok(self.inner.read().unwrap().blocks[height as usize]
             .header
             .block_hash())
+    }
+
+    async fn get_block(&self, block_hash: &bitcoin::BlockHash) -> BitcoinRpcResult<bitcoin::Block> {
+        let blocks = &self.inner.read().unwrap().blocks;
+
+        for block in blocks {
+            if block.header.block_hash() == *block_hash {
+                return Ok(block.clone());
+            }
+        }
+
+        bail!("No block with that hash found");
     }
 
     async fn get_fee_rate(&self, _confirmation_target: u16) -> BitcoinRpcResult<Option<Feerate>> {

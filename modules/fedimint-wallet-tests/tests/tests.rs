@@ -1024,7 +1024,7 @@ mod fedimint_migration_tests {
         PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix, PegOutNonceKey,
         PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
         PendingTransactionPrefixKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
-        UnsignedTransactionPrefixKey,
+        UnsignedTransactionPrefixKey, UnspentTxOutKey, UnspentTxOutPrefix,
     };
     use fedimint_wallet_server::{PendingTransaction, UnsignedTransaction};
     use futures::StreamExt;
@@ -1088,6 +1088,9 @@ mod fedimint_migration_tests {
             value: bitcoin::Amount::from_sat(10_000),
             script_pubkey: destination.clone(),
         }];
+
+        dbtx.insert_new_entry(&UnspentTxOutKey(utxo.0), &output[0])
+            .await;
 
         let tx = Transaction {
             version: bitcoin::transaction::Version(2),
@@ -1390,6 +1393,19 @@ mod fedimint_migration_tests {
                                 "validate_migrations was not able to read any consensus version votes"
                             );
                             info!("Validated ConsensusVersionVote");
+                        }
+                        DbKeyPrefix::UnspentTxOut => {
+                            let utxos = dbtx
+                                .find_by_prefix(&UnspentTxOutPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_utxos = utxos.len();
+                            ensure!(
+                                num_utxos > 0,
+                                "validate_migrations was not able to read any utxos"
+                            );
+                            info!("Validated UnspendTxOut");
                         }
                     }
                 }

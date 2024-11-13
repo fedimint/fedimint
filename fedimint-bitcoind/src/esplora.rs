@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use anyhow::{bail, format_err};
+use anyhow::{bail, format_err, Context};
 use bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::TaskHandle;
@@ -72,6 +72,13 @@ impl IBitcoindRpc for EsploraClient {
 
     async fn get_block_hash(&self, height: u64) -> anyhow::Result<BlockHash> {
         Ok(self.client.get_block_hash(u32::try_from(height)?).await?)
+    }
+
+    async fn get_block(&self, block_hash: &BlockHash) -> anyhow::Result<bitcoin::Block> {
+        self.client
+            .get_block_by_hash(block_hash)
+            .await?
+            .context("Block with this hash is not available")
     }
 
     async fn get_fee_rate(&self, confirmation_target: u16) -> anyhow::Result<Option<Feerate>> {
