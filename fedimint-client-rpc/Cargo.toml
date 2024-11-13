@@ -1,0 +1,24 @@
+[package]
+name = "fedimint-client-rpc"
+version = { workspace = true }
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "fedimint-core provides common code used by both client and server."
+license = "MIT"
+readme = "../README.md"
+repository = "https://github.com/fedimint/fedimint"
+
+[dependencies]
+anyhow = { workspace = true }
+async-stream = "0.3.6"
+async-trait = { workspace = true }
+fedimint-api-client = { workspace = true }
+fedimint-client = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-ln-client = { workspace = true, features = ["cli"] }
+fedimint-mint-client = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+tracing = { workspace = true }

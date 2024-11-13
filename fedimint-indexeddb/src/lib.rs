@@ -1,4 +1,5 @@
-//! Uses immutable data structures and saves to indexeddb on commit.
+#![cfg(target_family = "wasm")]
+//! IndexedDB database implementation for Fedimint WASM clients
 use std::fmt::Debug;
 use std::ops::Range;
 use std::sync::Arc;
@@ -236,8 +237,6 @@ impl<'a> IDatabaseTransactionOps for MemAndIndexedDbTransaction<'a> {
     }
 }
 
-// In-memory database transaction should only be used for test code and never
-// for production as it doesn't properly implement MVCC
 #[apply(async_trait_maybe_send!)]
 impl<'a> IRawDatabaseTransaction for MemAndIndexedDbTransaction<'a> {
     async fn commit_tx(self) -> Result<()> {

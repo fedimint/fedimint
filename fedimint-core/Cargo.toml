@@ -65,7 +65,7 @@ tokio-rustls = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 async-lock = "3.4"
-tokio = { workspace = true, features = ["io-util"] }
+tokio = { workspace = true, features = ["io-util", "macros", "sync", "rt", "time"] }
 futures-util = { workspace = true }
 # getrandom is transitive dependency of rand
 # on wasm, we need to enable the js backend

@@ -1,0 +1,24 @@
+[package]
+name = "fedimint-indexeddb"
+version = { workspace = true }
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "IndexedDB database implementation for Fedimint WASM clients"
+license = "MIT"
+readme = "../README.md"
+repository = "https://github.com/fedimint/fedimint"
+
+[lib]
+name = "fedimint_indexeddb"
+path = "src/lib.rs"
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+fedimint-core = { workspace = true }
+futures = { workspace = true }
+imbl = "3.0.0"
+js-sys = "0.3.69"
+rexie = "0.6.2"
+wasm-bindgen = "=0.2.92"
+wasm-bindgen-futures = "0.4.42"
