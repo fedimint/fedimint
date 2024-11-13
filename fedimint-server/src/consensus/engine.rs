@@ -313,7 +313,9 @@ impl ConsensusEngine {
 
         // We can terminate the session instead of waiting for other peers to complete
         // it since they can always download the signed session outcome from us
-        terminator_sender.send(()).ok();
+        if terminator_sender.send(()).is_err() {
+            warn!(target: LOG_CONSENSUS, "Failed to send termination signal to aleph_bft session");
+        }
         aleph_handle.await.ok();
 
         // This method removes the backup of the current session from the database
