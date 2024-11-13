@@ -106,6 +106,7 @@ impl DatabaseDump {
                     .available_decoders(kinds)
                     .unwrap()
                     .with_fallback();
+                let client_cfg = client_cfg.redecode_raw(&decoders)?;
                 (None, Some(client_cfg), decoders)
             } else {
                 (None, None, ModuleDecoderRegistry::default())
@@ -224,7 +225,7 @@ impl DatabaseDump {
 
         if let Some(cfg) = self.client_cfg.clone() {
             self.serialized
-                .insert("Client Config".into(), Box::new(cfg.clone()));
+                .insert("Client Config".into(), Box::new(cfg.to_json()));
 
             for (module_id, module_cfg) in &cfg.modules {
                 let kind = &module_cfg.kind;
