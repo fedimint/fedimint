@@ -31,7 +31,7 @@ use crate::btc::real::RealBitcoinTest;
 use crate::btc::BitcoinTest;
 use crate::envs::{
     FM_PORT_ESPLORA_ENV, FM_TEST_BACKEND_BITCOIN_RPC_KIND_ENV, FM_TEST_BACKEND_BITCOIN_RPC_URL_ENV,
-    FM_TEST_BITCOIND_RPC_ENV, FM_TEST_USE_REAL_DAEMONS_ENV,
+    FM_TEST_BITCOIND_RPC_ENV, FM_TEST_USE_REAL_DAEMONS_X_ENV,
 };
 use crate::federation::{FederationTest, FederationTestBuilder};
 use crate::gateway::{FakeLightningBuilder, DEFAULT_GATEWAY_PASSWORD};
@@ -107,7 +107,11 @@ impl Fixtures {
     }
 
     pub fn is_real_test() -> bool {
-        env::var(FM_TEST_USE_REAL_DAEMONS_ENV) == Ok("1".to_string())
+        let is_real_test = env::var(FM_TEST_USE_REAL_DAEMONS_X_ENV) == Ok("1".to_string());
+
+        assert!(!is_real_test, "IS REAL TEST");
+
+        false
     }
 
     // TODO: Auto-assign instance ids after removing legacy id order

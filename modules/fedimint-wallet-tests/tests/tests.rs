@@ -18,7 +18,9 @@ use fedimint_dummy_client::DummyClientInit;
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_testing::btc::BitcoinTest;
-use fedimint_testing::envs::{FM_TEST_BACKEND_BITCOIN_RPC_KIND_ENV, FM_TEST_USE_REAL_DAEMONS_ENV};
+use fedimint_testing::envs::{
+    FM_TEST_BACKEND_BITCOIN_RPC_KIND_ENV, FM_TEST_USE_REAL_DAEMONS_X_ENV,
+};
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::{DepositStateV2, WalletClientInit, WalletClientModule, WithdrawState};
@@ -1399,7 +1401,7 @@ fn verify_bitcoind_backend() {
 
     assert_eq!(
         bitcoin_rpc_kind,
-        if env::var(FM_TEST_USE_REAL_DAEMONS_ENV) == Ok("1".to_string()) {
+        if env::var(FM_TEST_USE_REAL_DAEMONS_X_ENV) == Ok("1".to_string()) {
             env::var(FM_TEST_BACKEND_BITCOIN_RPC_KIND_ENV).unwrap_or_else(|_| "bitcoind".into())
         } else {
             "mock_kind".into()
