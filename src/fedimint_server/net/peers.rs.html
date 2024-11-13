@@ -826,7 +826,18 @@
 <a href="#825" id="825">825</a>
 <a href="#826" id="826">826</a>
 <a href="#827" id="827">827</a>
-<a href="#828" id="828">828</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
 //! members
 //!
 //! The main interface is [`fedimint_core::net::peers::IPeerConnections`] and
@@ -837,6 +848,7 @@
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::net::SocketAddr;
+<span class="kw">use </span>std::sync::atomic::AtomicU64;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -890,6 +902,7 @@
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">struct </span>PeerConnection&lt;T&gt; {
     outgoing: async_channel::Sender&lt;T&gt;,
+    outgoing_send_err_count: Arc&lt;AtomicU64&gt;,
     incoming: async_channel::Receiver&lt;T&gt;,
 }
 
@@ -1481,13 +1494,22 @@
 
         PeerConnection {
             outgoing: outgoing_sender,
+            outgoing_send_err_count: Arc::new(AtomicU64::new(<span class="number">0</span>)),
             incoming: incoming_receiver,
         }
     }
 
     <span class="kw">fn </span>send(<span class="kw-2">&amp;</span><span class="self">self</span>, msg: M) {
         <span class="kw">if </span><span class="self">self</span>.outgoing.try_send(msg).is_err() {
-            <span class="macro">debug!</span>(target: LOG_NET_PEER, <span class="string">"Could not send outgoing message since the channel is full"</span>);
+            <span class="kw">let </span>count = <span class="self">self
+                </span>.outgoing_send_err_count
+                .fetch_add(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
+            <span class="kw">if </span>count % <span class="number">100 </span>== <span class="number">0 </span>{
+                <span class="macro">debug!</span>(target: LOG_NET_PEER, count, <span class="string">"Could not send outgoing message since the channel is full"</span>);
+            }
+        } <span class="kw">else </span>{
+            <span class="self">self</span>.outgoing_send_err_count
+                .store(<span class="number">0</span>, std::sync::atomic::Ordering::Relaxed);
         }
     }
 
