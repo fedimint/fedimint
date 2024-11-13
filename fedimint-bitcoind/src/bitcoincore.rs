@@ -6,6 +6,7 @@ use anyhow::{anyhow as format_err, bail};
 use bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use bitcoincore_rpc::{Auth, RpcApi};
+use fedimint_core::bitcoin_rpc::{DynBitcoindRpc, IBitcoindRpc};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::envs::{BitcoinRpcConfig, FM_BITCOIND_COOKIE_FILE_ENV};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -16,7 +17,7 @@ use fedimint_core::{apply, async_trait_maybe_send, Feerate};
 use fedimint_logging::LOG_CORE;
 use tracing::{info, warn};
 
-use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory};
+use crate::IBitcoindRpcFactory;
 
 #[derive(Debug)]
 pub struct BitcoindFactory;

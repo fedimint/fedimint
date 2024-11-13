@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use anyhow::{anyhow, bail, Result};
-use fedimint_bitcoind::DynBitcoindRpc;
+use fedimint_core::bitcoin_rpc::DynBitcoindRpc;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Feerate};
 use fedimint_logging::LOG_MODULE_WALLET;

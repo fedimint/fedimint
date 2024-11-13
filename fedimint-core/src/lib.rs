@@ -68,6 +68,8 @@ pub mod admin_client;
 mod amount;
 /// Federation-stored client backups
 pub mod backup;
+/// Trait to abstract over bitcoin backends
+pub mod bitcoin_rpc;
 /// Legacy serde encoding for `bls12_381`
 pub mod bls12_381_serde;
 /// Federation configuration
