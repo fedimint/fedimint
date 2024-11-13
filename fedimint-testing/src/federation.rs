@@ -8,6 +8,7 @@ use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::{AdminCreds, Client, ClientHandleArc};
 use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
+use fedimint_core::bitcoin_rpc::DynBitcoindRpc;
 use fedimint_core::config::{
     ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
     META_FEDERATION_NAME_KEY,
@@ -154,6 +155,7 @@ pub struct FederationTestBuilder {
     params: ServerModuleConfigGenParamsRegistry,
     server_init: ServerModuleInitRegistry,
     client_init: ClientModuleInitRegistry,
+    dyn_bitcoin_rpc: DynBitcoindRpc,
 }
 
 impl FederationTestBuilder {
@@ -161,6 +163,7 @@ impl FederationTestBuilder {
         params: ServerModuleConfigGenParamsRegistry,
         server_init: ServerModuleInitRegistry,
         client_init: ClientModuleInitRegistry,
+        dyn_bitcoin_rpc: DynBitcoindRpc,
     ) -> FederationTestBuilder {
         let num_peers = 4;
         Self {
@@ -173,6 +176,7 @@ impl FederationTestBuilder {
             params,
             server_init,
             client_init,
+            dyn_bitcoin_rpc,
         }
     }
 
@@ -229,6 +233,7 @@ impl FederationTestBuilder {
             let subgroup = task_group.make_subgroup();
             let checkpoint_dir = tempfile::Builder::new().tempdir().unwrap().into_path();
             let code_version_str = env!("CARGO_PKG_VERSION");
+            let dyn_bitcoin_rpc = self.dyn_bitcoin_rpc.clone();
 
             task_group.spawn("fedimintd", move |_| async move {
                 consensus::run(
@@ -241,6 +246,7 @@ impl FederationTestBuilder {
                     fedimint_server::net::api::ApiSecrets::default(),
                     checkpoint_dir,
                     code_version_str.to_string(),
+                    dyn_bitcoin_rpc,
                 )
                 .await
                 .expect("Could not initialise consensus");
