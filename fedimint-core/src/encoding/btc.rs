@@ -168,27 +168,21 @@ impl Decodable for NetworkLegacyEncodingWrapper {
         Ok(Self(network))
     }
 }
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct NetworkSaneEncodingWrapper(pub bitcoin::Network);
-
-impl Encodable for NetworkSaneEncodingWrapper {
+impl Encodable for bitcoin::Network {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        self.0.magic().to_bytes().consensus_encode(writer)
+        self.magic().to_bytes().consensus_encode(writer)
     }
 }
 
-impl Decodable for NetworkSaneEncodingWrapper {
+impl Decodable for bitcoin::Network {
     fn consensus_decode<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Ok(Self(
-            bitcoin::Network::from_magic(bitcoin::p2p::Magic::from_bytes(
-                Decodable::consensus_decode(d, modules)?,
-            ))
-            .ok_or_else(|| DecodeError::new_custom(format_err!("Unknown network magic")))?,
+        Self::from_magic(bitcoin::p2p::Magic::from_bytes(
+            Decodable::consensus_decode(d, modules)?,
         ))
+        .ok_or_else(|| DecodeError::new_custom(format_err!("Unknown network magic")))
     }
 }
 
@@ -260,7 +254,7 @@ mod tests {
 
     use bitcoin::hashes::Hash as BitcoinHash;
 
-    use crate::encoding::btc::{NetworkLegacyEncodingWrapper, NetworkSaneEncodingWrapper};
+    use crate::encoding::btc::NetworkLegacyEncodingWrapper;
     use crate::encoding::tests::test_roundtrip_expected;
     use crate::encoding::{Decodable, Encodable};
     use crate::ModuleDecoderRegistry;
@@ -295,16 +289,14 @@ mod tests {
             ),
         ];
 
-        for (network, magic_legacy_bytes, magic_sane_bytes) in networks {
+        for (network, magic_legacy_bytes, magic_bytes) in networks {
             let mut network_legacy_encoded = Vec::new();
             NetworkLegacyEncodingWrapper(network)
                 .consensus_encode(&mut network_legacy_encoded)
                 .unwrap();
 
-            let mut network_sane_encoded = Vec::new();
-            NetworkSaneEncodingWrapper(network)
-                .consensus_encode(&mut network_sane_encoded)
-                .unwrap();
+            let mut network_encoded = Vec::new();
+            network.consensus_encode(&mut network_encoded).unwrap();
 
             let network_legacy_decoded = NetworkLegacyEncodingWrapper::consensus_decode(
                 &mut Cursor::new(network_legacy_encoded.clone()),
@@ -313,16 +305,16 @@ mod tests {
             .unwrap()
             .0;
 
-            let network_sane_decoded = NetworkSaneEncodingWrapper::consensus_decode(
-                &mut Cursor::new(network_sane_encoded.clone()),
+            let network_decoded = bitcoin::Network::consensus_decode(
+                &mut Cursor::new(network_encoded.clone()),
                 &ModuleDecoderRegistry::default(),
             )
             .unwrap();
 
             assert_eq!(magic_legacy_bytes, *network_legacy_encoded);
-            assert_eq!(magic_sane_bytes, *network_sane_encoded);
+            assert_eq!(magic_bytes, *network_encoded);
             assert_eq!(network, network_legacy_decoded);
-            assert_eq!(network, network_sane_decoded.0);
+            assert_eq!(network, network_decoded);
         }
     }
 

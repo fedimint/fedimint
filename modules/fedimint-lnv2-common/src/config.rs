@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 
 pub use bitcoin::Network;
 use fedimint_core::core::ModuleKind;
-use fedimint_core::encoding::btc::NetworkSaneEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::{plugin_types_trait_impl_config, Amount, PeerId};
@@ -59,7 +58,7 @@ pub struct LightningConfigConsensus {
     pub tpe_agg_pk: AggregatePublicKey,
     pub tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
     pub fee_consensus: FeeConsensus,
-    pub network: NetworkSaneEncodingWrapper,
+    pub network: Network,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -72,7 +71,7 @@ pub struct LightningClientConfig {
     pub tpe_agg_pk: AggregatePublicKey,
     pub tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
     pub fee_consensus: FeeConsensus,
-    pub network: NetworkSaneEncodingWrapper,
+    pub network: Network,
 }
 
 impl std::fmt::Display for LightningClientConfig {
@@ -189,7 +188,7 @@ fn migrate_config_consensus(
             })
             .collect(),
         fee_consensus: FeeConsensus::new(1000).expect("Relative fee is within range"),
-        network: NetworkSaneEncodingWrapper(config.network.0),
+        network: config.network.0,
     }
 }
 

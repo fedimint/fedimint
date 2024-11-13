@@ -1874,14 +1874,14 @@ impl Gateway {
             ))))?;
         let ln_cfg: &fedimint_lnv2_common::config::LightningClientConfig = cfg.cast()?;
 
-        if ln_cfg.network.0 != network {
+        if ln_cfg.network != network {
             error!(
                 "Federation {federation_id} runs on {} but this gateway supports {network}",
-                ln_cfg.network.0,
+                ln_cfg.network,
             );
             return Err(AdminGatewayError::ClientCreationError(anyhow!(format!(
                 "Unsupported network {}",
-                ln_cfg.network.0
+                ln_cfg.network
             ))));
         }
 

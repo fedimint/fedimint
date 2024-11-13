@@ -16,7 +16,6 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
-use fedimint_core::encoding::btc::NetworkSaneEncodingWrapper;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
@@ -206,7 +205,7 @@ impl ServerModuleInit for LightningInit {
                             tpe_agg_pk,
                             tpe_pks: tpe_pks.clone(),
                             fee_consensus: params.consensus.fee_consensus.clone(),
-                            network: NetworkSaneEncodingWrapper(params.consensus.network),
+                            network: params.consensus.network,
                         },
                         private: LightningConfigPrivate {
                             sk: sks[peer.to_usize()],
@@ -248,7 +247,7 @@ impl ServerModuleInit for LightningInit {
                     })
                     .collect(),
                 fee_consensus: params.consensus.fee_consensus.clone(),
-                network: NetworkSaneEncodingWrapper(params.consensus.network),
+                network: params.consensus.network,
             },
             private: LightningConfigPrivate {
                 sk: SecretKeyShare(sk),
