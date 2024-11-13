@@ -247,6 +247,7 @@ mod tests {
     use bitcoin::hashes::Hash as BitcoinHash;
 
     use crate::encoding::btc::NetworkSaneEncodingWrapper;
+    use crate::encoding::tests::test_roundtrip_expected;
     use crate::encoding::{Decodable, Encodable};
     use crate::ModuleDecoderRegistry;
 
@@ -337,14 +338,12 @@ mod tests {
 
     #[test_log::test]
     fn sha256_roundtrip() {
-        let hash = bitcoin::hashes::sha256::Hash::hash(b"Hello world!");
-        let mut encoded = Vec::new();
-        hash.consensus_encode(&mut encoded).unwrap();
-        let hash_decoded = bitcoin::hashes::sha256::Hash::consensus_decode(
-            &mut Cursor::new(encoded),
-            &ModuleDecoderRegistry::default(),
-        )
-        .unwrap();
-        assert_eq!(hash, hash_decoded);
+        test_roundtrip_expected(
+            &bitcoin::hashes::sha256::Hash::hash(b"Hello world!"),
+            &[
+                192, 83, 94, 75, 226, 183, 159, 253, 147, 41, 19, 5, 67, 107, 248, 137, 49, 78, 74,
+                63, 174, 192, 94, 207, 252, 187, 125, 243, 26, 217, 229, 26,
+            ],
+        );
     }
 }
