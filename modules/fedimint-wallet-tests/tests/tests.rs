@@ -629,7 +629,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
 
     let peg_in_address = peg_in_descriptor
         .tweak(&pk, secp256k1::SECP256K1)
-        .address(wallet_config.consensus.network)?;
+        .address(wallet_config.consensus.network.0)?;
 
     let mut wallet = fedimint_wallet_server::Wallet::new_with_bitcoind(
         wallet_server_cfg[0].to_typed()?,

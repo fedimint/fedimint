@@ -680,7 +680,7 @@ impl LightningClientModule {
         ClientOutputSM<LightningClientStateMachines>,
         ContractId,
     )> {
-        let federation_currency: Currency = self.cfg.network.into();
+        let federation_currency: Currency = self.cfg.network.0.into();
         let invoice_currency = invoice.currency();
         ensure!(
             federation_currency == invoice_currency,
@@ -1624,7 +1624,7 @@ impl LightningClientModule {
             src_node_id,
             short_channel_id,
             &route_hints,
-            self.cfg.network,
+            self.cfg.network.0,
         )?;
 
         let tx =

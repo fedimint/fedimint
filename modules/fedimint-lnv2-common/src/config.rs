@@ -189,7 +189,7 @@ fn migrate_config_consensus(
             })
             .collect(),
         fee_consensus: FeeConsensus::new(1000).expect("Relative fee is within range"),
-        network: NetworkSaneEncodingWrapper(config.network),
+        network: NetworkSaneEncodingWrapper(config.network.0),
     }
 }
 

@@ -42,6 +42,7 @@ use fedimint_core::db::{
     CoreMigrationFn, Database, DatabaseTransaction, DatabaseVersion,
     IDatabaseTransactionOpsCoreTyped,
 };
+use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{is_rbf_withdrawal_enabled, is_running_in_test_env, BitcoinRpcConfig};
 use fedimint_core::module::audit::Audit;
@@ -593,7 +594,7 @@ impl ServerModule for Wallet {
 
         let fee_rate = self.consensus_fee_rate(dbtx).await;
 
-        StatelessWallet::validate_tx(&tx, output, fee_rate, self.cfg.consensus.network)?;
+        StatelessWallet::validate_tx(&tx, output, fee_rate, self.cfg.consensus.network.0)?;
 
         self.offline_wallet().sign_psbt(&mut tx.psbt);
 
@@ -849,10 +850,12 @@ impl Wallet {
 
         let bitcoind_rpc = bitcoind;
 
-        let bitcoind_net = bitcoind_rpc
-            .get_network()
-            .await
-            .map_err(|e| WalletCreationError::RpcError(e.to_string()))?;
+        let bitcoind_net = NetworkLegacyEncodingWrapper(
+            bitcoind_rpc
+                .get_network()
+                .await
+                .map_err(|e| WalletCreationError::RpcError(e.to_string()))?,
+        );
         if bitcoind_net != cfg.consensus.network {
             return Err(WalletCreationError::WrongNetwork(
                 cfg.consensus.network,
@@ -1511,8 +1514,8 @@ impl<'a> StatelessWallet<'a> {
         if let WalletOutputV0::PegOut(peg_out) = output {
             if !peg_out.recipient.is_valid_for_network(network) {
                 return Err(WalletOutputError::WrongNetwork(
-                    network,
-                    get_network_for_address(&peg_out.recipient),
+                    NetworkLegacyEncodingWrapper(network),
+                    NetworkLegacyEncodingWrapper(get_network_for_address(&peg_out.recipient)),
                 ));
             }
         }
@@ -1906,6 +1909,7 @@ mod tests {
     use bitcoin::hashes::Hash;
     use bitcoin::Network::{Bitcoin, Testnet};
     use bitcoin::{secp256k1, Address, Amount, OutPoint, Txid};
+    use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
     use fedimint_core::Feerate;
     use fedimint_wallet_common::{PegOut, PegOutFees, Rbf, WalletOutputV0};
     use miniscript::descriptor::Wsh;
@@ -2011,7 +2015,13 @@ mod tests {
             fees: PegOutFees::new(100, weight),
         });
         let res = StatelessWallet::validate_tx(&tx, &output, fee, Testnet);
-        assert_eq!(res, Err(WalletOutputError::WrongNetwork(Testnet, Bitcoin)));
+        assert_eq!(
+            res,
+            Err(WalletOutputError::WrongNetwork(
+                NetworkLegacyEncodingWrapper(Testnet),
+                NetworkLegacyEncodingWrapper(Bitcoin)
+            ))
+        );
     }
 
     fn rbf(sats_per_kvb: u64, total_weight: u64) -> WalletOutputV0 {

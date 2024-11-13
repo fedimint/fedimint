@@ -53,6 +53,7 @@ use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::db::{apply_migrations_server, Database, DatabaseTransaction};
+use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::secp256k1::schnorr::Signature;
@@ -516,7 +517,7 @@ impl Gateway {
                 .await
         };
 
-        if gateway_config.network != lightning_network {
+        if gateway_config.network.0 != lightning_network {
             warn!(
                 "Lightning node does not match previously configured gateway network : ({:?})",
                 gateway_config.network
@@ -825,7 +826,7 @@ impl Gateway {
             lightning_alias: Some(lightning_context.lightning_alias.clone()),
             gateway_id: self.gateway_id,
             gateway_state: self.state.read().await.to_string(),
-            network: Some(gateway_config.network),
+            network: Some(gateway_config.network.0),
             block_height: Some(node_info.3),
             synced_to_chain: node_info.4,
             api: self.versioned_api.clone(),
@@ -1171,7 +1172,7 @@ impl Gateway {
         };
 
         if self.is_running_lnv1() {
-            Self::check_lnv1_federation_network(&client, gateway_config.network).await?;
+            Self::check_lnv1_federation_network(&client, gateway_config.network.0).await?;
             client
                 .get_first_module::<GatewayClientModule>()?
                 .try_register_with_federation(
@@ -1185,7 +1186,7 @@ impl Gateway {
         }
 
         if self.is_running_lnv2() {
-            Self::check_lnv2_federation_network(&client, gateway_config.network).await?;
+            Self::check_lnv2_federation_network(&client, gateway_config.network.0).await?;
         }
 
         // no need to enter span earlier, because connect-fed has a span
@@ -1323,7 +1324,7 @@ impl Gateway {
                         "Cannot change network while connected to a federation".to_string(),
                     ));
                 }
-                prev_config.network = network;
+                prev_config.network.0 = network;
             }
 
             if let Some(num_route_hints) = num_route_hints {
@@ -1347,7 +1348,7 @@ impl Gateway {
 
             GatewayConfiguration {
                 hashed_password,
-                network: lightning_network,
+                network: NetworkLegacyEncodingWrapper(lightning_network),
                 num_route_hints: DEFAULT_NUM_ROUTE_HINTS,
                 routing_fees: DEFAULT_FEES,
                 password_salt,
@@ -1686,7 +1687,8 @@ impl Gateway {
             .fees
             .clone()
             .unwrap_or(GatewayFee(DEFAULT_FEES));
-        let network = gateway_parameters.network.unwrap_or(DEFAULT_NETWORK);
+        let network =
+            NetworkLegacyEncodingWrapper(gateway_parameters.network.unwrap_or(DEFAULT_NETWORK));
         let password_salt: [u8; 16] = rand::thread_rng().gen();
         let hashed_password = hash_password(password, password_salt);
         let gateway_config = GatewayConfiguration {
@@ -1841,7 +1843,7 @@ impl Gateway {
             ))))?;
         let ln_cfg: &LightningClientConfig = cfg.cast()?;
 
-        if ln_cfg.network != network {
+        if ln_cfg.network.0 != network {
             error!(
                 "Federation {federation_id} runs on {} but this gateway supports {network}",
                 ln_cfg.network,

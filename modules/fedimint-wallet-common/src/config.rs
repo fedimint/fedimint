@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use bitcoin::secp256k1::SecretKey;
 use bitcoin::Network;
 use fedimint_core::core::ModuleKind;
+use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::serde_json;
@@ -86,7 +87,7 @@ pub struct WalletConfigPrivate {
 #[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct WalletConfigConsensus {
     /// Bitcoin network (e.g. testnet, bitcoin)
-    pub network: Network,
+    pub network: NetworkLegacyEncodingWrapper,
     /// The federations public peg-in-descriptor
     pub peg_in_descriptor: PegInDescriptor,
     /// The public keys for the bitcoin multisig
@@ -114,7 +115,7 @@ pub struct WalletClientConfig {
     /// The federations public peg-in-descriptor
     pub peg_in_descriptor: PegInDescriptor,
     /// The bitcoin network the client will use
-    pub network: Network,
+    pub network: NetworkLegacyEncodingWrapper,
     /// Confirmations required for a peg in to be accepted by federation
     pub finality_delay: u32,
     pub fee_consensus: FeeConsensus,
@@ -182,7 +183,7 @@ impl WalletConfig {
             local: WalletConfigLocal { bitcoin_rpc },
             private: WalletConfigPrivate { peg_in_key: sk },
             consensus: WalletConfigConsensus {
-                network,
+                network: NetworkLegacyEncodingWrapper(network),
                 peg_in_descriptor,
                 peer_peg_in_keys: pubkeys,
                 finality_delay,
