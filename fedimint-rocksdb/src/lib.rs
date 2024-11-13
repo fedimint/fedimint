@@ -83,6 +83,15 @@ fn get_default_options() -> anyhow::Result<rocksdb::Options> {
             bail!("{} is not a power of 2", FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV);
         }
         opts.set_write_buffer_size(size);
+    } else {
+        // We are a lightweight application that accumulates data over time.
+        // Default is 64MiB, multiplied by 2 buffers, which wastes 128MiB of memory
+        // from the start, while we would like people to host fedimintd on tiny systems.
+        // Default to 4MiB * 2.
+        // See https://docs.rs/rocksdb/0.22.0/rocksdb/struct.Options.html
+        opts.set_write_buffer_size(4 * 1024 * 1024);
+        // Across all memtables, etc. we want to cap at 16MiB max
+        opts.set_db_write_buffer_size(16 * 1024 * 1024);
     }
     opts.create_if_missing(true);
     Ok(opts)
