@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["TransactionError","TransactionSignature"],"struct":["Transaction","TransactionSubmissionOutcome"],"type":["SerdeTransaction"]};
+window.SIDEBAR_ITEMS = {"constant":["TRANSACTION_OVERFLOW_ERROR"],"enum":["TransactionError","TransactionSignature"],"struct":["Transaction","TransactionSubmissionOutcome"],"type":["SerdeTransaction"]};

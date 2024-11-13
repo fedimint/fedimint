@@ -839,7 +839,11 @@
 <a href="#838" id="838">838</a>
 <a href="#839" id="839">839</a>
 <a href="#840" id="840">840</a>
-<a href="#841" id="841">841</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -1540,7 +1544,11 @@
         }
 
         <span class="macro">assert!</span>(
-            audit.net_assets().milli_sat &gt;= <span class="number">0</span>,
+            audit
+                .net_assets()
+                .expect(<span class="string">"Overflow while checking balance sheet"</span>)
+                .milli_sat
+                &gt;= <span class="number">0</span>,
             <span class="string">"Balance sheet of the fed has gone negative, this should never happen! {audit}"
         </span>);
 

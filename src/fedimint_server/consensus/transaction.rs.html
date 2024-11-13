@@ -118,10 +118,34 @@
 <a href="#117" id="117">117</a>
 <a href="#118" id="118">118</a>
 <a href="#119" id="119">119</a>
-<a href="#120" id="120">120</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_core::module::registry::ServerModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::TransactionItemAmount;
-<span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionError};
+<span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionError, TRANSACTION_OVERFLOW_ERROR};
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint};
 <span class="kw">use </span>rayon::iter::{IntoParallelIterator, ParallelIterator};
 
@@ -170,7 +194,7 @@
             .<span class="kw">await
             </span>.map_err(TransactionError::Input)<span class="question-mark">?</span>;
 
-        funding_verifier.add_input(meta.amount);
+        funding_verifier.add_input(meta.amount)<span class="question-mark">?</span>;
         public_keys.push(meta.pub_key);
     }
 
@@ -191,7 +215,7 @@
             .<span class="kw">await
             </span>.map_err(TransactionError::Output)<span class="question-mark">?</span>;
 
-        funding_verifier.add_output(amount);
+        funding_verifier.add_output(amount)<span class="question-mark">?</span>;
     }
 
     funding_verifier.verify_funding()<span class="question-mark">?</span>;
@@ -206,18 +230,42 @@
 }
 
 <span class="kw">impl </span>FundingVerifier {
-    <span class="kw">pub fn </span>add_input(<span class="kw-2">&amp;mut </span><span class="self">self</span>, input_amount: TransactionItemAmount) {
-        <span class="self">self</span>.input_amount += input_amount.amount;
-        <span class="self">self</span>.fee_amount += input_amount.fee;
+    <span class="kw">pub fn </span>add_input(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        input_amount: TransactionItemAmount,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionError&gt; {
+        <span class="self">self</span>.input_amount = <span class="self">self
+            </span>.input_amount
+            .checked_add(input_amount.amount)
+            .ok_or(TRANSACTION_OVERFLOW_ERROR)<span class="question-mark">?</span>;
+        <span class="self">self</span>.fee_amount = <span class="self">self
+            </span>.fee_amount
+            .checked_add(input_amount.fee)
+            .ok_or(TRANSACTION_OVERFLOW_ERROR)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub fn </span>add_output(<span class="kw-2">&amp;mut </span><span class="self">self</span>, output_amount: TransactionItemAmount) {
-        <span class="self">self</span>.output_amount += output_amount.amount;
-        <span class="self">self</span>.fee_amount += output_amount.fee;
+    <span class="kw">pub fn </span>add_output(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        output_amount: TransactionItemAmount,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionError&gt; {
+        <span class="self">self</span>.output_amount = <span class="self">self
+            </span>.output_amount
+            .checked_add(output_amount.amount)
+            .ok_or(TRANSACTION_OVERFLOW_ERROR)<span class="question-mark">?</span>;
+        <span class="self">self</span>.fee_amount = <span class="self">self
+            </span>.fee_amount
+            .checked_add(output_amount.fee)
+            .ok_or(TRANSACTION_OVERFLOW_ERROR)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">pub fn </span>verify_funding(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionError&gt; {
-        <span class="kw">if </span><span class="self">self</span>.input_amount == (<span class="self">self</span>.output_amount + <span class="self">self</span>.fee_amount) {
+        <span class="kw">let </span>outputs_and_fees = <span class="self">self
+            </span>.output_amount
+            .checked_add(<span class="self">self</span>.fee_amount)
+            .ok_or(TRANSACTION_OVERFLOW_ERROR)<span class="question-mark">?</span>;
+        <span class="kw">if </span><span class="self">self</span>.input_amount == outputs_and_fees {
             <span class="prelude-val">Ok</span>(())
         } <span class="kw">else </span>{
             <span class="prelude-val">Err</span>(TransactionError::UnbalancedTransaction {

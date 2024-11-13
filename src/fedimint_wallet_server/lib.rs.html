@@ -1945,7 +1945,30 @@
 <a href="#1944" id="1944">1944</a>
 <a href="#1945" id="1945">1945</a>
 <a href="#1946" id="1946">1946</a>
-<a href="#1947" id="1947">1947</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1947" id="1947">1947</a>
+<a href="#1948" id="1948">1948</a>
+<a href="#1949" id="1949">1949</a>
+<a href="#1950" id="1950">1950</a>
+<a href="#1951" id="1951">1951</a>
+<a href="#1952" id="1952">1952</a>
+<a href="#1953" id="1953">1953</a>
+<a href="#1954" id="1954">1954</a>
+<a href="#1955" id="1955">1955</a>
+<a href="#1956" id="1956">1956</a>
+<a href="#1957" id="1957">1957</a>
+<a href="#1958" id="1958">1958</a>
+<a href="#1959" id="1959">1959</a>
+<a href="#1960" id="1960">1960</a>
+<a href="#1961" id="1961">1961</a>
+<a href="#1962" id="1962">1962</a>
+<a href="#1963" id="1963">1963</a>
+<a href="#1964" id="1964">1964</a>
+<a href="#1965" id="1965">1965</a>
+<a href="#1966" id="1966">1966</a>
+<a href="#1967" id="1967">1967</a>
+<a href="#1968" id="1968">1968</a>
+<a href="#1969" id="1969">1969</a>
+<a href="#1970" id="1970">1970</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -1985,7 +2008,10 @@
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
-<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+<span class="kw">use </span>fedimint_core::db::{
+    CoreMigrationFn, Database, DatabaseTransaction, DatabaseVersion,
+    IDatabaseTransactionOpsCoreTyped,
+};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::envs::{is_rbf_withdrawal_enabled, is_running_in_test_env, BitcoinRpcConfig};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
@@ -2018,7 +2044,7 @@
 <span class="kw">use </span>fedimint_wallet_common::{
     Rbf, WalletInputError, WalletOutputError, WalletOutputV0, MODULE_CONSENSUS_VERSION,
 };
-<span class="kw">use </span>futures::StreamExt;
+<span class="kw">use </span>futures::{FutureExt, StreamExt};
 <span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>metrics::{
     WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS, WALLET_PEGIN_SATS,
@@ -2033,9 +2059,10 @@
 <span class="kw">use </span>tracing::{debug, info, instrument, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{
-    BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix,
-    FeeRateVoteKey, FeeRateVotePrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix,
-    PegOutNonceKey, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
+    migrate_to_v1, BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix,
+    ClaimedPegInOutpointKey, ClaimedPegInOutpointPrefixKey, DbKeyPrefix, FeeRateVoteKey,
+    FeeRateVotePrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix, PegOutNonceKey,
+    PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
     PendingTransactionPrefixKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
     UnsignedTransactionPrefixKey,
 };
@@ -2118,7 +2145,6 @@
                         <span class="string">"UTXOs"
                     </span>);
                 }
-
                 DbKeyPrefix::BlockCountVote =&gt; {
                     <span class="macro">push_db_pair_items!</span>(
                         dbtx,
@@ -2129,7 +2155,6 @@
                         <span class="string">"Block Count Votes"
                     </span>);
                 }
-
                 DbKeyPrefix::FeeRateVote =&gt; {
                     <span class="macro">push_db_pair_items!</span>(
                         dbtx,
@@ -2138,6 +2163,16 @@
                         Feerate,
                         wallet,
                         <span class="string">"Fee Rate Votes"
+                    </span>);
+                }
+                DbKeyPrefix::ClaimedPegInOutpoint =&gt; {
+                    <span class="macro">push_db_pair_items!</span>(
+                        dbtx,
+                        ClaimedPegInOutpointPrefixKey,
+                        PeggedInOutpointKey,
+                        (),
+                        wallet,
+                        <span class="string">"Claimed Peg-in Outpoint"
                     </span>);
                 }
             }
@@ -2289,6 +2324,13 @@
             finality_delay: config.finality_delay,
             default_bitcoin_rpc: config.client_default_bitcoin_rpc,
         })
+    }
+
+    <span class="doccomment">/// DB migrations to move from old to newer versions
+    </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>migrations: BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt; = BTreeMap::new();
+        migrations.insert(DatabaseVersion(<span class="number">0</span>), |ctx| migrate_to_v1(ctx).boxed());
+        migrations
     }
 }
 
@@ -2466,18 +2508,22 @@
         <span class="macro">debug!</span>(outpoint = %input.outpoint(), <span class="string">"Claiming peg-in"</span>);
 
         <span class="kw">if </span>dbtx
-            .insert_entry(
-                <span class="kw-2">&amp;</span>UTXOKey(input.outpoint()),
-                <span class="kw-2">&amp;</span>SpendableUTXO {
-                    tweak: input.tweak_contract_key().serialize(),
-                    amount: input.tx_output().value,
-                },
-            )
+            .insert_entry(<span class="kw-2">&amp;</span>ClaimedPegInOutpointKey(input.outpoint()), <span class="kw-2">&amp;</span>())
             .<span class="kw">await
             </span>.is_some()
         {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletInputError::PegInAlreadyClaimed);
         }
+
+        dbtx.insert_entry(
+            <span class="kw-2">&amp;</span>UTXOKey(input.outpoint()),
+            <span class="kw-2">&amp;</span>SpendableUTXO {
+                tweak: input.tweak_contract_key().serialize(),
+                amount: input.tx_output().value,
+            },
+        )
+        .<span class="kw">await</span>;
+
         <span class="kw">let </span>amount = input.tx_output().value.into();
         <span class="kw">let </span>fee = <span class="self">self</span>.cfg.consensus.fee_consensus.peg_in_abs;
         calculate_pegin_metrics(dbtx, amount, fee);

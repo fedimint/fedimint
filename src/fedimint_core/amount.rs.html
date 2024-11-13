@@ -295,7 +295,13 @@
 <a href="#294" id="294">294</a>
 <a href="#295" id="295">295</a>
 <a href="#296" id="296">296</a>
-<a href="#297" id="297">297</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::num::ParseIntError;
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::num::ParseIntError;
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::bail;
@@ -405,6 +411,12 @@
     <span class="kw">pub fn </span>checked_sub(<span class="self">self</span>, other: <span class="self">Self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
         <span class="prelude-val">Some</span>(<span class="self">Self </span>{
             msats: <span class="self">self</span>.msats.checked_sub(other.msats)<span class="question-mark">?</span>,
+        })
+    }
+
+    <span class="kw">pub fn </span>checked_add(<span class="self">self</span>, other: <span class="self">Self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="prelude-val">Some</span>(<span class="self">Self </span>{
+            msats: <span class="self">self</span>.msats.checked_add(other.msats)<span class="question-mark">?</span>,
         })
     }
 }
