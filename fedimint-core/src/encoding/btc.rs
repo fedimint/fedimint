@@ -137,25 +137,9 @@ where
     }
 }
 
-impl Encodable for bitcoin::p2p::Magic {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        u32::from_le_bytes(self.to_bytes()).consensus_encode(writer)
-    }
-}
-
-impl Decodable for bitcoin::p2p::Magic {
-    fn consensus_decode<D: std::io::Read>(
-        d: &mut D,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        let num = u32::consensus_decode(d, modules)?;
-        Ok(Self::from_bytes(num.to_le_bytes()))
-    }
-}
-
 impl Encodable for bitcoin::Network {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        self.magic().consensus_encode(writer)
+        u32::from_le_bytes(self.magic().to_bytes()).consensus_encode(writer)
     }
 }
 
@@ -164,7 +148,8 @@ impl Decodable for bitcoin::Network {
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let magic = bitcoin::p2p::Magic::consensus_decode(d, modules)?;
+        let num = u32::consensus_decode(d, modules)?;
+        let magic = bitcoin::p2p::Magic::from_bytes(num.to_le_bytes());
         Self::from_magic(magic).ok_or_else(|| {
             DecodeError::new_custom(format_err!("Unknown network magic: {:x}", magic))
         })
@@ -212,9 +197,7 @@ impl Decodable for bitcoin::Amount {
 impl Encodable for bitcoin::Address<NetworkUnchecked> {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         let mut len = 0;
-        len += get_network_for_address(self.as_unchecked())
-            .magic()
-            .consensus_encode(writer)?;
+        len += get_network_for_address(self.as_unchecked()).consensus_encode(writer)?;
         len += self
             .clone()
             .assume_checked()
@@ -229,9 +212,7 @@ impl Decodable for bitcoin::Address<NetworkUnchecked> {
         mut d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let network =
-            bitcoin::Network::from_magic(bitcoin::p2p::Magic::consensus_decode(&mut d, modules)?)
-                .ok_or_else(|| DecodeError::from_str("Unknown network"))?;
+        let network = bitcoin::Network::consensus_decode(&mut d, modules)?;
         let script_pk = bitcoin::ScriptBuf::consensus_decode(&mut d, modules)?;
 
         let address = bitcoin::Address::from_script(&script_pk, network)
@@ -270,42 +251,17 @@ mod tests {
 
     #[test_log::test]
     fn network_roundtrip() {
-        let networks: [(bitcoin::Network, bitcoin::p2p::Magic, [u8; 5]); 5] = [
-            (
-                bitcoin::Network::Bitcoin,
-                bitcoin::p2p::Magic::BITCOIN,
-                [0xFE, 0xD9, 0xB4, 0xBE, 0xF9],
-            ),
-            (
-                bitcoin::Network::Testnet,
-                bitcoin::p2p::Magic::TESTNET3,
-                [0xFE, 0x07, 0x09, 0x11, 0x0B],
-            ),
-            (
-                bitcoin::Network::Testnet4,
-                bitcoin::p2p::Magic::TESTNET4,
-                [0xFE, 0x28, 0x3F, 0x16, 0x1C],
-            ),
-            (
-                bitcoin::Network::Signet,
-                bitcoin::p2p::Magic::SIGNET,
-                [0xFE, 0x40, 0xCF, 0x03, 0x0A],
-            ),
-            (
-                bitcoin::Network::Regtest,
-                bitcoin::p2p::Magic::REGTEST,
-                [0xFE, 0xDA, 0xB5, 0xBF, 0xFA],
-            ),
+        let networks: [(bitcoin::Network, [u8; 5]); 5] = [
+            (bitcoin::Network::Bitcoin, [0xFE, 0xD9, 0xB4, 0xBE, 0xF9]),
+            (bitcoin::Network::Testnet, [0xFE, 0x07, 0x09, 0x11, 0x0B]),
+            (bitcoin::Network::Testnet4, [0xFE, 0x28, 0x3F, 0x16, 0x1C]),
+            (bitcoin::Network::Signet, [0xFE, 0x40, 0xCF, 0x03, 0x0A]),
+            (bitcoin::Network::Regtest, [0xFE, 0xDA, 0xB5, 0xBF, 0xFA]),
         ];
 
-        for (network, network_magic, magic_bytes) in networks {
+        for (network, magic_bytes) in networks {
             let mut network_encoded = Vec::new();
             network.consensus_encode(&mut network_encoded).unwrap();
-
-            let mut network_magic_encoded = Vec::new();
-            network_magic
-                .consensus_encode(&mut network_magic_encoded)
-                .unwrap();
 
             let network_decoded = bitcoin::Network::consensus_decode(
                 &mut Cursor::new(network_encoded.clone()),
@@ -313,17 +269,8 @@ mod tests {
             )
             .unwrap();
 
-            let network_magic_decoded = bitcoin::p2p::Magic::consensus_decode(
-                &mut Cursor::new(network_magic_encoded.clone()),
-                &ModuleDecoderRegistry::default(),
-            )
-            .unwrap();
-
             assert_eq!(magic_bytes, *network_encoded);
-            assert_eq!(magic_bytes, *network_magic_encoded);
-
             assert_eq!(network, network_decoded);
-            assert_eq!(network_magic, network_magic_decoded);
         }
     }
 
