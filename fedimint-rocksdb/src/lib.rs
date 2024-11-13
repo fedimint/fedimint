@@ -94,7 +94,8 @@ fn get_default_options() -> anyhow::Result<rocksdb::Options> {
         opts.set_db_write_buffer_size(16 * 1024 * 1024);
     }
     opts.create_if_missing(true);
-
+    // workaround https://github.com/facebook/rocksdb/pull/9020 (?)
+    opts.set_max_write_buffer_size_to_maintain(32 * 1024 * 1024);
     let mut block_opts = rocksdb::BlockBasedOptions::default();
     block_opts.set_optimize_filters_for_memory(true);
     // counterintuitively, this limits amount of memory used as these will now be
