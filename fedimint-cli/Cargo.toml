@@ -62,3 +62,6 @@ reqwest = { workspace = true }
 
 [build-dependencies]
 fedimint-build = { version = "=0.4.4-rc.0", path = "../fedimint-build" }
+
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+jemallocator = { workspace = true }
