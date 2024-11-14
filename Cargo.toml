@@ -65,7 +65,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.5.0-alpha"
+version = "0.6.0-alpha"
 
 [workspace.metadata]
 name = "fedimint"
@@ -100,7 +100,7 @@ bytes = "1.7.2"
 clap = { version = "4.5.20", features = ["derive", "env"] }
 cln-rpc = { package = "fedimint-cln-rpc", version = "0.5.0" }
 criterion = "0.5.1"
-devimint = { path = "./devimint", version = "=0.5.0-alpha" }
+devimint = { path = "./devimint", version = "=0.6.0-alpha" }
 electrum-client = { version = "0.21.0", default-features = false, features = [
     "proxy",
     "use-rustls-ring",
@@ -109,55 +109,55 @@ erased-serde = "0.4"
 esplora-client = { version = "0.10.0", default-features = false, features = [
     "async-https-rustls",
 ] }
-fedimintd = { path = "./fedimintd", version = "=0.5.0-alpha" }
-fedimint-aead = { path = "./crypto/aead", version = "=0.5.0-alpha" }
-fedimint-api-client = { path = "./fedimint-api-client", version = "=0.5.0-alpha" }
-fedimint-bip39 = { path = "./fedimint-bip39", version = "=0.5.0-alpha" }
-fedimint-bitcoind = { path = "./fedimint-bitcoind", version = "=0.5.0-alpha" }
-fedimint-build = { path = "./fedimint-build", version = "=0.5.0-alpha" }
-fedimint-client = { path = "./fedimint-client", version = "=0.5.0-alpha" }
-fedimint-core = { path = "./fedimint-core", version = "=0.5.0-alpha" }
-fedimint-derive = { path = "./fedimint-derive", version = "=0.5.0-alpha" }
-fedimint-derive-secret = { path = "./crypto/derive-secret", version = "=0.5.0-alpha" }
-fedimint-dummy-client = { path = "./modules/fedimint-dummy-client", version = "=0.5.0-alpha" }
-fedimint-dummy-common = { path = "./modules/fedimint-dummy-common", version = "=0.5.0-alpha" }
-fedimint-dummy-server = { path = "./modules/fedimint-dummy-server", version = "=0.5.0-alpha" }
-fedimint-empty-common = { path = "./modules/fedimint-empty-common", version = "=0.5.0-alpha" }
-fedimint-lnv2-client = { path = "./modules/fedimint-lnv2-client", version = "=0.5.0-alpha" }
-fedimint-lnv2-common = { path = "./modules/fedimint-lnv2-common", version = "=0.5.0-alpha" }
-fedimint-lnv2-server = { path = "./modules/fedimint-lnv2-server", version = "=0.5.0-alpha" }
-fedimint-ln-client = { path = "./modules/fedimint-ln-client", version = "=0.5.0-alpha" }
-fedimint-ln-common = { path = "./modules/fedimint-ln-common", version = "=0.5.0-alpha" }
-fedimint-ln-server = { path = "./modules/fedimint-ln-server", version = "=0.5.0-alpha" }
-fedimint-logging = { path = "./fedimint-logging", version = "=0.5.0-alpha" }
-fedimint-meta-client = { path = "./modules/fedimint-meta-client", version = "=0.5.0-alpha" }
-fedimint-meta-common = { path = "./modules/fedimint-meta-common", version = "=0.5.0-alpha" }
-fedimint-meta-server = { path = "./modules/fedimint-meta-server", version = "=0.5.0-alpha" }
-fedimint-metrics = { path = "./fedimint-metrics", version = "=0.5.0-alpha" }
-fedimint-mint-client = { path = "./modules/fedimint-mint-client", version = "=0.5.0-alpha" }
-fedimint-mint-common = { path = "./modules/fedimint-mint-common", version = "=0.5.0-alpha" }
-fedimint-mint-server = { path = "./modules/fedimint-mint-server", version = "=0.5.0-alpha" }
-fedimint-portalloc = { path = "utils/portalloc", version = "=0.5.0-alpha" }
-fedimint-rocksdb = { path = "./fedimint-rocksdb", version = "=0.5.0-alpha" }
-fedimint-server = { path = "./fedimint-server", version = "=0.5.0-alpha" }
-fedimint-testing = { path = "./fedimint-testing", version = "=0.5.0-alpha" }
-fedimint-testing-core = { path = "./fedimint-testing-core", version = "=0.5.0-alpha" }
-fedimint-unknown-common = { path = "./modules/fedimint-unknown-common", version = "=0.5.0-alpha" }
-fedimint-unknown-server = { path = "./modules/fedimint-unknown-server", version = "=0.5.0-alpha" }
-fedimint-wallet-client = { path = "./modules/fedimint-wallet-client", version = "=0.5.0-alpha" }
-fedimint-wallet-common = { path = "./modules/fedimint-wallet-common", version = "=0.5.0-alpha" }
-fedimint-wallet-server = { path = "./modules/fedimint-wallet-server", version = "=0.5.0-alpha" }
+fedimintd = { path = "./fedimintd", version = "=0.6.0-alpha" }
+fedimint-aead = { path = "./crypto/aead", version = "=0.6.0-alpha" }
+fedimint-api-client = { path = "./fedimint-api-client", version = "=0.6.0-alpha" }
+fedimint-bip39 = { path = "./fedimint-bip39", version = "=0.6.0-alpha" }
+fedimint-bitcoind = { path = "./fedimint-bitcoind", version = "=0.6.0-alpha" }
+fedimint-build = { path = "./fedimint-build", version = "=0.6.0-alpha" }
+fedimint-client = { path = "./fedimint-client", version = "=0.6.0-alpha" }
+fedimint-core = { path = "./fedimint-core", version = "=0.6.0-alpha" }
+fedimint-derive = { path = "./fedimint-derive", version = "=0.6.0-alpha" }
+fedimint-derive-secret = { path = "./crypto/derive-secret", version = "=0.6.0-alpha" }
+fedimint-dummy-client = { path = "./modules/fedimint-dummy-client", version = "=0.6.0-alpha" }
+fedimint-dummy-common = { path = "./modules/fedimint-dummy-common", version = "=0.6.0-alpha" }
+fedimint-dummy-server = { path = "./modules/fedimint-dummy-server", version = "=0.6.0-alpha" }
+fedimint-empty-common = { path = "./modules/fedimint-empty-common", version = "=0.6.0-alpha" }
+fedimint-lnv2-client = { path = "./modules/fedimint-lnv2-client", version = "=0.6.0-alpha" }
+fedimint-lnv2-common = { path = "./modules/fedimint-lnv2-common", version = "=0.6.0-alpha" }
+fedimint-lnv2-server = { path = "./modules/fedimint-lnv2-server", version = "=0.6.0-alpha" }
+fedimint-ln-client = { path = "./modules/fedimint-ln-client", version = "=0.6.0-alpha" }
+fedimint-ln-common = { path = "./modules/fedimint-ln-common", version = "=0.6.0-alpha" }
+fedimint-ln-server = { path = "./modules/fedimint-ln-server", version = "=0.6.0-alpha" }
+fedimint-logging = { path = "./fedimint-logging", version = "=0.6.0-alpha" }
+fedimint-meta-client = { path = "./modules/fedimint-meta-client", version = "=0.6.0-alpha" }
+fedimint-meta-common = { path = "./modules/fedimint-meta-common", version = "=0.6.0-alpha" }
+fedimint-meta-server = { path = "./modules/fedimint-meta-server", version = "=0.6.0-alpha" }
+fedimint-metrics = { path = "./fedimint-metrics", version = "=0.6.0-alpha" }
+fedimint-mint-client = { path = "./modules/fedimint-mint-client", version = "=0.6.0-alpha" }
+fedimint-mint-common = { path = "./modules/fedimint-mint-common", version = "=0.6.0-alpha" }
+fedimint-mint-server = { path = "./modules/fedimint-mint-server", version = "=0.6.0-alpha" }
+fedimint-portalloc = { path = "utils/portalloc", version = "=0.6.0-alpha" }
+fedimint-rocksdb = { path = "./fedimint-rocksdb", version = "=0.6.0-alpha" }
+fedimint-server = { path = "./fedimint-server", version = "=0.6.0-alpha" }
+fedimint-testing = { path = "./fedimint-testing", version = "=0.6.0-alpha" }
+fedimint-testing-core = { path = "./fedimint-testing-core", version = "=0.6.0-alpha" }
+fedimint-unknown-common = { path = "./modules/fedimint-unknown-common", version = "=0.6.0-alpha" }
+fedimint-unknown-server = { path = "./modules/fedimint-unknown-server", version = "=0.6.0-alpha" }
+fedimint-wallet-client = { path = "./modules/fedimint-wallet-client", version = "=0.6.0-alpha" }
+fedimint-wallet-common = { path = "./modules/fedimint-wallet-common", version = "=0.6.0-alpha" }
+fedimint-wallet-server = { path = "./modules/fedimint-wallet-server", version = "=0.6.0-alpha" }
 fs-lock = "0.1.6"
 futures = "0.3.31"
 futures-util = "0.3.30"
 group = "0.13.0"
 hex = "0.4.3"
-hkdf = { package = "fedimint-hkdf", path = "./crypto/hkdf", version = "=0.5.0-alpha" }
+hkdf = { package = "fedimint-hkdf", path = "./crypto/hkdf", version = "=0.6.0-alpha" }
 hyper = "1.5"
 itertools = "0.13.0"
 lightning = "0.0.125"
 lightning-invoice = { version = "0.32.0", features = ["std"] }
-ln-gateway = { package = "fedimint-ln-gateway", path = "./gateway/ln-gateway", version = "=0.5.0-alpha" }
+ln-gateway = { package = "fedimint-ln-gateway", path = "./gateway/ln-gateway", version = "=0.6.0-alpha" }
 miniscript = "12.2.0"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
@@ -181,7 +181,7 @@ strum = "0.26"
 strum_macros = "0.26"
 subtle = "2.6.1"
 test-log = { version = "0.2", features = ["trace"], default-features = false }
-tbs = { package = "fedimint-tbs", path = "./crypto/tbs", version = "=0.5.0-alpha" }
+tbs = { package = "fedimint-tbs", path = "./crypto/tbs", version = "=0.6.0-alpha" }
 thiserror = "1.0.68"
 threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
 tokio = "1.41.1"
@@ -191,7 +191,7 @@ tonic_lnd = { version = "0.2.0", package = "fedimint-tonic-lnd", features = [
     "lightningrpc",
     "routerrpc",
 ] }
-tpe = { package = "fedimint-tpe", path = "./crypto/tpe", version = "=0.5.0-alpha" }
+tpe = { package = "fedimint-tpe", path = "./crypto/tpe", version = "=0.6.0-alpha" }
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 url = "2.5.3"

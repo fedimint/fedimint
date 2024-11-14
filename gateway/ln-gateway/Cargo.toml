@@ -41,9 +41,9 @@ cln-plugin = "0.2.0"
 cln-rpc = { workspace = true }
 erased-serde = { workspace = true }
 esplora-client = { workspace = true }
-fedimint-api-client = { path = "../../fedimint-api-client", version = "=0.5.0-alpha", default-features = false }
-fedimint-bip39 = { version = "=0.5.0-alpha", path = "../../fedimint-bip39" }
-fedimint-client = { path = "../../fedimint-client", version = "=0.5.0-alpha", default-features = false }
+fedimint-api-client = { path = "../../fedimint-api-client", version = "=0.6.0-alpha", default-features = false }
+fedimint-bip39 = { version = "=0.6.0-alpha", path = "../../fedimint-bip39" }
+fedimint-client = { path = "../../fedimint-client", version = "=0.6.0-alpha", default-features = false }
 fedimint-core = { workspace = true }
 fedimint-ln-client = { workspace = true }
 fedimint-ln-common = { workspace = true }

@@ -30,7 +30,7 @@ async-stream = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
 fedimint-aead = { workspace = true }
-fedimint-api-client = { path = "../fedimint-api-client", version = "=0.5.0-alpha", default-features = false }
+fedimint-api-client = { path = "../fedimint-api-client", version = "=0.6.0-alpha", default-features = false }
 fedimint-core = { workspace = true }
 fedimint-derive-secret = { workspace = true }
 fedimint-logging = { workspace = true }
