@@ -8,6 +8,8 @@ pub mod envs;
 use std::fmt;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::atomic::AtomicU64;
+use std::sync::Arc;
 
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
@@ -20,12 +22,12 @@ pub use rocksdb;
 use rocksdb::{
     DBRecoveryMode, OptimisticTransactionDB, OptimisticTransactionOptions, WriteOptions,
 };
-use tracing::debug;
+use tracing::{debug, info};
 
 use crate::envs::FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV;
 
 #[derive(Debug)]
-pub struct RocksDb(rocksdb::OptimisticTransactionDB);
+pub struct RocksDb(rocksdb::OptimisticTransactionDB, Arc<AtomicU64>);
 
 pub struct RocksDbTransaction<'a>(rocksdb::Transaction<'a, rocksdb::OptimisticTransactionDB>);
 
@@ -37,7 +39,7 @@ impl RocksDb {
         opts.set_wal_recovery_mode(DBRecoveryMode::AbsoluteConsistency);
         let db: rocksdb::OptimisticTransactionDB =
             rocksdb::OptimisticTransactionDB::<rocksdb::SingleThreaded>::open(&opts, &db_path)?;
-        Ok(RocksDb(db))
+        Ok(RocksDb(db, AtomicU64::default().into()))
     }
 
     pub fn inner(&self) -> &rocksdb::OptimisticTransactionDB {
@@ -121,7 +123,7 @@ impl RocksDbReadOnly {
 
 impl From<rocksdb::OptimisticTransactionDB> for RocksDb {
     fn from(db: OptimisticTransactionDB) -> Self {
-        RocksDb(db)
+        RocksDb(db, AtomicU64::default().into())
     }
 }
 
@@ -159,6 +161,28 @@ fn next_prefix(prefix: &[u8]) -> Option<Vec<u8>> {
 impl IRawDatabase for RocksDb {
     type Transaction<'a> = RocksDbTransaction<'a>;
     async fn begin_transaction<'a>(&'a self) -> RocksDbTransaction {
+        let count = self.1.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if count % 100_000 == 0 {
+            for property in [
+                "rocksdb.estimate-num-keys",
+                "rocksdb.num-snapshots",
+                "rocksdb.total-sst-files-size",
+                "rocksdb.cur-size-all-mem-tables",
+                "rocksdb.cur-size-active-mem-table",
+                "rocksdb.estimate-table-readers-mem",
+                "rocksdb.block-cache-usage",
+                "rocksdb.block-cache-pinned-usage",
+                "rocksdb.block-cache-capacity",
+                "rocksdb.estimate-pending-compaction-bytes",
+            ] {
+                let val = self
+                    .0
+                    .property_value(property)
+                    .unwrap_or_else(|e| Some(e.to_string()));
+                info!(property, val, "Property");
+            }
+        }
+
         let mut optimistic_options = OptimisticTransactionOptions::default();
         optimistic_options.set_snapshot(true);
 
@@ -215,6 +239,7 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbTransaction<'a> {
         fedimint_core::runtime::block_in_place(|| {
             let val = self.0.snapshot().get(key).unwrap();
             self.0.delete(key)?;
+
             Ok(val)
         })
     }
