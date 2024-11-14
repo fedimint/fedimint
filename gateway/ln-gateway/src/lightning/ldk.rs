@@ -16,6 +16,7 @@ use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::ln::PaymentHash;
 use ldk_node::lightning::routing::gossip::NodeAlias;
 use ldk_node::payment::{PaymentKind, PaymentStatus, SendingParameters};
+use lightning::ln::channelmanager::PaymentId;
 use lightning::ln::PaymentPreimage;
 use lightning::util::scid_utils::scid_from_parts;
 use lightning_invoice::Bolt11Invoice;
@@ -290,22 +291,25 @@ impl ILnRpcClient for GatewayLdkClient {
         max_delay: u64,
         max_fee: Amount,
     ) -> Result<PayInvoiceResponse, LightningRpcError> {
-        let payment_id = match self.node.bolt11_payment().send(
-            &invoice,
-            Some(SendingParameters {
-                max_total_routing_fee_msat: Some(Some(max_fee.msats)),
-                max_total_cltv_expiry_delta: Some(max_delay as u32),
-                max_path_count: None,
-                max_channel_saturation_power_of_half: None,
-            }),
-        ) {
-            Ok(payment_id) => payment_id,
-            Err(e) => {
-                return Err(LightningRpcError::FailedPayment {
-                    failure_reason: format!("LDK payment failed to initialize: {e:?}"),
-                });
-            }
-        };
+        let payment_id = PaymentId(*invoice.payment_hash().as_byte_array());
+
+        if self.node.payment(&payment_id).is_none() {
+            assert_eq!(
+                self.node
+                    .bolt11_payment()
+                    .send(
+                        &invoice,
+                        Some(SendingParameters {
+                            max_total_routing_fee_msat: Some(Some(max_fee.msats)),
+                            max_total_cltv_expiry_delta: Some(max_delay as u32),
+                            max_path_count: None,
+                            max_channel_saturation_power_of_half: None,
+                        }),
+                    )
+                    .expect("LDK payment failed to initialize"),
+                payment_id
+            );
+        }
 
         // TODO: Find a way to avoid looping/polling to know when a payment is
         // completed. `ldk-node` provides `PaymentSuccessful` and `PaymentFailed`
