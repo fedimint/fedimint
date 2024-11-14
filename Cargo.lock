@@ -1878,6 +1878,7 @@ dependencies = [
  "fedimint-wallet-client",
  "futures",
  "hex",
+ "jemallocator",
  "lightning",
  "lightning-invoice",
  "prost",

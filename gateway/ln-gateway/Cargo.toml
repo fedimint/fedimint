@@ -39,6 +39,7 @@ clap = { workspace = true }
 # cln-plugin made semver incompatible change
 cln-plugin = "=0.1.7"
 cln-rpc = { workspace = true }
+jemallocator = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
