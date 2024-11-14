@@ -1469,6 +1469,7 @@ dependencies = [
  "futures",
  "hex",
  "itertools 0.12.1",
+ "jemallocator",
  "lightning-invoice",
  "rand",
  "reqwest 0.12.5",
