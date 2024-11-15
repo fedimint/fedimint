@@ -121,10 +121,9 @@
 <a href="#120" id="120">120</a>
 <a href="#121" id="121">121</a>
 <a href="#122" id="122">122</a>
-<a href="#123" id="123">123</a>
-<a href="#124" id="124">124</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
+<a href="#123" id="123">123</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
 
-<span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, OperationId};
+<span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -209,6 +208,8 @@
         <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
     }
 
+    <span class="kw">let </span>_unreachable_state_length = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+
     <span class="comment">// Migrate `Unreachable` states to `OutputDone`
     </span><span class="kw">let </span>unreachable = Unreachable::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
     <span class="kw">let </span>new_state = DummyStateMachine::OutputDone(
@@ -222,7 +223,6 @@
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">struct </span>Unreachable {
-    _module_instance_id: ModuleInstanceId,
     operation_id: OperationId,
     txid: TransactionId,
     amount: Amount,
@@ -233,13 +233,11 @@
         reader: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, fedimint_core::encoding::DecodeError&gt; {
-        <span class="kw">let </span>module_instance_id = ModuleInstanceId::consensus_decode(reader, modules)<span class="question-mark">?</span>;
         <span class="kw">let </span>operation_id = OperationId::consensus_decode(reader, modules)<span class="question-mark">?</span>;
         <span class="kw">let </span>txid = TransactionId::consensus_decode(reader, modules)<span class="question-mark">?</span>;
         <span class="kw">let </span>amount = Amount::consensus_decode(reader, modules)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(Unreachable {
-            _module_instance_id: module_instance_id,
             operation_id,
             txid,
             amount,
