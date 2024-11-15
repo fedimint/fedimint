@@ -45,7 +45,7 @@ use super::vars::utf8;
 use crate::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
 use crate::util::{poll, poll_with_timeout, FedimintdCmd};
 use crate::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA};
-use crate::{poll_eq, vars};
+use crate::{poll_eq, poll_ge, vars};
 
 #[derive(Clone)]
 pub struct Federation {
@@ -758,7 +758,7 @@ impl Federation {
                     .ecash_balance(fed_id.clone())
                     .await
                     .map_err(ControlFlow::Continue)?;
-                poll_eq!(gateway_balance, amount * 1000)
+                poll_ge!(gateway_balance, ((99 * amount) / 100) * 1000)
             })
         }))
         .await?;

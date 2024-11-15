@@ -49,7 +49,8 @@ pub fn attach_default_module_init_params(
                 local: EmptyGenParams::default(),
                 consensus: MintGenParamsConsensus::new(
                     2,
-                    fedimint_mint_common::config::FeeConsensus::zero(),
+                    fedimint_mint_common::config::FeeConsensus::new(1_000)
+                        .expect("Relative fee is within range"),
                 ),
             },
         )

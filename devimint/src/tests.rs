@@ -34,6 +34,10 @@ use crate::version_constants::{
 };
 use crate::{cmd, dev_fed, poll_eq, DevFed, Gatewayd, LightningNode, Lightningd, Lnd};
 
+fn almost_equal(a: u64, b: u64, diff: u64) -> bool {
+    a.abs_diff(b) <= diff
+}
+
 pub struct Stats {
     pub min: Duration,
     pub avg: Duration,
@@ -806,16 +810,21 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .to_owned();
 
     let client_post_spend_balance = client.balance().await?;
-    assert_eq!(
+    assert!(almost_equal(
         client_post_spend_balance,
-        CLIENT_START_AMOUNT - CLIENT_SPEND_AMOUNT
-    );
+        CLIENT_START_AMOUNT - CLIENT_SPEND_AMOUNT,
+        10_000_000
+    ));
 
     // Test we can reissue our own notes
     cmd!(client, "reissue", notes).out_json().await?;
 
     let client_post_spend_balance = client.balance().await?;
-    assert_eq!(client_post_spend_balance, CLIENT_START_AMOUNT);
+    assert!(almost_equal(
+        client_post_spend_balance,
+        CLIENT_START_AMOUNT,
+        10_000_000
+    ));
 
     let reissue_amount: u64 = 409_600;
 
@@ -897,12 +906,20 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     let expected_diff = 1_200_000;
     anyhow::ensure!(
-        initial_client_balance - final_cln_outgoing_client_balance == expected_diff,
+        almost_equal(
+            initial_client_balance - final_cln_outgoing_client_balance,
+            expected_diff,
+            50_000
+        ),
         "Client balance changed by {} on CLN outgoing payment, expected {expected_diff}",
         (initial_client_balance - final_cln_outgoing_client_balance)
     );
     anyhow::ensure!(
-        final_cln_outgoing_gateway_balance - initial_cln_gateway_balance == expected_diff,
+        almost_equal(
+            final_cln_outgoing_gateway_balance - initial_cln_gateway_balance,
+            expected_diff,
+            50_000
+        ),
         "CLN Gateway balance changed by {} on CLN outgoing payment, expected {expected_diff}",
         (final_cln_outgoing_gateway_balance - initial_cln_gateway_balance)
     );
@@ -928,12 +945,20 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let final_cln_incoming_client_balance = client.balance().await?;
     let final_cln_incoming_gateway_balance = gw_cln.ecash_balance(fed_id.clone()).await?;
     anyhow::ensure!(
-        final_cln_incoming_client_balance - final_cln_outgoing_client_balance == 1_100_000,
+        almost_equal(
+            final_cln_incoming_client_balance - final_cln_outgoing_client_balance,
+            1_100_000,
+            50_000
+        ),
         "Client balance changed by {} on CLN incoming payment, expected 1100000",
         (final_cln_incoming_client_balance - final_cln_outgoing_client_balance)
     );
     anyhow::ensure!(
-        final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance == 1_100_000,
+        almost_equal(
+            final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance,
+            1_100_000,
+            50_000
+        ),
         "CLN Gateway balance changed by {} on CLN incoming payment, expected 1100000",
         (final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance)
     );
@@ -961,12 +986,20 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let final_lnd_outgoing_client_balance = client.balance().await?;
     let final_lnd_outgoing_gateway_balance = gw_lnd.ecash_balance(fed_id.clone()).await?;
     anyhow::ensure!(
-        final_cln_incoming_client_balance - final_lnd_outgoing_client_balance == 2_000_000,
+        almost_equal(
+            final_cln_incoming_client_balance - final_lnd_outgoing_client_balance,
+            2_000_000,
+            50_000
+        ),
         "Client balance changed by {} on LND outgoing payment, expected 2_000_000",
         (final_cln_incoming_client_balance - final_lnd_outgoing_client_balance)
     );
     anyhow::ensure!(
-        final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance == 2_000_000,
+        almost_equal(
+            final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance,
+            2_000_000,
+            50_000
+        ),
         "LND Gateway balance changed by {} on LND outgoing payment, expected 2_000_000",
         (final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance)
     );
@@ -994,12 +1027,20 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let final_lnd_incoming_client_balance = client.balance().await?;
     let final_lnd_incoming_gateway_balance = gw_lnd.ecash_balance(fed_id.clone()).await?;
     anyhow::ensure!(
-        final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance == 1_300_000,
+        almost_equal(
+            final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance,
+            1_300_000,
+            50_000
+        ),
         "Client balance changed by {} on LND incoming payment, expected 1_300_000",
         (final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance)
     );
     anyhow::ensure!(
-        final_lnd_outgoing_gateway_balance - final_lnd_incoming_gateway_balance == 1_300_000,
+        almost_equal(
+            final_lnd_outgoing_gateway_balance - final_lnd_incoming_gateway_balance,
+            1_300_000,
+            50_000
+        ),
         "LND Gateway balance changed by {} on LND incoming payment, expected 1_300_000",
         (final_lnd_outgoing_gateway_balance - final_lnd_incoming_gateway_balance)
     );
@@ -1025,10 +1066,11 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     let post_deposit_walletng_balance = client.balance().await?;
 
-    assert_eq!(
+    assert!(almost_equal(
         post_deposit_walletng_balance,
-        initial_walletng_balance + 100_000_000 // deposit in msats
-    );
+        initial_walletng_balance + 100_000_000, // deposit in msats
+        200_000
+    ));
 
     // ## Withdraw
     info!("Testing client withdraw");
@@ -1061,7 +1103,11 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let post_withdraw_walletng_balance = client.balance().await?;
     let expected_wallet_balance = initial_walletng_balance - 50_000_000 - (fees_sat * 1000);
 
-    assert_eq!(post_withdraw_walletng_balance, expected_wallet_balance);
+    assert!(almost_equal(
+        post_withdraw_walletng_balance,
+        expected_wallet_balance,
+        100_000
+    ));
 
     // # peer-version command
 
@@ -1492,7 +1538,11 @@ pub async fn cli_tests_backup_and_restore(
                 let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
                 debug!(target: LOG_DEVIMINT, %post_notes, post_balance, "State after (subsequent) backup");
 
-                assert_eq!(pre_balance + EXTRA_PEGIN_SATS * 1000, post_balance);
+                assert!(almost_equal(
+                    pre_balance + EXTRA_PEGIN_SATS * 1000,
+                    post_balance,
+                    50_000
+                ));
             }
         } else {
             let client = reference_client.new_forked("restore-with-backup").await?;

@@ -27,7 +27,7 @@ pub async fn test_restore_gap_test(fed: &Federation) -> Result<()> {
     }
 
     const PEGIN_SATS: u64 = 300000;
-    fed.pegin_client(PEGIN_SATS, &client).await?;
+    fed.pegin_client(PEGIN_SATS + 10000, &client).await?;
 
     for i in 0..20 {
         let gap = rand::thread_rng().gen_range(0..20);

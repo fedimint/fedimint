@@ -9,6 +9,10 @@ use devimint::federation::Client;
 use fedimint_core::encoding::Decodable;
 use tokio::try_join;
 
+fn almost_equal(a: u64, b: u64) -> bool {
+    a.abs_diff(b) < 200_000
+}
+
 async fn assert_withdrawal(
     send_client: &Client,
     receive_client: &Client,
@@ -72,8 +76,14 @@ async fn assert_withdrawal(
         receive_client_pre_balance + withdrawal_amount_msats - fed_deposit_fees_msats
     };
 
-    assert_eq!(send_client_post_balance, expected_send_client_balance);
-    assert_eq!(receive_client_post_balance, expected_receive_client_balance);
+    assert!(almost_equal(
+        send_client_post_balance,
+        expected_send_client_balance
+    ));
+    assert!(almost_equal(
+        receive_client_post_balance,
+        expected_receive_client_balance
+    ));
 
     Ok(())
 }

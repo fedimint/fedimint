@@ -18,6 +18,10 @@ use itertools::Itertools;
 use ln_gateway::rpc::{FederationInfo, GatewayBalances, GatewayFedConfig, GatewayInfo};
 use tracing::{info, warn};
 
+fn almost_equal(a: u64, b: u64) -> bool {
+    a.abs_diff(b) < 50_000
+}
+
 #[derive(Parser)]
 struct GatewayTestOpts {
     #[clap(subcommand)]
@@ -107,7 +111,10 @@ async fn backup_restore_test() -> anyhow::Result<()> {
                 .federations
                 .first()
                 .expect("Should have on joined federation");
-            assert_eq!(10_000_000, federation_info.balance_msat.sats_round_down());
+            assert!(almost_equal(
+                10_000_000,
+                federation_info.balance_msat.sats_round_down()
+            ));
             info!("Verified balance after peg-in");
 
             let mnemonic = gw.get_mnemonic().await?.mnemonic;
@@ -202,10 +209,10 @@ async fn stop_and_recover_gateway(
         .ecash_balances
         .first()
         .expect("Should have one joined federation");
-    assert_eq!(
+    assert!(almost_equal(
         10_000_000,
         ecash_balance.ecash_balance_msats.sats_round_down()
-    );
+    ));
     let after_onchain_balance = gateway_balances.onchain_balance_sats;
     assert_eq!(before_onchain_balance, after_onchain_balance);
     info!("Verified balances after recovery");
@@ -522,7 +529,10 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                     .find(|i| i.federation_id.to_string() == new_fed_id)
                     .expect("Could not find federation");
                 assert_eq!(first_fed_info.balance_msat, Amount::ZERO);
-                assert_eq!(second_fed_info.balance_msat, pegin_amount);
+                assert!(almost_equal(
+                    second_fed_info.balance_msat.msats,
+                    pegin_amount.msats
+                ));
 
                 leave_federation(gw, fed_id, 1).await?;
                 leave_federation(gw, new_fed_id, 2).await?;
@@ -594,7 +604,7 @@ async fn liquidity_test() -> anyhow::Result<()> {
             let after_send_ecash_balance = gw_send.ecash_balance(fed_id.clone()).await?;
             let after_receive_ecash_balance = gw_receive.ecash_balance(fed_id.clone()).await?;
             assert_eq!(prev_send_ecash_balance - 500_000, after_send_ecash_balance);
-            assert_eq!(prev_receive_ecash_balance + 500_000, after_receive_ecash_balance);
+            assert!(almost_equal(prev_receive_ecash_balance + 500_000, after_receive_ecash_balance));
         }
 
         info!("Testing payments between gateways...");
