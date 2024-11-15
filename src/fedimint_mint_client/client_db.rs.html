@@ -175,7 +175,11 @@
 <a href="#174" id="174">174</a>
 <a href="#175" id="175">175</a>
 <a href="#176" id="176">176</a>
-<a href="#177" id="177">177</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
 
 <span class="kw">use </span>fedimint_client::module::init::recovery::RecoveryFromHistoryCommon;
 <span class="kw">use </span>fedimint_client::module::{IdxRange, OutPointRange};
@@ -189,9 +193,9 @@
 <span class="kw">use </span>strum_macros::EnumIter;
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::recovery::MintRecoveryState;
-<span class="kw">use </span><span class="kw">crate</span>::input::{MintInputCommon, MintInputStateMachine, MintInputStateMachineV1};
-<span class="kw">use </span><span class="kw">crate</span>::oob::{MintOOBStateMachine, MintOOBStateMachineV1, MintOOBStates, MintOOBStatesV1};
-<span class="kw">use </span><span class="kw">crate</span>::output::{MintOutputCommon, MintOutputStateMachine, MintOutputStateMachineV1};
+<span class="kw">use </span><span class="kw">crate</span>::input::{MintInputCommon, MintInputStateMachine, MintInputStateMachineV0};
+<span class="kw">use </span><span class="kw">crate</span>::oob::{MintOOBStateMachine, MintOOBStateMachineV0, MintOOBStates, MintOOBStatesV0};
+<span class="kw">use </span><span class="kw">crate</span>::output::{MintOutputCommon, MintOutputStateMachine, MintOutputStateMachineV0};
 <span class="kw">use crate</span>::{MintClientStateMachines, SpendableNoteUndecoded};
 
 <span class="attr">#[repr(u8)]
@@ -295,7 +299,7 @@
     <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
 }
 
-<span class="doccomment">/// Maps all `Unreachable` states in the state machine to `OutputDone`
+<span class="doccomment">/// Migrates `MintClientStateMachinesV0`
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>migrate_state_to_v2(
     operation_id: OperationId,
     cursor: <span class="kw-2">&amp;mut </span>Cursor&lt;<span class="kw-2">&amp;</span>[u8]&gt;,
@@ -306,7 +310,9 @@
 
     <span class="kw">let </span>new_mint_state_machine = <span class="kw">match </span>mint_client_state_machine_variant {
         <span class="number">0 </span>=&gt; {
-            <span class="kw">let </span>old_state = MintOutputStateMachineV1::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+            <span class="kw">let </span>_output_sm_len = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+            <span class="kw">let </span>old_state = MintOutputStateMachineV0::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+
             MintClientStateMachines::Output(MintOutputStateMachine {
                 common: MintOutputCommon {
                     operation_id: old_state.common.operation_id,
@@ -319,7 +325,8 @@
             })
         }
         <span class="number">1 </span>=&gt; {
-            <span class="kw">let </span>old_state = MintInputStateMachineV1::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+            <span class="kw">let </span>_input_sm_len = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+            <span class="kw">let </span>old_state = MintInputStateMachineV0::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
             MintClientStateMachines::Input(MintInputStateMachine {
                 common: MintInputCommon {
@@ -333,12 +340,13 @@
             })
         }
         <span class="number">2 </span>=&gt; {
-            <span class="kw">let </span>old_state = MintOOBStateMachineV1::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+            <span class="kw">let </span>_oob_sm_len = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+            <span class="kw">let </span>old_state = MintOOBStateMachineV0::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
             <span class="kw">let </span>new_state = <span class="kw">match </span>old_state.state {
-                MintOOBStatesV1::Created(created) =&gt; MintOOBStates::Created(created),
-                MintOOBStatesV1::UserRefund(refund) =&gt; MintOOBStates::UserRefund(refund),
-                MintOOBStatesV1::TimeoutRefund(refund) =&gt; MintOOBStates::TimeoutRefund(refund),
+                MintOOBStatesV0::Created(created) =&gt; MintOOBStates::Created(created),
+                MintOOBStatesV0::UserRefund(refund) =&gt; MintOOBStates::UserRefund(refund),
+                MintOOBStatesV0::TimeoutRefund(refund) =&gt; MintOOBStates::TimeoutRefund(refund),
             };
             MintClientStateMachines::OOB(MintOOBStateMachine {
                 operation_id: old_state.operation_id,

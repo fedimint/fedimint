@@ -373,7 +373,7 @@
 <span class="kw">use crate</span>::{MintClientContext, MintClientStateMachines, SpendableNote};
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-</span><span class="kw">pub enum </span>MintOOBStatesV1 {
+</span><span class="kw">pub enum </span>MintOOBStatesV0 {
     <span class="doccomment">/// The e-cash has been taken out of the wallet and we are waiting for the
     /// recipient to reissue it or the user to trigger a refund.
     </span>Created(MintOOBStatesCreated),
@@ -408,18 +408,18 @@
 
     <span class="comment">// States we want to drop eventually (that's why they are last)
     // -
-    </span><span class="doccomment">/// Obsoleted, legacy from [`MintOOBStatesV1`], like
+    </span><span class="doccomment">/// Obsoleted, legacy from [`MintOOBStatesV0`], like
     /// [`MintOOBStates::CreatedMulti`] but for a single note only.
     </span>Created(MintOOBStatesCreated),
-    <span class="doccomment">/// Obsoleted, legacy from [`MintOOBStatesV1`], like
+    <span class="doccomment">/// Obsoleted, legacy from [`MintOOBStatesV0`], like
     /// [`MintOOBStates::UserRefundMulti`] but for single note only
     </span>UserRefund(MintOOBStatesUserRefund),
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-</span><span class="kw">pub struct </span>MintOOBStateMachineV1 {
+</span><span class="kw">pub struct </span>MintOOBStateMachineV0 {
     <span class="kw">pub</span>(<span class="kw">crate</span>) operation_id: OperationId,
-    <span class="kw">pub</span>(<span class="kw">crate</span>) state: MintOOBStatesV1,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) state: MintOOBStatesV0,
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]

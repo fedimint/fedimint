@@ -745,7 +745,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-</span><span class="kw">pub struct </span>MintOutputCommonV1 {
+</span><span class="kw">pub struct </span>MintOutputCommonV0 {
     <span class="kw">pub</span>(<span class="kw">crate</span>) operation_id: OperationId,
     <span class="kw">pub</span>(<span class="kw">crate</span>) out_point: OutPoint,
 }
@@ -763,8 +763,8 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-</span><span class="kw">pub struct </span>MintOutputStateMachineV1 {
-    <span class="kw">pub</span>(<span class="kw">crate</span>) common: MintOutputCommonV1,
+</span><span class="kw">pub struct </span>MintOutputStateMachineV0 {
+    <span class="kw">pub</span>(<span class="kw">crate</span>) common: MintOutputCommonV0,
     <span class="kw">pub</span>(<span class="kw">crate</span>) state: MintOutputStates,
 }
 

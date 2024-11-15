@@ -525,7 +525,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, Hash, PartialEq, Decodable, Encodable)]
-</span><span class="kw">pub struct </span>MintInputCommonV1 {
+</span><span class="kw">pub struct </span>MintInputCommonV0 {
     <span class="kw">pub</span>(<span class="kw">crate</span>) operation_id: OperationId,
     <span class="kw">pub</span>(<span class="kw">crate</span>) txid: TransactionId,
     <span class="kw">pub</span>(<span class="kw">crate</span>) input_idx: u64,
@@ -538,8 +538,8 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-</span><span class="kw">pub struct </span>MintInputStateMachineV1 {
-    <span class="kw">pub</span>(<span class="kw">crate</span>) common: MintInputCommonV1,
+</span><span class="kw">pub struct </span>MintInputStateMachineV0 {
+    <span class="kw">pub</span>(<span class="kw">crate</span>) common: MintInputCommonV0,
     <span class="kw">pub</span>(<span class="kw">crate</span>) state: MintInputStates,
 }
 
