@@ -125,19 +125,14 @@
 <a href="#124" id="124">124</a>
 <a href="#125" id="125">125</a>
 <a href="#126" id="126">126</a>
-<a href="#127" id="127">127</a>
-<a href="#128" id="128">128</a>
-<a href="#129" id="129">129</a>
-<a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
+<a href="#127" id="127">127</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::io::Cursor;
 
 <span class="kw">use </span>bitcoin::block::Header <span class="kw">as </span>BlockHeader;
 <span class="kw">use </span>bitcoin::merkle_tree::PartialMerkleTree;
 <span class="kw">use </span>bitcoin::{BlockHash, Txid};
-<span class="kw">use </span>hex::{FromHex, ToHex};
+<span class="kw">use </span>hex::FromHex;
 <span class="kw">use </span>serde::de::Error;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -212,13 +207,10 @@
     <span class="kw">where
         </span>S: Serializer,
     {
-        <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::new();
-        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes).unwrap();
-
         <span class="kw">if </span>serializer.is_human_readable() {
-            serializer.serialize_str(<span class="kw-2">&amp;</span>bytes.encode_hex::&lt;String&gt;())
+            serializer.serialize_str(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus_encode_to_hex())
         } <span class="kw">else </span>{
-            serializer.serialize_bytes(<span class="kw-2">&amp;</span>bytes)
+            serializer.serialize_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus_encode_to_vec())
         }
     }
 }
@@ -249,9 +241,7 @@
 <span class="comment">// TODO: upstream
 </span><span class="kw">impl </span>Hash <span class="kw">for </span>TxOutProof {
     <span class="kw">fn </span>hash&lt;H: std::hash::Hasher&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;mut </span>H) {
-        <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::new();
-        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes).unwrap();
-        state.write(<span class="kw-2">&amp;</span>bytes);
+        state.write(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus_encode_to_vec());
     }
 }
 

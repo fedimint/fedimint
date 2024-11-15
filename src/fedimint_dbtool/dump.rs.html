@@ -317,10 +317,7 @@
 <a href="#316" id="316">316</a>
 <a href="#317" id="317">317</a>
 <a href="#318" id="318">318</a>
-<a href="#319" id="319">319</a>
-<a href="#320" id="320">320</a>
-<a href="#321" id="321">321</a>
-<a href="#322" id="322">322</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#319" id="319">319</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>anyhow::Context;
@@ -366,10 +363,7 @@
 
 <span class="kw">impl </span>SerdeWrapper {
     <span class="kw">fn </span>from_encodable&lt;T: Encodable&gt;(e: <span class="kw-2">&amp;</span>T) -&gt; SerdeWrapper {
-        <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="macro">vec!</span>[];
-        e.consensus_encode(<span class="kw-2">&amp;mut </span>bytes)
-            .expect(<span class="string">"Write to vec can't fail"</span>);
-        SerdeWrapper(bytes)
+        SerdeWrapper(e.consensus_encode_to_vec())
     }
 }
 

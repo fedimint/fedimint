@@ -2752,8 +2752,7 @@
 <a href="#2751" id="2751">2751</a>
 <a href="#2752" id="2752">2752</a>
 <a href="#2753" id="2753">2753</a>
-<a href="#2754" id="2754">2754</a>
-<a href="#2755" id="2755">2755</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2754" id="2754">2754</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -3110,8 +3109,7 @@
     /// For URL-safe base64 as alternative display use:
     /// `format!("{:#}", oob_notes)`
     </span><span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
-        <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::new();
-        Encodable::consensus_encode(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>bytes).expect(<span class="string">"encodes correctly"</span>);
+        <span class="kw">let </span>bytes = Encodable::consensus_encode_to_vec(<span class="self">self</span>);
 
         <span class="kw">if </span>f.alternate() {
             f.write_str(<span class="kw-2">&amp;</span>BASE64_URL_SAFE.encode(<span class="kw-2">&amp;</span>bytes))

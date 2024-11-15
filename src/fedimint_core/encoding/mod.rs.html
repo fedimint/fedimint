@@ -1635,10 +1635,7 @@
 <a href="#1634" id="1634">1634</a>
 <a href="#1635" id="1635">1635</a>
 <a href="#1636" id="1636">1636</a>
-<a href="#1637" id="1637">1637</a>
-<a href="#1638" id="1638">1638</a>
-<a href="#1639" id="1639">1639</a>
-<a href="#1640" id="1640">1640</a></pre></div><pre class="rust"><code><span class="doccomment">//! Binary encoding interface suitable for
+<a href="#1637" id="1637">1637</a></pre></div><pre class="rust"><code><span class="doccomment">//! Binary encoding interface suitable for
 //! consensus critical encoding.
 //!
 //! Over time all structs that ! need to be encoded to binary will be migrated
@@ -1738,13 +1735,10 @@
 
     <span class="doccomment">/// Encode and convert to hex string representation
     </span><span class="kw">fn </span>consensus_encode_to_hex(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
-        <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="macro">vec!</span>[];
-        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes)
-            .expect(<span class="string">"encoding to bytes can't fail for io reasons"</span>);
         <span class="comment">// TODO: This double allocation offends real Rustaceans. We should
         // be able to go straight to String, but this use case seems under-served
         // by hex encoding crates.
-        </span>bytes.encode_hex()
+        </span><span class="self">self</span>.consensus_encode_to_vec().encode_hex()
     }
 
     <span class="doccomment">/// Encode without storing the encoding, return the size

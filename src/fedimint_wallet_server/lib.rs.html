@@ -2024,14 +2024,7 @@
 <a href="#2023" id="2023">2023</a>
 <a href="#2024" id="2024">2024</a>
 <a href="#2025" id="2025">2025</a>
-<a href="#2026" id="2026">2026</a>
-<a href="#2027" id="2027">2027</a>
-<a href="#2028" id="2028">2028</a>
-<a href="#2029" id="2029">2029</a>
-<a href="#2030" id="2030">2030</a>
-<a href="#2031" id="2031">2031</a>
-<a href="#2032" id="2032">2032</a>
-<a href="#2033" id="2033">2033</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2026" id="2026">2026</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -2109,7 +2102,6 @@
     Rbf, WalletInputError, WalletOutputError, WalletOutputV0, MODULE_CONSENSUS_VERSION,
 };
 <span class="kw">use </span>futures::{FutureExt, StreamExt};
-<span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>metrics::{
     WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS, WALLET_PEGIN_SATS,
     WALLET_PEGOUT_FEES_SATS, WALLET_PEGOUT_SATS,
@@ -3893,13 +3885,10 @@
     <span class="kw">where
         </span>S: serde::Serializer,
     {
-        <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::new();
-        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes).unwrap();
-
         <span class="kw">if </span>serializer.is_human_readable() {
-            serializer.serialize_str(<span class="kw-2">&amp;</span>bytes.encode_hex::&lt;String&gt;())
+            serializer.serialize_str(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus_encode_to_hex())
         } <span class="kw">else </span>{
-            serializer.serialize_bytes(<span class="kw-2">&amp;</span>bytes)
+            serializer.serialize_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus_encode_to_vec())
         }
     }
 }
@@ -3923,13 +3912,10 @@
     <span class="kw">where
         </span>S: serde::Serializer,
     {
-        <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::new();
-        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes).unwrap();
-
         <span class="kw">if </span>serializer.is_human_readable() {
-            serializer.serialize_str(<span class="kw-2">&amp;</span>bytes.encode_hex::&lt;String&gt;())
+            serializer.serialize_str(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus_encode_to_hex())
         } <span class="kw">else </span>{
-            serializer.serialize_bytes(<span class="kw-2">&amp;</span>bytes)
+            serializer.serialize_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus_encode_to_vec())
         }
     }
 }

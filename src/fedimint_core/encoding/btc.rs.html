@@ -348,15 +348,7 @@
 <a href="#347" id="347">347</a>
 <a href="#348" id="348">348</a>
 <a href="#349" id="349">349</a>
-<a href="#350" id="350">350</a>
-<a href="#351" id="351">351</a>
-<a href="#352" id="352">352</a>
-<a href="#353" id="353">353</a>
-<a href="#354" id="354">354</a>
-<a href="#355" id="355">355</a>
-<a href="#356" id="356">356</a>
-<a href="#357" id="357">357</a>
-<a href="#358" id="358">358</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
+<a href="#350" id="350">350</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::format_err;
@@ -431,9 +423,7 @@
     }
 
     <span class="kw">fn </span>consensus_encode_to_hex(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
-        <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="macro">vec!</span>[];
-        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes)
-            .expect(<span class="string">"encoding to bytes can't fail for io reasons"</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="self">self</span>.consensus_encode_to_vec();
 
         <span class="comment">// Just Bitcoin things: transaction hashes are encoded reverse
         </span>bytes.reverse();
@@ -648,13 +638,10 @@
         ];
 
         <span class="kw">for </span>(network, magic_legacy_bytes, magic_bytes) <span class="kw">in </span>networks {
-            <span class="kw">let </span><span class="kw-2">mut </span>network_legacy_encoded = Vec::new();
-            NetworkLegacyEncodingWrapper(network)
-                .consensus_encode(<span class="kw-2">&amp;mut </span>network_legacy_encoded)
-                .unwrap();
+            <span class="kw">let </span>network_legacy_encoded =
+                NetworkLegacyEncodingWrapper(network).consensus_encode_to_vec();
 
-            <span class="kw">let </span><span class="kw-2">mut </span>network_encoded = Vec::new();
-            network.consensus_encode(<span class="kw-2">&amp;mut </span>network_encoded).unwrap();
+            <span class="kw">let </span>network_encoded = network.consensus_encode_to_vec();
 
             <span class="kw">let </span>network_legacy_decoded = NetworkLegacyEncodingWrapper::consensus_decode(
                 <span class="kw-2">&amp;mut </span>Cursor::new(network_legacy_encoded.clone()),
@@ -690,10 +677,7 @@
         <span class="kw">for </span>address_str <span class="kw">in </span>addresses {
             <span class="kw">let </span>address =
                 bitcoin::Address::from_str(address_str).expect(<span class="string">"All tested addresses are valid"</span>);
-            <span class="kw">let </span><span class="kw-2">mut </span>encoding = <span class="macro">vec!</span>[];
-            address
-                .consensus_encode(<span class="kw-2">&amp;mut </span>encoding)
-                .expect(<span class="string">"Encoding to vec can't fail"</span>);
+            <span class="kw">let </span>encoding = address.consensus_encode_to_vec();
             <span class="kw">let </span><span class="kw-2">mut </span>cursor = Cursor::new(encoding);
             <span class="kw">let </span>parsed_address =
                 bitcoin::Address::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())

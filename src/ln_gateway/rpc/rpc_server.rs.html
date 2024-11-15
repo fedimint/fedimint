@@ -476,10 +476,7 @@
 <a href="#475" id="475">475</a>
 <a href="#476" id="476">476</a>
 <a href="#477" id="477">477</a>
-<a href="#478" id="478">478</a>
-<a href="#479" id="479">479</a>
-<a href="#480" id="480">480</a>
-<a href="#481" id="481">481</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#478" id="478">478</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>axum::extract::Request;
 <span class="kw">use </span>axum::http::{header, StatusCode};
@@ -711,12 +708,9 @@
 <span class="doccomment">/// Creates a password hash by appending a 4 byte salt to the plaintext
 /// password.
 </span><span class="kw">pub fn </span>hash_password(plaintext_password: <span class="kw-2">&amp;</span>str, salt: [u8; <span class="number">16</span>]) -&gt; sha256::Hash {
-    <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::&lt;u8&gt;::new();
-    plaintext_password
-        .consensus_encode(<span class="kw-2">&amp;mut </span>bytes)
-        .expect(<span class="string">"Password is encodable"</span>);
-    salt.consensus_encode(<span class="kw-2">&amp;mut </span>bytes)
-        .expect(<span class="string">"Salt is encodable"</span>);
+    <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::new();
+    bytes.append(<span class="kw-2">&amp;mut </span>plaintext_password.consensus_encode_to_vec());
+    bytes.append(<span class="kw-2">&amp;mut </span>salt.consensus_encode_to_vec());
     sha256::Hash::hash(<span class="kw-2">&amp;</span>bytes)
 }
 

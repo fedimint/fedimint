@@ -3594,13 +3594,7 @@
 <a href="#3593" id="3593">3593</a>
 <a href="#3594" id="3594">3594</a>
 <a href="#3595" id="3595">3595</a>
-<a href="#3596" id="3596">3596</a>
-<a href="#3597" id="3597">3597</a>
-<a href="#3598" id="3598">3598</a>
-<a href="#3599" id="3599">3599</a>
-<a href="#3600" id="3600">3600</a>
-<a href="#3601" id="3601">3601</a>
-<a href="#3602" id="3602">3602</a></pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
+<a href="#3596" id="3596">3596</a></pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! This module provides the core key-value database for Fedimint.
 //!
@@ -4250,11 +4244,9 @@
 }
 
 <span class="kw">fn </span>module_instance_id_to_byte_prefix(module_instance_id: u16) -&gt; Vec&lt;u8&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>prefix = <span class="macro">vec!</span>[MODULE_GLOBAL_PREFIX];
-    module_instance_id
-        .consensus_encode(<span class="kw-2">&amp;mut </span>prefix)
-        .expect(<span class="string">"Error encoding module instance id as prefix"</span>);
-    prefix
+    <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="macro">vec!</span>[MODULE_GLOBAL_PREFIX];
+    bytes.append(<span class="kw-2">&amp;mut </span>module_instance_id.consensus_encode_to_vec());
+    bytes
 }
 
 <span class="doccomment">/// A database that wraps an `inner` one and adds a prefix to all operations,
@@ -5534,8 +5526,7 @@
 {
     <span class="kw">fn </span>to_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>data = <span class="macro">vec!</span>[&lt;<span class="self">Self </span><span class="kw">as </span>DatabaseLookup&gt;::Record::DB_PREFIX];
-        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>data)
-            .expect(<span class="string">"Writing to vec is infallible"</span>);
+        data.append(<span class="kw-2">&amp;mut </span><span class="self">self</span>.consensus_encode_to_vec());
         data
     }
 }
@@ -5575,10 +5566,7 @@
     }
 
     <span class="kw">fn </span>to_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::new();
-        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes)
-            .expect(<span class="string">"writing to vec can't fail"</span>);
-        bytes
+        <span class="self">self</span>.consensus_encode_to_vec()
     }
 }
 
