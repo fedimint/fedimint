@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["handle_events","run_event_log_ordering_task"],"static":["UNORDEREDED_EVENT_LOG_ID_COUNTER"],"struct":["EventKind","EventLogEntry","EventLogId","EventLogIdPrefix","EventLogIdPrefixAll","UnordedEventLogId","UnorderedEventLogEntry","UnorderedEventLogIdPrefixAll"],"trait":["DBTransactionEventLogExt","Event"]};

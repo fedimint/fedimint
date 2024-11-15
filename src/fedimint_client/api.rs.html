@@ -221,7 +221,7 @@
     <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"api-call-done"</span>);
 }
 
-<span class="kw">use </span><span class="kw">crate</span>::db::event_log::{DBTransactionEventLogExt <span class="kw">as _</span>, Event, EventKind};
+<span class="kw">use </span>fedimint_eventlog::{DBTransactionEventLogExt <span class="kw">as _</span>, Event, EventKind};
 
 <span class="doccomment">/// Convenience extension trait used for wrapping [`IRawFederationApi`] in
 /// a [`ClientRawFederationApi`]

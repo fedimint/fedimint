@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-client/src/db/event_log.rs`."><title>event_log.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-4ee5002b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.84.0-nightly (a93c1718c 2024-10-24)" data-channel="nightly" data-search-js="search-c5a66128.js" data-settings-js="settings-0f613d39.js" ><script src="../../../static.files/storage-59e33391.js"></script><script defer src="../../../static.files/src-script-56102188.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">fedimint_client/db/</div>event_log.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers">
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-eventlog/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-4ee5002b.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_eventlog" data-themes="" data-resource-suffix="" data-rustdoc-version="1.84.0-nightly (a93c1718c 2024-10-24)" data-channel="nightly" data-search-js="search-c5a66128.js" data-settings-js="settings-0f613d39.js" ><script src="../../static.files/storage-59e33391.js"></script><script defer src="../../static.files/src-script-56102188.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">fedimint_eventlog/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers">
 <a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
@@ -521,7 +521,16 @@
 <a href="#520" id="520">520</a>
 <a href="#521" id="521">521</a>
 <a href="#522" id="522">522</a>
-<a href="#523" id="523">523</a></pre></div><pre class="rust"><code><span class="doccomment">//! Client Event Log
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
+<a href="#527" id="527">527</a>
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a></pre></div><pre class="rust"><code><span class="doccomment">//! Client Event Log
 //!
 //! The goal here is to maintain a single, ordered, append only
 //! log of all important client-side events: low or high level,
@@ -550,7 +559,16 @@
 <span class="kw">use </span>tokio::sync::{broadcast, watch};
 <span class="kw">use </span>tracing::{debug, trace};
 
-<span class="kw">use </span><span class="kw">super</span>::DbKeyPrefix;
+<span class="doccomment">/// DB prefixes hardcoded for use of the event log
+/// `fedimint-eventlog` was extracted from `fedimint-client` to help
+/// include/re-use in other part of the code. But fundamentally its role
+/// is to implement event log in the client.
+/// There is currently no way to inject the prefixes to use for db records,
+/// so we use these constants to keep them in sync. Any other app that will
+/// want to store its own even log, will need to use the exact same prefixes,
+/// which in practice should not be a problem.
+</span><span class="kw">pub const </span>DB_KEY_PREFIX_UNORDERED_EVENT_LOG: u8 = <span class="number">0x39</span>;
+<span class="kw">pub const </span>DB_KEY_PREFIX_EVENT_LOG: u8 = <span class="number">0x3a</span>;
 
 <span class="kw">pub trait </span>Event: serde::Serialize + serde::de::DeserializeOwned {
     <span class="kw">const </span>MODULE: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt;;
@@ -678,7 +696,7 @@
 <span class="macro">impl_db_record!</span>(
     key = UnordedEventLogId,
     value = UnorderedEventLogEntry,
-    db_prefix = DbKeyPrefix::UnorderedEventLog,
+    db_prefix = DB_KEY_PREFIX_UNORDERED_EVENT_LOG,
 );
 
 <span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
@@ -698,7 +716,7 @@
 <span class="macro">impl_db_record!</span>(
     key = EventLogId,
     value = EventLogEntry,
-    db_prefix = DbKeyPrefix::EventLog,
+    db_prefix = DB_KEY_PREFIX_EVENT_LOG,
 );
 
 <span class="macro">impl_db_lookup!</span>(key = EventLogId, query_prefix = EventLogIdPrefixAll);
@@ -845,7 +863,7 @@
 
 <span class="doccomment">/// The code that handles new unordered events and rewriters them fully ordered
 /// into the final event log.
-</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>run_event_log_ordering_task(
+</span><span class="kw">pub async fn </span>run_event_log_ordering_task(
     db: Database,
     <span class="kw-2">mut </span>log_ordering_task_wakeup: watch::Receiver&lt;()&gt;,
     log_event_added: watch::Sender&lt;()&gt;,
@@ -968,7 +986,7 @@
     <span class="kw">use super</span>::{
         handle_events, run_event_log_ordering_task, DBTransactionEventLogExt <span class="kw">as _</span>, EventLogId,
     };
-    <span class="kw">use </span><span class="kw">crate</span>::db::event_log::EventKind;
+    <span class="kw">use </span><span class="kw">crate</span>::EventKind;
 
     <span class="attr">#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable)]
     </span><span class="kw">pub struct </span>TestLogIdKey;

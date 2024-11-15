@@ -53,7 +53,7 @@ Returns transaction id of the funding transaction and an optional
     'life0: 'async_trait,</div></h4></section><section id="method.log_event_json" class="method trait-impl"><a class="src rightside" href="../src/fedimint_client/lib.rs.html#609-626">Source</a><a href="#method.log_event_json" class="anchor">§</a><h4 class="code-header">fn <a href="trait.IGlobalClientContext.html#tymethod.log_event_json" class="fn">log_event_json</a>&lt;'life0, 'life1, 'life2, 'life3, 'async_trait&gt;(
     &amp;'life0 self,
     dbtx: &amp;'life1 mut <a class="struct" href="sm/dbtx/struct.ClientSMDatabaseTransaction.html" title="struct fedimint_client::sm::dbtx::ClientSMDatabaseTransaction">ClientSMDatabaseTransaction</a>&lt;'life2, 'life3&gt;,
-    kind: <a class="struct" href="db/event_log/struct.EventKind.html" title="struct fedimint_client::db::event_log::EventKind">EventKind</a>,
+    kind: <a class="struct" href="../fedimint_eventlog/struct.EventKind.html" title="struct fedimint_eventlog::EventKind">EventKind</a>,
     module: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;(<a class="struct" href="../fedimint_core/core/struct.ModuleKind.html" title="struct fedimint_core::core::ModuleKind">ModuleKind</a>, <a class="type" href="../fedimint_core/core/type.ModuleInstanceId.html" title="type fedimint_core::core::ModuleInstanceId">ModuleInstanceId</a>)&gt;,
     payload: <a class="enum" href="https://docs.rs/serde_json/1.0.132/serde_json/value/enum.Value.html" title="enum serde_json::value::Value">Value</a>,
     transient: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>,

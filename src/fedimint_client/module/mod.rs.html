@@ -1096,12 +1096,12 @@
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
     TransactionId,
 };
+<span class="kw">use </span>fedimint_eventlog::Event;
 <span class="kw">use </span>futures::Stream;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::Serialize;
 
 <span class="kw">use </span><span class="self">self</span>::init::ClientModuleInit;
-<span class="kw">use </span><span class="kw">crate</span>::db::event_log::Event;
 <span class="kw">use </span><span class="kw">crate</span>::module::recovery::{DynModuleBackup, ModuleBackup};
 <span class="kw">use </span><span class="kw">crate</span>::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::sm::{<span class="self">self</span>, ActiveStateMeta, Context, DynContext, DynState, State};

@@ -438,12 +438,12 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
+<span class="kw">use </span>fedimint_eventlog::{Event, EventKind};
 <span class="kw">use </span>fedimint_logging::{LOG_CLIENT, LOG_CLIENT_BACKUP, LOG_CLIENT_RECOVERY};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tracing::{debug, info, warn};
 
 <span class="kw">use </span><span class="kw">super</span>::Client;
-<span class="kw">use </span><span class="kw">crate</span>::db::event_log::{Event, EventKind};
 <span class="kw">use </span><span class="kw">crate</span>::db::LastBackupKey;
 <span class="kw">use </span><span class="kw">crate</span>::get_decoded_client_secret;
 <span class="kw">use </span><span class="kw">crate</span>::module::recovery::DynModuleBackup;
