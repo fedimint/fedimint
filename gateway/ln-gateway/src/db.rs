@@ -1,13 +1,13 @@
 use std::collections::BTreeMap;
 
 use bitcoin::hashes::sha256;
-use bitcoin::Network;
 use fedimint_api_client::api::net::Connector;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{
     CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
     MigrationContext,
 };
+use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::{impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1, Amount};
@@ -326,7 +326,7 @@ struct GatewayConfigurationV0 {
     num_route_hints: u32,
     #[serde(with = "serde_routing_fees")]
     routing_fees: RoutingFees,
-    network: Network,
+    network: NetworkLegacyEncodingWrapper,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
@@ -338,7 +338,7 @@ pub struct GatewayConfiguration {
     pub num_route_hints: u32,
     #[serde(with = "serde_routing_fees")]
     pub routing_fees: RoutingFees,
-    pub network: Network,
+    pub network: NetworkLegacyEncodingWrapper,
     pub password_salt: [u8; 16],
 }
 
@@ -494,7 +494,7 @@ mod fedimint_migration_tests {
             password: "EXAMPLE".to_string(),
             num_route_hints: 2,
             routing_fees: DEFAULT_FEES,
-            network: Network::Regtest,
+            network: NetworkLegacyEncodingWrapper(bitcoin::Network::Regtest),
         };
 
         dbtx.insert_new_entry(&GatewayConfigurationKeyV0, &gateway_configuration)

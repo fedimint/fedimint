@@ -331,7 +331,7 @@ impl WalletClientModuleData {
             .cfg
             .peg_in_descriptor
             .tweak(&public_tweak_key, bitcoin::secp256k1::SECP256K1)
-            .address(self.cfg.network)
+            .address(self.cfg.network.0)
             .unwrap();
 
         // TODO: make hash?
@@ -503,7 +503,7 @@ impl WalletClientModule {
     }
 
     pub fn get_network(&self) -> Network {
-        self.cfg().network
+        self.cfg().network.0
     }
 
     pub fn get_fee_consensus(&self) -> FeeConsensus {
@@ -548,7 +548,7 @@ impl WalletClientModule {
         address: bitcoin::Address<NetworkUnchecked>,
         amount: bitcoin::Amount,
     ) -> anyhow::Result<PegOutFees> {
-        check_address(&address, self.cfg().network)?;
+        check_address(&address, self.cfg().network.0)?;
 
         self.module_api
             .fetch_peg_out_fees(&address.assume_checked(), amount)
@@ -568,7 +568,7 @@ impl WalletClientModule {
         amount: bitcoin::Amount,
         fees: PegOutFees,
     ) -> anyhow::Result<ClientOutputBundle<WalletOutput, WalletClientStates>> {
-        check_address(address, self.cfg().network)?;
+        check_address(address, self.cfg().network.0)?;
 
         let output = WalletOutput::new_v0_peg_out(address.clone(), amount, fees);
 

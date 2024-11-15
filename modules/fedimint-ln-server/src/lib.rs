@@ -17,6 +17,7 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseTransaction, DatabaseValue, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -242,7 +243,7 @@ impl ServerModuleInit for LightningInit {
                         consensus: LightningConfigConsensus {
                             threshold_pub_keys: pks.clone(),
                             fee_consensus: FeeConsensus::default(),
-                            network: params.consensus.network,
+                            network: NetworkLegacyEncodingWrapper(params.consensus.network),
                         },
                         private: LightningConfigPrivate {
                             threshold_sec_key: threshold_crypto::serde_impl::SerdeSecret(sk),
@@ -273,7 +274,7 @@ impl ServerModuleInit for LightningInit {
             consensus: LightningConfigConsensus {
                 threshold_pub_keys: keys.public_key_set,
                 fee_consensus: FeeConsensus::default(),
-                network: params.consensus.network,
+                network: NetworkLegacyEncodingWrapper(params.consensus.network),
             },
             private: LightningConfigPrivate {
                 threshold_sec_key: keys.secret_key_share,

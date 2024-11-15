@@ -3,6 +3,7 @@ use std::str::FromStr;
 use anyhow::Context;
 pub use bitcoin::Network;
 use fedimint_core::core::ModuleKind;
+use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::{msats, plugin_types_trait_impl_config, Amount};
@@ -58,7 +59,7 @@ pub struct LightningConfigConsensus {
     pub threshold_pub_keys: threshold_crypto::PublicKeySet,
     /// Fees charged for LN transactions
     pub fee_consensus: FeeConsensus,
-    pub network: Network,
+    pub network: NetworkLegacyEncodingWrapper,
 }
 
 impl LightningConfigConsensus {
@@ -79,7 +80,7 @@ pub struct LightningConfigPrivate {
 pub struct LightningClientConfig {
     pub threshold_pub_key: threshold_crypto::PublicKey,
     pub fee_consensus: FeeConsensus,
-    pub network: Network,
+    pub network: NetworkLegacyEncodingWrapper,
 }
 
 impl std::fmt::Display for LightningClientConfig {
