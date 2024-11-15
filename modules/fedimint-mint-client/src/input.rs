@@ -45,7 +45,7 @@ pub enum MintInputStates {
 }
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq, Decodable, Encodable)]
-pub struct MintInputCommonV1 {
+pub struct MintInputCommonV0 {
     pub(crate) operation_id: OperationId,
     pub(crate) txid: TransactionId,
     pub(crate) input_idx: u64,
@@ -59,8 +59,8 @@ pub struct MintInputCommon {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-pub struct MintInputStateMachineV1 {
-    pub(crate) common: MintInputCommonV1,
+pub struct MintInputStateMachineV0 {
+    pub(crate) common: MintInputCommonV0,
     pub(crate) state: MintInputStates,
 }
 

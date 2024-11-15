@@ -15,7 +15,7 @@ use crate::input::{
 use crate::{MintClientContext, MintClientStateMachines, SpendableNote};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-pub enum MintOOBStatesV1 {
+pub enum MintOOBStatesV0 {
     /// The e-cash has been taken out of the wallet and we are waiting for the
     /// recipient to reissue it or the user to trigger a refund.
     Created(MintOOBStatesCreated),
@@ -50,18 +50,18 @@ pub enum MintOOBStates {
 
     // States we want to drop eventually (that's why they are last)
     // -
-    /// Obsoleted, legacy from [`MintOOBStatesV1`], like
+    /// Obsoleted, legacy from [`MintOOBStatesV0`], like
     /// [`MintOOBStates::CreatedMulti`] but for a single note only.
     Created(MintOOBStatesCreated),
-    /// Obsoleted, legacy from [`MintOOBStatesV1`], like
+    /// Obsoleted, legacy from [`MintOOBStatesV0`], like
     /// [`MintOOBStates::UserRefundMulti`] but for single note only
     UserRefund(MintOOBStatesUserRefund),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-pub struct MintOOBStateMachineV1 {
+pub struct MintOOBStateMachineV0 {
     pub(crate) operation_id: OperationId,
-    pub(crate) state: MintOOBStatesV1,
+    pub(crate) state: MintOOBStatesV0,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]

@@ -11,9 +11,9 @@ use serde::Serialize;
 use strum_macros::EnumIter;
 
 use crate::backup::recovery::MintRecoveryState;
-use crate::input::{MintInputCommon, MintInputStateMachine, MintInputStateMachineV1};
-use crate::oob::{MintOOBStateMachine, MintOOBStateMachineV1, MintOOBStates, MintOOBStatesV1};
-use crate::output::{MintOutputCommon, MintOutputStateMachine, MintOutputStateMachineV1};
+use crate::input::{MintInputCommon, MintInputStateMachine, MintInputStateMachineV0};
+use crate::oob::{MintOOBStateMachine, MintOOBStateMachineV0, MintOOBStates, MintOOBStatesV0};
+use crate::output::{MintOutputCommon, MintOutputStateMachine, MintOutputStateMachineV0};
 use crate::{MintClientStateMachines, SpendableNoteUndecoded};
 
 #[repr(u8)]
@@ -117,7 +117,7 @@ pub async fn migrate_to_v1(
     Ok(None)
 }
 
-/// Migrates `MintClientStateMachinesV1`
+/// Migrates `MintClientStateMachinesV0`
 pub(crate) fn migrate_state_to_v2(
     operation_id: OperationId,
     cursor: &mut Cursor<&[u8]>,
@@ -129,7 +129,7 @@ pub(crate) fn migrate_state_to_v2(
     let new_mint_state_machine = match mint_client_state_machine_variant {
         0 => {
             let _output_sm_len = u16::consensus_decode(cursor, &decoders)?;
-            let old_state = MintOutputStateMachineV1::consensus_decode(cursor, &decoders)?;
+            let old_state = MintOutputStateMachineV0::consensus_decode(cursor, &decoders)?;
 
             MintClientStateMachines::Output(MintOutputStateMachine {
                 common: MintOutputCommon {
@@ -143,7 +143,7 @@ pub(crate) fn migrate_state_to_v2(
         }
         1 => {
             let _input_sm_len = u16::consensus_decode(cursor, &decoders)?;
-            let old_state = MintInputStateMachineV1::consensus_decode(cursor, &decoders)?;
+            let old_state = MintInputStateMachineV0::consensus_decode(cursor, &decoders)?;
 
             MintClientStateMachines::Input(MintInputStateMachine {
                 common: MintInputCommon {
@@ -156,12 +156,12 @@ pub(crate) fn migrate_state_to_v2(
         }
         2 => {
             let _oob_sm_len = u16::consensus_decode(cursor, &decoders)?;
-            let old_state = MintOOBStateMachineV1::consensus_decode(cursor, &decoders)?;
+            let old_state = MintOOBStateMachineV0::consensus_decode(cursor, &decoders)?;
 
             let new_state = match old_state.state {
-                MintOOBStatesV1::Created(created) => MintOOBStates::Created(created),
-                MintOOBStatesV1::UserRefund(refund) => MintOOBStates::UserRefund(refund),
-                MintOOBStatesV1::TimeoutRefund(refund) => MintOOBStates::TimeoutRefund(refund),
+                MintOOBStatesV0::Created(created) => MintOOBStates::Created(created),
+                MintOOBStatesV0::UserRefund(refund) => MintOOBStates::UserRefund(refund),
+                MintOOBStatesV0::TimeoutRefund(refund) => MintOOBStates::TimeoutRefund(refund),
             };
             MintClientStateMachines::OOB(MintOOBStateMachine {
                 operation_id: old_state.operation_id,

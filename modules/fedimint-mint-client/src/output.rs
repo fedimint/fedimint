@@ -74,7 +74,7 @@ pub enum MintOutputStates {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-pub struct MintOutputCommonV1 {
+pub struct MintOutputCommonV0 {
     pub(crate) operation_id: OperationId,
     pub(crate) out_point: OutPoint,
 }
@@ -87,8 +87,8 @@ pub struct MintOutputCommon {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-pub struct MintOutputStateMachineV1 {
-    pub(crate) common: MintOutputCommonV1,
+pub struct MintOutputStateMachineV0 {
+    pub(crate) common: MintOutputCommonV0,
     pub(crate) state: MintOutputStates,
 }
 
