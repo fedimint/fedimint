@@ -17,6 +17,7 @@ members = [
     "fedimint-core",
     "fedimint-dbtool",
     "fedimint-derive",
+    "fedimint-eventlog",
     "fedimint-load-test-tool",
     "fedimint-logging",
     "fedimint-metrics",
@@ -123,6 +124,7 @@ fedimint-dummy-client = { path = "./modules/fedimint-dummy-client", version = "=
 fedimint-dummy-common = { path = "./modules/fedimint-dummy-common", version = "=0.6.0-alpha" }
 fedimint-dummy-server = { path = "./modules/fedimint-dummy-server", version = "=0.6.0-alpha" }
 fedimint-empty-common = { path = "./modules/fedimint-empty-common", version = "=0.6.0-alpha" }
+fedimint-eventlog = { path = "./fedimint-eventlog", version = "=0.6.0-alpha" }
 fedimint-lnv2-client = { path = "./modules/fedimint-lnv2-client", version = "=0.6.0-alpha" }
 fedimint-lnv2-common = { path = "./modules/fedimint-lnv2-common", version = "=0.6.0-alpha" }
 fedimint-lnv2-server = { path = "./modules/fedimint-lnv2-server", version = "=0.6.0-alpha" }

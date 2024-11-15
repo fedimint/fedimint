@@ -92,10 +92,6 @@ use api::ClientRawFederationApiExt as _;
 use async_stream::{stream, try_stream};
 use backup::ClientBackup;
 use bitcoin::secp256k1;
-use db::event_log::{
-    self, run_event_log_ordering_task, DBTransactionEventLogExt, Event, EventKind, EventLogEntry,
-    EventLogId,
-};
 use db::{
     apply_migrations_client, apply_migrations_core_client, get_core_client_database_migrations,
     ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientInitStateKey,
@@ -137,6 +133,10 @@ use fedimint_core::{
 };
 pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::DerivableSecret;
+use fedimint_eventlog::{
+    self, run_event_log_ordering_task, DBTransactionEventLogExt, Event, EventKind, EventLogEntry,
+    EventLogId,
+};
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API, LOG_CLIENT_RECOVERY};
 use futures::stream::FuturesUnordered;
 use futures::{Future, Stream, StreamExt};
@@ -2180,7 +2180,7 @@ impl Client {
         F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
         R: Future<Output = anyhow::Result<()>>,
     {
-        event_log::handle_events(
+        fedimint_eventlog::handle_events(
             self.db.clone(),
             pos_key,
             self.log_event_added_rx.clone(),

@@ -2211,6 +2211,7 @@ dependencies = [
  "fedimint-build",
  "fedimint-client",
  "fedimint-core",
+ "fedimint-eventlog",
  "fedimint-ln-client",
  "fedimint-lnv2-client",
  "fedimint-logging",
@@ -2246,6 +2247,7 @@ dependencies = [
  "fedimint-build",
  "fedimint-core",
  "fedimint-derive-secret",
+ "fedimint-eventlog",
  "fedimint-logging",
  "futures",
  "itertools 0.13.0",
@@ -2255,7 +2257,6 @@ dependencies = [
  "serde_json",
  "strum 0.26.3",
  "strum_macros 0.26.4",
- "test-log",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -2521,6 +2522,22 @@ dependencies = [
  "serde",
  "strum 0.26.3",
  "strum_macros 0.26.4",
+]
+
+[[package]]
+name = "fedimint-eventlog"
+version = "0.6.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fedimint-core",
+ "fedimint-logging",
+ "futures",
+ "serde",
+ "serde_json",
+ "test-log",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2954,6 +2971,7 @@ dependencies = [
  "fedimint-client",
  "fedimint-core",
  "fedimint-derive-secret",
+ "fedimint-eventlog",
  "fedimint-logging",
  "fedimint-mint-common",
  "fedimint-tbs",

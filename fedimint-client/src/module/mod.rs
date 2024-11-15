@@ -23,12 +23,12 @@ use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
     TransactionId,
 };
+use fedimint_eventlog::Event;
 use futures::Stream;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use self::init::ClientModuleInit;
-use crate::db::event_log::Event;
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
 use crate::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use crate::sm::{self, ActiveStateMeta, Context, DynContext, DynState, State};
