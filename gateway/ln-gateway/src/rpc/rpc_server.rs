@@ -230,12 +230,9 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
 /// Creates a password hash by appending a 4 byte salt to the plaintext
 /// password.
 pub fn hash_password(plaintext_password: &str, salt: [u8; 16]) -> sha256::Hash {
-    let mut bytes = Vec::<u8>::new();
-    plaintext_password
-        .consensus_encode(&mut bytes)
-        .expect("Password is encodable");
-    salt.consensus_encode(&mut bytes)
-        .expect("Salt is encodable");
+    let mut bytes = Vec::new();
+    bytes.append(&mut plaintext_password.consensus_encode_to_vec());
+    bytes.append(&mut salt.consensus_encode_to_vec());
     sha256::Hash::hash(&bytes)
 }
 

@@ -5,7 +5,7 @@ use std::io::Cursor;
 use bitcoin::block::Header as BlockHeader;
 use bitcoin::merkle_tree::PartialMerkleTree;
 use bitcoin::{BlockHash, Txid};
-use hex::{FromHex, ToHex};
+use hex::FromHex;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -80,13 +80,10 @@ impl Serialize for TxOutProof {
     where
         S: Serializer,
     {
-        let mut bytes = Vec::new();
-        self.consensus_encode(&mut bytes).unwrap();
-
         if serializer.is_human_readable() {
-            serializer.serialize_str(&bytes.encode_hex::<String>())
+            serializer.serialize_str(&self.consensus_encode_to_hex())
         } else {
-            serializer.serialize_bytes(&bytes)
+            serializer.serialize_bytes(&self.consensus_encode_to_vec())
         }
     }
 }
@@ -117,9 +114,7 @@ impl<'de> Deserialize<'de> for TxOutProof {
 // TODO: upstream
 impl Hash for TxOutProof {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let mut bytes = Vec::new();
-        self.consensus_encode(&mut bytes).unwrap();
-        state.write(&bytes);
+        state.write(&self.consensus_encode_to_vec());
     }
 }
 

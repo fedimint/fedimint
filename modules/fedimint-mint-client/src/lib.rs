@@ -355,8 +355,7 @@ impl Display for OOBNotes {
     /// For URL-safe base64 as alternative display use:
     /// `format!("{:#}", oob_notes)`
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut bytes = Vec::new();
-        Encodable::consensus_encode(self, &mut bytes).expect("encodes correctly");
+        let bytes = Encodable::consensus_encode_to_vec(self);
 
         if f.alternate() {
             f.write_str(&BASE64_URL_SAFE.encode(&bytes))

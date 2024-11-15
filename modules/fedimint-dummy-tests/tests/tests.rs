@@ -214,62 +214,42 @@ mod fedimint_migration_tests {
 
     fn create_client_states() -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
         // Create an active state and inactive state that will not be migrated.
-        let input_operation_id = OperationId::new_random();
-        let input_state = {
-            let mut input_state = Vec::<u8>::new();
-            Amount::from_sats(1000)
-                .consensus_encode(&mut input_state)
-                .expect("Amount is encodable");
-            TransactionId::from_slice(&BYTE_32)
-                .expect("Couldn't create TransactionId")
-                .consensus_encode(&mut input_state)
-                .expect("TransactionId is encodable");
-            input_operation_id
-                .consensus_encode(&mut input_state)
-                .expect("OperationId is encodable");
-            input_state
+        let input_state: Vec<u8> = {
+            let mut bytes = Vec::new();
+            bytes.append(&mut Amount::from_sats(1000).consensus_encode_to_vec());
+            bytes.append(
+                &mut TransactionId::from_slice(&BYTE_32)
+                    .expect("Couldn't create TransactionId")
+                    .consensus_encode_to_vec(),
+            );
+            bytes.append(&mut OperationId::new_random().consensus_encode_to_vec());
+            bytes
         };
 
-        let input_variant = {
-            let mut input_variant = Vec::<u8>::new();
-            TEST_MODULE_INSTANCE_ID
-                .consensus_encode(&mut input_variant)
-                .expect("u16 is encodable");
-            0u64.consensus_encode(&mut input_variant)
-                .expect("u64 is encodable"); // Input variant
-            input_state
-                .consensus_encode(&mut input_variant)
-                .expect("input state is encodable");
-            input_variant
+        let input_variant: Vec<u8> = {
+            let mut bytes = Vec::new();
+            bytes.append(&mut TEST_MODULE_INSTANCE_ID.consensus_encode_to_vec());
+            bytes.append(&mut 0u64.consensus_encode_to_vec()); // Input variant.
+            bytes.append(&mut input_state.consensus_encode_to_vec());
+            bytes
         };
 
         // Create and active state and inactive state that will be migrated.
         let unreachable_operation_id = OperationId::new_random();
-        let unreachable_state = {
-            let mut unreachable = Vec::<u8>::new();
-            unreachable_operation_id
-                .consensus_encode(&mut unreachable)
-                .expect("OperationId is encodable");
-            TransactionId::all_zeros()
-                .consensus_encode(&mut unreachable)
-                .expect("Amount is encodable");
-            Amount::from_sats(1000)
-                .consensus_encode(&mut unreachable)
-                .expect("Amount is encodable");
-            unreachable
+        let unreachable_state: Vec<u8> = {
+            let mut bytes = Vec::new();
+            bytes.append(&mut unreachable_operation_id.consensus_encode_to_vec());
+            bytes.append(&mut TransactionId::all_zeros().consensus_encode_to_vec());
+            bytes.append(&mut Amount::from_sats(1000).consensus_encode_to_vec());
+            bytes
         };
 
-        let unreachable_variant = {
-            let mut unreachable = Vec::<u8>::new();
-            TEST_MODULE_INSTANCE_ID
-                .consensus_encode(&mut unreachable)
-                .expect("u16 is encodable");
-            5u64.consensus_encode(&mut unreachable)
-                .expect("u64 is encodable"); // Unreachable variant
-            unreachable_state
-                .consensus_encode(&mut unreachable)
-                .expect("unreachable state is encodable");
-            unreachable
+        let unreachable_variant: Vec<u8> = {
+            let mut bytes = Vec::new();
+            bytes.append(&mut TEST_MODULE_INSTANCE_ID.consensus_encode_to_vec());
+            bytes.append(&mut 5u64.consensus_encode_to_vec()); // Unreachable variant
+            bytes.append(&mut unreachable_state.consensus_encode_to_vec());
+            bytes
         };
 
         (

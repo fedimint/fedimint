@@ -44,8 +44,7 @@ impl ApiAnnouncement {
 
     pub fn tagged_hash(&self) -> sha256::Hash {
         let mut msg = API_ANNOUNCEMENT_MESSAGE_TAG.to_vec();
-        self.consensus_encode(&mut msg)
-            .expect("writing to vec is infallible");
+        msg.append(&mut self.consensus_encode_to_vec());
         sha256::Hash::hash(&msg)
     }
 

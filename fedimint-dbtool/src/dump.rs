@@ -44,10 +44,7 @@ struct SerdeWrapper(#[serde(with = "hex::serde")] Vec<u8>);
 
 impl SerdeWrapper {
     fn from_encodable<T: Encodable>(e: &T) -> SerdeWrapper {
-        let mut bytes = vec![];
-        e.consensus_encode(&mut bytes)
-            .expect("Write to vec can't fail");
-        SerdeWrapper(bytes)
+        SerdeWrapper(e.consensus_encode_to_vec())
     }
 }
 
