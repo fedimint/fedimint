@@ -53,7 +53,7 @@ impl Event for ApiCallDone {
     const KIND: EventKind = EventKind::from_static("api-call-done");
 }
 
-use crate::db::event_log::{DBTransactionEventLogExt as _, Event, EventKind};
+use fedimint_eventlog::{DBTransactionEventLogExt as _, Event, EventKind};
 
 /// Convenience extension trait used for wrapping [`IRawFederationApi`] in
 /// a [`ClientRawFederationApi`]

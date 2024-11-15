@@ -1,5 +1,3 @@
-pub mod event_log;
-
 use std::collections::BTreeMap;
 use std::io::Cursor;
 use std::time::SystemTime;
@@ -51,8 +49,8 @@ pub enum DbKeyPrefix {
     ApiSecret = 0x36,
     PeerLastApiVersionsSummaryCache = 0x37,
     ApiUrlAnnouncement = 0x38,
-    EventLog = 0x39,
-    UnorderedEventLog = 0x3a,
+    EventLog = fedimint_eventlog::DB_KEY_PREFIX_EVENT_LOG,
+    UnorderedEventLog = fedimint_eventlog::DB_KEY_PREFIX_UNORDERED_EVENT_LOG,
 
     /// Arbitrary data of the applications integrating Fedimint client and
     /// wanting to store some Federation-specific data in Fedimint client

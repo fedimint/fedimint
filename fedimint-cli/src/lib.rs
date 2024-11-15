@@ -35,7 +35,6 @@ use fedimint_api_client::api::{
     DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, WsFederationApi,
 };
 use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
-use fedimint_client::db::event_log::EventLogId;
 use fedimint_client::meta::{FetchKind, LegacyMetaSource, MetaSource};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
@@ -50,6 +49,7 @@ use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::util::{backoff_util, handle_version_hash_command, retry, SafeUrl};
 use fedimint_core::{fedimint_build_code_version_env, runtime, Amount, PeerId, TieredMulti};
+use fedimint_eventlog::EventLogId;
 use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::{TracingSetup, LOG_CLIENT};
 use fedimint_meta_client::{MetaClientInit, MetaModuleMetaSourceWithFallback};

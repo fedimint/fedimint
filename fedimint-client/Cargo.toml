@@ -33,6 +33,7 @@ fedimint-aead = { workspace = true }
 fedimint-api-client = { path = "../fedimint-api-client", version = "=0.6.0-alpha", default-features = false }
 fedimint-core = { workspace = true }
 fedimint-derive-secret = { workspace = true }
+fedimint-eventlog = { workspace = true }
 fedimint-logging = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
@@ -48,7 +49,6 @@ tokio-stream = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
-test-log = { workspace = true }
 tracing-test = "0.2.5"
 
 [build-dependencies]

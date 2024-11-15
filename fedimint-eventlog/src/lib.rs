@@ -27,7 +27,16 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, watch};
 use tracing::{debug, trace};
 
-use super::DbKeyPrefix;
+/// DB prefixes hardcoded for use of the event log
+/// `fedimint-eventlog` was extracted from `fedimint-client` to help
+/// include/re-use in other part of the code. But fundamentally its role
+/// is to implement event log in the client.
+/// There is currently no way to inject the prefixes to use for db records,
+/// so we use these constants to keep them in sync. Any other app that will
+/// want to store its own even log, will need to use the exact same prefixes,
+/// which in practice should not be a problem.
+pub const DB_KEY_PREFIX_UNORDERED_EVENT_LOG: u8 = 0x39;
+pub const DB_KEY_PREFIX_EVENT_LOG: u8 = 0x3a;
 
 pub trait Event: serde::Serialize + serde::de::DeserializeOwned {
     const MODULE: Option<ModuleKind>;
@@ -155,7 +164,7 @@ pub struct EventLogEntry {
 impl_db_record!(
     key = UnordedEventLogId,
     value = UnorderedEventLogEntry,
-    db_prefix = DbKeyPrefix::UnorderedEventLog,
+    db_prefix = DB_KEY_PREFIX_UNORDERED_EVENT_LOG,
 );
 
 #[derive(Clone, Debug, Encodable, Decodable)]
@@ -175,7 +184,7 @@ pub struct EventLogIdPrefix(EventLogId);
 impl_db_record!(
     key = EventLogId,
     value = EventLogEntry,
-    db_prefix = DbKeyPrefix::EventLog,
+    db_prefix = DB_KEY_PREFIX_EVENT_LOG,
 );
 
 impl_db_lookup!(key = EventLogId, query_prefix = EventLogIdPrefixAll);
@@ -322,7 +331,7 @@ where
 
 /// The code that handles new unordered events and rewriters them fully ordered
 /// into the final event log.
-pub(crate) async fn run_event_log_ordering_task(
+pub async fn run_event_log_ordering_task(
     db: Database,
     mut log_ordering_task_wakeup: watch::Receiver<()>,
     log_event_added: watch::Sender<()>,
@@ -445,7 +454,7 @@ mod tests {
     use super::{
         handle_events, run_event_log_ordering_task, DBTransactionEventLogExt as _, EventLogId,
     };
-    use crate::db::event_log::EventKind;
+    use crate::EventKind;
 
     #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable)]
     pub struct TestLogIdKey;

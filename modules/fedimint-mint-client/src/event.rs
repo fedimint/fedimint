@@ -1,5 +1,5 @@
-use fedimint_client::db::event_log::{Event, EventKind};
 use fedimint_core::core::ModuleKind;
+use fedimint_eventlog::{Event, EventKind};
 use fedimint_mint_common::{Nonce, KIND};
 use serde::{Deserialize, Serialize};
 
