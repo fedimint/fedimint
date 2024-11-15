@@ -73,9 +73,7 @@ impl crate::encoding::Encodable for bitcoin::Txid {
     }
 
     fn consensus_encode_to_hex(&self) -> String {
-        let mut bytes = vec![];
-        self.consensus_encode(&mut bytes)
-            .expect("encoding to bytes can't fail for io reasons");
+        let mut bytes = self.consensus_encode_to_vec();
 
         // Just Bitcoin things: transaction hashes are encoded reverse
         bytes.reverse();
@@ -290,13 +288,10 @@ mod tests {
         ];
 
         for (network, magic_legacy_bytes, magic_bytes) in networks {
-            let mut network_legacy_encoded = Vec::new();
-            NetworkLegacyEncodingWrapper(network)
-                .consensus_encode(&mut network_legacy_encoded)
-                .unwrap();
+            let network_legacy_encoded =
+                NetworkLegacyEncodingWrapper(network).consensus_encode_to_vec();
 
-            let mut network_encoded = Vec::new();
-            network.consensus_encode(&mut network_encoded).unwrap();
+            let network_encoded = network.consensus_encode_to_vec();
 
             let network_legacy_decoded = NetworkLegacyEncodingWrapper::consensus_decode(
                 &mut Cursor::new(network_legacy_encoded.clone()),
@@ -332,10 +327,7 @@ mod tests {
         for address_str in addresses {
             let address =
                 bitcoin::Address::from_str(address_str).expect("All tested addresses are valid");
-            let mut encoding = vec![];
-            address
-                .consensus_encode(&mut encoding)
-                .expect("Encoding to vec can't fail");
+            let encoding = address.consensus_encode_to_vec();
             let mut cursor = Cursor::new(encoding);
             let parsed_address =
                 bitcoin::Address::consensus_decode(&mut cursor, &ModuleDecoderRegistry::default())

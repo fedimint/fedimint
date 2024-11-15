@@ -648,11 +648,9 @@ impl Database {
 }
 
 fn module_instance_id_to_byte_prefix(module_instance_id: u16) -> Vec<u8> {
-    let mut prefix = vec![MODULE_GLOBAL_PREFIX];
-    module_instance_id
-        .consensus_encode(&mut prefix)
-        .expect("Error encoding module instance id as prefix");
-    prefix
+    let mut bytes = vec![MODULE_GLOBAL_PREFIX];
+    bytes.append(&mut module_instance_id.consensus_encode_to_vec());
+    bytes
 }
 
 /// A database that wraps an `inner` one and adds a prefix to all operations,
@@ -1932,8 +1930,7 @@ where
 {
     fn to_bytes(&self) -> Vec<u8> {
         let mut data = vec![<Self as DatabaseLookup>::Record::DB_PREFIX];
-        self.consensus_encode(&mut data)
-            .expect("Writing to vec is infallible");
+        data.append(&mut self.consensus_encode_to_vec());
         data
     }
 }
@@ -1973,10 +1970,7 @@ where
     }
 
     fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::new();
-        self.consensus_encode(&mut bytes)
-            .expect("writing to vec can't fail");
-        bytes
+        self.consensus_encode_to_vec()
     }
 }
 

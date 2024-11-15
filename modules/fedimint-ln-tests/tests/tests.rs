@@ -881,53 +881,35 @@ mod fedimint_migration_tests {
 
         // Create an active state and inactive state that will not be migrated.
         let operation_id = OperationId::new_random();
-        let submitted_offer_variant_new = {
-            let mut submitted_offer_variant = Vec::<u8>::new();
-            TransactionId::all_zeros()
-                .consensus_encode(&mut submitted_offer_variant)
-                .expect("TransactionId is encodable");
-            invoice
-                .consensus_encode(&mut submitted_offer_variant)
-                .expect("Invoice is encodable");
+        let submitted_offer_variant_new: Vec<u8> = {
+            let mut bytes = Vec::new();
+            bytes.append(&mut TransactionId::all_zeros().consensus_encode_to_vec());
+            bytes.append(&mut invoice.consensus_encode_to_vec());
             let receiving_key = ReceivingKey::Personal(Keypair::new_global(&mut OsRng));
-            receiving_key
-                .consensus_encode(&mut submitted_offer_variant)
-                .expect("ReceivingKey is encodable");
-
-            submitted_offer_variant
+            bytes.append(&mut receiving_key.consensus_encode_to_vec());
+            bytes
         };
         let new_receive_bytes =
             create_receive_state_machine(submitted_offer_variant_new, operation_id, 0);
 
         // Create and active state and inactive state that will be migrated.
-        let submitted_offer_variant_old = {
-            let mut submitted_offer_variant = Vec::<u8>::new();
-            TransactionId::all_zeros()
-                .consensus_encode(&mut submitted_offer_variant)
-                .expect("TransactionId is encodable");
-            invoice
-                .consensus_encode(&mut submitted_offer_variant)
-                .expect("Invoice is encodable");
+        let submitted_offer_variant_old: Vec<u8> = {
+            let mut bytes = Vec::<u8>::new();
+            bytes.append(&mut TransactionId::all_zeros().consensus_encode_to_vec());
+            bytes.append(&mut invoice.consensus_encode_to_vec());
             let keypair = Keypair::new_global(&mut OsRng);
-            keypair
-                .consensus_encode(&mut submitted_offer_variant)
-                .expect("Keypair is encodable");
-
-            submitted_offer_variant
+            bytes.append(&mut keypair.consensus_encode_to_vec());
+            bytes
         };
         let old_receive_bytes =
             create_receive_state_machine(submitted_offer_variant_old, operation_id, 0);
 
-        let confirmed_offer_variant_old = {
-            let mut confirmed_variant = Vec::<u8>::new();
-            invoice
-                .consensus_encode(&mut confirmed_variant)
-                .expect("Invoice is encodable");
+        let confirmed_offer_variant_old: Vec<u8> = {
+            let mut bytes = Vec::new();
+            bytes.append(&mut invoice.consensus_encode_to_vec());
             let keypair = Keypair::new_global(&mut OsRng);
-            keypair
-                .consensus_encode(&mut confirmed_variant)
-                .expect("Keypair is encodable");
-            confirmed_variant
+            bytes.append(&mut keypair.consensus_encode_to_vec());
+            bytes
         };
         let old_confirmed_bytes =
             create_receive_state_machine(confirmed_offer_variant_old, operation_id, 2);
@@ -957,19 +939,19 @@ mod fedimint_migration_tests {
             invoice: invoice.clone(),
         };
 
-        let mut refund_state = Vec::new();
-        TransactionId::all_zeros()
-            .consensus_encode(&mut refund_state)
-            .expect("TransactionId is encodable");
-        vec![OutPoint {
-            txid: TransactionId::all_zeros(),
-            out_idx: 0,
-        }]
-        .consensus_encode(&mut refund_state)
-        .expect("OutPoint vector is encodable");
+        let refund_state: Vec<u8> = {
+            let mut bytes = Vec::new();
+            bytes.append(&mut TransactionId::all_zeros().consensus_encode_to_vec());
+            bytes.append(
+                &mut vec![OutPoint {
+                    txid: TransactionId::all_zeros(),
+                    out_idx: 0,
+                }]
+                .consensus_encode_to_vec(),
+            );
+            bytes
+        };
         let old_refund_bytes = create_pay_state_machine(refund_state, ln_common.clone(), 5u64);
-
-        let mut funded_state = Vec::new();
 
         let hop = RouteHintHop {
             src_node_id: pk,
@@ -982,34 +964,38 @@ mod fedimint_migration_tests {
         };
         let route_hints = vec![RouteHint(vec![hop])];
 
-        PayInvoicePayload {
-            federation_id: FederationId::dummy(),
-            contract_id: outgoing_contract.contract_id(),
-            payment_data: PaymentData::Invoice(invoice),
-            preimage_auth: sha256::Hash::hash(&BYTE_32),
-        }
-        .consensus_encode(&mut funded_state)
-        .expect("PayInvoicePayload is encodable");
-        LightningGateway {
-            federation_index: 3,
-            gateway_redeem_key: pk,
-            node_pub_key: pk,
-            lightning_alias: "MyLightningNode".to_string(),
-            api: SafeUrl::from_str("http://mylightningnode.com")
-                .expect("SafeUrl parsing should not fail"),
-            route_hints,
-            fees: RoutingFees {
-                base_msat: 10,
-                proportional_millionths: 1000,
-            },
-            gateway_id: pk,
-            supports_private_payments: false,
-        }
-        .consensus_encode(&mut funded_state)
-        .expect("LightningGateway is encodable");
-        10000u32
-            .consensus_encode(&mut funded_state)
-            .expect("Timelock is encodable");
+        let funded_state: Vec<u8> = {
+            let mut bytes = Vec::new();
+            bytes.append(
+                &mut PayInvoicePayload {
+                    federation_id: FederationId::dummy(),
+                    contract_id: outgoing_contract.contract_id(),
+                    payment_data: PaymentData::Invoice(invoice),
+                    preimage_auth: sha256::Hash::hash(&BYTE_32),
+                }
+                .consensus_encode_to_vec(),
+            );
+            bytes.append(
+                &mut LightningGateway {
+                    federation_index: 3,
+                    gateway_redeem_key: pk,
+                    node_pub_key: pk,
+                    lightning_alias: "MyLightningNode".to_string(),
+                    api: SafeUrl::from_str("http://mylightningnode.com")
+                        .expect("SafeUrl parsing should not fail"),
+                    route_hints,
+                    fees: RoutingFees {
+                        base_msat: 10,
+                        proportional_millionths: 1000,
+                    },
+                    gateway_id: pk,
+                    supports_private_payments: false,
+                }
+                .consensus_encode_to_vec(),
+            );
+            bytes.append(&mut 10000u32.consensus_encode_to_vec());
+            bytes
+        };
         let old_funded_bytes = create_pay_state_machine(funded_state, ln_common, 2u64);
 
         (
@@ -1038,29 +1024,22 @@ mod fedimint_migration_tests {
         operation_id: OperationId,
         sm_state: u64,
     ) -> Vec<u8> {
-        let receive_variant = {
-            let mut receive_variant = Vec::<u8>::new();
-            operation_id
-                .consensus_encode(&mut receive_variant)
-                .expect("OperationId is encodable");
-            sm_state
-                .consensus_encode(&mut receive_variant)
-                .expect("u64 is encodable");
-            state
-                .consensus_encode(&mut receive_variant)
-                .expect("State is encodable");
-            receive_variant
+        let receive_variant: Vec<u8> = {
+            let mut bytes = Vec::<u8>::new();
+            bytes.append(&mut operation_id.consensus_encode_to_vec());
+            bytes.append(&mut sm_state.consensus_encode_to_vec());
+            bytes.append(&mut state.consensus_encode_to_vec());
+            bytes
         };
 
-        let mut sm_bytes = Vec::<u8>::new();
-        TEST_MODULE_INSTANCE_ID
-            .consensus_encode(&mut sm_bytes)
-            .expect("u16 is encodable");
-        2u64.consensus_encode(&mut sm_bytes)
-            .expect("u64 is encodable"); // Receive state machine variant
-        receive_variant
-            .consensus_encode(&mut sm_bytes)
-            .expect("receive variant is encodable");
+        let sm_bytes: Vec<u8> = {
+            let mut bytes = Vec::new();
+            bytes.append(&mut TEST_MODULE_INSTANCE_ID.consensus_encode_to_vec());
+            bytes.append(&mut 2u64.consensus_encode_to_vec()); // Receive state machine variant.
+            bytes.append(&mut receive_variant.consensus_encode_to_vec());
+            bytes
+        };
+
         sm_bytes
     }
 
@@ -1072,26 +1051,21 @@ mod fedimint_migration_tests {
         ln_pay_common: LightningPayCommon,
         sm_state: u64,
     ) -> Vec<u8> {
-        let mut ln_pay_variant = Vec::<u8>::new();
-        ln_pay_common
-            .consensus_encode(&mut ln_pay_variant)
-            .expect("LnPayCommon is encodable");
-        sm_state
-            .consensus_encode(&mut ln_pay_variant)
-            .expect("u64 is encodable");
-        state
-            .consensus_encode(&mut ln_pay_variant)
-            .expect("State is encodable");
+        let ln_pay_variant: Vec<u8> = {
+            let mut bytes = Vec::new();
+            bytes.append(&mut ln_pay_common.consensus_encode_to_vec());
+            bytes.append(&mut sm_state.consensus_encode_to_vec());
+            bytes.append(&mut state.consensus_encode_to_vec());
+            bytes
+        };
 
-        let mut sm_bytes = Vec::<u8>::new();
-        TEST_MODULE_INSTANCE_ID
-            .consensus_encode(&mut sm_bytes)
-            .expect("u16 is encodable");
-        1u64.consensus_encode(&mut sm_bytes)
-            .expect("u64 is encodable"); // LightningPay state machine variant
-        ln_pay_variant
-            .consensus_encode(&mut sm_bytes)
-            .expect("ln pay variant is encodable");
+        let sm_bytes: Vec<u8> = {
+            let mut bytes = Vec::new();
+            bytes.append(&mut TEST_MODULE_INSTANCE_ID.consensus_encode_to_vec());
+            bytes.append(&mut 1u64.consensus_encode_to_vec()); // LightningPay state machine variant.
+            bytes.append(&mut ln_pay_variant.consensus_encode_to_vec());
+            bytes
+        };
         sm_bytes
     }
 

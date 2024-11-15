@@ -76,7 +76,6 @@ use fedimint_wallet_common::{
     Rbf, WalletInputError, WalletOutputError, WalletOutputV0, MODULE_CONSENSUS_VERSION,
 };
 use futures::{FutureExt, StreamExt};
-use hex::ToHex;
 use metrics::{
     WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS, WALLET_PEGIN_SATS,
     WALLET_PEGOUT_FEES_SATS, WALLET_PEGOUT_SATS,
@@ -1860,13 +1859,10 @@ impl Serialize for PendingTransaction {
     where
         S: serde::Serializer,
     {
-        let mut bytes = Vec::new();
-        self.consensus_encode(&mut bytes).unwrap();
-
         if serializer.is_human_readable() {
-            serializer.serialize_str(&bytes.encode_hex::<String>())
+            serializer.serialize_str(&self.consensus_encode_to_hex())
         } else {
-            serializer.serialize_bytes(&bytes)
+            serializer.serialize_bytes(&self.consensus_encode_to_vec())
         }
     }
 }
@@ -1890,13 +1886,10 @@ impl Serialize for UnsignedTransaction {
     where
         S: serde::Serializer,
     {
-        let mut bytes = Vec::new();
-        self.consensus_encode(&mut bytes).unwrap();
-
         if serializer.is_human_readable() {
-            serializer.serialize_str(&bytes.encode_hex::<String>())
+            serializer.serialize_str(&self.consensus_encode_to_hex())
         } else {
-            serializer.serialize_bytes(&bytes)
+            serializer.serialize_bytes(&self.consensus_encode_to_vec())
         }
     }
 }

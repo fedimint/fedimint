@@ -292,44 +292,28 @@ mod tests {
         let operation_id = OperationId::new_random();
         let txid = TransactionId::from_byte_array([42; 32]);
 
-        let submitted_offer_variant_old = {
-            let mut submitted_offer_variant = Vec::<u8>::new();
-            txid.consensus_encode(&mut submitted_offer_variant)
-                .expect("TransactionId is encodable");
-            dummy_invoice
-                .consensus_encode(&mut submitted_offer_variant)
-                .expect("Invoice is encodable");
-            claim_key
-                .consensus_encode(&mut submitted_offer_variant)
-                .expect("Keypair is encodable");
-
-            submitted_offer_variant
+        let submitted_offer_variant_old: Vec<u8> = {
+            let mut bytes = Vec::new();
+            bytes.append(&mut txid.consensus_encode_to_vec());
+            bytes.append(&mut dummy_invoice.consensus_encode_to_vec());
+            bytes.append(&mut claim_key.consensus_encode_to_vec());
+            bytes
         };
 
-        let receive_variant = {
-            let mut receive_variant = Vec::<u8>::new();
-            operation_id
-                .consensus_encode(&mut receive_variant)
-                .expect("OperationId is encodable");
-            0u64.consensus_encode(&mut receive_variant)
-                .expect("u64 is encodable"); // Submitted Invoice variant
-            submitted_offer_variant_old
-                .consensus_encode(&mut receive_variant)
-                .expect("State is encodable");
-            receive_variant
+        let receive_variant: Vec<u8> = {
+            let mut bytes = Vec::new();
+            bytes.append(&mut operation_id.consensus_encode_to_vec());
+            bytes.append(&mut 0u64.consensus_encode_to_vec()); // Submitted Invoice variant.
+            bytes.append(&mut submitted_offer_variant_old.consensus_encode_to_vec());
+            bytes
         };
 
-        let old_state = {
-            let mut sm_bytes = Vec::<u8>::new();
-            instance_id
-                .consensus_encode(&mut sm_bytes)
-                .expect("u16 is encodable");
-            2u64.consensus_encode(&mut sm_bytes)
-                .expect("u64 is encodable"); // Receive state machine variant
-            receive_variant
-                .consensus_encode(&mut sm_bytes)
-                .expect("receive variant is encodable");
-            sm_bytes
+        let old_state: Vec<u8> = {
+            let mut bytes = Vec::new();
+            bytes.append(&mut instance_id.consensus_encode_to_vec());
+            bytes.append(&mut 2u64.consensus_encode_to_vec()); // Receive state machine variant.
+            bytes.append(&mut receive_variant.consensus_encode_to_vec());
+            bytes
         };
 
         let old_states = vec![(old_state, operation_id)];
@@ -373,27 +357,27 @@ mod tests {
         yysgqddrv0jqhyf3q6z75rt7nrwx0crxme87s8rx2rt8xr9slzu0p3xg3f3f0zmqavtmsnqaj5v0y5mdzszah7thrmg\
         2we42dvjggjkf44egqheymyw",).expect("Invalid invoice");
 
-        let confirmed_variant = {
-            let mut confirmed_variant = Vec::<u8>::new();
-            dummy_invoice.consensus_encode(&mut confirmed_variant)?;
-            claim_key.consensus_encode(&mut confirmed_variant)?;
-            confirmed_variant
+        let confirmed_variant: Vec<u8> = {
+            let mut bytes = Vec::new();
+            bytes.append(&mut dummy_invoice.consensus_encode_to_vec());
+            bytes.append(&mut claim_key.consensus_encode_to_vec());
+            bytes
         };
 
-        let receive_variant = {
-            let mut receive_variant = Vec::<u8>::new();
-            operation_id.consensus_encode(&mut receive_variant)?;
-            2u64.consensus_encode(&mut receive_variant)?; // Enum variant confirmed invoice
-            confirmed_variant.consensus_encode(&mut receive_variant)?;
-            receive_variant
+        let receive_variant: Vec<u8> = {
+            let mut bytes = Vec::new();
+            bytes.append(&mut operation_id.consensus_encode_to_vec());
+            bytes.append(&mut 2u64.consensus_encode_to_vec()); // Enum variant confirmed invoice.
+            bytes.append(&mut confirmed_variant.consensus_encode_to_vec());
+            bytes
         };
 
-        let old_sm_bytes = {
-            let mut sm_bytes_old = Vec::<u8>::new();
-            instance_id.consensus_encode(&mut sm_bytes_old)?;
-            2u64.consensus_encode(&mut sm_bytes_old)?; // Enum variant Receive
-            receive_variant.consensus_encode(&mut sm_bytes_old)?;
-            sm_bytes_old
+        let old_sm_bytes: Vec<u8> = {
+            let mut bytes = Vec::new();
+            bytes.append(&mut instance_id.consensus_encode_to_vec());
+            bytes.append(&mut 2u64.consensus_encode_to_vec()); // Enum variant Receive.
+            bytes.append(&mut receive_variant.consensus_encode_to_vec());
+            bytes
         };
 
         let old_states = vec![(old_sm_bytes, operation_id)];
@@ -440,44 +424,28 @@ mod tests {
         let operation_id = OperationId::new_random();
         let txid = TransactionId::from_byte_array([42; 32]);
 
-        let submitted_offer_variant_deleted = {
-            let mut submitted_offer_variant = Vec::<u8>::new();
-            txid.consensus_encode(&mut submitted_offer_variant)
-                .expect("TransactionId is encodable");
-            dummy_invoice
-                .consensus_encode(&mut submitted_offer_variant)
-                .expect("Invoice is encodable");
-            ReceivingKey::Personal(claim_key)
-                .consensus_encode(&mut submitted_offer_variant)
-                .expect("Keypair is encodable");
-
-            submitted_offer_variant
+        let submitted_offer_variant_deleted: Vec<u8> = {
+            let mut bytes = Vec::new();
+            bytes.append(&mut txid.consensus_encode_to_vec());
+            bytes.append(&mut dummy_invoice.consensus_encode_to_vec());
+            bytes.append(&mut ReceivingKey::Personal(claim_key).consensus_encode_to_vec());
+            bytes
         };
 
-        let receive_variant = {
-            let mut receive_variant = Vec::<u8>::new();
-            operation_id
-                .consensus_encode(&mut receive_variant)
-                .expect("OperationId is encodable");
-            5u64.consensus_encode(&mut receive_variant)
-                .expect("u64 is encodable"); // Deleted Submitted Invoice variant
-            submitted_offer_variant_deleted
-                .consensus_encode(&mut receive_variant)
-                .expect("State is encodable");
-            receive_variant
+        let receive_variant: Vec<u8> = {
+            let mut bytes = Vec::new();
+            bytes.append(&mut operation_id.consensus_encode_to_vec());
+            bytes.append(&mut 5u64.consensus_encode_to_vec()); // Deleted Submitted Invoice variant.
+            bytes.append(&mut submitted_offer_variant_deleted.consensus_encode_to_vec());
+            bytes
         };
 
-        let old_state = {
-            let mut sm_bytes = Vec::<u8>::new();
-            instance_id
-                .consensus_encode(&mut sm_bytes)
-                .expect("u16 is encodable");
-            2u64.consensus_encode(&mut sm_bytes)
-                .expect("u64 is encodable"); // Receive state machine variant
-            receive_variant
-                .consensus_encode(&mut sm_bytes)
-                .expect("receive variant is encodable");
-            sm_bytes
+        let old_state: Vec<u8> = {
+            let mut bytes = Vec::new();
+            bytes.append(&mut instance_id.consensus_encode_to_vec());
+            bytes.append(&mut 2u64.consensus_encode_to_vec()); // Receive state machine variant.
+            bytes.append(&mut receive_variant.consensus_encode_to_vec());
+            bytes
         };
 
         let old_states = vec![(old_state, operation_id)];

@@ -231,11 +231,7 @@ impl FromStr for InviteCode {
 /// Parses the invite code from a bech32 string
 impl Display for InviteCode {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
-        let mut data = vec![];
-
-        self.consensus_encode(&mut data)
-            .expect("Vec<u8> provides capacity");
-
+        let data = self.consensus_encode_to_vec();
         let encode = bech32::encode::<Bech32m>(BECH32_HRP, &data).map_err(|_| fmt::Error)?;
         formatter.write_str(&encode)
     }
