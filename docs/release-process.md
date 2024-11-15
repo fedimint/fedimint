@@ -11,6 +11,7 @@ The release process evolves each cycle, so don't hesitate to make frequent edits
     - Push the release branch to `upstream`
     - Add branch protection rules to the release branch in GH
     - Push a signed tag to GH
+    - Create a PR that bumps master to a new `*-alpha` (e.g. `0.4.0-alpha -> 0.5.0-alpha`)
   - If there is already a `releases/v*` branch
     - Bump the cargo version to a new release candidate (e.g `0.4.3-rc.0`)
     - Open a PR targeting the `releases/v*` branch
