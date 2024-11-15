@@ -11,7 +11,6 @@ use fedimint_core::envs::is_env_var_set;
 use fedimint_core::task::{block_in_place, TaskGroup, TaskHandle};
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::contracts::Preimage;
-use ldk_node::config::EsploraSyncConfig;
 use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::ln::PaymentHash;
 use ldk_node::lightning::routing::gossip::NodeAlias;
@@ -88,16 +87,7 @@ impl GatewayLdkClient {
         });
         node_builder
             .set_entropy_bip39_mnemonic(mnemonic, None)
-            .set_chain_source_esplora(
-                esplora_server_url.to_string(),
-                Some(EsploraSyncConfig {
-                    // TODO: Remove these and rely on the default values.
-                    // See here for details: https://github.com/lightningdevkit/ldk-node/issues/339#issuecomment-2344230472
-                    onchain_wallet_sync_interval_secs: 10,
-                    lightning_wallet_sync_interval_secs: 10,
-                    ..Default::default()
-                }),
-            );
+            .set_chain_source_esplora(esplora_server_url.to_string(), None);
         let Some(data_dir_str) = data_dir.to_str() else {
             return Err(anyhow::anyhow!("Invalid data dir path"));
         };
