@@ -2921,7 +2921,7 @@
         ClientOutputSM&lt;LightningClientStateMachines&gt;,
         ContractId,
     )&gt; {
-        <span class="kw">let </span>federation_currency: Currency = <span class="self">self</span>.cfg.network.into();
+        <span class="kw">let </span>federation_currency: Currency = <span class="self">self</span>.cfg.network.<span class="number">0</span>.into();
         <span class="kw">let </span>invoice_currency = invoice.currency();
         <span class="macro">ensure!</span>(
             federation_currency == invoice_currency,
@@ -3865,7 +3865,7 @@
             src_node_id,
             short_channel_id,
             <span class="kw-2">&amp;</span>route_hints,
-            <span class="self">self</span>.cfg.network,
+            <span class="self">self</span>.cfg.network.<span class="number">0</span>,
         )<span class="question-mark">?</span>;
 
         <span class="kw">let </span>tx =

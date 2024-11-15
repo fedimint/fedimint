@@ -2156,7 +2156,9 @@
 <a href="#2155" id="2155">2155</a>
 <a href="#2156" id="2156">2156</a>
 <a href="#2157" id="2157">2157</a>
-<a href="#2158" id="2158">2158</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2158" id="2158">2158</a>
+<a href="#2159" id="2159">2159</a>
+<a href="#2160" id="2160">2160</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2211,6 +2213,7 @@
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 <span class="kw">use </span>fedimint_core::db::{apply_migrations_server, Database, DatabaseTransaction};
+<span class="kw">use </span>fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
 <span class="kw">use </span>fedimint_core::secp256k1::schnorr::Signature;
@@ -2674,7 +2677,7 @@
                 .<span class="kw">await
         </span>};
 
-        <span class="kw">if </span>gateway_config.network != lightning_network {
+        <span class="kw">if </span>gateway_config.network.<span class="number">0 </span>!= lightning_network {
             <span class="macro">warn!</span>(
                 <span class="string">"Lightning node does not match previously configured gateway network : ({:?})"</span>,
                 gateway_config.network
@@ -2983,7 +2986,7 @@
             lightning_alias: <span class="prelude-val">Some</span>(lightning_context.lightning_alias.clone()),
             gateway_id: <span class="self">self</span>.gateway_id,
             gateway_state: <span class="self">self</span>.state.read().<span class="kw">await</span>.to_string(),
-            network: <span class="prelude-val">Some</span>(gateway_config.network),
+            network: <span class="prelude-val">Some</span>(gateway_config.network.<span class="number">0</span>),
             block_height: <span class="prelude-val">Some</span>(node_info.<span class="number">3</span>),
             synced_to_chain: node_info.<span class="number">4</span>,
             api: <span class="self">self</span>.versioned_api.clone(),
@@ -3329,7 +3332,7 @@
         };
 
         <span class="kw">if </span><span class="self">self</span>.is_running_lnv1() {
-            <span class="self">Self</span>::check_lnv1_federation_network(<span class="kw-2">&amp;</span>client, gateway_config.network).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="self">Self</span>::check_lnv1_federation_network(<span class="kw-2">&amp;</span>client, gateway_config.network.<span class="number">0</span>).<span class="kw">await</span><span class="question-mark">?</span>;
             client
                 .get_first_module::&lt;GatewayClientModule&gt;()<span class="question-mark">?
                 </span>.try_register_with_federation(
@@ -3343,7 +3346,7 @@
         }
 
         <span class="kw">if </span><span class="self">self</span>.is_running_lnv2() {
-            <span class="self">Self</span>::check_lnv2_federation_network(<span class="kw-2">&amp;</span>client, gateway_config.network).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="self">Self</span>::check_lnv2_federation_network(<span class="kw-2">&amp;</span>client, gateway_config.network.<span class="number">0</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         }
 
         <span class="comment">// no need to enter span earlier, because connect-fed has a span
@@ -3481,7 +3484,7 @@
                         <span class="string">"Cannot change network while connected to a federation"</span>.to_string(),
                     ));
                 }
-                prev_config.network = network;
+                prev_config.network.<span class="number">0 </span>= network;
             }
 
             <span class="kw">if let </span><span class="prelude-val">Some</span>(num_route_hints) = num_route_hints {
@@ -3505,7 +3508,7 @@
 
             GatewayConfiguration {
                 hashed_password,
-                network: lightning_network,
+                network: NetworkLegacyEncodingWrapper(lightning_network),
                 num_route_hints: DEFAULT_NUM_ROUTE_HINTS,
                 routing_fees: DEFAULT_FEES,
                 password_salt,
@@ -3844,7 +3847,8 @@
             .fees
             .clone()
             .unwrap_or(GatewayFee(DEFAULT_FEES));
-        <span class="kw">let </span>network = gateway_parameters.network.unwrap_or(DEFAULT_NETWORK);
+        <span class="kw">let </span>network =
+            NetworkLegacyEncodingWrapper(gateway_parameters.network.unwrap_or(DEFAULT_NETWORK));
         <span class="kw">let </span>password_salt: [u8; <span class="number">16</span>] = rand::thread_rng().gen();
         <span class="kw">let </span>hashed_password = hash_password(password, password_salt);
         <span class="kw">let </span>gateway_config = GatewayConfiguration {
@@ -3999,7 +4003,7 @@
             </span>))))<span class="question-mark">?</span>;
         <span class="kw">let </span>ln_cfg: <span class="kw-2">&amp;</span>LightningClientConfig = cfg.cast()<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>ln_cfg.network != network {
+        <span class="kw">if </span>ln_cfg.network.<span class="number">0 </span>!= network {
             <span class="macro">error!</span>(
                 <span class="string">"Federation {federation_id} runs on {} but this gateway supports {network}"</span>,
                 ln_cfg.network,
@@ -4030,15 +4034,15 @@
             </span>))))<span class="question-mark">?</span>;
         <span class="kw">let </span>ln_cfg: <span class="kw-2">&amp;</span>fedimint_lnv2_common::config::LightningClientConfig = cfg.cast()<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>ln_cfg.network.<span class="number">0 </span>!= network {
+        <span class="kw">if </span>ln_cfg.network != network {
             <span class="macro">error!</span>(
                 <span class="string">"Federation {federation_id} runs on {} but this gateway supports {network}"</span>,
-                ln_cfg.network.<span class="number">0</span>,
+                ln_cfg.network,
             );
             <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::ClientCreationError(<span class="macro">anyhow!</span>(<span class="macro">format!</span>(
                 <span class="string">"Unsupported network {}"</span>,
-                ln_cfg.network.<span class="number">0
-            </span>))));
+                ln_cfg.network
+            ))));
         }
 
         <span class="prelude-val">Ok</span>(())

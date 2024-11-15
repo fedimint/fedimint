@@ -1482,7 +1482,8 @@
 <a href="#1481" id="1481">1481</a>
 <a href="#1482" id="1482">1482</a>
 <a href="#1483" id="1483">1483</a>
-<a href="#1484" id="1484">1484</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1484" id="1484">1484</a>
+<a href="#1485" id="1485">1485</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -1501,6 +1502,7 @@
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseValue, IDatabaseTransactionOpsCoreTyped};
+<span class="kw">use </span>fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
@@ -1726,7 +1728,7 @@
                         consensus: LightningConfigConsensus {
                             threshold_pub_keys: pks.clone(),
                             fee_consensus: FeeConsensus::default(),
-                            network: params.consensus.network,
+                            network: NetworkLegacyEncodingWrapper(params.consensus.network),
                         },
                         private: LightningConfigPrivate {
                             threshold_sec_key: threshold_crypto::serde_impl::SerdeSecret(sk),
@@ -1757,7 +1759,7 @@
             consensus: LightningConfigConsensus {
                 threshold_pub_keys: keys.public_key_set,
                 fee_consensus: FeeConsensus::default(),
-                network: params.consensus.network,
+                network: NetworkLegacyEncodingWrapper(params.consensus.network),
             },
             private: LightningConfigPrivate {
                 threshold_sec_key: keys.secret_key_share,

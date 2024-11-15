@@ -577,13 +577,13 @@
 <a href="#576" id="576">576</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin::hashes::sha256;
-<span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::db::{
     CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
     MigrationContext,
 };
+<span class="kw">use </span>fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1, Amount};
@@ -902,7 +902,7 @@
     num_route_hints: u32,
     <span class="attr">#[serde(with = <span class="string">"serde_routing_fees"</span>)]
     </span>routing_fees: RoutingFees,
-    network: Network,
+    network: NetworkLegacyEncodingWrapper,
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
@@ -914,7 +914,7 @@
     <span class="kw">pub </span>num_route_hints: u32,
     <span class="attr">#[serde(with = <span class="string">"serde_routing_fees"</span>)]
     </span><span class="kw">pub </span>routing_fees: RoutingFees,
-    <span class="kw">pub </span>network: Network,
+    <span class="kw">pub </span>network: NetworkLegacyEncodingWrapper,
     <span class="kw">pub </span>password_salt: [u8; <span class="number">16</span>],
 }
 
@@ -1070,7 +1070,7 @@
             password: <span class="string">"EXAMPLE"</span>.to_string(),
             num_route_hints: <span class="number">2</span>,
             routing_fees: DEFAULT_FEES,
-            network: Network::Regtest,
+            network: NetworkLegacyEncodingWrapper(bitcoin::Network::Regtest),
         };
 
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>GatewayConfigurationKeyV0, <span class="kw-2">&amp;</span>gateway_configuration)

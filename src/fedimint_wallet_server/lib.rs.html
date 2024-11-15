@@ -2021,7 +2021,17 @@
 <a href="#2020" id="2020">2020</a>
 <a href="#2021" id="2021">2021</a>
 <a href="#2022" id="2022">2022</a>
-<a href="#2023" id="2023">2023</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2023" id="2023">2023</a>
+<a href="#2024" id="2024">2024</a>
+<a href="#2025" id="2025">2025</a>
+<a href="#2026" id="2026">2026</a>
+<a href="#2027" id="2027">2027</a>
+<a href="#2028" id="2028">2028</a>
+<a href="#2029" id="2029">2029</a>
+<a href="#2030" id="2030">2030</a>
+<a href="#2031" id="2031">2031</a>
+<a href="#2032" id="2032">2032</a>
+<a href="#2033" id="2033">2033</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -2065,6 +2075,7 @@
     CoreMigrationFn, Database, DatabaseTransaction, DatabaseVersion,
     IDatabaseTransactionOpsCoreTyped,
 };
+<span class="kw">use </span>fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::envs::{is_rbf_withdrawal_enabled, is_running_in_test_env, BitcoinRpcConfig};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
@@ -2616,7 +2627,7 @@
 
         <span class="kw">let </span>fee_rate = <span class="self">self</span>.consensus_fee_rate(dbtx).<span class="kw">await</span>;
 
-        StatelessWallet::validate_tx(<span class="kw-2">&amp;</span>tx, output, fee_rate, <span class="self">self</span>.cfg.consensus.network)<span class="question-mark">?</span>;
+        StatelessWallet::validate_tx(<span class="kw-2">&amp;</span>tx, output, fee_rate, <span class="self">self</span>.cfg.consensus.network.<span class="number">0</span>)<span class="question-mark">?</span>;
 
         <span class="self">self</span>.offline_wallet().sign_psbt(<span class="kw-2">&amp;mut </span>tx.psbt);
 
@@ -2872,10 +2883,12 @@
 
         <span class="kw">let </span>bitcoind_rpc = bitcoind;
 
-        <span class="kw">let </span>bitcoind_net = bitcoind_rpc
-            .get_network()
-            .<span class="kw">await
-            </span>.map_err(|e| WalletCreationError::RpcError(e.to_string()))<span class="question-mark">?</span>;
+        <span class="kw">let </span>bitcoind_net = NetworkLegacyEncodingWrapper(
+            bitcoind_rpc
+                .get_network()
+                .<span class="kw">await
+                </span>.map_err(|e| WalletCreationError::RpcError(e.to_string()))<span class="question-mark">?</span>,
+        );
         <span class="kw">if </span>bitcoind_net != cfg.consensus.network {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletCreationError::WrongNetwork(
                 cfg.consensus.network,
@@ -3534,8 +3547,8 @@
         <span class="kw">if let </span>WalletOutputV0::PegOut(peg_out) = output {
             <span class="kw">if </span>!peg_out.recipient.is_valid_for_network(network) {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(WalletOutputError::WrongNetwork(
-                    network,
-                    get_network_for_address(<span class="kw-2">&amp;</span>peg_out.recipient),
+                    NetworkLegacyEncodingWrapper(network),
+                    NetworkLegacyEncodingWrapper(get_network_for_address(<span class="kw-2">&amp;</span>peg_out.recipient)),
                 ));
             }
         }
@@ -3929,6 +3942,7 @@
     <span class="kw">use </span>bitcoin::hashes::Hash;
     <span class="kw">use </span>bitcoin::Network::{Bitcoin, Testnet};
     <span class="kw">use </span>bitcoin::{secp256k1, Address, Amount, OutPoint, Txid};
+    <span class="kw">use </span>fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
     <span class="kw">use </span>fedimint_core::Feerate;
     <span class="kw">use </span>fedimint_wallet_common::{PegOut, PegOutFees, Rbf, WalletOutputV0};
     <span class="kw">use </span>miniscript::descriptor::Wsh;
@@ -4034,7 +4048,13 @@
             fees: PegOutFees::new(<span class="number">100</span>, weight),
         });
         <span class="kw">let </span>res = StatelessWallet::validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>output, fee, Testnet);
-        <span class="macro">assert_eq!</span>(res, <span class="prelude-val">Err</span>(WalletOutputError::WrongNetwork(Testnet, Bitcoin)));
+        <span class="macro">assert_eq!</span>(
+            res,
+            <span class="prelude-val">Err</span>(WalletOutputError::WrongNetwork(
+                NetworkLegacyEncodingWrapper(Testnet),
+                NetworkLegacyEncodingWrapper(Bitcoin)
+            ))
+        );
     }
 
     <span class="kw">fn </span>rbf(sats_per_kvb: u64, total_weight: u64) -&gt; WalletOutputV0 {

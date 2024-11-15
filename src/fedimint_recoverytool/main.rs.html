@@ -504,7 +504,7 @@
             .expect(<span class="string">"Malformed wallet config"</span>);
         <span class="kw">let </span>base_descriptor = wallet_cfg.consensus.peg_in_descriptor;
         <span class="kw">let </span>base_key = wallet_cfg.private.peg_in_key;
-        <span class="kw">let </span>network = wallet_cfg.consensus.network;
+        <span class="kw">let </span>network = wallet_cfg.consensus.network.<span class="number">0</span>;
 
         (base_descriptor, base_key, network)
     } <span class="kw">else if let </span>(<span class="prelude-val">Some</span>(descriptor), <span class="prelude-val">Some</span>(key)) = (opts.descriptor, opts.key) {

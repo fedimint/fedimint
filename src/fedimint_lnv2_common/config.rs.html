@@ -209,12 +209,10 @@
 <a href="#208" id="208">208</a>
 <a href="#209" id="209">209</a>
 <a href="#210" id="210">210</a>
-<a href="#211" id="211">211</a>
-<a href="#212" id="212">212</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#211" id="211">211</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">pub use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
-<span class="kw">use </span>fedimint_core::encoding::btc::NetworkSaneEncodingWrapper;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::{plugin_types_trait_impl_config, Amount, PeerId};
@@ -271,7 +269,7 @@
     <span class="kw">pub </span>tpe_agg_pk: AggregatePublicKey,
     <span class="kw">pub </span>tpe_pks: BTreeMap&lt;PeerId, PublicKeyShare&gt;,
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
-    <span class="kw">pub </span>network: NetworkSaneEncodingWrapper,
+    <span class="kw">pub </span>network: Network,
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
@@ -284,7 +282,7 @@
     <span class="kw">pub </span>tpe_agg_pk: AggregatePublicKey,
     <span class="kw">pub </span>tpe_pks: BTreeMap&lt;PeerId, PublicKeyShare&gt;,
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
-    <span class="kw">pub </span>network: NetworkSaneEncodingWrapper,
+    <span class="kw">pub </span>network: Network,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>LightningClientConfig {
@@ -401,7 +399,7 @@
             })
             .collect(),
         fee_consensus: FeeConsensus::new(<span class="number">1000</span>).expect(<span class="string">"Relative fee is within range"</span>),
-        network: NetworkSaneEncodingWrapper(config.network),
+        network: config.network.<span class="number">0</span>,
     }
 }
 

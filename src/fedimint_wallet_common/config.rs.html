@@ -205,11 +205,13 @@
 <a href="#204" id="204">204</a>
 <a href="#205" id="205">205</a>
 <a href="#206" id="206">206</a>
-<a href="#207" id="207">207</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin::secp256k1::SecretKey;
 <span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
+<span class="kw">use </span>fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::module::serde_json;
@@ -293,7 +295,7 @@
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>WalletConfigConsensus {
     <span class="doccomment">/// Bitcoin network (e.g. testnet, bitcoin)
-    </span><span class="kw">pub </span>network: Network,
+    </span><span class="kw">pub </span>network: NetworkLegacyEncodingWrapper,
     <span class="doccomment">/// The federations public peg-in-descriptor
     </span><span class="kw">pub </span>peg_in_descriptor: PegInDescriptor,
     <span class="doccomment">/// The public keys for the bitcoin multisig
@@ -321,7 +323,7 @@
     <span class="doccomment">/// The federations public peg-in-descriptor
     </span><span class="kw">pub </span>peg_in_descriptor: PegInDescriptor,
     <span class="doccomment">/// The bitcoin network the client will use
-    </span><span class="kw">pub </span>network: Network,
+    </span><span class="kw">pub </span>network: NetworkLegacyEncodingWrapper,
     <span class="doccomment">/// Confirmations required for a peg in to be accepted by federation
     </span><span class="kw">pub </span>finality_delay: u32,
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
@@ -389,7 +391,7 @@
             local: WalletConfigLocal { bitcoin_rpc },
             private: WalletConfigPrivate { peg_in_key: sk },
             consensus: WalletConfigConsensus {
-                network,
+                network: NetworkLegacyEncodingWrapper(network),
                 peg_in_descriptor,
                 peer_peg_in_keys: pubkeys,
                 finality_delay,

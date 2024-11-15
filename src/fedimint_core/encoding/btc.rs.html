@@ -347,7 +347,16 @@
 <a href="#346" id="346">346</a>
 <a href="#347" id="347">347</a>
 <a href="#348" id="348">348</a>
-<a href="#349" id="349">349</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::format_err;
@@ -486,9 +495,40 @@
     }
 }
 
+<span class="doccomment">/// Wrapper around `bitcoin::Network` that encodes and decodes the network as a
+/// little-endian u32. This is here for backwards compatibility and is used by
+/// the LNv1 and WalletV1 modules.
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>NetworkLegacyEncodingWrapper(<span class="kw">pub </span>bitcoin::Network);
+
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>NetworkLegacyEncodingWrapper {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">"{}"</span>, <span class="self">self</span>.<span class="number">0</span>)
+    }
+}
+
+<span class="kw">impl </span>Encodable <span class="kw">for </span>NetworkLegacyEncodingWrapper {
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+        u32::from_le_bytes(<span class="self">self</span>.<span class="number">0</span>.magic().to_bytes()).consensus_encode(writer)
+    }
+}
+
+<span class="kw">impl </span>Decodable <span class="kw">for </span>NetworkLegacyEncodingWrapper {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+        d: <span class="kw-2">&amp;mut </span>D,
+        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        <span class="kw">let </span>num = u32::consensus_decode(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>magic = bitcoin::p2p::Magic::from_bytes(num.to_le_bytes());
+        <span class="kw">let </span>network = bitcoin::Network::from_magic(magic).ok_or_else(|| {
+            DecodeError::new_custom(<span class="macro">format_err!</span>(<span class="string">"Unknown network magic: {:x}"</span>, magic))
+        })<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>(network))
+    }
+}
 <span class="kw">impl </span>Encodable <span class="kw">for </span>bitcoin::Network {
     <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        u32::from_le_bytes(<span class="self">self</span>.magic().to_bytes()).consensus_encode(writer)
+        <span class="self">self</span>.magic().to_bytes().consensus_encode(writer)
     }
 }
 
@@ -497,34 +537,10 @@
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>num = u32::consensus_decode(d, modules)<span class="question-mark">?</span>;
-        <span class="kw">let </span>magic = bitcoin::p2p::Magic::from_bytes(num.to_le_bytes());
-        <span class="self">Self</span>::from_magic(magic).ok_or_else(|| {
-            DecodeError::new_custom(<span class="macro">format_err!</span>(<span class="string">"Unknown network magic: {:x}"</span>, magic))
-        })
-    }
-}
-
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>NetworkSaneEncodingWrapper(<span class="kw">pub </span>bitcoin::Network);
-
-<span class="kw">impl </span>Encodable <span class="kw">for </span>NetworkSaneEncodingWrapper {
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.magic().to_bytes().consensus_encode(writer)
-    }
-}
-
-<span class="kw">impl </span>Decodable <span class="kw">for </span>NetworkSaneEncodingWrapper {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
-        d: <span class="kw-2">&amp;mut </span>D,
-        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">Self</span>(
-            bitcoin::Network::from_magic(bitcoin::p2p::Magic::from_bytes(
-                Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>,
-            ))
-            .ok_or_else(|| DecodeError::new_custom(<span class="macro">format_err!</span>(<span class="string">"Unknown network magic"</span>)))<span class="question-mark">?</span>,
+        <span class="self">Self</span>::from_magic(bitcoin::p2p::Magic::from_bytes(
+            Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>,
         ))
+        .ok_or_else(|| DecodeError::new_custom(<span class="macro">format_err!</span>(<span class="string">"Unknown network magic"</span>)))
     }
 }
 
@@ -546,7 +562,8 @@
 <span class="kw">impl </span>Encodable <span class="kw">for </span>bitcoin::Address&lt;NetworkUnchecked&gt; {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-        len += get_network_for_address(<span class="self">self</span>.as_unchecked()).consensus_encode(writer)<span class="question-mark">?</span>;
+        len += NetworkLegacyEncodingWrapper(get_network_for_address(<span class="self">self</span>.as_unchecked()))
+            .consensus_encode(writer)<span class="question-mark">?</span>;
         len += <span class="self">self
             </span>.clone()
             .assume_checked()
@@ -561,7 +578,7 @@
         <span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>network = bitcoin::Network::consensus_decode(<span class="kw-2">&amp;mut </span>d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>network = NetworkLegacyEncodingWrapper::consensus_decode(<span class="kw-2">&amp;mut </span>d, modules)<span class="question-mark">?</span>.<span class="number">0</span>;
         <span class="kw">let </span>script_pk = bitcoin::ScriptBuf::consensus_decode(<span class="kw-2">&amp;mut </span>d, modules)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>address = bitcoin::Address::from_script(<span class="kw-2">&amp;</span>script_pk, network)
@@ -595,7 +612,7 @@
 
     <span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 
-    <span class="kw">use </span><span class="kw">crate</span>::encoding::btc::NetworkSaneEncodingWrapper;
+    <span class="kw">use </span><span class="kw">crate</span>::encoding::btc::NetworkLegacyEncodingWrapper;
     <span class="kw">use </span><span class="kw">crate</span>::encoding::tests::test_roundtrip_expected;
     <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
     <span class="kw">use </span><span class="kw">crate</span>::ModuleDecoderRegistry;
@@ -630,14 +647,21 @@
             ),
         ];
 
-        <span class="kw">for </span>(network, magic_bytes, magic_sane_bytes) <span class="kw">in </span>networks {
+        <span class="kw">for </span>(network, magic_legacy_bytes, magic_bytes) <span class="kw">in </span>networks {
+            <span class="kw">let </span><span class="kw-2">mut </span>network_legacy_encoded = Vec::new();
+            NetworkLegacyEncodingWrapper(network)
+                .consensus_encode(<span class="kw-2">&amp;mut </span>network_legacy_encoded)
+                .unwrap();
+
             <span class="kw">let </span><span class="kw-2">mut </span>network_encoded = Vec::new();
             network.consensus_encode(<span class="kw-2">&amp;mut </span>network_encoded).unwrap();
 
-            <span class="kw">let </span><span class="kw-2">mut </span>network_sane_encoded = Vec::new();
-            NetworkSaneEncodingWrapper(network)
-                .consensus_encode(<span class="kw-2">&amp;mut </span>network_sane_encoded)
-                .unwrap();
+            <span class="kw">let </span>network_legacy_decoded = NetworkLegacyEncodingWrapper::consensus_decode(
+                <span class="kw-2">&amp;mut </span>Cursor::new(network_legacy_encoded.clone()),
+                <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
+            )
+            .unwrap()
+            .<span class="number">0</span>;
 
             <span class="kw">let </span>network_decoded = bitcoin::Network::consensus_decode(
                 <span class="kw-2">&amp;mut </span>Cursor::new(network_encoded.clone()),
@@ -645,16 +669,10 @@
             )
             .unwrap();
 
-            <span class="kw">let </span>network_sane_decoded = NetworkSaneEncodingWrapper::consensus_decode(
-                <span class="kw-2">&amp;mut </span>Cursor::new(network_sane_encoded.clone()),
-                <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
-            )
-            .unwrap();
-
+            <span class="macro">assert_eq!</span>(magic_legacy_bytes, <span class="kw-2">*</span>network_legacy_encoded);
             <span class="macro">assert_eq!</span>(magic_bytes, <span class="kw-2">*</span>network_encoded);
-            <span class="macro">assert_eq!</span>(magic_sane_bytes, <span class="kw-2">*</span>network_sane_encoded);
+            <span class="macro">assert_eq!</span>(network, network_legacy_decoded);
             <span class="macro">assert_eq!</span>(network, network_decoded);
-            <span class="macro">assert_eq!</span>(network, network_sane_decoded.<span class="number">0</span>);
         }
     }
 
