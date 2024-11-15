@@ -117,7 +117,7 @@ pub async fn migrate_to_v1(
     Ok(None)
 }
 
-/// Maps all `Unreachable` states in the state machine to `OutputDone`
+/// Migrates `MintClientStateMachinesV1`
 pub(crate) fn migrate_state_to_v2(
     operation_id: OperationId,
     cursor: &mut Cursor<&[u8]>,
@@ -128,7 +128,9 @@ pub(crate) fn migrate_state_to_v2(
 
     let new_mint_state_machine = match mint_client_state_machine_variant {
         0 => {
+            let _output_sm_len = u16::consensus_decode(cursor, &decoders)?;
             let old_state = MintOutputStateMachineV1::consensus_decode(cursor, &decoders)?;
+
             MintClientStateMachines::Output(MintOutputStateMachine {
                 common: MintOutputCommon {
                     operation_id: old_state.common.operation_id,
@@ -140,6 +142,7 @@ pub(crate) fn migrate_state_to_v2(
             })
         }
         1 => {
+            let _input_sm_len = u16::consensus_decode(cursor, &decoders)?;
             let old_state = MintInputStateMachineV1::consensus_decode(cursor, &decoders)?;
 
             MintClientStateMachines::Input(MintInputStateMachine {
@@ -152,6 +155,7 @@ pub(crate) fn migrate_state_to_v2(
             })
         }
         2 => {
+            let _oob_sm_len = u16::consensus_decode(cursor, &decoders)?;
             let old_state = MintOOBStateMachineV1::consensus_decode(cursor, &decoders)?;
 
             let new_state = match old_state.state {
