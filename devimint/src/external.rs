@@ -470,9 +470,9 @@ impl Lightningd {
         Ok(rpc.call_typed(&request).await?)
     }
 
-    // TODO(tvolk131): Remove this method and instead use
-    // `Gatewayd.wait_for_chain_sync()` once 0.4.0 is released
-    pub async fn await_block_processing(&self) -> Result<()> {
+    // TODO: Remove this method once we drop backwards compatibility for versions
+    // earlier than v0.4.0-alpha.
+    async fn await_block_processing(&self) -> Result<()> {
         poll("lightningd block processing", || async {
             let btc_height = self
                 .bitcoind
@@ -676,9 +676,9 @@ impl Lnd {
             .identity_pubkey)
     }
 
-    // TODO(tvolk131): Remove this method and instead use
-    // `Gatewayd.wait_for_chain_sync()` once 0.4.0 is released
-    pub async fn await_block_processing(&self) -> Result<()> {
+    // TODO: Remove this method once we drop backwards compatibility for versions
+    // earlier than v0.4.0-alpha.
+    async fn await_block_processing(&self) -> Result<()> {
         poll("lnd block processing", || async {
             let synced = self
                 .lightning_client_lock()
@@ -847,8 +847,8 @@ impl Lnd {
     }
 }
 
-// TODO(tvolk131): Remove this method and instead use
-// `open_channels_between_gateways()` below once 0.4.0 is released
+// TODO: Remove this method once we drop backwards compatibility for versions
+// earlier than v0.4.0-alpha.
 pub async fn open_channel(
     process_mgr: &ProcessManager,
     bitcoind: &Bitcoind,
