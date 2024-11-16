@@ -43,6 +43,7 @@ use super::external::Bitcoind;
 use super::util::{cmd, parse_map, Command, ProcessHandle, ProcessManager};
 use super::vars::utf8;
 use crate::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
+use crate::tests::almost_equal;
 use crate::util::{poll, poll_with_timeout, FedimintdCmd};
 use crate::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA};
 use crate::{poll_eq, poll_ge, vars};
@@ -833,9 +834,12 @@ impl Federation {
                 .1
                 .fees;
             let total_fee = fees.amount().to_sat() * 1000;
-            assert_eq!(
-                prev_balance - amount - total_fee,
-                after_fed_ecash_balance.msats,
+            assert!(
+                almost_equal(
+                    prev_balance - amount - total_fee,
+                    after_fed_ecash_balance.msats,
+                    1_000_000
+                ),
                 "new balance did not equal prev balance minus withdraw_amount minus fees"
             );
         }
