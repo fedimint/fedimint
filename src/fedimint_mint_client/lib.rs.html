@@ -2750,9 +2750,7 @@
 <a href="#2749" id="2749">2749</a>
 <a href="#2750" id="2750">2750</a>
 <a href="#2751" id="2751">2751</a>
-<a href="#2752" id="2752">2752</a>
-<a href="#2753" id="2753">2753</a>
-<a href="#2754" id="2754">2754</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2752" id="2752">2752</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -3853,8 +3851,6 @@
                 }),
             })]
         });
-
-        <span class="macro">assert!</span>(!outputs.is_empty());
 
         ClientOutputBundle::new(
             outputs,
