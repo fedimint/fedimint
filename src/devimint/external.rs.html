@@ -1747,9 +1747,9 @@
         <span class="prelude-val">Ok</span>(rpc.call_typed(<span class="kw-2">&amp;</span>request).<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
-    <span class="comment">// TODO(tvolk131): Remove this method and instead use
-    // `Gatewayd.wait_for_chain_sync()` once 0.4.0 is released
-    </span><span class="kw">pub async fn </span>await_block_processing(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="comment">// TODO: Remove this method once we drop backwards compatibility for versions
+    // earlier than v0.4.0-alpha.
+    </span><span class="kw">async fn </span>await_block_processing(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         poll(<span class="string">"lightningd block processing"</span>, || <span class="kw">async </span>{
             <span class="kw">let </span>btc_height = <span class="self">self
                 </span>.bitcoind
@@ -1953,9 +1953,9 @@
             .identity_pubkey)
     }
 
-    <span class="comment">// TODO(tvolk131): Remove this method and instead use
-    // `Gatewayd.wait_for_chain_sync()` once 0.4.0 is released
-    </span><span class="kw">pub async fn </span>await_block_processing(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="comment">// TODO: Remove this method once we drop backwards compatibility for versions
+    // earlier than v0.4.0-alpha.
+    </span><span class="kw">async fn </span>await_block_processing(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         poll(<span class="string">"lnd block processing"</span>, || <span class="kw">async </span>{
             <span class="kw">let </span>synced = <span class="self">self
                 </span>.lightning_client_lock()
@@ -2124,8 +2124,8 @@
     }
 }
 
-<span class="comment">// TODO(tvolk131): Remove this method and instead use
-// `open_channels_between_gateways()` below once 0.4.0 is released
+<span class="comment">// TODO: Remove this method once we drop backwards compatibility for versions
+// earlier than v0.4.0-alpha.
 </span><span class="kw">pub async fn </span>open_channel(
     process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
     bitcoind: <span class="kw-2">&amp;</span>Bitcoind,
