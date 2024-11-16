@@ -404,7 +404,7 @@ impl ServerModule for Lightning {
                             return Err(LightningInputError::InvalidPreimage);
                         }
 
-                        dbtx.insert_new_entry(&PreimageKey(*contract_id), preimage)
+                        dbtx.insert_entry(&PreimageKey(*contract_id), preimage)
                             .await;
 
                         contract.claim_pk
