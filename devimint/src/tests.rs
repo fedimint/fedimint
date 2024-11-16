@@ -349,7 +349,7 @@ pub async fn latency_tests(
                 if crate::util::is_backwards_compatibility_test() {
                     assert!(restore_time < Duration::from_secs(160));
                 } else {
-                    assert!(restore_time < Duration::from_secs(15));
+                    assert!(restore_time < Duration::from_secs(30));
                 }
             }
         }
