@@ -1101,8 +1101,6 @@ impl MintClientModule {
             })]
         });
 
-        assert!(!outputs.is_empty());
-
         ClientOutputBundle::new(
             outputs,
             vec![ClientOutputSM {
