@@ -1196,7 +1196,7 @@
                             <span class="kw">return </span><span class="prelude-val">Err</span>(LightningInputError::InvalidPreimage);
                         }
 
-                        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>PreimageKey(<span class="kw-2">*</span>contract_id), preimage)
+                        dbtx.insert_entry(<span class="kw-2">&amp;</span>PreimageKey(<span class="kw-2">*</span>contract_id), preimage)
                             .<span class="kw">await</span>;
 
                         contract.claim_pk

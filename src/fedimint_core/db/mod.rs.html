@@ -3589,12 +3589,7 @@
 <a href="#3588" id="3588">3588</a>
 <a href="#3589" id="3589">3589</a>
 <a href="#3590" id="3590">3590</a>
-<a href="#3591" id="3591">3591</a>
-<a href="#3592" id="3592">3592</a>
-<a href="#3593" id="3593">3593</a>
-<a href="#3594" id="3594">3594</a>
-<a href="#3595" id="3595">3595</a>
-<a href="#3596" id="3596">3596</a></pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
+<a href="#3591" id="3591">3591</a></pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! This module provides the core key-value database for Fedimint.
 //!
@@ -4720,12 +4715,7 @@
         K::Value: MaybeSend + MaybeSync,
     {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(prev) = <span class="self">self</span>.insert_entry(key, value).<span class="kw">await </span>{
-            <span class="macro">debug_assert!</span>(
-                <span class="bool-val">false</span>,
-                <span class="string">"Database overwriting element when expecting insertion of new entry. Key: {key:?} Prev Value: {prev:?}"
-            </span>);
-            <span class="macro">warn!</span>(
-                target: LOG_DB,
+            <span class="macro">panic!</span>(
                 <span class="string">"Database overwriting element when expecting insertion of new entry. Key: {key:?} Prev Value: {prev:?}"
             </span>);
         }
