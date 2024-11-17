@@ -35,7 +35,11 @@ fn fixtures() -> Fixtures {
         MintClientInit,
         MintInit,
         MintGenParams {
-            consensus: MintGenParamsConsensus::new(2, FeeConsensus::zero()),
+            consensus: MintGenParamsConsensus::new(
+                2,
+                FeeConsensus::new(1_000).expect("Relative fee is within range"),
+            ),
+
             local: EmptyGenParams {},
         },
     );
@@ -149,19 +153,14 @@ async fn blind_nonce_index() -> anyhow::Result<()> {
     let mut dbtx = client_mint.db.begin_transaction().await;
     let operation_id = OperationId::new_random();
     let issuance_req = client_mint
-        .create_output(
-            &mut dbtx.to_ref_nc(),
-            operation_id,
-            1,
-            Amount::from_msats(1),
-        )
+        .create_output(&mut dbtx.to_ref_nc(), operation_id, 1, Amount::from_sats(1))
         .await;
     dbtx.commit_tx().await;
 
     let blind_nonce = issuance_req
         .outputs()
         .first()
-        .expect("There should be exactly one note in here")
+        .expect("There should be at least one note in here")
         .output
         .ensure_v0_ref()?
         .blind_nonce;
