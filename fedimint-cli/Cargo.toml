@@ -57,3 +57,6 @@ tracing = { workspace = true }
 
 [build-dependencies]
 fedimint-build = { workspace = true }
+
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+jemallocator = { workspace = true }

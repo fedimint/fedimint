@@ -187,6 +187,7 @@ tbs = { package = "fedimint-tbs", path = "./crypto/tbs", version = "=0.6.0-alpha
 thiserror = "1.0.68"
 threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
 tokio = "1.41.1"
+jemallocator = "0.5"
 tokio-rustls = "0.24.1"
 tokio-stream = "0.1.16"
 tonic_lnd = { version = "0.2.0", package = "fedimint-tonic-lnd", features = [
