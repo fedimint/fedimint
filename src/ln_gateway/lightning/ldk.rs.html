@@ -592,17 +592,7 @@
 <a href="#591" id="591">591</a>
 <a href="#592" id="592">592</a>
 <a href="#593" id="593">593</a>
-<a href="#594" id="594">594</a>
-<a href="#595" id="595">595</a>
-<a href="#596" id="596">596</a>
-<a href="#597" id="597">597</a>
-<a href="#598" id="598">598</a>
-<a href="#599" id="599">599</a>
-<a href="#600" id="600">600</a>
-<a href="#601" id="601">601</a>
-<a href="#602" id="602">602</a>
-<a href="#603" id="603">603</a>
-<a href="#604" id="604">604</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
+<a href="#594" id="594">594</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -615,7 +605,6 @@
 <span class="kw">use </span>fedimint_core::task::{block_in_place, TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll};
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
-<span class="kw">use </span>ldk_node::config::EsploraSyncConfig;
 <span class="kw">use </span>ldk_node::lightning::ln::msgs::SocketAddress;
 <span class="kw">use </span>ldk_node::lightning::ln::PaymentHash;
 <span class="kw">use </span>ldk_node::lightning::routing::gossip::NodeAlias;
@@ -692,16 +681,7 @@
         });
         node_builder
             .set_entropy_bip39_mnemonic(mnemonic, <span class="prelude-val">None</span>)
-            .set_chain_source_esplora(
-                esplora_server_url.to_string(),
-                <span class="prelude-val">Some</span>(EsploraSyncConfig {
-                    <span class="comment">// TODO: Remove these and rely on the default values.
-                    // See here for details: https://github.com/lightningdevkit/ldk-node/issues/339#issuecomment-2344230472
-                    </span>onchain_wallet_sync_interval_secs: <span class="number">10</span>,
-                    lightning_wallet_sync_interval_secs: <span class="number">10</span>,
-                    ..Default::default()
-                }),
-            );
+            .set_chain_source_esplora(esplora_server_url.to_string(), <span class="prelude-val">None</span>);
         <span class="kw">let </span><span class="prelude-val">Some</span>(data_dir_str) = data_dir.to_str() <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Invalid data dir path"</span>));
         };
