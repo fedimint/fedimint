@@ -12,8 +12,15 @@ use fedimint_core::fedimint_build_code_version_env;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_logging::TracingSetup;
+#[cfg(not(target_env = "msvc"))]
+use jemallocator::Jemalloc;
 use ln_gateway::Gateway;
 use tracing::info;
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+// rocksdb suffers from memory fragmentation when using standard allocator
+static GLOBAL: Jemalloc = Jemalloc;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
