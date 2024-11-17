@@ -267,8 +267,11 @@ impl ILnRpcClient for GatewayLdkClient {
         &self,
         _num_route_hints: usize,
     ) -> Result<GetRouteHintsResponse, LightningRpcError> {
-        // TODO: Return real route hints. Not strictly necessary but would be nice to
-        // have.
+        // `ILnRpcClient::routehints()` is currently only ever used for LNv1 payment
+        // receives and will be removed when we switch to LNv2. The LDK gateway will
+        // never support LNv1 payment receives, only LNv2 payment receives, which
+        // require that the gateway's lightning node generates invoices rather than the
+        // fedimint client, so it is able to insert the proper route hints on its own.
         Ok(GetRouteHintsResponse {
             route_hints: vec![],
         })
