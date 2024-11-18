@@ -348,17 +348,243 @@
 <a href="#347" id="347">347</a>
 <a href="#348" id="348">348</a>
 <a href="#349" id="349">349</a>
-<a href="#350" id="350">350</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
+<a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
+<a href="#501" id="501">501</a>
+<a href="#502" id="502">502</a>
+<a href="#503" id="503">503</a>
+<a href="#504" id="504">504</a>
+<a href="#505" id="505">505</a>
+<a href="#506" id="506">506</a>
+<a href="#507" id="507">507</a>
+<a href="#508" id="508">508</a>
+<a href="#509" id="509">509</a>
+<a href="#510" id="510">510</a>
+<a href="#511" id="511">511</a>
+<a href="#512" id="512">512</a>
+<a href="#513" id="513">513</a>
+<a href="#514" id="514">514</a>
+<a href="#515" id="515">515</a>
+<a href="#516" id="516">516</a>
+<a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a>
+<a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
+<a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
+<a href="#527" id="527">527</a>
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a>
+<a href="#535" id="535">535</a>
+<a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a>
+<a href="#549" id="549">549</a>
+<a href="#550" id="550">550</a>
+<a href="#551" id="551">551</a>
+<a href="#552" id="552">552</a>
+<a href="#553" id="553">553</a>
+<a href="#554" id="554">554</a>
+<a href="#555" id="555">555</a>
+<a href="#556" id="556">556</a>
+<a href="#557" id="557">557</a>
+<a href="#558" id="558">558</a>
+<a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
+<a href="#570" id="570">570</a>
+<a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>hex::{FromHex, ToHex};
+<span class="kw">use </span>lightning::util::ser::{BigSize, Readable, Writeable};
 <span class="kw">use </span>miniscript::{Descriptor, MiniscriptKey};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
-<span class="kw">use super</span>::{BufBitcoinReader, CountWrite, SimpleBitcoinRead};
+<span class="kw">use </span><span class="kw">super</span>::CountWrite;
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::get_network_for_address;
 <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
@@ -595,17 +821,222 @@
     }
 }
 
+<span class="kw">impl </span>Encodable <span class="kw">for </span>lightning_invoice::Bolt11Invoice {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+        <span class="self">self</span>.to_string().consensus_encode(writer)
+    }
+}
+
+<span class="kw">impl </span>Decodable <span class="kw">for </span>lightning_invoice::Bolt11Invoice {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+        d: <span class="kw-2">&amp;mut </span>D,
+        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        String::consensus_decode(d, modules)<span class="question-mark">?
+            </span>.parse::&lt;<span class="self">Self</span>&gt;()
+            .map_err(DecodeError::from_err)
+    }
+}
+
+<span class="kw">impl </span>Encodable <span class="kw">for </span>lightning_invoice::RoutingFees {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
+        len += <span class="self">self</span>.base_msat.consensus_encode(writer)<span class="question-mark">?</span>;
+        len += <span class="self">self</span>.proportional_millionths.consensus_encode(writer)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(len)
+    }
+}
+
+<span class="kw">impl </span>Decodable <span class="kw">for </span>lightning_invoice::RoutingFees {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+        d: <span class="kw-2">&amp;mut </span>D,
+        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        <span class="kw">let </span>base_msat = Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>proportional_millionths = Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+            base_msat,
+            proportional_millionths,
+        })
+    }
+}
+
+<span class="comment">// Simple decoder implementing `bitcoin_io::Read` for `std::io::Read`.
+// This is needed because `bitcoin::consensus::Decodable` requires a
+// `bitcoin_io::Read`.
+</span><span class="kw">struct </span>SimpleBitcoinRead&lt;R: std::io::Read&gt;(R);
+
+<span class="kw">impl</span>&lt;R: std::io::Read&gt; bitcoin_io::Read <span class="kw">for </span>SimpleBitcoinRead&lt;R&gt; {
+    <span class="kw">fn </span>read(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;mut </span>[u8]) -&gt; bitcoin_io::Result&lt;usize&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.read(buf).map_err(bitcoin_io::Error::from)
+    }
+}
+
+<span class="doccomment">/// Wrap buffering support for implementations of Read.
+/// A reader which keeps an internal buffer to avoid hitting the underlying
+/// stream directly for every read.
+///
+/// In order to avoid reading bytes past the first object, and those bytes then
+/// ending up getting dropped, this BufBitcoinReader operates in
+/// one-byte-increments.
+///
+/// This code is vendored from the `lightning` crate:
+/// &lt;https://github.com/lightningdevkit/rust-lightning/blob/5718baaed947fcaa9c60d80cdf309040c0c68489/lightning/src/util/ser.rs#L72-L138&gt;
+</span><span class="kw">struct </span>BufBitcoinReader&lt;<span class="lifetime">'a</span>, R: std::io::Read&gt; {
+    inner: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>R,
+    buf: [u8; <span class="number">1</span>],
+    is_consumed: bool,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, R: std::io::Read&gt; BufBitcoinReader&lt;<span class="lifetime">'a</span>, R&gt; {
+    <span class="doccomment">/// Creates a [`BufBitcoinReader`] which will read from the given `inner`.
+    </span><span class="kw">fn </span>new(inner: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>R) -&gt; <span class="self">Self </span>{
+        BufBitcoinReader {
+            inner,
+            buf: [<span class="number">0</span>; <span class="number">1</span>],
+            is_consumed: <span class="bool-val">true</span>,
+        }
+    }
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, R: std::io::Read&gt; bitcoin_io::Read <span class="kw">for </span>BufBitcoinReader&lt;<span class="lifetime">'a</span>, R&gt; {
+    <span class="attr">#[inline]
+    </span><span class="kw">fn </span>read(<span class="kw-2">&amp;mut </span><span class="self">self</span>, output: <span class="kw-2">&amp;mut </span>[u8]) -&gt; bitcoin_io::Result&lt;usize&gt; {
+        <span class="kw">if </span>output.is_empty() {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="number">0</span>);
+        }
+        <span class="attr">#[allow(clippy::useless_let_if_seq)]
+        </span><span class="kw">let </span><span class="kw-2">mut </span>offset = <span class="number">0</span>;
+        <span class="kw">if </span>!<span class="self">self</span>.is_consumed {
+            output[<span class="number">0</span>] = <span class="self">self</span>.buf[<span class="number">0</span>];
+            <span class="self">self</span>.is_consumed = <span class="bool-val">true</span>;
+            offset = <span class="number">1</span>;
+        }
+        <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.inner
+            .read(<span class="kw-2">&amp;mut </span>output[offset..])
+            .map(|len| len + offset)<span class="question-mark">?</span>)
+    }
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, R: std::io::Read&gt; bitcoin_io::BufRead <span class="kw">for </span>BufBitcoinReader&lt;<span class="lifetime">'a</span>, R&gt; {
+    <span class="attr">#[inline]
+    </span><span class="kw">fn </span>fill_buf(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; bitcoin_io::Result&lt;<span class="kw-2">&amp;</span>[u8]&gt; {
+        <span class="macro">debug_assert!</span>(<span class="bool-val">false</span>, <span class="string">"rust-bitcoin doesn't actually use this"</span>);
+        <span class="kw">if </span><span class="self">self</span>.is_consumed {
+            <span class="kw">let </span>count = <span class="self">self</span>.inner.read(<span class="kw-2">&amp;mut </span><span class="self">self</span>.buf[..])<span class="question-mark">?</span>;
+            <span class="macro">debug_assert!</span>(count &lt;= <span class="number">1</span>, <span class="string">"read gave us a garbage length"</span>);
+
+            <span class="comment">// upon hitting EOF, assume the byte is already consumed
+            </span><span class="self">self</span>.is_consumed = count == <span class="number">0</span>;
+        }
+
+        <span class="kw">if </span><span class="self">self</span>.is_consumed {
+            <span class="prelude-val">Ok</span>(<span class="kw-2">&amp;</span>[])
+        } <span class="kw">else </span>{
+            <span class="prelude-val">Ok</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.buf[..])
+        }
+    }
+
+    <span class="attr">#[inline]
+    </span><span class="kw">fn </span>consume(<span class="kw-2">&amp;mut </span><span class="self">self</span>, amount: usize) {
+        <span class="macro">debug_assert!</span>(<span class="bool-val">false</span>, <span class="string">"rust-bitcoin doesn't actually use this"</span>);
+        <span class="kw">if </span>amount &gt;= <span class="number">1 </span>{
+            <span class="macro">debug_assert_eq!</span>(amount, <span class="number">1</span>, <span class="string">"Can only consume one byte"</span>);
+            <span class="macro">debug_assert!</span>(!<span class="self">self</span>.is_consumed, <span class="string">"Cannot consume more than had been read"</span>);
+            <span class="self">self</span>.is_consumed = <span class="bool-val">true</span>;
+        }
+    }
+}
+
+<span class="kw">impl </span>Encodable <span class="kw">for </span>BigSize {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>writer = CountWrite::from(writer);
+        <span class="self">self</span>.write(<span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(usize::try_from(writer.count()).expect(<span class="string">"can't overflow"</span>))
+    }
+}
+
+<span class="kw">impl </span>Decodable <span class="kw">for </span>BigSize {
+    <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
+        r: <span class="kw-2">&amp;mut </span>R,
+        _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        <span class="self">Self</span>::read(<span class="kw-2">&amp;mut </span>SimpleBitcoinRead(r))
+            .map_err(|e| DecodeError::new_custom(<span class="macro">anyhow::anyhow!</span>(<span class="string">"BigSize decoding error: {e:?}"</span>)))
+    }
+}
+
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::io::Cursor;
     <span class="kw">use </span>std::str::FromStr;
 
     <span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
+    <span class="kw">use </span>hex::FromHex;
 
+    <span class="kw">use </span><span class="kw">crate</span>::db::DatabaseValue;
     <span class="kw">use </span><span class="kw">crate</span>::encoding::btc::NetworkLegacyEncodingWrapper;
-    <span class="kw">use </span><span class="kw">crate</span>::encoding::tests::test_roundtrip_expected;
+    <span class="kw">use </span><span class="kw">crate</span>::encoding::tests::{test_roundtrip, test_roundtrip_expected};
     <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
     <span class="kw">use </span><span class="kw">crate</span>::ModuleDecoderRegistry;
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>block_hash_roundtrip() {
+        <span class="kw">let </span>blockhash = bitcoin::BlockHash::from_str(
+            <span class="string">"0000000000000000000065bda8f8a88f2e1e00d9a6887a43d640e52a4c7660f2"</span>,
+        )
+        .unwrap();
+        test_roundtrip_expected(
+            <span class="kw-2">&amp;</span>blockhash,
+            <span class="kw-2">&amp;</span>[
+                <span class="number">242</span>, <span class="number">96</span>, <span class="number">118</span>, <span class="number">76</span>, <span class="number">42</span>, <span class="number">229</span>, <span class="number">64</span>, <span class="number">214</span>, <span class="number">67</span>, <span class="number">122</span>, <span class="number">136</span>, <span class="number">166</span>, <span class="number">217</span>, <span class="number">0</span>, <span class="number">30</span>, <span class="number">46</span>, <span class="number">143</span>, <span class="number">168</span>,
+                <span class="number">248</span>, <span class="number">168</span>, <span class="number">189</span>, <span class="number">101</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>,
+            ],
+        );
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>tx_roundtrip() {
+        <span class="kw">let </span>transaction: Vec&lt;u8&gt; = FromHex::from_hex(
+            <span class="string">"02000000000101d35b66c54cf6c09b81a8d94cd5d179719cd7595c258449452a9305ab9b12df250200000000fdffffff020cd50a0000000000160014ae5d450b71c04218e6e81c86fcc225882d7b7caae695b22100000000160014f60834ef165253c571b11ce9fa74e46692fc5ec10248304502210092062c609f4c8dc74cd7d4596ecedc1093140d90b3fd94b4bdd9ad3e102ce3bc02206bb5a6afc68d583d77d5d9bcfb6252a364d11a307f3418be1af9f47f7b1b3d780121026e5628506ecd33242e5ceb5fdafe4d3066b5c0f159b3c05a621ef65f177ea28600000000"
+        </span>).unwrap();
+        <span class="kw">let </span>transaction =
+            bitcoin::Transaction::from_bytes(<span class="kw-2">&amp;</span>transaction, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())
+                .unwrap();
+        test_roundtrip_expected(
+            <span class="kw-2">&amp;</span>transaction,
+            <span class="kw-2">&amp;</span>[
+                <span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">1</span>, <span class="number">211</span>, <span class="number">91</span>, <span class="number">102</span>, <span class="number">197</span>, <span class="number">76</span>, <span class="number">246</span>, <span class="number">192</span>, <span class="number">155</span>, <span class="number">129</span>, <span class="number">168</span>, <span class="number">217</span>, <span class="number">76</span>, <span class="number">213</span>,
+                <span class="number">209</span>, <span class="number">121</span>, <span class="number">113</span>, <span class="number">156</span>, <span class="number">215</span>, <span class="number">89</span>, <span class="number">92</span>, <span class="number">37</span>, <span class="number">132</span>, <span class="number">73</span>, <span class="number">69</span>, <span class="number">42</span>, <span class="number">147</span>, <span class="number">5</span>, <span class="number">171</span>, <span class="number">155</span>, <span class="number">18</span>, <span class="number">223</span>,
+                <span class="number">37</span>, <span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">253</span>, <span class="number">255</span>, <span class="number">255</span>, <span class="number">255</span>, <span class="number">2</span>, <span class="number">12</span>, <span class="number">213</span>, <span class="number">10</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">22</span>, <span class="number">0</span>, <span class="number">20</span>,
+                <span class="number">174</span>, <span class="number">93</span>, <span class="number">69</span>, <span class="number">11</span>, <span class="number">113</span>, <span class="number">192</span>, <span class="number">66</span>, <span class="number">24</span>, <span class="number">230</span>, <span class="number">232</span>, <span class="number">28</span>, <span class="number">134</span>, <span class="number">252</span>, <span class="number">194</span>, <span class="number">37</span>, <span class="number">136</span>, <span class="number">45</span>, <span class="number">123</span>,
+                <span class="number">124</span>, <span class="number">170</span>, <span class="number">230</span>, <span class="number">149</span>, <span class="number">178</span>, <span class="number">33</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">22</span>, <span class="number">0</span>, <span class="number">20</span>, <span class="number">246</span>, <span class="number">8</span>, <span class="number">52</span>, <span class="number">239</span>, <span class="number">22</span>, <span class="number">82</span>, <span class="number">83</span>,
+                <span class="number">197</span>, <span class="number">113</span>, <span class="number">177</span>, <span class="number">28</span>, <span class="number">233</span>, <span class="number">250</span>, <span class="number">116</span>, <span class="number">228</span>, <span class="number">102</span>, <span class="number">146</span>, <span class="number">252</span>, <span class="number">94</span>, <span class="number">193</span>, <span class="number">2</span>, <span class="number">72</span>, <span class="number">48</span>, <span class="number">69</span>, <span class="number">2</span>,
+                <span class="number">33</span>, <span class="number">0</span>, <span class="number">146</span>, <span class="number">6</span>, <span class="number">44</span>, <span class="number">96</span>, <span class="number">159</span>, <span class="number">76</span>, <span class="number">141</span>, <span class="number">199</span>, <span class="number">76</span>, <span class="number">215</span>, <span class="number">212</span>, <span class="number">89</span>, <span class="number">110</span>, <span class="number">206</span>, <span class="number">220</span>, <span class="number">16</span>, <span class="number">147</span>,
+                <span class="number">20</span>, <span class="number">13</span>, <span class="number">144</span>, <span class="number">179</span>, <span class="number">253</span>, <span class="number">148</span>, <span class="number">180</span>, <span class="number">189</span>, <span class="number">217</span>, <span class="number">173</span>, <span class="number">62</span>, <span class="number">16</span>, <span class="number">44</span>, <span class="number">227</span>, <span class="number">188</span>, <span class="number">2</span>, <span class="number">32</span>, <span class="number">107</span>,
+                <span class="number">181</span>, <span class="number">166</span>, <span class="number">175</span>, <span class="number">198</span>, <span class="number">141</span>, <span class="number">88</span>, <span class="number">61</span>, <span class="number">119</span>, <span class="number">213</span>, <span class="number">217</span>, <span class="number">188</span>, <span class="number">251</span>, <span class="number">98</span>, <span class="number">82</span>, <span class="number">163</span>, <span class="number">100</span>, <span class="number">209</span>,
+                <span class="number">26</span>, <span class="number">48</span>, <span class="number">127</span>, <span class="number">52</span>, <span class="number">24</span>, <span class="number">190</span>, <span class="number">26</span>, <span class="number">249</span>, <span class="number">244</span>, <span class="number">127</span>, <span class="number">123</span>, <span class="number">27</span>, <span class="number">61</span>, <span class="number">120</span>, <span class="number">1</span>, <span class="number">33</span>, <span class="number">2</span>, <span class="number">110</span>, <span class="number">86</span>,
+                <span class="number">40</span>, <span class="number">80</span>, <span class="number">110</span>, <span class="number">205</span>, <span class="number">51</span>, <span class="number">36</span>, <span class="number">46</span>, <span class="number">92</span>, <span class="number">235</span>, <span class="number">95</span>, <span class="number">218</span>, <span class="number">254</span>, <span class="number">77</span>, <span class="number">48</span>, <span class="number">102</span>, <span class="number">181</span>, <span class="number">192</span>, <span class="number">241</span>,
+                <span class="number">89</span>, <span class="number">179</span>, <span class="number">192</span>, <span class="number">90</span>, <span class="number">98</span>, <span class="number">30</span>, <span class="number">246</span>, <span class="number">95</span>, <span class="number">23</span>, <span class="number">126</span>, <span class="number">162</span>, <span class="number">134</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>,
+            ],
+        );
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>txid_roundtrip() {
+        <span class="kw">let </span>txid = bitcoin::Txid::from_str(
+            <span class="string">"51f7ed2f23e58cc6e139e715e9ce304a1e858416edc9079dd7b74fa8d2efc09a"</span>,
+        )
+        .unwrap();
+        test_roundtrip_expected(
+            <span class="kw-2">&amp;</span>txid,
+            <span class="kw-2">&amp;</span>[
+                <span class="number">154</span>, <span class="number">192</span>, <span class="number">239</span>, <span class="number">210</span>, <span class="number">168</span>, <span class="number">79</span>, <span class="number">183</span>, <span class="number">215</span>, <span class="number">157</span>, <span class="number">7</span>, <span class="number">201</span>, <span class="number">237</span>, <span class="number">22</span>, <span class="number">132</span>, <span class="number">133</span>, <span class="number">30</span>, <span class="number">74</span>, <span class="number">48</span>,
+                <span class="number">206</span>, <span class="number">233</span>, <span class="number">21</span>, <span class="number">231</span>, <span class="number">57</span>, <span class="number">225</span>, <span class="number">198</span>, <span class="number">140</span>, <span class="number">229</span>, <span class="number">35</span>, <span class="number">47</span>, <span class="number">237</span>, <span class="number">247</span>, <span class="number">81</span>,
+            ],
+        );
+    }
 
     <span class="attr">#[test_log::test]
     </span><span class="kw">fn </span>network_roundtrip() {
@@ -696,6 +1127,25 @@
                 <span class="number">63</span>, <span class="number">174</span>, <span class="number">192</span>, <span class="number">94</span>, <span class="number">207</span>, <span class="number">252</span>, <span class="number">187</span>, <span class="number">125</span>, <span class="number">243</span>, <span class="number">26</span>, <span class="number">217</span>, <span class="number">229</span>, <span class="number">26</span>,
             ],
         );
+    }
+
+    <span class="attr">#[test_log::test]
+    </span><span class="kw">fn </span>bolt11_invoice_roundtrip() {
+        <span class="kw">let </span>invoice_str = <span class="string">"lnbc100p1psj9jhxdqud3jxktt5w46x7unfv9kz6mn0v3jsnp4q0d3p2sfluzdx45tqcs\
+			h2pu5qc7lgq0xs578ngs6s0s68ua4h7cvspp5q6rmq35js88zp5dvwrv9m459tnk2zunwj5jalqtyxqulh0l\
+			5gflssp5nf55ny5gcrfl30xuhzj3nphgj27rstekmr9fw3ny5989s300gyus9qyysgqcqpcrzjqw2sxwe993\
+			h5pcm4dxzpvttgza8zhkqxpgffcrf5v25nwpr3cmfg7z54kuqq8rgqqqqqqqq2qqqqq9qq9qrzjqd0ylaqcl\
+			j9424x9m8h2vcukcgnm6s56xfgu3j78zyqzhgs4hlpzvznlugqq9vsqqqqqqqlgqqqqqeqq9qrzjqwldmj9d\
+			ha74df76zhx6l9we0vjdquygcdt3kssupehe64g6yyp5yz5rhuqqwccqqyqqqqlgqqqqjcqq9qrzjqf9e58a\
+			guqr0rcun0ajlvmzq3ek63cw2w282gv3z5uupmuwvgjtq2z55qsqqg6qqqyqqqrtnqqqzq3cqygrzjqvphms\
+			ywntrrhqjcraumvc4y6r8v4z5v593trte429v4hredj7ms5z52usqq9ngqqqqqqqlgqqqqqqgq9qrzjq2v0v\
+			p62g49p7569ev48cmulecsxe59lvaw3wlxm7r982zxa9zzj7z5l0cqqxusqqyqqqqlgqqqqqzsqygarl9fh3\
+			8s0gyuxjjgux34w75dnc6xp2l35j7es3jd4ugt3lu0xzre26yg5m7ke54n2d5sym4xcmxtl8238xxvw5h5h5\
+			j5r6drg6k6zcqj0fcwg"</span>;
+        <span class="kw">let </span>invoice = invoice_str
+            .parse::&lt;lightning_invoice::Bolt11Invoice&gt;()
+            .unwrap();
+        test_roundtrip(<span class="kw-2">&amp;</span>invoice);
     }
 }
 </code></pre></div></section></main></body></html>
