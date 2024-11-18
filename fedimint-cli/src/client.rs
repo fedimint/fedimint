@@ -233,7 +233,10 @@ pub async fn handle_command(
             timeout,
             include_invite,
         } => {
-            warn!("The client will try to double-spend these notes after the duration specified by the --timeout option to recover any unclaimed e-cash.");
+            warn!(
+                target: LOG_CLIENT,
+                "The client will try to double-spend these notes after the duration specified by the --timeout option to recover any unclaimed e-cash."
+            );
 
             let mint_module = client.get_first_module::<MintClientModule>()?;
             let timeout = Duration::from_secs(timeout);
@@ -251,6 +254,7 @@ pub async fn handle_command(
                 let overspend_amount = notes.total_amount() - amount;
                 if overspend_amount != Amount::ZERO {
                     warn!(
+                        target: LOG_CLIENT,
                         "Selected notes {} worth more than requested",
                         overspend_amount
                     );
@@ -268,7 +272,7 @@ pub async fn handle_command(
                     )
                     .await?
             };
-            info!("Spend e-cash operation: {}", operation.fmt_short());
+            info!(target: LOG_CLIENT, "Spend e-cash operation: {}", operation.fmt_short());
 
             Ok(json!({
                 "notes": notes,
@@ -337,7 +341,10 @@ pub async fn handle_command(
             gateway_id,
             force_internal,
         } => {
-            warn!("Command deprecated. Use `fedimint-cli module ln invoice` instead.");
+            warn!(
+                target: LOG_CLIENT,
+                "Command deprecated. Use `fedimint-cli module ln invoice` instead."
+            );
             let lightning_module = client.get_first_module::<LightningClientModule>()?;
             let ln_gateway = lightning_module
                 .get_gateway(gateway_id, force_internal)
@@ -392,10 +399,13 @@ pub async fn handle_command(
             gateway_id,
             force_internal,
         } => {
-            warn!("Command deprecated. Use `fedimint-cli module ln pay` instead.");
+            warn!(
+                target: LOG_CLIENT,
+                "Command deprecated. Use `fedimint-cli module ln pay` instead."
+            );
             let bolt11 =
                 fedimint_ln_client::get_invoice(&payment_info, amount, lnurl_comment).await?;
-            info!("Paying invoice: {bolt11}");
+            info!(target: LOG_CLIENT, "Paying invoice: {bolt11}");
             let lightning_module = client.get_first_module::<LightningClientModule>()?;
             let ln_gateway = lightning_module
                 .get_gateway(gateway_id, force_internal)
@@ -411,6 +421,7 @@ pub async fn handle_command(
                 .await?;
             let operation_id = payment_type.operation_id();
             info!(
+                target: LOG_CLIENT,
                 "Gateway fee: {fee}, payment operation id: {}",
                 operation_id.fmt_short()
             );
@@ -419,7 +430,10 @@ pub async fn handle_command(
                     .get_first_module::<LightningClientModule>()?
                     .wait_for_ln_payment(payment_type, contract_id, true)
                     .await?;
-                info!("Payment will finish in background, use await-ln-pay to get the result");
+                info!(
+                    target: LOG_CLIENT,
+                    "Payment will finish in background, use await-ln-pay to get the result"
+                );
                 Ok(serde_json::json! {
                     {
                         "operation_id": operation_id,
@@ -564,7 +578,10 @@ pub async fn handle_command(
             };
             let absolute_fees = fees.amount();
 
-            info!("Attempting withdraw with fees: {fees:?}");
+            info!(
+                target: LOG_CLIENT,
+                "Attempting withdraw with fees: {fees:?}"
+            );
 
             let operation_id = wallet_module.withdraw(address, amount, fees, ()).await?;
 

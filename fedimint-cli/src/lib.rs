@@ -301,7 +301,10 @@ async fn load_or_generate_mnemonic(db: &Database) -> Result<Mnemonic, CliError> 
         if let Ok(entropy) = Client::load_decodable_client_secret::<Vec<u8>>(db).await {
             Mnemonic::from_entropy(&entropy).map_err_cli()?
         } else {
-            info!("Generating mnemonic and writing entropy to client storage");
+            info!(
+                target: LOG_CLIENT,
+                "Generating mnemonic and writing entropy to client storage"
+            );
             let mnemonic = Bip39RootSecretStrategy::<12>::random(&mut thread_rng());
             Client::store_encodable_client_secret(db, mnemonic.to_entropy())
                 .await
