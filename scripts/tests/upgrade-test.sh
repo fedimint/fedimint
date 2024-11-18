@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs a test to determine if upgrading binaries succeeds
 
-set -euo pipefail
+set -euxo pipefail
 export RUST_LOG="${RUST_LOG:-info}"
 source scripts/_common.sh
 
@@ -43,8 +43,14 @@ echo "## Running upgrade tests
 versions: ${versions[*]}
 kinds: ${test_kinds[*]}"
 
-build_workspace
-add_target_dir_to_path
+if contains "current" "${versions[@]}"; then
+  build_workspace
+  add_target_dir_to_path
+  FM_DEVIMINT_PATH="devimint"
+else
+  LATEST_VERSION="${versions[-1]}"
+  FM_DEVIMINT_PATH="$(nix_build_binary_for_version 'devimint' "$LATEST_VERSION")"
+fi
 
 export FM_BACKWARDS_COMPATIBILITY_TEST=1
 
@@ -62,7 +68,7 @@ if contains "fedimintd" "${test_kinds[@]}"; then
   done
 
   upgrade_tests+=(
-    "devimint upgrade-tests fedimintd --paths $(printf "%s " "${fedimintd_paths[@]}")"
+    "${FM_DEVIMINT_PATH} upgrade-tests fedimintd --paths $(printf "%s " "${fedimintd_paths[@]}")"
   )
 fi
 
@@ -78,7 +84,7 @@ if contains "fedimint-cli" "${test_kinds[@]}"; then
   done
 
   upgrade_tests+=(
-    "devimint upgrade-tests fedimint-cli --paths $(printf "%s " "${fedimint_cli_paths[@]}")"
+    "${FM_DEVIMINT_PATH} upgrade-tests fedimint-cli --paths $(printf "%s " "${fedimint_cli_paths[@]}")"
   )
 fi
 
@@ -97,7 +103,7 @@ if contains "gateway" "${test_kinds[@]}"; then
   done
 
   upgrade_tests+=(
-    "devimint upgrade-tests gatewayd --gatewayd-paths $(printf "%s " "${gatewayd_paths[@]}") --gateway-cli-paths $(printf "%s " "${gateway_cli_paths[@]}")"
+    "${FM_DEVIMINT_PATH} upgrade-tests gatewayd --gatewayd-paths $(printf "%s " "${gatewayd_paths[@]}") --gateway-cli-paths $(printf "%s " "${gateway_cli_paths[@]}")"
   )
 fi
 
