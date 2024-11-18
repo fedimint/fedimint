@@ -398,11 +398,70 @@ mod tests {
     use std::str::FromStr;
 
     use bitcoin::hashes::Hash as BitcoinHash;
+    use hex::FromHex;
 
+    use crate::db::DatabaseValue;
     use crate::encoding::btc::NetworkLegacyEncodingWrapper;
     use crate::encoding::tests::{test_roundtrip, test_roundtrip_expected};
     use crate::encoding::{Decodable, Encodable};
     use crate::ModuleDecoderRegistry;
+
+    #[test_log::test]
+    fn block_hash_roundtrip() {
+        let blockhash = bitcoin::BlockHash::from_str(
+            "0000000000000000000065bda8f8a88f2e1e00d9a6887a43d640e52a4c7660f2",
+        )
+        .unwrap();
+        test_roundtrip_expected(
+            &blockhash,
+            &[
+                242, 96, 118, 76, 42, 229, 64, 214, 67, 122, 136, 166, 217, 0, 30, 46, 143, 168,
+                248, 168, 189, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
+        );
+    }
+
+    #[test_log::test]
+    fn tx_roundtrip() {
+        let transaction: Vec<u8> = FromHex::from_hex(
+            "02000000000101d35b66c54cf6c09b81a8d94cd5d179719cd7595c258449452a9305ab9b12df250200000000fdffffff020cd50a0000000000160014ae5d450b71c04218e6e81c86fcc225882d7b7caae695b22100000000160014f60834ef165253c571b11ce9fa74e46692fc5ec10248304502210092062c609f4c8dc74cd7d4596ecedc1093140d90b3fd94b4bdd9ad3e102ce3bc02206bb5a6afc68d583d77d5d9bcfb6252a364d11a307f3418be1af9f47f7b1b3d780121026e5628506ecd33242e5ceb5fdafe4d3066b5c0f159b3c05a621ef65f177ea28600000000"
+        ).unwrap();
+        let transaction =
+            bitcoin::Transaction::from_bytes(&transaction, &ModuleDecoderRegistry::default())
+                .unwrap();
+        test_roundtrip_expected(
+            &transaction,
+            &[
+                2, 0, 0, 0, 0, 1, 1, 211, 91, 102, 197, 76, 246, 192, 155, 129, 168, 217, 76, 213,
+                209, 121, 113, 156, 215, 89, 92, 37, 132, 73, 69, 42, 147, 5, 171, 155, 18, 223,
+                37, 2, 0, 0, 0, 0, 253, 255, 255, 255, 2, 12, 213, 10, 0, 0, 0, 0, 0, 22, 0, 20,
+                174, 93, 69, 11, 113, 192, 66, 24, 230, 232, 28, 134, 252, 194, 37, 136, 45, 123,
+                124, 170, 230, 149, 178, 33, 0, 0, 0, 0, 22, 0, 20, 246, 8, 52, 239, 22, 82, 83,
+                197, 113, 177, 28, 233, 250, 116, 228, 102, 146, 252, 94, 193, 2, 72, 48, 69, 2,
+                33, 0, 146, 6, 44, 96, 159, 76, 141, 199, 76, 215, 212, 89, 110, 206, 220, 16, 147,
+                20, 13, 144, 179, 253, 148, 180, 189, 217, 173, 62, 16, 44, 227, 188, 2, 32, 107,
+                181, 166, 175, 198, 141, 88, 61, 119, 213, 217, 188, 251, 98, 82, 163, 100, 209,
+                26, 48, 127, 52, 24, 190, 26, 249, 244, 127, 123, 27, 61, 120, 1, 33, 2, 110, 86,
+                40, 80, 110, 205, 51, 36, 46, 92, 235, 95, 218, 254, 77, 48, 102, 181, 192, 241,
+                89, 179, 192, 90, 98, 30, 246, 95, 23, 126, 162, 134, 0, 0, 0, 0,
+            ],
+        );
+    }
+
+    #[test_log::test]
+    fn txid_roundtrip() {
+        let txid = bitcoin::Txid::from_str(
+            "51f7ed2f23e58cc6e139e715e9ce304a1e858416edc9079dd7b74fa8d2efc09a",
+        )
+        .unwrap();
+        test_roundtrip_expected(
+            &txid,
+            &[
+                154, 192, 239, 210, 168, 79, 183, 215, 157, 7, 201, 237, 22, 132, 133, 30, 74, 48,
+                206, 233, 21, 231, 57, 225, 198, 140, 229, 35, 47, 237, 247, 81,
+            ],
+        );
+    }
 
     #[test_log::test]
     fn network_roundtrip() {
