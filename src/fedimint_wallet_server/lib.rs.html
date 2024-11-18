@@ -2024,7 +2024,11 @@
 <a href="#2023" id="2023">2023</a>
 <a href="#2024" id="2024">2024</a>
 <a href="#2025" id="2025">2025</a>
-<a href="#2026" id="2026">2026</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2026" id="2026">2026</a>
+<a href="#2027" id="2027">2027</a>
+<a href="#2028" id="2028">2028</a>
+<a href="#2029" id="2029">2029</a>
+<a href="#2030" id="2030">2030</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -3455,10 +3459,14 @@
     </span><span class="kw">async fn </span>wait_for_finality_confs_or_shutdown(<span class="kw-2">&amp;</span><span class="self">self</span>, consensus_block_count: u32) {
         <span class="kw">let </span>backoff = <span class="kw">if </span>is_running_in_test_env() {
             <span class="comment">// every 100ms for 60s
-            </span>backoff_util::custom_constant_backoff(Duration::from_millis(<span class="number">100</span>), <span class="prelude-val">Some</span>(<span class="number">10 </span>* <span class="number">60</span>))
+            </span>backoff_util::custom_backoff(
+                Duration::from_millis(<span class="number">100</span>),
+                Duration::from_millis(<span class="number">100</span>),
+                <span class="prelude-val">Some</span>(<span class="number">10 </span>* <span class="number">60</span>),
+            )
         } <span class="kw">else </span>{
-            <span class="comment">// every 10s for 1 hour
-            </span>backoff_util::custom_constant_backoff(Duration::from_secs(<span class="number">10</span>), <span class="prelude-val">Some</span>(<span class="number">6 </span>* <span class="number">60</span>))
+            <span class="comment">// every max 10s for 1 hour
+            </span>backoff_util::fibonacci_max_one_hour()
         };
 
         <span class="kw">let </span>wait_for_finality_confs = || <span class="kw">async </span>{
