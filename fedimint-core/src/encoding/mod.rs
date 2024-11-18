@@ -28,7 +28,7 @@ use std::{cmp, mem};
 use anyhow::{format_err, Context};
 pub use fedimint_derive::{Decodable, Encodable};
 use hex::{FromHex, ToHex};
-use lightning::util::ser::{Readable, Writeable};
+use lightning::util::ser::BigSize;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -246,26 +246,6 @@ impl DecodeError {
 impl From<anyhow::Error> for DecodeError {
     fn from(e: anyhow::Error) -> Self {
         Self(e)
-    }
-}
-
-pub use lightning::util::ser::BigSize;
-
-impl Encodable for BigSize {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        let mut writer = CountWrite::from(writer);
-        self.write(&mut writer)?;
-        Ok(usize::try_from(writer.count()).expect("can't overflow"))
-    }
-}
-
-impl Decodable for BigSize {
-    fn consensus_decode<R: std::io::Read>(
-        r: &mut R,
-        _modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        Self::read(&mut SimpleBitcoinRead(r))
-            .map_err(|e| DecodeError::new_custom(anyhow::anyhow!("BigSize decoding error: {e:?}")))
     }
 }
 
@@ -809,46 +789,6 @@ impl Decodable for Duration {
     }
 }
 
-impl Encodable for lightning_invoice::Bolt11Invoice {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        self.to_string().consensus_encode(writer)
-    }
-}
-
-impl Encodable for lightning_invoice::RoutingFees {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        let mut len = 0;
-        len += self.base_msat.consensus_encode(writer)?;
-        len += self.proportional_millionths.consensus_encode(writer)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for lightning_invoice::RoutingFees {
-    fn consensus_decode<D: std::io::Read>(
-        d: &mut D,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        let base_msat = Decodable::consensus_decode(d, modules)?;
-        let proportional_millionths = Decodable::consensus_decode(d, modules)?;
-        Ok(Self {
-            base_msat,
-            proportional_millionths,
-        })
-    }
-}
-
-impl Decodable for lightning_invoice::Bolt11Invoice {
-    fn consensus_decode<D: std::io::Read>(
-        d: &mut D,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        String::consensus_decode(d, modules)?
-            .parse::<Self>()
-            .map_err(DecodeError::from_err)
-    }
-}
-
 impl Encodable for bool {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
         let bool_as_u8 = u8::from(*self);
@@ -995,94 +935,6 @@ impl Decodable for Cow<'static, str> {
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         Ok(Cow::Owned(String::consensus_decode(d, modules)?))
-    }
-}
-
-// Simple decoder implementing `bitcoin_io::Read` for `std::io::Read`.
-// This is needed because `bitcoin::consensus::Decodable` requires a
-// `bitcoin_io::Read`.
-pub struct SimpleBitcoinRead<R: std::io::Read>(R);
-
-impl<R: std::io::Read> bitcoin_io::Read for SimpleBitcoinRead<R> {
-    fn read(&mut self, buf: &mut [u8]) -> bitcoin_io::Result<usize> {
-        self.0.read(buf).map_err(bitcoin_io::Error::from)
-    }
-}
-
-/// Wrap buffering support for implementations of Read.
-/// A reader which keeps an internal buffer to avoid hitting the underlying
-/// stream directly for every read.
-///
-/// In order to avoid reading bytes past the first object, and those bytes then
-/// ending up getting dropped, this BufBitcoinReader operates in
-/// one-byte-increments.
-///
-/// This code is vendored from the `lightning` crate:
-/// <https://github.com/lightningdevkit/rust-lightning/blob/5718baaed947fcaa9c60d80cdf309040c0c68489/lightning/src/util/ser.rs#L72-L138>
-struct BufBitcoinReader<'a, R: Read> {
-    inner: &'a mut R,
-    buf: [u8; 1],
-    is_consumed: bool,
-}
-
-impl<'a, R: Read> BufBitcoinReader<'a, R> {
-    /// Creates a [`BufBitcoinReader`] which will read from the given `inner`.
-    pub fn new(inner: &'a mut R) -> Self {
-        BufBitcoinReader {
-            inner,
-            buf: [0; 1],
-            is_consumed: true,
-        }
-    }
-}
-
-impl<'a, R: Read> bitcoin_io::Read for BufBitcoinReader<'a, R> {
-    #[inline]
-    fn read(&mut self, output: &mut [u8]) -> bitcoin_io::Result<usize> {
-        if output.is_empty() {
-            return Ok(0);
-        }
-        #[allow(clippy::useless_let_if_seq)]
-        let mut offset = 0;
-        if !self.is_consumed {
-            output[0] = self.buf[0];
-            self.is_consumed = true;
-            offset = 1;
-        }
-        Ok(self
-            .inner
-            .read(&mut output[offset..])
-            .map(|len| len + offset)?)
-    }
-}
-
-impl<'a, R: Read> bitcoin_io::BufRead for BufBitcoinReader<'a, R> {
-    #[inline]
-    fn fill_buf(&mut self) -> bitcoin_io::Result<&[u8]> {
-        debug_assert!(false, "rust-bitcoin doesn't actually use this");
-        if self.is_consumed {
-            let count = self.inner.read(&mut self.buf[..])?;
-            debug_assert!(count <= 1, "read gave us a garbage length");
-
-            // upon hitting EOF, assume the byte is already consumed
-            self.is_consumed = count == 0;
-        }
-
-        if self.is_consumed {
-            Ok(&[])
-        } else {
-            Ok(&self.buf[..])
-        }
-    }
-
-    #[inline]
-    fn consume(&mut self, amount: usize) {
-        debug_assert!(false, "rust-bitcoin doesn't actually use this");
-        if amount >= 1 {
-            debug_assert_eq!(amount, 1, "Can only consume one byte");
-            debug_assert!(!self.is_consumed, "Cannot consume more than had been read");
-            self.is_consumed = true;
-        }
     }
 }
 
@@ -1277,10 +1129,8 @@ where
 mod tests {
     use std::fmt::Debug;
     use std::io::Cursor;
-    use std::str::FromStr;
 
     use super::*;
-    use crate::db::DatabaseValue;
     use crate::encoding::{Decodable, Encodable};
 
     pub(crate) fn test_roundtrip<T>(value: &T)
@@ -1439,25 +1289,6 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_invoice() {
-        let invoice_str = "lnbc100p1psj9jhxdqud3jxktt5w46x7unfv9kz6mn0v3jsnp4q0d3p2sfluzdx45tqcs\
-			h2pu5qc7lgq0xs578ngs6s0s68ua4h7cvspp5q6rmq35js88zp5dvwrv9m459tnk2zunwj5jalqtyxqulh0l\
-			5gflssp5nf55ny5gcrfl30xuhzj3nphgj27rstekmr9fw3ny5989s300gyus9qyysgqcqpcrzjqw2sxwe993\
-			h5pcm4dxzpvttgza8zhkqxpgffcrf5v25nwpr3cmfg7z54kuqq8rgqqqqqqqq2qqqqq9qq9qrzjqd0ylaqcl\
-			j9424x9m8h2vcukcgnm6s56xfgu3j78zyqzhgs4hlpzvznlugqq9vsqqqqqqqlgqqqqqeqq9qrzjqwldmj9d\
-			ha74df76zhx6l9we0vjdquygcdt3kssupehe64g6yyp5yz5rhuqqwccqqyqqqqlgqqqqjcqq9qrzjqf9e58a\
-			guqr0rcun0ajlvmzq3ek63cw2w282gv3z5uupmuwvgjtq2z55qsqqg6qqqyqqqrtnqqqzq3cqygrzjqvphms\
-			ywntrrhqjcraumvc4y6r8v4z5v593trte429v4hredj7ms5z52usqq9ngqqqqqqqlgqqqqqqgq9qrzjq2v0v\
-			p62g49p7569ev48cmulecsxe59lvaw3wlxm7r982zxa9zzj7z5l0cqqxusqqyqqqqlgqqqqqzsqygarl9fh3\
-			8s0gyuxjjgux34w75dnc6xp2l35j7es3jd4ugt3lu0xzre26yg5m7ke54n2d5sym4xcmxtl8238xxvw5h5h5\
-			j5r6drg6k6zcqj0fcwg";
-        let invoice = invoice_str
-            .parse::<lightning_invoice::Bolt11Invoice>()
-            .unwrap();
-        test_roundtrip(&invoice);
-    }
-
-    #[test_log::test]
     fn test_btreemap() {
         test_roundtrip(&BTreeMap::from([
             ("a".to_string(), 1u32),
@@ -1583,55 +1414,5 @@ mod tests {
         // bitcoin structures are not lexicographically sortable so we cannot
         // test them here. in future we may crate a wrapper type that is
         // lexicographically sortable to use when needed
-    }
-
-    #[test]
-    fn test_bitcoin_consensus_encoding() {
-        // encodings should follow the bitcoin consensus encoding
-        let txid = bitcoin::Txid::from_str(
-            "51f7ed2f23e58cc6e139e715e9ce304a1e858416edc9079dd7b74fa8d2efc09a",
-        )
-        .unwrap();
-        test_roundtrip_expected(
-            &txid,
-            &[
-                154, 192, 239, 210, 168, 79, 183, 215, 157, 7, 201, 237, 22, 132, 133, 30, 74, 48,
-                206, 233, 21, 231, 57, 225, 198, 140, 229, 35, 47, 237, 247, 81,
-            ],
-        );
-        let transaction: Vec<u8> = FromHex::from_hex(
-            "02000000000101d35b66c54cf6c09b81a8d94cd5d179719cd7595c258449452a9305ab9b12df250200000000fdffffff020cd50a0000000000160014ae5d450b71c04218e6e81c86fcc225882d7b7caae695b22100000000160014f60834ef165253c571b11ce9fa74e46692fc5ec10248304502210092062c609f4c8dc74cd7d4596ecedc1093140d90b3fd94b4bdd9ad3e102ce3bc02206bb5a6afc68d583d77d5d9bcfb6252a364d11a307f3418be1af9f47f7b1b3d780121026e5628506ecd33242e5ceb5fdafe4d3066b5c0f159b3c05a621ef65f177ea28600000000"
-        ).unwrap();
-        let transaction =
-            bitcoin::Transaction::from_bytes(&transaction, &ModuleDecoderRegistry::default())
-                .unwrap();
-        test_roundtrip_expected(
-            &transaction,
-            &[
-                2, 0, 0, 0, 0, 1, 1, 211, 91, 102, 197, 76, 246, 192, 155, 129, 168, 217, 76, 213,
-                209, 121, 113, 156, 215, 89, 92, 37, 132, 73, 69, 42, 147, 5, 171, 155, 18, 223,
-                37, 2, 0, 0, 0, 0, 253, 255, 255, 255, 2, 12, 213, 10, 0, 0, 0, 0, 0, 22, 0, 20,
-                174, 93, 69, 11, 113, 192, 66, 24, 230, 232, 28, 134, 252, 194, 37, 136, 45, 123,
-                124, 170, 230, 149, 178, 33, 0, 0, 0, 0, 22, 0, 20, 246, 8, 52, 239, 22, 82, 83,
-                197, 113, 177, 28, 233, 250, 116, 228, 102, 146, 252, 94, 193, 2, 72, 48, 69, 2,
-                33, 0, 146, 6, 44, 96, 159, 76, 141, 199, 76, 215, 212, 89, 110, 206, 220, 16, 147,
-                20, 13, 144, 179, 253, 148, 180, 189, 217, 173, 62, 16, 44, 227, 188, 2, 32, 107,
-                181, 166, 175, 198, 141, 88, 61, 119, 213, 217, 188, 251, 98, 82, 163, 100, 209,
-                26, 48, 127, 52, 24, 190, 26, 249, 244, 127, 123, 27, 61, 120, 1, 33, 2, 110, 86,
-                40, 80, 110, 205, 51, 36, 46, 92, 235, 95, 218, 254, 77, 48, 102, 181, 192, 241,
-                89, 179, 192, 90, 98, 30, 246, 95, 23, 126, 162, 134, 0, 0, 0, 0,
-            ],
-        );
-        let blockhash = bitcoin::BlockHash::from_str(
-            "0000000000000000000065bda8f8a88f2e1e00d9a6887a43d640e52a4c7660f2",
-        )
-        .unwrap();
-        test_roundtrip_expected(
-            &blockhash,
-            &[
-                242, 96, 118, 76, 42, 229, 64, 214, 67, 122, 136, 166, 217, 0, 30, 46, 143, 168,
-                248, 168, 189, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            ],
-        );
     }
 }
