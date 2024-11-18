@@ -592,7 +592,10 @@
 <a href="#591" id="591">591</a>
 <a href="#592" id="592">592</a>
 <a href="#593" id="593">593</a>
-<a href="#594" id="594">594</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
+<a href="#594" id="594">594</a>
+<a href="#595" id="595">595</a>
+<a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -861,8 +864,11 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _num_route_hints: usize,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, LightningRpcError&gt; {
-        <span class="comment">// TODO: Return real route hints. Not strictly necessary but would be nice to
-        // have.
+        <span class="comment">// `ILnRpcClient::routehints()` is currently only ever used for LNv1 payment
+        // receives and will be removed when we switch to LNv2. The LDK gateway will
+        // never support LNv1 payment receives, only LNv2 payment receives, which
+        // require that the gateway's lightning node generates invoices rather than the
+        // fedimint client, so it is able to insert the proper route hints on its own.
         </span><span class="prelude-val">Ok</span>(GetRouteHintsResponse {
             route_hints: <span class="macro">vec!</span>[],
         })
