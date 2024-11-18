@@ -1,6 +1,6 @@
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::module::registry::ServerModuleRegistry;
-use fedimint_core::module::TransactionItemAmount;
+use fedimint_core::module::{CoreConsensusVersion, TransactionItemAmount};
 use fedimint_core::transaction::{Transaction, TransactionError, TRANSACTION_OVERFLOW_ERROR};
 use fedimint_core::{Amount, OutPoint};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -11,6 +11,7 @@ pub async fn process_transaction_with_dbtx(
     modules: ServerModuleRegistry,
     dbtx: &mut DatabaseTransaction<'_>,
     transaction: &Transaction,
+    version: CoreConsensusVersion,
 ) -> Result<(), TransactionError> {
     let in_count = transaction.inputs.len();
     let out_count = transaction.outputs.len();
@@ -74,7 +75,7 @@ pub async fn process_transaction_with_dbtx(
         funding_verifier.add_output(amount)?;
     }
 
-    funding_verifier.verify_funding()?;
+    funding_verifier.verify_funding(version)?;
 
     Ok(())
 }
@@ -94,10 +95,12 @@ impl FundingVerifier {
             .input_amount
             .checked_add(input_amount.amount)
             .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
+
         self.fee_amount = self
             .fee_amount
             .checked_add(input_amount.fee)
             .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
+
         Ok(())
     }
 
@@ -109,27 +112,34 @@ impl FundingVerifier {
             .output_amount
             .checked_add(output_amount.amount)
             .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
+
         self.fee_amount = self
             .fee_amount
             .checked_add(output_amount.fee)
             .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
+
         Ok(())
     }
 
-    pub fn verify_funding(self) -> Result<(), TransactionError> {
+    pub fn verify_funding(self, version: CoreConsensusVersion) -> Result<(), TransactionError> {
         let outputs_and_fees = self
             .output_amount
             .checked_add(self.fee_amount)
             .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
+
         if self.input_amount == outputs_and_fees {
-            Ok(())
-        } else {
-            Err(TransactionError::UnbalancedTransaction {
-                inputs: self.input_amount,
-                outputs: self.output_amount,
-                fee: self.fee_amount,
-            })
+            return Ok(());
         }
+
+        if self.input_amount > outputs_and_fees && version >= CoreConsensusVersion::new(2, 1) {
+            return Ok(());
+        }
+
+        Err(TransactionError::UnbalancedTransaction {
+            inputs: self.input_amount,
+            outputs: self.output_amount,
+            fee: self.fee_amount,
+        })
     }
 }
 
