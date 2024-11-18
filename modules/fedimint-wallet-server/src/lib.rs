@@ -1427,10 +1427,14 @@ impl Wallet {
     async fn wait_for_finality_confs_or_shutdown(&self, consensus_block_count: u32) {
         let backoff = if is_running_in_test_env() {
             // every 100ms for 60s
-            backoff_util::custom_constant_backoff(Duration::from_millis(100), Some(10 * 60))
+            backoff_util::custom_backoff(
+                Duration::from_millis(100),
+                Duration::from_millis(100),
+                Some(10 * 60),
+            )
         } else {
-            // every 10s for 1 hour
-            backoff_util::custom_constant_backoff(Duration::from_secs(10), Some(6 * 60))
+            // every max 10s for 1 hour
+            backoff_util::fibonacci_max_one_hour()
         };
 
         let wait_for_finality_confs = || async {

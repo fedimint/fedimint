@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-pub use backon::{Backoff, ConstantBackoff, FibonacciBackoff};
-use backon::{BackoffBuilder, ConstantBuilder, FibonacciBuilder};
+pub use backon::{Backoff, FibonacciBackoff};
+use backon::{BackoffBuilder, FibonacciBuilder};
 
 /// Backoff strategy for background tasks.
 ///
@@ -43,9 +43,23 @@ pub fn custom_backoff(
         .build()
 }
 
-pub fn custom_constant_backoff(delay: Duration, max_times: Option<usize>) -> ConstantBackoff {
-    ConstantBuilder::default()
-        .with_delay(delay)
-        .with_max_times(max_times.unwrap_or(usize::MAX))
-        .build()
+/// Retry every max 10s for up to one hour, with a more aggressive fibonacci
+/// backoff in the beginning to reduce expected latency.
+///
+/// Starts at 200ms increasing to 10s. Retries 360 times before giving up, with
+/// a maximum total delay between 3527.6s (58m 47.6s) and 3599.6s (59m 59.6s)
+/// depending on jitter.
+pub fn fibonacci_max_one_hour() -> FibonacciBackoff {
+    // Not accounting for jitter, the delays are:
+    // 0.2, 0.2, 0.4, 0.6, 1.0, 1.6, 2.6, 4.2, 6.8, 10.0...
+    //
+    // Jitter adds a random value between 0 and `min_delay` to each delay.
+    // Total jitter is between 0 and (360 * 0.2) = 72.0.
+    //
+    // Maximum possible delay including jitter is 3599.6s seconds.
+    custom_backoff(
+        Duration::from_millis(200),
+        Duration::from_secs(10),
+        Some(360),
+    )
 }
