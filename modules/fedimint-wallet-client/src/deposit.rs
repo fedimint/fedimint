@@ -274,7 +274,7 @@ pub(crate) async fn transition_btc_tx_confirmed(
 
     let amount = pegin_proof.tx_output().value.into();
 
-    let wallet_input = WalletInput::new_v0(pegin_proof);
+    let wallet_input = WalletInput::new_v1(&pegin_proof);
 
     let client_input = ClientInput::<WalletInput> {
         input: wallet_input,

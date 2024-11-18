@@ -341,6 +341,13 @@ impl WalletInput {
     pub fn new_v0(peg_in_proof: PegInProof) -> WalletInput {
         WalletInput::V0(WalletInputV0(Box::new(peg_in_proof)))
     }
+
+    pub fn new_v1(peg_in_proof: &PegInProof) -> WalletInput {
+        WalletInput::V1(WalletInputV1 {
+            outpoint: peg_in_proof.outpoint(),
+            tweak_contract_key: *peg_in_proof.tweak_contract_key(),
+        })
+    }
 }
 
 #[autoimpl(Deref, DerefMut using self.0)]
