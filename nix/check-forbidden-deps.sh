@@ -22,7 +22,7 @@ find fedimint-client/ -name Cargo.toml | while read -r cargo_toml ; do
     return 1
   fi
 done
-find ./ -name Cargo.lock | while read -r cargo_lock ; do
+echo Cargo.lock | while read -r cargo_lock ; do
   if grep -E "openssl" "$cargo_lock" >&2 ; then
     >&2 echo "$cargo_lock must not depend on openssl"
     return 1
