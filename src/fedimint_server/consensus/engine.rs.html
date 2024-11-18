@@ -843,7 +843,12 @@
 <a href="#842" id="842">842</a>
 <a href="#843" id="843">843</a>
 <a href="#844" id="844">844</a>
-<a href="#845" id="845">845</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
+<a href="#847" id="847">847</a>
+<a href="#848" id="848">848</a>
+<a href="#849" id="849">849</a>
+<a href="#850" id="850">850</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -1602,9 +1607,14 @@
                     .map(DynOutput::module_instance_id)
                     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-                process_transaction_with_dbtx(<span class="self">self</span>.modules.clone(), dbtx, <span class="kw-2">&amp;</span>transaction)
-                    .<span class="kw">await
-                    </span>.map_err(|error| <span class="macro">anyhow!</span>(error.to_string()))<span class="question-mark">?</span>;
+                process_transaction_with_dbtx(
+                    <span class="self">self</span>.modules.clone(),
+                    dbtx,
+                    <span class="kw-2">&amp;</span>transaction,
+                    <span class="self">self</span>.cfg.consensus.version,
+                )
+                .<span class="kw">await
+                </span>.map_err(|error| <span class="macro">anyhow!</span>(error.to_string()))<span class="question-mark">?</span>;
 
                 <span class="macro">debug!</span>(target: LOG_CONSENSUS, %txid,  <span class="string">"Transaction accepted"</span>);
                 dbtx.insert_entry(<span class="kw-2">&amp;</span>AcceptedTransactionKey(txid), <span class="kw-2">&amp;</span>modules_ids)

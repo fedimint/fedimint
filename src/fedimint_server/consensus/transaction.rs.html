@@ -142,9 +142,19 @@
 <a href="#141" id="141">141</a>
 <a href="#142" id="142">142</a>
 <a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_core::module::registry::ServerModuleRegistry;
-<span class="kw">use </span>fedimint_core::module::TransactionItemAmount;
+<span class="kw">use </span>fedimint_core::module::{CoreConsensusVersion, TransactionItemAmount};
 <span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionError, TRANSACTION_OVERFLOW_ERROR};
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint};
 <span class="kw">use </span>rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -155,6 +165,7 @@
     modules: ServerModuleRegistry,
     dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
     transaction: <span class="kw-2">&amp;</span>Transaction,
+    version: CoreConsensusVersion,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionError&gt; {
     <span class="kw">let </span>in_count = transaction.inputs.len();
     <span class="kw">let </span>out_count = transaction.outputs.len();
@@ -218,7 +229,7 @@
         funding_verifier.add_output(amount)<span class="question-mark">?</span>;
     }
 
-    funding_verifier.verify_funding()<span class="question-mark">?</span>;
+    funding_verifier.verify_funding(version)<span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(())
 }
@@ -238,10 +249,12 @@
             </span>.input_amount
             .checked_add(input_amount.amount)
             .ok_or(TRANSACTION_OVERFLOW_ERROR)<span class="question-mark">?</span>;
+
         <span class="self">self</span>.fee_amount = <span class="self">self
             </span>.fee_amount
             .checked_add(input_amount.fee)
             .ok_or(TRANSACTION_OVERFLOW_ERROR)<span class="question-mark">?</span>;
+
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -253,27 +266,34 @@
             </span>.output_amount
             .checked_add(output_amount.amount)
             .ok_or(TRANSACTION_OVERFLOW_ERROR)<span class="question-mark">?</span>;
+
         <span class="self">self</span>.fee_amount = <span class="self">self
             </span>.fee_amount
             .checked_add(output_amount.fee)
             .ok_or(TRANSACTION_OVERFLOW_ERROR)<span class="question-mark">?</span>;
+
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub fn </span>verify_funding(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionError&gt; {
+    <span class="kw">pub fn </span>verify_funding(<span class="self">self</span>, version: CoreConsensusVersion) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionError&gt; {
         <span class="kw">let </span>outputs_and_fees = <span class="self">self
             </span>.output_amount
             .checked_add(<span class="self">self</span>.fee_amount)
             .ok_or(TRANSACTION_OVERFLOW_ERROR)<span class="question-mark">?</span>;
+
         <span class="kw">if </span><span class="self">self</span>.input_amount == outputs_and_fees {
-            <span class="prelude-val">Ok</span>(())
-        } <span class="kw">else </span>{
-            <span class="prelude-val">Err</span>(TransactionError::UnbalancedTransaction {
-                inputs: <span class="self">self</span>.input_amount,
-                outputs: <span class="self">self</span>.output_amount,
-                fee: <span class="self">self</span>.fee_amount,
-            })
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
+
+        <span class="kw">if </span><span class="self">self</span>.input_amount &gt; outputs_and_fees &amp;&amp; version &gt;= CoreConsensusVersion::new(<span class="number">2</span>, <span class="number">1</span>) {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+        }
+
+        <span class="prelude-val">Err</span>(TransactionError::UnbalancedTransaction {
+            inputs: <span class="self">self</span>.input_amount,
+            outputs: <span class="self">self</span>.output_amount,
+            fee: <span class="self">self</span>.fee_amount,
+        })
     }
 }
 

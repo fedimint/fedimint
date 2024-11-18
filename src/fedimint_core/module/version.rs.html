@@ -458,7 +458,9 @@
 <a href="#457" id="457">457</a>
 <a href="#458" id="458">458</a>
 <a href="#459" id="459">459</a>
-<a href="#460" id="460">460</a></pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint consensus and API versioning.
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a></pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint consensus and API versioning.
 //!
 //! ## Introduction
 //!
@@ -528,7 +530,9 @@
 ///
 /// See [`ModuleConsensusVersion`] for more details on how it interacts with
 /// module's consensus.
-</span><span class="attr">#[derive(Debug, Copy, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq)]
+</span><span class="attr">#[derive(
+    Debug, Copy, Clone, PartialOrd, Ord, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq,
+)]
 </span><span class="kw">pub struct </span>CoreConsensusVersion {
     <span class="kw">pub </span>major: u32,
     <span class="kw">pub </span>minor: u32,
@@ -541,7 +545,7 @@
 }
 
 <span class="doccomment">/// Globally declared core consensus version
-</span><span class="kw">pub const </span>CORE_CONSENSUS_VERSION: CoreConsensusVersion = CoreConsensusVersion::new(<span class="number">2</span>, <span class="number">0</span>);
+</span><span class="kw">pub const </span>CORE_CONSENSUS_VERSION: CoreConsensusVersion = CoreConsensusVersion::new(<span class="number">2</span>, <span class="number">1</span>);
 
 <span class="doccomment">/// Consensus version of a specific module instance
 ///

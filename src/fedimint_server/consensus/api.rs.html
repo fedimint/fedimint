@@ -715,7 +715,13 @@
 <a href="#714" id="714">714</a>
 <a href="#715" id="715">715</a>
 <a href="#716" id="716">716</a>
-<a href="#717" id="717">717</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
+<a href="#717" id="717">717</a>
+<a href="#718" id="718">718</a>
+<a href="#719" id="719">719</a>
+<a href="#720" id="720">720</a>
+<a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a>
+<a href="#723" id="723">723</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -839,7 +845,13 @@
         <span class="comment">// We ignore any writes, as we only verify if the transaction is valid here
         </span>dbtx.ignore_uncommitted();
 
-        process_transaction_with_dbtx(<span class="self">self</span>.modules.clone(), <span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;</span>transaction).<span class="kw">await</span><span class="question-mark">?</span>;
+        process_transaction_with_dbtx(
+            <span class="self">self</span>.modules.clone(),
+            <span class="kw-2">&amp;mut </span>dbtx,
+            <span class="kw-2">&amp;</span>transaction,
+            <span class="self">self</span>.cfg.consensus.version,
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="self">self</span>.submission_sender
             .send(ConsensusItem::Transaction(transaction))
