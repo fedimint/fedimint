@@ -9,7 +9,7 @@ use std::hash::Hasher;
 
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::psbt::raw::ProprietaryKey;
-use bitcoin::{secp256k1, Address, Amount, BlockHash, Txid};
+use bitcoin::{secp256k1, Address, Amount, BlockHash, ScriptBuf, Txid};
 use config::WalletClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
@@ -346,6 +346,7 @@ impl WalletInput {
         WalletInput::V1(WalletInputV1 {
             outpoint: peg_in_proof.outpoint(),
             tweak_contract_key: *peg_in_proof.tweak_contract_key(),
+            script_pubkey: peg_in_proof.tx_output().script_pubkey,
         })
     }
 }
@@ -358,6 +359,7 @@ pub struct WalletInputV0(pub Box<PegInProof>);
 pub struct WalletInputV1 {
     pub outpoint: bitcoin::OutPoint,
     pub tweak_contract_key: secp256k1::PublicKey,
+    pub script_pubkey: ScriptBuf,
 }
 
 impl std::fmt::Display for WalletInputV0 {
