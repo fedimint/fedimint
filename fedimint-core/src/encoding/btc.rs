@@ -5,10 +5,11 @@ use anyhow::format_err;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::hashes::Hash as BitcoinHash;
 use hex::{FromHex, ToHex};
+use lightning::util::ser::{BigSize, Readable, Writeable};
 use miniscript::{Descriptor, MiniscriptKey};
 use serde::{Deserialize, Serialize};
 
-use super::{BufBitcoinReader, CountWrite, SimpleBitcoinRead};
+use super::CountWrite;
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::get_network_for_address;
 use crate::module::registry::ModuleDecoderRegistry;
@@ -245,6 +246,152 @@ impl Decodable for bitcoin::hashes::sha256::Hash {
     }
 }
 
+impl Encodable for lightning_invoice::Bolt11Invoice {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        self.to_string().consensus_encode(writer)
+    }
+}
+
+impl Decodable for lightning_invoice::Bolt11Invoice {
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        String::consensus_decode(d, modules)?
+            .parse::<Self>()
+            .map_err(DecodeError::from_err)
+    }
+}
+
+impl Encodable for lightning_invoice::RoutingFees {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        let mut len = 0;
+        len += self.base_msat.consensus_encode(writer)?;
+        len += self.proportional_millionths.consensus_encode(writer)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for lightning_invoice::RoutingFees {
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let base_msat = Decodable::consensus_decode(d, modules)?;
+        let proportional_millionths = Decodable::consensus_decode(d, modules)?;
+        Ok(Self {
+            base_msat,
+            proportional_millionths,
+        })
+    }
+}
+
+// Simple decoder implementing `bitcoin_io::Read` for `std::io::Read`.
+// This is needed because `bitcoin::consensus::Decodable` requires a
+// `bitcoin_io::Read`.
+struct SimpleBitcoinRead<R: std::io::Read>(R);
+
+impl<R: std::io::Read> bitcoin_io::Read for SimpleBitcoinRead<R> {
+    fn read(&mut self, buf: &mut [u8]) -> bitcoin_io::Result<usize> {
+        self.0.read(buf).map_err(bitcoin_io::Error::from)
+    }
+}
+
+/// Wrap buffering support for implementations of Read.
+/// A reader which keeps an internal buffer to avoid hitting the underlying
+/// stream directly for every read.
+///
+/// In order to avoid reading bytes past the first object, and those bytes then
+/// ending up getting dropped, this BufBitcoinReader operates in
+/// one-byte-increments.
+///
+/// This code is vendored from the `lightning` crate:
+/// <https://github.com/lightningdevkit/rust-lightning/blob/5718baaed947fcaa9c60d80cdf309040c0c68489/lightning/src/util/ser.rs#L72-L138>
+struct BufBitcoinReader<'a, R: std::io::Read> {
+    inner: &'a mut R,
+    buf: [u8; 1],
+    is_consumed: bool,
+}
+
+impl<'a, R: std::io::Read> BufBitcoinReader<'a, R> {
+    /// Creates a [`BufBitcoinReader`] which will read from the given `inner`.
+    fn new(inner: &'a mut R) -> Self {
+        BufBitcoinReader {
+            inner,
+            buf: [0; 1],
+            is_consumed: true,
+        }
+    }
+}
+
+impl<'a, R: std::io::Read> bitcoin_io::Read for BufBitcoinReader<'a, R> {
+    #[inline]
+    fn read(&mut self, output: &mut [u8]) -> bitcoin_io::Result<usize> {
+        if output.is_empty() {
+            return Ok(0);
+        }
+        #[allow(clippy::useless_let_if_seq)]
+        let mut offset = 0;
+        if !self.is_consumed {
+            output[0] = self.buf[0];
+            self.is_consumed = true;
+            offset = 1;
+        }
+        Ok(self
+            .inner
+            .read(&mut output[offset..])
+            .map(|len| len + offset)?)
+    }
+}
+
+impl<'a, R: std::io::Read> bitcoin_io::BufRead for BufBitcoinReader<'a, R> {
+    #[inline]
+    fn fill_buf(&mut self) -> bitcoin_io::Result<&[u8]> {
+        debug_assert!(false, "rust-bitcoin doesn't actually use this");
+        if self.is_consumed {
+            let count = self.inner.read(&mut self.buf[..])?;
+            debug_assert!(count <= 1, "read gave us a garbage length");
+
+            // upon hitting EOF, assume the byte is already consumed
+            self.is_consumed = count == 0;
+        }
+
+        if self.is_consumed {
+            Ok(&[])
+        } else {
+            Ok(&self.buf[..])
+        }
+    }
+
+    #[inline]
+    fn consume(&mut self, amount: usize) {
+        debug_assert!(false, "rust-bitcoin doesn't actually use this");
+        if amount >= 1 {
+            debug_assert_eq!(amount, 1, "Can only consume one byte");
+            debug_assert!(!self.is_consumed, "Cannot consume more than had been read");
+            self.is_consumed = true;
+        }
+    }
+}
+
+impl Encodable for BigSize {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+        let mut writer = CountWrite::from(writer);
+        self.write(&mut writer)?;
+        Ok(usize::try_from(writer.count()).expect("can't overflow"))
+    }
+}
+
+impl Decodable for BigSize {
+    fn consensus_decode<R: std::io::Read>(
+        r: &mut R,
+        _modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Self::read(&mut SimpleBitcoinRead(r))
+            .map_err(|e| DecodeError::new_custom(anyhow::anyhow!("BigSize decoding error: {e:?}")))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::Cursor;
@@ -253,7 +400,7 @@ mod tests {
     use bitcoin::hashes::Hash as BitcoinHash;
 
     use crate::encoding::btc::NetworkLegacyEncodingWrapper;
-    use crate::encoding::tests::test_roundtrip_expected;
+    use crate::encoding::tests::{test_roundtrip, test_roundtrip_expected};
     use crate::encoding::{Decodable, Encodable};
     use crate::ModuleDecoderRegistry;
 
@@ -346,5 +493,24 @@ mod tests {
                 63, 174, 192, 94, 207, 252, 187, 125, 243, 26, 217, 229, 26,
             ],
         );
+    }
+
+    #[test_log::test]
+    fn bolt11_invoice_roundtrip() {
+        let invoice_str = "lnbc100p1psj9jhxdqud3jxktt5w46x7unfv9kz6mn0v3jsnp4q0d3p2sfluzdx45tqcs\
+			h2pu5qc7lgq0xs578ngs6s0s68ua4h7cvspp5q6rmq35js88zp5dvwrv9m459tnk2zunwj5jalqtyxqulh0l\
+			5gflssp5nf55ny5gcrfl30xuhzj3nphgj27rstekmr9fw3ny5989s300gyus9qyysgqcqpcrzjqw2sxwe993\
+			h5pcm4dxzpvttgza8zhkqxpgffcrf5v25nwpr3cmfg7z54kuqq8rgqqqqqqqq2qqqqq9qq9qrzjqd0ylaqcl\
+			j9424x9m8h2vcukcgnm6s56xfgu3j78zyqzhgs4hlpzvznlugqq9vsqqqqqqqlgqqqqqeqq9qrzjqwldmj9d\
+			ha74df76zhx6l9we0vjdquygcdt3kssupehe64g6yyp5yz5rhuqqwccqqyqqqqlgqqqqjcqq9qrzjqf9e58a\
+			guqr0rcun0ajlvmzq3ek63cw2w282gv3z5uupmuwvgjtq2z55qsqqg6qqqyqqqrtnqqqzq3cqygrzjqvphms\
+			ywntrrhqjcraumvc4y6r8v4z5v593trte429v4hredj7ms5z52usqq9ngqqqqqqqlgqqqqqqgq9qrzjq2v0v\
+			p62g49p7569ev48cmulecsxe59lvaw3wlxm7r982zxa9zzj7z5l0cqqxusqqyqqqqlgqqqqqzsqygarl9fh3\
+			8s0gyuxjjgux34w75dnc6xp2l35j7es3jd4ugt3lu0xzre26yg5m7ke54n2d5sym4xcmxtl8238xxvw5h5h5\
+			j5r6drg6k6zcqj0fcwg";
+        let invoice = invoice_str
+            .parse::<lightning_invoice::Bolt11Invoice>()
+            .unwrap();
+        test_roundtrip(&invoice);
     }
 }
