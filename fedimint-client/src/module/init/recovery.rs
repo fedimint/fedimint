@@ -266,7 +266,10 @@ where
                         // is not being polled, and possibly can increase the fetching performance.
                         task_group.spawn_cancellable("recovery fetch block", async move {
 
-                            info!(session_idx, "Fetching epoch");
+                            info!(
+                                target: LOG_CLIENT_RECOVERY,
+                                session_idx, "Fetching epoch"
+                            );
 
                             let mut retry_sleep = Duration::from_millis(10);
                             let block = loop {
@@ -390,7 +393,10 @@ where
             //    again and moves to finalization
             // 6. module runs finalization again and probably fails because it's actually
             //    not idempotent and doesn't expect the already existing state.
-            warn!("Previously finalized, exiting");
+            warn!(
+                target: LOG_CLIENT_RECOVERY,
+                "Previously finalized, exiting"
+            );
             return Ok(());
         }
         let current_session_count = client_ctx.global_api().session_count().await?;

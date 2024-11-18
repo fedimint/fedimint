@@ -680,7 +680,10 @@ impl ClientHandle {
 
     async fn shutdown_inner(&mut self) {
         let Some(inner) = self.inner.take() else {
-            error!("ClientHandleShared::shutdown called twice");
+            error!(
+                target: LOG_CLIENT,
+                "ClientHandleShared::shutdown called twice"
+            );
             return;
         };
         inner.executor.stop_executor();
@@ -1004,6 +1007,7 @@ impl Client {
 
     pub fn start_executor(self: &Arc<Self>) {
         debug!(
+            target: LOG_CLIENT,
             "Starting fedimint client executor (version: {})",
             fedimint_build_code_version_env!()
         );
@@ -1645,7 +1649,10 @@ impl Client {
             .get_value(&CachedApiVersionSetKey)
             .await
         {
-            debug!("Found existing cached common api versions");
+            debug!(
+                target: LOG_CLIENT,
+                "Found existing cached common api versions"
+            );
             let config = config.clone();
             let client_module_init = module_init.clone();
             let api = api.clone();
@@ -1665,14 +1672,20 @@ impl Client {
                     )
                     .await
                     {
-                        warn!(%error, "Failed to discover common api versions");
+                        warn!(
+                            target: LOG_CLIENT,
+                            %error, "Failed to discover common api versions"
+                        );
                     }
                 });
 
             return Ok(v.0);
         }
 
-        debug!("No existing cached common api versions found, waiting for initial discovery");
+        debug!(
+            target: LOG_CLIENT,
+            "No existing cached common api versions found, waiting for initial discovery"
+        );
         Self::refresh_common_api_version_static(config, module_init, api, db, task_group.clone())
             .await
     }
@@ -1684,7 +1697,10 @@ impl Client {
         db: &Database,
         task_group: TaskGroup,
     ) -> anyhow::Result<ApiVersionSet> {
-        debug!("Refreshing common api versions");
+        debug!(
+            target: LOG_CLIENT,
+            "Refreshing common api versions"
+        );
 
         let (num_responses_sender, mut num_responses_receiver) = tokio::sync::watch::channel(0);
         let num_peers = NumPeers::from(config.global.api_endpoints.len());
@@ -1719,6 +1735,7 @@ impl Client {
         )?;
 
         debug!(
+            target: LOG_CLIENT,
             value = ?common_api_versions,
             "Updating the cached common api versions"
         );
@@ -1743,7 +1760,10 @@ impl Client {
             .get_value(&ClientMetadataKey)
             .await
             .unwrap_or_else(|| {
-                warn!("Missing existing metadata. This key should have been set on Client init");
+                warn!(
+                    target: LOG_CLIENT,
+                    "Missing existing metadata. This key should have been set on Client init"
+                );
                 Metadata::empty()
             })
     }
@@ -1880,7 +1900,7 @@ impl Client {
             watch::Receiver<RecoveryProgress>,
         >,
     ) {
-        debug!(target:LOG_CLIENT_RECOVERY, num_modules=%module_recovery_progress_receivers.len(), "Staring module recoveries");
+        debug!(target: LOG_CLIENT_RECOVERY, num_modules=%module_recovery_progress_receivers.len(), "Staring module recoveries");
         let mut completed_stream = Vec::new();
         let progress_stream = futures::stream::FuturesUnordered::new();
 
@@ -1889,7 +1909,10 @@ impl Client {
                 match f.await {
                     Ok(()) => (module_instance_id, None),
                     Err(err) => {
-                        warn!(%err, module_instance_id, "Module recovery failed");
+                        warn!(
+                            target: LOG_CLIENT,
+                            %err, module_instance_id, "Module recovery failed"
+                        );
                         // a module recovery that failed reports and error and
                         // just never finishes, so we don't need a separate state
                         // for it
@@ -1932,6 +1955,7 @@ impl Client {
 
             if !prev_progress.is_done() && progress.is_done() {
                 info!(
+                    target: LOG_CLIENT,
                     module_instance_id,
                     prev_progress = format!("{}/{}", prev_progress.complete, prev_progress.total),
                     progress = format!("{}/{}", progress.complete, progress.total),
@@ -1947,6 +1971,7 @@ impl Client {
                 .await;
             } else {
                 info!(
+                    target: LOG_CLIENT,
                     module_instance_id,
                     prev_progress = format!("{}/{}", prev_progress.complete, prev_progress.total),
                     progress = format!("{}/{}", progress.complete, progress.total),
@@ -2046,7 +2071,10 @@ impl Client {
                 .expect("Will never return on error");
 
                 let Some(guardian_pub_keys) = fetched_config.global.broadcast_public_keys else {
-                    warn!("Guardian public keys not found in fetched config, server not updated to 0.4 yet");
+                    warn!(
+                        target: LOG_CLIENT,
+                        "Guardian public keys not found in fetched config, server not updated to 0.4 yet"
+                    );
                     pending::<()>().await;
                     unreachable!("Pending will never return");
                 };
@@ -2719,7 +2747,7 @@ impl ClientBuilder {
             modules: BTreeMap::new(),
         });
 
-        debug!(?common_api_versions, "Completed api version negotiation");
+        debug!(target: LOG_CLIENT, ?common_api_versions, "Completed api version negotiation");
 
         let mut module_recoveries: BTreeMap<
             ModuleInstanceId,
@@ -2739,13 +2767,22 @@ impl ClientBuilder {
             for (module_instance_id, module_config) in config.modules.clone() {
                 let kind = module_config.kind().clone();
                 let Some(module_init) = self.module_inits.get(&kind).cloned() else {
-                    debug!("Module kind {kind} of instance {module_instance_id} not found in module gens, skipping");
+                    debug!(
+                        target: LOG_CLIENT,
+                        kind=%kind,
+                        instance_id=%module_instance_id,
+                        "Module kind of instance not found in module gens, skipping");
                     continue;
                 };
 
                 let Some(&api_version) = common_api_versions.modules.get(&module_instance_id)
                 else {
-                    warn!("Module kind {kind} of instance {module_instance_id} has not compatible api version, skipping");
+                    warn!(
+                        target: LOG_CLIENT,
+                        kind=%kind,
+                        instance_id=%module_instance_id,
+                        "Module kind of instance has incompatible api version, skipping"
+                    );
                     continue;
                 };
 
@@ -2788,8 +2825,9 @@ impl ClientBuilder {
                                     .await
                                     .map_err(|err| {
                                         warn!(
-                                                module_id = module_instance_id, %kind, %err, "Module failed to recover"
-                                            );
+                                            target: LOG_CLIENT,
+                                            module_id = module_instance_id, %kind, %err, "Module failed to recover"
+                                        );
                                         err
                                     })
                             }),
@@ -2995,7 +3033,10 @@ impl ClientBuilder {
             .unwrap_or_else(|| {
                 // could be turned in a hard error in the future, but for now
                 // no need to break backward compat.
-                warn!("Client missing ClientRequiresRecovery: assuming complete");
+                warn!(
+                    target: LOG_CLIENT,
+                    "Client missing ClientRequiresRecovery: assuming complete"
+                );
                 db::InitState::Complete(db::InitModeComplete::Fresh)
             })
     }

@@ -10,6 +10,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::time::now;
 use fedimint_core::util::BoxStream;
+use fedimint_logging::LOG_CLIENT;
 use futures::{stream, Stream, StreamExt};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -150,7 +151,10 @@ impl OperationLog {
         outcome: &(impl Serialize + Debug),
     ) {
         if let Err(e) = Self::set_operation_outcome(db, operation_id, outcome).await {
-            warn!("Error setting operation outcome: {e}");
+            warn!(
+                target: LOG_CLIENT,
+                "Error setting operation outcome: {e}"
+            );
         }
     }
 }
@@ -331,7 +335,10 @@ where
         }
 
         let Some(last_update) = last_update else {
-            error!("Stream ended without any updates, this should not happen!");
+            error!(
+                target: LOG_CLIENT,
+                "Stream ended without any updates, this should not happen!"
+            );
             return;
         };
 

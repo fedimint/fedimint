@@ -104,7 +104,7 @@ impl ExecutorState {
             // Replace the previous state, undoing the `mem::replace` above.
             *self = previous_state;
 
-            debug!("Executor already started, ignoring start request");
+            debug!(target: LOG_CLIENT_REACTOR, "Executor already started, ignoring start request");
             None
         }
     }
@@ -119,14 +119,14 @@ impl ExecutorState {
         } = previous_state
         {
             if shutdown_sender.send(()).is_err() {
-                warn!("Failed to send shutdown signal to executor, already dead?");
+                warn!(target: LOG_CLIENT_REACTOR, "Failed to send shutdown signal to executor, already dead?");
             }
             Some(())
         } else {
             // Replace the previous state, undoing the `mem::replace` above.
             *self = previous_state;
 
-            debug!("Executor not running, ignoring stop request");
+            debug!(target: LOG_CLIENT_REACTOR, "Executor not running, ignoring stop request");
             None
         }
     }
@@ -361,20 +361,29 @@ impl Executor {
             let task_group_shutdown_rx = task_handle.make_shutdown_rx();
             select! {
                 () = task_group_shutdown_rx => {
-                    debug!("Shutting down state machine executor runner due to task group shutdown signal");
+                    debug!(
+                        target: LOG_CLIENT_REACTOR,
+                        "Shutting down state machine executor runner due to task group shutdown signal"
+                    );
                 },
                 shutdown_happened_sender = shutdown_receiver => {
                     match shutdown_happened_sender {
                         Ok(()) => {
-                            debug!("Shutting down state machine executor runner due to explicit shutdown signal");
+                            debug!(
+                                target: LOG_CLIENT_REACTOR,
+                                "Shutting down state machine executor runner due to explicit shutdown signal"
+                            );
                         },
                         Err(_) => {
-                            warn!("Shutting down state machine executor runner because the shutdown signal channel was closed (the executor object was dropped)");
+                            warn!(
+                                target: LOG_CLIENT_REACTOR,
+                                "Shutting down state machine executor runner because the shutdown signal channel was closed (the executor object was dropped)"
+                            );
                         }
                     }
                 },
                 () = executor_runner => {
-                    error!("State machine executor runner exited unexpectedly!");
+                    error!(target: LOG_CLIENT_REACTOR, "State machine executor runner exited unexpectedly!");
                 },
             };
         });
@@ -429,6 +438,7 @@ impl ExecutorInner {
             .await
         {
             warn!(
+                target: LOG_CLIENT_REACTOR,
                 %err,
                 "An unexpected error occurred during a state transition"
             );
@@ -473,7 +483,10 @@ impl ExecutorInner {
             // In certain cases a terminal (no transitions) state could get here due to
             // module bug. Inactivate it to prevent accumulation of such states.
             // See [`Self::add_state_machines_dbtx`].
-            warn!(module_id = module_instance, "A terminal state where only active states are expected. Please report this bug upstream.");
+            warn!(
+                target: LOG_CLIENT_REACTOR,
+                module_id = module_instance, "A terminal state where only active states are expected. Please report this bug upstream."
+            );
             self.db
                 .autocommit::<_, _, anyhow::Error>(
                     |dbtx, _| {
@@ -878,6 +891,7 @@ impl ExecutorBuilder {
         });
 
         debug!(
+            target: LOG_CLIENT_REACTOR,
             instances = ?inner.module_contexts.keys().copied().collect::<Vec<_>>(),
             "Initialized state machine executor with module instances"
         );
@@ -1250,6 +1264,7 @@ mod tests {
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::runtime;
     use fedimint_core::task::TaskGroup;
+    use fedimint_logging::LOG_CLIENT_REACTOR;
     use tokio::sync::broadcast::Sender;
     use tracing::{info, trace};
 
@@ -1379,7 +1394,10 @@ mod tests {
             executor_builder.build(db.clone(), Notifier::new(db.clone()), TaskGroup::new());
         executor.start_executor(Arc::new(|_, _| DynGlobalClientContext::new_fake()));
 
-        info!("Initialized test executor");
+        info!(
+            target: LOG_CLIENT_REACTOR,
+            "Initialized test executor"
+        );
         (executor, broadcast, db)
     }
 

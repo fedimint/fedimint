@@ -141,6 +141,7 @@ impl ClientBackup {
                 {
                     let size_previous = last_module_backup.consensus_encode_to_len();
                     warn!(
+                        target: LOG_CLIENT_BACKUP,
                         size,
                         limit,
                         %module_id,
@@ -150,6 +151,7 @@ impl ClientBackup {
                     modules.insert(module_id, last_module_backup.clone());
                 } else {
                     warn!(
+                        target: LOG_CLIENT_BACKUP,
                         size,
                         limit,
                         %module_id,

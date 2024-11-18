@@ -15,6 +15,7 @@ use fedimint_core::module::{
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, NumPeers};
 use fedimint_derive_secret::DerivableSecret;
+use fedimint_logging::LOG_CLIENT;
 use tokio::sync::watch;
 use tracing::warn;
 
@@ -196,13 +197,13 @@ where
         if progress.is_done() {
             // Recovery is complete when the recovery function finishes. To avoid
             // confusing any downstream code, we never send completed process.
-            warn!("Module trying to send a completed recovery progress. Ignoring");
+            warn!(target: LOG_CLIENT, "Module trying to send a completed recovery progress. Ignoring");
         } else if progress.is_none() {
             // Recovery starts with "none" none progress. To avoid
             // confusing any downstream code, we never send none process afterwards.
-            warn!("Module trying to send a none recovery progress. Ignoring");
+            warn!(target: LOG_CLIENT, "Module trying to send a none recovery progress. Ignoring");
         } else if self.progress_tx.send(progress).is_err() {
-            warn!("Module trying to send a recovery progress but nothing is listening");
+            warn!(target: LOG_CLIENT, "Module trying to send a recovery progress but nothing is listening");
         }
     }
 }
@@ -226,6 +227,7 @@ pub trait ClientModuleInit: ModuleInit + Sized {
         _snapshot: Option<&<Self::Module as ClientModule>::Backup>,
     ) -> anyhow::Result<()> {
         warn!(
+            target: LOG_CLIENT,
             kind = %<Self::Module as ClientModule>::kind(),
             "Module does not support recovery, completing without doing anything"
         );
