@@ -8,6 +8,8 @@ pub mod envs;
 use std::fmt;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::atomic::AtomicU64;
+use std::sync::Arc;
 
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
@@ -20,12 +22,12 @@ pub use rocksdb;
 use rocksdb::{
     DBRecoveryMode, OptimisticTransactionDB, OptimisticTransactionOptions, WriteOptions,
 };
-use tracing::debug;
+use tracing::{debug, info};
 
 use crate::envs::FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV;
 
 #[derive(Debug)]
-pub struct RocksDb(rocksdb::OptimisticTransactionDB);
+pub struct RocksDb(rocksdb::OptimisticTransactionDB, Arc<AtomicU64>);
 
 pub struct RocksDbTransaction<'a>(rocksdb::Transaction<'a, rocksdb::OptimisticTransactionDB>);
 
@@ -37,7 +39,7 @@ impl RocksDb {
         opts.set_wal_recovery_mode(DBRecoveryMode::AbsoluteConsistency);
         let db: rocksdb::OptimisticTransactionDB =
             rocksdb::OptimisticTransactionDB::<rocksdb::SingleThreaded>::open(&opts, &db_path)?;
-        Ok(RocksDb(db))
+        Ok(RocksDb(db, AtomicU64::default().into()))
     }
 
     pub fn inner(&self) -> &rocksdb::OptimisticTransactionDB {
@@ -83,8 +85,26 @@ fn get_default_options() -> anyhow::Result<rocksdb::Options> {
             bail!("{} is not a power of 2", FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV);
         }
         opts.set_write_buffer_size(size);
+    } else {
+        // We are a lightweight application that accumulates data over time.
+        // Default is 64MiB, multiplied by 2 buffers, which wastes 128MiB of memory
+        // from the start, while we would like people to host fedimintd on tiny systems.
+        // Default to 4MiB * 2.
+        // See https://docs.rs/rocksdb/0.22.0/rocksdb/struct.Options.html
+        opts.set_write_buffer_size(4 * 1024 * 1024);
+        // Across all memtables, etc. we want to cap at 16MiB max
+        opts.set_db_write_buffer_size(16 * 1024 * 1024);
     }
     opts.create_if_missing(true);
+    // workaround https://github.com/facebook/rocksdb/pull/9020 (?)
+    opts.set_max_write_buffer_size_to_maintain(32 * 1024 * 1024);
+    let mut block_opts = rocksdb::BlockBasedOptions::default();
+    block_opts.set_optimize_filters_for_memory(true);
+    // counterintuitively, this limits amount of memory used as these will now be
+    // part of the block cache.
+    block_opts.set_cache_index_and_filter_blocks(true);
+    block_opts.set_ribbon_filter(10.0);
+    opts.set_block_based_table_factory(&block_opts);
     Ok(opts)
 }
 
@@ -103,7 +123,7 @@ impl RocksDbReadOnly {
 
 impl From<rocksdb::OptimisticTransactionDB> for RocksDb {
     fn from(db: OptimisticTransactionDB) -> Self {
-        RocksDb(db)
+        RocksDb(db, AtomicU64::default().into())
     }
 }
 
@@ -141,6 +161,28 @@ fn next_prefix(prefix: &[u8]) -> Option<Vec<u8>> {
 impl IRawDatabase for RocksDb {
     type Transaction<'a> = RocksDbTransaction<'a>;
     async fn begin_transaction<'a>(&'a self) -> RocksDbTransaction {
+        let count = self.1.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if count % 100_000 == 0 {
+            for property in [
+                "rocksdb.estimate-num-keys",
+                "rocksdb.num-snapshots",
+                "rocksdb.total-sst-files-size",
+                "rocksdb.cur-size-all-mem-tables",
+                "rocksdb.cur-size-active-mem-table",
+                "rocksdb.estimate-table-readers-mem",
+                "rocksdb.block-cache-usage",
+                "rocksdb.block-cache-pinned-usage",
+                "rocksdb.block-cache-capacity",
+                "rocksdb.estimate-pending-compaction-bytes",
+            ] {
+                let val = self
+                    .0
+                    .property_value(property)
+                    .unwrap_or_else(|e| Some(e.to_string()));
+                info!(property, val, "Property");
+            }
+        }
+
         let mut optimistic_options = OptimisticTransactionOptions::default();
         optimistic_options.set_snapshot(true);
 
@@ -197,6 +239,7 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbTransaction<'a> {
         fedimint_core::runtime::block_in_place(|| {
             let val = self.0.snapshot().get(key).unwrap();
             self.0.delete(key)?;
+
             Ok(val)
         })
     }
