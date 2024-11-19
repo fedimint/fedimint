@@ -215,6 +215,7 @@ bitcoin_hashes = { opt-level = 3 }
 bls12_381 = { opt-level = 3 }
 byteorder = { opt-level = 3 }
 fedimint-threshold-crypto = { opt-level = 3 }
+fedimint-tbs = { opt-level = 3 }
 ff = { opt-level = 3 }
 group = { opt-level = 3 }
 hashbrown = { opt-level = 3 }
