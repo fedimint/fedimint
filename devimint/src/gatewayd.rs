@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use esplora_client::Txid;
 use fedimint_core::config::FederationId;
 use fedimint_core::envs::{is_env_var_set, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV};
@@ -120,9 +120,7 @@ impl Gatewayd {
                 // the gateway process and cannot be stopped independently.
                 unimplemented!("LDK node termination not implemented")
             }
-            None => Err(anyhow::anyhow!(
-                "Cannot stop an already stopped Lightning Node"
-            )),
+            None => Err(anyhow!("Cannot stop an already stopped Lightning Node")),
         }
     }
 
@@ -368,7 +366,7 @@ impl Gatewayd {
             .ecash_balances
             .into_iter()
             .find(|info| info.federation_id == federation_id)
-            .ok_or(anyhow::anyhow!("Gateway is not joined to federation"))?
+            .ok_or(anyhow!("Gateway is not joined to federation"))?
             .ecash_balance_msats
             .msats;
         Ok(ecash_balance)
@@ -505,15 +503,17 @@ impl Gatewayd {
             let info = self.get_info().await.map_err(ControlFlow::Continue)?;
             let value = info.get("block_height");
             if let Some(height) = value {
-                let block_height: u32 =
-                    serde_json::from_value(height.clone()).expect("Could not parse block height");
+                let block_height: Option<u32> = serde_json::from_value(height.clone())
+                    .context("Could not parse block height")
+                    .map_err(ControlFlow::Continue)?;
+                let Some(block_height) = block_height else {
+                    return Err(ControlFlow::Continue(anyhow!("Not synced any blocks yet")));
+                };
                 if block_height >= target_block_height as u32 {
                     return Ok(());
                 }
             }
-            Err(ControlFlow::Continue(anyhow::anyhow!(
-                "Not synced to block"
-            )))
+            Err(ControlFlow::Continue(anyhow!("Not synced to block")))
         })
         .await?;
         Ok(())
