@@ -5,6 +5,7 @@ use std::fs::remove_dir_all;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use anyhow::ensure;
 use clap::{Parser, Subcommand};
 use devimint::envs::FM_DATA_DIR_ENV;
 use devimint::federation::Federation;
@@ -12,6 +13,9 @@ use devimint::util::ProcessManager;
 use devimint::version_constants::{VERSION_0_3_0, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA};
 use devimint::{cmd, util, Gatewayd, LightningNode};
 use fedimint_core::config::FederationId;
+use fedimint_core::envs::{is_env_var_set, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV};
+use fedimint_core::util::backoff_util::aggressive_backoff;
+use fedimint_core::util::retry;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_testing::gateway::LightningNodeType;
 use itertools::Itertools;
@@ -617,17 +621,32 @@ async fn liquidity_test() -> anyhow::Result<()> {
         for gw in gateways.clone() {
             gw.close_all_channels(dev_fed.bitcoind().await?.clone()).await?;
             let balances = gw.get_balances().await?;
-            let curr_lightning_balance = balances.lightning_balance_msats;
-            assert_eq!(curr_lightning_balance, 0, "Close channels did not sweep all lightning funds");
-            let inbound_lightning_balance = balances.inbound_lightning_liquidity_msats;
-            assert_eq!(inbound_lightning_balance, 0, "Close channels did not sweep all lightning funds");
+
+            retry(
+                "Wait for balance update after sweeping all lightning funds",
+                aggressive_backoff(),
+                || async {
+                    let curr_lightning_balance = balances.lightning_balance_msats;
+                    ensure!(curr_lightning_balance == 0, "Close channels did not sweep all lightning funds");
+                    let inbound_lightning_balance = balances.inbound_lightning_liquidity_msats;
+                    ensure!(inbound_lightning_balance == 0, "Close channels did not sweep all lightning funds");
+                    Ok(())
+                }
+            ).await?;
         }
 
         info!("Testing sending onchain...");
         for gw in gateways {
             gw.send_onchain(dev_fed.bitcoind().await?, BitcoinAmountOrAll::All, 10).await?;
-            let curr_balance = gw.get_balances().await?.onchain_balance_sats;
-            assert_eq!(curr_balance, 0, "Gateway onchain balance did not match previous balance minus withdraw amount");
+            retry(
+                "Wait for balance update after sending on chain funds",
+                aggressive_backoff(),
+                || async {
+                    let curr_balance = gw.get_balances().await?.onchain_balance_sats;
+                    ensure!(curr_balance == 0, "Gateway onchain balance did not match previous balance minus withdraw amount");
+                    Ok(())
+                }
+            ).await?;
         }
 
         Ok(())
