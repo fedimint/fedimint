@@ -199,7 +199,7 @@ pub fn aggregate_public_key_shares(shares: &BTreeMap<u64, PublicKeyShare>) -> Ag
 
 fn lagrange_multipliers(scalars: Vec<Scalar>) -> Vec<Scalar> {
     scalars
-        .iter()
+        .par_iter()
         .map(|i| {
             scalars
                 .iter()
