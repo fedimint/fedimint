@@ -229,14 +229,15 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     // just poll more often in tests?)
     let await_update_while_rechecking = async {
         loop {
+            wallet_module
+                .recheck_pegin_address_by_op_id(op)
+                .await
+                .expect("Operation exists");
             select! {
                 update = deposit_updates.next() => {
                     break update;
                 },
-                _ = sleep_in_test("Waiting for address recheck", Duration::from_secs(1)) => {
-                    wallet_module.recheck_pegin_address_by_op_id(op).await
-                        .expect("Operation exists");
-                }
+                _ = sleep_in_test("Waiting for address recheck", Duration::from_millis(100)) => { }
             }
         }
     };
