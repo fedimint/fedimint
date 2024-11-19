@@ -59,6 +59,7 @@ hex = { workspace = true }
 ldk-node = "0.4.2"
 lightning = { workspace = true }
 lightning-invoice = { workspace = true }
+lockable = "0.1.1"
 prost = "0.13.3"
 rand = { workspace = true }
 reqwest = { workspace = true }

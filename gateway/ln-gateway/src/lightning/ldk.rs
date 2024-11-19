@@ -15,6 +15,7 @@ use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::ln::PaymentHash;
 use ldk_node::lightning::routing::gossip::NodeAlias;
 use ldk_node::payment::{PaymentKind, PaymentStatus, SendingParameters};
+use lightning::ln::channelmanager::PaymentId;
 use lightning::ln::PaymentPreimage;
 use lightning::util::scid_utils::scid_from_parts;
 use lightning_invoice::Bolt11Invoice;
@@ -43,6 +44,11 @@ pub struct GatewayLdkClient {
     /// The HTLC stream, until it is taken by calling
     /// `ILnRpcClient::route_htlcs`.
     htlc_stream_receiver_or: Option<tokio::sync::mpsc::Receiver<InterceptPaymentRequest>>,
+
+    /// Lock pool used to ensure that our implementation of `ILnRpcClient::pay`
+    /// doesn't allow for multiple simultaneous calls with the same invoice to
+    /// execute in parallel. This helps ensure that the function is idempotent.
+    outbound_lightning_payment_lock_pool: lockable::LockPool<PaymentId>,
 }
 
 impl std::fmt::Debug for GatewayLdkClient {
@@ -116,6 +122,7 @@ impl GatewayLdkClient {
             esplora_client: esplora_client::Builder::new(esplora_server_url).build_async()?,
             task_group,
             htlc_stream_receiver_or: Some(htlc_stream_receiver),
+            outbound_lightning_payment_lock_pool: lockable::LockPool::new(),
         })
     }
 
@@ -283,22 +290,45 @@ impl ILnRpcClient for GatewayLdkClient {
         max_delay: u64,
         max_fee: Amount,
     ) -> Result<PayInvoiceResponse, LightningRpcError> {
-        let payment_id = match self.node.bolt11_payment().send(
-            &invoice,
-            Some(SendingParameters {
-                max_total_routing_fee_msat: Some(Some(max_fee.msats)),
-                max_total_cltv_expiry_delta: Some(max_delay as u32),
-                max_path_count: None,
-                max_channel_saturation_power_of_half: None,
-            }),
-        ) {
-            Ok(payment_id) => payment_id,
-            Err(e) => {
-                return Err(LightningRpcError::FailedPayment {
-                    failure_reason: format!("LDK payment failed to initialize: {e:?}"),
-                });
-            }
-        };
+        let payment_id = PaymentId(*invoice.payment_hash().as_byte_array());
+
+        // Lock by the payment hash to prevent multiple simultaneous calls with the same
+        // invoice from executing. This prevents `ldk-node::Bolt11Payment::send()` from
+        // being called multiple times with the same invoice. This is important because
+        // `ldk-node::Bolt11Payment::send()` is not idempotent, but this function must
+        // be idempotent.
+        let _payment_lock_guard = self
+            .outbound_lightning_payment_lock_pool
+            .async_lock(payment_id)
+            .await;
+
+        // If a payment is not known to the node we can initiate it, and if it is known
+        // we can skip calling `ldk-node::Bolt11Payment::send()` and wait for the
+        // payment to complete. The lock guard above guarantees that this block is only
+        // executed once at a time for a given payment hash, ensuring that there is no
+        // race condition between checking if a payment is known and initiating a new
+        // payment if it isn't.
+        if self.node.payment(&payment_id).is_none() {
+            assert_eq!(
+                self.node
+                    .bolt11_payment()
+                    .send(
+                        &invoice,
+                        Some(SendingParameters {
+                            max_total_routing_fee_msat: Some(Some(max_fee.msats)),
+                            max_total_cltv_expiry_delta: Some(max_delay as u32),
+                            max_path_count: None,
+                            max_channel_saturation_power_of_half: None,
+                        }),
+                    )
+                    // TODO: Investigate whether all error types returned by `Bolt11Payment::send()`
+                    // result in idempotency.
+                    .map_err(|e| LightningRpcError::FailedPayment {
+                        failure_reason: format!("LDK payment failed to initialize: {e:?}"),
+                    })?,
+                payment_id
+            );
+        }
 
         // TODO: Find a way to avoid looping/polling to know when a payment is
         // completed. `ldk-node` provides `PaymentSuccessful` and `PaymentFailed`
