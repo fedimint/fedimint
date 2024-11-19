@@ -161,6 +161,7 @@ const DEFAULT_MODULE_KINDS: [(ModuleInstanceId, &ModuleKind); 2] = [
 ///    Connected -- not synced to chain --> Syncing
 ///    Syncing -- load federation clients --> Running
 ///    Running -- disconnected from lightning node --> Disconnected
+///    Running -- shutdown initiated --> ShuttingDown
 ///    Disconnected -- re-established lightning connection --> Connected
 /// ```
 #[derive(Clone, Debug)]
