@@ -216,6 +216,9 @@
             inherit system;
             inherit name;
 
+            # some bundlers want `pname` here, instead of `name`
+            pname = name;
+
             dontUnpack = true;
             dontStrip = !pkgs.stdenv.isDarwin;
 
