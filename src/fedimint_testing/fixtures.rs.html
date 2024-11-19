@@ -254,7 +254,10 @@
 <a href="#253" id="253">253</a>
 <a href="#254" id="254">254</a>
 <a href="#255" id="255">255</a>
-<a href="#256" id="256">256</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -438,12 +441,11 @@
 
         <span class="kw">let </span>lightning_builder: Arc&lt;<span class="kw">dyn </span>LightningBuilder + Send + Sync&gt; =
             Arc::new(FakeLightningBuilder);
+        <span class="comment">// Note: This runtime isn't used by `FakeLightningBuilder`. It is immediately
+        // dropped.
+        </span><span class="kw">let </span>runtime = Arc::new(tokio::runtime::Runtime::new().unwrap());
+        <span class="kw">let </span>ln_client: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt; = lightning_builder.build(runtime).<span class="kw">await</span>.into();
 
-        <span class="comment">// Module tests do not use the webserver, so any port is ok
-        </span><span class="kw">let </span>listen: SocketAddr = <span class="string">"127.0.0.1:9000"</span>.parse().unwrap();
-        <span class="kw">let </span>address: SafeUrl = <span class="macro">format!</span>(<span class="string">"http://{listen}"</span>).parse().unwrap();
-
-        <span class="kw">let </span>ln_client: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt; = lightning_builder.build().<span class="kw">await</span>.into();
         <span class="kw">let </span>(lightning_public_key, lightning_alias, lightning_network, <span class="kw">_</span>, <span class="kw">_</span>) = ln_client
             .parsed_node_info()
             .<span class="kw">await
@@ -454,6 +456,10 @@
             lightning_alias,
             lightning_network,
         };
+
+        <span class="comment">// Module tests do not use the webserver, so any port is ok
+        </span><span class="kw">let </span>listen: SocketAddr = <span class="string">"127.0.0.1:9000"</span>.parse().unwrap();
+        <span class="kw">let </span>address: SafeUrl = <span class="macro">format!</span>(<span class="string">"http://{listen}"</span>).parse().unwrap();
 
         Gateway::new_with_custom_registry(
             lightning_builder,

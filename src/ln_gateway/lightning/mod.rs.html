@@ -511,7 +511,9 @@
 <a href="#510" id="510">510</a>
 <a href="#511" id="511">511</a>
 <a href="#512" id="512">512</a>
-<a href="#513" id="513">513</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>cln;
+<a href="#513" id="513">513</a>
+<a href="#514" id="514">514</a>
+<a href="#515" id="515">515</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>extension;
 <span class="kw">pub mod </span>ldk;
 <span class="kw">pub mod </span>lnd;
@@ -856,7 +858,8 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>LightningBuilder {
-    <span class="kw">async fn </span>build(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>ILnRpcClient&gt;;
+    <span class="kw">async fn </span>build(<span class="kw-2">&amp;</span><span class="self">self</span>, runtime: Arc&lt;tokio::runtime::Runtime&gt;) -&gt; Box&lt;<span class="kw">dyn </span>ILnRpcClient&gt;;
+
     <span class="kw">fn </span>lightning_mode(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;LightningMode&gt; {
         <span class="prelude-val">None
     </span>}
@@ -872,7 +875,7 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>LightningBuilder <span class="kw">for </span>GatewayLightningBuilder {
-    <span class="kw">async fn </span>build(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>ILnRpcClient&gt; {
+    <span class="kw">async fn </span>build(<span class="kw-2">&amp;</span><span class="self">self</span>, runtime: Arc&lt;tokio::runtime::Runtime&gt;) -&gt; Box&lt;<span class="kw">dyn </span>ILnRpcClient&gt; {
         <span class="kw">match </span><span class="self">self</span>.lightning_mode.clone() {
             LightningMode::Cln { cln_extension_addr } =&gt; {
                 Box::new(NetworkLnRpcClient::new(cln_extension_addr))
@@ -899,6 +902,7 @@
                     network,
                     lightning_port,
                     <span class="self">self</span>.mnemonic.clone(),
+                    runtime,
                 )
                 .unwrap(),
             ),

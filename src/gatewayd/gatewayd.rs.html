@@ -35,7 +35,11 @@
 <a href="#34" id="34">34</a>
 <a href="#35" id="35">35</a>
 <a href="#36" id="36">36</a>
-<a href="#37" id="37">37</a></pre></div><pre class="rust"><code><span class="attr">#![warn(missing_docs)]
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a></pre></div><pre class="rust"><code><span class="attr">#![warn(missing_docs)]
 </span><span class="doccomment">//! This crate provides `gatewayd`, the Fedimint gateway binary.
 //!
 //! The binary contains logic for sending/receiving Lightning payments on behalf
@@ -45,7 +49,9 @@
 //! clients to request routing of payments through the Lightning Network.
 //! The API also has endpoints for managing the gateway.
 
-</span><span class="kw">use </span>fedimint_core::fedimint_build_code_version_env;
+</span><span class="kw">use </span>std::sync::Arc;
+
+<span class="kw">use </span>fedimint_core::fedimint_build_code_version_env;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::handle_version_hash_command;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
@@ -59,17 +65,19 @@
 </span><span class="comment">// rocksdb suffers from memory fragmentation when using standard allocator
 </span><span class="kw">static </span>GLOBAL: Jemalloc = Jemalloc;
 
-<span class="attr">#[tokio::main]
-</span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
-    handle_version_hash_command(<span class="macro">fedimint_build_code_version_env!</span>());
-    TracingSetup::default().init()<span class="question-mark">?</span>;
-    <span class="kw">let </span>tg = TaskGroup::new();
-    tg.install_kill_handler();
-    <span class="kw">let </span>gatewayd = Gateway::new_with_default_modules().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>shutdown_receiver = gatewayd.clone().run(tg).<span class="kw">await</span><span class="question-mark">?</span>;
-    shutdown_receiver.<span class="kw">await</span>;
-    gatewayd.unannounce_from_all_federations().<span class="kw">await</span>;
-    <span class="macro">info!</span>(<span class="string">"Gatewayd exiting..."</span>);
-    <span class="prelude-val">Ok</span>(())
+<span class="kw">fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+    <span class="kw">let </span>runtime = Arc::new(tokio::runtime::Runtime::new()<span class="question-mark">?</span>);
+    runtime.block_on(<span class="kw">async </span>{
+        handle_version_hash_command(<span class="macro">fedimint_build_code_version_env!</span>());
+        TracingSetup::default().init()<span class="question-mark">?</span>;
+        <span class="kw">let </span>tg = TaskGroup::new();
+        tg.install_kill_handler();
+        <span class="kw">let </span>gatewayd = Gateway::new_with_default_modules().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>shutdown_receiver = gatewayd.clone().run(tg, runtime.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+        shutdown_receiver.<span class="kw">await</span>;
+        gatewayd.unannounce_from_all_federations().<span class="kw">await</span>;
+        <span class="macro">info!</span>(<span class="string">"Gatewayd exiting..."</span>);
+        <span class="prelude-val">Ok</span>(())
+    })
 }
 </code></pre></div></section></main></body></html>

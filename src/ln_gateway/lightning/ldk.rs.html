@@ -624,8 +624,7 @@
 <a href="#623" id="623">623</a>
 <a href="#624" id="624">624</a>
 <a href="#625" id="625">625</a>
-<a href="#626" id="626">626</a>
-<a href="#627" id="627">627</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
+<a href="#626" id="626">626</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -695,6 +694,7 @@
         network: Network,
         lightning_port: u16,
         mnemonic: Mnemonic,
+        runtime: Arc&lt;tokio::runtime::Runtime&gt;,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="comment">// In devimint, gateways must allow for other gateways to open channels to them.
         // To ensure this works, we must set a node alias to signal to ldk-node that we
@@ -727,9 +727,7 @@
         node_builder.set_storage_dir_path(data_dir_str.to_string());
 
         <span class="kw">let </span>node = Arc::new(node_builder.build()<span class="question-mark">?</span>);
-        <span class="comment">// TODO: Call `start_with_runtime()` instead of `start()`.
-        // See https://github.com/fedimint/fedimint/issues/6159
-        </span>node.start().map_err(|e| {
+        node.start_with_runtime(runtime).map_err(|e| {
             <span class="macro">error!</span>(<span class="question-mark">?</span>e, <span class="string">"Failed to start LDK Node"</span>);
             LightningRpcError::FailedToConnect
         })<span class="question-mark">?</span>;

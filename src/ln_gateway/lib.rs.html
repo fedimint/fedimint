@@ -2159,7 +2159,11 @@
 <a href="#2158" id="2158">2158</a>
 <a href="#2159" id="2159">2159</a>
 <a href="#2160" id="2160">2160</a>
-<a href="#2161" id="2161">2161</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2161" id="2161">2161</a>
+<a href="#2162" id="2162">2162</a>
+<a href="#2163" id="2163">2163</a>
+<a href="#2164" id="2164">2164</a>
+<a href="#2165" id="2165">2165</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2574,10 +2578,14 @@
     /// timer, loads the federation clients from the persisted config,
     /// begins listening for intercepted payments, and starts the webserver
     /// to service requests.
-    </span><span class="kw">pub async fn </span>run(<span class="self">self</span>, tg: TaskGroup) -&gt; anyhow::Result&lt;TaskShutdownToken&gt; {
+    </span><span class="kw">pub async fn </span>run(
+        <span class="self">self</span>,
+        tg: TaskGroup,
+        runtime: Arc&lt;tokio::runtime::Runtime&gt;,
+    ) -&gt; anyhow::Result&lt;TaskShutdownToken&gt; {
         <span class="self">self</span>.register_clients_timer(<span class="kw-2">&amp;</span>tg);
         <span class="self">self</span>.load_clients().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="self">self</span>.start_gateway(<span class="kw-2">&amp;</span>tg);
+        <span class="self">self</span>.start_gateway(<span class="kw-2">&amp;</span>tg, runtime);
         <span class="comment">// start webserver last to avoid handling requests before fully initialized
         </span><span class="kw">let </span>handle = tg.make_handle();
         run_webserver(Arc::new(<span class="self">self</span>), tg).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2587,7 +2595,7 @@
 
     <span class="doccomment">/// Begins the task for listening for intercepted payments from the
     /// lightning node.
-    </span><span class="kw">fn </span>start_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, task_group: <span class="kw-2">&amp;</span>TaskGroup) {
+    </span><span class="kw">fn </span>start_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, task_group: <span class="kw-2">&amp;</span>TaskGroup, runtime: Arc&lt;tokio::runtime::Runtime&gt;) {
         <span class="kw">const </span>PAYMENT_STREAM_RETRY_SECONDS: u64 = <span class="number">5</span>;
 
         <span class="kw">let </span>self_copy = <span class="self">self</span>.clone();
@@ -2603,7 +2611,7 @@
                     }
 
                     <span class="kw">let </span>payment_stream_task_group = tg.make_subgroup();
-                    <span class="kw">let </span>lnrpc_route = self_copy.lightning_builder.build().<span class="kw">await</span>;
+                    <span class="kw">let </span>lnrpc_route = self_copy.lightning_builder.build(runtime.clone()).<span class="kw">await</span>;
 
                     <span class="macro">debug!</span>(<span class="string">"Establishing lightning payment stream..."</span>);
                     <span class="kw">let </span>(stream, ln_client) = <span class="kw">match </span>lnrpc_route.route_htlcs(<span class="kw-2">&amp;</span>payment_stream_task_group).<span class="kw">await
