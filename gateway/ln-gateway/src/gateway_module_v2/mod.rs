@@ -28,6 +28,7 @@ use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::secp256k1::Keypair;
+use fedimint_core::time::now;
 use fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint, PeerId};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
@@ -43,6 +44,7 @@ use serde::{Deserialize, Serialize};
 use tpe::{AggregatePublicKey, PublicKeyShare};
 use tracing::{info, warn};
 
+use crate::events::{IncomingPaymentStarted, OutgoingPaymentStarted};
 use crate::gateway_module_v2::api::GatewayFederationApi;
 use crate::gateway_module_v2::complete_sm::{
     CompleteSMCommon, CompleteSMState, CompleteStateMachine,
@@ -241,6 +243,8 @@ impl GatewayClientModuleV2 {
         &self,
         payload: SendPaymentPayload,
     ) -> anyhow::Result<Result<[u8; 32], Signature>> {
+        let operation_start = now();
+
         // The operation id is equal to the contract id which also doubles as the
         // message signed by the gateway via the forfeit signature to forfeit
         // the gateways claim to a contract in case of cancellation. We only create a
@@ -318,8 +322,10 @@ impl GatewayClientModuleV2 {
             state: SendSMState::Sending,
         });
 
+        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
         self.client_ctx
-            .manual_operation_start(
+            .manual_operation_start_dbtx(
+                &mut dbtx.to_ref_nc(),
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
                 GatewayOperationMetaV2,
@@ -327,6 +333,20 @@ impl GatewayClientModuleV2 {
             )
             .await
             .ok();
+
+        self.client_ctx
+            .log_event(
+                &mut dbtx,
+                OutgoingPaymentStarted {
+                    operation_start,
+                    outgoing_contract: payload.contract.clone(),
+                    min_contract_amount,
+                    invoice_amount: Amount::from_msats(amount),
+                    max_delay,
+                },
+            )
+            .await;
+        dbtx.commit_tx().await;
 
         Ok(self.subscribe_send(operation_id).await)
     }
@@ -374,7 +394,10 @@ impl GatewayClientModuleV2 {
         incoming_chan_id: u64,
         htlc_id: u64,
         contract: IncomingContract,
+        amount_msat: u64,
     ) -> anyhow::Result<()> {
+        let operation_start = now();
+
         let operation_id = OperationId::from_encodable(&contract);
 
         if self.client_ctx.operation_exists(operation_id).await {
@@ -387,6 +410,7 @@ impl GatewayClientModuleV2 {
             output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
             amount: contract.commitment.amount,
         };
+        let commitment = contract.commitment.clone();
         let client_output_sm = ClientOutputSM::<GatewayClientStateMachinesV2> {
             state_machines: Arc::new(move |out_point_range: OutPointRange| {
                 assert_eq!(out_point_range.count(), 1);
@@ -432,13 +456,29 @@ impl GatewayClientModuleV2 {
             )
             .await?;
 
+        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        self.client_ctx
+            .log_event(
+                &mut dbtx,
+                IncomingPaymentStarted {
+                    operation_start,
+                    incoming_contract_commitment: commitment,
+                    invoice_amount: Amount::from_msats(amount_msat),
+                },
+            )
+            .await;
+        dbtx.commit_tx().await;
+
         Ok(())
     }
 
     pub async fn relay_direct_swap(
         &self,
         contract: IncomingContract,
+        amount_msat: u64,
     ) -> anyhow::Result<FinalReceiveState> {
+        let operation_start = now();
+
         let operation_id = OperationId::from_encodable(&contract);
 
         if self.client_ctx.operation_exists(operation_id).await {
@@ -451,6 +491,7 @@ impl GatewayClientModuleV2 {
             output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
             amount: contract.commitment.amount,
         };
+        let commitment = contract.commitment.clone();
         let client_output_sm = ClientOutputSM::<GatewayClientStateMachinesV2> {
             state_machines: Arc::new(move |out_point_range| {
                 assert_eq!(out_point_range.count(), 1);
@@ -485,6 +526,19 @@ impl GatewayClientModuleV2 {
                 transaction,
             )
             .await?;
+
+        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        self.client_ctx
+            .log_event(
+                &mut dbtx,
+                IncomingPaymentStarted {
+                    operation_start,
+                    incoming_contract_commitment: commitment,
+                    invoice_amount: Amount::from_msats(amount_msat),
+                },
+            )
+            .await;
+        dbtx.commit_tx().await;
 
         Ok(self.await_receive(operation_id).await)
     }

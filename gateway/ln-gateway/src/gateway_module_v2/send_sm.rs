@@ -3,6 +3,7 @@ use std::fmt;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
+use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::Keypair;
@@ -12,6 +13,7 @@ use fedimint_lnv2_common::{LightningInput, LightningInputV0, LightningInvoice, O
 use serde::{Deserialize, Serialize};
 
 use super::FinalReceiveState;
+use crate::events::OutgoingPaymentSucceeded;
 use crate::gateway_module_v2::{GatewayClientContextV2, GatewayClientModuleV2};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -54,6 +56,12 @@ pub enum SendSMState {
     Sending,
     Claiming(Claiming),
     Cancelled(Cancelled),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PaymentResponse {
+    preimage: [u8; 32],
+    target_federation: Option<FederationId>,
 }
 
 impl fmt::Display for SendSMState {
@@ -104,6 +112,7 @@ impl State for SendStateMachine {
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         let gc = global_context.clone();
+        let gateway_context = context.clone();
 
         match &self.state {
             SendSMState::Sending => {
@@ -121,6 +130,7 @@ impl State for SendStateMachine {
                             old_state,
                             gc.clone(),
                             result,
+                            gateway_context.clone(),
                         ))
                     },
                 )]
@@ -143,7 +153,7 @@ impl SendStateMachine {
         min_contract_amount: Amount,
         invoice: LightningInvoice,
         contract: OutgoingContract,
-    ) -> Result<[u8; 32], Cancelled> {
+    ) -> Result<PaymentResponse, Cancelled> {
         let LightningInvoice::Bolt11(invoice) = invoice;
 
         // The following two checks may fail in edge cases since they have inherent
@@ -182,12 +192,20 @@ impl SendStateMachine {
             return match client
                 .get_first_module::<GatewayClientModuleV2>()
                 .expect("Must have client module")
-                .relay_direct_swap(contract)
+                .relay_direct_swap(
+                    contract,
+                    invoice
+                        .amount_milli_satoshis()
+                        .expect("amountless invoices are not supported"),
+                )
                 .await
             {
                 Ok(final_receive_state) => match final_receive_state {
                     FinalReceiveState::Rejected => Err(Cancelled::Rejected),
-                    FinalReceiveState::Success(preimage) => Ok(preimage),
+                    FinalReceiveState::Success(preimage) => Ok(PaymentResponse {
+                        preimage,
+                        target_federation: Some(client.federation_id()),
+                    }),
                     FinalReceiveState::Refunded => Err(Cancelled::Refunded),
                     FinalReceiveState::Failure => Err(Cancelled::Failure),
                 },
@@ -195,26 +213,41 @@ impl SendStateMachine {
             };
         }
 
-        lightning_context
+        let preimage = lightning_context
             .lnrpc
             .pay(invoice, max_delay, contract.amount - min_contract_amount)
             .await
             .map(|response| response.preimage.0)
-            .map_err(|e| Cancelled::LightningRpcError(e.to_string()))
+            .map_err(|e| Cancelled::LightningRpcError(e.to_string()))?;
+        Ok(PaymentResponse {
+            preimage,
+            target_federation: None,
+        })
     }
 
     async fn transition_send_payment(
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         old_state: SendStateMachine,
         global_context: DynGlobalClientContext,
-        result: Result<[u8; 32], Cancelled>,
+        result: Result<PaymentResponse, Cancelled>,
+        client_ctx: GatewayClientContextV2,
     ) -> SendStateMachine {
         match result {
-            Ok(preimage) => {
+            Ok(payment_response) => {
+                client_ctx
+                    .module
+                    .client_ctx
+                    .log_event(
+                        &mut dbtx.module_tx(),
+                        OutgoingPaymentSucceeded {
+                            target_federation: payment_response.target_federation,
+                        },
+                    )
+                    .await;
                 let client_input = ClientInput::<LightningInput> {
                     input: LightningInput::V0(LightningInputV0::Outgoing(
                         old_state.common.contract.contract_id(),
-                        OutgoingWitness::Claim(preimage),
+                        OutgoingWitness::Claim(payment_response.preimage),
                     )),
                     amount: old_state.common.contract.amount,
                     keys: vec![old_state.common.claim_keypair],
@@ -227,7 +260,7 @@ impl SendStateMachine {
                     .1;
 
                 old_state.update(SendSMState::Claiming(Claiming {
-                    preimage,
+                    preimage: payment_response.preimage,
                     outpoints,
                 }))
             }
