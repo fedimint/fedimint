@@ -2158,7 +2158,8 @@
 <a href="#2157" id="2157">2157</a>
 <a href="#2158" id="2158">2158</a>
 <a href="#2159" id="2159">2159</a>
-<a href="#2160" id="2160">2160</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2160" id="2160">2160</a>
+<a href="#2161" id="2161">2161</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2321,6 +2322,7 @@
 ///    Connected -- not synced to chain --&gt; Syncing
 ///    Syncing -- load federation clients --&gt; Running
 ///    Running -- disconnected from lightning node --&gt; Disconnected
+///    Running -- shutdown initiated --&gt; ShuttingDown
 ///    Disconnected -- re-established lightning connection --&gt; Connected
 /// ```
 </span><span class="attr">#[derive(Clone, Debug)]
