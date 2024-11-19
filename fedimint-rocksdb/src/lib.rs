@@ -12,8 +12,8 @@ use std::str::FromStr;
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use fedimint_core::db::{
-    IDatabaseTransactionOps, IDatabaseTransactionOpsCore, IRawDatabase, IRawDatabaseTransaction,
-    PrefixStream,
+    next_prefix, IDatabaseTransactionOps, IDatabaseTransactionOpsCore, IRawDatabase,
+    IRawDatabaseTransaction, PrefixStream,
 };
 use futures::stream;
 pub use rocksdb;
@@ -128,30 +128,6 @@ impl From<RocksDb> for rocksdb::OptimisticTransactionDB {
     }
 }
 
-// When finding by prefix iterating in Reverse order, we need to start from
-// "prefix+1" instead of "prefix", using lexicographic ordering. See the tests
-// below.
-// Will return None if there is no next prefix (i.e prefix is already the last
-// possible/max one)
-fn next_prefix(prefix: &[u8]) -> Option<Vec<u8>> {
-    let mut next_prefix = prefix.to_vec();
-    let mut is_last_prefix = true;
-    for i in (0..next_prefix.len()).rev() {
-        next_prefix[i] = next_prefix[i].wrapping_add(1);
-        if next_prefix[i] > 0 {
-            is_last_prefix = false;
-            break;
-        }
-    }
-    if is_last_prefix {
-        // The given prefix is already the last/max prefix, so there is no next prefix,
-        // return None to represent that
-        None
-    } else {
-        Some(next_prefix)
-    }
-}
-
 #[async_trait]
 impl IRawDatabase for RocksDb {
     type Transaction<'a> = RocksDbTransaction<'a>;
@@ -250,6 +226,37 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbTransaction<'a> {
             let rocksdb_iter = iter.map_while(move |res| {
                 let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
                 (key_bytes.as_ref() < range.end.as_slice())
+                    .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
+            });
+            Box::pin(convert_to_async_stream(rocksdb_iter))
+        }))
+    }
+
+    async fn raw_find_by_range_sorted_descending(
+        &mut self,
+        range: Range<&[u8]>,
+    ) -> Result<PrefixStream<'_>> {
+        Ok(fedimint_core::runtime::block_in_place(|| {
+            let mut options = rocksdb::ReadOptions::default();
+            let end = next_prefix(range.end);
+            let start = range.start.to_vec();
+            let iterator_mode = if let Some(end) = &end {
+                let range = Range {
+                    start: range.start.to_vec(),
+                    end: end.to_owned(),
+                };
+                options.set_iterate_range(range.clone());
+                rocksdb::IteratorMode::From(end, rocksdb::Direction::Reverse)
+            } else {
+                let prefix_range = rocksdb::PrefixRange(range.start);
+                options.set_iterate_range(prefix_range);
+                rocksdb::IteratorMode::End
+            };
+
+            let iter = self.0.snapshot().iterator_opt(iterator_mode, options);
+            let rocksdb_iter = iter.map_while(move |res| {
+                let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
+                (key_bytes.as_ref() > start.as_slice())
                     .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
             });
             Box::pin(convert_to_async_stream(rocksdb_iter))
@@ -366,6 +373,37 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'a> {
             let rocksdb_iter = iter.map_while(move |res| {
                 let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
                 (key_bytes.as_ref() < range.end.as_slice())
+                    .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
+            });
+            Box::pin(convert_to_async_stream(rocksdb_iter))
+        }))
+    }
+
+    async fn raw_find_by_range_sorted_descending(
+        &mut self,
+        range: Range<&[u8]>,
+    ) -> Result<PrefixStream<'_>> {
+        Ok(fedimint_core::runtime::block_in_place(|| {
+            let mut options = rocksdb::ReadOptions::default();
+            let end = next_prefix(range.end);
+            let start = range.start.to_vec();
+            let iterator_mode = if let Some(end) = &end {
+                let range = Range {
+                    start: range.start.to_vec(),
+                    end: end.to_owned(),
+                };
+                options.set_iterate_range(range.clone());
+                rocksdb::IteratorMode::From(end, rocksdb::Direction::Reverse)
+            } else {
+                let prefix_range = rocksdb::PrefixRange(range.start);
+                options.set_iterate_range(prefix_range);
+                rocksdb::IteratorMode::End
+            };
+
+            let iter = self.0.snapshot().iterator_opt(iterator_mode, options);
+            let rocksdb_iter = iter.map_while(move |res| {
+                let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
+                (key_bytes.as_ref() > start.as_slice())
                     .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
             });
             Box::pin(convert_to_async_stream(rocksdb_iter))

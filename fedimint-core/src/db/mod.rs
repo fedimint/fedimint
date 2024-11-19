@@ -828,6 +828,21 @@ where
         Ok(Self::adapt_prefix_stream(stream, self.prefix.len()))
     }
 
+    async fn raw_find_by_range_sorted_descending(
+        &mut self,
+        range: Range<&[u8]>,
+    ) -> Result<PrefixStream<'_>> {
+        let range = self.get_full_range(range);
+        let stream = self
+            .inner
+            .raw_find_by_range_sorted_descending(Range {
+                start: &range.start,
+                end: &range.end,
+            })
+            .await?;
+        Ok(Self::adapt_prefix_stream(stream, self.prefix.len()))
+    }
+
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
         let key = self.get_full_key(key_prefix);
         self.inner.raw_remove_by_prefix(&key).await
@@ -877,6 +892,14 @@ pub trait IDatabaseTransactionOpsCore: MaybeSend {
     /// exclusively above.
     async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> Result<PrefixStream<'_>>;
 
+    /// Returns a stream of key-value pairs with keys within a `range`, sorted
+    /// by key in descending order. [`Range`] is an (half-open) range
+    /// bounded inclusively at the end and exclusively at the start.
+    async fn raw_find_by_range_sorted_descending(
+        &mut self,
+        range: Range<&[u8]>,
+    ) -> Result<PrefixStream<'_>>;
+
     /// Delete keys matching prefix
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()>;
 }
@@ -913,6 +936,13 @@ where
 
     async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> Result<PrefixStream<'_>> {
         (**self).raw_find_by_range(range).await
+    }
+
+    async fn raw_find_by_range_sorted_descending(
+        &mut self,
+        range: Range<&[u8]>,
+    ) -> Result<PrefixStream<'_>> {
+        (**self).raw_find_by_range_sorted_descending(range).await
     }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
@@ -952,6 +982,13 @@ where
 
     async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> Result<PrefixStream<'_>> {
         (**self).raw_find_by_range(range).await
+    }
+
+    async fn raw_find_by_range_sorted_descending(
+        &mut self,
+        range: Range<&[u8]>,
+    ) -> Result<PrefixStream<'_>> {
+        (**self).raw_find_by_range_sorted_descending(range).await
     }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
@@ -1029,6 +1066,14 @@ pub trait IDatabaseTransactionOpsCoreTyped<'a> {
         K::Value: MaybeSend + MaybeSync;
 
     async fn find_by_range<K>(
+        &mut self,
+        key_range: Range<K>,
+    ) -> Pin<Box<maybe_add_send!(dyn Stream<Item = (K, K::Value)> + '_)>>
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+        K::Value: MaybeSend + MaybeSync;
+
+    async fn find_by_range_sorted_descending<K>(
         &mut self,
         key_range: Range<K>,
     ) -> Pin<Box<maybe_add_send!(dyn Stream<Item = (K, K::Value)> + '_)>>
@@ -1141,6 +1186,30 @@ where
         let decoders = self.decoders().clone();
         Box::pin(
             self.raw_find_by_range(Range {
+                start: &key_range.start.to_bytes(),
+                end: &key_range.end.to_bytes(),
+            })
+            .await
+            .expect("Unrecoverable error occurred while listing entries from the database")
+            .map(move |(key_bytes, value_bytes)| {
+                let key = decode_key_expect(&key_bytes, &decoders);
+                let value = decode_value_expect(&value_bytes, &decoders, &key_bytes);
+                (key, value)
+            }),
+        )
+    }
+
+    async fn find_by_range_sorted_descending<K>(
+        &mut self,
+        key_range: Range<K>,
+    ) -> Pin<Box<maybe_add_send!(dyn Stream<Item = (K, K::Value)> + '_)>>
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+        K::Value: MaybeSend + MaybeSync,
+    {
+        let decoders = self.decoders().clone();
+        Box::pin(
+            self.raw_find_by_range_sorted_descending(Range {
                 start: &key_range.start.to_bytes(),
                 end: &key_range.end.to_bytes(),
             })
@@ -1384,6 +1453,17 @@ impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOpsCore for BaseDatabaseTr
             .as_mut()
             .context("Cannot retrieve from already consumed transaction")?
             .raw_find_by_range(key_range)
+            .await
+    }
+
+    async fn raw_find_by_range_sorted_descending(
+        &mut self,
+        key_range: Range<&[u8]>,
+    ) -> Result<PrefixStream<'_>> {
+        self.raw
+            .as_mut()
+            .context("Cannot retrieve from already consumed transaction")?
+            .raw_find_by_range_sorted_descending(key_range)
             .await
     }
 
@@ -1888,6 +1968,13 @@ where
 
     async fn raw_find_by_range(&mut self, key_range: Range<&[u8]>) -> Result<PrefixStream<'_>> {
         self.tx.raw_find_by_range(key_range).await
+    }
+
+    async fn raw_find_by_range_sorted_descending(
+        &mut self,
+        key_range: Range<&[u8]>,
+    ) -> Result<PrefixStream<'_>> {
+        self.tx.raw_find_by_range_sorted_descending(key_range).await
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
@@ -2418,6 +2505,30 @@ impl<'tx> MigrationContext<'tx> {
     }
 }
 
+// When finding by prefix iterating in Reverse order, we need to start from
+// "prefix+1" instead of "prefix", using lexicographic ordering. See the tests
+// below.
+// Will return None if there is no next prefix (i.e prefix is already the last
+// possible/max one)
+pub fn next_prefix(prefix: &[u8]) -> Option<Vec<u8>> {
+    let mut next_prefix = prefix.to_vec();
+    let mut is_last_prefix = true;
+    for i in (0..next_prefix.len()).rev() {
+        next_prefix[i] = next_prefix[i].wrapping_add(1);
+        if next_prefix[i] > 0 {
+            is_last_prefix = false;
+            break;
+        }
+    }
+    if is_last_prefix {
+        // The given prefix is already the last/max prefix, so there is no next prefix,
+        // return None to represent that
+        None
+    } else {
+        Some(next_prefix)
+    }
+}
+
 #[allow(unused_imports)]
 mod test_utils {
     use std::collections::BTreeMap;
@@ -2436,7 +2547,8 @@ mod test_utils {
     use crate::core::ModuleKind;
     use crate::db::mem_impl::MemDatabase;
     use crate::db::{
-        IDatabaseTransactionOps, IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
+        IDatabaseTransactionOps, IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped,
+        MODULE_GLOBAL_PREFIX,
     };
     use crate::encoding::{Decodable, Encodable};
     use crate::module::registry::ModuleDecoderRegistry;
@@ -2625,12 +2737,28 @@ mod test_utils {
         assert_eq!(returned_keys, expected);
 
         let returned_keys = dbtx
+            .find_by_range_sorted_descending(TestKey(55)..TestKey(56))
+            .await
+            .collect::<Vec<_>>()
+            .await;
+        let expected = vec![(TestKey(56), TestVal(7777))];
+        assert_eq!(returned_keys, expected);
+
+        let returned_keys = dbtx
             .find_by_range(TestKey(54)..TestKey(56))
             .await
             .collect::<Vec<_>>()
             .await;
 
         let expected = vec![(TestKey(54), TestVal(8888)), (TestKey(55), TestVal(9999))];
+        assert_eq!(returned_keys, expected);
+
+        let returned_keys = dbtx
+            .find_by_range_sorted_descending(TestKey(54)..TestKey(56))
+            .await
+            .collect::<Vec<_>>()
+            .await;
+        let expected = vec![(TestKey(56), TestVal(7777)), (TestKey(55), TestVal(9999))];
         assert_eq!(returned_keys, expected);
 
         let returned_keys = dbtx
@@ -2646,13 +2774,39 @@ mod test_utils {
         ];
         assert_eq!(returned_keys, expected);
 
-        let mut module_dbtx = dbtx.with_prefix_module_id(2).0;
-        let test_range = module_dbtx
-            .find_by_range(TestKey(300)..TestKey(301))
+        let returned_keys = dbtx
+            .find_by_range_sorted_descending(TestKey(53)..TestKey(56))
             .await
             .collect::<Vec<_>>()
             .await;
-        assert!(test_range.len() == 1);
+        let expected = vec![
+            (TestKey(56), TestVal(7777)),
+            (TestKey(55), TestVal(9999)),
+            (TestKey(54), TestVal(8888)),
+        ];
+        assert_eq!(returned_keys, expected);
+
+        {
+            let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(2).0;
+            let test_range = module_dbtx
+                .find_by_range(TestKey(300)..TestKey(301))
+                .await
+                .collect::<Vec<_>>()
+                .await;
+            let expected = vec![(TestKey(300), TestVal(3000))];
+            assert_eq!(test_range, expected);
+        }
+
+        {
+            let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(2).0;
+            let test_range = module_dbtx
+                .find_by_range_sorted_descending(TestKey(299)..TestKey(300))
+                .await
+                .collect::<Vec<_>>()
+                .await;
+            let expected = vec![(TestKey(300), TestVal(3000))];
+            assert_eq!(test_range, expected);
+        }
     }
 
     pub async fn verify_find_by_prefix(db: Database) {
@@ -3280,6 +3434,13 @@ mod test_utils {
             }
 
             async fn raw_find_by_range(
+                &mut self,
+                _key_range: Range<&[u8]>,
+            ) -> anyhow::Result<crate::db::PrefixStream<'_>> {
+                unimplemented!()
+            }
+
+            async fn raw_find_by_range_sorted_descending(
                 &mut self,
                 _key_range: Range<&[u8]>,
             ) -> anyhow::Result<crate::db::PrefixStream<'_>> {

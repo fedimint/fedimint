@@ -169,6 +169,26 @@ impl<'a> IDatabaseTransactionOpsCore for MemAndIndexedDbTransaction<'a> {
         Ok(Box::pin(stream::iter(data)))
     }
 
+    async fn raw_find_by_range_sorted_descending(
+        &mut self,
+        range: Range<&[u8]>,
+    ) -> Result<PrefixStream<'_>> {
+        let Some(start) = next_prefix(range.start) else {
+            // End of range, just return empty stream
+            return Ok(Box::pin(stream::iter(vec![])));
+        };
+        let data = if let Some(end) = next_prefix(range.end) {
+            self.tx_data.range(Range { start, end })
+        } else {
+            self.tx_data.range(start..)
+        };
+        let mut data = data
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect::<Vec<_>>();
+        data.sort_by(|a, b| a.cmp(b).reverse());
+        Ok(Box::pin(stream::iter(data)))
+    }
+
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
         let data = self
             .tx_data
