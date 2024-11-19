@@ -1195,6 +1195,7 @@ impl Esplora {
 
         let btc_rpc_port = process_mgr.globals.FM_PORT_BTC_RPC;
         let esplora_port = process_mgr.globals.FM_PORT_ESPLORA;
+        let esplora_monitoring_port = process_mgr.globals.FM_PORT_ESPLORA_MONITORING;
         // spawn esplora
         let cmd = cmd!(
             crate::util::Esplora,
@@ -1204,7 +1205,7 @@ impl Esplora {
             "--network=regtest",
             "--daemon-rpc-addr=127.0.0.1:{btc_rpc_port}",
             "--http-addr=127.0.0.1:{esplora_port}",
-            "--monitoring-addr=127.0.0.1:0",
+            "--monitoring-addr=127.0.0.1:{esplora_monitoring_port}",
             "--jsonrpc-import", // Workaround for incompatible on-disk format
         );
         let process = process_mgr.spawn_daemon("esplora", cmd).await?;
