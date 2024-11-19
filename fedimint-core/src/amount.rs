@@ -198,16 +198,6 @@ impl std::iter::Sum for Amount {
     }
 }
 
-impl std::ops::Sub for Amount {
-    type Output = Self;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        Self {
-            msats: self.msats - rhs.msats,
-        }
-    }
-}
-
 impl FromStr for Amount {
     type Err = ParseAmountError;
 

@@ -157,9 +157,9 @@ impl SendStateMachine {
             return Err(Cancelled::TimeoutTooClose);
         }
 
-        if contract.amount < min_contract_amount {
+        let Some(max_fee) = contract.amount.checked_sub(min_contract_amount) else {
             return Err(Cancelled::Underfunded);
-        }
+        };
 
         let lightning_context = context
             .gateway
@@ -197,7 +197,7 @@ impl SendStateMachine {
 
         lightning_context
             .lnrpc
-            .pay(invoice, max_delay, contract.amount - min_contract_amount)
+            .pay(invoice, max_delay, max_fee)
             .await
             .map(|response| response.preimage.0)
             .map_err(|e| Cancelled::LightningRpcError(e.to_string()))

@@ -251,7 +251,7 @@ pub async fn handle_command(
                     )
                     .await?;
 
-                let overspend_amount = notes.total_amount() - amount;
+                let overspend_amount = notes.total_amount().saturating_sub(amount);
                 if overspend_amount != Amount::ZERO {
                     warn!(
                         target: LOG_CLIENT,

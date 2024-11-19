@@ -245,7 +245,7 @@ impl ServerModule for Dummy {
             // The printer is broken
             current_funds
         } else {
-            current_funds - input.amount
+            current_funds.saturating_sub(input.amount)
         };
 
         dbtx.insert_entry(&DummyFundsKeyV1(input.account), &updated_funds)

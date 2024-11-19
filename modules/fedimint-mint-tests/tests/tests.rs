@@ -133,8 +133,8 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
     assert_eq!(sub1.ok().await?, SpendOOBState::Success);
     info!("### REISSUE: DONE");
 
-    assert!(client1.get_balance().await >= sats(250) - EXPECTED_MAXIMUM_FEE);
-    assert!(client2.get_balance().await >= sats(750) - EXPECTED_MAXIMUM_FEE);
+    assert!(client1.get_balance().await >= sats(250).saturating_sub(EXPECTED_MAXIMUM_FEE));
+    assert!(client2.get_balance().await >= sats(750).saturating_sub(EXPECTED_MAXIMUM_FEE));
     Ok(())
 }
 
@@ -253,7 +253,10 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
     // anymore we have to use the amount actually sent and not the one requested
     let total_amount_spent: Amount = note_bags.iter().map(|bag| bag.total_amount()).sum();
 
-    assert_eq!(client1.get_balance().await, sats(1000) - total_amount_spent);
+    assert_eq!(
+        client1.get_balance().await,
+        sats(1000).saturating_sub(total_amount_spent)
+    );
 
     info!(%total_amount_spent, "Sent notes");
 
@@ -288,7 +291,7 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
         task.await.expect("reissue task failed");
     }
 
-    assert!(client2.get_balance().await >= total_amount_spent - EXPECTED_MAXIMUM_FEE);
+    assert!(client2.get_balance().await >= total_amount_spent.saturating_sub(EXPECTED_MAXIMUM_FEE));
 
     Ok(())
 }
@@ -370,7 +373,7 @@ async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
     // FIXME: UserCanceledSuccess should mean the money is in our wallet
     for _ in 0..120 {
         let balance = client.get_balance().await;
-        let expected_min_balance = sats(1000) - EXPECTED_MAXIMUM_FEE;
+        let expected_min_balance = sats(1000).saturating_sub(EXPECTED_MAXIMUM_FEE);
         if expected_min_balance <= balance {
             return Ok(());
         }
@@ -447,7 +450,9 @@ async fn sends_ecash_out_of_band_cancel_partial() -> anyhow::Result<()> {
     // FIXME: UserCanceledSuccess should mean the money is in our wallet
     for _ in 0..120 {
         let balance = client.get_balance().await;
-        let expected_min_balance = sats(1000) - EXPECTED_MAXIMUM_FEE - single_note.0;
+        let expected_min_balance = sats(1000)
+            .saturating_sub(EXPECTED_MAXIMUM_FEE)
+            .saturating_sub(single_note.0);
         info!(target: LOG_TEST, %balance, %expected_min_balance, "Checking balance");
         if expected_min_balance <= balance {
             return Ok(());
