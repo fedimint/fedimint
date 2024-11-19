@@ -524,16 +524,21 @@ jobs:
           # seems like cachix needs this explicitly set in the env
           CACHIX_AUTH_TOKEN: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         run: |
+          >&2 echo "Building: ${{ matrix.build.flake-output }}"
           nix build -L .#${{ matrix.build.flake-output }}
           mkdir -p bins
           bins="${{ matrix.build.bins }}"
           for bin in ${bins//,/ } ; do
             if [[ $GITHUB_REF_TYPE == "tag" ]]; then
+              >&2 echo "Building: $bin"
               nix build -L .#$bin
+              >&2 echo "Pushing to cachix: $bin"
               cachix push fedimint -c 8 -j 8 $(nix-store --query --references $(readlink -f result)) $(readlink -f result)
+              >&2 echo "Pining in cachix: fedimint-release-$bin:$BUILD_ID"
               cachix pin fedimint "fedimint-release-$bin:$BUILD_ID" $(readlink -f result)
             fi
             # Note: keep in sync with sign.sh
+            >&2 echo "Building bundled: $bin"
             nix bundle --bundler .# ".#$bin" -o "bins/$bin-$BUILD_ID" && sha256sum "bins/$bin-$BUILD_ID"
           done
 
@@ -541,6 +546,7 @@ jobs:
         run: |
           bins="${{ matrix.build.bins }}"
           for bin in ${bins//,/ } ; do
+            >&2 echo "Checking version: $bin"
             nix run .#$bin version-hash && echo "$GITHUB_SHA" && test "$(nix run .#$bin version-hash)" = "${GITHUB_SHA}"
           done
 
@@ -548,6 +554,7 @@ jobs:
         run: |
           bins="${{ matrix.build.bins }}"
           for bin in ${bins//,/ } ; do
+            >&2 echo "Checking sha256sum: $bin"
             nix build -L .#$bin && sha256sum "./result/bin/$bin"
           done
 
@@ -568,6 +575,7 @@ jobs:
         run: |
           bins="${{ matrix.build.bins }}"
           for bin in ${bins//,/ } ; do
+            >&2 echo "Bundling DEB: $bin"
             nix bundle -L --bundler .#toDEB --accept-flake-config -o debs/$bin .#$bin
             # workaround: https://github.com/actions/upload-artifact/issues/92
             cp -a debs/$bin/*.deb debs/
@@ -577,6 +585,7 @@ jobs:
         run: |
           bins="${{ matrix.build.bins }}"
           for bin in ${bins//,/ } ; do
+            >&2 echo "Bundling RPM: $bin"
             nix bundle -L --bundler .#toRPM --accept-flake-config -o rpms/$bin .#$bin
             # workaround: https://github.com/actions/upload-artifact/issues/92
             cp -a rpms/$bin/*.rpm rpms/
