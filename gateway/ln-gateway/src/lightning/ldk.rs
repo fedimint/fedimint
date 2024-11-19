@@ -68,6 +68,7 @@ impl GatewayLdkClient {
         network: Network,
         lightning_port: u16,
         mnemonic: Mnemonic,
+        runtime: Arc<tokio::runtime::Runtime>,
     ) -> anyhow::Result<Self> {
         // In devimint, gateways must allow for other gateways to open channels to them.
         // To ensure this works, we must set a node alias to signal to ldk-node that we
@@ -100,9 +101,7 @@ impl GatewayLdkClient {
         node_builder.set_storage_dir_path(data_dir_str.to_string());
 
         let node = Arc::new(node_builder.build()?);
-        // TODO: Call `start_with_runtime()` instead of `start()`.
-        // See https://github.com/fedimint/fedimint/issues/6159
-        node.start().map_err(|e| {
+        node.start_with_runtime(runtime).map_err(|e| {
             error!(?e, "Failed to start LDK Node");
             LightningRpcError::FailedToConnect
         })?;

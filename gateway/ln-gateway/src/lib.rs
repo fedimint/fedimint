@@ -413,10 +413,14 @@ impl Gateway {
     /// timer, loads the federation clients from the persisted config,
     /// begins listening for intercepted payments, and starts the webserver
     /// to service requests.
-    pub async fn run(self, tg: TaskGroup) -> anyhow::Result<TaskShutdownToken> {
+    pub async fn run(
+        self,
+        tg: TaskGroup,
+        runtime: Arc<tokio::runtime::Runtime>,
+    ) -> anyhow::Result<TaskShutdownToken> {
         self.register_clients_timer(&tg);
         self.load_clients().await?;
-        self.start_gateway(&tg);
+        self.start_gateway(&tg, runtime);
         // start webserver last to avoid handling requests before fully initialized
         let handle = tg.make_handle();
         run_webserver(Arc::new(self), tg).await?;
@@ -426,7 +430,7 @@ impl Gateway {
 
     /// Begins the task for listening for intercepted payments from the
     /// lightning node.
-    fn start_gateway(&self, task_group: &TaskGroup) {
+    fn start_gateway(&self, task_group: &TaskGroup, runtime: Arc<tokio::runtime::Runtime>) {
         const PAYMENT_STREAM_RETRY_SECONDS: u64 = 5;
 
         let self_copy = self.clone();
@@ -442,7 +446,7 @@ impl Gateway {
                     }
 
                     let payment_stream_task_group = tg.make_subgroup();
-                    let lnrpc_route = self_copy.lightning_builder.build().await;
+                    let lnrpc_route = self_copy.lightning_builder.build(runtime.clone()).await;
 
                     debug!("Establishing lightning payment stream...");
                     let (stream, ln_client) = match lnrpc_route.route_htlcs(&payment_stream_task_group).await

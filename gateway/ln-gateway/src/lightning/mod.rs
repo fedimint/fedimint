@@ -343,7 +343,8 @@ pub enum LightningMode {
 
 #[async_trait]
 pub trait LightningBuilder {
-    async fn build(&self) -> Box<dyn ILnRpcClient>;
+    async fn build(&self, runtime: Arc<tokio::runtime::Runtime>) -> Box<dyn ILnRpcClient>;
+
     fn lightning_mode(&self) -> Option<LightningMode> {
         None
     }
@@ -359,7 +360,7 @@ pub struct GatewayLightningBuilder {
 
 #[async_trait]
 impl LightningBuilder for GatewayLightningBuilder {
-    async fn build(&self) -> Box<dyn ILnRpcClient> {
+    async fn build(&self, runtime: Arc<tokio::runtime::Runtime>) -> Box<dyn ILnRpcClient> {
         match self.lightning_mode.clone() {
             LightningMode::Cln { cln_extension_addr } => {
                 Box::new(NetworkLnRpcClient::new(cln_extension_addr))
@@ -386,6 +387,7 @@ impl LightningBuilder for GatewayLightningBuilder {
                     network,
                     lightning_port,
                     self.mnemonic.clone(),
+                    runtime,
                 )
                 .unwrap(),
             ),
