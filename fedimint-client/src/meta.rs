@@ -12,6 +12,7 @@ use fedimint_core::task::waiter::Waiter;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{apply, async_trait_maybe_send};
+use fedimint_logging::LOG_CLIENT;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Notify;
@@ -187,7 +188,7 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
         let failed_initial = meta_values.is_err();
         match meta_values {
             Ok(meta_values) => self.save_meta_values(client, &meta_values).await,
-            Err(error) => warn!(%error, "failed to fetch source"),
+            Err(error) => warn!(target: LOG_CLIENT, %error, "failed to fetch source"),
         };
         self.initial_fetch_waiter.done();
 
@@ -314,7 +315,7 @@ pub async fn fetch_meta_overrides(
             if let serde_json::Value::String(value_str) = value {
                 Some((MetaFieldKey(key), MetaFieldValue(value_str)))
             } else {
-                warn!("Meta override map contained non-string key: {key}, ignoring");
+                warn!(target: LOG_CLIENT, "Meta override map contained non-string key: {key}, ignoring");
                 None
             }
         })

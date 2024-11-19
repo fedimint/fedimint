@@ -111,6 +111,8 @@ rules:
     include:
       - fedimint-server/
       - fedimint-core/
+      - fedimint-cli/
+      - fedimint-client/
 
 - id: use-client-log-targets
   languages:
