@@ -14,6 +14,7 @@ use hex::encode;
 use rand::rngs::OsRng;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use rayon::iter::{IntoParallelRefIterator as _, ParallelIterator as _};
 use serde::{Deserialize, Serialize};
 use sha3::Digest;
 
@@ -188,9 +189,10 @@ pub fn aggregate_public_key_shares(shares: &BTreeMap<u64, PublicKeyShare>) -> Ag
         lagrange_multipliers(shares.keys().cloned().map(Scalar::from).collect())
             .into_iter()
             .zip(shares.values())
+            .collect::<Vec<_>>()
+            .par_iter()
             .map(|(lagrange_multiplier, share)| lagrange_multiplier * share.0)
-            .reduce(|a, b| a + b)
-            .expect("We have at least one share")
+            .reduce(G2Projective::identity, |a, b| a + b)
             .to_affine(),
     )
 }

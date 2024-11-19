@@ -3200,6 +3200,7 @@ dependencies = [
  "hex",
  "rand",
  "rand_chacha",
+ "rayon",
  "serde",
  "sha3",
 ]
