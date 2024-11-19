@@ -1275,7 +1275,8 @@
 <a href="#1274" id="1274">1274</a>
 <a href="#1275" id="1275">1275</a>
 <a href="#1276" id="1276">1276</a>
-<a href="#1277" id="1277">1277</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
+<a href="#1277" id="1277">1277</a>
+<a href="#1278" id="1278">1278</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -2472,6 +2473,7 @@
 
         <span class="kw">let </span>btc_rpc_port = process_mgr.globals.FM_PORT_BTC_RPC;
         <span class="kw">let </span>esplora_port = process_mgr.globals.FM_PORT_ESPLORA;
+        <span class="kw">let </span>esplora_monitoring_port = process_mgr.globals.FM_PORT_ESPLORA_MONITORING;
         <span class="comment">// spawn esplora
         </span><span class="kw">let </span>cmd = <span class="macro">cmd!</span>(
             <span class="kw">crate</span>::util::Esplora,
@@ -2481,7 +2483,7 @@
             <span class="string">"--network=regtest"</span>,
             <span class="string">"--daemon-rpc-addr=127.0.0.1:{btc_rpc_port}"</span>,
             <span class="string">"--http-addr=127.0.0.1:{esplora_port}"</span>,
-            <span class="string">"--monitoring-addr=127.0.0.1:0"</span>,
+            <span class="string">"--monitoring-addr=127.0.0.1:{esplora_monitoring_port}"</span>,
             <span class="string">"--jsonrpc-import"</span>, <span class="comment">// Workaround for incompatible on-disk format
         </span>);
         <span class="kw">let </span>process = process_mgr.spawn_daemon(<span class="string">"esplora"</span>, cmd).<span class="kw">await</span><span class="question-mark">?</span>;
