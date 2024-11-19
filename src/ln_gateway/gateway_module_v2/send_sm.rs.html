@@ -394,9 +394,9 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(Cancelled::TimeoutTooClose);
         }
 
-        <span class="kw">if </span>contract.amount &lt; min_contract_amount {
+        <span class="kw">let </span><span class="prelude-val">Some</span>(max_fee) = contract.amount.checked_sub(min_contract_amount) <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(Cancelled::Underfunded);
-        }
+        };
 
         <span class="kw">let </span>lightning_context = context
             .gateway
@@ -434,7 +434,7 @@
 
         lightning_context
             .lnrpc
-            .pay(invoice, max_delay, contract.amount - min_contract_amount)
+            .pay(invoice, max_delay, max_fee)
             .<span class="kw">await
             </span>.map(|response| response.preimage.<span class="number">0</span>)
             .map_err(|e| Cancelled::LightningRpcError(e.to_string()))

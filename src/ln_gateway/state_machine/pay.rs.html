@@ -941,7 +941,8 @@
 <a href="#940" id="940">940</a>
 <a href="#941" id="941">941</a>
 <a href="#942" id="942">942</a>
-<a href="#943" id="943">943</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
+<a href="#943" id="943">943</a>
+<a href="#944" id="944">944</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -1355,11 +1356,12 @@
         <span class="macro">debug!</span>(<span class="string">"Buying preimage over lightning for contract {contract:?}"</span>);
 
         <span class="kw">let </span>max_delay = buy_preimage.max_delay;
-        <span class="kw">let </span>max_fee = buy_preimage.max_send_amount
-            - buy_preimage
+        <span class="kw">let </span>max_fee = buy_preimage.max_send_amount.saturating_sub(
+            buy_preimage
                 .payment_data
                 .amount()
-                .expect(<span class="string">"We already checked that an amount was supplied"</span>);
+                .expect(<span class="string">"We already checked that an amount was supplied"</span>),
+        );
 
         <span class="kw">let </span><span class="prelude-val">Ok</span>(lightning_context) = context.gateway.get_lightning_context().<span class="kw">await else </span>{
             <span class="kw">return </span><span class="self">Self</span>::gateway_pay_cancel_contract(

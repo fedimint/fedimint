@@ -2750,7 +2750,12 @@
 <a href="#2749" id="2749">2749</a>
 <a href="#2750" id="2750">2750</a>
 <a href="#2751" id="2751">2751</a>
-<a href="#2752" id="2752">2752</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2752" id="2752">2752</a>
+<a href="#2753" id="2753">2753</a>
+<a href="#2754" id="2754">2754</a>
+<a href="#2755" id="2755">2755</a>
+<a href="#2756" id="2756">2756</a>
+<a href="#2757" id="2757">2757</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -3536,7 +3541,12 @@
             .sum();
 
         <span class="kw">let </span>outputs = <span class="self">self
-            </span>.create_output(dbtx, operation_id, <span class="number">2</span>, input_amount - output_amount)
+            </span>.create_output(
+                dbtx,
+                operation_id,
+                <span class="number">2</span>,
+                input_amount.saturating_sub(output_amount),
+            )
             .<span class="kw">await</span>;
 
         <span class="prelude-val">Ok</span>((
@@ -4791,7 +4801,7 @@
                 </span><span class="kw">return </span><span class="prelude-val">Ok</span>(notes);
             }
 
-            <span class="kw">let </span>total_amount = requested_amount - pending_amount;
+            <span class="kw">let </span>total_amount = requested_amount.saturating_sub(pending_amount);
             <span class="comment">// not enough notes, return
             </span><span class="kw">return </span><span class="prelude-val">Err</span>(InsufficientBalanceError {
                 requested_amount,

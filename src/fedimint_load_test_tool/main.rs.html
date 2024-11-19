@@ -1927,7 +1927,7 @@
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>current_balance = coordinator.get_balance().<span class="kw">await</span>;
     <span class="kw">if </span>current_balance &lt; minimum_amount_required {
-        <span class="kw">let </span>diff = minimum_amount_required - current_balance;
+        <span class="kw">let </span>diff = minimum_amount_required.saturating_sub(current_balance);
         <span class="macro">info!</span>(<span class="string">"Current balance {current_balance} on coordinator not enough, trying to get {diff} more through fedimint-cli"</span>);
         <span class="kw">match </span>try_get_notes_cli(<span class="kw-2">&amp;</span>diff, <span class="number">5</span>).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(notes) =&gt; {

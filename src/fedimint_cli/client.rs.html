@@ -962,7 +962,7 @@
                     )
                     .<span class="kw">await</span><span class="question-mark">?</span>;
 
-                <span class="kw">let </span>overspend_amount = notes.total_amount() - amount;
+                <span class="kw">let </span>overspend_amount = notes.total_amount().saturating_sub(amount);
                 <span class="kw">if </span>overspend_amount != Amount::ZERO {
                     <span class="macro">warn!</span>(
                         target: LOG_CLIENT,

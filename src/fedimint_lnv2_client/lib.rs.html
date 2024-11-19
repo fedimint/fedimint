@@ -1091,10 +1091,7 @@
 <a href="#1090" id="1090">1090</a>
 <a href="#1091" id="1091">1091</a>
 <a href="#1092" id="1092">1092</a>
-<a href="#1093" id="1093">1093</a>
-<a href="#1094" id="1094">1094</a>
-<a href="#1095" id="1095">1095</a>
-<a href="#1096" id="1096">1096</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1093" id="1093">1093</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -1186,12 +1183,9 @@
     <span class="doccomment">/// Calculate the absolute fee paid to the gateway on success.
     </span><span class="kw">pub fn </span>gateway_fee(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.invoice {
-            LightningInvoice::Bolt11(invoice) =&gt; {
-                <span class="self">self</span>.contract.amount
-                    - Amount::from_msats(
-                        invoice.amount_milli_satoshis().expect(<span class="string">"Invoice has amount"</span>),
-                    )
-            }
+            LightningInvoice::Bolt11(invoice) =&gt; <span class="self">self</span>.contract.amount.saturating_sub(
+                Amount::from_msats(invoice.amount_milli_satoshis().expect(<span class="string">"Invoice has amount"</span>)),
+            ),
         }
     }
 }
@@ -1210,7 +1204,7 @@
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.invoice {
             LightningInvoice::Bolt11(invoice) =&gt; {
                 Amount::from_msats(invoice.amount_milli_satoshis().expect(<span class="string">"Invoice has amount"</span>))
-                    - <span class="self">self</span>.contract.commitment.amount
+                    .saturating_sub(<span class="self">self</span>.contract.commitment.amount)
             }
         }
     }
