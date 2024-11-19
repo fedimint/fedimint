@@ -1173,7 +1173,7 @@ impl Wallet {
                 .expect("bitcoind rpc to get block hash");
 
             if self.consensus_module_consensus_version(dbtx).await
-                >= ModuleConsensusVersion::new(2, 1)
+                >= ModuleConsensusVersion::new(2, 2)
             {
                 let block = retry("get_block", backoff_util::background_backoff(), || {
                     self.btc_rpc.get_block(&block_hash)

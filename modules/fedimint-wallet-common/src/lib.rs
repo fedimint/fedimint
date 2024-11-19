@@ -33,7 +33,7 @@ pub mod tweakable;
 pub mod txoproof;
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("wallet");
-pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 1);
+pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 2);
 
 /// Used for estimating a feerate that will confirm within a target number of
 /// blocks.
