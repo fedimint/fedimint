@@ -9,7 +9,7 @@ slow-timeout = { period = "30s", terminate-after = 4 }
 [profile.dev]
 
 [profile.ci]
-slow-timeout = { period = "30s", terminate-after = 2 }
+slow-timeout = { period = "30s", terminate-after = 3 }
 
 # ccov seems MUCH slower, especially in Nix sandbox
 # possibly due to writing to a shared tracing file(?)

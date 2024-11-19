@@ -347,13 +347,15 @@ if [ -n "${FM_TEST_CI_ALL_JOBS:-}" ]; then
   # when specifically set, use the env var
   parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS}")
 elif [ -n "${CI:-}" ] || [ "${CARGO_PROFILE:-}" == "ci" ]; then
-  parallel_args+=(--jobs $(($(nproc) / 2 + 1)))
+  # our CI runners have 96 CPUs, which is a lot of CPUs, and a lot of jobs
+  # to run in parallel
+  parallel_args+=(--jobs $(($(nproc) / 3 + 1)))
 else
   # on dev computers default to `num_cpus / 2 + 1` max parallel jobs
   parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS:-$(($(nproc) / 2 + 1))}")
 fi
 
-parallel_args+=(--timeout "${FM_TEST_CI_ALL_TIMEOUT:-300}")
+parallel_args+=(--timeout "${FM_TEST_CI_ALL_TIMEOUT:-360}")
 
 parallel_args+=(--load "${FM_TEST_CI_ALL_MAX_LOAD:-$(($(nproc) / 3 + 1))}")
 # --delay to let nix start extracting and bump the load
