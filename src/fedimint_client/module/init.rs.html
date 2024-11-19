@@ -439,7 +439,9 @@
 <a href="#438" id="438">438</a>
 <a href="#439" id="439">439</a>
 <a href="#440" id="440">440</a>
-<a href="#441" id="441">441</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>recovery;
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>recovery;
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
@@ -456,6 +458,7 @@
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, NumPeers};
 <span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
+<span class="kw">use </span>fedimint_logging::LOG_CLIENT;
 <span class="kw">use </span>tokio::sync::watch;
 <span class="kw">use </span>tracing::warn;
 
@@ -637,13 +640,13 @@
         <span class="kw">if </span>progress.is_done() {
             <span class="comment">// Recovery is complete when the recovery function finishes. To avoid
             // confusing any downstream code, we never send completed process.
-            </span><span class="macro">warn!</span>(<span class="string">"Module trying to send a completed recovery progress. Ignoring"</span>);
+            </span><span class="macro">warn!</span>(target: LOG_CLIENT, <span class="string">"Module trying to send a completed recovery progress. Ignoring"</span>);
         } <span class="kw">else if </span>progress.is_none() {
             <span class="comment">// Recovery starts with "none" none progress. To avoid
             // confusing any downstream code, we never send none process afterwards.
-            </span><span class="macro">warn!</span>(<span class="string">"Module trying to send a none recovery progress. Ignoring"</span>);
+            </span><span class="macro">warn!</span>(target: LOG_CLIENT, <span class="string">"Module trying to send a none recovery progress. Ignoring"</span>);
         } <span class="kw">else if </span><span class="self">self</span>.progress_tx.send(progress).is_err() {
-            <span class="macro">warn!</span>(<span class="string">"Module trying to send a recovery progress but nothing is listening"</span>);
+            <span class="macro">warn!</span>(target: LOG_CLIENT, <span class="string">"Module trying to send a recovery progress but nothing is listening"</span>);
         }
     }
 }
@@ -667,6 +670,7 @@
         _snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::Backup&gt;,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">warn!</span>(
+            target: LOG_CLIENT,
             kind = %&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::kind(),
             <span class="string">"Module does not support recovery, completing without doing anything"
         </span>);

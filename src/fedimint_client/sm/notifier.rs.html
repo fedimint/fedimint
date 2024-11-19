@@ -230,13 +230,15 @@
 <a href="#229" id="229">229</a>
 <a href="#230" id="230">230</a>
 <a href="#231" id="231">231</a>
-<a href="#232" id="232">232</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::marker::PhantomData;
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::marker::PhantomData;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::util::broadcaststream::BroadcastStream;
 <span class="kw">use </span>fedimint_core::util::BoxStream;
+<span class="kw">use </span>fedimint_logging::LOG_CLIENT;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>tracing::{debug, error, trace};
 
@@ -439,7 +441,7 @@
             BroadcastStream::new(<span class="self">self</span>.broadcast.subscribe())
                 .take_while(|res| {
                     <span class="kw">let </span>cont = <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = res {
-                        <span class="macro">error!</span>(<span class="question-mark">?</span>err, <span class="string">"ModuleNotifier stream stopped on error"</span>);
+                        <span class="macro">error!</span>(target: LOG_CLIENT, <span class="question-mark">?</span>err, <span class="string">"ModuleNotifier stream stopped on error"</span>);
                         <span class="bool-val">false
                     </span>} <span class="kw">else </span>{
                         <span class="bool-val">true

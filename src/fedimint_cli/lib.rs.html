@@ -1323,7 +1323,10 @@
 <a href="#1322" id="1322">1322</a>
 <a href="#1323" id="1323">1323</a>
 <a href="#1324" id="1324">1324</a>
-<a href="#1325" id="1325">1325</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1325" id="1325">1325</a>
+<a href="#1326" id="1326">1326</a>
+<a href="#1327" id="1327">1327</a>
+<a href="#1328" id="1328">1328</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1626,7 +1629,10 @@
         <span class="kw">if let </span><span class="prelude-val">Ok</span>(entropy) = Client::load_decodable_client_secret::&lt;Vec&lt;u8&gt;&gt;(db).<span class="kw">await </span>{
             Mnemonic::from_entropy(<span class="kw-2">&amp;</span>entropy).map_err_cli()<span class="question-mark">?
         </span>} <span class="kw">else </span>{
-            <span class="macro">info!</span>(<span class="string">"Generating mnemonic and writing entropy to client storage"</span>);
+            <span class="macro">info!</span>(
+                target: LOG_CLIENT,
+                <span class="string">"Generating mnemonic and writing entropy to client storage"
+            </span>);
             <span class="kw">let </span>mnemonic = Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::random(<span class="kw-2">&amp;mut </span>thread_rng());
             Client::store_encodable_client_secret(db, mnemonic.to_entropy())
                 .<span class="kw">await

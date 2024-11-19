@@ -1435,7 +1435,25 @@
 <a href="#1434" id="1434">1434</a>
 <a href="#1435" id="1435">1435</a>
 <a href="#1436" id="1436">1436</a>
-<a href="#1437" id="1437">1437</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
+<a href="#1437" id="1437">1437</a>
+<a href="#1438" id="1438">1438</a>
+<a href="#1439" id="1439">1439</a>
+<a href="#1440" id="1440">1440</a>
+<a href="#1441" id="1441">1441</a>
+<a href="#1442" id="1442">1442</a>
+<a href="#1443" id="1443">1443</a>
+<a href="#1444" id="1444">1444</a>
+<a href="#1445" id="1445">1445</a>
+<a href="#1446" id="1446">1446</a>
+<a href="#1447" id="1447">1447</a>
+<a href="#1448" id="1448">1448</a>
+<a href="#1449" id="1449">1449</a>
+<a href="#1450" id="1450">1450</a>
+<a href="#1451" id="1451">1451</a>
+<a href="#1452" id="1452">1452</a>
+<a href="#1453" id="1453">1453</a>
+<a href="#1454" id="1454">1454</a>
+<a href="#1455" id="1455">1455</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 <span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::io::{Error, Read, Write};
@@ -1541,7 +1559,7 @@
             <span class="comment">// Replace the previous state, undoing the `mem::replace` above.
             </span><span class="kw-2">*</span><span class="self">self </span>= previous_state;
 
-            <span class="macro">debug!</span>(<span class="string">"Executor already started, ignoring start request"</span>);
+            <span class="macro">debug!</span>(target: LOG_CLIENT_REACTOR, <span class="string">"Executor already started, ignoring start request"</span>);
             <span class="prelude-val">None
         </span>}
     }
@@ -1556,14 +1574,14 @@
         } = previous_state
         {
             <span class="kw">if </span>shutdown_sender.send(()).is_err() {
-                <span class="macro">warn!</span>(<span class="string">"Failed to send shutdown signal to executor, already dead?"</span>);
+                <span class="macro">warn!</span>(target: LOG_CLIENT_REACTOR, <span class="string">"Failed to send shutdown signal to executor, already dead?"</span>);
             }
             <span class="prelude-val">Some</span>(())
         } <span class="kw">else </span>{
             <span class="comment">// Replace the previous state, undoing the `mem::replace` above.
             </span><span class="kw-2">*</span><span class="self">self </span>= previous_state;
 
-            <span class="macro">debug!</span>(<span class="string">"Executor not running, ignoring stop request"</span>);
+            <span class="macro">debug!</span>(target: LOG_CLIENT_REACTOR, <span class="string">"Executor not running, ignoring stop request"</span>);
             <span class="prelude-val">None
         </span>}
     }
@@ -1798,20 +1816,29 @@
             <span class="kw">let </span>task_group_shutdown_rx = task_handle.make_shutdown_rx();
             <span class="macro">select!</span> {
                 () = task_group_shutdown_rx =&gt; {
-                    <span class="macro">debug!</span>(<span class="string">"Shutting down state machine executor runner due to task group shutdown signal"</span>);
+                    <span class="macro">debug!</span>(
+                        target: LOG_CLIENT_REACTOR,
+                        <span class="string">"Shutting down state machine executor runner due to task group shutdown signal"
+                    </span>);
                 },
                 shutdown_happened_sender = shutdown_receiver =&gt; {
                     <span class="kw">match </span>shutdown_happened_sender {
                         <span class="prelude-val">Ok</span>(()) =&gt; {
-                            <span class="macro">debug!</span>(<span class="string">"Shutting down state machine executor runner due to explicit shutdown signal"</span>);
+                            <span class="macro">debug!</span>(
+                                target: LOG_CLIENT_REACTOR,
+                                <span class="string">"Shutting down state machine executor runner due to explicit shutdown signal"
+                            </span>);
                         },
                         <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                            <span class="macro">warn!</span>(<span class="string">"Shutting down state machine executor runner because the shutdown signal channel was closed (the executor object was dropped)"</span>);
+                            <span class="macro">warn!</span>(
+                                target: LOG_CLIENT_REACTOR,
+                                <span class="string">"Shutting down state machine executor runner because the shutdown signal channel was closed (the executor object was dropped)"
+                            </span>);
                         }
                     }
                 },
                 () = executor_runner =&gt; {
-                    <span class="macro">error!</span>(<span class="string">"State machine executor runner exited unexpectedly!"</span>);
+                    <span class="macro">error!</span>(target: LOG_CLIENT_REACTOR, <span class="string">"State machine executor runner exited unexpectedly!"</span>);
                 },
             };
         });
@@ -1866,6 +1893,7 @@
             .<span class="kw">await
         </span>{
             <span class="macro">warn!</span>(
+                target: LOG_CLIENT_REACTOR,
                 %err,
                 <span class="string">"An unexpected error occurred during a state transition"
             </span>);
@@ -1910,7 +1938,10 @@
             <span class="comment">// In certain cases a terminal (no transitions) state could get here due to
             // module bug. Inactivate it to prevent accumulation of such states.
             // See [`Self::add_state_machines_dbtx`].
-            </span><span class="macro">warn!</span>(module_id = module_instance, <span class="string">"A terminal state where only active states are expected. Please report this bug upstream."</span>);
+            </span><span class="macro">warn!</span>(
+                target: LOG_CLIENT_REACTOR,
+                module_id = module_instance, <span class="string">"A terminal state where only active states are expected. Please report this bug upstream."
+            </span>);
             <span class="self">self</span>.db
                 .autocommit::&lt;<span class="kw">_</span>, <span class="kw">_</span>, anyhow::Error&gt;(
                     |dbtx, <span class="kw">_</span>| {
@@ -2315,6 +2346,7 @@
         });
 
         <span class="macro">debug!</span>(
+            target: LOG_CLIENT_REACTOR,
             instances = <span class="question-mark">?</span>inner.module_contexts.keys().copied().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
             <span class="string">"Initialized state machine executor with module instances"
         </span>);
@@ -2687,6 +2719,7 @@
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::runtime;
     <span class="kw">use </span>fedimint_core::task::TaskGroup;
+    <span class="kw">use </span>fedimint_logging::LOG_CLIENT_REACTOR;
     <span class="kw">use </span>tokio::sync::broadcast::Sender;
     <span class="kw">use </span>tracing::{info, trace};
 
@@ -2816,7 +2849,10 @@
             executor_builder.build(db.clone(), Notifier::new(db.clone()), TaskGroup::new());
         executor.start_executor(Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| DynGlobalClientContext::new_fake()));
 
-        <span class="macro">info!</span>(<span class="string">"Initialized test executor"</span>);
+        <span class="macro">info!</span>(
+            target: LOG_CLIENT_REACTOR,
+            <span class="string">"Initialized test executor"
+        </span>);
         (executor, broadcast, db)
     }
 

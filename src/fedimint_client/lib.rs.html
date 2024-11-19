@@ -3078,7 +3078,48 @@
 <a href="#3077" id="3077">3077</a>
 <a href="#3078" id="3078">3078</a>
 <a href="#3079" id="3079">3079</a>
-<a href="#3080" id="3080">3080</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#3080" id="3080">3080</a>
+<a href="#3081" id="3081">3081</a>
+<a href="#3082" id="3082">3082</a>
+<a href="#3083" id="3083">3083</a>
+<a href="#3084" id="3084">3084</a>
+<a href="#3085" id="3085">3085</a>
+<a href="#3086" id="3086">3086</a>
+<a href="#3087" id="3087">3087</a>
+<a href="#3088" id="3088">3088</a>
+<a href="#3089" id="3089">3089</a>
+<a href="#3090" id="3090">3090</a>
+<a href="#3091" id="3091">3091</a>
+<a href="#3092" id="3092">3092</a>
+<a href="#3093" id="3093">3093</a>
+<a href="#3094" id="3094">3094</a>
+<a href="#3095" id="3095">3095</a>
+<a href="#3096" id="3096">3096</a>
+<a href="#3097" id="3097">3097</a>
+<a href="#3098" id="3098">3098</a>
+<a href="#3099" id="3099">3099</a>
+<a href="#3100" id="3100">3100</a>
+<a href="#3101" id="3101">3101</a>
+<a href="#3102" id="3102">3102</a>
+<a href="#3103" id="3103">3103</a>
+<a href="#3104" id="3104">3104</a>
+<a href="#3105" id="3105">3105</a>
+<a href="#3106" id="3106">3106</a>
+<a href="#3107" id="3107">3107</a>
+<a href="#3108" id="3108">3108</a>
+<a href="#3109" id="3109">3109</a>
+<a href="#3110" id="3110">3110</a>
+<a href="#3111" id="3111">3111</a>
+<a href="#3112" id="3112">3112</a>
+<a href="#3113" id="3113">3113</a>
+<a href="#3114" id="3114">3114</a>
+<a href="#3115" id="3115">3115</a>
+<a href="#3116" id="3116">3116</a>
+<a href="#3117" id="3117">3117</a>
+<a href="#3118" id="3118">3118</a>
+<a href="#3119" id="3119">3119</a>
+<a href="#3120" id="3120">3120</a>
+<a href="#3121" id="3121">3121</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
@@ -3760,7 +3801,10 @@
 
     <span class="kw">async fn </span>shutdown_inner(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">let </span><span class="prelude-val">Some</span>(inner) = <span class="self">self</span>.inner.take() <span class="kw">else </span>{
-            <span class="macro">error!</span>(<span class="string">"ClientHandleShared::shutdown called twice"</span>);
+            <span class="macro">error!</span>(
+                target: LOG_CLIENT,
+                <span class="string">"ClientHandleShared::shutdown called twice"
+            </span>);
             <span class="kw">return</span>;
         };
         inner.executor.stop_executor();
@@ -4084,6 +4128,7 @@
 
     <span class="kw">pub fn </span>start_executor(<span class="self">self</span>: <span class="kw-2">&amp;</span>Arc&lt;<span class="self">Self</span>&gt;) {
         <span class="macro">debug!</span>(
+            target: LOG_CLIENT,
             <span class="string">"Starting fedimint client executor (version: {})"</span>,
             <span class="macro">fedimint_build_code_version_env!</span>()
         );
@@ -4725,7 +4770,10 @@
             </span>.get_value(<span class="kw-2">&amp;</span>CachedApiVersionSetKey)
             .<span class="kw">await
         </span>{
-            <span class="macro">debug!</span>(<span class="string">"Found existing cached common api versions"</span>);
+            <span class="macro">debug!</span>(
+                target: LOG_CLIENT,
+                <span class="string">"Found existing cached common api versions"
+            </span>);
             <span class="kw">let </span>config = config.clone();
             <span class="kw">let </span>client_module_init = module_init.clone();
             <span class="kw">let </span>api = api.clone();
@@ -4745,14 +4793,20 @@
                     )
                     .<span class="kw">await
                     </span>{
-                        <span class="macro">warn!</span>(%error, <span class="string">"Failed to discover common api versions"</span>);
+                        <span class="macro">warn!</span>(
+                            target: LOG_CLIENT,
+                            %error, <span class="string">"Failed to discover common api versions"
+                        </span>);
                     }
                 });
 
             <span class="kw">return </span><span class="prelude-val">Ok</span>(v.<span class="number">0</span>);
         }
 
-        <span class="macro">debug!</span>(<span class="string">"No existing cached common api versions found, waiting for initial discovery"</span>);
+        <span class="macro">debug!</span>(
+            target: LOG_CLIENT,
+            <span class="string">"No existing cached common api versions found, waiting for initial discovery"
+        </span>);
         <span class="self">Self</span>::refresh_common_api_version_static(config, module_init, api, db, task_group.clone())
             .<span class="kw">await
     </span>}
@@ -4764,7 +4818,10 @@
         db: <span class="kw-2">&amp;</span>Database,
         task_group: TaskGroup,
     ) -&gt; anyhow::Result&lt;ApiVersionSet&gt; {
-        <span class="macro">debug!</span>(<span class="string">"Refreshing common api versions"</span>);
+        <span class="macro">debug!</span>(
+            target: LOG_CLIENT,
+            <span class="string">"Refreshing common api versions"
+        </span>);
 
         <span class="kw">let </span>(num_responses_sender, <span class="kw-2">mut </span>num_responses_receiver) = tokio::sync::watch::channel(<span class="number">0</span>);
         <span class="kw">let </span>num_peers = NumPeers::from(config.global.api_endpoints.len());
@@ -4799,6 +4856,7 @@
         )<span class="question-mark">?</span>;
 
         <span class="macro">debug!</span>(
+            target: LOG_CLIENT,
             value = <span class="question-mark">?</span>common_api_versions,
             <span class="string">"Updating the cached common api versions"
         </span>);
@@ -4823,7 +4881,10 @@
             </span>.get_value(<span class="kw-2">&amp;</span>ClientMetadataKey)
             .<span class="kw">await
             </span>.unwrap_or_else(|| {
-                <span class="macro">warn!</span>(<span class="string">"Missing existing metadata. This key should have been set on Client init"</span>);
+                <span class="macro">warn!</span>(
+                    target: LOG_CLIENT,
+                    <span class="string">"Missing existing metadata. This key should have been set on Client init"
+                </span>);
                 Metadata::empty()
             })
     }
@@ -4960,7 +5021,7 @@
             watch::Receiver&lt;RecoveryProgress&gt;,
         &gt;,
     ) {
-        <span class="macro">debug!</span>(target:LOG_CLIENT_RECOVERY, num_modules=%module_recovery_progress_receivers.len(), <span class="string">"Staring module recoveries"</span>);
+        <span class="macro">debug!</span>(target: LOG_CLIENT_RECOVERY, num_modules=%module_recovery_progress_receivers.len(), <span class="string">"Staring module recoveries"</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>completed_stream = Vec::new();
         <span class="kw">let </span>progress_stream = futures::stream::FuturesUnordered::new();
 
@@ -4969,7 +5030,10 @@
                 <span class="kw">match </span>f.<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>(()) =&gt; (module_instance_id, <span class="prelude-val">None</span>),
                     <span class="prelude-val">Err</span>(err) =&gt; {
-                        <span class="macro">warn!</span>(%err, module_instance_id, <span class="string">"Module recovery failed"</span>);
+                        <span class="macro">warn!</span>(
+                            target: LOG_CLIENT,
+                            %err, module_instance_id, <span class="string">"Module recovery failed"
+                        </span>);
                         <span class="comment">// a module recovery that failed reports and error and
                         // just never finishes, so we don't need a separate state
                         // for it
@@ -5012,6 +5076,7 @@
 
             <span class="kw">if </span>!prev_progress.is_done() &amp;&amp; progress.is_done() {
                 <span class="macro">info!</span>(
+                    target: LOG_CLIENT,
                     module_instance_id,
                     prev_progress = <span class="macro">format!</span>(<span class="string">"{}/{}"</span>, prev_progress.complete, prev_progress.total),
                     progress = <span class="macro">format!</span>(<span class="string">"{}/{}"</span>, progress.complete, progress.total),
@@ -5027,6 +5092,7 @@
                 .<span class="kw">await</span>;
             } <span class="kw">else </span>{
                 <span class="macro">info!</span>(
+                    target: LOG_CLIENT,
                     module_instance_id,
                     prev_progress = <span class="macro">format!</span>(<span class="string">"{}/{}"</span>, prev_progress.complete, prev_progress.total),
                     progress = <span class="macro">format!</span>(<span class="string">"{}/{}"</span>, progress.complete, progress.total),
@@ -5126,7 +5192,10 @@
                 </span>.expect(<span class="string">"Will never return on error"</span>);
 
                 <span class="kw">let </span><span class="prelude-val">Some</span>(guardian_pub_keys) = fetched_config.global.broadcast_public_keys <span class="kw">else </span>{
-                    <span class="macro">warn!</span>(<span class="string">"Guardian public keys not found in fetched config, server not updated to 0.4 yet"</span>);
+                    <span class="macro">warn!</span>(
+                        target: LOG_CLIENT,
+                        <span class="string">"Guardian public keys not found in fetched config, server not updated to 0.4 yet"
+                    </span>);
                     pending::&lt;()&gt;().<span class="kw">await</span>;
                     <span class="macro">unreachable!</span>(<span class="string">"Pending will never return"</span>);
                 };
@@ -5799,7 +5868,7 @@
             </span>modules: BTreeMap::new(),
         });
 
-        <span class="macro">debug!</span>(<span class="question-mark">?</span>common_api_versions, <span class="string">"Completed api version negotiation"</span>);
+        <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="question-mark">?</span>common_api_versions, <span class="string">"Completed api version negotiation"</span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>module_recoveries: BTreeMap&lt;
             ModuleInstanceId,
@@ -5819,13 +5888,22 @@
             <span class="kw">for </span>(module_instance_id, module_config) <span class="kw">in </span>config.modules.clone() {
                 <span class="kw">let </span>kind = module_config.kind().clone();
                 <span class="kw">let </span><span class="prelude-val">Some</span>(module_init) = <span class="self">self</span>.module_inits.get(<span class="kw-2">&amp;</span>kind).cloned() <span class="kw">else </span>{
-                    <span class="macro">debug!</span>(<span class="string">"Module kind {kind} of instance {module_instance_id} not found in module gens, skipping"</span>);
+                    <span class="macro">debug!</span>(
+                        target: LOG_CLIENT,
+                        kind=%kind,
+                        instance_id=%module_instance_id,
+                        <span class="string">"Module kind of instance not found in module gens, skipping"</span>);
                     <span class="kw">continue</span>;
                 };
 
                 <span class="kw">let </span><span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>api_version) = common_api_versions.modules.get(<span class="kw-2">&amp;</span>module_instance_id)
                 <span class="kw">else </span>{
-                    <span class="macro">warn!</span>(<span class="string">"Module kind {kind} of instance {module_instance_id} has not compatible api version, skipping"</span>);
+                    <span class="macro">warn!</span>(
+                        target: LOG_CLIENT,
+                        kind=%kind,
+                        instance_id=%module_instance_id,
+                        <span class="string">"Module kind of instance has incompatible api version, skipping"
+                    </span>);
                     <span class="kw">continue</span>;
                 };
 
@@ -5868,8 +5946,9 @@
                                     .<span class="kw">await
                                     </span>.map_err(|err| {
                                         <span class="macro">warn!</span>(
-                                                module_id = module_instance_id, %kind, %err, <span class="string">"Module failed to recover"
-                                            </span>);
+                                            target: LOG_CLIENT,
+                                            module_id = module_instance_id, %kind, %err, <span class="string">"Module failed to recover"
+                                        </span>);
                                         err
                                     })
                             }),
@@ -6075,7 +6154,10 @@
             </span>.unwrap_or_else(|| {
                 <span class="comment">// could be turned in a hard error in the future, but for now
                 // no need to break backward compat.
-                </span><span class="macro">warn!</span>(<span class="string">"Client missing ClientRequiresRecovery: assuming complete"</span>);
+                </span><span class="macro">warn!</span>(
+                    target: LOG_CLIENT,
+                    <span class="string">"Client missing ClientRequiresRecovery: assuming complete"
+                </span>);
                 db::InitState::Complete(db::InitModeComplete::Fresh)
             })
     }
