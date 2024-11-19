@@ -784,7 +784,12 @@ impl ClientModule for MintClientModule {
             .sum();
 
         let outputs = self
-            .create_output(dbtx, operation_id, 2, input_amount - output_amount)
+            .create_output(
+                dbtx,
+                operation_id,
+                2,
+                input_amount.saturating_sub(output_amount),
+            )
             .await;
 
         Ok((
@@ -2039,7 +2044,7 @@ async fn select_notes_from_stream<Note>(
                 return Ok(notes);
             }
 
-            let total_amount = requested_amount - pending_amount;
+            let total_amount = requested_amount.saturating_sub(pending_amount);
             // not enough notes, return
             return Err(InsufficientBalanceError {
                 requested_amount,

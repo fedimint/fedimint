@@ -412,11 +412,12 @@ impl GatewayPayInvoice {
         debug!("Buying preimage over lightning for contract {contract:?}");
 
         let max_delay = buy_preimage.max_delay;
-        let max_fee = buy_preimage.max_send_amount
-            - buy_preimage
+        let max_fee = buy_preimage.max_send_amount.saturating_sub(
+            buy_preimage
                 .payment_data
                 .amount()
-                .expect("We already checked that an amount was supplied");
+                .expect("We already checked that an amount was supplied"),
+        );
 
         let Ok(lightning_context) = context.gateway.get_lightning_context().await else {
             return Self::gateway_pay_cancel_contract(

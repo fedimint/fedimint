@@ -531,7 +531,7 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
             GatewayExtReceiveStates::Preimage { .. }
         );
         assert_eq!(
-            initial_gateway_balance - invoice_amount,
+            initial_gateway_balance.saturating_sub(invoice_amount),
             gateway_client.get_balance().await
         );
 

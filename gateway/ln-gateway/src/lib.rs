@@ -1512,7 +1512,7 @@ impl Gateway {
                 )
                 .await?;
 
-            let overspend_amount = notes.total_amount() - payload.amount;
+            let overspend_amount = notes.total_amount().saturating_sub(payload.amount);
             if overspend_amount != Amount::ZERO {
                 warn!(
                     "Selected notes {} worth more than requested",

@@ -557,7 +557,7 @@ async fn get_required_notes(
 ) -> anyhow::Result<()> {
     let current_balance = coordinator.get_balance().await;
     if current_balance < minimum_amount_required {
-        let diff = minimum_amount_required - current_balance;
+        let diff = minimum_amount_required.saturating_sub(current_balance);
         info!("Current balance {current_balance} on coordinator not enough, trying to get {diff} more through fedimint-cli");
         match try_get_notes_cli(&diff, 5).await {
             Ok(notes) => {

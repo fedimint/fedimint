@@ -113,7 +113,7 @@ impl ClientModule for DummyClientModule {
 
         match input_amount.cmp(&output_amount) {
             Ordering::Less => {
-                let missing_input_amount = output_amount - input_amount;
+                let missing_input_amount = output_amount.saturating_sub(input_amount);
 
                 // Check and subtract from our funds
                 let our_funds = get_funds(dbtx).await;
@@ -122,7 +122,7 @@ impl ClientModule for DummyClientModule {
                     return Err(format_err!("Insufficient funds"));
                 }
 
-                let updated = our_funds - missing_input_amount;
+                let updated = our_funds.saturating_sub(missing_input_amount);
 
                 dbtx.insert_entry(&DummyClientFundsKeyV1, &updated).await;
 
@@ -154,7 +154,7 @@ impl ClientModule for DummyClientModule {
                 ClientOutputBundle::new(vec![], vec![]),
             )),
             Ordering::Greater => {
-                let missing_output_amount = input_amount - output_amount;
+                let missing_output_amount = input_amount.saturating_sub(output_amount);
                 let output = ClientOutput {
                     output: DummyOutput {
                         amount: missing_output_amount,

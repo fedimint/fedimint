@@ -90,12 +90,9 @@ impl SendOperationMeta {
     /// Calculate the absolute fee paid to the gateway on success.
     pub fn gateway_fee(&self) -> Amount {
         match &self.invoice {
-            LightningInvoice::Bolt11(invoice) => {
-                self.contract.amount
-                    - Amount::from_msats(
-                        invoice.amount_milli_satoshis().expect("Invoice has amount"),
-                    )
-            }
+            LightningInvoice::Bolt11(invoice) => self.contract.amount.saturating_sub(
+                Amount::from_msats(invoice.amount_milli_satoshis().expect("Invoice has amount")),
+            ),
         }
     }
 }
@@ -114,7 +111,7 @@ impl ReceiveOperationMeta {
         match &self.invoice {
             LightningInvoice::Bolt11(invoice) => {
                 Amount::from_msats(invoice.amount_milli_satoshis().expect("Invoice has amount"))
-                    - self.contract.commitment.amount
+                    .saturating_sub(self.contract.commitment.amount)
             }
         }
     }
