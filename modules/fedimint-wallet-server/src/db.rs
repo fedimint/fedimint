@@ -27,6 +27,7 @@ pub enum DbKeyPrefix {
     ClaimedPegInOutpoint = 0x39,
     ConsensusVersionVote = 0x40,
     UnspentTxOut = 0x41,
+    ConsensusVersionVotingActivation = 0x42,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -240,3 +241,19 @@ impl_db_record!(
     db_prefix = DbKeyPrefix::UnspentTxOut,
 );
 impl_db_lookup!(key = UnspentTxOutKey, query_prefix = UnspentTxOutPrefix);
+
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct ConsensusVersionVotingActivationKey;
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct ConsensusVersionVotingActivationPrefix;
+
+impl_db_record!(
+    key = ConsensusVersionVotingActivationKey,
+    value = (),
+    db_prefix = DbKeyPrefix::ConsensusVersionVotingActivation,
+);
+impl_db_lookup!(
+    key = ConsensusVersionVotingActivationKey,
+    query_prefix = ConsensusVersionVotingActivationPrefix
+);

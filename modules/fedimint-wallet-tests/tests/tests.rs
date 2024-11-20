@@ -1041,7 +1041,8 @@ mod fedimint_migration_tests {
     use fedimint_wallet_server::db::{
         BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix,
         ClaimedPegInOutpointKey, ClaimedPegInOutpointPrefixKey, ConsensusVersionVoteKey,
-        ConsensusVersionVotePrefix, DbKeyPrefix, FeeRateVoteKey, FeeRateVotePrefix,
+        ConsensusVersionVotePrefix, ConsensusVersionVotingActivationKey,
+        ConsensusVersionVotingActivationPrefix, DbKeyPrefix, FeeRateVoteKey, FeeRateVotePrefix,
         PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix, PegOutNonceKey,
         PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
         PendingTransactionPrefixKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
@@ -1111,6 +1112,9 @@ mod fedimint_migration_tests {
         }];
 
         dbtx.insert_new_entry(&UnspentTxOutKey(utxo.0), &output[0])
+            .await;
+
+        dbtx.insert_new_entry(&ConsensusVersionVotingActivationKey, &())
             .await;
 
         let tx = Transaction {
@@ -1427,6 +1431,19 @@ mod fedimint_migration_tests {
                                 "validate_migrations was not able to read any utxos"
                             );
                             info!("Validated UnspendTxOut");
+                        }
+                        DbKeyPrefix::ConsensusVersionVotingActivation => {
+                            let activations = dbtx
+                                .find_by_prefix(&ConsensusVersionVotingActivationPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_activations = activations.len();
+                            ensure!(
+                                num_activations > 0,
+                                "validate_migrations was not able to read any version voting activation"
+                            );
+                            info!("Validated ConsensusVersionVotingActivation");
                         }
                     }
                 }

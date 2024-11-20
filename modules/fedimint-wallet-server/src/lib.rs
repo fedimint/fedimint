@@ -67,9 +67,9 @@ use fedimint_server::net::api::check_auth;
 pub use fedimint_wallet_common as common;
 use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
 use fedimint_wallet_common::endpoint_constants::{
-    BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT, BLOCK_COUNT_ENDPOINT,
-    BLOCK_COUNT_LOCAL_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT, PEG_OUT_FEES_ENDPOINT,
-    WALLET_SUMMARY_ENDPOINT,
+    ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT, BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT,
+    BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT,
+    PEG_OUT_FEES_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
 };
 use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
@@ -93,7 +93,8 @@ use tracing::{debug, info, instrument, trace, warn};
 use crate::db::{
     migrate_to_v1, BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix,
     ClaimedPegInOutpointKey, ClaimedPegInOutpointPrefixKey, ConsensusVersionVoteKey,
-    ConsensusVersionVotePrefix, DbKeyPrefix, FeeRateVoteKey, FeeRateVotePrefix,
+    ConsensusVersionVotePrefix, ConsensusVersionVotingActivationKey,
+    ConsensusVersionVotingActivationPrefix, DbKeyPrefix, FeeRateVoteKey, FeeRateVotePrefix,
     PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix, PegOutNonceKey, PegOutTxSignatureCI,
     PegOutTxSignatureCIPrefix, PendingTransactionKey, PendingTransactionPrefixKey, UTXOKey,
     UTXOPrefixKey, UnsignedTransactionKey, UnsignedTransactionPrefixKey, UnspentTxOutKey,
@@ -218,7 +219,6 @@ impl ModuleInit for WalletInit {
                         "Consensus Version Votes"
                     );
                 }
-
                 DbKeyPrefix::UnspentTxOut => {
                     push_db_pair_items!(
                         dbtx,
@@ -227,6 +227,16 @@ impl ModuleInit for WalletInit {
                         TxOut,
                         wallet,
                         "Consensus Version Votes"
+                    );
+                }
+                DbKeyPrefix::ConsensusVersionVotingActivation => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ConsensusVersionVotingActivationPrefix,
+                        ConsensusVersionVotingActivationKey,
+                        (),
+                        wallet,
+                        "Consensus Version Voting Activation Key"
                     );
                 }
             }
@@ -439,9 +449,16 @@ impl ServerModule for Wallet {
 
         items.push(WalletConsensusItem::Feerate(fee_rate_proposal));
 
-        items.push(WalletConsensusItem::ModuleConsensusVersion(
-            MODULE_CONSENSUS_VERSION,
-        ));
+        if dbtx
+            .get_value(&ConsensusVersionVotingActivationKey)
+            .await
+            .is_some()
+            || is_running_in_test_env()
+        {
+            items.push(WalletConsensusItem::ModuleConsensusVersion(
+                MODULE_CONSENSUS_VERSION,
+            ));
+        }
 
         items
     }
@@ -784,6 +801,22 @@ impl ServerModule for Wallet {
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, _params: ()| -> ModuleConsensusVersion {
                     Ok(module.consensus_module_consensus_version(&mut context.dbtx().into_nc()).await)
+                }
+            },
+            api_endpoint! {
+                ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT,
+                ApiVersion::new(0, 0),
+                async |_module: &Wallet, context, _params: ()| -> () {
+                    check_auth(context)?;
+
+                    let mut dbtx = context.dbtx();
+
+                    dbtx.insert_entry(&ConsensusVersionVotingActivationKey, &()).await;
+
+                    dbtx.commit_tx_result().await.map_err(|e| ApiError::server_error(e.to_string()))?;
+
+                    Ok(())
+
                 }
             },
             api_endpoint! {
