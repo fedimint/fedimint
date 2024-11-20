@@ -521,7 +521,7 @@
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 
-<span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>esplora_client::Txid;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::secp256k1::PublicKey;
@@ -635,9 +635,7 @@
                 // the gateway process and cannot be stopped independently.
                 </span><span class="macro">unimplemented!</span>(<span class="string">"LDK node termination not implemented"</span>)
             }
-            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
-                <span class="string">"Cannot stop an already stopped Lightning Node"
-            </span>)),
+            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">"Cannot stop an already stopped Lightning Node"</span>)),
         }
     }
 
@@ -883,7 +881,7 @@
             .ecash_balances
             .into_iter()
             .find(|info| info.federation_id == federation_id)
-            .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Gateway is not joined to federation"</span>))<span class="question-mark">?
+            .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Gateway is not joined to federation"</span>))<span class="question-mark">?
             </span>.ecash_balance_msats
             .msats;
         <span class="prelude-val">Ok</span>(ecash_balance)
@@ -1020,15 +1018,17 @@
             <span class="kw">let </span>info = <span class="self">self</span>.get_info().<span class="kw">await</span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
             <span class="kw">let </span>value = info.get(<span class="string">"block_height"</span>);
             <span class="kw">if let </span><span class="prelude-val">Some</span>(height) = value {
-                <span class="kw">let </span>block_height: u32 =
-                    serde_json::from_value(height.clone()).expect(<span class="string">"Could not parse block height"</span>);
+                <span class="kw">let </span>block_height: <span class="prelude-ty">Option</span>&lt;u32&gt; = serde_json::from_value(height.clone())
+                    .context(<span class="string">"Could not parse block height"</span>)
+                    .map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
+                <span class="kw">let </span><span class="prelude-val">Some</span>(block_height) = block_height <span class="kw">else </span>{
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">"Not synced any blocks yet"</span>)));
+                };
                 <span class="kw">if </span>block_height &gt;= target_block_height <span class="kw">as </span>u32 {
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                 }
             }
-            <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow::anyhow!</span>(
-                <span class="string">"Not synced to block"
-            </span>)))
+            <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">"Not synced to block"</span>)))
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
