@@ -76,7 +76,10 @@ jobs:
             scripts/ci/run-in-fs-dir-cache.sh upgrade-tests \
             env -u RUSTC_WRAPPER \
             env TEST_KINDS="$TEST_KINDS" \
-            FM_DEVIMINT_DISABLE_MODULE_LNV2=1 ./scripts/tests/upgrade-test.sh "$VERSIONS"
+            env FM_TEST_CI_ALL_JOBS=1 \
+            env FM_TEST_CI_ALL_DELAY=10 \
+            env FM_DEVIMINT_DISABLE_MODULE_LNV2=1 \
+            ./scripts/tests/upgrade-test.sh "$VERSIONS"
 
   notifications:
     if: always() && github.repository == 'fedimint/fedimint'
