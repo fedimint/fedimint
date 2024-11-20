@@ -407,7 +407,7 @@ async fn invite_code_or_fallback(invite_code: Option<InviteCode>) -> Option<Invi
         Some(invite_code)
     } else {
         // Try to get an invite code through cli in a best effort basis
-        match get_invite_code_cli().await {
+        match get_invite_code_cli(0.into()).await {
             Ok(invite_code) => Some(invite_code),
             Err(e) => {
                 info!("No invite code provided and failed to get one with '{e}' error, will try to proceed without one...");
