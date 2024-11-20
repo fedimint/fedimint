@@ -679,9 +679,19 @@ in
       packages = [ "fedimint-client-wasm" ];
     };
 
-    devimint = fedimintBuildPackageGroup {
+    devimint-pkgs = fedimintBuildPackageGroup {
       pname = "devimint";
       packages = [ "devimint" ];
+    };
+
+    devimint = flakeboxLib.pickBinary {
+      pkg = devimint-pkgs;
+      bin = "devimint";
+    };
+
+    devimint-faucet = flakeboxLib.pickBinary {
+      pkg = devimint-pkgs;
+      bin = "devimint-faucet";
     };
 
     fedimint-load-test-tool = fedimintBuildPackageGroup {
