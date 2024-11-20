@@ -13,7 +13,7 @@ use devimint::util::ProcessManager;
 use devimint::version_constants::{VERSION_0_3_0, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA};
 use devimint::{cmd, util, Gatewayd, LightningNode};
 use fedimint_core::config::FederationId;
-use fedimint_core::util::backoff_util::aggressive_backoff;
+use fedimint_core::util::backoff_util::aggressive_backoff_long;
 use fedimint_core::util::retry;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_testing::gateway::LightningNodeType;
@@ -623,7 +623,7 @@ async fn liquidity_test() -> anyhow::Result<()> {
 
             retry(
                 "Wait for balance update after sweeping all lightning funds",
-                aggressive_backoff(),
+                aggressive_backoff_long(),
                 || async {
                     let curr_lightning_balance = balances.lightning_balance_msats;
                     ensure!(curr_lightning_balance == 0, "Close channels did not sweep all lightning funds");
@@ -639,7 +639,7 @@ async fn liquidity_test() -> anyhow::Result<()> {
             gw.send_onchain(dev_fed.bitcoind().await?, BitcoinAmountOrAll::All, 10).await?;
             retry(
                 "Wait for balance update after sending on chain funds",
-                aggressive_backoff(),
+                aggressive_backoff_long(),
                 || async {
                     let curr_balance = gw.get_balances().await?.onchain_balance_sats;
                     ensure!(curr_balance == 0, "Gateway onchain balance did not match previous balance minus withdraw amount");
