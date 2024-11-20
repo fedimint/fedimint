@@ -240,7 +240,7 @@ impl ServerModule for Dummy {
 
         // Subtract funds from normal user, or print funds for the fed
         let updated_funds = if fed_public_key() == input.account {
-            current_funds + input.amount
+            current_funds.saturating_add(input.amount)
         } else if broken_fed_public_key() == input.account {
             // The printer is broken
             current_funds
@@ -269,7 +269,9 @@ impl ServerModule for Dummy {
     ) -> Result<TransactionItemAmount, DummyOutputError> {
         // Add output funds to the user's account
         let current_funds = dbtx.get_value(&DummyFundsKeyV1(output.account)).await;
-        let updated_funds = current_funds.unwrap_or(Amount::ZERO) + output.amount;
+        let updated_funds = current_funds
+            .unwrap_or(Amount::ZERO)
+            .saturating_add(output.amount);
         dbtx.insert_entry(&DummyFundsKeyV1(output.account), &updated_funds)
             .await;
 

@@ -436,7 +436,7 @@ async fn run_load_test(
     let db_path = get_db_path(&archive_dir);
     let (coordinator, invite_code) = get_coordinator_client(&db_path, &invite_code).await?;
     let minimum_notes = notes_per_user * users;
-    let minimum_amount_required = note_denomination * u64::from(minimum_notes);
+    let minimum_amount_required = note_denomination.saturating_mul(u64::from(minimum_notes));
 
     reissue_initial_notes(initial_notes, &coordinator, &event_sender).await?;
     get_required_notes(&coordinator, minimum_amount_required, &event_sender).await?;
@@ -746,7 +746,7 @@ async fn run_ln_circular_load_test(
     let db_path = get_db_path(&archive_dir);
     let (coordinator, invite_code) = get_coordinator_client(&db_path, &invite_code).await?;
     let minimum_notes = notes_per_user * users;
-    let minimum_amount_required = note_denomination * u64::from(minimum_notes);
+    let minimum_amount_required = note_denomination.saturating_mul(u64::from(minimum_notes));
 
     reissue_initial_notes(initial_notes, &coordinator, &event_sender).await?;
     get_required_notes(&coordinator, minimum_amount_required, &event_sender).await?;

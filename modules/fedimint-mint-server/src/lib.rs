@@ -550,10 +550,10 @@ impl ServerModule for Mint {
             .map(|(key, amount)| {
                 match key {
                     MintAuditItemKey::Issuance(_) | MintAuditItemKey::IssuanceTotal => {
-                        issuances += amount;
+                        issuances.saturating_add_to(amount);
                     }
                     MintAuditItemKey::Redemption(_) | MintAuditItemKey::RedemptionTotal => {
-                        redemptions += amount;
+                        redemptions.saturating_add_to(amount);
                     }
                 }
                 key

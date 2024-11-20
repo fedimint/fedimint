@@ -498,7 +498,7 @@ impl MintOutputStatesCreatedMulti {
                 )
                 .await;
 
-            amount_total += amount;
+            amount_total.saturating_add_to(amount);
             if let Some(note) = dbtx
                 .module_tx()
                 .insert_entry(

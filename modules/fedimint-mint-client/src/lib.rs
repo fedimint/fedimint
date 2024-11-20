@@ -423,8 +423,9 @@ impl OOBNotesV2 {
 
         Ok(OOBNotes::new_with_invite(notes, &self.mint.into_v1()?))
     }
+
     pub fn total_amount(&self) -> Amount {
-        self.notes.iter().map(|note| note.amount).sum()
+        Amount::saturating_sum(self.notes.iter().map(|note| note.amount))
     }
 
     pub fn encode_base64(&self) -> String {
@@ -762,26 +763,19 @@ impl ClientModule for MintClientModule {
     )> {
         let consolidation_inputs = self.consolidate_notes(dbtx).await?;
 
-        input_amount += consolidation_inputs
-            .iter()
-            .map(|input| input.0.amount)
-            .sum();
-
-        output_amount += consolidation_inputs
-            .iter()
-            .map(|input| self.cfg.fee_consensus.fee(input.0.amount))
-            .sum();
+        for input in &consolidation_inputs {
+            input_amount.saturating_add_to(input.0.amount);
+            output_amount.saturating_add_to(self.cfg.fee_consensus.fee(input.0.amount));
+        }
 
         let additional_inputs = self
             .create_sufficient_input(dbtx, output_amount.saturating_sub(input_amount))
             .await?;
 
-        input_amount += additional_inputs.iter().map(|input| input.0.amount).sum();
-
-        output_amount += additional_inputs
-            .iter()
-            .map(|input| self.cfg.fee_consensus.fee(input.0.amount))
-            .sum();
+        for input in &additional_inputs {
+            input_amount.saturating_add_to(input.0.amount);
+            output_amount.saturating_add_to(self.cfg.fee_consensus.fee(input.0.amount));
+        }
 
         let outputs = self
             .create_output(
@@ -1983,15 +1977,17 @@ async fn select_notes_from_stream<Note>(
             );
             previous_amount = Some(note_amount);
 
+            // Skip notes that are economically unspendable.
             if note_amount <= fee_consensus.fee(note_amount) {
                 continue;
             }
 
-            match note_amount.cmp(&(pending_amount + fee_consensus.fee(note_amount))) {
+            match note_amount.cmp(&(pending_amount.saturating_add(fee_consensus.fee(note_amount))))
+            {
                 Ordering::Less => {
                     // keep adding notes until we have enough
-                    pending_amount += fee_consensus.fee(note_amount);
-                    pending_amount -= note_amount;
+                    pending_amount.saturating_add_to(fee_consensus.fee(note_amount));
+                    pending_amount = pending_amount.saturating_sub(note_amount);
                     selected.push((note_amount, note));
                 }
                 Ordering::Greater => {
@@ -2006,15 +2002,10 @@ async fn select_notes_from_stream<Note>(
 
                     let notes: TieredMulti<Note> = selected.into_iter().collect();
 
-                    assert!(
-                        notes.total_amount().msats
-                            >= requested_amount.msats
-                                + notes
-                                    .iter()
-                                    .map(|note| fee_consensus.fee(note.0))
-                                    .sum::<Amount>()
-                                    .msats
-                    );
+                    let total_fee =
+                        Amount::saturating_sum(notes.iter().map(|note| fee_consensus.fee(note.0)));
+
+                    assert!(notes.total_amount() >= requested_amount.saturating_add(total_fee));
 
                     return Ok(notes);
                 }
@@ -2030,15 +2021,10 @@ async fn select_notes_from_stream<Note>(
 
                 let notes: TieredMulti<Note> = selected.into_iter().collect();
 
-                assert!(
-                    notes.total_amount().msats
-                        >= requested_amount.msats
-                            + notes
-                                .iter()
-                                .map(|note| fee_consensus.fee(note.0))
-                                .sum::<Amount>()
-                                .msats
-                );
+                let total_fee =
+                    Amount::saturating_sum(notes.iter().map(|note| fee_consensus.fee(note.0)));
+
+                assert!(notes.total_amount() >= requested_amount.saturating_add(total_fee));
 
                 // so now we have enough to cover the requested amount, return
                 return Ok(notes);
@@ -2335,23 +2321,33 @@ pub fn represent_amount<K>(
     for tier in tiers.tiers() {
         let notes = current_denominations.get(*tier);
         let missing_notes = u64::from(denomination_sets).saturating_sub(notes as u64);
-        let possible_notes = remaining_amount / (*tier + fee_consensus.fee(*tier));
+        let possible_notes = remaining_amount
+            .checked_div(tier.saturating_add(fee_consensus.fee(*tier)))
+            .unwrap();
 
         let add_notes = min(possible_notes, missing_notes);
         denominations.inc(*tier, add_notes as usize);
-        remaining_amount -= (*tier + fee_consensus.fee(*tier)) * add_notes;
+        remaining_amount = remaining_amount.saturating_sub(
+            tier.saturating_add(fee_consensus.fee(*tier))
+                .saturating_mul(add_notes),
+        );
     }
 
     // if there is a remaining amount, add denominations with a greedy algorithm
     for tier in tiers.tiers().rev() {
-        let res = remaining_amount / (*tier + fee_consensus.fee(*tier));
-        remaining_amount -= (*tier + fee_consensus.fee(*tier)) * res;
+        let res = remaining_amount
+            .checked_div(tier.saturating_add(fee_consensus.fee(*tier)))
+            .unwrap();
+        remaining_amount = remaining_amount.saturating_sub(
+            tier.saturating_add(fee_consensus.fee(*tier))
+                .saturating_mul(res),
+        );
         denominations.inc(*tier, res as usize);
     }
 
     let represented: u64 = denominations
         .iter()
-        .map(|(k, v)| (k + fee_consensus.fee(k)).msats * (v as u64))
+        .map(|(k, v)| (k.saturating_add(fee_consensus.fee(k))).msats * (v as u64))
         .sum();
 
     assert!(represented <= amount.msats);

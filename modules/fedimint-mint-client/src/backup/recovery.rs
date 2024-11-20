@@ -156,12 +156,9 @@ impl RecoveryFromHistory for MintRecovery {
     async fn finalize_dbtx(&self, dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {
         let finalized = self.state.clone().finalize();
 
-        let restored_amount = finalized
-            .unconfirmed_notes
-            .iter()
-            .map(|entry| entry.1)
-            .sum::<Amount>()
-            + finalized.spendable_notes.total_amount();
+        let restored_amount =
+            Amount::saturating_sum(finalized.unconfirmed_notes.iter().map(|entry| entry.1))
+                .saturating_add(finalized.spendable_notes.total_amount());
 
         info!(
             amount = %restored_amount,
@@ -448,7 +445,7 @@ impl MintRecoveryStateV0 {
         if let Some((_issuance_request, note_idx, amount)) =
             self.used_nonces.get(&output.blind_nonce.0.into())
         {
-            self.burned_total += *amount;
+            self.burned_total.saturating_add_to(*amount);
             warn!(
                 target: LOG_CLIENT_RECOVERY_MINT,
                 %note_idx,

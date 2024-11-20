@@ -85,7 +85,7 @@ impl State for DummyStateMachine {
 }
 
 async fn add_funds(amount: Amount, mut dbtx: DatabaseTransaction<'_>) {
-    let funds = get_funds(&mut dbtx).await + amount;
+    let funds = get_funds(&mut dbtx).await.saturating_add(amount);
     dbtx.insert_entry(&DummyClientFundsKeyV1, &funds).await;
 }
 

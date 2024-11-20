@@ -715,7 +715,7 @@ impl LightningClientModule {
         );
 
         let gateway_fee = gateway.fees.to_amount(&invoice_amount);
-        let contract_amount = invoice_amount + gateway_fee;
+        let contract_amount = invoice_amount.saturating_add(gateway_fee);
 
         let user_sk = Keypair::new(&self.secp, &mut rng);
 
