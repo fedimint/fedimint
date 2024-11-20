@@ -139,6 +139,7 @@ declare_vars! {
         FM_PORT_ELECTRS: u16 = port_alloc(1)?; env: "FM_PORT_ELECTRS";
         FM_PORT_ELECTRS_MONITORING: u16 = port_alloc(1)?; env: "FM_PORT_ELECTRS_MONITORING";
         FM_PORT_ESPLORA: u16 = port_alloc(1)?; env: "FM_PORT_ESPLORA";
+        FM_PORT_ESPLORA_MONITORING: u16 = port_alloc(1)?; env: "FM_PORT_ESPLORA_MONITORING";
         // 3 = p2p + api + metrics env: "// ";
         FM_PORT_FEDIMINTD_BASE: u16 = port_alloc((3 * fed_size).try_into().unwrap())?; env: "FM_PORT_FEDIMINTD_BASE";
         FM_PORT_GW_CLN: u16 = port_alloc(1)?; env: "FM_PORT_GW_CLN";
