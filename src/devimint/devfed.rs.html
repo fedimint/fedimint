@@ -443,10 +443,14 @@
 <a href="#442" id="442">442</a>
 <a href="#443" id="443">443</a>
 <a href="#444" id="444">444</a>
-<a href="#445" id="445">445</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::Deref <span class="kw">as _</span>;
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::Deref <span class="kw">as _</span>;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>fedimint_core::envs::{is_env_var_set, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV};
 <span class="kw">use </span>fedimint_core::runtime;
 <span class="kw">use </span>fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
@@ -667,7 +671,9 @@
                 </span><span class="kw">let </span>fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
                 <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
                 <span class="kw">if </span>gatewayd_version &gt;= <span class="kw-2">*</span>VERSION_0_5_0_ALPHA
-                    &amp;&amp; fedimintd_version &gt;= <span class="kw-2">*</span>VERSION_0_4_0_ALPHA
+                    &amp;&amp; fedimintd_version &gt;= <span class="kw-2">*</span>VERSION_0_5_0_ALPHA
+                    <span class="comment">// and lnv2 was not explicitly disabled
+                    </span>&amp;&amp; !is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV)
                 {
                     esplora.get_try().<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="prelude-val">Ok</span>(Arc::new(<span class="prelude-val">Some</span>(

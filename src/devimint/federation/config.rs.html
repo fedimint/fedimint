@@ -160,9 +160,17 @@
 <a href="#159" id="159">159</a>
 <a href="#160" id="160">160</a>
 <a href="#161" id="161">161</a>
-<a href="#162" id="162">162</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoincore_rpc::bitcoin::Network;
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoincore_rpc::bitcoin::Network;
 <span class="kw">use </span>fedimint_core::config::{EmptyGenParams, ServerModuleConfigGenParamsRegistry};
-<span class="kw">use </span>fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig, FM_USE_UNKNOWN_MODULE_ENV};
+<span class="kw">use </span>fedimint_core::envs::{
+    is_env_var_set, BitcoinRpcConfig, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV,
+    FM_USE_UNKNOWN_MODULE_ENV,
+};
 <span class="kw">use </span>fedimint_core::module::ServerModuleInit <span class="kw">as _</span>;
 <span class="kw">use </span>fedimint_ln_server::common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
@@ -181,7 +189,7 @@
 <span class="kw">use </span>fedimintd::envs::FM_DISABLE_META_MODULE_ENV;
 <span class="kw">use </span>legacy_types::{LegacyFeeConsensus, LegacyMintGenParams, LegacyMintGenParamsConsensus};
 
-<span class="kw">use </span><span class="kw">crate</span>::version_constants::{VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA};
+<span class="kw">use </span><span class="kw">crate</span>::version_constants::VERSION_0_5_0_ALPHA;
 
 <span class="doccomment">/// Duplicate default fedimint module setup
 </span><span class="kw">pub fn </span>attach_default_module_init_params(
@@ -240,9 +248,11 @@
         },
     );
 
-    <span class="comment">// TODO(support:v0.3): v0.4 introduced lnv2 modules, so we need to skip
+    <span class="comment">// TODO(support:v0.3): v0.5 introduced lnv2 modules, so we need to skip
     // attaching the module for old fedimintd versions
-    </span><span class="kw">if </span>fedimintd_version &gt;= <span class="kw-2">&amp;</span>VERSION_0_4_0_ALPHA {
+    </span><span class="kw">if </span>fedimintd_version &gt;= <span class="kw-2">&amp;</span>VERSION_0_5_0_ALPHA
+        &amp;&amp; !is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV)
+    {
         module_init_params.attach_config_gen_params(
             fedimint_lnv2_server::LightningInit::kind(),
             fedimint_lnv2_common::config::LightningGenParams {
