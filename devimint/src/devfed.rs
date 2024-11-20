@@ -2,6 +2,7 @@ use std::ops::Deref as _;
 use std::sync::Arc;
 
 use anyhow::Result;
+use fedimint_core::envs::{is_env_var_set, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV};
 use fedimint_core::runtime;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_logging::LOG_DEVIMINT;
@@ -222,7 +223,9 @@ impl DevJitFed {
                 let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
                 let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
                 if gatewayd_version >= *VERSION_0_5_0_ALPHA
-                    && fedimintd_version >= *VERSION_0_4_0_ALPHA
+                    && fedimintd_version >= *VERSION_0_5_0_ALPHA
+                    // and lnv2 was not explicitly disabled
+                    && !is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV)
                 {
                     esplora.get_try().await?;
                     Ok(Arc::new(Some(

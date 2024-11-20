@@ -6,6 +6,7 @@ use std::str::FromStr;
 use anyhow::{anyhow, Context, Result};
 use esplora_client::Txid;
 use fedimint_core::config::FederationId;
+use fedimint_core::envs::{is_env_var_set, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::BitcoinAmountOrAll;
@@ -21,7 +22,7 @@ use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
 use crate::util::{poll, Command, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
-use crate::version_constants::{VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA};
+use crate::version_constants::VERSION_0_5_0_ALPHA;
 use crate::{cmd, Lightningd};
 
 #[derive(Clone)]
@@ -62,10 +63,12 @@ impl Gatewayd {
             ),
             (FM_GATEWAY_API_ADDR_ENV.to_owned(), addr.clone()),
         ]);
-        // TODO(support:v0.4.0): Run the gateway in LNv1 mode only before v0.4.0 because
+        // TODO(support:v0.4.0): Run the gateway in LNv1 mode only before v0.5.0 because
         // that is the only module it supported.
         let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
-        if fedimintd_version < *VERSION_0_4_0_ALPHA {
+        if fedimintd_version < *VERSION_0_5_0_ALPHA
+            || is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV)
+        {
             gateway_env.insert(
                 FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV.to_owned(),
                 "LNv1".to_string(),
