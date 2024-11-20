@@ -26,15 +26,15 @@ use tracing::{error, info, instrument};
 use super::{
     BackupPayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
     CreateInvoiceForOperatorPayload, DepositAddressPayload, InfoPayload, LeaveFedPayload,
-    OpenChannelPayload, PayInvoiceForOperatorPayload, ReceiveEcashPayload, SendOnchainPayload,
-    SetConfigurationPayload, SpendEcashPayload, WithdrawPayload, ADDRESS_ENDPOINT, BACKUP_ENDPOINT,
-    CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
-    CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT,
-    GET_BALANCES_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT,
-    LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT,
-    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT, SEND_ONCHAIN_ENDPOINT,
-    SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, V1_API_ENDPOINT,
-    WITHDRAW_ENDPOINT,
+    OpenChannelPayload, PayInvoiceForOperatorPayload, PaymentLogPayload, ReceiveEcashPayload,
+    SendOnchainPayload, SetConfigurationPayload, SpendEcashPayload, WithdrawPayload,
+    ADDRESS_ENDPOINT, BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
+    CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, GATEWAY_INFO_ENDPOINT,
+    GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
+    LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT,
+    PAYMENT_LOG_ENDPOINT, PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT,
+    SEND_ONCHAIN_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
+    V1_API_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 use crate::error::{AdminGatewayError, PublicGatewayError};
 use crate::rpc::ConfigPayload;
@@ -206,6 +206,7 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
         .route(SPEND_ECASH_ENDPOINT, post(spend_ecash))
         .route(MNEMONIC_ENDPOINT, get(mnemonic))
         .route(STOP_ENDPOINT, get(stop))
+        .route(PAYMENT_LOG_ENDPOINT, post(payment_log))
         .layer(middleware::from_fn(auth_middleware));
 
     // Routes that are un-authenticated before gateway configuration, then become
@@ -475,4 +476,13 @@ async fn stop(
 ) -> Result<impl IntoResponse, AdminGatewayError> {
     gateway.handle_shutdown_msg(task_group).await?;
     Ok(Json(json!(())))
+}
+
+#[instrument(skip_all, err)]
+async fn payment_log(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<PaymentLogPayload>,
+) -> Result<impl IntoResponse, AdminGatewayError> {
+    let payment_log = gateway.handle_payment_log_msg(payload).await?;
+    Ok(Json(json!(payment_log)))
 }

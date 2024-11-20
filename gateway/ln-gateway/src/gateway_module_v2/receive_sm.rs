@@ -23,6 +23,7 @@ use fedimint_lnv2_common::{
 use tpe::{aggregate_decryption_shares, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare};
 use tracing::{error, trace};
 
+use crate::events::IncomingPaymentSucceeded;
 use crate::gateway_module_v2::GatewayClientContextV2;
 
 const RETRY_DELAY: Duration = Duration::from_secs(1);
@@ -103,6 +104,7 @@ impl State for ReceiveStateMachine {
     ) -> Vec<StateTransition<Self>> {
         let gc = global_context.clone();
         let tpe_agg_pk = context.tpe_agg_pk;
+        let gateway_context = context.clone();
 
         match &self.state {
             ReceiveSMState::Funding => {
@@ -133,6 +135,7 @@ impl State for ReceiveStateMachine {
                                 old_state,
                                 gc.clone(),
                                 tpe_agg_pk,
+                                gateway_context.clone(),
                             ))
                         },
                     ),
@@ -229,6 +232,7 @@ impl ReceiveStateMachine {
         old_state: ReceiveStateMachine,
         global_context: DynGlobalClientContext,
         tpe_agg_pk: AggregatePublicKey,
+        client_ctx: GatewayClientContextV2,
     ) -> ReceiveStateMachine {
         let decryption_shares = decryption_shares
             .into_iter()
@@ -252,6 +256,16 @@ impl ReceiveStateMachine {
             .contract
             .decrypt_preimage(&agg_decryption_key)
         {
+            client_ctx
+                .module
+                .client_ctx
+                .log_event(
+                    &mut dbtx.module_tx(),
+                    IncomingPaymentSucceeded {
+                        payment_hash: old_state.common.contract.commitment.payment_image.clone(),
+                    },
+                )
+                .await;
             return old_state.update(ReceiveSMState::Success(preimage));
         }
 

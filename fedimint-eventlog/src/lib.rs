@@ -97,6 +97,14 @@ impl EventLogId {
     fn saturating_add(self, rhs: u64) -> EventLogId {
         Self(self.0.saturating_add(rhs))
     }
+
+    pub fn saturating_sub(self, rhs: u64) -> EventLogId {
+        Self(self.0.saturating_sub(rhs))
+    }
+
+    pub fn new(log: u64) -> Self {
+        Self(log)
+    }
 }
 
 impl FromStr for EventLogId {

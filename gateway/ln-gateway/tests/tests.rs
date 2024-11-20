@@ -16,11 +16,13 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::sleep_in_test;
-use fedimint_core::util::NextOrPending;
+use fedimint_core::time::now;
+use fedimint_core::util::{backoff_util, retry, NextOrPending};
 use fedimint_core::{msats, sats, secp256k1, Amount, OutPoint, TransactionId};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
+use fedimint_eventlog::Event;
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_client::{
@@ -34,7 +36,7 @@ use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{EncryptedPreimage, FundedContract, Preimage, PreimageKey};
 use fedimint_ln_common::{LightningGateway, LightningInput, LightningOutput, PrunedInvoice};
 use fedimint_ln_server::LightningInit;
-use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
+use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
 use fedimint_logging::LOG_TEST;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::db::BYTE_33;
@@ -44,10 +46,15 @@ use fedimint_testing::ln::FakeLightningTest;
 use fedimint_unknown_common::config::UnknownGenParams;
 use fedimint_unknown_server::UnknownInit;
 use futures::Future;
+use itertools::Itertools;
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use ln_gateway::config::LightningModuleMode;
+use ln_gateway::events::{
+    CompleteLightningPaymentSucceeded, IncomingPaymentStarted, IncomingPaymentSucceeded,
+    OutgoingPaymentStarted, OutgoingPaymentSucceeded,
+};
 use ln_gateway::gateway_module_v2::{FinalReceiveState, GatewayClientModuleV2};
-use ln_gateway::rpc::{FederationRoutingFees, SetConfigurationPayload};
+use ln_gateway::rpc::{FederationRoutingFees, PaymentLogPayload, SetConfigurationPayload};
 use ln_gateway::state_machine::pay::{
     OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
 };
@@ -997,7 +1004,7 @@ async fn lnv2_incoming_contract_with_invalid_preimage_is_refunded() -> anyhow::R
     assert_eq!(
         client
             .get_first_module::<GatewayClientModuleV2>()?
-            .relay_direct_swap(contract)
+            .relay_direct_swap(contract, 900)
             .await?,
         FinalReceiveState::Refunded
     );
@@ -1041,7 +1048,7 @@ async fn lnv2_expired_incoming_contract_is_rejected() -> anyhow::Result<()> {
     assert_eq!(
         client
             .get_first_module::<GatewayClientModuleV2>()?
-            .relay_direct_swap(contract)
+            .relay_direct_swap(contract, 900)
             .await?,
         FinalReceiveState::Rejected
     );
@@ -1085,7 +1092,7 @@ async fn lnv2_malleated_incoming_contract_is_rejected() -> anyhow::Result<()> {
     assert_eq!(
         client
             .get_first_module::<GatewayClientModuleV2>()?
-            .relay_direct_swap(contract.clone())
+            .relay_direct_swap(contract.clone(), 900)
             .await?,
         FinalReceiveState::Success([0; 32])
     );
@@ -1097,10 +1104,182 @@ async fn lnv2_malleated_incoming_contract_is_rejected() -> anyhow::Result<()> {
     assert_eq!(
         client
             .get_first_module::<GatewayClientModuleV2>()?
-            .relay_direct_swap(contract)
+            .relay_direct_swap(contract, 900)
             .await?,
         FinalReceiveState::Rejected
     );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gateway_read_payment_log() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed1 = fixtures.new_default_fed().await;
+    let fed2 = fixtures.new_default_fed().await;
+    let gateway = fixtures.new_gateway(LightningModuleMode::LNv2).await;
+    fed1.connect_gateway(&gateway).await;
+    fed2.connect_gateway(&gateway).await;
+    let client1 = gateway.select_client(fed1.id()).await?.into_value();
+    let mut dbtx = client1.db().begin_transaction().await;
+    for _ in 0..10 {
+        let mut fed1_module_dbtx = dbtx.to_ref_with_prefix_module_id(3).0.into_nc();
+        let fed1_lnv2 = client1.get_first_module::<GatewayClientModuleV2>()?;
+        let outgoing_payment_event = OutgoingPaymentStarted {
+            outgoing_contract: OutgoingContract {
+                payment_image: PaymentImage::Hash([0_u8; 32].consensus_hash()),
+                amount: Amount::from_msats(120000),
+                expiration: 120,
+                claim_pk: Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+                refund_pk: fed1_lnv2.keypair.public_key(),
+                ephemeral_pk: Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng())
+                    .public_key(),
+            },
+            min_contract_amount: Amount::from_msats(120000),
+            invoice_amount: Amount::from_msats(10000),
+            operation_start: now(),
+            max_delay: 100,
+        };
+        fed1_lnv2
+            .client_ctx
+            .log_event(&mut fed1_module_dbtx, outgoing_payment_event)
+            .await;
+
+        fed1_lnv2
+            .client_ctx
+            .log_event(
+                &mut fed1_module_dbtx,
+                OutgoingPaymentSucceeded {
+                    target_federation: Some(fed2.id()),
+                },
+            )
+            .await;
+    }
+
+    dbtx.commit_tx().await;
+
+    let client2 = gateway.select_client(fed2.id()).await?.into_value();
+    let mut dbtx = client2.db().begin_transaction().await;
+    {
+        let fed2_lnv2 = client2.get_first_module::<GatewayClientModuleV2>()?;
+        let mut fed2_module_dbtx = dbtx.to_ref_with_prefix_module_id(3).0.into_nc();
+
+        let contract = IncomingContract::new(
+            fed2_lnv2.cfg.tpe_agg_pk,
+            [42; 32],
+            [0; 32],
+            PaymentImage::Hash([0_u8; 32].consensus_hash()),
+            Amount::from_sats(1000),
+            u64::MAX,
+            Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+            fed2_lnv2.keypair.public_key(),
+            Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+        );
+
+        let incoming_payment_event = IncomingPaymentStarted {
+            incoming_contract_commitment: contract.commitment,
+            invoice_amount: Amount::from_msats(1200),
+            operation_start: now(),
+        };
+        fed2_lnv2
+            .client_ctx
+            .log_event(&mut fed2_module_dbtx, incoming_payment_event)
+            .await;
+
+        fed2_lnv2
+            .client_ctx
+            .log_event(
+                &mut fed2_module_dbtx,
+                IncomingPaymentSucceeded {
+                    payment_hash: PaymentImage::Hash([0_u8; 32].consensus_hash()),
+                },
+            )
+            .await;
+
+        let complete_payment_event = CompleteLightningPaymentSucceeded {
+            payment_hash: PaymentImage::Hash([0_u8; 32].consensus_hash()),
+        };
+        fed2_lnv2
+            .client_ctx
+            .log_event(&mut fed2_module_dbtx, complete_payment_event)
+            .await;
+    }
+
+    dbtx.commit_tx().await;
+
+    // Inserting log entries is async so we need to retry until they are available
+    retry(
+        "Get all transactions",
+        backoff_util::custom_backoff(Duration::ZERO, Duration::ZERO, Some(10)),
+        || async {
+            // There are 10 transactions and 2 events per transaction, so verify that all 20
+            // events are returned
+            let transactions = gateway
+                .handle_payment_log_msg(PaymentLogPayload {
+                    end_position: None,
+                    pagination_size: 20,
+                    federation_id: fed1.id(),
+                    event_kinds: vec![],
+                })
+                .await?;
+            if transactions.0.len() == 20 {
+                Ok(())
+            } else {
+                Err(anyhow::anyhow!("Invalid number of transactions"))
+            }
+        },
+    )
+    .await?;
+
+    // Verify the pagination API works (query 10 events at a time)
+    let transactions = gateway
+        .handle_payment_log_msg(PaymentLogPayload {
+            end_position: None,
+            pagination_size: 10,
+            federation_id: fed1.id(),
+            event_kinds: vec![],
+        })
+        .await?;
+    assert_eq!(transactions.0.len(), 10);
+
+    // Verify transactions are in descending order
+    assert!(transactions
+        .0
+        .iter()
+        .tuple_windows()
+        .all(|(e1, e2)| e1.3 > e2.3));
+
+    // Verify that we retrieve the rest of the events
+    let start_event = transactions
+        .0
+        .last()
+        .expect("no transactions")
+        .0
+        .saturating_sub(1);
+
+    let transactions = gateway
+        .handle_payment_log_msg(PaymentLogPayload {
+            end_position: Some(start_event),
+            pagination_size: 20,
+            federation_id: fed1.id(),
+            event_kinds: vec![],
+        })
+        .await?;
+    assert_eq!(transactions.0.len(), 10);
+
+    // Verify filtering by `EventKind` works
+    let transactions = gateway
+        .handle_payment_log_msg(PaymentLogPayload {
+            end_position: None,
+            pagination_size: 20,
+            federation_id: fed2.id(),
+            event_kinds: vec![
+                IncomingPaymentSucceeded::KIND,
+                CompleteLightningPaymentSucceeded::KIND,
+            ],
+        })
+        .await?;
+    assert_eq!(transactions.0.len(), 2);
 
     Ok(())
 }

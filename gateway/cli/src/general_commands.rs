@@ -2,9 +2,10 @@ use anyhow::bail;
 use clap::Subcommand;
 use fedimint_core::config::FederationId;
 use fedimint_core::fedimint_build_code_version_env;
+use fedimint_eventlog::{EventKind, EventLogId};
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
-    ConfigPayload, ConnectFedPayload, FederationRoutingFees, LeaveFedPayload,
+    ConfigPayload, ConnectFedPayload, FederationRoutingFees, LeaveFedPayload, PaymentLogPayload,
     SetConfigurationPayload,
 };
 
@@ -93,6 +94,20 @@ pub enum GeneralCommands {
     },
     /// Safely stop the gateway
     Stop,
+    /// List the transactions that the gateway has processed
+    PaymentLog {
+        #[clap(long)]
+        end_position: Option<EventLogId>,
+
+        #[clap(long, default_value_t = 25)]
+        pagination_size: usize,
+
+        #[clap(long)]
+        federation_id: FederationId,
+
+        #[clap(long)]
+        event_kinds: Vec<EventKind>,
+    },
 }
 
 impl GeneralCommands {
@@ -177,6 +192,22 @@ impl GeneralCommands {
             }
             Self::Stop => {
                 create_client().stop().await?;
+            }
+            Self::PaymentLog {
+                end_position,
+                pagination_size,
+                federation_id,
+                event_kinds,
+            } => {
+                let payment_log = create_client()
+                    .payment_log(PaymentLogPayload {
+                        end_position,
+                        pagination_size,
+                        federation_id,
+                        event_kinds,
+                    })
+                    .await?;
+                print_response(payment_log);
             }
         }
 

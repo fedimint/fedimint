@@ -2585,6 +2585,7 @@ dependencies = [
  "clap_complete",
  "fedimint-build",
  "fedimint-core",
+ "fedimint-eventlog",
  "fedimint-ln-gateway",
  "fedimint-logging",
  "fedimint-mint-client",
@@ -2675,6 +2676,7 @@ dependencies = [
  "fedimint-dummy-client",
  "fedimint-dummy-common",
  "fedimint-dummy-server",
+ "fedimint-eventlog",
  "fedimint-ln-client",
  "fedimint-ln-common",
  "fedimint-ln-server",
@@ -2693,6 +2695,7 @@ dependencies = [
  "futures",
  "futures-util",
  "hex",
+ "itertools 0.13.0",
  "jemallocator",
  "ldk-node",
  "lightning",
@@ -2703,6 +2706,7 @@ dependencies = [
  "reqwest 0.12.9",
  "serde",
  "serde_json",
+ "serde_millis",
  "strum 0.26.3",
  "strum_macros 0.26.4",
  "thiserror",
@@ -6887,6 +6891,15 @@ dependencies = [
  "itoa",
  "memchr",
  "ryu",
+ "serde",
+]
+
+[[package]]
+name = "serde_millis"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6e2dc780ca5ee2c369d1d01d100270203c4ff923d2a4264812d723766434d00"
+dependencies = [
  "serde",
 ]
 

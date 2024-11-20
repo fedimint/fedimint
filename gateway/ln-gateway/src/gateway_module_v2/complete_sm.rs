@@ -1,15 +1,17 @@
 use std::fmt;
 use std::time::Duration;
 
-use fedimint_client::sm::{State, StateTransition};
+use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_ln_common::contracts::Preimage;
+use fedimint_lnv2_common::contracts::PaymentImage;
 use tracing::warn;
 
 use super::FinalReceiveState;
+use crate::events::CompleteLightningPaymentSucceeded;
 use crate::gateway_module_v2::GatewayClientContextV2;
 use crate::lightning::{InterceptPaymentResponse, PaymentAction};
 
@@ -84,6 +86,7 @@ impl State for CompleteStateMachine {
         context: &Self::ModuleContext,
         _global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
+        let gateway_context = context.clone();
         match &self.state {
             CompleteSMState::Pending => vec![StateTransition::new(
                 Self::await_receive(context.clone(), self.common.operation_id),
@@ -93,13 +96,19 @@ impl State for CompleteStateMachine {
             )],
             CompleteSMState::Completing(finale_receive_state) => vec![StateTransition::new(
                 Self::await_completion(
-                    context.clone(),
+                    gateway_context.clone(),
                     self.common.payment_hash,
                     finale_receive_state.clone(),
                     self.common.incoming_chan_id,
                     self.common.htlc_id,
                 ),
-                |_, (), old_state| Box::pin(async move { Self::transition_completion(&old_state) }),
+                move |dbtx, (), old_state| {
+                    Box::pin(Self::transition_completion(
+                        old_state,
+                        dbtx,
+                        gateway_context.clone(),
+                    ))
+                },
             )],
             CompleteSMState::Completed => Vec::new(),
         }
@@ -168,7 +177,21 @@ impl CompleteStateMachine {
         }
     }
 
-    fn transition_completion(old_state: &CompleteStateMachine) -> CompleteStateMachine {
+    async fn transition_completion(
+        old_state: CompleteStateMachine,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        client_ctx: GatewayClientContextV2,
+    ) -> CompleteStateMachine {
+        client_ctx
+            .module
+            .client_ctx
+            .log_event(
+                &mut dbtx.module_tx(),
+                CompleteLightningPaymentSucceeded {
+                    payment_hash: PaymentImage::Hash(old_state.common.payment_hash),
+                },
+            )
+            .await;
         old_state.update(CompleteSMState::Completed)
     }
 }

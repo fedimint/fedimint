@@ -45,6 +45,7 @@ fedimint-api-client = { path = "../../fedimint-api-client", version = "=0.6.0-al
 fedimint-bip39 = { version = "=0.6.0-alpha", path = "../../fedimint-bip39" }
 fedimint-client = { path = "../../fedimint-client", version = "=0.6.0-alpha", default-features = false }
 fedimint-core = { workspace = true }
+fedimint-eventlog = { workspace = true }
 fedimint-ln-client = { workspace = true }
 fedimint-ln-common = { workspace = true }
 fedimint-lnv2-client = { workspace = true }
@@ -65,6 +66,7 @@ rand = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_millis = "0.1.1"
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
@@ -87,6 +89,7 @@ fedimint-lnv2-server = { workspace = true }
 fedimint-testing = { workspace = true }
 fedimint-unknown-common = { workspace = true }
 fedimint-unknown-server = { workspace = true }
+itertools = { workspace = true }
 
 [build-dependencies]
 fedimint-build = { workspace = true }

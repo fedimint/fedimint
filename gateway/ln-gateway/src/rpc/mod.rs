@@ -7,8 +7,9 @@ use std::str::FromStr;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Network};
 use fedimint_core::config::{FederationId, JsonClientConfig};
-use fedimint_core::core::OperationId;
+use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
+use fedimint_eventlog::{EventKind, EventLogId};
 use fedimint_ln_common::config::parse_routing_fees;
 use fedimint_mint_client::OOBNotes;
 use fedimint_wallet_client::PegOutFees;
@@ -35,12 +36,21 @@ pub const MNEMONIC_ENDPOINT: &str = "/mnemonic";
 pub const OPEN_CHANNEL_ENDPOINT: &str = "/open_channel";
 pub const CLOSE_CHANNELS_WITH_PEER_ENDPOINT: &str = "/close_channels_with_peer";
 pub const PAY_INVOICE_FOR_OPERATOR_ENDPOINT: &str = "/pay_invoice_for_operator";
+pub const PAYMENT_LOG_ENDPOINT: &str = "/payment_log";
 pub const RECEIVE_ECASH_ENDPOINT: &str = "/receive_ecash";
 pub const SET_CONFIGURATION_ENDPOINT: &str = "/set_configuration";
 pub const STOP_ENDPOINT: &str = "/stop";
 pub const SEND_ONCHAIN_ENDPOINT: &str = "/send_onchain";
 pub const SPEND_ECASH_ENDPOINT: &str = "/spend_ecash";
 pub const WITHDRAW_ENDPOINT: &str = "/withdraw";
+
+type GatewayTransactionEvent = (
+    EventLogId,
+    EventKind,
+    Option<(ModuleKind, ModuleInstanceId)>,
+    u64,
+    serde_json::Value,
+);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConnectFedPayload {
@@ -270,3 +280,19 @@ pub struct MnemonicResponse {
     // a separate database from the gateway's db.
     pub legacy_federations: Vec<FederationId>,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PaymentLogPayload {
+    // The position in the log to stop querying. No events will be returned from after
+    // this `EventLogId`. If it is `None`, the last `EventLogId` is used.
+    pub end_position: Option<EventLogId>,
+
+    // The number of events to return
+    pub pagination_size: usize,
+
+    pub federation_id: FederationId,
+    pub event_kinds: Vec<EventKind>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PaymentLogResponse(pub Vec<GatewayTransactionEvent>);
