@@ -21,7 +21,7 @@ use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
 use crate::util::{poll, Command, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
-use crate::version_constants::{VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA};
+use crate::version_constants::VERSION_0_5_0_ALPHA;
 use crate::{cmd, Lightningd};
 
 #[derive(Clone)]
@@ -62,10 +62,10 @@ impl Gatewayd {
             ),
             (FM_GATEWAY_API_ADDR_ENV.to_owned(), addr.clone()),
         ]);
-        // TODO(support:v0.4.0): Run the gateway in LNv1 mode only before v0.4.0 because
+        // TODO(support:v0.4.0): Run the gateway in LNv1 mode only before v0.5.0 because
         // that is the only module it supported.
         let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
-        if fedimintd_version < *VERSION_0_4_0_ALPHA {
+        if fedimintd_version < *VERSION_0_5_0_ALPHA {
             gateway_env.insert(
                 FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV.to_owned(),
                 "LNv1".to_string(),

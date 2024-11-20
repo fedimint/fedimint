@@ -222,7 +222,7 @@ impl DevJitFed {
                 let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
                 let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
                 if gatewayd_version >= *VERSION_0_5_0_ALPHA
-                    && fedimintd_version >= *VERSION_0_4_0_ALPHA
+                    && fedimintd_version >= *VERSION_0_5_0_ALPHA
                 {
                     esplora.get_try().await?;
                     Ok(Arc::new(Some(
