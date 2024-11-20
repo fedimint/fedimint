@@ -1,6 +1,9 @@
 use bitcoincore_rpc::bitcoin::Network;
 use fedimint_core::config::{EmptyGenParams, ServerModuleConfigGenParamsRegistry};
-use fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig, FM_USE_UNKNOWN_MODULE_ENV};
+use fedimint_core::envs::{
+    is_env_var_set, BitcoinRpcConfig, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV,
+    FM_USE_UNKNOWN_MODULE_ENV,
+};
 use fedimint_core::module::ServerModuleInit as _;
 use fedimint_ln_server::common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
@@ -80,7 +83,9 @@ pub fn attach_default_module_init_params(
 
     // TODO(support:v0.3): v0.4 introduced lnv2 modules, so we need to skip
     // attaching the module for old fedimintd versions
-    if fedimintd_version >= &VERSION_0_4_0_ALPHA {
+    if fedimintd_version >= &VERSION_0_4_0_ALPHA
+        && !is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV)
+    {
         module_init_params.attach_config_gen_params(
             fedimint_lnv2_server::LightningInit::kind(),
             fedimint_lnv2_common::config::LightningGenParams {

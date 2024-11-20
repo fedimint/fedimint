@@ -13,6 +13,10 @@ use tracing::warn;
 pub const FM_USE_UNKNOWN_MODULE_ENV: &str = "FM_USE_UNKNOWN_MODULE";
 
 pub const FM_ENABLE_MODULE_LNV2_ENV: &str = "FM_ENABLE_MODULE_LNV2";
+/// In certain devimint cases (e.g. upgrade tests), we'd like to test things
+/// without enabling lnv2. This should make deviming stop setting
+/// `FM_ENABLE_MODULE_LNV2_ENV`
+pub const FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV: &str = "FM_DEVIMINT_DISABLE_MODULE_LNV2";
 
 /// Check if env variable is set and not equal `0` or `false` which are common
 /// ways to disable something.
