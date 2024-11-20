@@ -31,7 +31,7 @@ use bitcoin::address::NetworkUnchecked;
 use bitcoin::secp256k1::{All, Secp256k1, SECP256K1};
 use bitcoin::{Address, Network, ScriptBuf};
 use client_db::{DbKeyPrefix, PegInTweakIndexKey, TweakIdx};
-use fedimint_api_client::api::DynModuleApi;
+use fedimint_api_client::api::{DynModuleApi, FederationResult};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 use fedimint_client::module::init::{
@@ -52,7 +52,8 @@ use fedimint_core::db::{
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::{
-    ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
+    ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleConsensusVersion, ModuleInit,
+    MultiApiVersion,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::util::backoff_util::background_backoff;
@@ -625,6 +626,10 @@ impl WalletClientModule {
                 state_machines: Arc::new(sm_gen),
             }],
         ))
+    }
+
+    pub async fn btc_tx_has_no_size_limit(&self) -> FederationResult<bool> {
+        Ok(self.module_api.module_consensus_version().await? >= ModuleConsensusVersion::new(2, 2))
     }
 
     /// Allocates a deposit address that is controlled by the federation.

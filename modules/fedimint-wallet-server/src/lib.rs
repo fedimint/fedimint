@@ -68,7 +68,8 @@ pub use fedimint_wallet_common as common;
 use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
 use fedimint_wallet_common::endpoint_constants::{
     BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT, BLOCK_COUNT_ENDPOINT,
-    BLOCK_COUNT_LOCAL_ENDPOINT, PEG_OUT_FEES_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
+    BLOCK_COUNT_LOCAL_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT, PEG_OUT_FEES_ENDPOINT,
+    WALLET_SUMMARY_ENDPOINT,
 };
 use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
@@ -778,6 +779,13 @@ impl ServerModule for Wallet {
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
+            api_endpoint! {
+                MODULE_CONSENSUS_VERSION_ENDPOINT,
+                ApiVersion::new(0, 0),
+                async |module: &Wallet, context, _params: ()| -> ModuleConsensusVersion {
+                    Ok(module.consensus_module_consensus_version(&mut context.dbtx().into_nc()).await)
+                }
+            },
             api_endpoint! {
                 BLOCK_COUNT_ENDPOINT,
                 ApiVersion::new(0, 0),
