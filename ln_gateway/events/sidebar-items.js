@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ALL_GATEWAY_EVENTS","GATEWAY_KIND"],"struct":["CompleteLightningPaymentSucceeded","IncomingPaymentStarted","IncomingPaymentSucceeded","OutgoingPaymentStarted","OutgoingPaymentSucceeded"]};

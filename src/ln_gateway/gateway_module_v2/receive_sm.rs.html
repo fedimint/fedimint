@@ -277,7 +277,21 @@
 <a href="#276" id="276">276</a>
 <a href="#277" id="277">277</a>
 <a href="#278" id="278">278</a>
-<a href="#279" id="279">279</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::future::pending;
 <span class="kw">use </span>std::time::Duration;
@@ -302,6 +316,7 @@
 <span class="kw">use </span>tpe::{aggregate_decryption_shares, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare};
 <span class="kw">use </span>tracing::{error, trace};
 
+<span class="kw">use </span><span class="kw">crate</span>::events::IncomingPaymentSucceeded;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::GatewayClientContextV2;
 
 <span class="kw">const </span>RETRY_DELAY: Duration = Duration::from_secs(<span class="number">1</span>);
@@ -382,6 +397,7 @@
     ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">let </span>gc = global_context.clone();
         <span class="kw">let </span>tpe_agg_pk = context.tpe_agg_pk;
+        <span class="kw">let </span>gateway_context = context.clone();
 
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.state {
             ReceiveSMState::Funding =&gt; {
@@ -412,6 +428,7 @@
                                 old_state,
                                 gc.clone(),
                                 tpe_agg_pk,
+                                gateway_context.clone(),
                             ))
                         },
                     ),
@@ -508,6 +525,7 @@
         old_state: ReceiveStateMachine,
         global_context: DynGlobalClientContext,
         tpe_agg_pk: AggregatePublicKey,
+        client_ctx: GatewayClientContextV2,
     ) -&gt; ReceiveStateMachine {
         <span class="kw">let </span>decryption_shares = decryption_shares
             .into_iter()
@@ -531,6 +549,16 @@
             .contract
             .decrypt_preimage(<span class="kw-2">&amp;</span>agg_decryption_key)
         {
+            client_ctx
+                .module
+                .client_ctx
+                .log_event(
+                    <span class="kw-2">&amp;mut </span>dbtx.module_tx(),
+                    IncomingPaymentSucceeded {
+                        payment_hash: old_state.common.contract.commitment.payment_image.clone(),
+                    },
+                )
+                .<span class="kw">await</span>;
             <span class="kw">return </span>old_state.update(ReceiveSMState::Success(preimage));
         }
 

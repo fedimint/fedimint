@@ -172,18 +172,43 @@
 <a href="#171" id="171">171</a>
 <a href="#172" id="172">172</a>
 <a href="#173" id="173">173</a>
-<a href="#174" id="174">174</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>fedimint_client::sm::{State, StateTransition};
+<span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
+<span class="kw">use </span>fedimint_lnv2_common::contracts::PaymentImage;
 <span class="kw">use </span>tracing::warn;
 
 <span class="kw">use </span><span class="kw">super</span>::FinalReceiveState;
+<span class="kw">use </span><span class="kw">crate</span>::events::CompleteLightningPaymentSucceeded;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::GatewayClientContextV2;
 <span class="kw">use </span><span class="kw">crate</span>::lightning::{InterceptPaymentResponse, PaymentAction};
 
@@ -258,6 +283,7 @@
         context: <span class="kw-2">&amp;</span><span class="self">Self</span>::ModuleContext,
         _global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
+        <span class="kw">let </span>gateway_context = context.clone();
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.state {
             CompleteSMState::Pending =&gt; <span class="macro">vec!</span>[StateTransition::new(
                 <span class="self">Self</span>::await_receive(context.clone(), <span class="self">self</span>.common.operation_id),
@@ -267,13 +293,19 @@
             )],
             CompleteSMState::Completing(finale_receive_state) =&gt; <span class="macro">vec!</span>[StateTransition::new(
                 <span class="self">Self</span>::await_completion(
-                    context.clone(),
+                    gateway_context.clone(),
                     <span class="self">self</span>.common.payment_hash,
                     finale_receive_state.clone(),
                     <span class="self">self</span>.common.incoming_chan_id,
                     <span class="self">self</span>.common.htlc_id,
                 ),
-                |<span class="kw">_</span>, (), old_state| Box::pin(<span class="kw">async move </span>{ <span class="self">Self</span>::transition_completion(<span class="kw-2">&amp;</span>old_state) }),
+                <span class="kw">move </span>|dbtx, (), old_state| {
+                    Box::pin(<span class="self">Self</span>::transition_completion(
+                        old_state,
+                        dbtx,
+                        gateway_context.clone(),
+                    ))
+                },
             )],
             CompleteSMState::Completed =&gt; Vec::new(),
         }
@@ -342,7 +374,21 @@
         }
     }
 
-    <span class="kw">fn </span>transition_completion(old_state: <span class="kw-2">&amp;</span>CompleteStateMachine) -&gt; CompleteStateMachine {
+    <span class="kw">async fn </span>transition_completion(
+        old_state: CompleteStateMachine,
+        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
+        client_ctx: GatewayClientContextV2,
+    ) -&gt; CompleteStateMachine {
+        client_ctx
+            .module
+            .client_ctx
+            .log_event(
+                <span class="kw-2">&amp;mut </span>dbtx.module_tx(),
+                CompleteLightningPaymentSucceeded {
+                    payment_hash: PaymentImage::Hash(old_state.common.payment_hash),
+                },
+            )
+            .<span class="kw">await</span>;
         old_state.update(CompleteSMState::Completed)
     }
 }

@@ -530,7 +530,15 @@
 <a href="#529" id="529">529</a>
 <a href="#530" id="530">530</a>
 <a href="#531" id="531">531</a>
-<a href="#532" id="532">532</a></pre></div><pre class="rust"><code><span class="doccomment">//! Client Event Log
+<a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a>
+<a href="#535" id="535">535</a>
+<a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a></pre></div><pre class="rust"><code><span class="doccomment">//! Client Event Log
 //!
 //! The goal here is to maintain a single, ordered, append only
 //! log of all important client-side events: low or high level,
@@ -628,6 +636,14 @@
 
     <span class="kw">fn </span>saturating_add(<span class="self">self</span>, rhs: u64) -&gt; EventLogId {
         <span class="self">Self</span>(<span class="self">self</span>.<span class="number">0</span>.saturating_add(rhs))
+    }
+
+    <span class="kw">pub fn </span>saturating_sub(<span class="self">self</span>, rhs: u64) -&gt; EventLogId {
+        <span class="self">Self</span>(<span class="self">self</span>.<span class="number">0</span>.saturating_sub(rhs))
+    }
+
+    <span class="kw">pub fn </span>new(log: u64) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>(log)
     }
 }
 

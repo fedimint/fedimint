@@ -235,11 +235,45 @@
 <a href="#234" id="234">234</a>
 <a href="#235" id="235">235</a>
 <a href="#236" id="236">236</a>
-<a href="#237" id="237">237</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
+<span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::secp256k1::Keypair;
@@ -249,6 +283,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use </span><span class="kw">super</span>::FinalReceiveState;
+<span class="kw">use </span><span class="kw">crate</span>::events::OutgoingPaymentSucceeded;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::{GatewayClientContextV2, GatewayClientModuleV2};
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -291,6 +326,12 @@
     Sending,
     Claiming(Claiming),
     Cancelled(Cancelled),
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>PaymentResponse {
+    preimage: [u8; <span class="number">32</span>],
+    target_federation: <span class="prelude-ty">Option</span>&lt;FederationId&gt;,
 }
 
 <span class="kw">impl </span>fmt::Display <span class="kw">for </span>SendSMState {
@@ -341,6 +382,7 @@
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">let </span>gc = global_context.clone();
+        <span class="kw">let </span>gateway_context = context.clone();
 
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.state {
             SendSMState::Sending =&gt; {
@@ -358,6 +400,7 @@
                             old_state,
                             gc.clone(),
                             result,
+                            gateway_context.clone(),
                         ))
                     },
                 )]
@@ -380,7 +423,7 @@
         min_contract_amount: Amount,
         invoice: LightningInvoice,
         contract: OutgoingContract,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Cancelled&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;PaymentResponse, Cancelled&gt; {
         <span class="kw">let </span>LightningInvoice::Bolt11(invoice) = invoice;
 
         <span class="comment">// The following two checks may fail in edge cases since they have inherent
@@ -419,12 +462,20 @@
             <span class="kw">return match </span>client
                 .get_first_module::&lt;GatewayClientModuleV2&gt;()
                 .expect(<span class="string">"Must have client module"</span>)
-                .relay_direct_swap(contract)
+                .relay_direct_swap(
+                    contract,
+                    invoice
+                        .amount_milli_satoshis()
+                        .expect(<span class="string">"amountless invoices are not supported"</span>),
+                )
                 .<span class="kw">await
             </span>{
                 <span class="prelude-val">Ok</span>(final_receive_state) =&gt; <span class="kw">match </span>final_receive_state {
                     FinalReceiveState::Rejected =&gt; <span class="prelude-val">Err</span>(Cancelled::Rejected),
-                    FinalReceiveState::Success(preimage) =&gt; <span class="prelude-val">Ok</span>(preimage),
+                    FinalReceiveState::Success(preimage) =&gt; <span class="prelude-val">Ok</span>(PaymentResponse {
+                        preimage,
+                        target_federation: <span class="prelude-val">Some</span>(client.federation_id()),
+                    }),
                     FinalReceiveState::Refunded =&gt; <span class="prelude-val">Err</span>(Cancelled::Refunded),
                     FinalReceiveState::Failure =&gt; <span class="prelude-val">Err</span>(Cancelled::Failure),
                 },
@@ -432,26 +483,41 @@
             };
         }
 
-        lightning_context
+        <span class="kw">let </span>preimage = lightning_context
             .lnrpc
             .pay(invoice, max_delay, max_fee)
             .<span class="kw">await
             </span>.map(|response| response.preimage.<span class="number">0</span>)
-            .map_err(|e| Cancelled::LightningRpcError(e.to_string()))
+            .map_err(|e| Cancelled::LightningRpcError(e.to_string()))<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(PaymentResponse {
+            preimage,
+            target_federation: <span class="prelude-val">None</span>,
+        })
     }
 
     <span class="kw">async fn </span>transition_send_payment(
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         old_state: SendStateMachine,
         global_context: DynGlobalClientContext,
-        result: <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Cancelled&gt;,
+        result: <span class="prelude-ty">Result</span>&lt;PaymentResponse, Cancelled&gt;,
+        client_ctx: GatewayClientContextV2,
     ) -&gt; SendStateMachine {
         <span class="kw">match </span>result {
-            <span class="prelude-val">Ok</span>(preimage) =&gt; {
+            <span class="prelude-val">Ok</span>(payment_response) =&gt; {
+                client_ctx
+                    .module
+                    .client_ctx
+                    .log_event(
+                        <span class="kw-2">&amp;mut </span>dbtx.module_tx(),
+                        OutgoingPaymentSucceeded {
+                            target_federation: payment_response.target_federation,
+                        },
+                    )
+                    .<span class="kw">await</span>;
                 <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput&gt; {
                     input: LightningInput::V0(LightningInputV0::Outgoing(
                         old_state.common.contract.contract_id(),
-                        OutgoingWitness::Claim(preimage),
+                        OutgoingWitness::Claim(payment_response.preimage),
                     )),
                     amount: old_state.common.contract.amount,
                     keys: <span class="macro">vec!</span>[old_state.common.claim_keypair],
@@ -464,7 +530,7 @@
                     .<span class="number">1</span>;
 
                 old_state.update(SendSMState::Claiming(Claiming {
-                    preimage,
+                    preimage: payment_response.preimage,
                     outpoints,
                 }))
             }
