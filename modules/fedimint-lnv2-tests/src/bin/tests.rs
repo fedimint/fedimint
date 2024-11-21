@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use devimint::devfed::DevJitFed;
 use devimint::federation::Client;
 use devimint::version_constants::VERSION_0_5_0_ALPHA;
@@ -32,22 +34,7 @@ async fn main() -> anyhow::Result<()> {
         }
 
         test_gateway_registration(&dev_fed).await?;
-
-        let lnd = dev_fed.lnd().await?;
-        let cln = dev_fed.cln().await?;
-
-        info!("Verify HOLD invoices still work, create one now for payment later");
-
-        let (preimage, invoice, payment_hash) = lnd.create_hold_invoice(50000).await?;
-
         test_payments(&dev_fed).await?;
-
-        info!("Testing that CLN pay HOLD invoice and LND can settle HOLD invoice");
-
-        try_join!(
-            cln.pay_bolt11_invoice(invoice),
-            lnd.settle_hold_invoice(preimage, payment_hash)
-        )?;
 
         Ok(())
     })
@@ -178,6 +165,10 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         .await?
         .as_ref()
         .expect("Gateways of version 0.5.0 or higher support LDK");
+    let lnd = dev_fed.lnd().await?;
+
+    let (hold_preimage, hold_invoice, hold_payment_hash) = lnd.create_hold_invoice(60000).await?;
+    let hold_invoice = Bolt11Invoice::from_str(&hold_invoice).expect("Could not parse invoice");
 
     let gateway_pairs = [(gw_lnd, gw_ldk), (gw_ldk, gw_lnd)];
 
@@ -271,6 +262,17 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
         await_receive_claimed(&client, receive_op).await?;
     }
+
+    info!("Testing LDK Gateway can pay HOLD invoice...");
+    try_join!(
+        test_send(
+            &client,
+            &gw_ldk.addr,
+            &hold_invoice,
+            FinalSendOperationState::Success
+        ),
+        lnd.settle_hold_invoice(hold_preimage, hold_payment_hash),
+    )?;
 
     Ok(())
 }
