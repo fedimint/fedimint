@@ -606,17 +606,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "axum-macros"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57d123550fa8d071b7255cb0cc04dc302baa6c8c4a79f55701552684d8399bce"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.87",
-]
-
-[[package]]
 name = "backon"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1231,25 +1220,6 @@ name = "clap_lex"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "98cc8fbded0c607b7ba9dd60cd98df59af97e84d24e49c8557331cfc26d301ce"
-
-[[package]]
-name = "cln-plugin"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36894239b9df672853500b3abdd133dd6969efd0307806e6dec533ead6de367e"
-dependencies = [
- "anyhow",
- "bytes",
- "futures",
- "log",
- "serde",
- "serde_json",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
-]
 
 [[package]]
 name = "coarsetime"
@@ -2661,17 +2631,14 @@ dependencies = [
  "async-stream",
  "async-trait",
  "axum 0.7.8",
- "axum-macros",
  "bitcoin",
  "clap",
- "cln-plugin",
  "erased-serde",
  "esplora-client 0.10.0",
  "fedimint-api-client",
  "fedimint-bip39",
  "fedimint-build",
  "fedimint-client",
- "fedimint-cln-rpc",
  "fedimint-core",
  "fedimint-dummy-client",
  "fedimint-dummy-common",

@@ -73,10 +73,6 @@ pub const FM_MINT_CLIENT_ENV: &str = "FM_MINT_CLIENT";
 // Env variable to override gateway-cli binary set:
 pub const FM_GATEWAY_CLI_BASE_EXECUTABLE_ENV: &str = "FM_GATEWAY_CLI_BASE_EXECUTABLE";
 
-// Env variable to override gateway-cln-extension binary set:
-pub const FM_GATEWAY_CLN_EXTENSION_BASE_EXECUTABLE_ENV: &str =
-    "FM_GATEWAY_CLN_EXTENSION_BASE_EXECUTABLE";
-
 // Env variable to override fedimint-load-test-tool binary set:
 pub const FM_LOAD_TEST_TOOL_BASE_EXECUTABLE_ENV: &str = "FM_LOAD_TEST_TOOL_BASE_EXECUTABLE";
 
@@ -127,9 +123,6 @@ pub const FM_LOGS_DIR_ENV: &str = "FM_LOGS_DIR";
 
 // Env variable to TODO
 pub const FM_BACKWARDS_COMPATIBILITY_TEST_ENV: &str = "FM_BACKWARDS_COMPATIBILITY_TEST";
-
-// Env variable to define command for the CLN client
-pub const FM_GWCLI_CLN_ENV: &str = "FM_GWCLI_CLN";
 
 // Env variable to define command for the LND client
 pub const FM_GWCLI_LND_ENV: &str = "FM_GWCLI_LND";

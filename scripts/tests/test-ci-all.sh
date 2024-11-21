@@ -69,11 +69,6 @@ function gateway_config_test_lnd() {
 }
 export -f gateway_config_test_lnd
 
-function gateway_config_test_cln() {
-  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/gateway-module-test.sh config-test cln
-}
-export -f gateway_config_test_cln
-
 function gateway_restore_test() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/gateway-module-test.sh backup-restore-test
 }
@@ -261,7 +256,7 @@ if [[ "$num_versions" == "0" ]]; then
   mapfile -t version_matrix < <(generate_current_only_matrix "${versions[@]}")
 else
   # precompile binaries
-  binaries=( "fedimintd" "fedimint-cli" "gateway-cli" "gatewayd" "gateway-cln-extension" )
+  binaries=( "fedimintd" "fedimint-cli" "gateway-cli" "gatewayd" )
   for version in "${versions[@]}" ; do
     if [ "$version" == "current" ] ; then
       continue
@@ -309,7 +304,6 @@ tests_to_run_in_parallel+=(
   "reconnect_test"
   "lightning_reconnect_test"
   "gateway_reboot_test"
-  "gateway_config_test_cln"
   "gateway_config_test_lnd"
   "gateway_restore_test"
   "gateway_liquidity_test"

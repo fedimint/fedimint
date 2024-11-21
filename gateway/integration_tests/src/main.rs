@@ -44,10 +44,6 @@ enum GatewayTest {
         old_gateway_cli_path: PathBuf,
         #[arg(long)]
         new_gateway_cli_path: PathBuf,
-        #[arg(long)]
-        old_gateway_cln_extension_path: PathBuf,
-        #[arg(long)]
-        new_gateway_cln_extension_path: PathBuf,
     },
     BackupRestoreTest,
     LiquidityTest,
@@ -64,8 +60,6 @@ async fn main() -> anyhow::Result<()> {
             gateway_type,
             old_gateway_cli_path,
             new_gateway_cli_path,
-            old_gateway_cln_extension_path,
-            new_gateway_cln_extension_path,
         } => {
             mnemonic_upgrade_test(
                 old_gatewayd_path,
@@ -73,8 +67,6 @@ async fn main() -> anyhow::Result<()> {
                 gateway_type,
                 old_gateway_cli_path,
                 new_gateway_cli_path,
-                old_gateway_cln_extension_path,
-                new_gateway_cln_extension_path,
             )
             .await
         }
@@ -225,15 +217,9 @@ async fn mnemonic_upgrade_test(
     gw_type: LightningNodeType,
     old_gateway_cli_path: PathBuf,
     new_gateway_cli_path: PathBuf,
-    old_gateway_cln_extension_path: PathBuf,
-    new_gateway_cln_extension_path: PathBuf,
 ) -> anyhow::Result<()> {
     std::env::set_var("FM_GATEWAYD_BASE_EXECUTABLE", old_gatewayd_path);
     std::env::set_var("FM_GATEWAY_CLI_BASE_EXECUTABLE", old_gateway_cli_path);
-    std::env::set_var(
-        "FM_GATEWAY_CLN_EXTENSION_BASE_EXECUTABLE",
-        old_gateway_cln_extension_path,
-    );
 
     devimint::run_devfed_test(|dev_fed, process_mgr| async move {
         let gatewayd_version = util::Gatewayd::version_or_default().await;
@@ -247,16 +233,9 @@ async fn mnemonic_upgrade_test(
         let mut gw_lnd = dev_fed.gw_lnd_registered().await?.to_owned();
         let fed = dev_fed.fed().await?;
         let federation_id = FederationId::from_str(fed.calculate_federation_id().as_str())?;
-        let bitcoind = dev_fed.bitcoind().await?;
 
         gw_lnd
-            .restart_with_bin(
-                &process_mgr,
-                &new_gatewayd_path,
-                &new_gateway_cli_path,
-                &new_gateway_cln_extension_path,
-                bitcoind.clone(),
-            )
+            .restart_with_bin(&process_mgr, &new_gatewayd_path, &new_gateway_cli_path)
             .await?;
 
         // Gateway mnemonic is only support in >= v0.5.0
@@ -312,32 +291,6 @@ async fn mnemonic_upgrade_test(
 
         info!("Verified deleting database will migrate the federation to use mnemonic");
 
-        // Restart CLN gateway but with a given mnemonic
-        let mnemonic =
-            "cereal fortune course waste wagon jaguar shoulder client modify view panic describe";
-        std::env::set_var("FM_GATEWAY_MNEMONIC", mnemonic);
-        let mut gw_cln = dev_fed.gw_cln_registered().await?.to_owned();
-        gw_cln
-            .restart_with_bin(
-                &process_mgr,
-                &new_gatewayd_path,
-                &new_gateway_cli_path,
-                &new_gateway_cln_extension_path,
-                bitcoind.clone(),
-            )
-            .await?;
-        let mnemonic_response = gw_cln.get_mnemonic().await?;
-        assert!(mnemonic_response
-            .legacy_federations
-            .contains(&federation_id));
-        assert_eq!(
-            mnemonic_response.mnemonic,
-            mnemonic
-                .split_whitespace()
-                .map(std::string::ToString::to_string)
-                .collect::<Vec<String>>()
-        );
-
         info!("Successfully completed mnemonic upgrade test");
 
         Ok(())
@@ -357,7 +310,6 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
 
             let gw = match gw_type {
                 LightningNodeType::Lnd => dev_fed.gw_lnd_registered().await?,
-                LightningNodeType::Cln => dev_fed.gw_cln_registered().await?,
                 LightningNodeType::Ldk => dev_fed
                     .gw_ldk_connected()
                     .await?
@@ -556,19 +508,16 @@ async fn liquidity_test() -> anyhow::Result<()> {
     devimint::run_devfed_test(|dev_fed, _process_mgr| async move {
         let federation = dev_fed.fed().await?;
         let gatewayd_version = util::Gatewayd::version_or_default().await;
-        if gatewayd_version < *VERSION_0_5_0_ALPHA {
+        // LDK Gateway is not available when fedimintd version is < v0.5
+        let fedimintd_version = util::FedimintdCmd::version_or_default().await;
+        if gatewayd_version < *VERSION_0_5_0_ALPHA || fedimintd_version < *VERSION_0_5_0_ALPHA {
             info!(%gatewayd_version, "Version did not support gateway liquidity management, skipping");
             return Ok(());
         }
 
         let gw_lnd = dev_fed.gw_lnd_registered().await?;
-        let gw_cln = dev_fed.gw_cln_registered().await?;
-
-        let gateways = if let Some(gw_ldk) = dev_fed.gw_ldk_connected().await? {
-            [gw_lnd, gw_ldk].to_vec()
-        } else {
-            [gw_lnd, gw_cln].to_vec()
-        };
+        let gw_ldk = dev_fed.gw_ldk_connected().await?.as_ref().expect("LDK Should be available");
+        let gateways = [gw_lnd, gw_ldk].to_vec();
 
         let gateway_matrix = gateways
             .iter()

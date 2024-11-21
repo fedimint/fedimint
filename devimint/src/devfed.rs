@@ -36,7 +36,6 @@ pub struct DevFed {
     pub cln: Lightningd,
     pub lnd: Lnd,
     pub fed: Federation,
-    pub gw_cln: Gatewayd,
     pub gw_lnd: Gatewayd,
     pub gw_ldk: Option<Gatewayd>,
     pub electrs: Electrs,
@@ -50,7 +49,6 @@ impl DevFed {
             cln,
             lnd,
             fed,
-            gw_cln,
             gw_lnd,
             gw_ldk,
             electrs,
@@ -58,7 +56,6 @@ impl DevFed {
         } = self;
 
         join!(
-            spawn_drop(gw_cln),
             spawn_drop(gw_lnd),
             spawn_drop(gw_ldk),
             spawn_drop(fed),
@@ -84,13 +81,11 @@ pub struct DevJitFed {
     cln: JitArc<Lightningd>,
     lnd: JitArc<Lnd>,
     fed: JitArc<Federation>,
-    gw_cln: JitArc<Gatewayd>,
     gw_lnd: JitArc<Gatewayd>,
     gw_ldk: JitArc<Option<Gatewayd>>,
     electrs: JitArc<Electrs>,
     esplora: JitArc<Esplora>,
     start_time: std::time::SystemTime,
-    gw_cln_registered: JitArc<()>,
     gw_lnd_registered: JitArc<()>,
     gw_ldk_connected: JitArc<()>,
     fed_epoch_generated: JitArc<()>,
@@ -170,29 +165,6 @@ impl DevJitFed {
             }
         });
 
-        let gw_cln = JitTryAnyhow::new_try({
-            let process_mgr = process_mgr.to_owned();
-            let cln = cln.clone();
-            || async move {
-                let cln = cln.get_try().await?.deref().clone();
-                Ok(Arc::new(
-                    Gatewayd::new(&process_mgr, LightningNode::Cln(cln)).await?,
-                ))
-            }
-        });
-        let gw_cln_registered = JitTryAnyhow::new_try({
-            let gw_cln = gw_cln.clone();
-            let fed = fed.clone();
-            move || async move {
-                let gw_cln = gw_cln.get_try().await?.deref();
-                let fed = fed.get_try().await?.deref();
-
-                if !skip_setup {
-                    gw_cln.connect_fed(fed).await?;
-                }
-                Ok(Arc::new(()))
-            }
-        });
         let gw_lnd = JitTryAnyhow::new_try({
             let process_mgr = process_mgr.to_owned();
             let lnd = lnd.clone();
@@ -256,7 +228,6 @@ impl DevJitFed {
             let lnd = lnd.clone();
             let gw_lnd = gw_lnd.clone();
             let cln = cln.clone();
-            let gw_cln = gw_cln.clone();
             let gw_ldk = gw_ldk.clone();
             let bitcoind = bitcoind.clone();
             || async move {
@@ -270,26 +241,28 @@ impl DevJitFed {
 
                 let bitcoind = bitcoind.get_try().await?.deref().clone();
 
-                if gateway_cli_version < *VERSION_0_4_0_ALPHA
-                    || gatewayd_version < *VERSION_0_4_0_ALPHA
-                    || fedimintd_version < *VERSION_0_4_0_ALPHA
+                if gateway_cli_version <= *VERSION_0_4_0_ALPHA
+                    || gatewayd_version <= *VERSION_0_4_0_ALPHA
+                    || fedimintd_version <= *VERSION_0_4_0_ALPHA
                 {
                     let lnd = lnd.get_try().await?.deref().clone();
                     let cln = cln.get_try().await?.deref().clone();
 
                     open_channel(&process_mgr, &bitcoind, &cln, &lnd).await?;
                 } else {
-                    let gw_cln = gw_cln.get_try().await?.deref();
                     let gw_lnd = gw_lnd.get_try().await?.deref();
-
-                    let gateways: &[NamedGateway<'_>] =
-                        if let Some(gw_ldk) = gw_ldk.get_try().await?.deref() {
-                            &[(gw_cln, "CLN"), (gw_lnd, "LND"), (gw_ldk, "LDK")]
-                        } else {
-                            &[(gw_cln, "CLN"), (gw_lnd, "LND")]
-                        };
-
+                    let gw_ldk = gw_ldk
+                        .get_try()
+                        .await?
+                        .deref()
+                        .as_ref()
+                        .expect("GW LDK should be present");
+                    let gateways: &[NamedGateway<'_>] = &[(gw_lnd, "LND"), (gw_ldk, "LDK")];
                     open_channels_between_gateways(&bitcoind, gateways).await?;
+
+                    let lnd = lnd.get_try().await?.deref().clone();
+                    let cln = cln.get_try().await?.deref().clone();
+                    open_channel(&process_mgr, &bitcoind, &cln, &lnd).await?;
                 }
 
                 Ok(Arc::new(()))
@@ -312,13 +285,11 @@ impl DevJitFed {
             cln,
             lnd,
             fed,
-            gw_cln,
             gw_lnd,
             gw_ldk,
             electrs,
             esplora,
             start_time,
-            gw_cln_registered,
             gw_lnd_registered,
             gw_ldk_connected,
             fed_epoch_generated,
@@ -337,13 +308,6 @@ impl DevJitFed {
     }
     pub async fn lnd(&self) -> anyhow::Result<&Lnd> {
         Ok(self.lnd.get_try().await?.deref())
-    }
-    pub async fn gw_cln(&self) -> anyhow::Result<&Gatewayd> {
-        Ok(self.gw_cln.get_try().await?.deref())
-    }
-    pub async fn gw_cln_registered(&self) -> anyhow::Result<&Gatewayd> {
-        self.gw_cln_registered.get_try().await?;
-        Ok(self.gw_cln.get_try().await?.deref())
     }
     pub async fn gw_lnd(&self) -> anyhow::Result<&Gatewayd> {
         Ok(self.gw_lnd.get_try().await?.deref())
@@ -387,7 +351,6 @@ impl DevJitFed {
 
         let _ = self.internal_client_gw_registered().await?;
         let _ = self.channel_opened.get_try().await?;
-        let _ = self.gw_cln_registered().await?;
         let _ = self.gw_lnd_registered().await?;
         let _ = self.gw_ldk_connected().await?;
         let _ = self.cln().await?;
@@ -413,7 +376,6 @@ impl DevJitFed {
             cln: self.cln().await?.to_owned(),
             lnd: self.lnd().await?.to_owned(),
             fed: self.fed().await?.to_owned(),
-            gw_cln: self.gw_cln().await?.to_owned(),
             gw_lnd: self.gw_lnd().await?.to_owned(),
             gw_ldk: self.gw_ldk().await?.to_owned(),
             esplora: self.esplora().await?.to_owned(),
@@ -427,7 +389,6 @@ impl DevJitFed {
             cln,
             lnd,
             fed,
-            gw_cln,
             gw_lnd,
             electrs,
             esplora,
@@ -435,7 +396,6 @@ impl DevJitFed {
         } = self;
 
         join!(
-            spawn_drop(gw_cln),
             spawn_drop(gw_lnd),
             spawn_drop(fed),
             spawn_drop(lnd),

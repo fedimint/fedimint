@@ -14,11 +14,10 @@ use anyhow::{bail, Context};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use common::{
     cln_create_invoice, cln_pay_invoice, cln_wait_invoice_payment, gateway_pay_invoice,
-    get_note_summary, lnd_create_invoice, lnd_pay_invoice, lnd_wait_invoice_payment,
-    parse_gateway_id, reissue_notes,
+    get_note_summary, parse_gateway_id, reissue_notes,
 };
 use devimint::cmd;
-use devimint::util::{GatewayClnCli, GatewayLndCli};
+use devimint::util::GatewayLndCli;
 use fedimint_client::ClientHandleArc;
 use fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
@@ -68,7 +67,6 @@ struct Opts {
 #[derive(Debug, Clone, Copy, ValueEnum)]
 enum LnInvoiceGeneration {
     ClnLightningCli,
-    LnCli,
 }
 
 #[derive(Subcommand, Clone)]
@@ -674,19 +672,6 @@ async fn do_load_test_user_task(
                     .await?;
                     cln_wait_invoice_payment(&label).await?;
                 }
-                Some(LnInvoiceGeneration::LnCli) => {
-                    let (invoice, r_hash) = lnd_create_invoice(invoice_amount).await?;
-                    gateway_pay_invoice(
-                        &prefix,
-                        "CLN",
-                        &client,
-                        invoice,
-                        &event_sender,
-                        ln_gateway.clone(),
-                    )
-                    .await?;
-                    lnd_wait_invoice_payment(r_hash).await?;
-                }
                 None if additional_invoices.is_empty() => {
                     debug!("No method given to generate an invoice and no invoices on file, will not test the gateway");
                     break;
@@ -819,19 +804,13 @@ async fn do_ln_circular_test_user_task(
     };
     match strategy {
         LnCircularStrategy::TwoGateways => {
-            // pick the first payment method randomly to avoid overloading one of the
-            // gateways
-            let mut invoice_generation = if rand::random::<bool>() {
-                LnInvoiceGeneration::LnCli
-            } else {
-                LnInvoiceGeneration::ClnLightningCli
-            };
+            let invoice_generation = LnInvoiceGeneration::ClnLightningCli;
             while still_ontime().await {
                 let gateway_id = get_gateway_id(invoice_generation).await?;
                 let ln_gateway = get_lightning_gateway(&client, Some(gateway_id)).await;
                 run_two_gateways_strategy(
                     &prefix,
-                    &mut invoice_generation,
+                    &invoice_generation,
                     &invoice_amount,
                     &event_sender,
                     &client,
@@ -863,7 +842,7 @@ const GATEWAY_CREATE_INVOICE: &str = "gateway_create_invoice";
 
 async fn run_two_gateways_strategy(
     prefix: &str,
-    invoice_generation: &mut LnInvoiceGeneration,
+    invoice_generation: &LnInvoiceGeneration,
     invoice_amount: &Amount,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
     client: &ClientHandleArc,
@@ -902,40 +881,6 @@ async fn run_two_gateways_strategy(
                 pay_invoice_time,
             )
             .await?;
-            *invoice_generation = LnInvoiceGeneration::LnCli;
-        }
-        LnInvoiceGeneration::LnCli => {
-            let (invoice, r_hash) = lnd_create_invoice(*invoice_amount).await?;
-            let elapsed = create_invoice_time.elapsed()?;
-            info!("Created invoice using LND in {elapsed:?}");
-            event_sender.send(MetricEvent {
-                name: GATEWAY_CREATE_INVOICE.into(),
-                duration: elapsed,
-            })?;
-            gateway_pay_invoice(
-                prefix,
-                "CLN",
-                client,
-                invoice,
-                event_sender,
-                ln_gateway.clone(),
-            )
-            .await?;
-            lnd_wait_invoice_payment(r_hash).await?;
-            let (operation_id, invoice) =
-                client_create_invoice(client, *invoice_amount, event_sender, ln_gateway).await?;
-            let pay_invoice_time = fedimint_core::time::now();
-            lnd_pay_invoice(invoice).await?;
-            wait_invoice_payment(
-                prefix,
-                "CLN",
-                client,
-                operation_id,
-                event_sender,
-                pay_invoice_time,
-            )
-            .await?;
-            *invoice_generation = LnInvoiceGeneration::ClnLightningCli;
         }
     };
     Ok(())
@@ -1354,12 +1299,8 @@ async fn handle_metrics_summary(
 async fn get_gateway_id(generate_invoice_with: LnInvoiceGeneration) -> anyhow::Result<String> {
     let gateway_json = match generate_invoice_with {
         LnInvoiceGeneration::ClnLightningCli => {
-            // If we are paying a lnd invoice, we use the cln gateway
+            // If we are paying a lnd invoice, we use the cln node
             cmd!(GatewayLndCli, "info").out_json().await
-        }
-        LnInvoiceGeneration::LnCli => {
-            // and vice-versa
-            cmd!(GatewayClnCli, "info").out_json().await
         }
     }?;
     let gateway_id = gateway_json["gateway_id"]

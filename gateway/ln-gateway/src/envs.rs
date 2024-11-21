@@ -51,14 +51,6 @@ pub const FM_LDK_NETWORK: &str = "FM_LDK_NETWORK";
 /// Necessary for LDK configuration.
 pub const FM_PORT_LDK: &str = "FM_PORT_LDK";
 
-/// Environment variable that specifies the address that the Core Lightning
-/// extension should listen on. Will be removed in v0.6
-pub const FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV: &str = "FM_CLN_EXTENSION_LISTEN_ADDRESS";
-
-/// Environment variable that specifies the URL that the gateway can use to
-/// connect to the Core Lightning extension. Will be removed in v0.6.
-pub const FM_GATEWAY_LIGHTNING_ADDR_ENV: &str = "FM_GATEWAY_LIGHTNING_ADDR";
-
 /// Environment variable that specifies the mnemonic that the gateway should use
 /// for ecash and the LDK Node should use for onchain funds. If not set, a
 /// mnemonic will be generated. This environment variable can be used for

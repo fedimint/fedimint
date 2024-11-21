@@ -144,10 +144,8 @@ declare_vars! {
         FM_PORT_ESPLORA_MONITORING: u16 = port_alloc(1)?; env: "FM_PORT_ESPLORA_MONITORING";
         // 3 = p2p + api + metrics env: "// ";
         FM_PORT_FEDIMINTD_BASE: u16 = port_alloc((3 * fed_size).try_into().unwrap())?; env: "FM_PORT_FEDIMINTD_BASE";
-        FM_PORT_GW_CLN: u16 = port_alloc(1)?; env: "FM_PORT_GW_CLN";
         FM_PORT_GW_LND: u16 = port_alloc(1)?; env: "FM_PORT_GW_LND";
         FM_PORT_GW_LDK: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK";
-        FM_PORT_CLN_EXTENSION: u16 = port_alloc(1)?; env: "FM_PORT_CLN_EXTENSION";
         FM_PORT_FAUCET: u16 = 15243u16; env: "FM_PORT_FAUCET";
 
         FM_LDK_ESPLORA_SERVER_URL: String = format!("http://127.0.0.1:{FM_PORT_ESPLORA}"); env: "FM_LDK_ESPLORA_SERVER_URL";
@@ -168,15 +166,12 @@ declare_vars! {
         FM_LND_TLS_CERT: PathBuf = FM_LND_DIR.join("tls.cert"); env: "FM_LND_TLS_CERT";
         FM_LND_MACAROON: PathBuf = FM_LND_DIR.join("data/chain/bitcoin/regtest/admin.macaroon"); env: "FM_LND_MACAROON";
 
-        FM_GATEWAY_API_ADDR: String = f!("http://127.0.0.1:{FM_PORT_GW_CLN}"); env: "FM_GATEWAY_API_ADDR";
         FM_GATEWAY_PASSWORD: String = "theresnosecondbest"; env: "FM_GATEWAY_PASSWORD";
 
          // Enable to us to make an unbounded number of payments
         FM_DEFAULT_GATEWAY_FEES: String = "0,0"; env: "FM_DEFAULT_GATEWAY_FEES";
         FM_GATEWAY_SKIP_WAIT_FOR_SYNC: String = "1"; env: "FM_GATEWAY_SKIP_WAIT_FOR_SYNC";
 
-        FM_CLN_EXTENSION_LISTEN_ADDRESS: String = f!("0.0.0.0:{FM_PORT_CLN_EXTENSION}"); env: "FM_CLN_EXTENSION_LISTEN_ADDRESS";
-        FM_GATEWAY_LIGHTNING_ADDR: String = f!("http://localhost:{FM_PORT_CLN_EXTENSION}"); env: "FM_GATEWAY_LIGHTNING_ADDR";
         FM_FAUCET_BIND_ADDR: String = f!("0.0.0.0:{FM_PORT_FAUCET}"); env: "FM_FAUCET_BIND_ADDR";
 
         // clients env: "// ";
@@ -193,8 +188,6 @@ declare_vars! {
             fedimint_cli = crate::util::get_fedimint_cli_path().join(" "),
             datadir = utf8(&FM_CLIENT_DIR));  env: "FM_MINT_CLIENT";
         FM_MINT_RPC_CLIENT: String = f!("mint-rpc-client"); env: "FM_MINT_RPC_CLIENT";
-        FM_GWCLI_CLN: String = f!("{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_CLN}/",
-            gateway_cli = crate::util::get_gateway_cli_path().join(" "),); env: "FM_GWCLI_CLN";
         FM_GWCLI_LND: String = f!("{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_LND}/",
             gateway_cli = crate::util::get_gateway_cli_path().join(" "),); env: "FM_GWCLI_LND";
         FM_GWCLI_LDK: String = f!("{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_LDK}/",

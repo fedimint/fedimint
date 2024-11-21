@@ -85,22 +85,19 @@ fi
 if contains "gateway" "${test_kinds[@]}"; then
   gatewayd_paths=()
   gateway_cli_paths=()
-  gateway_cln_extension_paths=()
   for version in "${versions[@]}"; do
     if [ "$version" == "current" ]; then
       # Add current binaries from PATH
       gatewayd_paths+=("gatewayd")
       gateway_cli_paths+=("gateway-cli")
-      gateway_cln_extension_paths+=("gateway-cln-extension")
     else
       gatewayd_paths+=("$(nix_build_binary_for_version 'gatewayd' "$version")")
       gateway_cli_paths+=("$(nix_build_binary_for_version 'gateway-cli' "$version")")
-      gateway_cln_extension_paths+=("$(nix_build_binary_for_version 'gateway-cln-extension' "$version")")
     fi
   done
 
   upgrade_tests+=(
-    "devimint upgrade-tests gatewayd --gatewayd-paths $(printf "%s " "${gatewayd_paths[@]}") --gateway-cli-paths $(printf "%s " "${gateway_cli_paths[@]}") --gateway-cln-extension-paths $(printf "%s " "${gateway_cln_extension_paths[@]}")"
+    "devimint upgrade-tests gatewayd --gatewayd-paths $(printf "%s " "${gatewayd_paths[@]}") --gateway-cli-paths $(printf "%s " "${gateway_cli_paths[@]}")"
   )
 fi
 
@@ -109,11 +106,9 @@ if contains "mnemonic" "${test_kinds[@]}"; then
   new_gatewayd="gatewayd"
   old_gateway_cli=$(nix_build_binary_for_version 'gateway-cli' "v0.4.0")
   new_gateway_cli="gateway-cli"
-  old_gateway_cln_ext=$(nix_build_binary_for_version 'gateway-cln-extension' "v0.4.0")
-  new_gateway_cln_ext="gateway-cln-extension"
 
   upgrade_tests+=(
-    "gateway-tests gatewayd-mnemonic --old-gatewayd-path $old_gatewayd --new-gatewayd-path $new_gatewayd --gw-type lnd --old-gateway-cli-path $old_gateway_cli --new-gateway-cli-path $new_gateway_cli --old-gateway-cln-extension-path $old_gateway_cln_ext --new-gateway-cln-extension-path $new_gateway_cln_ext"
+    "gateway-tests gatewayd-mnemonic --old-gatewayd-path $old_gatewayd --new-gatewayd-path $new_gatewayd --gw-type lnd --old-gateway-cli-path $old_gateway_cli --new-gateway-cli-path $new_gateway_cli"
   )
 fi
 
