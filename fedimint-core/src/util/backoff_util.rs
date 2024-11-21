@@ -25,6 +25,10 @@ pub fn aggressive_backoff() -> FibonacciBackoff {
     custom_backoff(Duration::from_millis(200), Duration::from_secs(5), Some(10))
 }
 
+pub fn aggressive_backoff_long() -> FibonacciBackoff {
+    custom_backoff(Duration::from_millis(200), Duration::from_secs(5), Some(15))
+}
+
 #[cfg(test)]
 pub fn immediate_backoff(max_retries_or: Option<usize>) -> FibonacciBackoff {
     custom_backoff(Duration::ZERO, Duration::ZERO, max_retries_or)
