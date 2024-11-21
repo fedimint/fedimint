@@ -388,22 +388,6 @@
 
             lint = flakeboxLib.mkLintShell { nativeBuildInputs = [ pkgs.cargo-sort ]; };
 
-            # Shell with extra stuff to support cross-compilation with `cargo build --target <target>`
-            #
-            # This will pull extra stuff so to save time and download time to most common developers,
-            # was moved into another shell.
-            cross = flakeboxLib.mkDevShell (
-              commonShellArgs
-              // craneMultiBuild.commonEnvsCrossShell
-              // {
-                toolchain = toolchainAll;
-                shellHook = ''
-                  export REPO_ROOT="$(git rev-parse --show-toplevel)"
-                  export PATH="$REPO_ROOT/bin:$PATH"
-                '';
-              }
-            );
-
             # Like `cross` but only with wasm
             crossWasm = flakeboxLib.mkDevShell (
               commonShellArgs
@@ -429,6 +413,22 @@
             };
 
             bootstrap = pkgs.mkShell { nativeBuildInputs = with pkgs; [ cachix ]; };
+          } // lib.attrsets.optionalAttrs (lib.lists.elem system ["x86_64-linux" "x86_64-darwin" "aarch64-darwin"]) {
+            # Shell with extra stuff to support cross-compilation with `cargo build --target <target>`
+            #
+            # This will pull extra stuff so to save time and download time to most common developers,
+            # was moved into another shell.
+            cross = flakeboxLib.mkDevShell (
+              commonShellArgs
+              // craneMultiBuild.commonEnvsCrossShell
+              // {
+                toolchain = toolchainAll;
+                shellHook = ''
+                  export REPO_ROOT="$(git rev-parse --show-toplevel)"
+                  export PATH="$REPO_ROOT/bin:$PATH"
+                '';
+              }
+            );
           };
       in
       {
