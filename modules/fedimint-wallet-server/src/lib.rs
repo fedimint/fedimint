@@ -624,6 +624,12 @@ impl ServerModule for Wallet {
                     return Err(WalletInputError::WrongOutputScript);
                 }
 
+                // Verifying this is not strictly necessary for the server as the tx_out is only
+                // used in backup and recovery.
+                if input.tx_out != input_tx_out {
+                    return Err(WalletInputError::WrongTxOut);
+                }
+
                 (input.outpoint, input_tx_out.value, input.tweak_contract_key)
             }
             WalletInput::Default { variant, .. } => {
