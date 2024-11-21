@@ -63,7 +63,11 @@
 <a href="#62" id="62">62</a>
 <a href="#63" id="63">63</a>
 <a href="#64" id="64">64</a>
-<a href="#65" id="65">65</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">pub use </span>backon::{Backoff, FibonacciBackoff};
 <span class="kw">use </span>backon::{BackoffBuilder, FibonacciBuilder};
@@ -88,6 +92,10 @@
     //
     // Maximum possible delay including jitter is 22.8 seconds.
     </span>custom_backoff(Duration::from_millis(<span class="number">200</span>), Duration::from_secs(<span class="number">5</span>), <span class="prelude-val">Some</span>(<span class="number">10</span>))
+}
+
+<span class="kw">pub fn </span>aggressive_backoff_long() -&gt; FibonacciBackoff {
+    custom_backoff(Duration::from_millis(<span class="number">200</span>), Duration::from_secs(<span class="number">5</span>), <span class="prelude-val">Some</span>(<span class="number">15</span>))
 }
 
 <span class="attr">#[cfg(test)]
