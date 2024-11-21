@@ -1578,11 +1578,11 @@ fn decode_value_expect<V: DatabaseValue>(
 ) -> V {
     decode_value(value_bytes, decoders).unwrap_or_else(|err| {
         panic!(
-            "Unrecoverable decoding DatabaseValue as {}; err={}, bytes={}; key_bytes={}",
+            "Unrecoverable decoding DatabaseValue as {}; err={}, key_bytes={}, val_bytes={}",
             any::type_name::<V>(),
             err,
-            AbbreviateHexBytes(value_bytes),
             AbbreviateHexBytes(key_bytes),
+            AbbreviateHexBytes(value_bytes),
         )
     })
 }
