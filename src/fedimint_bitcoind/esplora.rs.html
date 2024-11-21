@@ -173,9 +173,16 @@
 <a href="#172" id="172">172</a>
 <a href="#173" id="173">173</a>
 <a href="#174" id="174">174</a>
-<a href="#175" id="175">175</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
-<span class="kw">use </span>anyhow::{bail, format_err};
+<span class="kw">use </span>anyhow::{bail, format_err, Context};
 <span class="kw">use </span>bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::task::TaskHandle;
@@ -247,6 +254,13 @@
 
     <span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; anyhow::Result&lt;BlockHash&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.client.get_block_hash(u32::try_from(height)<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>)
+    }
+
+    <span class="kw">async fn </span>get_block(<span class="kw-2">&amp;</span><span class="self">self</span>, block_hash: <span class="kw-2">&amp;</span>BlockHash) -&gt; anyhow::Result&lt;bitcoin::Block&gt; {
+        <span class="self">self</span>.client
+            .get_block_by_hash(block_hash)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.context(<span class="string">"Block with this hash is not available"</span>)
     }
 
     <span class="kw">async fn </span>get_fee_rate(<span class="kw-2">&amp;</span><span class="self">self</span>, confirmation_target: u16) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;Feerate&gt;&gt; {

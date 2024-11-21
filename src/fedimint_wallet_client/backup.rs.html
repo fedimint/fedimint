@@ -497,7 +497,8 @@
 <a href="#496" id="496">496</a>
 <a href="#497" id="497">497</a>
 <a href="#498" id="498">498</a>
-<a href="#499" id="499">499</a></pre></div><pre class="rust"><code><span class="kw">mod </span>recovery_history_tracker;
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a></pre></div><pre class="rust"><code><span class="kw">mod </span>recovery_history_tracker;
 
 <span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::sync::{Arc, Mutex};
@@ -783,6 +784,7 @@
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>script_pubkey = <span class="kw">match </span>input {
             WalletInput::V0(WalletInputV0(<span class="kw-2">ref </span>input)) =&gt; <span class="kw-2">&amp;</span>input.tx_output().script_pubkey,
+            WalletInput::V1(input) =&gt; <span class="kw-2">&amp;</span>input.tx_out.script_pubkey,
             WalletInput::Default {
                 variant: <span class="kw">_</span>,
                 bytes: <span class="kw">_</span>,

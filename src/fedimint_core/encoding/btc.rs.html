@@ -573,7 +573,8 @@
 <a href="#572" id="572">572</a>
 <a href="#573" id="573">573</a>
 <a href="#574" id="574">574</a>
-<a href="#575" id="575">575</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::format_err;
@@ -620,6 +621,7 @@
 <span class="macro">impl_encode_decode_bridge!</span>(bitcoin::block::Header);
 <span class="macro">impl_encode_decode_bridge!</span>(bitcoin::BlockHash);
 <span class="macro">impl_encode_decode_bridge!</span>(bitcoin::OutPoint);
+<span class="macro">impl_encode_decode_bridge!</span>(bitcoin::TxOut);
 <span class="macro">impl_encode_decode_bridge!</span>(bitcoin::ScriptBuf);
 <span class="macro">impl_encode_decode_bridge!</span>(bitcoin::Transaction);
 <span class="macro">impl_encode_decode_bridge!</span>(bitcoin::merkle_tree::PartialMerkleTree);

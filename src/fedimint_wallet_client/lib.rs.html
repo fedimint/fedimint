@@ -1368,7 +1368,12 @@
 <a href="#1367" id="1367">1367</a>
 <a href="#1368" id="1368">1368</a>
 <a href="#1369" id="1369">1369</a>
-<a href="#1370" id="1370">1370</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1370" id="1370">1370</a>
+<a href="#1371" id="1371">1371</a>
+<a href="#1372" id="1372">1372</a>
+<a href="#1373" id="1373">1373</a>
+<a href="#1374" id="1374">1374</a>
+<a href="#1375" id="1375">1375</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1401,7 +1406,7 @@
 <span class="kw">use </span>bitcoin::secp256k1::{All, Secp256k1, SECP256K1};
 <span class="kw">use </span>bitcoin::{Address, Network, ScriptBuf};
 <span class="kw">use </span>client_db::{DbKeyPrefix, PegInTweakIndexKey, TweakIdx};
-<span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
+<span class="kw">use </span>fedimint_api_client::api::{DynModuleApi, FederationResult};
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 <span class="kw">use </span>fedimint_client::module::init::{
@@ -1422,7 +1427,8 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::module::{
-    ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
+    ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleConsensusVersion, ModuleInit,
+    MultiApiVersion,
 };
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 <span class="kw">use </span>fedimint_core::util::backoff_util::background_backoff;
@@ -1995,6 +2001,10 @@
                 state_machines: Arc::new(sm_gen),
             }],
         ))
+    }
+
+    <span class="kw">pub async fn </span>btc_tx_has_no_size_limit(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;bool&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.module_api.module_consensus_version().<span class="kw">await</span><span class="question-mark">? </span>&gt;= ModuleConsensusVersion::new(<span class="number">2</span>, <span class="number">2</span>))
     }
 
     <span class="doccomment">/// Allocates a deposit address that is controlled by the federation.

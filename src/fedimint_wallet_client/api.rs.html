@@ -81,22 +81,45 @@
 <a href="#80" id="80">80</a>
 <a href="#81" id="81">81</a>
 <a href="#82" id="82">82</a>
-<a href="#83" id="83">83</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::{Address, Amount};
 <span class="kw">use </span>fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
-<span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased};
+<span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased, ModuleConsensusVersion};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, PeerId};
 <span class="kw">use </span>fedimint_wallet_common::endpoint_constants::{
     BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT, BLOCK_COUNT_ENDPOINT,
-    PEG_OUT_FEES_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
+    MODULE_CONSENSUS_VERSION_ENDPOINT, PEG_OUT_FEES_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_wallet_common::{PegOutFees, WalletSummary};
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>WalletFederationApi {
+    <span class="kw">async fn </span>module_consensus_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;ModuleConsensusVersion&gt;;
+
     <span class="kw">async fn </span>fetch_consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt;;
 
     <span class="kw">async fn </span>fetch_peg_out_fees(
@@ -117,6 +140,25 @@
 <span class="kw">where
     </span>T: IModuleFederationApi + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
 {
+    <span class="kw">async fn </span>module_consensus_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;ModuleConsensusVersion&gt; {
+        <span class="kw">let </span>response = <span class="self">self
+            </span>.request_current_consensus(
+                MODULE_CONSENSUS_VERSION_ENDPOINT.to_string(),
+                ApiRequestErased::default(),
+            )
+            .<span class="kw">await</span>;
+
+        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="kw-2">&amp;</span>response {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>e) = e.general {
+                <span class="kw">if </span>e.to_string().contains(<span class="string">"Method not found"</span>) {
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(ModuleConsensusVersion::new(<span class="number">2</span>, <span class="number">0</span>));
+                }
+            }
+        }
+
+        response
+    }
+
     <span class="kw">async fn </span>fetch_consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt; {
         <span class="self">self</span>.request_current_consensus(
             BLOCK_COUNT_ENDPOINT.to_string(),

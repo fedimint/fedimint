@@ -299,7 +299,14 @@
 <a href="#298" id="298">298</a>
 <a href="#299" id="299">299</a>
 <a href="#300" id="300">300</a>
-<a href="#301" id="301">301</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::missing_errors_doc)]
@@ -317,7 +324,7 @@
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">pub use </span>anyhow::Result;
-<span class="kw">use </span>bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
+<span class="kw">use </span>bitcoin::{Block, BlockHash, Network, ScriptBuf, Transaction, Txid};
 <span class="kw">use </span>fedimint_core::envs::{
     BitcoinRpcConfig, FM_FORCE_BITCOIN_RPC_KIND_ENV, FM_FORCE_BITCOIN_RPC_URL_ENV,
 };
@@ -428,6 +435,8 @@
     /// prevented by only querying hashes for blocks tailing the chain tip
     /// by a certain number of blocks.
     </span><span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; <span class="prelude-ty">Result</span>&lt;BlockHash&gt;;
+
+    <span class="kw">async fn </span>get_block(<span class="kw-2">&amp;</span><span class="self">self</span>, block_hash: <span class="kw-2">&amp;</span>BlockHash) -&gt; <span class="prelude-ty">Result</span>&lt;Block&gt;;
 
     <span class="doccomment">/// Estimates the fee rate for a given confirmation target. Make sure that
     /// all federation members use the same algorithm to avoid widely
@@ -550,6 +559,11 @@
 
     <span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; <span class="prelude-ty">Result</span>&lt;BlockHash&gt; {
         <span class="self">self</span>.retry_call(|| <span class="kw">async </span>{ <span class="self">self</span>.inner.get_block_hash(height).<span class="kw">await </span>})
+            .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>get_block(<span class="kw-2">&amp;</span><span class="self">self</span>, block_hash: <span class="kw-2">&amp;</span>BlockHash) -&gt; <span class="prelude-ty">Result</span>&lt;Block&gt; {
+        <span class="self">self</span>.retry_call(|| <span class="kw">async </span>{ <span class="self">self</span>.inner.get_block(block_hash).<span class="kw">await </span>})
             .<span class="kw">await
     </span>}
 

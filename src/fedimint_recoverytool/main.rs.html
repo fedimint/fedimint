@@ -377,7 +377,9 @@
 <a href="#376" id="376">376</a>
 <a href="#377" id="377">377</a>
 <a href="#378" id="378">378</a>
-<a href="#379" id="379">379</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 
 </span><span class="kw">mod </span>envs;
 <span class="kw">mod </span>key;
@@ -643,15 +645,17 @@
                 }
 
                 <span class="prelude-val">Some</span>(
-                    input
+                    <span class="kw">match </span>input
                         .as_any()
                         .downcast_ref::&lt;WalletInput&gt;()
                         .expect(<span class="string">"Instance id mapping incorrect"</span>)
-                        .ensure_v0_ref()
-                        .expect(<span class="string">"recoverytool only supports v0 wallet inputs"</span>)
-                        .<span class="number">0
-                        </span>.tweak_contract_key()
-                        .serialize(),
+                    {
+                        WalletInput::V0(input) =&gt; input.tweak_contract_key().serialize(),
+                        WalletInput::V1(input) =&gt; input.tweak_contract_key.serialize(),
+                        WalletInput::Default { .. } =&gt; {
+                            <span class="macro">panic!</span>(<span class="string">"recoverytool only supports v0 wallet inputs"</span>)
+                        }
+                    },
                 )
             })
         })
