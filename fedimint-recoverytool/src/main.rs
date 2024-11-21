@@ -264,15 +264,17 @@ fn input_tweaks_and_peg_out_count(
                 }
 
                 Some(
-                    input
+                    match input
                         .as_any()
                         .downcast_ref::<WalletInput>()
                         .expect("Instance id mapping incorrect")
-                        .ensure_v0_ref()
-                        .expect("recoverytool only supports v0 wallet inputs")
-                        .0
-                        .tweak_contract_key()
-                        .serialize(),
+                    {
+                        WalletInput::V0(input) => input.tweak_contract_key().serialize(),
+                        WalletInput::V1(input) => input.tweak_contract_key.serialize(),
+                        WalletInput::Default { .. } => {
+                            panic!("recoverytool only supports v0 wallet inputs")
+                        }
+                    },
                 )
             })
         })

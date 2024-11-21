@@ -6,6 +6,7 @@ use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::secp256k1::Keypair;
 use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
@@ -188,7 +189,7 @@ async fn await_btc_transaction_confirmed(
     context: WalletClientContext,
     global_context: DynGlobalClientContext,
     waiting_state: WaitingForConfirmationsDepositState,
-) -> TxOutProof {
+) -> (TxOutProof, ModuleConsensusVersion) {
     loop {
         // TODO: make everything subscriptions
         // Wait for confirmation
@@ -249,7 +250,16 @@ async fn await_btc_transaction_confirmed(
 
         debug!(proof_block_hash = ?txout_proof.block_header.block_hash(), "Generated merkle proof");
 
-        return txout_proof;
+        let consensus_version = match global_context.module_api().module_consensus_version().await {
+            Ok(version) => version,
+            Err(e) => {
+                warn!("Failed to fetch module_consensus_version: {e:?}");
+                sleep(TRANSACTION_STATUS_FETCH_INTERVAL).await;
+                continue;
+            }
+        };
+
+        return (txout_proof, consensus_version);
     }
 }
 
@@ -257,7 +267,7 @@ pub(crate) async fn transition_btc_tx_confirmed(
     dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
     global_context: DynGlobalClientContext,
     old_state: DepositStateMachine,
-    txout_proof: TxOutProof,
+    (txout_proof, consensus_version): (TxOutProof, ModuleConsensusVersion),
 ) -> DepositStateMachine {
     let DepositStates::WaitingForConfirmations(awaiting_confirmation_state) = old_state.state
     else {
@@ -274,7 +284,11 @@ pub(crate) async fn transition_btc_tx_confirmed(
 
     let amount = pegin_proof.tx_output().value.into();
 
-    let wallet_input = WalletInput::new_v0(pegin_proof);
+    let wallet_input = if consensus_version >= ModuleConsensusVersion::new(2, 2) {
+        WalletInput::new_v1(&pegin_proof)
+    } else {
+        WalletInput::new_v0(pegin_proof)
+    };
 
     let client_input = ClientInput::<WalletInput> {
         input: wallet_input,

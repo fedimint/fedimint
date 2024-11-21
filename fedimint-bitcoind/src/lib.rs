@@ -16,7 +16,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 pub use anyhow::Result;
-use bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
+use bitcoin::{Block, BlockHash, Network, ScriptBuf, Transaction, Txid};
 use fedimint_core::envs::{
     BitcoinRpcConfig, FM_FORCE_BITCOIN_RPC_KIND_ENV, FM_FORCE_BITCOIN_RPC_URL_ENV,
 };
@@ -127,6 +127,8 @@ pub trait IBitcoindRpc: Debug {
     /// prevented by only querying hashes for blocks tailing the chain tip
     /// by a certain number of blocks.
     async fn get_block_hash(&self, height: u64) -> Result<BlockHash>;
+
+    async fn get_block(&self, block_hash: &BlockHash) -> Result<Block>;
 
     /// Estimates the fee rate for a given confirmation target. Make sure that
     /// all federation members use the same algorithm to avoid widely
@@ -249,6 +251,11 @@ where
 
     async fn get_block_hash(&self, height: u64) -> Result<BlockHash> {
         self.retry_call(|| async { self.inner.get_block_hash(height).await })
+            .await
+    }
+
+    async fn get_block(&self, block_hash: &BlockHash) -> Result<Block> {
+        self.retry_call(|| async { self.inner.get_block(block_hash).await })
             .await
     }
 

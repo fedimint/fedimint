@@ -9,7 +9,7 @@ use std::hash::Hasher;
 
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::psbt::raw::ProprietaryKey;
-use bitcoin::{secp256k1, Address, Amount, BlockHash, Txid};
+use bitcoin::{secp256k1, Address, Amount, BlockHash, TxOut, Txid};
 use config::WalletClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
@@ -33,7 +33,7 @@ pub mod tweakable;
 pub mod txoproof;
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("wallet");
-pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 1);
+pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 2);
 
 /// Used for estimating a feerate that will confirm within a target number of
 /// blocks.
@@ -60,6 +60,7 @@ pub enum WalletConsensusItem {
                       * * verification logic */
     Feerate(Feerate),
     PegOutSignature(PegOutSignatureItem),
+    ModuleConsensusVersion(ModuleConsensusVersion),
     #[encodable_default]
     Default {
         variant: u64,
@@ -82,6 +83,13 @@ impl std::fmt::Display for WalletConsensusItem {
             }
             WalletConsensusItem::PegOutSignature(sig) => {
                 write!(f, "Wallet PegOut signature for Bitcoin TxId {}", sig.txid)
+            }
+            WalletConsensusItem::ModuleConsensusVersion(version) => {
+                write!(
+                    f,
+                    "Wallet Consensus Version {}.{}",
+                    version.major, version.minor
+                )
             }
             WalletConsensusItem::Default { variant, .. } => {
                 write!(f, "Unknown Wallet CI variant={variant}")
@@ -280,17 +288,79 @@ impl CommonModuleInit for WalletCommonInit {
     }
 }
 
-extensible_associated_module_type!(WalletInput, WalletInputV0, UnknownWalletInputVariantError);
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub enum WalletInput {
+    V0(WalletInputV0),
+    V1(WalletInputV1),
+    #[encodable_default]
+    Default {
+        variant: u64,
+        bytes: Vec<u8>,
+    },
+}
+
+impl WalletInput {
+    pub fn maybe_v0_ref(&self) -> Option<&WalletInputV0> {
+        match self {
+            WalletInput::V0(v0) => Some(v0),
+            _ => None,
+        }
+    }
+}
+
+#[derive(
+    Debug,
+    thiserror::Error,
+    Clone,
+    Eq,
+    PartialEq,
+    Hash,
+    serde::Deserialize,
+    serde::Serialize,
+    fedimint_core::encoding::Encodable,
+    fedimint_core::encoding::Decodable,
+)]
+#[error("Unknown {} variant {variant}", stringify!($name))]
+pub struct UnknownWalletInputVariantError {
+    pub variant: u64,
+}
+
+impl std::fmt::Display for WalletInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            WalletInput::V0(inner) => std::fmt::Display::fmt(&inner, f),
+            WalletInput::V1(inner) => std::fmt::Display::fmt(&inner, f),
+            WalletInput::Default { variant, .. } => {
+                write!(f, "Unknown variant (variant={variant})")
+            }
+        }
+    }
+}
 
 impl WalletInput {
     pub fn new_v0(peg_in_proof: PegInProof) -> WalletInput {
         WalletInput::V0(WalletInputV0(Box::new(peg_in_proof)))
+    }
+
+    pub fn new_v1(peg_in_proof: &PegInProof) -> WalletInput {
+        WalletInput::V1(WalletInputV1 {
+            outpoint: peg_in_proof.outpoint(),
+            tweak_contract_key: *peg_in_proof.tweak_contract_key(),
+            tx_out: peg_in_proof.tx_output(),
+        })
     }
 }
 
 #[autoimpl(Deref, DerefMut using self.0)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct WalletInputV0(pub Box<PegInProof>);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct WalletInputV1 {
+    pub outpoint: bitcoin::OutPoint,
+    pub tweak_contract_key: secp256k1::PublicKey,
+    pub tx_out: TxOut,
+}
 
 impl std::fmt::Display for WalletInputV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -299,6 +369,12 @@ impl std::fmt::Display for WalletInputV0 {
             "Wallet PegIn with Bitcoin TxId {}",
             self.0.outpoint().txid
         )
+    }
+}
+
+impl std::fmt::Display for WalletInputV1 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Wallet PegIn V1 with TxId {}", self.outpoint.txid)
     }
 }
 
@@ -422,6 +498,12 @@ pub enum WalletInputError {
     PegInAlreadyClaimed,
     #[error("The wallet input version is not supported by this federation")]
     UnknownInputVariant(#[from] UnknownWalletInputVariantError),
+    #[error("Unknown UTXO")]
+    UnknownUTXO,
+    #[error("Wrong output script")]
+    WrongOutputScript,
+    #[error("Wrong tx out")]
+    WrongTxOut,
 }
 
 #[derive(Debug, Error, Encodable, Decodable, Hash, Clone, Eq, PartialEq)]

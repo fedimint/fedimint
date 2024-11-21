@@ -67,13 +67,15 @@ use fedimint_server::net::api::check_auth;
 pub use fedimint_wallet_common as common;
 use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
 use fedimint_wallet_common::endpoint_constants::{
-    BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT, BLOCK_COUNT_ENDPOINT,
-    BLOCK_COUNT_LOCAL_ENDPOINT, PEG_OUT_FEES_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
+    ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT, BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT,
+    BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT,
+    PEG_OUT_FEES_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
 };
 use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::{
-    Rbf, WalletInputError, WalletOutputError, WalletOutputV0, MODULE_CONSENSUS_VERSION,
+    Rbf, UnknownWalletInputVariantError, WalletInputError, WalletOutputError, WalletOutputV0,
+    MODULE_CONSENSUS_VERSION,
 };
 use futures::{FutureExt, StreamExt};
 use metrics::{
@@ -90,11 +92,13 @@ use tracing::{debug, info, instrument, trace, warn};
 
 use crate::db::{
     migrate_to_v1, BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix,
-    ClaimedPegInOutpointKey, ClaimedPegInOutpointPrefixKey, DbKeyPrefix, FeeRateVoteKey,
-    FeeRateVotePrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix, PegOutNonceKey,
-    PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
-    PendingTransactionPrefixKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
-    UnsignedTransactionPrefixKey,
+    ClaimedPegInOutpointKey, ClaimedPegInOutpointPrefixKey, ConsensusVersionVoteKey,
+    ConsensusVersionVotePrefix, ConsensusVersionVotingActivationKey,
+    ConsensusVersionVotingActivationPrefix, DbKeyPrefix, FeeRateVoteKey, FeeRateVotePrefix,
+    PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix, PegOutNonceKey, PegOutTxSignatureCI,
+    PegOutTxSignatureCIPrefix, PendingTransactionKey, PendingTransactionPrefixKey, UTXOKey,
+    UTXOPrefixKey, UnsignedTransactionKey, UnsignedTransactionPrefixKey, UnspentTxOutKey,
+    UnspentTxOutPrefix,
 };
 use crate::metrics::WALLET_BLOCK_COUNT;
 
@@ -203,6 +207,36 @@ impl ModuleInit for WalletInit {
                         (),
                         wallet,
                         "Claimed Peg-in Outpoint"
+                    );
+                }
+                DbKeyPrefix::ConsensusVersionVote => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ConsensusVersionVotePrefix,
+                        ConsensusVersionVoteKey,
+                        ModuleConsensusVersion,
+                        wallet,
+                        "Consensus Version Votes"
+                    );
+                }
+                DbKeyPrefix::UnspentTxOut => {
+                    push_db_pair_items!(
+                        dbtx,
+                        UnspentTxOutPrefix,
+                        UnspentTxOutKey,
+                        TxOut,
+                        wallet,
+                        "Consensus Version Votes"
+                    );
+                }
+                DbKeyPrefix::ConsensusVersionVotingActivation => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ConsensusVersionVotingActivationPrefix,
+                        ConsensusVersionVotingActivationKey,
+                        (),
+                        wallet,
+                        "Consensus Version Voting Activation Key"
                     );
                 }
             }
@@ -415,6 +449,17 @@ impl ServerModule for Wallet {
 
         items.push(WalletConsensusItem::Feerate(fee_rate_proposal));
 
+        if dbtx
+            .get_value(&ConsensusVersionVotingActivationKey)
+            .await
+            .is_some()
+            || is_running_in_test_env()
+        {
+            items.push(WalletConsensusItem::ModuleConsensusVersion(
+                MODULE_CONSENSUS_VERSION,
+            ));
+        }
+
         items
     }
 
@@ -512,6 +557,25 @@ impl ServerModule for Wallet {
                     dbtx.remove_entry(&UnsignedTransactionKey(txid)).await;
                 }
             }
+            WalletConsensusItem::ModuleConsensusVersion(module_consensus_version) => {
+                let current_vote = dbtx
+                    .get_value(&ConsensusVersionVoteKey(peer))
+                    .await
+                    .unwrap_or(ModuleConsensusVersion::new(2, 0));
+
+                ensure!(
+                    module_consensus_version > current_vote,
+                    "Module consenus version vote is redundant"
+                );
+
+                dbtx.insert_entry(&ConsensusVersionVoteKey(peer), &module_consensus_version)
+                    .await;
+
+                assert!(
+                    self.consensus_module_consensus_version(dbtx).await <= MODULE_CONSENSUS_VERSION,
+                    "Wallet module does not support new consensus version, please upgrade the module"
+                );
+            }
             WalletConsensusItem::Default { variant, .. } => {
                 panic!("Received wallet consensus item with unknown variant {variant}");
             }
@@ -525,41 +589,82 @@ impl ServerModule for Wallet {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b WalletInput,
     ) -> Result<InputMeta, WalletInputError> {
-        let input = input.ensure_v0_ref()?;
+        let (outpoint, value, pub_key) = match input {
+            WalletInput::V0(input) => {
+                if !self.block_is_known(dbtx, input.proof_block()).await {
+                    return Err(WalletInputError::UnknownPegInProofBlock(
+                        input.proof_block(),
+                    ));
+                }
 
-        if !self.block_is_known(dbtx, input.proof_block()).await {
-            return Err(WalletInputError::UnknownPegInProofBlock(
-                input.proof_block(),
-            ));
-        }
+                input.verify(&self.secp, &self.cfg.consensus.peg_in_descriptor)?;
 
-        input.verify(&self.secp, &self.cfg.consensus.peg_in_descriptor)?;
+                debug!(outpoint = %input.outpoint(), "Claiming peg-in");
 
-        debug!(outpoint = %input.outpoint(), "Claiming peg-in");
+                (
+                    input.0.outpoint(),
+                    input.tx_output().value,
+                    *input.tweak_contract_key(),
+                )
+            }
+            WalletInput::V1(input) => {
+                let input_tx_out = dbtx
+                    .get_value(&UnspentTxOutKey(input.outpoint))
+                    .await
+                    .ok_or(WalletInputError::UnknownUTXO)?;
+
+                if input_tx_out.script_pubkey
+                    != self
+                        .cfg
+                        .consensus
+                        .peg_in_descriptor
+                        .tweak(&input.tweak_contract_key, secp256k1::SECP256K1)
+                        .script_pubkey()
+                {
+                    return Err(WalletInputError::WrongOutputScript);
+                }
+
+                // Verifying this is not strictly necessary for the server as the tx_out is only
+                // used in backup and recovery.
+                if input.tx_out != input_tx_out {
+                    return Err(WalletInputError::WrongTxOut);
+                }
+
+                (input.outpoint, input_tx_out.value, input.tweak_contract_key)
+            }
+            WalletInput::Default { variant, .. } => {
+                return Err(WalletInputError::UnknownInputVariant(
+                    UnknownWalletInputVariantError { variant: *variant },
+                ));
+            }
+        };
 
         if dbtx
-            .insert_entry(&ClaimedPegInOutpointKey(input.outpoint()), &())
+            .insert_entry(&ClaimedPegInOutpointKey(outpoint), &())
             .await
             .is_some()
         {
             return Err(WalletInputError::PegInAlreadyClaimed);
         }
 
-        dbtx.insert_entry(
-            &UTXOKey(input.outpoint()),
+        dbtx.insert_new_entry(
+            &UTXOKey(outpoint),
             &SpendableUTXO {
-                tweak: input.tweak_contract_key().serialize(),
-                amount: input.tx_output().value,
+                tweak: pub_key.serialize(),
+                amount: value,
             },
         )
         .await;
 
-        let amount = input.tx_output().value.into();
+        let amount = value.into();
+
         let fee = self.cfg.consensus.fee_consensus.peg_in_abs;
+
         calculate_pegin_metrics(dbtx, amount, fee);
+
         Ok(InputMeta {
             amount: TransactionItemAmount { amount, fee },
-            pub_key: *input.tweak_contract_key(),
+            pub_key,
         })
     }
 
@@ -697,6 +802,29 @@ impl ServerModule for Wallet {
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
+            api_endpoint! {
+                MODULE_CONSENSUS_VERSION_ENDPOINT,
+                ApiVersion::new(0, 0),
+                async |module: &Wallet, context, _params: ()| -> ModuleConsensusVersion {
+                    Ok(module.consensus_module_consensus_version(&mut context.dbtx().into_nc()).await)
+                }
+            },
+            api_endpoint! {
+                ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT,
+                ApiVersion::new(0, 0),
+                async |_module: &Wallet, context, _params: ()| -> () {
+                    check_auth(context)?;
+
+                    let mut dbtx = context.dbtx();
+
+                    dbtx.insert_entry(&ConsensusVersionVotingActivationKey, &()).await;
+
+                    dbtx.commit_tx_result().await.map_err(|e| ApiError::server_error(e.to_string()))?;
+
+                    Ok(())
+
+                }
+            },
             api_endpoint! {
                 BLOCK_COUNT_ENDPOINT,
                 ApiVersion::new(0, 0),
@@ -1028,6 +1156,32 @@ impl Wallet {
         rates[peer_count / 2]
     }
 
+    async fn consensus_module_consensus_version(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> ModuleConsensusVersion {
+        let num_peers = self.cfg.consensus.peer_peg_in_keys.to_num_peers();
+
+        let mut versions = dbtx
+            .find_by_prefix(&ConsensusVersionVotePrefix)
+            .await
+            .map(|entry| entry.1)
+            .collect::<Vec<ModuleConsensusVersion>>()
+            .await;
+
+        while versions.len() < num_peers.total() {
+            versions.push(ModuleConsensusVersion::new(2, 0));
+        }
+
+        assert_eq!(versions.len(), num_peers.total());
+
+        versions.sort_unstable();
+
+        assert!(versions.first() <= versions.last());
+
+        versions[num_peers.max_evil()]
+    }
+
     pub async fn consensus_nonce(&self, dbtx: &mut DatabaseTransaction<'_>) -> [u8; 33] {
         let nonce_idx = dbtx.get_value(&PegOutNonceKey).await.unwrap_or(0);
         dbtx.insert_entry(&PegOutNonceKey, &(nonce_idx + 1)).await;
@@ -1064,6 +1218,42 @@ impl Wallet {
                 })
                 .await
                 .expect("bitcoind rpc to get block hash");
+
+            if self.consensus_module_consensus_version(dbtx).await
+                >= ModuleConsensusVersion::new(2, 2)
+            {
+                let block = retry("get_block", backoff_util::background_backoff(), || {
+                    self.btc_rpc.get_block(&block_hash)
+                })
+                .await
+                .expect("bitcoind rpc to get block");
+
+                for transaction in block.txdata {
+                    // We maintain the subset of unspent P2WSH transaction outputs created
+                    // since the federation was established in the database.
+
+                    for tx_in in &transaction.input {
+                        dbtx.remove_entry(&UnspentTxOutKey(tx_in.previous_output))
+                            .await;
+                    }
+
+                    for (vout, tx_out) in transaction.output.iter().enumerate() {
+                        if if self.cfg.consensus.peer_peg_in_keys.len() > 1 {
+                            tx_out.script_pubkey.is_p2wsh()
+                        } else {
+                            tx_out.script_pubkey.is_p2wpkh()
+                        } {
+                            let outpoint = bitcoin::OutPoint {
+                                txid: transaction.compute_txid(),
+                                vout: vout as u32,
+                            };
+
+                            dbtx.insert_new_entry(&UnspentTxOutKey(outpoint), tx_out)
+                                .await;
+                        }
+                    }
+                }
+            }
 
             let pending_transactions = dbtx
                 .find_by_prefix(&PendingTransactionPrefixKey)

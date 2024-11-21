@@ -78,6 +78,10 @@ impl IBitcoindRpc for ElectrumClient {
             .block_hash())
     }
 
+    async fn get_block(&self, _block_hash: &BlockHash) -> anyhow::Result<bitcoin::Block> {
+        bail!("Electrum does not support fetching full blocks");
+    }
+
     async fn get_fee_rate(&self, confirmation_target: u16) -> anyhow::Result<Option<Feerate>> {
         let estimate = block_in_place(|| self.client.estimate_fee(confirmation_target as usize))?;
         let min_fee = block_in_place(|| self.client.relay_fee())?;

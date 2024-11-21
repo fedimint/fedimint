@@ -54,6 +54,13 @@ async fn peg_in<'a>(
     let mut balance_sub = client.subscribe_balance_changes().await;
     let initial_balance = balance_sub.ok().await?;
 
+    assert!(
+        client
+            .get_first_module::<WalletClientModule>()?
+            .btc_tx_has_no_size_limit()
+            .await?
+    );
+
     let wallet_module = &client.get_first_module::<WalletClientModule>()?;
     let (op, address, _) = wallet_module
         .allocate_deposit_address_expert_only(())
@@ -166,6 +173,13 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     let finality_delay = 10;
     bitcoin.mine_blocks(finality_delay).await;
     await_consensus_to_catch_up(&client, 1).await?;
+
+    assert!(
+        client
+            .get_first_module::<WalletClientModule>()?
+            .btc_tx_has_no_size_limit()
+            .await?
+    );
 
     assert_eq!(client.get_balance().await, sats(0));
     let (op, address, _) = wallet_module
@@ -318,6 +332,13 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
 
     let starting_balance = client.get_balance().await;
     info!(?starting_balance, "Starting balance");
+
+    assert!(
+        client
+            .get_first_module::<WalletClientModule>()?
+            .btc_tx_has_no_size_limit()
+            .await?
+    );
 
     let wallet_module = &client.get_first_module::<WalletClientModule>()?;
     let (op, address, tweak_idx) = wallet_module
@@ -1006,7 +1027,7 @@ mod fedimint_migration_tests {
         Database, DatabaseVersion, DatabaseVersionKey, DatabaseVersionKeyV0,
         IDatabaseTransactionOpsCoreTyped,
     };
-    use fedimint_core::module::DynServerModuleInit;
+    use fedimint_core::module::{DynServerModuleInit, ModuleConsensusVersion};
     use fedimint_core::{Feerate, OutPoint, PeerId, TransactionId};
     use fedimint_logging::TracingSetup;
     use fedimint_testing::db::{
@@ -1020,11 +1041,13 @@ mod fedimint_migration_tests {
     };
     use fedimint_wallet_server::db::{
         BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix,
-        ClaimedPegInOutpointKey, ClaimedPegInOutpointPrefixKey, DbKeyPrefix, FeeRateVoteKey,
-        FeeRateVotePrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix,
-        PegOutNonceKey, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
+        ClaimedPegInOutpointKey, ClaimedPegInOutpointPrefixKey, ConsensusVersionVoteKey,
+        ConsensusVersionVotePrefix, ConsensusVersionVotingActivationKey,
+        ConsensusVersionVotingActivationPrefix, DbKeyPrefix, FeeRateVoteKey, FeeRateVotePrefix,
+        PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix, PegOutNonceKey,
+        PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
         PendingTransactionPrefixKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
-        UnsignedTransactionPrefixKey,
+        UnsignedTransactionPrefixKey, UnspentTxOutKey, UnspentTxOutPrefix,
     };
     use fedimint_wallet_server::{PendingTransaction, UnsignedTransaction};
     use futures::StreamExt;
@@ -1068,6 +1091,12 @@ mod fedimint_migration_tests {
             .await;
 
         dbtx.insert_new_entry(
+            &ConsensusVersionVoteKey(PeerId::from(0)),
+            &ModuleConsensusVersion::new(2, 0),
+        )
+        .await;
+
+        dbtx.insert_new_entry(
             &FeeRateVoteKey(PeerId::from(0)),
             &Feerate { sats_per_kvb: 10 },
         )
@@ -1082,6 +1111,12 @@ mod fedimint_migration_tests {
             value: bitcoin::Amount::from_sat(10_000),
             script_pubkey: destination.clone(),
         }];
+
+        dbtx.insert_new_entry(&UnspentTxOutKey(utxo.0), &output[0])
+            .await;
+
+        dbtx.insert_new_entry(&ConsensusVersionVotingActivationKey, &())
+            .await;
 
         let tx = Transaction {
             version: bitcoin::transaction::Version(2),
@@ -1371,6 +1406,45 @@ mod fedimint_migration_tests {
                                 "validate_migrations was not able to read any claimed peg-in outpoints"
                             );
                             info!("Validated PeggedInOutpoint");
+                        }
+                        DbKeyPrefix::ConsensusVersionVote => {
+                            let votes = dbtx
+                                .find_by_prefix(&ConsensusVersionVotePrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_votes = votes.len();
+                            ensure!(
+                                num_votes > 0,
+                                "validate_migrations was not able to read any consensus version votes"
+                            );
+                            info!("Validated ConsensusVersionVote");
+                        }
+                        DbKeyPrefix::UnspentTxOut => {
+                            let utxos = dbtx
+                                .find_by_prefix(&UnspentTxOutPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_utxos = utxos.len();
+                            ensure!(
+                                num_utxos > 0,
+                                "validate_migrations was not able to read any utxos"
+                            );
+                            info!("Validated UnspendTxOut");
+                        }
+                        DbKeyPrefix::ConsensusVersionVotingActivation => {
+                            let activations = dbtx
+                                .find_by_prefix(&ConsensusVersionVotingActivationPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_activations = activations.len();
+                            ensure!(
+                                num_activations > 0,
+                                "validate_migrations was not able to read any version voting activation"
+                            );
+                            info!("Validated ConsensusVersionVotingActivation");
                         }
                     }
                 }

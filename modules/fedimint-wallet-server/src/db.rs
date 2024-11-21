@@ -1,7 +1,8 @@
 use bitcoin::secp256k1::ecdsa::Signature;
-use bitcoin::{BlockHash, OutPoint, Txid};
+use bitcoin::{BlockHash, OutPoint, TxOut, Txid};
 use fedimint_core::db::{IDatabaseTransactionOpsCoreTyped, MigrationContext};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
 use fedimint_server::consensus::db::{MigrationContextExt, TypedModuleHistoryItem};
 use fedimint_wallet_common::WalletModuleTypes;
@@ -24,6 +25,9 @@ pub enum DbKeyPrefix {
     PegOutBitcoinOutPoint = 0x37,
     PegOutNonce = 0x38,
     ClaimedPegInOutpoint = 0x39,
+    ConsensusVersionVote = 0x40,
+    UnspentTxOut = 0x41,
+    ConsensusVersionVotingActivation = 0x42,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -151,6 +155,23 @@ impl_db_record!(
 
 impl_db_lookup!(key = FeeRateVoteKey, query_prefix = FeeRateVotePrefix);
 
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct ConsensusVersionVoteKey(pub PeerId);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct ConsensusVersionVotePrefix;
+
+impl_db_record!(
+    key = ConsensusVersionVoteKey,
+    value = ModuleConsensusVersion,
+    db_prefix = DbKeyPrefix::ConsensusVersionVote
+);
+
+impl_db_lookup!(
+    key = ConsensusVersionVoteKey,
+    query_prefix = ConsensusVersionVotePrefix
+);
+
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct PegOutNonceKey;
 
@@ -185,7 +206,7 @@ pub async fn migrate_to_v1(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::
                 match item {
                     TypedModuleHistoryItem::Input(input) => {
                         let outpoint = input
-                            .ensure_v0_ref()
+                            .maybe_v0_ref()
                             .expect("can only support V0 wallet inputs")
                             .0
                             .outpoint();
@@ -207,3 +228,32 @@ pub async fn migrate_to_v1(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::
 
     Ok(())
 }
+
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct UnspentTxOutKey(pub bitcoin::OutPoint);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct UnspentTxOutPrefix;
+
+impl_db_record!(
+    key = UnspentTxOutKey,
+    value = TxOut,
+    db_prefix = DbKeyPrefix::UnspentTxOut,
+);
+impl_db_lookup!(key = UnspentTxOutKey, query_prefix = UnspentTxOutPrefix);
+
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct ConsensusVersionVotingActivationKey;
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct ConsensusVersionVotingActivationPrefix;
+
+impl_db_record!(
+    key = ConsensusVersionVotingActivationKey,
+    value = (),
+    db_prefix = DbKeyPrefix::ConsensusVersionVotingActivation,
+);
+impl_db_lookup!(
+    key = ConsensusVersionVotingActivationKey,
+    query_prefix = ConsensusVersionVotingActivationPrefix
+);

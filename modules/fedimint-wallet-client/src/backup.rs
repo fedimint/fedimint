@@ -284,6 +284,7 @@ impl RecoveryFromHistory for WalletRecovery {
     ) -> anyhow::Result<()> {
         let script_pubkey = match input {
             WalletInput::V0(WalletInputV0(ref input)) => &input.tx_output().script_pubkey,
+            WalletInput::V1(input) => &input.tx_out.script_pubkey,
             WalletInput::Default {
                 variant: _,
                 bytes: _,
