@@ -14,7 +14,7 @@ use fedimint_core::db::Database;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::CommonModuleInit;
-use fedimint_core::{secp256k1, Amount, OutPoint, TieredCounts};
+use fedimint_core::{secp256k1, Amount, OutPoint, PeerId, TieredCounts};
 use fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LnPayState, OutgoingLightningPayment,
 };
@@ -31,8 +31,8 @@ use tracing::log::warn;
 
 use crate::MetricEvent;
 
-pub async fn get_invite_code_cli() -> anyhow::Result<InviteCode> {
-    cmd!(FedimintCli, "invite-code").out_json().await?["invite_code"]
+pub async fn get_invite_code_cli(peer: PeerId) -> anyhow::Result<InviteCode> {
+    cmd!(FedimintCli, "invite-code", peer).out_json().await?["invite_code"]
         .as_str()
         .map(InviteCode::from_str)
         .transpose()?
