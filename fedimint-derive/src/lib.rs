@@ -428,10 +428,11 @@ fn derive_named_decode_block(
             #(
                 let #variant_fields = ::fedimint_core::encoding::Decodable::consensus_decode_from_finite_reader(#reader, modules)
                     .context(concat!(
-                        "Decoding named block ",
+                        "Decoding named block field: ",
                         stringify!(#ident),
-                        " {} ",
+                        "{ ... ",
                         stringify!(#variant_fields),
+                        " ... }",
                     ))?;
             )*
             #constructor{
