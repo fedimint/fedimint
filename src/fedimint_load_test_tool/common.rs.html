@@ -417,7 +417,7 @@
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
-<span class="kw">use </span>fedimint_core::{secp256k1, Amount, OutPoint, TieredCounts};
+<span class="kw">use </span>fedimint_core::{secp256k1, Amount, OutPoint, PeerId, TieredCounts};
 <span class="kw">use </span>fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LnPayState, OutgoingLightningPayment,
 };
@@ -434,8 +434,8 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::MetricEvent;
 
-<span class="kw">pub async fn </span>get_invite_code_cli() -&gt; anyhow::Result&lt;InviteCode&gt; {
-    <span class="macro">cmd!</span>(FedimintCli, <span class="string">"invite-code"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"invite_code"</span>]
+<span class="kw">pub async fn </span>get_invite_code_cli(peer: PeerId) -&gt; anyhow::Result&lt;InviteCode&gt; {
+    <span class="macro">cmd!</span>(FedimintCli, <span class="string">"invite-code"</span>, peer).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"invite_code"</span>]
         .as_str()
         .map(InviteCode::from_str)
         .transpose()<span class="question-mark">?

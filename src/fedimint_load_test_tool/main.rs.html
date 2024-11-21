@@ -1777,7 +1777,7 @@
         <span class="prelude-val">Some</span>(invite_code)
     } <span class="kw">else </span>{
         <span class="comment">// Try to get an invite code through cli in a best effort basis
-        </span><span class="kw">match </span>get_invite_code_cli().<span class="kw">await </span>{
+        </span><span class="kw">match </span>get_invite_code_cli(<span class="number">0</span>.into()).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(invite_code) =&gt; <span class="prelude-val">Some</span>(invite_code),
             <span class="prelude-val">Err</span>(e) =&gt; {
                 <span class="macro">info!</span>(<span class="string">"No invite code provided and failed to get one with '{e}' error, will try to proceed without one..."</span>);
