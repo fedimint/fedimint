@@ -495,31 +495,7 @@
 <a href="#494" id="494">494</a>
 <a href="#495" id="495">495</a>
 <a href="#496" id="496">496</a>
-<a href="#497" id="497">497</a>
-<a href="#498" id="498">498</a>
-<a href="#499" id="499">499</a>
-<a href="#500" id="500">500</a>
-<a href="#501" id="501">501</a>
-<a href="#502" id="502">502</a>
-<a href="#503" id="503">503</a>
-<a href="#504" id="504">504</a>
-<a href="#505" id="505">505</a>
-<a href="#506" id="506">506</a>
-<a href="#507" id="507">507</a>
-<a href="#508" id="508">508</a>
-<a href="#509" id="509">509</a>
-<a href="#510" id="510">510</a>
-<a href="#511" id="511">511</a>
-<a href="#512" id="512">512</a>
-<a href="#513" id="513">513</a>
-<a href="#514" id="514">514</a>
-<a href="#515" id="515">515</a>
-<a href="#516" id="516">516</a>
-<a href="#517" id="517">517</a>
-<a href="#518" id="518">518</a>
-<a href="#519" id="519">519</a>
-<a href="#520" id="520">520</a>
-<a href="#521" id="521">521</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
+<a href="#497" id="497">497</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -538,13 +514,13 @@
 <span class="kw">use </span>ln_gateway::rpc::{GatewayBalances, MnemonicResponse, V1_API_ENDPOINT};
 <span class="kw">use </span>tracing::info;
 
+<span class="kw">use </span><span class="kw">crate</span>::cmd;
 <span class="kw">use </span><span class="kw">crate</span>::envs::{FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV};
 <span class="kw">use </span><span class="kw">crate</span>::external::{Bitcoind, LightningNode};
 <span class="kw">use </span><span class="kw">crate</span>::federation::Federation;
 <span class="kw">use </span><span class="kw">crate</span>::util::{poll, Command, ProcessHandle, ProcessManager};
 <span class="kw">use </span><span class="kw">crate</span>::vars::utf8;
 <span class="kw">use </span><span class="kw">crate</span>::version_constants::VERSION_0_5_0_ALPHA;
-<span class="kw">use crate</span>::{cmd, Lightningd};
 
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>Gatewayd {
@@ -560,14 +536,12 @@
         <span class="kw">let </span>test_dir = <span class="kw-2">&amp;</span>process_mgr.globals.FM_TEST_DIR;
 
         <span class="kw">let </span>port = <span class="kw">match </span>ln {
-            LightningNode::Cln(<span class="kw">_</span>) =&gt; process_mgr.globals.FM_PORT_GW_CLN,
             LightningNode::Lnd(<span class="kw">_</span>) =&gt; process_mgr.globals.FM_PORT_GW_LND,
             LightningNode::Ldk =&gt; process_mgr.globals.FM_PORT_GW_LDK,
         };
         <span class="kw">let </span>addr = <span class="macro">format!</span>(<span class="string">"http://127.0.0.1:{port}/{V1_API_ENDPOINT}"</span>);
 
         <span class="kw">let </span>lightning_node_port = <span class="kw">match </span>ln {
-            LightningNode::Cln(<span class="kw">_</span>) =&gt; process_mgr.globals.FM_PORT_CLN,
             LightningNode::Lnd(<span class="kw">_</span>) =&gt; process_mgr.globals.FM_PORT_LND_LISTEN,
             LightningNode::Ldk =&gt; process_mgr.globals.FM_PORT_LDK,
         };
@@ -635,7 +609,6 @@
         <span class="macro">info!</span>(<span class="string">"Stopping lightning node"</span>);
         <span class="kw">match </span><span class="self">self</span>.ln.take() {
             <span class="prelude-val">Some</span>(LightningNode::Lnd(lnd)) =&gt; lnd.terminate().<span class="kw">await</span>,
-            <span class="prelude-val">Some</span>(LightningNode::Cln(cln)) =&gt; cln.terminate().<span class="kw">await</span>,
             <span class="prelude-val">Some</span>(LightningNode::Ldk) =&gt; {
                 <span class="comment">// This is not implemented because the LDK node lives in
                 // the gateway process and cannot be stopped independently.
@@ -652,48 +625,27 @@
         process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
         gatewayd_path: <span class="kw-2">&amp;</span>PathBuf,
         gateway_cli_path: <span class="kw-2">&amp;</span>PathBuf,
-        gateway_cln_extension_path: <span class="kw-2">&amp;</span>PathBuf,
-        bitcoind: Bitcoind,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>ln = <span class="self">self
             </span>.ln
             .as_ref()
             .expect(<span class="string">"Lightning Node should exist"</span>)
             .clone();
-        <span class="kw">let </span>ln_type = ln.name();
 
-        <span class="comment">// We need to restart the CLN extension so that it has the same version as
-        // gatewayd
-        </span><span class="kw">if </span>ln_type == LightningNodeType::Cln {
-            <span class="self">self</span>.stop_lightning_node().<span class="kw">await</span><span class="question-mark">?</span>;
-        }
         <span class="self">self</span>.process.terminate().<span class="kw">await</span><span class="question-mark">?</span>;
         std::env::set_var(<span class="string">"FM_GATEWAYD_BASE_EXECUTABLE"</span>, gatewayd_path);
         std::env::set_var(<span class="string">"FM_GATEWAY_CLI_BASE_EXECUTABLE"</span>, gateway_cli_path);
-        std::env::set_var(
-            <span class="string">"FM_GATEWAY_CLN_EXTENSION_BASE_EXECUTABLE"</span>,
-            gateway_cln_extension_path,
-        );
 
-        <span class="kw">let </span>new_ln = <span class="kw">match </span>ln_type {
-            LightningNodeType::Cln =&gt; {
-                <span class="kw">let </span>new_cln = Lightningd::new(process_mgr, bitcoind).<span class="kw">await</span><span class="question-mark">?</span>;
-                LightningNode::Cln(new_cln)
-            }
-            <span class="kw">_ </span>=&gt; ln,
-        };
+        <span class="kw">let </span>new_ln = ln;
         <span class="kw">let </span>new_gw = <span class="self">Self</span>::new(process_mgr, new_ln.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.process = new_gw.process;
         <span class="self">self</span>.set_lightning_node(new_ln);
         <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
         <span class="kw">let </span>gateway_cli_version = <span class="kw">crate</span>::util::GatewayCli::version_or_default().<span class="kw">await</span>;
-        <span class="kw">let </span>gateway_cln_extension_version =
-            <span class="kw">crate</span>::util::GatewayClnExtension::version_or_default().<span class="kw">await</span>;
         <span class="macro">info!</span>(
             <span class="question-mark">?</span>gatewayd_version,
             <span class="question-mark">?</span>gateway_cli_version,
-            <span class="question-mark">?</span>gateway_cln_extension_version,
-            <span class="string">"upgraded gatewayd, gateway-cli, and gateway-cln-extension"
+            <span class="string">"upgraded gatewayd and gateway-cli"
         </span>);
         <span class="prelude-val">Ok</span>(())
     }

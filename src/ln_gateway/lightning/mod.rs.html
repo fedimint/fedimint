@@ -502,20 +502,7 @@
 <a href="#501" id="501">501</a>
 <a href="#502" id="502">502</a>
 <a href="#503" id="503">503</a>
-<a href="#504" id="504">504</a>
-<a href="#505" id="505">505</a>
-<a href="#506" id="506">506</a>
-<a href="#507" id="507">507</a>
-<a href="#508" id="508">508</a>
-<a href="#509" id="509">509</a>
-<a href="#510" id="510">510</a>
-<a href="#511" id="511">511</a>
-<a href="#512" id="512">512</a>
-<a href="#513" id="513">513</a>
-<a href="#514" id="514">514</a>
-<a href="#515" id="515">515</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>cln;
-<span class="kw">pub mod </span>extension;
-<span class="kw">pub mod </span>ldk;
+<a href="#504" id="504">504</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>ldk;
 <span class="kw">pub mod </span>lnd;
 
 <span class="kw">use </span>std::fmt::Debug;
@@ -532,7 +519,7 @@
 <span class="kw">use </span>fedimint_core::envs::is_env_var_set;
 <span class="kw">use </span>fedimint_core::secp256k1::PublicKey;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
-<span class="kw">use </span>fedimint_core::util::{backoff_util, retry, SafeUrl};
+<span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
 <span class="kw">use </span>fedimint_core::{secp256k1, Amount};
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
 <span class="kw">use </span>fedimint_ln_common::PrunedInvoice;
@@ -542,11 +529,10 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{debug, info, warn};
 
-<span class="kw">use </span><span class="self">self</span>::cln::NetworkLnRpcClient;
 <span class="kw">use </span><span class="self">self</span>::lnd::GatewayLndClient;
 <span class="kw">use </span><span class="kw">crate</span>::envs::{
-    FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV, FM_LDK_ESPLORA_SERVER_URL,
-    FM_LDK_NETWORK, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
+    FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV, FM_LDK_ESPLORA_SERVER_URL, FM_LDK_NETWORK,
+    FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
 <span class="kw">use </span><span class="kw">crate</span>::rpc::{CloseChannelsWithPeerPayload, SendOnchainPayload};
 <span class="kw">use crate</span>::{OpenChannelPayload, Preimage};
@@ -835,11 +821,6 @@
         </span><span class="attr">#[arg(long = <span class="string">"lnd-macaroon"</span>, env = FM_LND_MACAROON_ENV)]
         </span>lnd_macaroon: String,
     },
-    <span class="attr">#[clap(name = <span class="string">"cln"</span>)]
-    </span>Cln {
-        <span class="attr">#[arg(long = <span class="string">"cln-extension-addr"</span>, env = FM_GATEWAY_LIGHTNING_ADDR_ENV)]
-        </span>cln_extension_addr: SafeUrl,
-    },
     <span class="attr">#[clap(name = <span class="string">"ldk"</span>)]
     </span>Ldk {
         <span class="doccomment">/// LDK esplora server URL
@@ -877,9 +858,6 @@
 </span><span class="kw">impl </span>LightningBuilder <span class="kw">for </span>GatewayLightningBuilder {
     <span class="kw">async fn </span>build(<span class="kw-2">&amp;</span><span class="self">self</span>, runtime: Arc&lt;tokio::runtime::Runtime&gt;) -&gt; Box&lt;<span class="kw">dyn </span>ILnRpcClient&gt; {
         <span class="kw">match </span><span class="self">self</span>.lightning_mode.clone() {
-            LightningMode::Cln { cln_extension_addr } =&gt; {
-                Box::new(NetworkLnRpcClient::new(cln_extension_addr))
-            }
             LightningMode::Lnd {
                 lnd_rpc_addr,
                 lnd_tls_cert,

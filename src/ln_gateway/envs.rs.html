@@ -69,15 +69,7 @@
 <a href="#68" id="68">68</a>
 <a href="#69" id="69">69</a>
 <a href="#70" id="70">70</a>
-<a href="#71" id="71">71</a>
-<a href="#72" id="72">72</a>
-<a href="#73" id="73">73</a>
-<a href="#74" id="74">74</a>
-<a href="#75" id="75">75</a>
-<a href="#76" id="76">76</a>
-<a href="#77" id="77">77</a>
-<a href="#78" id="78">78</a>
-<a href="#79" id="79">79</a></pre></div><pre class="rust"><code><span class="doccomment">/// Environment variable that specifies the directory of the gateway's database.
+<a href="#71" id="71">71</a></pre></div><pre class="rust"><code><span class="doccomment">/// Environment variable that specifies the directory of the gateway's database.
 </span><span class="kw">pub const </span>FM_GATEWAY_DATA_DIR_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_DATA_DIR"</span>;
 
 <span class="doccomment">/// Environment variable that specifies the address the gateway's HTTP server
@@ -129,14 +121,6 @@
 <span class="doccomment">/// Environment variable the specifies the port that the LDK Node should use.
 /// Necessary for LDK configuration.
 </span><span class="kw">pub const </span>FM_PORT_LDK: <span class="kw-2">&amp;</span>str = <span class="string">"FM_PORT_LDK"</span>;
-
-<span class="doccomment">/// Environment variable that specifies the address that the Core Lightning
-/// extension should listen on. Will be removed in v0.6
-</span><span class="kw">pub const </span>FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_CLN_EXTENSION_LISTEN_ADDRESS"</span>;
-
-<span class="doccomment">/// Environment variable that specifies the URL that the gateway can use to
-/// connect to the Core Lightning extension. Will be removed in v0.6.
-</span><span class="kw">pub const </span>FM_GATEWAY_LIGHTNING_ADDR_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_LIGHTNING_ADDR"</span>;
 
 <span class="doccomment">/// Environment variable that specifies the mnemonic that the gateway should use
 /// for ecash and the LDK Node should use for onchain funds. If not set, a

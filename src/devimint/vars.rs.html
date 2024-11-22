@@ -231,14 +231,7 @@
 <a href="#230" id="230">230</a>
 <a href="#231" id="231">231</a>
 <a href="#232" id="232">232</a>
-<a href="#233" id="233">233</a>
-<a href="#234" id="234">234</a>
-<a href="#235" id="235">235</a>
-<a href="#236" id="236">236</a>
-<a href="#237" id="237">237</a>
-<a href="#238" id="238">238</a>
-<a href="#239" id="239">239</a>
-<a href="#240" id="240">240</a></pre></div><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
+<a href="#233" id="233">233</a></pre></div><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
 
 </span><span class="kw">use </span>std::path::{Path, PathBuf};
 <span class="kw">use </span>std::str::FromStr <span class="kw">as _</span>;
@@ -384,10 +377,8 @@
         FM_PORT_ESPLORA_MONITORING: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_ESPLORA_MONITORING"</span>;
         <span class="comment">// 3 = p2p + api + metrics env: "// ";
         </span>FM_PORT_FEDIMINTD_BASE: u16 = port_alloc((<span class="number">3 </span>* fed_size).try_into().unwrap())<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_FEDIMINTD_BASE"</span>;
-        FM_PORT_GW_CLN: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_GW_CLN"</span>;
         FM_PORT_GW_LND: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_GW_LND"</span>;
         FM_PORT_GW_LDK: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_GW_LDK"</span>;
-        FM_PORT_CLN_EXTENSION: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_CLN_EXTENSION"</span>;
         FM_PORT_FAUCET: u16 = <span class="number">15243u16</span>; env: <span class="string">"FM_PORT_FAUCET"</span>;
 
         FM_LDK_ESPLORA_SERVER_URL: String = <span class="macro">format!</span>(<span class="string">"http://127.0.0.1:{FM_PORT_ESPLORA}"</span>); env: <span class="string">"FM_LDK_ESPLORA_SERVER_URL"</span>;
@@ -408,15 +399,12 @@
         FM_LND_TLS_CERT: PathBuf = FM_LND_DIR.join(<span class="string">"tls.cert"</span>); env: <span class="string">"FM_LND_TLS_CERT"</span>;
         FM_LND_MACAROON: PathBuf = FM_LND_DIR.join(<span class="string">"data/chain/bitcoin/regtest/admin.macaroon"</span>); env: <span class="string">"FM_LND_MACAROON"</span>;
 
-        FM_GATEWAY_API_ADDR: String = <span class="macro">f!</span>(<span class="string">"http://127.0.0.1:{FM_PORT_GW_CLN}"</span>); env: <span class="string">"FM_GATEWAY_API_ADDR"</span>;
         FM_GATEWAY_PASSWORD: String = <span class="string">"theresnosecondbest"</span>; env: <span class="string">"FM_GATEWAY_PASSWORD"</span>;
 
          <span class="comment">// Enable to us to make an unbounded number of payments
         </span>FM_DEFAULT_GATEWAY_FEES: String = <span class="string">"0,0"</span>; env: <span class="string">"FM_DEFAULT_GATEWAY_FEES"</span>;
         FM_GATEWAY_SKIP_WAIT_FOR_SYNC: String = <span class="string">"1"</span>; env: <span class="string">"FM_GATEWAY_SKIP_WAIT_FOR_SYNC"</span>;
 
-        FM_CLN_EXTENSION_LISTEN_ADDRESS: String = <span class="macro">f!</span>(<span class="string">"0.0.0.0:{FM_PORT_CLN_EXTENSION}"</span>); env: <span class="string">"FM_CLN_EXTENSION_LISTEN_ADDRESS"</span>;
-        FM_GATEWAY_LIGHTNING_ADDR: String = <span class="macro">f!</span>(<span class="string">"http://localhost:{FM_PORT_CLN_EXTENSION}"</span>); env: <span class="string">"FM_GATEWAY_LIGHTNING_ADDR"</span>;
         FM_FAUCET_BIND_ADDR: String = <span class="macro">f!</span>(<span class="string">"0.0.0.0:{FM_PORT_FAUCET}"</span>); env: <span class="string">"FM_FAUCET_BIND_ADDR"</span>;
 
         <span class="comment">// clients env: "// ";
@@ -433,8 +421,6 @@
             fedimint_cli = <span class="kw">crate</span>::util::get_fedimint_cli_path().join(<span class="string">" "</span>),
             datadir = utf8(<span class="kw-2">&amp;</span>FM_CLIENT_DIR));  env: <span class="string">"FM_MINT_CLIENT"</span>;
         FM_MINT_RPC_CLIENT: String = <span class="macro">f!</span>(<span class="string">"mint-rpc-client"</span>); env: <span class="string">"FM_MINT_RPC_CLIENT"</span>;
-        FM_GWCLI_CLN: String = <span class="macro">f!</span>(<span class="string">"{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_CLN}/"</span>,
-            gateway_cli = <span class="kw">crate</span>::util::get_gateway_cli_path().join(<span class="string">" "</span>),); env: <span class="string">"FM_GWCLI_CLN"</span>;
         FM_GWCLI_LND: String = <span class="macro">f!</span>(<span class="string">"{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_LND}/"</span>,
             gateway_cli = <span class="kw">crate</span>::util::get_gateway_cli_path().join(<span class="string">" "</span>),); env: <span class="string">"FM_GWCLI_LND"</span>;
         FM_GWCLI_LDK: String = <span class="macro">f!</span>(<span class="string">"{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_LDK}/"</span>,

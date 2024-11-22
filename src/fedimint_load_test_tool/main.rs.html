@@ -1309,66 +1309,7 @@
 <a href="#1308" id="1308">1308</a>
 <a href="#1309" id="1309">1309</a>
 <a href="#1310" id="1310">1310</a>
-<a href="#1311" id="1311">1311</a>
-<a href="#1312" id="1312">1312</a>
-<a href="#1313" id="1313">1313</a>
-<a href="#1314" id="1314">1314</a>
-<a href="#1315" id="1315">1315</a>
-<a href="#1316" id="1316">1316</a>
-<a href="#1317" id="1317">1317</a>
-<a href="#1318" id="1318">1318</a>
-<a href="#1319" id="1319">1319</a>
-<a href="#1320" id="1320">1320</a>
-<a href="#1321" id="1321">1321</a>
-<a href="#1322" id="1322">1322</a>
-<a href="#1323" id="1323">1323</a>
-<a href="#1324" id="1324">1324</a>
-<a href="#1325" id="1325">1325</a>
-<a href="#1326" id="1326">1326</a>
-<a href="#1327" id="1327">1327</a>
-<a href="#1328" id="1328">1328</a>
-<a href="#1329" id="1329">1329</a>
-<a href="#1330" id="1330">1330</a>
-<a href="#1331" id="1331">1331</a>
-<a href="#1332" id="1332">1332</a>
-<a href="#1333" id="1333">1333</a>
-<a href="#1334" id="1334">1334</a>
-<a href="#1335" id="1335">1335</a>
-<a href="#1336" id="1336">1336</a>
-<a href="#1337" id="1337">1337</a>
-<a href="#1338" id="1338">1338</a>
-<a href="#1339" id="1339">1339</a>
-<a href="#1340" id="1340">1340</a>
-<a href="#1341" id="1341">1341</a>
-<a href="#1342" id="1342">1342</a>
-<a href="#1343" id="1343">1343</a>
-<a href="#1344" id="1344">1344</a>
-<a href="#1345" id="1345">1345</a>
-<a href="#1346" id="1346">1346</a>
-<a href="#1347" id="1347">1347</a>
-<a href="#1348" id="1348">1348</a>
-<a href="#1349" id="1349">1349</a>
-<a href="#1350" id="1350">1350</a>
-<a href="#1351" id="1351">1351</a>
-<a href="#1352" id="1352">1352</a>
-<a href="#1353" id="1353">1353</a>
-<a href="#1354" id="1354">1354</a>
-<a href="#1355" id="1355">1355</a>
-<a href="#1356" id="1356">1356</a>
-<a href="#1357" id="1357">1357</a>
-<a href="#1358" id="1358">1358</a>
-<a href="#1359" id="1359">1359</a>
-<a href="#1360" id="1360">1360</a>
-<a href="#1361" id="1361">1361</a>
-<a href="#1362" id="1362">1362</a>
-<a href="#1363" id="1363">1363</a>
-<a href="#1364" id="1364">1364</a>
-<a href="#1365" id="1365">1365</a>
-<a href="#1366" id="1366">1366</a>
-<a href="#1367" id="1367">1367</a>
-<a href="#1368" id="1368">1368</a>
-<a href="#1369" id="1369">1369</a>
-<a href="#1370" id="1370">1370</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1311" id="1311">1311</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::missing_errors_doc)]
@@ -1384,11 +1325,10 @@
 <span class="kw">use </span>clap::{Args, Parser, Subcommand, ValueEnum};
 <span class="kw">use </span>common::{
     cln_create_invoice, cln_pay_invoice, cln_wait_invoice_payment, gateway_pay_invoice,
-    get_note_summary, lnd_create_invoice, lnd_pay_invoice, lnd_wait_invoice_payment,
-    parse_gateway_id, reissue_notes,
+    get_note_summary, parse_gateway_id, reissue_notes,
 };
 <span class="kw">use </span>devimint::cmd;
-<span class="kw">use </span>devimint::util::{GatewayClnCli, GatewayLndCli};
+<span class="kw">use </span>devimint::util::GatewayLndCli;
 <span class="kw">use </span>fedimint_client::ClientHandleArc;
 <span class="kw">use </span>fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
@@ -1438,7 +1378,6 @@
 <span class="attr">#[derive(Debug, Clone, Copy, ValueEnum)]
 </span><span class="kw">enum </span>LnInvoiceGeneration {
     ClnLightningCli,
-    LnCli,
 }
 
 <span class="attr">#[derive(Subcommand, Clone)]
@@ -2044,19 +1983,6 @@
                     .<span class="kw">await</span><span class="question-mark">?</span>;
                     cln_wait_invoice_payment(<span class="kw-2">&amp;</span>label).<span class="kw">await</span><span class="question-mark">?</span>;
                 }
-                <span class="prelude-val">Some</span>(LnInvoiceGeneration::LnCli) =&gt; {
-                    <span class="kw">let </span>(invoice, r_hash) = lnd_create_invoice(invoice_amount).<span class="kw">await</span><span class="question-mark">?</span>;
-                    gateway_pay_invoice(
-                        <span class="kw-2">&amp;</span>prefix,
-                        <span class="string">"CLN"</span>,
-                        <span class="kw-2">&amp;</span>client,
-                        invoice,
-                        <span class="kw-2">&amp;</span>event_sender,
-                        ln_gateway.clone(),
-                    )
-                    .<span class="kw">await</span><span class="question-mark">?</span>;
-                    lnd_wait_invoice_payment(r_hash).<span class="kw">await</span><span class="question-mark">?</span>;
-                }
                 <span class="prelude-val">None </span><span class="kw">if </span>additional_invoices.is_empty() =&gt; {
                     <span class="macro">debug!</span>(<span class="string">"No method given to generate an invoice and no invoices on file, will not test the gateway"</span>);
                     <span class="kw">break</span>;
@@ -2189,19 +2115,13 @@
     };
     <span class="kw">match </span>strategy {
         LnCircularStrategy::TwoGateways =&gt; {
-            <span class="comment">// pick the first payment method randomly to avoid overloading one of the
-            // gateways
-            </span><span class="kw">let </span><span class="kw-2">mut </span>invoice_generation = <span class="kw">if </span>rand::random::&lt;bool&gt;() {
-                LnInvoiceGeneration::LnCli
-            } <span class="kw">else </span>{
-                LnInvoiceGeneration::ClnLightningCli
-            };
+            <span class="kw">let </span>invoice_generation = LnInvoiceGeneration::ClnLightningCli;
             <span class="kw">while </span>still_ontime().<span class="kw">await </span>{
                 <span class="kw">let </span>gateway_id = get_gateway_id(invoice_generation).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">let </span>ln_gateway = get_lightning_gateway(<span class="kw-2">&amp;</span>client, <span class="prelude-val">Some</span>(gateway_id)).<span class="kw">await</span>;
                 run_two_gateways_strategy(
                     <span class="kw-2">&amp;</span>prefix,
-                    <span class="kw-2">&amp;mut </span>invoice_generation,
+                    <span class="kw-2">&amp;</span>invoice_generation,
                     <span class="kw-2">&amp;</span>invoice_amount,
                     <span class="kw-2">&amp;</span>event_sender,
                     <span class="kw-2">&amp;</span>client,
@@ -2233,7 +2153,7 @@
 
 <span class="kw">async fn </span>run_two_gateways_strategy(
     prefix: <span class="kw-2">&amp;</span>str,
-    invoice_generation: <span class="kw-2">&amp;mut </span>LnInvoiceGeneration,
+    invoice_generation: <span class="kw-2">&amp;</span>LnInvoiceGeneration,
     invoice_amount: <span class="kw-2">&amp;</span>Amount,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
     client: <span class="kw-2">&amp;</span>ClientHandleArc,
@@ -2272,40 +2192,6 @@
                 pay_invoice_time,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw-2">*</span>invoice_generation = LnInvoiceGeneration::LnCli;
-        }
-        LnInvoiceGeneration::LnCli =&gt; {
-            <span class="kw">let </span>(invoice, r_hash) = lnd_create_invoice(<span class="kw-2">*</span>invoice_amount).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>elapsed = create_invoice_time.elapsed()<span class="question-mark">?</span>;
-            <span class="macro">info!</span>(<span class="string">"Created invoice using LND in {elapsed:?}"</span>);
-            event_sender.send(MetricEvent {
-                name: GATEWAY_CREATE_INVOICE.into(),
-                duration: elapsed,
-            })<span class="question-mark">?</span>;
-            gateway_pay_invoice(
-                prefix,
-                <span class="string">"CLN"</span>,
-                client,
-                invoice,
-                event_sender,
-                ln_gateway.clone(),
-            )
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-            lnd_wait_invoice_payment(r_hash).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>(operation_id, invoice) =
-                client_create_invoice(client, <span class="kw-2">*</span>invoice_amount, event_sender, ln_gateway).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>pay_invoice_time = fedimint_core::time::now();
-            lnd_pay_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
-            wait_invoice_payment(
-                prefix,
-                <span class="string">"CLN"</span>,
-                client,
-                operation_id,
-                event_sender,
-                pay_invoice_time,
-            )
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw-2">*</span>invoice_generation = LnInvoiceGeneration::ClnLightningCli;
         }
     };
     <span class="prelude-val">Ok</span>(())
@@ -2724,12 +2610,8 @@
 <span class="kw">async fn </span>get_gateway_id(generate_invoice_with: LnInvoiceGeneration) -&gt; anyhow::Result&lt;String&gt; {
     <span class="kw">let </span>gateway_json = <span class="kw">match </span>generate_invoice_with {
         LnInvoiceGeneration::ClnLightningCli =&gt; {
-            <span class="comment">// If we are paying a lnd invoice, we use the cln gateway
+            <span class="comment">// If we are paying a lnd invoice, we use the cln node
             </span><span class="macro">cmd!</span>(GatewayLndCli, <span class="string">"info"</span>).out_json().<span class="kw">await
-        </span>}
-        LnInvoiceGeneration::LnCli =&gt; {
-            <span class="comment">// and vice-versa
-            </span><span class="macro">cmd!</span>(GatewayClnCli, <span class="string">"info"</span>).out_json().<span class="kw">await
         </span>}
     }<span class="question-mark">?</span>;
     <span class="kw">let </span>gateway_id = gateway_json[<span class="string">"gateway_id"</span>]

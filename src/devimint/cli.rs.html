@@ -479,20 +479,7 @@
 <a href="#478" id="478">478</a>
 <a href="#479" id="479">479</a>
 <a href="#480" id="480">480</a>
-<a href="#481" id="481">481</a>
-<a href="#482" id="482">482</a>
-<a href="#483" id="483">483</a>
-<a href="#484" id="484">484</a>
-<a href="#485" id="485">485</a>
-<a href="#486" id="486">486</a>
-<a href="#487" id="487">487</a>
-<a href="#488" id="488">488</a>
-<a href="#489" id="489">489</a>
-<a href="#490" id="490">490</a>
-<a href="#491" id="491">491</a>
-<a href="#492" id="492">492</a>
-<a href="#493" id="493">493</a>
-<a href="#494" id="494">494</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ffi;
+<a href="#481" id="481">481</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -589,10 +576,10 @@
         <span class="attr">#[arg(long, trailing_var_arg = <span class="bool-val">true</span>, allow_hyphen_values = <span class="bool-val">true</span>, num_args=<span class="number">1</span>..)]
         </span>exec: <span class="prelude-ty">Option</span>&lt;Vec&lt;ffi::OsString&gt;&gt;,
     },
-    <span class="doccomment">/// Spins up bitcoind, cln w/ gateway, lnd w/ gateway, a faucet, electrs,
+    <span class="doccomment">/// Spins up bitcoind, cln, lnd w/ gateway, a faucet, electrs,
     /// esplora, and a federation sized from FM_FED_SIZE it opens LN channel
     /// between the two nodes. it connects the gateways to the federation.
-    /// it finally switches to use the CLN gateway using the fedimint-cli
+    /// it finally switches to use the LND gateway for LNv1
     </span>DevFed {
         <span class="attr">#[arg(long, trailing_var_arg = <span class="bool-val">true</span>, allow_hyphen_values = <span class="bool-val">true</span>, num_args=<span class="number">1</span>..)]
         </span>exec: <span class="prelude-ty">Option</span>&lt;Vec&lt;ffi::OsString&gt;&gt;,
@@ -748,7 +735,7 @@
                         <span class="kw">const </span>GW_PEGIN_AMOUNT: u64 = <span class="number">1_000_000</span>;
                         <span class="kw">const </span>CLIENT_PEGIN_AMOUNT: u64 = <span class="number">1_000_000</span>;
 
-                        <span class="kw">let </span>(operation_id, (), (), ()) = <span class="macro">tokio::try_join!</span>(
+                        <span class="kw">let </span>(operation_id, (), ()) = <span class="macro">tokio::try_join!</span>(
                             <span class="kw">async </span>{
                                 <span class="kw">let </span>(address, operation_id) =
                                     dev_fed.internal_client().<span class="kw">await</span><span class="question-mark">?</span>.get_deposit_addr().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -758,19 +745,6 @@
                                     </span>.send_to(address, CLIENT_PEGIN_AMOUNT)
                                     .<span class="kw">await</span><span class="question-mark">?</span>;
                                 <span class="prelude-val">Ok</span>(operation_id)
-                            },
-                            <span class="kw">async </span>{
-                                <span class="kw">let </span>pegin_addr = dev_fed
-                                    .gw_cln_registered()
-                                    .<span class="kw">await</span><span class="question-mark">?
-                                    </span>.get_pegin_addr(<span class="kw-2">&amp;</span>dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.calculate_federation_id())
-                                    .<span class="kw">await</span><span class="question-mark">?</span>;
-                                dev_fed
-                                    .bitcoind()
-                                    .<span class="kw">await</span><span class="question-mark">?
-                                    </span>.send_to(pegin_addr, GW_PEGIN_AMOUNT)
-                                    .<span class="kw">await
-                                    </span>.map(|<span class="kw">_</span>| ())
                             },
                             <span class="kw">async </span>{
                                 <span class="kw">let </span>pegin_addr = dev_fed
