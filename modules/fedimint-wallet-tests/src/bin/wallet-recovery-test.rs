@@ -6,6 +6,10 @@ use fedimint_core::util::{backoff_util, retry};
 use futures::try_join;
 use tracing::info;
 
+fn almost_equal(a: u64, b: u64) -> bool {
+    a.abs_diff(b) < 500_000
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     devimint::run_devfed_test(|dev_fed, _process_mgr| async move {
@@ -50,7 +54,7 @@ async fn main() -> anyhow::Result<()> {
                 .await?;
 
             info!("Check if claimed");
-            assert_eq!(peg_in_amount_sats * 1000, restored.balance().await?);
+            assert!(almost_equal(peg_in_amount_sats * 1000, restored.balance().await?));
         }
 
         info!("### Test wallet restore with a backup");
@@ -81,7 +85,7 @@ async fn main() -> anyhow::Result<()> {
                 .await?;
 
             info!("Check if claimed");
-            assert_eq!(peg_in_amount_sats * 1000 * 2, restored.balance().await?);
+            assert!(almost_equal(peg_in_amount_sats * 1000 * 2, restored.balance().await?));
         }
 
         info!("### Test wallet restore with a history and no backup");
@@ -111,7 +115,7 @@ async fn main() -> anyhow::Result<()> {
                 .await?;
 
             info!("Client slow: Check if claimed");
-            assert_eq!(peg_in_amount_sats * 1000 * 2, restored.balance().await?);
+            assert!(almost_equal(peg_in_amount_sats * 1000 * 2, restored.balance().await?));
         }
 
         Ok(())

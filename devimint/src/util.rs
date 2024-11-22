@@ -422,6 +422,23 @@ macro_rules! poll_eq {
     };
 }
 
+#[macro_export]
+macro_rules! poll_ge {
+    ($left:expr, $right:expr) => {
+        match ($left, $right) {
+            (left, right) => {
+                if left >= right {
+                    Ok(())
+                } else {
+                    Err(std::ops::ControlFlow::Continue(anyhow::anyhow!(
+                        "assertion failed, left: {left:?} right: {right:?}"
+                    )))
+                }
+            }
+        }
+    };
+}
+
 // Allow macro to be used within the crate. See https://stackoverflow.com/a/31749071.
 pub(crate) use cmd;
 
