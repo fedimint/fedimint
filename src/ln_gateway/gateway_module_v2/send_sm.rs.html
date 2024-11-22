@@ -268,7 +268,21 @@
 <a href="#267" id="267">267</a>
 <a href="#268" id="268">268</a>
 <a href="#269" id="269">269</a>
-<a href="#270" id="270">270</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
@@ -282,8 +296,8 @@
 <span class="kw">use </span>fedimint_lnv2_common::{LightningInput, LightningInputV0, LightningInvoice, OutgoingWitness};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
+<span class="kw">use </span><span class="kw">super</span>::events::{OutgoingPaymentFailed, OutgoingPaymentSucceeded};
 <span class="kw">use </span><span class="kw">super</span>::FinalReceiveState;
-<span class="kw">use </span><span class="kw">crate</span>::events::OutgoingPaymentSucceeded;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::{GatewayClientContextV2, GatewayClientModuleV2};
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -510,6 +524,7 @@
                     .log_event(
                         <span class="kw-2">&amp;mut </span>dbtx.module_tx(),
                         OutgoingPaymentSucceeded {
+                            payment_image: old_state.common.contract.payment_image.clone(),
                             target_federation: payment_response.target_federation,
                         },
                     )
@@ -534,7 +549,20 @@
                     outpoints,
                 }))
             }
-            <span class="prelude-val">Err</span>(e) =&gt; old_state.update(SendSMState::Cancelled(e)),
+            <span class="prelude-val">Err</span>(e) =&gt; {
+                client_ctx
+                    .module
+                    .client_ctx
+                    .log_event(
+                        <span class="kw-2">&amp;mut </span>dbtx.module_tx(),
+                        OutgoingPaymentFailed {
+                            payment_image: old_state.common.contract.payment_image.clone(),
+                            error: e.clone(),
+                        },
+                    )
+                    .<span class="kw">await</span>;
+                old_state.update(SendSMState::Cancelled(e))
+            }
         }
     }
 }

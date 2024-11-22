@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CompleteLightningPaymentSucceeded","IncomingPaymentFailed","IncomingPaymentStarted","IncomingPaymentSucceeded","OutgoingPaymentFailed","OutgoingPaymentStarted","OutgoingPaymentSucceeded"]};

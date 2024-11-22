@@ -207,8 +207,8 @@
 <span class="kw">use </span>fedimint_lnv2_common::contracts::PaymentImage;
 <span class="kw">use </span>tracing::warn;
 
+<span class="kw">use </span><span class="kw">super</span>::events::CompleteLightningPaymentSucceeded;
 <span class="kw">use </span><span class="kw">super</span>::FinalReceiveState;
-<span class="kw">use </span><span class="kw">crate</span>::events::CompleteLightningPaymentSucceeded;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::GatewayClientContextV2;
 <span class="kw">use </span><span class="kw">crate</span>::lightning::{InterceptPaymentResponse, PaymentAction};
 
@@ -385,7 +385,7 @@
             .log_event(
                 <span class="kw-2">&amp;mut </span>dbtx.module_tx(),
                 CompleteLightningPaymentSucceeded {
-                    payment_hash: PaymentImage::Hash(old_state.common.payment_hash),
+                    payment_image: PaymentImage::Hash(old_state.common.payment_hash),
                 },
             )
             .<span class="kw">await</span>;

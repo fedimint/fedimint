@@ -600,8 +600,10 @@
 <a href="#599" id="599">599</a>
 <a href="#600" id="600">600</a>
 <a href="#601" id="601">601</a>
-<a href="#602" id="602">602</a></pre></div><pre class="rust"><code><span class="kw">mod </span>api;
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a></pre></div><pre class="rust"><code><span class="kw">mod </span>api;
 <span class="kw">mod </span>complete_sm;
+<span class="kw">pub mod </span>events;
 <span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
 
@@ -612,6 +614,7 @@
 <span class="kw">use </span>anyhow::{anyhow, ensure};
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>bitcoin::secp256k1::Message;
+<span class="kw">use </span>events::{IncomingPaymentStarted, OutgoingPaymentStarted};
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
@@ -646,7 +649,6 @@
 <span class="kw">use </span>tpe::{AggregatePublicKey, PublicKeyShare};
 <span class="kw">use </span>tracing::{info, warn};
 
-<span class="kw">use </span><span class="kw">crate</span>::events::{IncomingPaymentStarted, OutgoingPaymentStarted};
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::api::GatewayFederationApi;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::complete_sm::{
     CompleteSMCommon, CompleteSMState, CompleteStateMachine,
