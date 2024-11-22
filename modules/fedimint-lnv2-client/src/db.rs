@@ -7,6 +7,14 @@ use fedimint_core::{impl_db_lookup, impl_db_record};
 #[derive(Clone, Debug)]
 pub enum DbKeyPrefix {
     Gateway = 0x41,
+    #[allow(dead_code)]
+    /// Prefixes between 0xb1..=0xcf shall all be considered allocated for
+    /// historical and future external use
+    ExternalReservedStart = 0xb1,
+    #[allow(dead_code)]
+    /// Prefixes between 0xb1..=0xcf shall all be considered allocated for
+    /// historical and future external use
+    ExternalReservedEnd = 0xcf,
 }
 
 #[derive(Debug, Encodable, Decodable)]

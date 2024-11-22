@@ -25,6 +25,12 @@ pub enum DbKeyPrefix {
     CancelledOOBSpend = 0x2b,
     RecoveryState = 0x2c,
     RecoveryFinalized = 0x2d,
+    /// Prefixes between 0xb1..=0xcf shall all be considered allocated for
+    /// historical and future external use
+    ExternalReservedStart = 0xb1,
+    /// Prefixes between 0xb1..=0xcf shall all be considered allocated for
+    /// historical and future external use
+    ExternalReservedEnd = 0xcf,
 }
 
 impl std::fmt::Display for DbKeyPrefix {

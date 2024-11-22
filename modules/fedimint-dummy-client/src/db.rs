@@ -17,6 +17,12 @@ pub enum DbKeyPrefix {
     // Used to verify that 0x50 key can be written to, which used to conflict with
     // `DatabaseVersionKeyV0`
     ClientName = 0x50,
+    /// Prefixes between 0xb1..=0xcf shall all be considered allocated for
+    /// historical and future external use
+    ExternalReservedStart = 0xb1,
+    /// Prefixes between 0xb1..=0xcf shall all be considered allocated for
+    /// historical and future external use
+    ExternalReservedEnd = 0xcf,
 }
 
 impl std::fmt::Display for DbKeyPrefix {

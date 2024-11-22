@@ -319,6 +319,7 @@ impl ModuleInit for LightningClientInit {
                         "Lightning Gateways"
                     );
                 }
+                DbKeyPrefix::ExternalReservedStart | DbKeyPrefix::ExternalReservedEnd => {}
             }
         }
 
