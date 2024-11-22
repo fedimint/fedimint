@@ -281,11 +281,11 @@ impl DecoderBuilder {
                 // pass empty `decoders`. But the client context uses nested `DynTypes` in
                 // `DynState`, so we special-case it with a flag.
                 let decoders = if is_transparent_decoder {
-                    Cow::Borrowed(decoders)
+                    decoders
                 } else {
-                    Cow::Owned(ModuleRegistry::default())
+                    &ModuleRegistry::default()
                 };
-                let typed_val = Type::consensus_decode(&mut reader, &decoders).map_err(|err| {
+                let typed_val = Type::consensus_decode(&mut reader, decoders).map_err(|err| {
                     let err: anyhow::Error = err.into();
                     DecodeError::new_custom(
                         err.context(format!("while decoding Dyn type module_id={instance}")),

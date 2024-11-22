@@ -101,11 +101,16 @@ pub struct OperationLogKey {
     pub operation_id: OperationId,
 }
 
+#[derive(Debug, Encodable)]
+pub struct OperationLogKeyPrefix;
+
 impl_db_record!(
     key = OperationLogKey,
     value = OperationLogEntry,
     db_prefix = DbKeyPrefix::OperationLog
 );
+
+impl_db_lookup!(key = OperationLogKey, query_prefix = OperationLogKeyPrefix);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ClientPreRootSecretHashKey;
