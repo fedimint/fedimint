@@ -317,13 +317,38 @@
 <a href="#316" id="316">316</a>
 <a href="#317" id="317">317</a>
 <a href="#318" id="318">318</a>
-<a href="#319" id="319">319</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>erased_serde::Serialize;
-<span class="kw">use </span>fedimint_client::db::ClientConfigKey;
+<span class="kw">use </span>fedimint_client::db::{ClientConfigKey, OperationLogKeyPrefix};
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
+<span class="kw">use </span>fedimint_client::oplog::OperationLogEntry;
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, CommonModuleInitRegistry, ServerModuleInitRegistry};
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::db::{
@@ -332,6 +357,7 @@
 };
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
+<span class="kw">use </span>fedimint_core::push_db_pair_items;
 <span class="kw">use </span>fedimint_rocksdb::RocksDbReadOnly;
 <span class="kw">use </span>fedimint_server::config::io::read_server_config;
 <span class="kw">use </span>fedimint_server::config::ServerConfig;
@@ -420,6 +446,7 @@
                     .available_decoders(kinds)
                     .unwrap()
                     .with_fallback();
+                <span class="kw">let </span>client_cfg = client_cfg.redecode_raw(<span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
                 (<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(client_cfg), decoders)
             } <span class="kw">else </span>{
                 (<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, ModuleDecoderRegistry::default())
@@ -537,6 +564,9 @@
         }
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(cfg) = <span class="self">self</span>.client_cfg.clone() {
+            <span class="self">self</span>.serialized
+                .insert(<span class="string">"Client Config"</span>.into(), Box::new(cfg.to_json()));
+
             <span class="kw">for </span>(module_id, module_cfg) <span class="kw">in </span><span class="kw-2">&amp;</span>cfg.modules {
                 <span class="kw">let </span>kind = <span class="kw-2">&amp;</span>module_cfg.kind;
                 <span class="kw">let </span><span class="kw-2">mut </span>modules = Vec::new();
@@ -546,6 +576,11 @@
 
                 <span class="kw">let </span>registry = CommonModuleInitRegistry::from(modules);
                 <span class="self">self</span>.serialize_module(module_id, kind, registry).<span class="kw">await</span><span class="question-mark">?</span>;
+            }
+
+            {
+                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.read_only_db.begin_transaction_nc().<span class="kw">await</span>;
+                <span class="self">Self</span>::write_serialized_client_operation_log(<span class="kw-2">&amp;mut </span><span class="self">self</span>.serialized, <span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>;
             }
 
             <span class="self">self</span>.print_database();
@@ -634,6 +669,19 @@
                 </span>);
             }
         }
+    }
+    <span class="kw">async fn </span>write_serialized_client_operation_log(
+        serialized: <span class="kw-2">&amp;mut </span>BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>Serialize&gt;&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
+    ) {
+        <span class="macro">push_db_pair_items!</span>(
+            dbtx,
+            OperationLogKeyPrefix,
+            OperationLogKey,
+            OperationLogEntry,
+            serialized,
+            <span class="string">"Operations"
+        </span>);
     }
 }
 </code></pre></div></section></main></body></html>
