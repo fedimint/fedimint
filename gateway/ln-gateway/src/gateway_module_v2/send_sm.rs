@@ -12,8 +12,8 @@ use fedimint_lnv2_common::contracts::{OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, LightningInvoice, OutgoingWitness};
 use serde::{Deserialize, Serialize};
 
+use super::events::{OutgoingPaymentFailed, OutgoingPaymentSucceeded};
 use super::FinalReceiveState;
-use crate::events::OutgoingPaymentSucceeded;
 use crate::gateway_module_v2::{GatewayClientContextV2, GatewayClientModuleV2};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -240,6 +240,7 @@ impl SendStateMachine {
                     .log_event(
                         &mut dbtx.module_tx(),
                         OutgoingPaymentSucceeded {
+                            payment_image: old_state.common.contract.payment_image.clone(),
                             target_federation: payment_response.target_federation,
                         },
                     )
@@ -264,7 +265,20 @@ impl SendStateMachine {
                     outpoints,
                 }))
             }
-            Err(e) => old_state.update(SendSMState::Cancelled(e)),
+            Err(e) => {
+                client_ctx
+                    .module
+                    .client_ctx
+                    .log_event(
+                        &mut dbtx.module_tx(),
+                        OutgoingPaymentFailed {
+                            payment_image: old_state.common.contract.payment_image.clone(),
+                            error: e.clone(),
+                        },
+                    )
+                    .await;
+                old_state.update(SendSMState::Cancelled(e))
+            }
         }
     }
 }

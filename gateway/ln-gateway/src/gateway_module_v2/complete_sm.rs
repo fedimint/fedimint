@@ -10,8 +10,8 @@ use fedimint_ln_common::contracts::Preimage;
 use fedimint_lnv2_common::contracts::PaymentImage;
 use tracing::warn;
 
+use super::events::CompleteLightningPaymentSucceeded;
 use super::FinalReceiveState;
-use crate::events::CompleteLightningPaymentSucceeded;
 use crate::gateway_module_v2::GatewayClientContextV2;
 use crate::lightning::{InterceptPaymentResponse, PaymentAction};
 
@@ -188,7 +188,7 @@ impl CompleteStateMachine {
             .log_event(
                 &mut dbtx.module_tx(),
                 CompleteLightningPaymentSucceeded {
-                    payment_hash: PaymentImage::Hash(old_state.common.payment_hash),
+                    payment_image: PaymentImage::Hash(old_state.common.payment_hash),
                 },
             )
             .await;

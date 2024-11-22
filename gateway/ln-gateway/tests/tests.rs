@@ -49,7 +49,7 @@ use futures::Future;
 use itertools::Itertools;
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use ln_gateway::config::LightningModuleMode;
-use ln_gateway::events::{
+use ln_gateway::gateway_module_v2::events::{
     CompleteLightningPaymentSucceeded, IncomingPaymentStarted, IncomingPaymentSucceeded,
     OutgoingPaymentStarted, OutgoingPaymentSucceeded,
 };
@@ -1150,6 +1150,7 @@ async fn gateway_read_payment_log() -> anyhow::Result<()> {
             .log_event(
                 &mut fed1_module_dbtx,
                 OutgoingPaymentSucceeded {
+                    payment_image: PaymentImage::Hash([0_u8; 32].consensus_hash()),
                     target_federation: Some(fed2.id()),
                 },
             )
@@ -1191,13 +1192,13 @@ async fn gateway_read_payment_log() -> anyhow::Result<()> {
             .log_event(
                 &mut fed2_module_dbtx,
                 IncomingPaymentSucceeded {
-                    payment_hash: PaymentImage::Hash([0_u8; 32].consensus_hash()),
+                    payment_image: PaymentImage::Hash([0_u8; 32].consensus_hash()),
                 },
             )
             .await;
 
         let complete_payment_event = CompleteLightningPaymentSucceeded {
-            payment_hash: PaymentImage::Hash([0_u8; 32].consensus_hash()),
+            payment_image: PaymentImage::Hash([0_u8; 32].consensus_hash()),
         };
         fed2_lnv2
             .client_ctx

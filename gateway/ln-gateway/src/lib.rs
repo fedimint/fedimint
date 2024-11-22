@@ -17,7 +17,7 @@ pub mod config;
 mod db;
 pub mod envs;
 mod error;
-pub mod events;
+mod events;
 mod federation_manager;
 pub mod gateway_module_v2;
 pub mod lightning;

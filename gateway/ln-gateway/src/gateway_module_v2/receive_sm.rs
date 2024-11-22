@@ -23,7 +23,7 @@ use fedimint_lnv2_common::{
 use tpe::{aggregate_decryption_shares, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare};
 use tracing::{error, trace};
 
-use crate::events::IncomingPaymentSucceeded;
+use super::events::{IncomingPaymentFailed, IncomingPaymentSucceeded};
 use crate::gateway_module_v2::GatewayClientContextV2;
 
 const RETRY_DELAY: Duration = Duration::from_secs(1);
@@ -104,7 +104,8 @@ impl State for ReceiveStateMachine {
     ) -> Vec<StateTransition<Self>> {
         let gc = global_context.clone();
         let tpe_agg_pk = context.tpe_agg_pk;
-        let gateway_context = context.clone();
+        let gateway_context_rejected = context.clone();
+        let gateway_context_ready = context.clone();
 
         match &self.state {
             ReceiveSMState::Funding => {
@@ -114,10 +115,13 @@ impl State for ReceiveStateMachine {
                             global_context.clone(),
                             self.common.out_point.txid,
                         ),
-                        |_, error, old_state| {
-                            Box::pin(
-                                async move { Self::transition_funding_rejected(error, &old_state) },
-                            )
+                        move |dbtx, error, old_state| {
+                            Box::pin(Self::transition_funding_rejected(
+                                error,
+                                old_state,
+                                dbtx,
+                                gateway_context_rejected.clone(),
+                            ))
                         },
                     ),
                     StateTransition::new(
@@ -135,7 +139,7 @@ impl State for ReceiveStateMachine {
                                 old_state,
                                 gc.clone(),
                                 tpe_agg_pk,
-                                gateway_context.clone(),
+                                gateway_context_ready.clone(),
                             ))
                         },
                     ),
@@ -166,10 +170,23 @@ impl ReceiveStateMachine {
         }
     }
 
-    fn transition_funding_rejected(
+    async fn transition_funding_rejected(
         error: String,
-        old_state: &ReceiveStateMachine,
+        old_state: ReceiveStateMachine,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        client_ctx: GatewayClientContextV2,
     ) -> ReceiveStateMachine {
+        client_ctx
+            .module
+            .client_ctx
+            .log_event(
+                &mut dbtx.module_tx(),
+                IncomingPaymentFailed {
+                    payment_image: old_state.common.contract.commitment.payment_image.clone(),
+                    error: error.clone(),
+                },
+            )
+            .await;
         old_state.update(ReceiveSMState::Rejected(error))
     }
 
@@ -246,7 +263,22 @@ impl ReceiveStateMachine {
             .contract
             .verify_agg_decryption_key(&tpe_agg_pk, &agg_decryption_key)
         {
-            error!("Failed to obtain decryption key. Client config's public keys are inconsistent");
+            let error =
+                "Failed to obtain decryption key. Client config's public keys are inconsistent"
+                    .to_string();
+            error!(error);
+
+            client_ctx
+                .module
+                .client_ctx
+                .log_event(
+                    &mut dbtx.module_tx(),
+                    IncomingPaymentFailed {
+                        payment_image: old_state.common.contract.commitment.payment_image.clone(),
+                        error,
+                    },
+                )
+                .await;
 
             return old_state.update(ReceiveSMState::Failure);
         }
@@ -262,7 +294,7 @@ impl ReceiveStateMachine {
                 .log_event(
                     &mut dbtx.module_tx(),
                     IncomingPaymentSucceeded {
-                        payment_hash: old_state.common.contract.commitment.payment_image.clone(),
+                        payment_image: old_state.common.contract.commitment.payment_image.clone(),
                     },
                 )
                 .await;
@@ -287,6 +319,18 @@ impl ReceiveStateMachine {
             .await
             .expect("Cannot claim input, additional funding needed")
             .1;
+
+        client_ctx
+            .module
+            .client_ctx
+            .log_event(
+                &mut dbtx.module_tx(),
+                IncomingPaymentFailed {
+                    payment_image: old_state.common.contract.commitment.payment_image.clone(),
+                    error: "Failed to decrypt preimage".to_string(),
+                },
+            )
+            .await;
 
         old_state.update(ReceiveSMState::Refunding(outpoints))
     }

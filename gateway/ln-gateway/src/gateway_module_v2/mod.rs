@@ -1,5 +1,6 @@
 mod api;
 mod complete_sm;
+pub mod events;
 mod receive_sm;
 mod send_sm;
 
@@ -10,6 +11,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, ensure};
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::Message;
+use events::{IncomingPaymentStarted, OutgoingPaymentStarted};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
@@ -44,7 +46,6 @@ use serde::{Deserialize, Serialize};
 use tpe::{AggregatePublicKey, PublicKeyShare};
 use tracing::{info, warn};
 
-use crate::events::{IncomingPaymentStarted, OutgoingPaymentStarted};
 use crate::gateway_module_v2::api::GatewayFederationApi;
 use crate::gateway_module_v2::complete_sm::{
     CompleteSMCommon, CompleteSMState, CompleteStateMachine,
