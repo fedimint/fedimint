@@ -95,10 +95,10 @@ pub enum Cmd {
         #[arg(long, trailing_var_arg = true, allow_hyphen_values = true, num_args=1..)]
         exec: Option<Vec<ffi::OsString>>,
     },
-    /// Spins up bitcoind, cln w/ gateway, lnd w/ gateway, a faucet, electrs,
+    /// Spins up bitcoind, cln, lnd w/ gateway, a faucet, electrs,
     /// esplora, and a federation sized from FM_FED_SIZE it opens LN channel
     /// between the two nodes. it connects the gateways to the federation.
-    /// it finally switches to use the CLN gateway using the fedimint-cli
+    /// it finally switches to use the LND gateway for LNv1
     DevFed {
         #[arg(long, trailing_var_arg = true, allow_hyphen_values = true, num_args=1..)]
         exec: Option<Vec<ffi::OsString>>,
@@ -254,7 +254,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                         const GW_PEGIN_AMOUNT: u64 = 1_000_000;
                         const CLIENT_PEGIN_AMOUNT: u64 = 1_000_000;
 
-                        let (operation_id, (), (), ()) = tokio::try_join!(
+                        let (operation_id, (), ()) = tokio::try_join!(
                             async {
                                 let (address, operation_id) =
                                     dev_fed.internal_client().await?.get_deposit_addr().await?;
@@ -264,19 +264,6 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                     .send_to(address, CLIENT_PEGIN_AMOUNT)
                                     .await?;
                                 Ok(operation_id)
-                            },
-                            async {
-                                let pegin_addr = dev_fed
-                                    .gw_cln_registered()
-                                    .await?
-                                    .get_pegin_addr(&dev_fed.fed().await?.calculate_federation_id())
-                                    .await?;
-                                dev_fed
-                                    .bitcoind()
-                                    .await?
-                                    .send_to(pegin_addr, GW_PEGIN_AMOUNT)
-                                    .await
-                                    .map(|_| ())
                             },
                             async {
                                 let pegin_addr = dev_fed

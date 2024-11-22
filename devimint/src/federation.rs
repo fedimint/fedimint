@@ -910,7 +910,7 @@ impl Federation {
             .context("invalid output")
             .map_err(ControlFlow::Break)?
             .len();
-            poll_eq!(num_gateways, 2)
+            poll_eq!(num_gateways, 1)
         })
         .await?;
         debug!(target: LOG_DEVIMINT,

@@ -1,5 +1,3 @@
-pub mod cln;
-pub mod extension;
 pub mod ldk;
 pub mod lnd;
 
@@ -17,7 +15,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::{backoff_util, retry, SafeUrl};
+use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{secp256k1, Amount};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::PrunedInvoice;
@@ -27,11 +25,10 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, info, warn};
 
-use self::cln::NetworkLnRpcClient;
 use self::lnd::GatewayLndClient;
 use crate::envs::{
-    FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV, FM_LDK_ESPLORA_SERVER_URL,
-    FM_LDK_NETWORK, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
+    FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV, FM_LDK_ESPLORA_SERVER_URL, FM_LDK_NETWORK,
+    FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
 use crate::rpc::{CloseChannelsWithPeerPayload, SendOnchainPayload};
 use crate::{OpenChannelPayload, Preimage};
@@ -320,11 +317,6 @@ pub enum LightningMode {
         #[arg(long = "lnd-macaroon", env = FM_LND_MACAROON_ENV)]
         lnd_macaroon: String,
     },
-    #[clap(name = "cln")]
-    Cln {
-        #[arg(long = "cln-extension-addr", env = FM_GATEWAY_LIGHTNING_ADDR_ENV)]
-        cln_extension_addr: SafeUrl,
-    },
     #[clap(name = "ldk")]
     Ldk {
         /// LDK esplora server URL
@@ -362,9 +354,6 @@ pub struct GatewayLightningBuilder {
 impl LightningBuilder for GatewayLightningBuilder {
     async fn build(&self, runtime: Arc<tokio::runtime::Runtime>) -> Box<dyn ILnRpcClient> {
         match self.lightning_mode.clone() {
-            LightningMode::Cln { cln_extension_addr } => {
-                Box::new(NetworkLnRpcClient::new(cln_extension_addr))
-            }
             LightningMode::Lnd {
                 lnd_rpc_addr,
                 lnd_tls_cert,

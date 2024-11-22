@@ -17,13 +17,13 @@ use ln_gateway::lightning::ChannelInfo;
 use ln_gateway::rpc::{GatewayBalances, MnemonicResponse, V1_API_ENDPOINT};
 use tracing::info;
 
+use crate::cmd;
 use crate::envs::{FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV};
 use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
 use crate::util::{poll, Command, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
 use crate::version_constants::VERSION_0_5_0_ALPHA;
-use crate::{cmd, Lightningd};
 
 #[derive(Clone)]
 pub struct Gatewayd {
@@ -39,14 +39,12 @@ impl Gatewayd {
         let test_dir = &process_mgr.globals.FM_TEST_DIR;
 
         let port = match ln {
-            LightningNode::Cln(_) => process_mgr.globals.FM_PORT_GW_CLN,
             LightningNode::Lnd(_) => process_mgr.globals.FM_PORT_GW_LND,
             LightningNode::Ldk => process_mgr.globals.FM_PORT_GW_LDK,
         };
         let addr = format!("http://127.0.0.1:{port}/{V1_API_ENDPOINT}");
 
         let lightning_node_port = match ln {
-            LightningNode::Cln(_) => process_mgr.globals.FM_PORT_CLN,
             LightningNode::Lnd(_) => process_mgr.globals.FM_PORT_LND_LISTEN,
             LightningNode::Ldk => process_mgr.globals.FM_PORT_LDK,
         };
@@ -114,7 +112,6 @@ impl Gatewayd {
         info!("Stopping lightning node");
         match self.ln.take() {
             Some(LightningNode::Lnd(lnd)) => lnd.terminate().await,
-            Some(LightningNode::Cln(cln)) => cln.terminate().await,
             Some(LightningNode::Ldk) => {
                 // This is not implemented because the LDK node lives in
                 // the gateway process and cannot be stopped independently.
@@ -131,48 +128,27 @@ impl Gatewayd {
         process_mgr: &ProcessManager,
         gatewayd_path: &PathBuf,
         gateway_cli_path: &PathBuf,
-        gateway_cln_extension_path: &PathBuf,
-        bitcoind: Bitcoind,
     ) -> Result<()> {
         let ln = self
             .ln
             .as_ref()
             .expect("Lightning Node should exist")
             .clone();
-        let ln_type = ln.name();
 
-        // We need to restart the CLN extension so that it has the same version as
-        // gatewayd
-        if ln_type == LightningNodeType::Cln {
-            self.stop_lightning_node().await?;
-        }
         self.process.terminate().await?;
         std::env::set_var("FM_GATEWAYD_BASE_EXECUTABLE", gatewayd_path);
         std::env::set_var("FM_GATEWAY_CLI_BASE_EXECUTABLE", gateway_cli_path);
-        std::env::set_var(
-            "FM_GATEWAY_CLN_EXTENSION_BASE_EXECUTABLE",
-            gateway_cln_extension_path,
-        );
 
-        let new_ln = match ln_type {
-            LightningNodeType::Cln => {
-                let new_cln = Lightningd::new(process_mgr, bitcoind).await?;
-                LightningNode::Cln(new_cln)
-            }
-            _ => ln,
-        };
+        let new_ln = ln;
         let new_gw = Self::new(process_mgr, new_ln.clone()).await?;
         self.process = new_gw.process;
         self.set_lightning_node(new_ln);
         let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
         let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
-        let gateway_cln_extension_version =
-            crate::util::GatewayClnExtension::version_or_default().await;
         info!(
             ?gatewayd_version,
             ?gateway_cli_version,
-            ?gateway_cln_extension_version,
-            "upgraded gatewayd, gateway-cli, and gateway-cln-extension"
+            "upgraded gatewayd and gateway-cli"
         );
         Ok(())
     }

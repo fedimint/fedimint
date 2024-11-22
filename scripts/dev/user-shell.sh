@@ -24,7 +24,6 @@ echo "  fedimint-cli   - cli client to interact with the federation"
 echo "  lightning-cli  - cli client for Core Lightning"
 echo "  lncli          - cli client for LND"
 echo "  bitcoin-cli    - cli client for bitcoind"
-echo "  gateway-cln    - cli client for the CLN gateway"
 echo "  gateway-lnd    - cli client for the LND gateway"
 echo "  gateway-ldk    - cli client for the LDK gateway"
 echo

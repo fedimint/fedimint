@@ -21,7 +21,6 @@ use fedimint_testing::gateway::LightningNodeType;
 use futures::StreamExt;
 use hex::ToHex;
 use itertools::Itertools;
-use ln_gateway::envs::FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV;
 use tokio::fs;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use tokio::task::spawn_blocking;
@@ -30,9 +29,7 @@ use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest};
 use tonic_lnd::Client as LndClient;
 use tracing::{debug, error, info, trace, warn};
 
-use crate::util::{
-    poll, poll_with_timeout, ClnLightningCli, GatewayClnExtension, ProcessHandle, ProcessManager,
-};
+use crate::util::{poll, poll_with_timeout, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
 use crate::version_constants::{VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA};
 use crate::{cmd, poll_eq, Gatewayd};
@@ -380,13 +377,6 @@ pub struct LightningdProcessHandle(ProcessHandle);
 impl LightningdProcessHandle {
     async fn terminate(&self) -> Result<()> {
         if self.0.is_running().await {
-            let mut stop_plugins = cmd!(ClnLightningCli, "plugin", "stop", "gateway-cln-extension");
-            if let Err(e) = stop_plugins.out_string().await {
-                warn!(
-                    target: LOG_DEVIMINT,
-                    "failed to terminate lightningd plugins: {e:?}"
-                );
-            }
             self.0.terminate().await
         } else {
             Ok(())
@@ -443,19 +433,13 @@ impl Lightningd {
     }
 
     pub async fn start(process_mgr: &ProcessManager, cln_dir: &Path) -> Result<ProcessHandle> {
-        let extension_path = crate::util::get_gateway_cln_extension_path(
-            GatewayClnExtension::default_path().await.as_str(),
-        );
         let btc_dir = utf8(&process_mgr.globals.FM_BTC_DIR);
-        let fm_gateway_listen = std::env::var(FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV)?;
         let cmd = cmd!(
             crate::util::Lightningd,
             "--dev-fast-gossip",
             "--dev-bitcoind-poll=1",
             format!("--lightning-dir={}", utf8(cln_dir)),
             format!("--bitcoin-datadir={btc_dir}"),
-            "--plugin={extension_path}",
-            "--fm-gateway-listen={fm_gateway_listen}"
         );
 
         process_mgr.spawn_daemon("lightningd", cmd).await
@@ -860,7 +844,7 @@ pub async fn open_channel(
     debug!(target: LOG_DEVIMINT, "Await block ln nodes block processing");
     tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
 
-    debug!(target: LOG_DEVIMINT, "Opening LN channel between the nodes...");
+    info!(target: LOG_DEVIMINT, "Opening LN channel between CLN and LND");
     let cln_addr = cln
         .request(cln_rpc::model::requests::NewaddrRequest { addresstype: None })
         .await?
@@ -1106,7 +1090,6 @@ async fn wait_for_ready_channel_on_gateway_with_counterparty(
 
 #[derive(Clone)]
 pub enum LightningNode {
-    Cln(Lightningd),
     Lnd(Lnd),
     Ldk,
 }
@@ -1114,7 +1097,6 @@ pub enum LightningNode {
 impl LightningNode {
     pub fn name(&self) -> LightningNodeType {
         match self {
-            LightningNode::Cln(_) => LightningNodeType::Cln,
             LightningNode::Lnd(_) => LightningNodeType::Lnd,
             LightningNode::Ldk => LightningNodeType::Ldk,
         }

@@ -11,12 +11,11 @@ A single gateway can serve multiple Federations.
 The gateway currently supports three different lightning backends:
 
 * Internal Node (powered by [Lightning Development Kit](https://github.com/lightningdevkit/ldk-node))
-* [Core Lightning (CLN)](https://github.com/ElementsProject/lightning)
 * [Lightning Network Daemon (LND)](https://github.com/lightningnetwork/lnd)
 
 The first option is great if you want to run a gateway without having to manage a separate lightning node or manage liquidity. We plan on automating liquidity management for this backend using the [Lightning Service Provider (LSP) spec](https://github.com/BitcoinAndLightningLayerSpecs/lsp) and channel splicing to allow for gateway operators to choose an LSP, insert funds, and let the gateway handle the rest. However, since the channel and liquidity management are automated, this backend is not well-suited as a routing node.
 
-The second two options are great if you are already running a lightning node, since you can use your existing liquidity for routing Fedimint payments. They are also preferable if you intend to run a lightning routing node in addition to routing Fedimint payments.
+The second option is great if you are already running a lightning node, since you can use your existing liquidity for routing Fedimint payments. It is also preferable if you intend to run a lightning routing node in addition to routing Fedimint payments.
 
 ## Components
 
@@ -26,15 +25,14 @@ A Fedimint lightning gateway consists of the following components:
 
 A webserver daemon that runs all the business logic of a gateway. Think of this as "The Gateway".
 
-- Given a single gateway can serve multiple Federations at the same time, gatewayd operates over an abstraction called a gateway actor.
-- A **Gateway Actor** contains one (and only one) client to a Federation which the gateway serves.
-- The gateway will have as many gateway actors as the number of Federations it serves, coordinating these gateway actors where necessary in order to route payments between such federations.
+- Given a single gateway can serve multiple Federations at the same time, gatewayd manages a set of federation clients.
+- The gateway will have as many clients as the number of Federations it serves, coordinating these clients where necessary in order to route payments between such federations.
 
 <details>
   <summary>Details on Lightning <-> E-Cash Contracting</summary>
-  Just like other Federation clients, the client within the gateway actor interfaces with the Federation through a well-defined **FederationAPI**
+  Just like other Federation clients, the client within the gateway interfaces with the Federation through a well-defined **FederationAPI**
 
-  - To receive incoming lightning payments, the client within a gateway actor calls to **FederationAPI**s to complete certain incoming contract functions
+  - To receive incoming lightning payments, the client calls to **FederationAPI**s to complete certain incoming contract functions
   - To make outgoing lightning payments, clients within a federation served by the gateway will use gatewayd `pay_invoice` API.
 
   Read more about the gateway <-> federation interactions and contracts [here](../modules/fedimint-ln-common/src/contracts/mod.rs).
@@ -154,32 +152,11 @@ Options:
   This process ensures that the gateway is cleanly removed from the federation after the funds have been securely withdrawn.
 </details>
 
-### Mintgate
-
-A simple and delightful dashboard for administrative access and control of your gateway. Presently, Mintgate supports admin functions like:
-
-- Connecting new federations to the gateway
-- Depositing funds into connected federations
-- Withdrawing funds from federations
-
----
-
 ## Developing the Gateway
 
 As described in [Running Fedimint for dev testing](./tutorial.md#using-the-gateway), running `just mprocs` starts a local development Federation instance with a running gateway instance attached. You can interact with this gateway via `gateway-cli`.
 
-### Developing gateway-lnrpc-extension
-
-- See and contribute to [gateway-cln-extension](../gateway/ln-gateway/src/bin/cln_extension.rs)
-- Help add support to other node implementations by building [gateway-lnrpc-extensions](#gateway-lnrpc-extension) for them. You can parent your brand-new extension in this directory, or in your own repository and we will link to it in this open documentation
-- Contributions are highly welcome!
-
 ## Deploying a Gateway in Production
-
-### Deploy a gateway-lnrpc-extension
-
-- [gateway-cln-extension](../gateway/ln-gateway/src/bin/cln_extension.rs): **TODO:** Add docs here
-- other _gateway-lnrpc-extension_: **TODO:** Add docs here
 
 ### Configure and deploy gatewayd
 

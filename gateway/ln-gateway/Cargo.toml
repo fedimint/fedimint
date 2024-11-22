@@ -16,10 +16,6 @@ tor = ["fedimint-client/tor", "fedimint-api-client/tor"]
 name = "gatewayd"
 path = "src/bin/gatewayd.rs"
 
-[[bin]]
-name = "gateway-cln-extension"
-path = "src/bin/cln_extension.rs"
-
 [lib]
 name = "ln_gateway"
 path = "src/lib.rs"
@@ -34,11 +30,8 @@ aquamarine = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 axum = { version = "0.7.8", features = [ "json" ] }
-axum-macros = "0.4.2"
 bitcoin = { workspace = true }
 clap = { workspace = true }
-cln-plugin = "0.2.0"
-cln-rpc = { workspace = true }
 erased-serde = { workspace = true }
 esplora-client = { workspace = true }
 fedimint-api-client = { path = "../../fedimint-api-client", version = "=0.6.0-alpha", default-features = false }
