@@ -32,25 +32,34 @@ log_file="$FS_DIR_CACHE_ROOT/log"
 
 fs-dir-cache gc unused --seconds "$((5 * 24 * 60 * 60))" # delete caches not used in more than a 5 days
 
-# create/reuse cache (sub-directory) and lock it (wait if already locked)
-cache_dir=$(fs-dir-cache lock --key-file Cargo.lock --key-str "${CARGO_PROFILE-:dev}" --key-file flake.lock)
+export log_file
+export job_name
+src_dir=$(pwd)
+export src_dir
 
-export TARGET_DIR="$cache_dir/target"
-export CARGO_BUILD_TARGET_DIR="$TARGET_DIR"
+function run_in_cache() {
+    echo "$(date --rfc-3339=seconds) RUN job=$job_name dir=$(pwd)" >> "$log_file"
+    >&2 echo "$(date --rfc-3339=seconds) RUN job=$job_name dir=$(pwd)"
+    CARGO_BUILD_TARGET_DIR="$(pwd)"
+    export CARGO_BUILD_TARGET_DIR
+    cd "$src_dir"
 
->&2 echo "Starting a job=$job_name in cache_dir=$cache_dir"
+    function on_exit() {
+        local exit_code=$?
 
-echo "$(date --rfc-3339=seconds) RUN $cache_dir job=$job_name" >> "$log_file"
+        echo "$(date --rfc-3339=seconds) END job=$job_name code=$exit_code" >> "$log_file"
+        >&2 echo "$(date --rfc-3339=seconds) END job=$job_name code=$exit_code"
 
-on_exit() {
-    local exit_code=$?
+        exit $exit_code
+    }
+    trap on_exit EXIT
 
-    fs-dir-cache unlock --dir "${cache_dir}"
-    echo "$(date --rfc-3339=seconds) END $cache_dir job=$job_name code=$exit_code" >> "$log_file"
-
-    exit $exit_code
+    "$@"
 }
-trap on_exit EXIT
+export -f run_in_cache
 
 
-"$@"
+fs-dir-cache exec \
+    --key-file Cargo.lock --key-str "${CARGO_PROFILE-:dev}" --key-file flake.lock \
+    -- \
+    bash -c 'run_in_cache "$@"' _ "$@"
