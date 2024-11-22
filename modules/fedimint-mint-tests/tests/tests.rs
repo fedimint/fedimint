@@ -534,7 +534,7 @@ mod fedimint_migration_tests {
     };
     use fedimint_logging::TracingSetup;
     use fedimint_mint_client::backup::recovery::{
-        MintRecovery, MintRecoveryState, MintRecoveryStateV0,
+        MintRecovery, MintRecoveryState, MintRecoveryStateV2,
     };
     use fedimint_mint_client::backup::{EcashBackup, EcashBackupV0};
     use fedimint_mint_client::client_db::{
@@ -675,7 +675,7 @@ mod fedimint_migration_tests {
 
         let backup = create_ecash_backup_v0(spendable_note, secret.clone());
 
-        let mint_recovery_state = MintRecoveryState::V1(MintRecoveryStateV0::from_backup(
+        let mint_recovery_state = MintRecoveryState::V2(MintRecoveryStateV2::from_backup(
             backup,
             10,
             tbs_pks,
@@ -881,6 +881,7 @@ mod fedimint_migration_tests {
                             );
                             info!("Validated RecoveryFinalized");
                         }
+                        fedimint_mint_client::client_db::DbKeyPrefix::ReusedNoteIndices => {}
                     }
                 }
 
