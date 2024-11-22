@@ -666,4 +666,12 @@ impl NoteIssuanceRequest {
             spend_key: self.spend_key,
         }
     }
+
+    pub fn blinding_key(&self) -> &BlindingKey {
+        &self.blinding_key
+    }
+
+    pub fn spend_key(&self) -> &Keypair {
+        &self.spend_key
+    }
 }
