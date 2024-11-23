@@ -1,7 +1,7 @@
 {
   inputs = {
     nixpkgs = {
-      url = "github:nixos/nixpkgs/nixos-24.05";
+      url = "github:nixos/nixpkgs/nixos-24.11";
     };
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
@@ -9,7 +9,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     flakebox = {
-      url = "github:dpc/flakebox?rev=171f3a1d83652d9db33992322f8793326a3b4df3";
+      url = "github:dpc/flakebox?rev=699293989b13b5a524178a899173e21e2da228bb";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.fenix.follows = "fenix";
     };
@@ -288,17 +288,6 @@
                     (pkgs.hiPrio pkgs.bashInteractive)
                     pkgs.tmux
                     pkgs.tmuxinator
-                    (pkgs.mprocs.overrideAttrs (
-                      final: prev: {
-                        patches = prev.patches ++ [
-                          (pkgs.fetchurl {
-                            url = "https://github.com/pvolok/mprocs/pull/88.patch";
-                            name = "clipboard-fix.patch";
-                            sha256 = "sha256-9dx1vaEQ6kD66M+vsJLIq1FK+nEObuXSi3cmpSZuQWk=";
-                          })
-                        ];
-                      }
-                    ))
                     pkgs.docker-compose
                     pkgs.tokio-console
                     pkgs.git
