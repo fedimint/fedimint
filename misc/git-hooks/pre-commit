@@ -178,6 +178,13 @@ function check_typos() {
 }
 export -f check_typos
 
+function check_nix_fmt() {
+    # we actually rely on word splitting here
+    # shellcheck disable=SC2046
+    nixfmt -c $(git ls-files | grep "\.nix$")
+}
+export -f check_nix_fmt
+
 parallel \
   --nonotice \
 ::: \
@@ -190,4 +197,5 @@ parallel \
     check_shellcheck \
     check_trailing_whitespace \
     check_typos \
-  check_nothing
+    check_nix_fmt \
+    check_nothing
