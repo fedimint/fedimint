@@ -767,7 +767,7 @@ impl WalletClientModule {
 
         Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, || {
             let stream_rpc = self.rpc.clone();
-            let stream_cient_ctx = self.client_ctx.clone();
+            let stream_client_ctx = self.client_ctx.clone();
             let stream_script_pub_key = address.assume_checked().script_pubkey();
 
             stream! {
@@ -806,7 +806,7 @@ impl WalletClientModule {
                     btc_out_point
                 };
 
-                let claim_data = stream_cient_ctx.module_db().wait_key_exists(&ClaimedPegInKey {
+                let claim_data = stream_client_ctx.module_db().wait_key_exists(&ClaimedPegInKey {
                     peg_in_index: tweak_idx,
                     btc_out_point,
                 }).await;
@@ -816,7 +816,7 @@ impl WalletClientModule {
                     btc_out_point
                 };
 
-                match stream_cient_ctx.await_primary_module_outputs(operation_id, claim_data.change).await {
+                match stream_client_ctx.await_primary_module_outputs(operation_id, claim_data.change).await {
                     Ok(_) => yield DepositStateV2::Claimed {
                         btc_deposited,
                         btc_out_point

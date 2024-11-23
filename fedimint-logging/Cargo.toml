@@ -13,7 +13,7 @@ telemetry = [
     "tracing-opentelemetry",
     "opentelemetry-jaeger",
     "console-subscriber",
-    "opentelemetry",
+    "opentelemetry"
 ]
 
 [lib]
