@@ -10,25 +10,20 @@ use fedimint_core::encoding::Decodable;
 use fedimint_core::envs::{BitcoinRpcConfig, FM_BITCOIND_COOKIE_FILE_ENV};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::runtime::block_in_place;
-use fedimint_core::task::TaskHandle;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Feerate};
 use fedimint_logging::LOG_CORE;
 use tracing::{info, warn};
 
-use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, RetryClient};
+use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory};
 
 #[derive(Debug)]
 pub struct BitcoindFactory;
 
 impl IBitcoindRpcFactory for BitcoindFactory {
-    fn create_connection(
-        &self,
-        url: &SafeUrl,
-        handle: TaskHandle,
-    ) -> anyhow::Result<DynBitcoindRpc> {
-        Ok(RetryClient::new(BitcoindClient::new(url)?, handle).into())
+    fn create_connection(&self, url: &SafeUrl) -> anyhow::Result<DynBitcoindRpc> {
+        Ok(BitcoindClient::new(url)?.into())
     }
 }
 

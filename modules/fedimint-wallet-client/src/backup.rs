@@ -11,7 +11,6 @@ use fedimint_client::module::ClientContext;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::task::TaskGroup;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::{LOG_CLIENT_MODULE_WALLET, LOG_CLIENT_RECOVERY};
@@ -141,7 +140,7 @@ impl RecoveryFromHistory for WalletRecovery {
             .clone()
             .unwrap_or(WalletClientModule::get_rpc_config(args.cfg()));
 
-        let btc_rpc = create_bitcoind(&rpc_config, TaskGroup::new().make_handle())?;
+        let btc_rpc = create_bitcoind(&rpc_config)?;
 
         let data = WalletClientModuleData {
             cfg: args.cfg().clone(),
@@ -222,7 +221,7 @@ impl RecoveryFromHistory for WalletRecovery {
             .clone()
             .unwrap_or(WalletClientModule::get_rpc_config(args.cfg()));
 
-        let btc_rpc = create_bitcoind(&rpc_config, TaskGroup::new().make_handle())?;
+        let btc_rpc = create_bitcoind(&rpc_config)?;
 
         let data = WalletClientModuleData {
             cfg: args.cfg().clone(),

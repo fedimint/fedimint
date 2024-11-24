@@ -16,7 +16,7 @@ use fedimint_core::db::Database;
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{DynServerModuleInit, IServerModuleInit};
-use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
+use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::TracingSetup;
 use fedimint_testing_core::test_dir;
@@ -59,7 +59,6 @@ impl Fixtures {
         // Ensure tracing has been set once
         let _ = TracingSetup::default().init();
         let real_testing = Fixtures::is_real_test();
-        let task_group = TaskGroup::new();
         let (dyn_bitcoin_rpc, bitcoin, config): (
             DynBitcoindRpc,
             Arc<dyn BitcoinTest>,
@@ -79,7 +78,7 @@ impl Fixtures {
                     .expect("must provide valid default env vars"),
             };
 
-            let dyn_bitcoin_rpc = create_bitcoind(&rpc_config, task_group.make_handle()).unwrap();
+            let dyn_bitcoin_rpc = create_bitcoind(&rpc_config).unwrap();
             let bitcoincore_url = env::var(FM_TEST_BITCOIND_RPC_ENV)
                 .expect("Must have bitcoind RPC defined for real tests")
                 .parse()
