@@ -14,8 +14,7 @@ use std::future::Future;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
 
-use anyhow::Context;
-pub use anyhow::Result;
+use anyhow::{Context, Result};
 use bitcoin::{Block, BlockHash, Network, ScriptBuf, Transaction, Txid};
 use fedimint_core::envs::{
     BitcoinRpcConfig, FM_FORCE_BITCOIN_RPC_KIND_ENV, FM_FORCE_BITCOIN_RPC_URL_ENV,

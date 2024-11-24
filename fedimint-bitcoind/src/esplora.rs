@@ -25,7 +25,7 @@ impl IBitcoindRpcFactory for EsploraFactory {
 }
 
 #[derive(Debug)]
-pub struct EsploraClient {
+struct EsploraClient {
     client: esplora_client::AsyncClient,
     url: SafeUrl,
 }

@@ -3,7 +3,7 @@ use std::iter::repeat;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{format_err, Context};
+use anyhow::{format_err, Context, Result};
 use async_trait::async_trait;
 use bitcoin::absolute::LockTime;
 use bitcoin::block::{Header as BlockHeader, Version};
@@ -14,10 +14,7 @@ use bitcoin::merkle_tree::PartialMerkleTree;
 use bitcoin::{
     Address, Block, BlockHash, CompactTarget, Network, OutPoint, ScriptBuf, Transaction, TxOut,
 };
-use fedimint_bitcoind::{
-    register_bitcoind, DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory,
-    Result as BitcoinRpcResult,
-};
+use fedimint_bitcoind::{register_bitcoind, DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::{sleep_in_test, TaskHandle};
 use fedimint_core::txoproof::TxOutProof;
@@ -51,11 +48,7 @@ impl FakeBitcoinFactory {
 }
 
 impl IBitcoindRpcFactory for FakeBitcoinFactory {
-    fn create_connection(
-        &self,
-        _url: &SafeUrl,
-        _handle: TaskHandle,
-    ) -> anyhow::Result<DynBitcoindRpc> {
+    fn create_connection(&self, _url: &SafeUrl, _handle: TaskHandle) -> Result<DynBitcoindRpc> {
         Ok(self.bitcoin.clone().into())
     }
 }
@@ -323,15 +316,15 @@ impl BitcoinTest for FakeBitcoinTest {
 
 #[async_trait]
 impl IBitcoindRpc for FakeBitcoinTest {
-    async fn get_network(&self) -> BitcoinRpcResult<bitcoin::Network> {
+    async fn get_network(&self) -> Result<bitcoin::Network> {
         Ok(bitcoin::Network::Regtest)
     }
 
-    async fn get_block_count(&self) -> BitcoinRpcResult<u64> {
+    async fn get_block_count(&self) -> Result<u64> {
         Ok(self.inner.read().unwrap().blocks.len() as u64)
     }
 
-    async fn get_block_hash(&self, height: u64) -> BitcoinRpcResult<bitcoin::BlockHash> {
+    async fn get_block_hash(&self, height: u64) -> Result<bitcoin::BlockHash> {
         self.inner
             .read()
             .unwrap()
@@ -341,7 +334,7 @@ impl IBitcoindRpc for FakeBitcoinTest {
             .context("No block with that height found")
     }
 
-    async fn get_block(&self, block_hash: &bitcoin::BlockHash) -> BitcoinRpcResult<bitcoin::Block> {
+    async fn get_block(&self, block_hash: &bitcoin::BlockHash) -> Result<bitcoin::Block> {
         self.inner
             .read()
             .unwrap()
@@ -352,7 +345,7 @@ impl IBitcoindRpc for FakeBitcoinTest {
             .cloned()
     }
 
-    async fn get_fee_rate(&self, _confirmation_target: u16) -> BitcoinRpcResult<Option<Feerate>> {
+    async fn get_fee_rate(&self, _confirmation_target: u16) -> Result<Option<Feerate>> {
         Ok(Some(Feerate { sats_per_kvb: 2000 }))
     }
 
@@ -378,7 +371,7 @@ impl IBitcoindRpc for FakeBitcoinTest {
         inner.pending = filtered.into_values().collect();
     }
 
-    async fn get_tx_block_height(&self, txid: &bitcoin::Txid) -> BitcoinRpcResult<Option<u64>> {
+    async fn get_tx_block_height(&self, txid: &bitcoin::Txid) -> Result<Option<u64>> {
         for (height, block) in self.inner.read().unwrap().blocks.iter().enumerate() {
             if block.txdata.iter().any(|tx| &tx.compute_txid() == txid) {
                 return Ok(Some(height as u64));
@@ -392,7 +385,7 @@ impl IBitcoindRpc for FakeBitcoinTest {
         txid: &bitcoin::Txid,
         block_hash: &bitcoin::BlockHash,
         block_height: u64,
-    ) -> BitcoinRpcResult<bool> {
+    ) -> Result<bool> {
         let block = &self.inner.read().unwrap().blocks[block_height as usize];
         assert!(
             &block.block_hash() == block_hash,
@@ -402,19 +395,19 @@ impl IBitcoindRpc for FakeBitcoinTest {
         Ok(block.txdata.iter().any(|tx| &tx.compute_txid() == txid))
     }
 
-    async fn watch_script_history(&self, _: &bitcoin::ScriptBuf) -> BitcoinRpcResult<()> {
+    async fn watch_script_history(&self, _: &bitcoin::ScriptBuf) -> Result<()> {
         Ok(())
     }
 
     async fn get_script_history(
         &self,
         script: &bitcoin::ScriptBuf,
-    ) -> BitcoinRpcResult<Vec<bitcoin::Transaction>> {
+    ) -> Result<Vec<bitcoin::Transaction>> {
         let inner = self.inner.read().unwrap();
         Ok(inner.scripts.get(script).cloned().unwrap_or_default())
     }
 
-    async fn get_txout_proof(&self, txid: bitcoin::Txid) -> BitcoinRpcResult<TxOutProof> {
+    async fn get_txout_proof(&self, txid: bitcoin::Txid) -> Result<TxOutProof> {
         let inner = self.inner.read().unwrap();
         let proof = inner.proofs.get(&txid);
         Ok(proof.ok_or(format_err!("No proof stored"))?.clone())

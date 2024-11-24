@@ -29,7 +29,7 @@ impl IBitcoindRpcFactory for ElectrumFactory {
     }
 }
 
-pub struct ElectrumClient {
+struct ElectrumClient {
     client: electrum_client::Client,
     url: SafeUrl,
 }
