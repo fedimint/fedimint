@@ -1,7 +1,7 @@
 {
   inputs = {
     nixpkgs = {
-      url = "github:nixos/nixpkgs/nixos-24.05";
+      url = "github:nixos/nixpkgs/nixos-24.11";
     };
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
@@ -289,17 +289,6 @@
                     (pkgs.hiPrio pkgs.bashInteractive)
                     pkgs.tmux
                     pkgs.tmuxinator
-                    (pkgs.mprocs.overrideAttrs (
-                      final: prev: {
-                        patches = prev.patches ++ [
-                          (pkgs.fetchurl {
-                            url = "https://github.com/pvolok/mprocs/pull/88.patch";
-                            name = "clipboard-fix.patch";
-                            sha256 = "sha256-9dx1vaEQ6kD66M+vsJLIq1FK+nEObuXSi3cmpSZuQWk=";
-                          })
-                        ];
-                      }
-                    ))
                     pkgs.docker-compose
                     pkgs.tokio-console
                     pkgs.git
