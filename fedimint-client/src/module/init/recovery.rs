@@ -250,7 +250,7 @@ where
         ) -> impl futures::Stream<Item = Result<(u64, Vec<AcceptedItem>), ShuttingDownError>> + 'a
         {
             // How many request for blocks to run in parallel (streaming).
-            const PARALLISM_LEVEL: usize = 64;
+            const PARALLELISM_LEVEL: usize = 64;
             const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS: ApiVersion =
                 ApiVersion { major: 0, minor: 1 };
 
@@ -294,7 +294,7 @@ where
                                         const MAX_SLEEP: Duration = Duration::from_secs(120);
 
                                         warn!(target: LOG_CLIENT_RECOVERY, e = %e, session_idx, "Error trying to fetch signed block");
-                                        // We don't want PARALLISM_LEVEL tasks hammering Federation
+                                        // We don't want PARALLELISM_LEVEL tasks hammering Federation
                                         // with requests, so max sleep is significant
                                         if retry_sleep <= MAX_SLEEP {
                                             retry_sleep = retry_sleep
@@ -310,7 +310,7 @@ where
                         }).await.expect("Can't fail")
                     })
                 })
-                .buffered(PARALLISM_LEVEL)
+                .buffered(PARALLELISM_LEVEL)
         }
 
         /// Make enough progress to justify saving a state snapshot

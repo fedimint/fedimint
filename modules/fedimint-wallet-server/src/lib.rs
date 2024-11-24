@@ -573,7 +573,7 @@ impl ServerModule for Wallet {
 
                 ensure!(
                     module_consensus_version > current_vote,
-                    "Module consenus version vote is redundant"
+                    "Module consensus version vote is redundant"
                 );
 
                 dbtx.insert_entry(&ConsensusVersionVoteKey(peer), &module_consensus_version)
