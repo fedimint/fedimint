@@ -28,17 +28,17 @@ impl IBitcoindRpcFactory for BitcoindFactory {
         url: &SafeUrl,
         handle: TaskHandle,
     ) -> anyhow::Result<DynBitcoindRpc> {
-        Ok(RetryClient::new(BitcoinClient::new(url)?, handle).into())
+        Ok(RetryClient::new(BitcoindClient::new(url)?, handle).into())
     }
 }
 
 #[derive(Debug)]
-struct BitcoinClient {
+struct BitcoindClient {
     client: ::bitcoincore_rpc::Client,
     url: SafeUrl,
 }
 
-impl BitcoinClient {
+impl BitcoindClient {
     fn new(url: &SafeUrl) -> anyhow::Result<Self> {
         let safe_url = url.clone();
         let (url, auth) = from_url_to_url_auth(url)?;
@@ -50,7 +50,7 @@ impl BitcoinClient {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl IBitcoindRpc for BitcoinClient {
+impl IBitcoindRpc for BitcoindClient {
     async fn get_network(&self) -> anyhow::Result<Network> {
         let network = block_in_place(|| self.client.get_blockchain_info())?;
         Ok(network.chain)
