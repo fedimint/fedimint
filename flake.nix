@@ -41,7 +41,6 @@
     let
       # overlay combining all overlays we use
       overlayAll = nixpkgs.lib.composeManyExtensions [
-        (import ./nix/overlays/rocksdb.nix)
         (import ./nix/overlays/wasm-bindgen.nix)
         (import ./nix/overlays/cargo-nextest.nix)
         (import ./nix/overlays/esplora-electrs.nix)
