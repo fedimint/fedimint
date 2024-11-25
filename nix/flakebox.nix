@@ -491,7 +491,10 @@ in
       src = filterWorkspaceAuditFiles commonSrc;
     };
 
-    cargoDeny = craneLib.cargoDeny { src = filterWorkspaceAuditFiles commonSrc; };
+    cargoDeny = craneLib.cargoDeny {
+      src = filterWorkspaceAuditFiles commonSrc;
+      cargoDenyChecks = "--hide-inclusion-graph bans licenses sources";
+    };
 
     # Build only deps, but with llvm-cov so `workspaceCov` can reuse them cached
     workspaceDepsCov = craneLib.buildDepsOnly {
