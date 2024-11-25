@@ -125,7 +125,9 @@ let
     }
     // pkgs.lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
       "ROCKSDB_${build_arch_underscores}_STATIC" = "true";
-      "ROCKSDB_${build_arch_underscores}_LIB_DIR" = "${pkgs.rocksdb}/lib/";
+      "ROCKSDB_${build_arch_underscores}_LIB_DIR" = "${
+        pkgs.rocksdb_8_11.override { enableLiburing = false; }
+      }/lib/";
 
       # does not produce static lib in most versions
       "SNAPPY_${build_arch_underscores}_STATIC" = "true";
