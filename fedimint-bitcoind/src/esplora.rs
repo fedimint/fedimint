@@ -3,29 +3,24 @@ use std::collections::HashMap;
 use anyhow::{bail, format_err, Context};
 use bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 use fedimint_core::envs::BitcoinRpcConfig;
-use fedimint_core::task::TaskHandle;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Feerate};
 use tracing::info;
 
-use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, RetryClient};
+use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory};
 
 #[derive(Debug)]
 pub struct EsploraFactory;
 
 impl IBitcoindRpcFactory for EsploraFactory {
-    fn create_connection(
-        &self,
-        url: &SafeUrl,
-        handle: TaskHandle,
-    ) -> anyhow::Result<DynBitcoindRpc> {
-        Ok(RetryClient::new(EsploraClient::new(url)?, handle).into())
+    fn create_connection(&self, url: &SafeUrl) -> anyhow::Result<DynBitcoindRpc> {
+        Ok(EsploraClient::new(url)?.into())
     }
 }
 
 #[derive(Debug)]
-pub struct EsploraClient {
+struct EsploraClient {
     client: esplora_client::AsyncClient,
     url: SafeUrl,
 }

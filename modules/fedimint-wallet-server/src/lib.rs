@@ -959,7 +959,7 @@ impl Wallet {
         task_group: &TaskGroup,
         our_peer_id: PeerId,
     ) -> anyhow::Result<Wallet> {
-        let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc, task_group.make_handle())?;
+        let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
         Ok(Self::new_with_bitcoind(cfg, db, btc_rpc, task_group, our_peer_id).await?)
     }
 

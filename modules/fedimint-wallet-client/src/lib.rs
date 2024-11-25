@@ -233,7 +233,7 @@ impl ClientModuleInit for WalletClientInit {
 
         let db = args.db().clone();
 
-        let btc_rpc = create_bitcoind(&rpc_config, TaskGroup::new().make_handle())?;
+        let btc_rpc = create_bitcoind(&rpc_config)?;
         let module_api = args.module_api().clone();
 
         let (pegin_claimed_sender, pegin_claimed_receiver) = watch::channel(());

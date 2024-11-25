@@ -10,35 +10,30 @@ use fedimint_core::encoding::Decodable;
 use fedimint_core::envs::{BitcoinRpcConfig, FM_BITCOIND_COOKIE_FILE_ENV};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::runtime::block_in_place;
-use fedimint_core::task::TaskHandle;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Feerate};
 use fedimint_logging::LOG_CORE;
 use tracing::{info, warn};
 
-use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, RetryClient};
+use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory};
 
 #[derive(Debug)]
 pub struct BitcoindFactory;
 
 impl IBitcoindRpcFactory for BitcoindFactory {
-    fn create_connection(
-        &self,
-        url: &SafeUrl,
-        handle: TaskHandle,
-    ) -> anyhow::Result<DynBitcoindRpc> {
-        Ok(RetryClient::new(BitcoinClient::new(url)?, handle).into())
+    fn create_connection(&self, url: &SafeUrl) -> anyhow::Result<DynBitcoindRpc> {
+        Ok(BitcoindClient::new(url)?.into())
     }
 }
 
 #[derive(Debug)]
-struct BitcoinClient {
+struct BitcoindClient {
     client: ::bitcoincore_rpc::Client,
     url: SafeUrl,
 }
 
-impl BitcoinClient {
+impl BitcoindClient {
     fn new(url: &SafeUrl) -> anyhow::Result<Self> {
         let safe_url = url.clone();
         let (url, auth) = from_url_to_url_auth(url)?;
@@ -50,7 +45,7 @@ impl BitcoinClient {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl IBitcoindRpc for BitcoinClient {
+impl IBitcoindRpc for BitcoindClient {
     async fn get_network(&self) -> anyhow::Result<Network> {
         let network = block_in_place(|| self.client.get_blockchain_info())?;
         Ok(network.chain)

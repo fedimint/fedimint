@@ -27,7 +27,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::secp256k1::{Message, PublicKey, SECP256K1};
 use fedimint_core::server::DynServerModule;
-use fedimint_core::task::{sleep, TaskGroup};
+use fedimint_core::task::sleep;
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, NumPeersExt, OutPoint, PeerId,
     ServerModule,
@@ -212,12 +212,7 @@ impl ServerModuleInit for LightningInit {
         // Eagerly initialize metrics that trigger infrequently
         LN_CANCEL_OUTGOING_CONTRACTS.get();
 
-        Ok(Lightning::new(
-            args.cfg().to_typed()?,
-            args.task_group(),
-            args.our_peer_id(),
-        )?
-        .into())
+        Ok(Lightning::new(args.cfg().to_typed()?, args.our_peer_id())?.into())
     }
 
     fn trusted_dealer_gen(
@@ -934,12 +929,8 @@ impl ServerModule for Lightning {
 }
 
 impl Lightning {
-    fn new(
-        cfg: LightningConfig,
-        task_group: &TaskGroup,
-        our_peer_id: PeerId,
-    ) -> anyhow::Result<Self> {
-        let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc, task_group.make_handle())?;
+    fn new(cfg: LightningConfig, our_peer_id: PeerId) -> anyhow::Result<Self> {
+        let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
         Ok(Lightning {
             cfg,
             btc_rpc,
@@ -1247,7 +1238,6 @@ mod tests {
     use fedimint_core::module::registry::ModuleRegistry;
     use fedimint_core::module::{InputMeta, ServerModuleInit, TransactionItemAmount};
     use fedimint_core::secp256k1::{generate_keypair, PublicKey};
-    use fedimint_core::task::TaskGroup;
     use fedimint_core::{Amount, OutPoint, PeerId, ServerModule, TransactionId};
     use fedimint_ln_common::config::{
         LightningClientConfig, LightningConfig, LightningGenParams, LightningGenParamsConsensus,
@@ -1313,8 +1303,7 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn encrypted_preimage_only_usable_once() {
         let (server_cfg, client_cfg) = build_configs();
-        let tg = TaskGroup::new();
-        let server = Lightning::new(server_cfg[0].clone(), &tg, 0.into()).unwrap();
+        let server = Lightning::new(server_cfg[0].clone(), 0.into()).unwrap();
 
         let preimage = [42u8; 32];
         let encrypted_preimage = EncryptedPreimage(client_cfg.threshold_pub_key.encrypt([42; 32]));
@@ -1375,8 +1364,7 @@ mod tests {
         let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         let mut dbtx = db.begin_transaction_nc().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
-        let tg = TaskGroup::new();
-        let server = Lightning::new(server_cfg[0].clone(), &tg, 0.into()).unwrap();
+        let server = Lightning::new(server_cfg[0].clone(), 0.into()).unwrap();
 
         let preimage = PreimageKey(generate_keypair(&mut OsRng).1.serialize());
         let funded_incoming_contract = FundedContract::Incoming(FundedIncomingContract {
@@ -1436,8 +1424,7 @@ mod tests {
         let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         let mut dbtx = db.begin_transaction_nc().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
-        let tg = TaskGroup::new();
-        let server = Lightning::new(server_cfg[0].clone(), &tg, 0.into()).unwrap();
+        let server = Lightning::new(server_cfg[0].clone(), 0.into()).unwrap();
 
         let preimage = Preimage([42u8; 32]);
         let gateway_key = random_pub_key();

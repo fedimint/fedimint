@@ -535,10 +535,9 @@ impl ConfigGenApi {
         &self,
         bitcoin_rpc_config: &BitcoinRpcConfig,
     ) -> ApiResult<BitcoinRpcConnectionStatus> {
-        let client =
-            create_bitcoind(bitcoin_rpc_config, self.task_group.make_handle()).map_err(|e| {
-                ApiError::server_error(format!("Failed to connect to bitcoin rpc: {e}"))
-            })?;
+        let client = create_bitcoind(bitcoin_rpc_config).map_err(|e| {
+            ApiError::server_error(format!("Failed to connect to bitcoin rpc: {e}"))
+        })?;
         // TODO: Find a better way to check if esplora is synced, just returning Synced
         // if it connects
         let _network_info = client

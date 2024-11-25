@@ -6,28 +6,21 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::similar_names)]
 
-use std::cmp::min;
 use std::collections::BTreeMap;
 use std::env;
 use std::fmt::Debug;
-use std::future::Future;
 use std::sync::{Arc, LazyLock, Mutex};
-use std::time::Duration;
 
-use anyhow::Context;
-pub use anyhow::Result;
-use bitcoin::{Block, BlockHash, Network, ScriptBuf, Transaction, Txid};
+use anyhow::{Context, Result};
+use bitcoin::{Block, BlockHash, ScriptBuf, Transaction, Txid};
 use fedimint_core::envs::{
     BitcoinRpcConfig, FM_FORCE_BITCOIN_RPC_KIND_ENV, FM_FORCE_BITCOIN_RPC_URL_ENV,
 };
-use fedimint_core::fmt_utils::OptStacktrace;
-use fedimint_core::runtime::sleep;
-use fedimint_core::task::TaskHandle;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, Feerate};
-use fedimint_logging::{LOG_BLOCKCHAIN, LOG_CORE};
-use tracing::{debug, info};
+use fedimint_logging::LOG_CORE;
+use tracing::debug;
 
 #[cfg(feature = "bitcoincore-rpc")]
 pub mod bitcoincore;
@@ -64,7 +57,7 @@ static BITCOIN_RPC_REGISTRY: LazyLock<Mutex<BTreeMap<String, DynBitcoindRpcFacto
     });
 
 /// Create a bitcoin RPC of a given kind
-pub fn create_bitcoind(config: &BitcoinRpcConfig, handle: TaskHandle) -> Result<DynBitcoindRpc> {
+pub fn create_bitcoind(config: &BitcoinRpcConfig) -> Result<DynBitcoindRpc> {
     let registry = BITCOIN_RPC_REGISTRY.lock().expect("lock poisoned");
 
     let kind = env::var(FM_FORCE_BITCOIN_RPC_KIND_ENV)
@@ -84,7 +77,7 @@ pub fn create_bitcoind(config: &BitcoinRpcConfig, handle: TaskHandle) -> Result<
             registry.keys()
         )
     })?;
-    factory.create_connection(&url, handle)
+    factory.create_connection(&url)
 }
 
 /// Register a new factory for creating bitcoin RPCs
@@ -96,7 +89,7 @@ pub fn register_bitcoind(kind: String, factory: DynBitcoindRpcFactory) {
 /// Trait for creating new bitcoin RPC clients
 pub trait IBitcoindRpcFactory: Debug + Send + Sync {
     /// Creates a new bitcoin RPC client connection
-    fn create_connection(&self, url: &SafeUrl, handle: TaskHandle) -> Result<DynBitcoindRpc>;
+    fn create_connection(&self, url: &SafeUrl) -> Result<DynBitcoindRpc>;
 }
 
 dyn_newtype_define! {
@@ -189,120 +182,4 @@ pub trait IBitcoindRpc: Debug {
 dyn_newtype_define! {
     #[derive(Clone)]
     pub DynBitcoindRpc(Arc<IBitcoindRpc>)
-}
-
-const RETRY_SLEEP_MIN_MS: Duration = Duration::from_millis(10);
-const RETRY_SLEEP_MAX_MS: Duration = Duration::from_millis(5000);
-
-/// Wrapper around [`IBitcoindRpc`] that will retry failed calls
-#[derive(Debug)]
-pub struct RetryClient<C> {
-    inner: C,
-    task_handle: TaskHandle,
-}
-
-impl<C> RetryClient<C> {
-    pub fn new(inner: C, task_handle: TaskHandle) -> Self {
-        Self { inner, task_handle }
-    }
-
-    /// Retries with an exponential backoff from `RETRY_SLEEP_MIN_MS` to
-    /// `RETRY_SLEEP_MAX_MS`
-    async fn retry_call<T, F, R>(&self, call_fn: F) -> Result<T>
-    where
-        F: Fn() -> R,
-        R: Future<Output = Result<T>>,
-    {
-        let mut retry_time = RETRY_SLEEP_MIN_MS;
-        let ret = loop {
-            match call_fn().await {
-                Ok(ret) => {
-                    break ret;
-                }
-                Err(e) => {
-                    if self.task_handle.is_shutting_down() {
-                        return Err(e);
-                    }
-
-                    info!(target: LOG_BLOCKCHAIN, "Bitcoind error {}, retrying", OptStacktrace(e));
-                    sleep(retry_time).await;
-                    retry_time = min(RETRY_SLEEP_MAX_MS, retry_time * 2);
-                }
-            }
-        };
-        Ok(ret)
-    }
-}
-
-#[apply(async_trait_maybe_send!)]
-impl<C> IBitcoindRpc for RetryClient<C>
-where
-    C: IBitcoindRpc + Sync + Send,
-{
-    async fn get_network(&self) -> Result<Network> {
-        self.retry_call(|| async { self.inner.get_network().await })
-            .await
-    }
-
-    async fn get_block_count(&self) -> Result<u64> {
-        self.retry_call(|| async { self.inner.get_block_count().await })
-            .await
-    }
-
-    async fn get_block_hash(&self, height: u64) -> Result<BlockHash> {
-        self.retry_call(|| async { self.inner.get_block_hash(height).await })
-            .await
-    }
-
-    async fn get_block(&self, block_hash: &BlockHash) -> Result<Block> {
-        self.retry_call(|| async { self.inner.get_block(block_hash).await })
-            .await
-    }
-
-    async fn get_fee_rate(&self, confirmation_target: u16) -> Result<Option<Feerate>> {
-        self.retry_call(|| async { self.inner.get_fee_rate(confirmation_target).await })
-            .await
-    }
-
-    async fn submit_transaction(&self, transaction: Transaction) {
-        self.inner.submit_transaction(transaction.clone()).await;
-    }
-
-    async fn get_tx_block_height(&self, txid: &Txid) -> Result<Option<u64>> {
-        self.retry_call(|| async { self.inner.get_tx_block_height(txid).await })
-            .await
-    }
-
-    async fn is_tx_in_block(
-        &self,
-        txid: &Txid,
-        block_hash: &BlockHash,
-        block_height: u64,
-    ) -> Result<bool> {
-        self.retry_call(|| async {
-            self.inner
-                .is_tx_in_block(txid, block_hash, block_height)
-                .await
-        })
-        .await
-    }
-
-    async fn watch_script_history(&self, script: &ScriptBuf) -> Result<()> {
-        self.retry_call(|| async { self.inner.watch_script_history(script).await })
-            .await
-    }
-
-    async fn get_script_history(&self, script: &ScriptBuf) -> Result<Vec<Transaction>> {
-        self.retry_call(|| async { self.inner.get_script_history(script).await })
-            .await
-    }
-
-    async fn get_txout_proof(&self, txid: Txid) -> Result<TxOutProof> {
-        self.retry_call(|| async { self.inner.get_txout_proof(txid).await })
-            .await
-    }
-
-    fn get_bitcoin_rpc_config(&self) -> BitcoinRpcConfig {
-        self.inner.get_bitcoin_rpc_config()
-    }
 }
