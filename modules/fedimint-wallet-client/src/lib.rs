@@ -204,6 +204,7 @@ impl ModuleInit for WalletClientInit {
                     }
                 }
                 DbKeyPrefix::RecoveryState => {}
+                DbKeyPrefix::ExternalReservedStart | DbKeyPrefix::ExternalReservedEnd => {}
             }
         }
 

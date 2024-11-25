@@ -18,6 +18,12 @@ pub enum DbKeyPrefix {
     ClaimedPegIn = 0x2e,
     RecoveryFinalized = 0x2f,
     RecoveryState = 0x30,
+    /// Prefixes between 0xb1..=0xcf shall all be considered allocated for
+    /// historical and future external use
+    ExternalReservedStart = 0xb1,
+    /// Prefixes between 0xb1..=0xcf shall all be considered allocated for
+    /// historical and future external use
+    ExternalReservedEnd = 0xcf,
 }
 
 impl std::fmt::Display for DbKeyPrefix {

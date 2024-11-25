@@ -881,6 +881,8 @@ mod fedimint_migration_tests {
                             );
                             info!("Validated RecoveryFinalized");
                         }
+                        fedimint_mint_client::client_db::DbKeyPrefix::ExternalReservedStart
+                        | fedimint_mint_client::client_db::DbKeyPrefix::ExternalReservedEnd => {}
                     }
                 }
 

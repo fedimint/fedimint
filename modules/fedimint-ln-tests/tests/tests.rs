@@ -1280,6 +1280,7 @@ mod fedimint_migration_tests {
                             );
                             info!("Validated LightningGateways");
                         }
+                        fedimint_ln_client::db::DbKeyPrefix::ExternalReservedEnd | fedimint_ln_client::db::DbKeyPrefix::ExternalReservedStart => {}
                     }
                 }
 

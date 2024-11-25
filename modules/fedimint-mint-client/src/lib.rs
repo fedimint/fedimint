@@ -571,6 +571,7 @@ impl ModuleInit for MintClientInit {
                     }
                 }
                 DbKeyPrefix::RecoveryState => {}
+                DbKeyPrefix::ExternalReservedStart | DbKeyPrefix::ExternalReservedEnd => {}
             }
         }
 

@@ -30,6 +30,12 @@ pub enum DbKeyPrefix {
     PaymentResult = 0x29,
     MetaOverridesDeprecated = 0x30,
     LightningGateway = 0x45,
+    /// Prefixes between 0xb1..=0xcf shall all be considered allocated for
+    /// historical and future external use
+    ExternalReservedStart = 0xb1,
+    /// Prefixes between 0xb1..=0xcf shall all be considered allocated for
+    /// historical and future external use
+    ExternalReservedEnd = 0xcf,
 }
 
 impl std::fmt::Display for DbKeyPrefix {

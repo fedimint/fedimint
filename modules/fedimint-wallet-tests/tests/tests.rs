@@ -1487,6 +1487,8 @@ mod fedimint_migration_tests {
                         client_db::DbKeyPrefix::ClaimedPegIn => {}
                         client_db::DbKeyPrefix::RecoveryFinalized => {}
                         client_db::DbKeyPrefix::RecoveryState => {}
+                        client_db::DbKeyPrefix::ExternalReservedStart
+                        | client_db::DbKeyPrefix::ExternalReservedEnd => {}
                     }
                 }
 
