@@ -29,7 +29,7 @@ anyhow = { workspace = true }
 aquamarine = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
-axum = { version = "0.7.8", features = [ "json" ] }
+axum = { version = "0.7.9", features = [ "json" ] }
 bitcoin = { workspace = true }
 clap = { workspace = true }
 erased-serde = { workspace = true }
@@ -67,7 +67,7 @@ tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { version = "0.12.3", features = ["transport", "tls"] }
 tonic_lnd = { workspace = true }
-tower-http = { version = "0.6.1", features = ["cors", "auth"] }
+tower-http = { version = "0.6.2", features = ["cors", "auth"] }
 tpe = { workspace = true }
 tracing = { workspace = true, features = ["log"] }
 url = { workspace = true, features = ["serde"] }
