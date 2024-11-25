@@ -2,9 +2,9 @@
 Pre-building workspace...
 Lowering IO priority with chrt -i 0 ionice -c 3
 warning: unused import: `ln_gateway::rpc::GatewayInfo`
-  --> devimint/src/tests.rs:22:5
+  --> devimint/src/tests.rs:23:5
    |
-22 | use ln_gateway::rpc::GatewayInfo;
+23 | use ln_gateway::rpc::GatewayInfo;
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
 help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
@@ -15,22 +15,23 @@ help: if this is a test module, consider adding a `#[cfg(test)]` to the containi
    = note: `#[warn(unused_imports)]` on by default
 
 warning: `devimint` (lib) generated 1 warning (run `cargo fix --lib -p devimint` to apply 1 suggestion)
+   Compiling gateway-tests v0.5.0-rc.1 (/home/nix/fedimint/gateway/integration_tests)
 warning: unused import: `ln_gateway::rpc::GatewayInfo`
-  --> devimint/src/tests.rs:22:5
+  --> devimint/src/tests.rs:23:5
    |
-22 | use ln_gateway::rpc::GatewayInfo;
+23 | use ln_gateway::rpc::GatewayInfo;
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
    = note: `#[warn(unused_imports)]` on by default
 
 warning: `devimint` (lib test) generated 1 warning (run `cargo fix --lib -p devimint --tests` to apply 1 suggestion)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.17s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.85s
 Pre-building tests...
 Lowering IO priority with chrt -i 0 ionice -c 3
 warning: unused import: `ln_gateway::rpc::GatewayInfo`
-  --> devimint/src/tests.rs:22:5
+  --> devimint/src/tests.rs:23:5
    |
-22 | use ln_gateway::rpc::GatewayInfo;
+23 | use ln_gateway::rpc::GatewayInfo;
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
 help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
@@ -42,9 +43,9 @@ help: if this is a test module, consider adding a `#[cfg(test)]` to the containi
 
 warning: `devimint` (lib) generated 1 warning (run `cargo fix --lib -p devimint` to apply 1 suggestion)
 warning: unused import: `ln_gateway::rpc::GatewayInfo`
-  --> devimint/src/tests.rs:22:5
+  --> devimint/src/tests.rs:23:5
    |
-22 | use ln_gateway::rpc::GatewayInfo;
+23 | use ln_gateway::rpc::GatewayInfo;
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
    = note: `#[warn(unused_imports)]` on by default
@@ -67,11 +68,11 @@ Compiling gateway-cln-extension for version v0.4.4 ...
 Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
 ## Starting all tests in parallel...
-parallel --jobs 1 --timeout 300 --load 5 --delay 10 --halt-on-error 1 --joblog /tmp/nix-shell.LbYM7O/HHRsL/joblog --noswap --memfree 2G
-## RUN:  gateway_reboot_test (FM: current, CLI: current, GW: v0.4.4)
-## STAT:    50.56s  1352968B   290529W    11629c
-## DONE: gateway_reboot_test (FM: current, CLI: current, GW: v0.4.4)
+parallel --jobs 1 --timeout 300 --load 5 --delay 10 --halt-on-error 1 --joblog /tmp/nix-shell.LbYM7O/fvQ8L/joblog --noswap --memfree 2G
+## RUN:  gateway_config_test_cln (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    25.28s   403016B   276324W    23741c
+## DONE: gateway_config_test_cln (FM: current, CLI: current, GW: v0.4.4)
 ## RUN:  always_success_test (FM: current, CLI: current, GW: v0.4.4)
-## STAT:     0.00s     3536B        3W        0c
+## STAT:     0.00s     3560B        3W        0c
 ## DONE: always_success_test (FM: current, CLI: current, GW: v0.4.4)
 All tests successful

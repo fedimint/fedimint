@@ -19,6 +19,7 @@ use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_logging::LOG_DEVIMINT;
 use futures::future::try_join_all;
 use hex::ToHex;
+use ln_gateway::rpc::legacy_types::LegacyGatewayInfo;
 use ln_gateway::rpc::GatewayInfo;
 use serde_json::json;
 use tokio::net::TcpStream;
@@ -1630,46 +1631,6 @@ pub async fn lightning_gw_reconnect_test(
 }
 
 pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
-    use bitcoin::Network;
-    use fedimint_core::config::FederationId;
-    use fedimint_core::secp256k1;
-    use ln_gateway::lightning::LightningMode;
-    use ln_gateway::rpc::FederationRoutingFees;
-    use serde::{Deserialize, Serialize};
-
-    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-    struct FederationInfoLegacy {
-        pub federation_id: FederationId,
-        pub federation_name: Option<String>,
-        pub balance_msat: Amount,
-        pub routing_fees: Option<FederationRoutingFees>,
-    }
-
-    #[derive(Debug, Serialize, Deserialize, PartialEq)]
-    struct GatewayInfoLegacy {
-        pub version_hash: String,
-        pub federations: Vec<FederationInfoLegacy>,
-        /// Mapping from short channel id to the federation id that it belongs
-        /// to.
-        // TODO: Remove this alias once it no longer breaks backwards compatibility.
-        #[serde(alias = "channels")]
-        pub federation_fake_scids: Option<BTreeMap<u64, FederationId>>,
-        pub lightning_pub_key: Option<String>,
-        pub lightning_alias: Option<String>,
-        pub gateway_id: secp256k1::PublicKey,
-        pub gateway_state: String,
-        pub network: Option<Network>,
-        // TODO: This is here to allow for backwards compatibility with old versions of this
-        // struct. We should be able to remove it once 0.4.0 is released.
-        #[serde(default)]
-        pub block_height: Option<u32>,
-        // TODO: This is here to allow for backwards compatibility with old versions of this
-        // struct. We should be able to remove it once 0.4.0 is released.
-        #[serde(default)]
-        pub synced_to_chain: bool,
-        pub lightning_mode: Option<LightningMode>,
-    }
-
     log_binary_versions().await?;
 
     let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
@@ -1760,14 +1721,15 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     };
 
     info!("parsing cln_info");
-    let cln_info: GatewayInfoLegacy = serde_json::from_value(cln_value)?;
+    // TODO: choose struct based on version
+    let cln_info: LegacyGatewayInfo = serde_json::from_value(cln_value)?;
     info!("past parsing cln_info");
     poll(
         "Waiting for CLN Gateway Running state after reboot",
         || async {
             let mut new_cln_cmd = cmd!(new_gw_cln, "info");
             let cln_value = new_cln_cmd.out_json().await.map_err(ControlFlow::Continue)?;
-            let reboot_info: GatewayInfoLegacy = serde_json::from_value(cln_value).context("json invalid").map_err(ControlFlow::Break)?;
+            let reboot_info: LegacyGatewayInfo = serde_json::from_value(cln_value).context("json invalid").map_err(ControlFlow::Break)?;
 
             if reboot_info.gateway_state == "Running" {
                 info!(target: LOG_DEVIMINT, "CLN Gateway restarted, with auto-rejoin to federation");
@@ -1782,13 +1744,13 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     )
     .await?;
 
-    let lnd_info: GatewayInfoLegacy = serde_json::from_value(lnd_value)?;
+    let lnd_info: LegacyGatewayInfo = serde_json::from_value(lnd_value)?;
     poll(
         "Waiting for LND Gateway Running state after reboot",
         || async {
             let mut new_lnd_cmd = cmd!(new_gw_lnd, "info");
             let lnd_value = new_lnd_cmd.out_json().await.map_err(ControlFlow::Continue)?;
-            let reboot_info: GatewayInfoLegacy = serde_json::from_value(lnd_value).context("json invalid").map_err(ControlFlow::Break)?;
+            let reboot_info: LegacyGatewayInfo = serde_json::from_value(lnd_value).context("json invalid").map_err(ControlFlow::Break)?;
 
             if reboot_info.gateway_state == "Running" {
                 info!(target: LOG_DEVIMINT, "LND Gateway restarted, with auto-rejoin to federation");
@@ -1802,13 +1764,13 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     .await?;
 
     if let (Some(new_gw_ldk), Some(ldk_value)) = (new_gw_ldk_or, ldk_value_or) {
-        let ldk_info: GatewayInfoLegacy = serde_json::from_value(ldk_value)?;
+        let ldk_info: LegacyGatewayInfo = serde_json::from_value(ldk_value)?;
         poll(
             "Waiting for LDK Gateway Running state after reboot",
             || async {
                 let mut new_ldk_cmd = cmd!(new_gw_ldk, "info");
                 let ldk_value = new_ldk_cmd.out_json().await.map_err(ControlFlow::Continue)?;
-                let reboot_info: GatewayInfoLegacy = serde_json::from_value(ldk_value).context("json invalid").map_err(ControlFlow::Break)?;
+                let reboot_info: LegacyGatewayInfo = serde_json::from_value(ldk_value).context("json invalid").map_err(ControlFlow::Break)?;
 
                 if reboot_info.gateway_state == "Running" {
                     info!(target: LOG_DEVIMINT, "LDK Gateway restarted, with auto-rejoin to federation");
