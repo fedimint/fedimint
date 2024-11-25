@@ -18,6 +18,7 @@ path = "src/lib.rs"
 
 [[bench]]
 name = "tbs"
+path = "benches/tbs.rs"
 harness = false
 
 [dependencies]
