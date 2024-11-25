@@ -1608,7 +1608,7 @@
 
         <span class="kw">let </span>db = args.db().clone();
 
-        <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>rpc_config, TaskGroup::new().make_handle())<span class="question-mark">?</span>;
+        <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>rpc_config)<span class="question-mark">?</span>;
         <span class="kw">let </span>module_api = args.module_api().clone();
 
         <span class="kw">let </span>(pegin_claimed_sender, pegin_claimed_receiver) = watch::channel(());

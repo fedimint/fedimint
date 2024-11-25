@@ -191,12 +191,7 @@
 <a href="#190" id="190">190</a>
 <a href="#191" id="191">191</a>
 <a href="#192" id="192">192</a>
-<a href="#193" id="193">193</a>
-<a href="#194" id="194">194</a>
-<a href="#195" id="195">195</a>
-<a href="#196" id="196">196</a>
-<a href="#197" id="197">197</a>
-<a href="#198" id="198">198</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
+<a href="#193" id="193">193</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::path::PathBuf;
 
@@ -208,35 +203,30 @@
 <span class="kw">use </span>fedimint_core::envs::{BitcoinRpcConfig, FM_BITCOIND_COOKIE_FILE_ENV};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::runtime::block_in_place;
-<span class="kw">use </span>fedimint_core::task::TaskHandle;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Feerate};
 <span class="kw">use </span>fedimint_logging::LOG_CORE;
 <span class="kw">use </span>tracing::{info, warn};
 
-<span class="kw">use crate</span>::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, RetryClient};
+<span class="kw">use crate</span>::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory};
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>BitcoindFactory;
 
 <span class="kw">impl </span>IBitcoindRpcFactory <span class="kw">for </span>BitcoindFactory {
-    <span class="kw">fn </span>create_connection(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        url: <span class="kw-2">&amp;</span>SafeUrl,
-        handle: TaskHandle,
-    ) -&gt; anyhow::Result&lt;DynBitcoindRpc&gt; {
-        <span class="prelude-val">Ok</span>(RetryClient::new(BitcoinClient::new(url)<span class="question-mark">?</span>, handle).into())
+    <span class="kw">fn </span>create_connection(<span class="kw-2">&amp;</span><span class="self">self</span>, url: <span class="kw-2">&amp;</span>SafeUrl) -&gt; anyhow::Result&lt;DynBitcoindRpc&gt; {
+        <span class="prelude-val">Ok</span>(BitcoindClient::new(url)<span class="question-mark">?</span>.into())
     }
 }
 
 <span class="attr">#[derive(Debug)]
-</span><span class="kw">struct </span>BitcoinClient {
+</span><span class="kw">struct </span>BitcoindClient {
     client: ::bitcoincore_rpc::Client,
     url: SafeUrl,
 }
 
-<span class="kw">impl </span>BitcoinClient {
+<span class="kw">impl </span>BitcoindClient {
     <span class="kw">fn </span>new(url: <span class="kw-2">&amp;</span>SafeUrl) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>safe_url = url.clone();
         <span class="kw">let </span>(url, auth) = from_url_to_url_auth(url)<span class="question-mark">?</span>;
@@ -248,7 +238,7 @@
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl </span>IBitcoindRpc <span class="kw">for </span>BitcoinClient {
+</span><span class="kw">impl </span>IBitcoindRpc <span class="kw">for </span>BitcoindClient {
     <span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Network&gt; {
         <span class="kw">let </span>network = block_in_place(|| <span class="self">self</span>.client.get_blockchain_info())<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(network.chain)

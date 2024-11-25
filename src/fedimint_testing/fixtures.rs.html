@@ -256,8 +256,7 @@
 <a href="#255" id="255">255</a>
 <a href="#256" id="256">256</a>
 <a href="#257" id="257">257</a>
-<a href="#258" id="258">258</a>
-<a href="#259" id="259">259</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
+<a href="#258" id="258">258</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -275,7 +274,7 @@
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::{DynServerModuleInit, IServerModuleInit};
-<span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
+<span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>fedimint_testing_core::test_dir;
@@ -318,7 +317,6 @@
         <span class="comment">// Ensure tracing has been set once
         </span><span class="kw">let _ </span>= TracingSetup::default().init();
         <span class="kw">let </span>real_testing = Fixtures::is_real_test();
-        <span class="kw">let </span>task_group = TaskGroup::new();
         <span class="kw">let </span>(dyn_bitcoin_rpc, bitcoin, config): (
             DynBitcoindRpc,
             Arc&lt;<span class="kw">dyn </span>BitcoinTest&gt;,
@@ -338,7 +336,7 @@
                     .expect(<span class="string">"must provide valid default env vars"</span>),
             };
 
-            <span class="kw">let </span>dyn_bitcoin_rpc = create_bitcoind(<span class="kw-2">&amp;</span>rpc_config, task_group.make_handle()).unwrap();
+            <span class="kw">let </span>dyn_bitcoin_rpc = create_bitcoind(<span class="kw-2">&amp;</span>rpc_config).unwrap();
             <span class="kw">let </span>bitcoincore_url = env::var(FM_TEST_BITCOIND_RPC_ENV)
                 .expect(<span class="string">"Must have bitcoind RPC defined for real tests"</span>)
                 .parse()

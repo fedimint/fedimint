@@ -233,12 +233,7 @@
 <a href="#232" id="232">232</a>
 <a href="#233" id="233">233</a>
 <a href="#234" id="234">234</a>
-<a href="#235" id="235">235</a>
-<a href="#236" id="236">236</a>
-<a href="#237" id="237">237</a>
-<a href="#238" id="238">238</a>
-<a href="#239" id="239">239</a>
-<a href="#240" id="240">240</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
+<a href="#235" id="235">235</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>anyhow::{anyhow <span class="kw">as </span>format_err, bail};
 <span class="kw">use </span>bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
@@ -246,7 +241,6 @@
 <span class="kw">use </span>electrum_client::Error::Protocol;
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::runtime::block_in_place;
-<span class="kw">use </span>fedimint_core::task::TaskHandle;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Feerate};
@@ -254,22 +248,18 @@
 <span class="kw">use </span>serde_json::{Map, Value};
 <span class="kw">use </span>tracing::info;
 
-<span class="kw">use crate</span>::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, RetryClient};
+<span class="kw">use crate</span>::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory};
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>ElectrumFactory;
 
 <span class="kw">impl </span>IBitcoindRpcFactory <span class="kw">for </span>ElectrumFactory {
-    <span class="kw">fn </span>create_connection(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        url: <span class="kw-2">&amp;</span>SafeUrl,
-        handle: TaskHandle,
-    ) -&gt; anyhow::Result&lt;DynBitcoindRpc&gt; {
-        <span class="prelude-val">Ok</span>(RetryClient::new(ElectrumClient::new(url)<span class="question-mark">?</span>, handle).into())
+    <span class="kw">fn </span>create_connection(<span class="kw-2">&amp;</span><span class="self">self</span>, url: <span class="kw-2">&amp;</span>SafeUrl) -&gt; anyhow::Result&lt;DynBitcoindRpc&gt; {
+        <span class="prelude-val">Ok</span>(ElectrumClient::new(url)<span class="question-mark">?</span>.into())
     }
 }
 
-<span class="kw">pub struct </span>ElectrumClient {
+<span class="kw">struct </span>ElectrumClient {
     client: electrum_client::Client,
     url: SafeUrl,
 }

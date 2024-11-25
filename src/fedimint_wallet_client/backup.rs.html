@@ -497,8 +497,7 @@
 <a href="#496" id="496">496</a>
 <a href="#497" id="497">497</a>
 <a href="#498" id="498">498</a>
-<a href="#499" id="499">499</a>
-<a href="#500" id="500">500</a></pre></div><pre class="rust"><code><span class="kw">mod </span>recovery_history_tracker;
+<a href="#499" id="499">499</a></pre></div><pre class="rust"><code><span class="kw">mod </span>recovery_history_tracker;
 
 <span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::sync::{Arc, Mutex};
@@ -511,7 +510,6 @@
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped <span class="kw">as _</span>};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send};
 <span class="kw">use </span>fedimint_logging::{LOG_CLIENT_MODULE_WALLET, LOG_CLIENT_RECOVERY};
@@ -641,7 +639,7 @@
             </span>.clone()
             .unwrap_or(WalletClientModule::get_rpc_config(args.cfg()));
 
-        <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>rpc_config, TaskGroup::new().make_handle())<span class="question-mark">?</span>;
+        <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>rpc_config)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>data = WalletClientModuleData {
             cfg: args.cfg().clone(),
@@ -722,7 +720,7 @@
             </span>.clone()
             .unwrap_or(WalletClientModule::get_rpc_config(args.cfg()));
 
-        <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>rpc_config, TaskGroup::new().make_handle())<span class="question-mark">?</span>;
+        <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>rpc_config)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>data = WalletClientModuleData {
             cfg: args.cfg().clone(),

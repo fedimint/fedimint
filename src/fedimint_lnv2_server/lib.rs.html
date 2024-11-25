@@ -816,7 +816,7 @@
     TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
-<span class="kw">use </span>fedimint_core::task::{timeout, TaskGroup};
+<span class="kw">use </span>fedimint_core::task::timeout;
 <span class="kw">use </span>fedimint_core::time::duration_since_epoch;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{
@@ -971,7 +971,7 @@
     }
 
     <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ServerModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;DynServerModule&gt; {
-        <span class="prelude-val">Ok</span>(Lightning::new(args.cfg().to_typed()<span class="question-mark">?</span>, <span class="kw-2">&amp;</span>args.task_group().clone())<span class="question-mark">?</span>.into())
+        <span class="prelude-val">Ok</span>(Lightning::new(args.cfg().to_typed()<span class="question-mark">?</span>)<span class="question-mark">?</span>.into())
     }
 
     <span class="kw">fn </span>trusted_dealer_gen(
@@ -1424,8 +1424,8 @@
 }
 
 <span class="kw">impl </span>Lightning {
-    <span class="kw">fn </span>new(cfg: LightningConfig, task_group: <span class="kw-2">&amp;</span>TaskGroup) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>cfg.local.bitcoin_rpc, task_group.make_handle())<span class="question-mark">?</span>;
+    <span class="kw">fn </span>new(cfg: LightningConfig) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>cfg.local.bitcoin_rpc)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(Lightning { cfg, btc_rpc })
     }
