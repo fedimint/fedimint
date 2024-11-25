@@ -12,7 +12,7 @@ repository = "https://github.com/fedimint/fedimint"
 rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
-default = ["bitcoincore-rpc", "electrum-client", "esplora-client"]
+default = ["bitcoincore-rpc", "esplora-client"]
 
 [lib]
 name = "fedimint_bitcoind"
@@ -23,7 +23,6 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
 bitcoincore-rpc = { workspace = true, optional = true }
-electrum-client = { workspace = true, optional = true }
 esplora-client = { workspace = true, optional = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
