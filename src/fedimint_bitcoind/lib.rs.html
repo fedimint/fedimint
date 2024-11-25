@@ -179,11 +179,7 @@
 <a href="#178" id="178">178</a>
 <a href="#179" id="179">179</a>
 <a href="#180" id="180">180</a>
-<a href="#181" id="181">181</a>
-<a href="#182" id="182">182</a>
-<a href="#183" id="183">183</a>
-<a href="#184" id="184">184</a>
-<a href="#185" id="185">185</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#181" id="181">181</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::missing_errors_doc)]
@@ -209,8 +205,6 @@
 
 <span class="attr">#[cfg(feature = <span class="string">"bitcoincore-rpc"</span>)]
 </span><span class="kw">pub mod </span>bitcoincore;
-<span class="attr">#[cfg(feature = <span class="string">"electrum-client"</span>)]
-</span><span class="kw">mod </span>electrum;
 <span class="attr">#[cfg(feature = <span class="string">"esplora-client"</span>)]
 </span><span class="kw">mod </span>esplora;
 
@@ -234,8 +228,6 @@
         Mutex::new(BTreeMap::from([
             <span class="attr">#[cfg(feature = <span class="string">"esplora-client"</span>)]
             </span>(<span class="string">"esplora"</span>.to_string(), esplora::EsploraFactory.into()),
-            <span class="attr">#[cfg(feature = <span class="string">"electrum-client"</span>)]
-            </span>(<span class="string">"electrum"</span>.to_string(), electrum::ElectrumFactory.into()),
             <span class="attr">#[cfg(feature = <span class="string">"bitcoincore-rpc"</span>)]
             </span>(<span class="string">"bitcoind"</span>.to_string(), bitcoincore::BitcoindFactory.into()),
         ]))
