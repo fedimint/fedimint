@@ -22,7 +22,7 @@ test-ci-all:
 test-count:
   ./scripts/tests/test-cov.sh
 
-test-compatibility *VERSIONS="v0.2.1":
+test-compatibility *VERSIONS="v0.4.4":
   ./scripts/tests/test-ci-all-backcompat.sh {{VERSIONS}}
 
 test-full-compatibility *VERSIONS="v0.2.1":

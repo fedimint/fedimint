@@ -1,0 +1,39 @@
+./scripts/tests/test-ci-all-backcompat.sh v0.4.4
+Pre-building workspace...
+Lowering IO priority with chrt -i 0 ionice -c 3
+    Blocking waiting for file lock on build directory
+   Compiling devimint v0.5.0-rc.1 (/home/nix/fedimint/devimint)
+   Compiling fedimint-wallet-tests v0.5.0-rc.1 (/home/nix/fedimint/modules/fedimint-wallet-tests)
+   Compiling gateway-tests v0.5.0-rc.1 (/home/nix/fedimint/gateway/integration_tests)
+   Compiling fedimint-lnv2-tests v0.5.0-rc.1 (/home/nix/fedimint/modules/fedimint-lnv2-tests)
+   Compiling fedimint-mint-tests v0.5.0-rc.1 (/home/nix/fedimint/modules/fedimint-mint-tests)
+   Compiling fedimint-meta-tests v0.5.0-rc.1 (/home/nix/fedimint/modules/fedimint-meta-tests)
+   Compiling fedimint-load-test-tool v0.5.0-rc.1 (/home/nix/fedimint/fedimint-load-test-tool)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 45.97s
+Pre-building tests...
+Lowering IO priority with chrt -i 0 ionice -c 3
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.44s
+Compiling fedimintd for version v0.4.4 ...
+Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
+Compiling fedimint-cli for version v0.4.4 ...
+Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
+Compiling gateway-cli for version v0.4.4 ...
+Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
+Compiling gatewayd for version v0.4.4 ...
+Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
+Compiling gateway-cln-extension for version v0.4.4 ...
+Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
+## Starting all tests in parallel...
+parallel --jobs 1 --timeout 300 --load 5 --delay 10 --halt-on-error 1 --joblog /tmp/nix-shell.LbYM7O/BIyKZ/joblog --noswap --memfree 2G
+## RUN:  always_success_test (FM: current, CLI: current, GW: v0.4.4)
+## STAT:     0.00s     3436B        3W        0c
+## DONE: always_success_test (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  devimint_cli_test (FM: current, CLI: current, GW: v0.4.4)
+## STAT:   111.30s  1402608B   848625W    36639c
+## DONE: devimint_cli_test (FM: current, CLI: current, GW: v0.4.4)
+All tests successful
