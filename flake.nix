@@ -368,10 +368,11 @@
                     libbfd_2_38
                     libunwind.dev
                     libopcodes_2_38
-                    libblocksruntime
+                    pkgsStatic.libblocksruntime
                     lldb
                     clang
                   ];
+
               }
             );
 
