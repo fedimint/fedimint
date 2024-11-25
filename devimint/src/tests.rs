@@ -1566,15 +1566,26 @@ pub async fn lightning_gw_reconnect_test(
     tracing::info!("Stopping all lightning nodes");
     for gw in &mut gateways {
         // Verify that the gateway can query the lightning node for the pubkey and alias
+        info!("about to call gw info");
         let mut info_cmd = cmd!(gw, "info");
         assert!(info_cmd.run().await.is_ok());
+        info!("past call gw info");
 
         // Verify that after stopping the lightning node, info no longer returns the
         // node public key since the lightning node is unreachable.
         gw.stop_lightning_node().await?;
-        let lightning_info = info_cmd.out_json().await?;
-        let gateway_info: GatewayInfo = serde_json::from_value(lightning_info)?;
-        assert!(gateway_info.lightning_pub_key.is_none());
+
+        let lightning_pub_key = info_cmd
+            .out_json()
+            .await?
+            .get("lightning_pub_key")
+            .map(|ln_pk| {
+                serde_json::from_value::<Option<String>>(ln_pk.clone())
+                    .expect("could not parse lightning_pub_key")
+            })
+            .expect("missing lightning_pub_key");
+
+        assert!(lightning_pub_key.is_none());
     }
 
     // Restart both lightning nodes
@@ -1783,12 +1794,18 @@ pub async fn do_try_create_and_pay_invoice(
     // automatically reconnects and can query the lightning node
     // info again.
     poll("Waiting for info to succeed after restart", || async {
-        let mut info_cmd = cmd!(gw, "info");
-        let lightning_info = info_cmd.out_json().await.map_err(ControlFlow::Continue)?;
-        let gateway_info: GatewayInfo = serde_json::from_value(lightning_info)
-            .context("invalid json")
-            .map_err(ControlFlow::Break)?;
-        poll_eq!(gateway_info.lightning_pub_key.is_some(), true)
+        let lightning_pub_key = cmd!(gw, "info")
+            .out_json()
+            .await
+            .map_err(ControlFlow::Continue)?
+            .get("lightning_pub_key")
+            .map(|ln_pk| {
+                serde_json::from_value::<Option<String>>(ln_pk.clone())
+                    .expect("could not parse lightning_pub_key")
+            })
+            .expect("missing lightning_pub_key");
+
+        poll_eq!(lightning_pub_key.is_some(), true)
     })
     .await?;
 
