@@ -24,8 +24,6 @@ use tracing::debug;
 
 #[cfg(feature = "bitcoincore-rpc")]
 pub mod bitcoincore;
-#[cfg(feature = "electrum-client")]
-mod electrum;
 #[cfg(feature = "esplora-client")]
 mod esplora;
 
@@ -49,8 +47,6 @@ static BITCOIN_RPC_REGISTRY: LazyLock<Mutex<BTreeMap<String, DynBitcoindRpcFacto
         Mutex::new(BTreeMap::from([
             #[cfg(feature = "esplora-client")]
             ("esplora".to_string(), esplora::EsploraFactory.into()),
-            #[cfg(feature = "electrum-client")]
-            ("electrum".to_string(), electrum::ElectrumFactory.into()),
             #[cfg(feature = "bitcoincore-rpc")]
             ("bitcoind".to_string(), bitcoincore::BitcoindFactory.into()),
         ]))
