@@ -17,6 +17,7 @@ use fedimint_core::envs::is_env_var_set;
 use fedimint_core::module::ApiAuth;
 use fedimint_core::task::{self, block_in_place, block_on};
 use fedimint_core::time::now;
+use fedimint_core::util::backoff_util::custom_backoff;
 use fedimint_core::PeerId;
 use fedimint_logging::LOG_DEVIMINT;
 use semver::Version;
@@ -437,6 +438,10 @@ pub async fn poll_with_timeout<Fut, R>(
 where
     Fut: Future<Output = Result<R, ControlFlow<anyhow::Error, anyhow::Error>>>,
 {
+    const MIN_BACKOFF: Duration = Duration::from_millis(50);
+    const MAX_BACKOFF: Duration = Duration::from_secs(1);
+
+    let mut backoff = custom_backoff(MIN_BACKOFF, MAX_BACKOFF, None);
     let start = now();
     for attempt in 0u64.. {
         let attempt_start = now();
@@ -452,7 +457,7 @@ where
                     < timeout =>
             {
                 debug!(target: LOG_DEVIMINT, %attempt, %err, "Polling {name} failed, will retry...");
-                task::sleep(Duration::from_millis((attempt * 10).min(1000))).await;
+                task::sleep(backoff.next().unwrap_or(MAX_BACKOFF)).await;
             }
             Err(ControlFlow::Continue(err)) => {
                 return Err(err).with_context(|| {
@@ -487,33 +492,7 @@ pub async fn poll_simple<Fut, R>(name: &str, f: impl Fn() -> Fut) -> Result<R>
 where
     Fut: Future<Output = Result<R, anyhow::Error>>,
 {
-    let start = now();
-    let timeout = DEFAULT_POLL_TIMEOUT;
-    for attempt in 0u64.. {
-        let attempt_start = now();
-        match f().await {
-            Ok(value) => return Ok(value),
-            Err(err)
-                if attempt_start
-                    .duration_since(start)
-                    .expect("time goes forward")
-                    < timeout =>
-            {
-                debug!(target: LOG_DEVIMINT, %attempt, %err, "Polling {name} failed, will retry...");
-                task::sleep(Duration::from_millis((attempt * 10).min(1000))).await;
-            }
-            Err(err) => {
-                return Err(err).with_context(|| {
-                    format!(
-                        "Polling {name} failed after {attempt} retries (timeout: {}s)",
-                        timeout.as_secs()
-                    )
-                });
-            }
-        }
-    }
-
-    unreachable!();
+    poll(name, || async { f().await.map_err(ControlFlow::Continue) }).await
 }
 
 // used to add `cmd` method.
