@@ -1,55 +1,77 @@
-./scripts/tests/test-ci-all-backcompat.sh v0.3.3
+./scripts/tests/test-ci-all-backcompat.sh v0.4.4
 Pre-building workspace...
 Lowering IO priority with chrt -i 0 ionice -c 3
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.39s
+warning: unused import: `ln_gateway::rpc::GatewayInfo`
+  --> devimint/src/tests.rs:22:5
+   |
+22 | use ln_gateway::rpc::GatewayInfo;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+  --> devimint/src/lib.rs:38:1
+   |
+38 | pub mod tests;
+   | ^^^^^^^^^^^^^^
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: `devimint` (lib) generated 1 warning (run `cargo fix --lib -p devimint` to apply 1 suggestion)
+warning: unused import: `ln_gateway::rpc::GatewayInfo`
+  --> devimint/src/tests.rs:22:5
+   |
+22 | use ln_gateway::rpc::GatewayInfo;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: `devimint` (lib test) generated 1 warning (run `cargo fix --lib -p devimint --tests` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.17s
 Pre-building tests...
 Lowering IO priority with chrt -i 0 ionice -c 3
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.42s
-Compiling fedimintd for version v0.3.3 ...
+warning: unused import: `ln_gateway::rpc::GatewayInfo`
+  --> devimint/src/tests.rs:22:5
+   |
+22 | use ln_gateway::rpc::GatewayInfo;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+  --> devimint/src/lib.rs:38:1
+   |
+38 | pub mod tests;
+   | ^^^^^^^^^^^^^^
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: `devimint` (lib) generated 1 warning (run `cargo fix --lib -p devimint` to apply 1 suggestion)
+warning: unused import: `ln_gateway::rpc::GatewayInfo`
+  --> devimint/src/tests.rs:22:5
+   |
+22 | use ln_gateway::rpc::GatewayInfo;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: `devimint` (lib test) generated 1 warning (run `cargo fix --lib -p devimint --tests` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.39s
+Compiling fedimintd for version v0.4.4 ...
 Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
-copying path '/nix/store/3i3rncs75fid9hwai5p2nvwc4ngdnia7-source' from 'https://cache.nixos.org'...
-these 7 paths will be fetched (66.39 MiB download, 133.64 MiB unpacked):
-  /nix/store/mm9kg3dl4s8dpgbfin3yjzl9acr42xm0-fedimintd
-  /nix/store/a3zlvnswi1p8cg7i9w4lpnvaankc7dxx-gcc-12.3.0-lib
-  /nix/store/l0ydz31lwa97zickpsxj2vmprcigh1m4-gcc-12.3.0-libgcc
-  /nix/store/1zy01hjzwvvia6h9dq5xar88v77fgh9x-glibc-2.38-44
-  /nix/store/a3n1vq6fxkpk5jv4wmqa1kpd3jzqhml9-libidn2-2.3.4
-  /nix/store/3dfyf6lyg6rvlslvik5116pnjbv57sn0-libunistring-1.1
-  /nix/store/j6n6ky7pidajcc3aaisd5qpni1w1rmya-xgcc-12.3.0-libgcc
-copying path '/nix/store/l0ydz31lwa97zickpsxj2vmprcigh1m4-gcc-12.3.0-libgcc' from 'https://cache.nixos.org'...
-copying path '/nix/store/j6n6ky7pidajcc3aaisd5qpni1w1rmya-xgcc-12.3.0-libgcc' from 'https://cache.nixos.org'...
-copying path '/nix/store/3dfyf6lyg6rvlslvik5116pnjbv57sn0-libunistring-1.1' from 'https://cache.nixos.org'...
-copying path '/nix/store/a3n1vq6fxkpk5jv4wmqa1kpd3jzqhml9-libidn2-2.3.4' from 'https://cache.nixos.org'...
-copying path '/nix/store/1zy01hjzwvvia6h9dq5xar88v77fgh9x-glibc-2.38-44' from 'https://cache.nixos.org'...
-copying path '/nix/store/a3zlvnswi1p8cg7i9w4lpnvaankc7dxx-gcc-12.3.0-lib' from 'https://cache.nixos.org'...
-copying path '/nix/store/mm9kg3dl4s8dpgbfin3yjzl9acr42xm0-fedimintd' from 'https://fedimint.cachix.org'...
-Compiling fedimint-cli for version v0.3.3 ...
+Compiling fedimint-cli for version v0.4.4 ...
 Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
-this path will be fetched (54.49 MiB download, 89.83 MiB unpacked):
-  /nix/store/9mf1p6vrrzh24559fifk9xxrfriaz9mr-fedimint-cli
-copying path '/nix/store/9mf1p6vrrzh24559fifk9xxrfriaz9mr-fedimint-cli' from 'https://fedimint.cachix.org'...
-warning: error: unable to download 'https://fedimint.cachix.org/nar/edc86950e778cde4c567a759c5cac5184b4ca55a2fe082fa772ccdb64250217a.nar.zst': HTTP error 200 (curl error: Timeout was reached); retrying from offset 32980974 in 254 ms
-warning: error: unable to download 'https://fedimint.cachix.org/nar/edc86950e778cde4c567a759c5cac5184b4ca55a2fe082fa772ccdb64250217a.nar.zst': Timeout was reached (28); retrying from offset 32980974 in 584 ms
-Compiling gateway-cli for version v0.3.3 ...
+Compiling gateway-cli for version v0.4.4 ...
 Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
-this path will be fetched (35.79 MiB download, 51.25 MiB unpacked):
-  /nix/store/85br637sicb26qgx9cxc35l07ic04s5z-gateway-cli
-copying path '/nix/store/85br637sicb26qgx9cxc35l07ic04s5z-gateway-cli' from 'https://fedimint.cachix.org'...
-Compiling gatewayd for version v0.3.3 ...
+Compiling gatewayd for version v0.4.4 ...
 Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
-this path will be fetched (52.23 MiB download, 85.72 MiB unpacked):
-  /nix/store/7j2rzf2vkcdibw1d0skskgw62v0hkcqd-gatewayd
-copying path '/nix/store/7j2rzf2vkcdibw1d0skskgw62v0hkcqd-gatewayd' from 'https://fedimint.cachix.org'...
-Compiling gateway-cln-extension for version v0.4.0 ...
+Compiling gateway-cln-extension for version v0.4.4 ...
 Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
-this path will be fetched (41.74 MiB download, 60.41 MiB unpacked):
-  /nix/store/1qksk8461ycmm3sm6bcwhkzd05kwsl0y-gateway-cln-extension
-copying path '/nix/store/1qksk8461ycmm3sm6bcwhkzd05kwsl0y-gateway-cln-extension' from 'https://fedimint.cachix.org'...
 ## Starting all tests in parallel...
-parallel --jobs 1 --timeout 300 --load 5 --delay 10 --halt-on-error 1 --joblog /tmp/nix-shell.LbYM7O/Izulb/joblog --noswap --memfree 2G
+parallel --jobs 1 --timeout 300 --load 5 --delay 10 --halt-on-error 1 --joblog /tmp/nix-shell.LbYM7O/HHRsL/joblog --noswap --memfree 2G
+## RUN:  gateway_reboot_test (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    50.56s  1352968B   290529W    11629c
+## DONE: gateway_reboot_test (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  always_success_test (FM: current, CLI: current, GW: v0.4.4)
+## STAT:     0.00s     3536B        3W        0c
+## DONE: always_success_test (FM: current, CLI: current, GW: v0.4.4)
 All tests successful
