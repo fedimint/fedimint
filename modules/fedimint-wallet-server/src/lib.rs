@@ -1564,7 +1564,7 @@ impl Wallet {
                 };
 
                 let update_fee_rate = || async {
-                    debug!(target: LOG_MODULE_WALLET, "Updating bitcoin fee rate");
+                    trace!(target: LOG_MODULE_WALLET, "Updating bitcoin fee rate");
 
                     let res = bitcoind
                        .get_fee_rate(CONFIRMATION_TARGET).await;
@@ -1575,7 +1575,9 @@ impl Wallet {
                             let _ = fee_rate_tx.send(feerate_with_multiplier);
                         }
                         Ok(None) => {
-                            debug!(target: LOG_MODULE_WALLET, "Bitcoin node did not return a fee rate");
+                            if !is_running_in_test_env() {
+                                warn!(target: LOG_MODULE_WALLET, "Bitcoin node did not return a fee rate");
+                            }
                         }
                         Err(err) => {
                             warn!(target: LOG_MODULE_WALLET, %err, "Unable to get fee rate from the node");
