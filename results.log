@@ -11,7 +11,7 @@ warning: unused import: `VERSION_0_4_0_ALPHA`
 
 warning: `gateway-tests` (bin "gateway-tests") generated 1 warning (run `cargo fix --bin "gateway-tests"` to apply 1 suggestion)
 warning: `gateway-tests` (bin "gateway-tests" test) generated 1 warning (1 duplicate)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.40s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.43s
 Pre-building tests...
 Lowering IO priority with chrt -i 0 ionice -c 3
 warning: unused import: `VERSION_0_4_0_ALPHA`
@@ -23,7 +23,7 @@ warning: unused import: `VERSION_0_4_0_ALPHA`
    = note: `#[warn(unused_imports)]` on by default
 
 warning: `gateway-tests` (bin "gateway-tests" test) generated 1 warning (run `cargo fix --bin "gateway-tests" --tests` to apply 1 suggestion)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.40s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.41s
 Compiling fedimintd for version v0.4.4 ...
 Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
@@ -40,23 +40,11 @@ Compiling gateway-cln-extension for version v0.4.4 ...
 Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
 ## Starting all tests in parallel...
-parallel --jobs 1 --timeout 300 --load 5 --delay 10 --joblog /tmp/nix-shell.LbYM7O/jKxX5/joblog --noswap --memfree 2G
-## RUN:  gateway_restore_test (FM: v0.4.4, CLI: current, GW: current)
-## STAT:    31.64s  1535828B   245913W     9218c
-## DONE: gateway_restore_test (FM: v0.4.4, CLI: current, GW: current)
-## RUN:  gateway_restore_test (FM: current, CLI: current, GW: v0.4.4)
-## STAT:    19.99s   321272B   100942W     8393c
-## DONE: gateway_restore_test (FM: current, CLI: current, GW: v0.4.4)
-## RUN:  always_success_test (FM: current, CLI: current, GW: v0.4.4)
-## STAT:     0.00s     3480B        3W        0c
-## DONE: always_success_test (FM: current, CLI: current, GW: v0.4.4)
-## RUN:  gateway_restore_test (FM: current, CLI: v0.4.4, GW: current)
-## STAT:    32.54s  1535932B   235353W    10165c
-## DONE: gateway_restore_test (FM: current, CLI: v0.4.4, GW: current)
+parallel --jobs 1 --timeout 300 --load 5 --delay 10 --joblog /tmp/nix-shell.LbYM7O/pM67R/joblog --noswap --memfree 2G
+## RUN:  recoverytool_tests (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    33.02s  1535672B   297874W    14932c
+## DONE: recoverytool_tests (FM: v0.4.4, CLI: current, GW: current)
 ## RUN:  always_success_test (FM: v0.4.4, CLI: current, GW: current)
-## STAT:     0.00s     3448B        3W        0c
+## STAT:     0.00s     3552B        3W        0c
 ## DONE: always_success_test (FM: v0.4.4, CLI: current, GW: current)
-## RUN:  always_success_test (FM: current, CLI: v0.4.4, GW: current)
-## STAT:     0.00s     3452B        3W        0c
-## DONE: always_success_test (FM: current, CLI: v0.4.4, GW: current)
 All tests successful
