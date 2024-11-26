@@ -21,7 +21,9 @@ use tracing::{debug, info, trace, warn};
 
 use super::EcashBackup;
 use crate::backup::EcashBackupV0;
-use crate::client_db::{NextECashNoteIndexKey, NoteKey, RecoveryFinalizedKey, RecoveryStateKey};
+use crate::client_db::{
+    NextECashNoteIndexKey, NoteKey, RecoveryFinalizedKey, RecoveryStateKey, ReusedNoteIndices,
+};
 use crate::event::NoteCreated;
 use crate::output::{
     MintOutputCommon, MintOutputStateMachine, MintOutputStatesCreated, NoteIssuanceRequest,
@@ -30,7 +32,7 @@ use crate::{MintClientInit, MintClientModule, MintClientStateMachines, NoteIndex
 
 #[derive(Clone, Debug)]
 pub struct MintRecovery {
-    state: MintRecoveryStateV0,
+    state: MintRecoveryStateV2,
     secret: DerivableSecret,
     client_ctx: ClientContext<MintClientModule>,
 }
@@ -64,7 +66,7 @@ impl RecoveryFromHistory for MintRecovery {
 
         Ok((
             MintRecovery {
-                state: MintRecoveryStateV0::from_backup(
+                state: MintRecoveryStateV2::from_backup(
                     snapshot,
                     100,
                     config.tbs_pks.clone(),
@@ -87,7 +89,7 @@ impl RecoveryFromHistory for MintRecovery {
             .get_value(&RecoveryStateKey)
             .await
             .and_then(|(state, common)| {
-                if let MintRecoveryState::V1(state) = state {
+                if let MintRecoveryState::V2(state) = state {
                     Some((state, common))
                 } else {
                     warn!(target: LOG_CLIENT_RECOVERY, "Found unknown version recovery state. Ignoring");
@@ -113,7 +115,7 @@ impl RecoveryFromHistory for MintRecovery {
     ) {
         dbtx.insert_entry(
             &RecoveryStateKey,
-            &(MintRecoveryState::V1(self.state.clone()), common.clone()),
+            &(MintRecoveryState::V2(self.state.clone()), common.clone()),
         )
         .await;
     }
@@ -169,6 +171,8 @@ impl RecoveryFromHistory for MintRecovery {
             "Finalizing mint recovery"
         );
 
+        dbtx.insert_new_entry(&ReusedNoteIndices, &finalized.reused_note_indices)
+            .await;
         debug!(
             target: LOG_CLIENT_RECOVERY_MINT,
             len = finalized.spendable_notes.count_items(),
@@ -253,6 +257,8 @@ pub struct EcashRecoveryFinalState {
     pub next_note_idx: Tiered<NoteIndex>,
     /// Total burned amount
     pub burned_total: Amount,
+    /// Note indices that were reused.
+    pub reused_note_indices: Vec<(Amount, NoteIndex)>,
 }
 
 /// Newtype over [`BlindedMessage`] to enable `Ord`
@@ -278,12 +284,10 @@ impl From<CompressedBlindedMessage> for BlindedMessage {
 
 #[derive(Debug, Clone, Decodable, Encodable)]
 pub enum MintRecoveryState {
-    V1(MintRecoveryStateV0),
+    #[encodable(index = 2)]
+    V2(MintRecoveryStateV2),
     #[encodable_default]
-    Default {
-        variant: u64,
-        bytes: Vec<u8>,
-    },
+    Default { variant: u64, bytes: Vec<u8> },
 }
 
 /// The state machine used for fast-forwarding backup from point when it was
@@ -294,7 +298,7 @@ pub enum MintRecoveryState {
 /// valid consensus items from the epoch history between time taken (or even
 /// somewhat before it) and present time.
 #[derive(Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
-pub struct MintRecoveryStateV0 {
+pub struct MintRecoveryStateV2 {
     spendable_notes: BTreeMap<Nonce, (Amount, SpendableNote)>,
     /// Nonces that we track that are currently spendable.
     pending_outputs: BTreeMap<Nonce, (OutPoint, Amount, NoteIssuanceRequest)>,
@@ -308,6 +312,8 @@ pub struct MintRecoveryStateV0 {
     /// Nonces that we have already used. Used for detecting double-used nonces
     /// (accidentally burning funds).
     used_nonces: BTreeMap<CompressedBlindedMessage, (NoteIssuanceRequest, NoteIndex, Amount)>,
+    /// Note indices that were reused.
+    reused_note_indices: Vec<(Amount, NoteIndex)>,
     /// Total amount probably burned due to re-using nonces
     burned_total: Amount,
     /// Tail of `pending`. `pending_notes` is filled by generating note with
@@ -332,7 +338,7 @@ pub struct MintRecoveryStateV0 {
     gap_limit: u64,
 }
 
-impl fmt::Debug for MintRecoveryStateV0 {
+impl fmt::Debug for MintRecoveryStateV2 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!(
             "MintRestoreInProgressState(pending_outputs: {}, pending_nonces: {}, used_nonces: {}, burned_total: {})",
@@ -344,7 +350,7 @@ impl fmt::Debug for MintRecoveryStateV0 {
     }
 }
 
-impl MintRecoveryStateV0 {
+impl MintRecoveryStateV2 {
     pub fn from_backup(
         backup: EcashBackupV0,
         gap_limit: u64,
@@ -369,6 +375,7 @@ impl MintRecoveryStateV0 {
                     )
                 })
                 .collect(),
+            reused_note_indices: Vec::new(),
             pending_nonces: BTreeMap::default(),
             used_nonces: BTreeMap::default(),
             burned_total: Amount::ZERO,
@@ -449,6 +456,7 @@ impl MintRecoveryStateV0 {
             self.used_nonces.get(&output.blind_nonce.0.into())
         {
             self.burned_total += *amount;
+            self.reused_note_indices.push((*amount, *note_idx));
             warn!(
                 target: LOG_CLIENT_RECOVERY_MINT,
                 %note_idx,
@@ -552,6 +560,7 @@ impl MintRecoveryStateV0 {
                 .iter()
                 .map(|(amount, value)| (amount, value.next()))
                 .collect(),
+            reused_note_indices: self.reused_note_indices,
             burned_total: self.burned_total,
         }
     }
