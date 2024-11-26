@@ -260,35 +260,33 @@ impl BitcoinTest for FakeBitcoinTest {
     }
 
     async fn get_mempool_tx_fee(&self, txid: &Txid) -> Amount {
-        loop {
+        let (addresses, tx) = loop {
             let (pending, addresses) = {
                 let inner = self.inner.read().unwrap();
                 (inner.pending.clone(), inner.addresses.clone())
             };
 
-            let mut fee = Amount::ZERO;
-            let maybe_tx = pending.iter().find(|tx| tx.compute_txid() == *txid);
+            let maybe_tx = pending.into_iter().find(|tx| tx.compute_txid() == *txid);
 
-            let tx = match maybe_tx {
+            match maybe_tx {
                 None => {
                     sleep_in_test("no transaction found", Duration::from_millis(100)).await;
                     continue;
                 }
-                Some(tx) => tx,
-            };
-
-            for input in &tx.input {
-                fee += *addresses
-                    .get(&input.previous_output.txid)
-                    .expect("previous transaction should be known");
+                Some(tx) => break (addresses, tx),
             }
+        };
 
-            for output in &tx.output {
-                fee -= output.value.into();
-            }
+        let total_input = Amount::saturating_sum(tx.input.iter().map(|input| {
+            *addresses
+                .get(&input.previous_output.txid)
+                .expect("previous transaction should be known")
+        }));
 
-            return fee;
-        }
+        let total_output =
+            Amount::saturating_sum(tx.output.iter().map(|output| output.value.into()));
+
+        total_input.saturating_sub(total_output)
     }
 
     async fn get_tx_block_height(&self, txid: &Txid) -> Option<u64> {

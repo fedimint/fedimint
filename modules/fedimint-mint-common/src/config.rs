@@ -169,21 +169,21 @@ fn test_fee_consensus() {
 
     assert_eq!(
         fee_consensus.fee(Amount::from_sats(1)),
-        Amount::from_msats(100) + Amount::from_msats(1)
+        Amount::from_msats(100).saturating_add(Amount::from_msats(1))
     );
 
     assert_eq!(
         fee_consensus.fee(Amount::from_sats(1000)),
-        Amount::from_sats(1) + Amount::from_msats(100)
+        Amount::from_sats(1).saturating_add(Amount::from_msats(100))
     );
 
     assert_eq!(
         fee_consensus.fee(Amount::from_bitcoins(1)),
-        Amount::from_sats(100_000) + Amount::from_msats(100)
+        Amount::from_sats(100_000).saturating_add(Amount::from_msats(100))
     );
 
     assert_eq!(
         fee_consensus.fee(Amount::from_bitcoins(100_000)),
-        Amount::from_bitcoins(100) + Amount::from_msats(100)
+        Amount::from_bitcoins(100).saturating_add(Amount::from_msats(100))
     );
 }

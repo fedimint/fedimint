@@ -605,7 +605,7 @@ impl GatewayPayInvoice {
             .ok_or(OutgoingContractError::InvoiceMissingAmount)?;
 
         let gateway_fee = routing_fees.to_amount(&payment_amount);
-        let necessary_contract_amount = payment_amount + gateway_fee;
+        let necessary_contract_amount = payment_amount.saturating_add(gateway_fee);
         if account.amount < necessary_contract_amount {
             return Err(OutgoingContractError::Underfunded(
                 necessary_contract_amount,

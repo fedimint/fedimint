@@ -1080,8 +1080,8 @@ impl Client {
                 "We only build transactions with input versions that are supported by the module",
             );
 
-            in_amount += input.amount;
-            fee_amount += item_fee;
+            in_amount.saturating_add_to(input.amount);
+            fee_amount.saturating_add_to(item_fee);
         }
 
         for output in builder.outputs() {
@@ -1091,11 +1091,11 @@ impl Client {
                 "We only build transactions with output versions that are supported by the module",
             );
 
-            out_amount += output.amount;
-            fee_amount += item_fee;
+            out_amount.saturating_add_to(output.amount);
+            fee_amount.saturating_add_to(item_fee);
         }
 
-        (in_amount, out_amount + fee_amount)
+        (in_amount, out_amount.saturating_add(fee_amount))
     }
 
     pub fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {
@@ -1450,9 +1450,10 @@ impl Client {
         let mut amount = Amount::ZERO;
 
         for out_point in outputs {
-            amount += self
-                .await_primary_module_output(operation_id, out_point)
-                .await?;
+            amount.saturating_add_to(
+                self.await_primary_module_output(operation_id, out_point)
+                    .await?,
+            );
         }
 
         Ok(amount)

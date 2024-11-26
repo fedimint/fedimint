@@ -251,7 +251,7 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
         .await;
     // Since we are overspending as soon as the right denominations aren't available
     // anymore we have to use the amount actually sent and not the one requested
-    let total_amount_spent: Amount = note_bags.iter().map(|bag| bag.total_amount()).sum();
+    let total_amount_spent = Amount::saturating_sum(note_bags.iter().map(|bag| bag.total_amount()));
 
     assert_eq!(
         client1.get_balance().await,

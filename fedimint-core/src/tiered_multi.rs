@@ -52,12 +52,11 @@ impl<T> TieredMulti<T> {
 
     /// Returns the total value of all notes in msat as `Amount`
     pub fn total_amount(&self) -> Amount {
-        let milli_sat = self
-            .0
-            .iter()
-            .map(|(tier, notes)| tier.msats * (notes.len() as u64))
-            .sum();
-        Amount::from_msats(milli_sat)
+        Amount::saturating_sum(
+            self.0
+                .iter()
+                .map(|(tier, notes)| tier.saturating_mul(notes.len() as u64)),
+        )
     }
 
     /// Returns the number of items in all vectors
@@ -215,7 +214,7 @@ impl TieredCounts {
     }
 
     pub fn total_amount(&self) -> Amount {
-        self.0.iter().map(|(k, v)| k * (*v as u64)).sum::<Amount>()
+        Amount::saturating_sum(self.0.iter().map(|(k, v)| k.saturating_mul(*v as u64)))
     }
 
     pub fn count_items(&self) -> usize {

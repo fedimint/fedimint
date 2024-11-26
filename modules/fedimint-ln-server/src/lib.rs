@@ -573,7 +573,7 @@ impl ServerModule for Lightning {
             },
         };
 
-        account.amount -= input.amount;
+        account.amount = account.amount.saturating_sub(input.amount);
 
         dbtx.insert_entry(&ContractKey(input.contract_id), &account)
             .await;
@@ -635,7 +635,7 @@ impl ServerModule for Lightning {
                         contract: contract.contract.clone().to_funded(out_point),
                     },
                     |mut value: ContractAccount| {
-                        value.amount += contract.amount;
+                        value.amount.saturating_add_to(contract.amount);
                         value
                     },
                 );

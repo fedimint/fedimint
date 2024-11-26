@@ -95,7 +95,7 @@ impl Tiered<()> {
         let mut denomination = Amount::from_msats(1);
         while denomination <= max {
             amounts.push((denomination, ()));
-            denomination = denomination * denomination_base.into();
+            denomination = denomination.saturating_mul(denomination_base.into());
         }
 
         amounts.into_iter().collect()

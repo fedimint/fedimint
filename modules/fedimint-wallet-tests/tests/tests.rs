@@ -86,11 +86,11 @@ async fn peg_in<'a>(
         .await?;
     assert_eq!(
         client.get_balance().await,
-        initial_balance + sats(PEG_IN_AMOUNT_SATS)
+        initial_balance.saturating_add(sats(PEG_IN_AMOUNT_SATS))
     );
     assert_eq!(
         balance_sub.ok().await?,
-        initial_balance + sats(PEG_IN_AMOUNT_SATS)
+        initial_balance.saturating_add(sats(PEG_IN_AMOUNT_SATS))
     );
     info!(?height, ?tx, "Peg-in transaction claimed");
 
@@ -366,7 +366,7 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
             .await?;
         assert_eq!(
             client.get_balance().await,
-            sats(PEG_IN_AMOUNT_SATS) + starting_balance
+            sats(PEG_IN_AMOUNT_SATS).saturating_add(starting_balance)
         );
         info!(?height, ?tx, "First peg-in transaction claimed");
     }
@@ -391,7 +391,7 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
         wallet_module.await_num_deposits(tweak_idx, 2).await?;
         assert_eq!(
             client.get_balance().await,
-            sats(PEG_IN_AMOUNT_SATS * 2) + starting_balance
+            sats(PEG_IN_AMOUNT_SATS * 2).saturating_add(starting_balance)
         );
         info!(?height, ?tx, "Second peg-in transaction claimed");
     }
