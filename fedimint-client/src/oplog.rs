@@ -93,86 +93,42 @@ impl OperationLog {
     ) -> Vec<(ChronologicalOperationLogKey, OperationLogEntry)> {
         const EPOCH_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 7);
 
+        let start_after_key = last_seen.unwrap_or_else(|| ChronologicalOperationLogKey {
+            creation_time: now(),
+            operation_id: OperationId([0; 32]),
+        });
+
+        let Some(oldest_entry_key) = self.get_oldest_operation_log_key().await else {
+            return vec![];
+        };
+
         let mut dbtx = self.db.begin_transaction_nc().await;
-        let operation_log_keys = if let Some(start_after) = last_seen {
-            let Some(oldest_entry_key) = self.get_oldest_operation_log_key().await else {
-                return vec![];
-            };
+        let mut operation_log_keys = Vec::with_capacity(limit);
 
-            // We want to fetch all operations that were created before `start_after`, going
-            // backwards in time. This means "start" generally means a later time than
-            // "end". Only when creating a rust Range we have to swap the terminology (see
-            // comment there).
-            let epochs_rev_ranges = (0..)
-                .map(|epoch| start_after.creation_time - epoch * EPOCH_DURATION)
-                // We want to get all operation log keys in the range [last_key, start_after). Sp as
-                // long as the start time is greater than the last key's creation time, we have to
-                // keep going.
-                .take_while(|&start_time| start_time >= oldest_entry_key.creation_time)
-                .map(|start_time| {
-                    let end_time = start_time - EPOCH_DURATION;
-
-                    // In the edge case that there were two events logged at exactly the same time
-                    // we need to specify the correct operation_id for the first key. Otherwise, we
-                    // could miss entries.
-                    let start_key = if start_time == start_after.creation_time {
-                        start_after
-                    } else {
-                        ChronologicalOperationLogKey {
-                            creation_time: start_time,
-                            operation_id: OperationId([0; 32]),
-                        }
-                    };
-
-                    // We could also special-case the last key here, but it's not necessary, making
-                    // it last_key if end_time < last_key.creation_time. We know there are no
-                    // entries beyond last_key though, so the range query will be equivalent either
-                    // way.
-                    let end_key = ChronologicalOperationLogKey {
-                        creation_time: end_time,
-                        operation_id: OperationId([0; 32]),
-                    };
-
-                    // We want to go backwards using a forward range query. This means we have to
-                    // swap the start and end keys and then reverse the vector returned by the
-                    // query.
-                    Range {
-                        start: end_key,
-                        end: start_key,
-                    }
-                });
-
-            let mut operation_log_keys = Vec::with_capacity(limit);
-            for key_range_rev in epochs_rev_ranges {
-                let epoch_operation_log_keys_rev = dbtx
-                    .find_by_range(key_range_rev)
-                    .await
-                    .map(|(key, ())| key)
-                    .collect::<Vec<_>>()
-                    .await;
-
-                for operation_log_key in epoch_operation_log_keys_rev.into_iter().rev() {
-                    operation_log_keys.push(operation_log_key);
-                    if operation_log_keys.len() >= limit {
-                        break;
-                    }
-                }
-            }
-
-            debug_assert!(
-                operation_log_keys.iter().collect::<HashSet<_>>().len() == operation_log_keys.len(),
-                "Operation log keys returned are not unique"
-            );
-
-            operation_log_keys
-        } else {
-            dbtx.find_by_prefix_sorted_descending(&ChronologicalOperationLogKeyPrefix)
+        // Find all the operation log keys in the requested window. Since we decided to
+        // not introduce a find_by_range_rev function we have to jump through some
+        // hoops, see also the comments in rev_epoch_ranges.
+        // TODO: Implement using find_by_range_rev if ever introduced
+        for key_range_rev in rev_epoch_ranges(start_after_key, oldest_entry_key, EPOCH_DURATION) {
+            let epoch_operation_log_keys_rev = dbtx
+                .find_by_range(key_range_rev)
                 .await
                 .map(|(key, ())| key)
-                .take(limit)
                 .collect::<Vec<_>>()
-                .await
-        };
+                .await;
+
+            for operation_log_key in epoch_operation_log_keys_rev.into_iter().rev() {
+                operation_log_keys.push(operation_log_key);
+                if operation_log_keys.len() >= limit {
+                    break;
+                }
+            }
+        }
+
+        debug_assert!(
+            operation_log_keys.iter().collect::<HashSet<_>>().len() == operation_log_keys.len(),
+            "Operation log keys returned are not unique"
+        );
 
         let mut operation_log_entries = Vec::with_capacity(operation_log_keys.len());
         for operation_log_key in operation_log_keys {
@@ -240,6 +196,64 @@ impl OperationLog {
             );
         }
     }
+}
+
+/// Returns an iterator over the ranges of operation log keys, starting from the
+/// most recent range and going backwards in time till slightly later than
+/// `last_entry`.
+///
+/// Simplifying keys to integers and assuming a `start_after` of 100, a
+/// `last_entry` of 55 and an `epoch_duration` of 10 the ranges would be:
+/// ```text
+/// [90..100, 80..90, 70..80, 60..70, 50..60]
+/// ```
+fn rev_epoch_ranges(
+    start_after: ChronologicalOperationLogKey,
+    last_entry: ChronologicalOperationLogKey,
+    epoch_duration: Duration,
+) -> impl Iterator<Item = Range<ChronologicalOperationLogKey>> {
+    // We want to fetch all operations that were created before `start_after`, going
+    // backwards in time. This means "start" generally means a later time than
+    // "end". Only when creating a rust Range we have to swap the terminology (see
+    // comment there).
+    (0..)
+        .map(move |epoch| start_after.creation_time - epoch * epoch_duration)
+        // We want to get all operation log keys in the range [last_key, start_after). So as
+        // long as the start time is greater than the last key's creation time, we have to
+        // keep going.
+        .take_while(move |&start_time| start_time >= last_entry.creation_time)
+        .map(move |start_time| {
+            let end_time = start_time - epoch_duration;
+
+            // In the edge case that there were two events logged at exactly the same time
+            // we need to specify the correct operation_id for the first key. Otherwise, we
+            // could miss entries.
+            let start_key = if start_time == start_after.creation_time {
+                start_after
+            } else {
+                ChronologicalOperationLogKey {
+                    creation_time: start_time,
+                    operation_id: OperationId([0; 32]),
+                }
+            };
+
+            // We could also special-case the last key here, but it's not necessary, making
+            // it last_key if end_time < last_key.creation_time. We know there are no
+            // entries beyond last_key though, so the range query will be equivalent either
+            // way.
+            let end_key = ChronologicalOperationLogKey {
+                creation_time: end_time,
+                operation_id: OperationId([0; 32]),
+            };
+
+            // We want to go backwards using a forward range query. This means we have to
+            // swap the start and end keys and then reverse the vector returned by the
+            // query.
+            Range {
+                start: end_key,
+                end: start_key,
+            }
+        })
 }
 
 /// Represents an operation triggered by a user, typically related to sending or
