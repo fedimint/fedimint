@@ -17,6 +17,7 @@ use fedimint_logging::LOG_CLIENT;
 use futures::{stream, Stream, StreamExt};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use tokio::sync::OnceCell;
 use tracing::{error, instrument, warn};
 
 use crate::db::{
@@ -26,11 +27,34 @@ use crate::db::{
 #[derive(Debug, Clone)]
 pub struct OperationLog {
     db: Database,
+    oldest_entry: OnceCell<ChronologicalOperationLogKey>,
 }
 
 impl OperationLog {
     pub fn new(db: Database) -> Self {
-        Self { db }
+        Self {
+            db,
+            oldest_entry: OnceCell::new(),
+        }
+    }
+
+    /// Will return the oldest operation log key in the database and cache the
+    /// result. If no entry exists yet the DB will be queried on each call till
+    /// an entry is present.
+    async fn get_oldest_operation_log_key(&self) -> Option<ChronologicalOperationLogKey> {
+        let mut dbtx = self.db.begin_transaction_nc().await;
+        self.oldest_entry
+            .get_or_try_init(move || async move {
+                dbtx.find_by_prefix(&ChronologicalOperationLogKeyPrefix)
+                    .await
+                    .map(|(key, ())| key)
+                    .next()
+                    .await
+                    .ok_or(())
+            })
+            .await
+            .ok()
+            .copied()
     }
 
     pub async fn add_operation_log_entry(
@@ -71,13 +95,7 @@ impl OperationLog {
 
         let mut dbtx = self.db.begin_transaction_nc().await;
         let operation_log_keys = if let Some(start_after) = last_seen {
-            let Some(last_key) = dbtx
-                .find_by_prefix(&ChronologicalOperationLogKeyPrefix)
-                .await
-                .map(|(key, ())| key)
-                .next()
-                .await
-            else {
+            let Some(oldest_entry_key) = self.get_oldest_operation_log_key().await else {
                 return vec![];
             };
 
@@ -90,7 +108,7 @@ impl OperationLog {
                 // We want to get all operation log keys in the range [last_key, start_after). Sp as
                 // long as the start time is greater than the last key's creation time, we have to
                 // keep going.
-                .take_while(|&start_time| start_time >= last_key.creation_time)
+                .take_while(|&start_time| start_time >= oldest_entry_key.creation_time)
                 .map(|start_time| {
                     let end_time = start_time - EPOCH_DURATION;
 
@@ -676,5 +694,23 @@ mod tests {
             ],
         )
         .await;
+    }
+
+    #[tokio::test]
+    async fn test_pagination_empty_then_not() {
+        let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
+        let op_log = OperationLog::new(db.clone());
+
+        let page = op_log.list_operations(10, None).await;
+        assert!(page.is_empty());
+
+        let mut dbtx = db.begin_transaction().await;
+        op_log
+            .add_operation_log_entry(&mut dbtx.to_ref_nc(), OperationId([0; 32]), "foo", "bar")
+            .await;
+        dbtx.commit_tx().await;
+
+        let page = op_log.list_operations(10, None).await;
+        assert_eq!(page.len(), 1);
     }
 }
