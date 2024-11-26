@@ -3,6 +3,9 @@
     nixpkgs = {
       url = "github:nixos/nixpkgs/nixos-24.11";
     };
+    nixpkgs-old = {
+      url = "github:nixos/nixpkgs/nixos-23.05";
+    };
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
       url = "github:nix-community/fenix";
@@ -31,6 +34,7 @@
     {
       self,
       nixpkgs,
+      nixpkgs-old,
       flake-utils,
       flakebox,
       cargo-deluxe,
@@ -67,12 +71,24 @@
     // flake-utils.lib.eachDefaultSystem (
       system:
       let
+        pkgs-old = import nixpkgs-old {
+          inherit system;
+          overlays = [
+            overlayAll
+          ];
+        };
         pkgs = import nixpkgs {
           inherit system;
           overlays = [
             overlayAll
 
-            (final: prev: { cargo-deluxe = cargo-deluxe.packages.${system}.default; })
+            (final: prev: {
+              cargo-deluxe = cargo-deluxe.packages.${system}.default;
+              # use old CLN, until https://github.com/NixOS/nixpkgs/pull/358063 possibly
+              # resolves some python on darwin breakage
+              # https://github.com/NixOS/nixpkgs/blob/470e6e641f412894086b6df2f204847bd3905f17/pkgs/development/python-modules/jaraco-path/default.nix#L34
+              clightning = pkgs-old.clightning;
+            })
           ];
         };
 
