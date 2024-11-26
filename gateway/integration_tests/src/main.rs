@@ -530,7 +530,7 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                         "Default Base msat for new federation was not correct"
                     );
                 } else {
-                    let federation_info: LegacyFederationInfo =
+                    let federation_info: FederationInfo =
                         serde_json::from_value(output).expect("Could not parse FederationInfo");
                     // New federation should have the default fees
                     let fees = federation_info

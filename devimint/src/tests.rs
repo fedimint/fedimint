@@ -1720,68 +1720,134 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
         (new_gw_cln, new_gw_lnd, None)
     };
 
-    info!("parsing cln_info");
-    // TODO: choose struct based on version
-    let cln_info: LegacyGatewayInfo = serde_json::from_value(cln_value)?;
-    info!("past parsing cln_info");
-    poll(
-        "Waiting for CLN Gateway Running state after reboot",
-        || async {
-            let mut new_cln_cmd = cmd!(new_gw_cln, "info");
-            let cln_value = new_cln_cmd.out_json().await.map_err(ControlFlow::Continue)?;
-            let reboot_info: LegacyGatewayInfo = serde_json::from_value(cln_value).context("json invalid").map_err(ControlFlow::Break)?;
-
-            if reboot_info.gateway_state == "Running" {
-                info!(target: LOG_DEVIMINT, "CLN Gateway restarted, with auto-rejoin to federation");
-                // Assert that the gateway info is the same as before the reboot
-                if cln_info != reboot_info {
-                    return Err(ControlFlow::Continue(anyhow!("cln_info != reboot_info")));
-                }
-                return Ok(());
-            }
-            Err(ControlFlow::Continue(anyhow!("gateway not running")))
-        },
-    )
-    .await?;
-
-    let lnd_info: LegacyGatewayInfo = serde_json::from_value(lnd_value)?;
-    poll(
-        "Waiting for LND Gateway Running state after reboot",
-        || async {
-            let mut new_lnd_cmd = cmd!(new_gw_lnd, "info");
-            let lnd_value = new_lnd_cmd.out_json().await.map_err(ControlFlow::Continue)?;
-            let reboot_info: LegacyGatewayInfo = serde_json::from_value(lnd_value).context("json invalid").map_err(ControlFlow::Break)?;
-
-            if reboot_info.gateway_state == "Running" {
-                info!(target: LOG_DEVIMINT, "LND Gateway restarted, with auto-rejoin to federation");
-                // Assert that the gateway info is the same as before the reboot
-                assert_eq!(lnd_info, reboot_info);
-                return Ok(());
-            }
-            Err(ControlFlow::Continue(anyhow!("gateway not running")))
-        },
-    )
-    .await?;
-
-    if let (Some(new_gw_ldk), Some(ldk_value)) = (new_gw_ldk_or, ldk_value_or) {
-        let ldk_info: LegacyGatewayInfo = serde_json::from_value(ldk_value)?;
+    if gatewayd_version < *VERSION_0_5_0_ALPHA {
+        info!("parsing cln_info");
+        // TODO: choose struct based on version
+        let cln_info: LegacyGatewayInfo = serde_json::from_value(cln_value)?;
+        info!("past parsing cln_info");
         poll(
-            "Waiting for LDK Gateway Running state after reboot",
+            "Waiting for CLN Gateway Running state after reboot",
             || async {
-                let mut new_ldk_cmd = cmd!(new_gw_ldk, "info");
-                let ldk_value = new_ldk_cmd.out_json().await.map_err(ControlFlow::Continue)?;
-                let reboot_info: LegacyGatewayInfo = serde_json::from_value(ldk_value).context("json invalid").map_err(ControlFlow::Break)?;
+                let mut new_cln_cmd = cmd!(new_gw_cln, "info");
+                let cln_value = new_cln_cmd.out_json().await.map_err(ControlFlow::Continue)?;
+                let reboot_info: LegacyGatewayInfo = serde_json::from_value(cln_value).context("json invalid").map_err(ControlFlow::Break)?;
 
                 if reboot_info.gateway_state == "Running" {
-                    info!(target: LOG_DEVIMINT, "LDK Gateway restarted, with auto-rejoin to federation");
+                    info!(target: LOG_DEVIMINT, "CLN Gateway restarted, with auto-rejoin to federation");
                     // Assert that the gateway info is the same as before the reboot
-                    assert_eq!(ldk_info, reboot_info);
+                    if cln_info != reboot_info {
+                        return Err(ControlFlow::Continue(anyhow!("cln_info != reboot_info")));
+                    }
                     return Ok(());
                 }
                 Err(ControlFlow::Continue(anyhow!("gateway not running")))
             },
         )
         .await?;
+
+        let lnd_info: LegacyGatewayInfo = serde_json::from_value(lnd_value)?;
+        poll(
+            "Waiting for LND Gateway Running state after reboot",
+            || async {
+                let mut new_lnd_cmd = cmd!(new_gw_lnd, "info");
+                let lnd_value = new_lnd_cmd.out_json().await.map_err(ControlFlow::Continue)?;
+                let reboot_info: LegacyGatewayInfo = serde_json::from_value(lnd_value).context("json invalid").map_err(ControlFlow::Break)?;
+
+                if reboot_info.gateway_state == "Running" {
+                    info!(target: LOG_DEVIMINT, "LND Gateway restarted, with auto-rejoin to federation");
+                    // Assert that the gateway info is the same as before the reboot
+                    assert_eq!(lnd_info, reboot_info);
+                    return Ok(());
+                }
+                Err(ControlFlow::Continue(anyhow!("gateway not running")))
+            },
+        )
+        .await?;
+
+        if let (Some(new_gw_ldk), Some(ldk_value)) = (new_gw_ldk_or, ldk_value_or) {
+            let ldk_info: LegacyGatewayInfo = serde_json::from_value(ldk_value)?;
+            poll(
+                "Waiting for LDK Gateway Running state after reboot",
+                || async {
+                    let mut new_ldk_cmd = cmd!(new_gw_ldk, "info");
+                    let ldk_value = new_ldk_cmd.out_json().await.map_err(ControlFlow::Continue)?;
+                    let reboot_info: LegacyGatewayInfo = serde_json::from_value(ldk_value).context("json invalid").map_err(ControlFlow::Break)?;
+
+                    if reboot_info.gateway_state == "Running" {
+                        info!(target: LOG_DEVIMINT, "LDK Gateway restarted, with auto-rejoin to federation");
+                        // Assert that the gateway info is the same as before the reboot
+                        assert_eq!(ldk_info, reboot_info);
+                        return Ok(());
+                    }
+                    Err(ControlFlow::Continue(anyhow!("gateway not running")))
+                },
+            )
+            .await?;
+        }
+    } else {
+        info!("parsing cln_info");
+        // TODO: choose struct based on version
+        let cln_info: GatewayInfo = serde_json::from_value(cln_value)?;
+        info!("past parsing cln_info");
+        poll(
+            "Waiting for CLN Gateway Running state after reboot",
+            || async {
+                let mut new_cln_cmd = cmd!(new_gw_cln, "info");
+                let cln_value = new_cln_cmd.out_json().await.map_err(ControlFlow::Continue)?;
+                let reboot_info: GatewayInfo = serde_json::from_value(cln_value).context("json invalid").map_err(ControlFlow::Break)?;
+
+                if reboot_info.gateway_state == "Running" {
+                    info!(target: LOG_DEVIMINT, "CLN Gateway restarted, with auto-rejoin to federation");
+                    // Assert that the gateway info is the same as before the reboot
+                    if cln_info != reboot_info {
+                        return Err(ControlFlow::Continue(anyhow!("cln_info != reboot_info")));
+                    }
+                    return Ok(());
+                }
+                Err(ControlFlow::Continue(anyhow!("gateway not running")))
+            },
+        )
+        .await?;
+
+        let lnd_info: GatewayInfo = serde_json::from_value(lnd_value)?;
+        poll(
+            "Waiting for LND Gateway Running state after reboot",
+            || async {
+                let mut new_lnd_cmd = cmd!(new_gw_lnd, "info");
+                let lnd_value = new_lnd_cmd.out_json().await.map_err(ControlFlow::Continue)?;
+                let reboot_info: GatewayInfo = serde_json::from_value(lnd_value).context("json invalid").map_err(ControlFlow::Break)?;
+
+                if reboot_info.gateway_state == "Running" {
+                    info!(target: LOG_DEVIMINT, "LND Gateway restarted, with auto-rejoin to federation");
+                    // Assert that the gateway info is the same as before the reboot
+                    assert_eq!(lnd_info, reboot_info);
+                    return Ok(());
+                }
+                Err(ControlFlow::Continue(anyhow!("gateway not running")))
+            },
+        )
+        .await?;
+
+        if let (Some(new_gw_ldk), Some(ldk_value)) = (new_gw_ldk_or, ldk_value_or) {
+            let ldk_info: GatewayInfo = serde_json::from_value(ldk_value)?;
+            poll(
+                "Waiting for LDK Gateway Running state after reboot",
+                || async {
+                    let mut new_ldk_cmd = cmd!(new_gw_ldk, "info");
+                    let ldk_value = new_ldk_cmd.out_json().await.map_err(ControlFlow::Continue)?;
+                    let reboot_info: GatewayInfo = serde_json::from_value(ldk_value).context("json invalid").map_err(ControlFlow::Break)?;
+
+                    if reboot_info.gateway_state == "Running" {
+                        info!(target: LOG_DEVIMINT, "LDK Gateway restarted, with auto-rejoin to federation");
+                        // Assert that the gateway info is the same as before the reboot
+                        assert_eq!(ldk_info, reboot_info);
+                        return Ok(());
+                    }
+                    Err(ControlFlow::Continue(anyhow!("gateway not running")))
+                },
+            )
+            .await?;
+        }
     }
 
     info!(LOG_DEVIMINT, "gateway_reboot_test: success");
