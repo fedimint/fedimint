@@ -426,23 +426,30 @@ impl ServerModule for Wallet {
         // node is delayed processing of change outputs for the federation, which is an
         // acceptable risk since subsequent rounds of consensus will reattempt to fetch
         // the latest block count.
-        if let Ok(block_count) = self.get_block_count() {
-            let block_count_vote = block_count.saturating_sub(self.cfg.consensus.finality_delay);
+        match self.get_block_count() {
+            Ok(block_count) => {
+                let block_count_vote =
+                    block_count.saturating_sub(self.cfg.consensus.finality_delay);
 
-            let current_vote = dbtx
-                .get_value(&BlockCountVoteKey(self.our_peer_id))
-                .await
-                .unwrap_or(0);
+                let current_vote = dbtx
+                    .get_value(&BlockCountVoteKey(self.our_peer_id))
+                    .await
+                    .unwrap_or(0);
 
-            debug!(
-                ?current_vote,
-                ?block_count_vote,
-                ?block_count,
-                "Proposing block count"
-            );
+                debug!(
+                    target: LOG_MODULE_WALLET,
+                    ?current_vote,
+                    ?block_count_vote,
+                    ?block_count,
+                    "Proposing block count"
+                );
 
-            WALLET_BLOCK_COUNT.set(i64::from(block_count_vote));
-            items.push(WalletConsensusItem::BlockCount(block_count_vote));
+                WALLET_BLOCK_COUNT.set(i64::from(block_count_vote));
+                items.push(WalletConsensusItem::BlockCount(block_count_vote));
+            }
+            Err(err) => {
+                warn!(target: LOG_MODULE_WALLET, %err, "Can't update block count");
+            }
         }
 
         let fee_rate_proposal = self.get_fee_rate_opt();
@@ -478,7 +485,7 @@ impl ServerModule for Wallet {
                 let current_vote = dbtx.get_value(&BlockCountVoteKey(peer)).await.unwrap_or(0);
 
                 if block_count_vote < current_vote {
-                    warn!(?peer, ?block_count_vote, "Block count vote is outdated");
+                    warn!(target: LOG_MODULE_WALLET, ?peer, ?block_count_vote, "Block count vote is outdated");
                 }
 
                 ensure!(
@@ -515,6 +522,7 @@ impl ServerModule for Wallet {
                         .await;
                     } else {
                         info!(
+                            target: LOG_MODULE_WALLET,
                             ?old_consensus_block_count,
                             ?new_consensus_block_count,
                             "Not syncing up to consensus block count because we are at block 0"
@@ -686,7 +694,7 @@ impl ServerModule for Wallet {
             // enable this variable until they've successfully synced, then restart with
             // this disabled.
             if is_rbf_withdrawal_enabled() {
-                warn!("processing rbf withdrawal");
+                warn!(target: LOG_MODULE_WALLET, "processing rbf withdrawal");
             } else {
                 return Err(DEPRECATED_RBF_ERROR);
             }
@@ -705,6 +713,7 @@ impl ServerModule for Wallet {
         let txid = tx.psbt.unsigned_tx.compute_txid();
 
         info!(
+            target: LOG_MODULE_WALLET,
             %txid,
             "Signing peg out",
         );
@@ -862,7 +871,7 @@ impl ServerModule for Wallet {
                     match tx {
                         Err(error) => {
                             // Usually from not enough spendable UTXOs
-                            warn!("Error returning peg-out fees {error}");
+                            warn!(target: LOG_MODULE_WALLET, "Error returning peg-out fees {error}");
                             Ok(None)
                         }
                         Ok(tx) => Ok(Some(tx.fees))
@@ -1196,6 +1205,7 @@ impl Wallet {
         new_count: u32,
     ) {
         info!(
+            target: LOG_MODULE_WALLET,
             new_count,
             blocks_to_go = new_count - old_count,
             "New consensus count, syncing up",
@@ -1207,7 +1217,10 @@ impl Wallet {
 
         for height in old_count..new_count {
             if height % 100 == 0 {
-                debug!("Caught up to block {height}");
+                debug!(
+                    target: LOG_MODULE_WALLET,
+                    "Caught up to block {height}"
+                );
             }
 
             // TODO: use batching for mainnet syncing
@@ -1264,6 +1277,7 @@ impl Wallet {
             let pending_transactions_len = pending_transactions.len();
 
             debug!(
+                target: LOG_MODULE_WALLET,
                 ?height,
                 ?pending_transactions_len,
                 "Recognizing change UTXOs"
@@ -1280,10 +1294,14 @@ impl Wallet {
                     });
 
                 if is_tx_in_block {
-                    debug!(?txid, ?height, ?block_hash, "Recognizing change UTXO");
+                    debug!(
+                        target: LOG_MODULE_WALLET,
+                        ?txid, ?height, ?block_hash, "Recognizing change UTXO"
+                    );
                     self.recognize_change_utxo(dbtx, tx).await;
                 } else {
                     debug!(
+                        target: LOG_MODULE_WALLET,
                         ?txid,
                         ?height,
                         ?block_hash,
@@ -1575,6 +1593,7 @@ impl Wallet {
                             let _ = fee_rate_tx.send(feerate_with_multiplier);
                         }
                         Ok(None) => {
+                            // Regtest node never returns fee rate, so no point spamming about it
                             if !is_running_in_test_env() {
                                 warn!(target: LOG_MODULE_WALLET, "Bitcoin node did not return a fee rate");
                             }
@@ -1672,6 +1691,7 @@ pub async fn broadcast_pending_tx(mut dbtx: DatabaseTransaction<'_>, rpc: &DynBi
         .filter_map(|tx| tx.rbf.clone().map(|rbf| rbf.txid))
         .collect();
     debug!(
+        target: LOG_MODULE_WALLET,
         "Broadcasting pending transactions (total={}, rbf={})",
         pending_tx.len(),
         rbf_txids.len()
@@ -1680,6 +1700,7 @@ pub async fn broadcast_pending_tx(mut dbtx: DatabaseTransaction<'_>, rpc: &DynBi
     for PendingTransaction { tx, .. } in pending_tx {
         if !rbf_txids.contains(&tx.compute_txid()) {
             debug!(
+                target: LOG_MODULE_WALLET,
                 tx = %tx.compute_txid(),
                 weight = tx.weight().to_wu(),
                 output = ?tx.output,
@@ -1843,6 +1864,7 @@ impl<'a> StatelessWallet<'a> {
             .insert(proprietary_tweak_key(), change_tweak.to_vec());
 
         info!(
+            target: LOG_MODULE_WALLET,
             inputs = selected_utxos.len(),
             input_sats = total_selected_value.to_sat(),
             peg_out_sats = peg_out_amount.to_sat(),
@@ -1867,7 +1889,10 @@ impl<'a> StatelessWallet<'a> {
                 .collect(),
             output,
         };
-        info!(txid = %transaction.compute_txid(), "Creating peg-out tx");
+        info!(
+            target: LOG_MODULE_WALLET,
+            txid = %transaction.compute_txid(), "Creating peg-out tx"
+        );
 
         // FIXME: use custom data structure that guarantees more invariants and only
         // convert to PSBT for finalization
