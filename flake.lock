@@ -51,17 +51,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1727381935,
-        "narHash": "sha256-G2fOYRZM7bXK5eBb+GK3k/WmO+q5JA/GtFwSPc3kdc8=",
+        "lastModified": 1732566114,
+        "narHash": "sha256-rgFf/qq7vR4KKRfZ55jnWN+d7WjE8Qhz6BYywsbD79w=",
         "owner": "tadfisher",
         "repo": "android-nixpkgs",
-        "rev": "522d86121cbd413aff922c54f38106ecf8740107",
+        "rev": "4ecd9e0da0a955a180a429196f59a8716d1dd138",
         "type": "github"
       },
       "original": {
         "owner": "tadfisher",
         "repo": "android-nixpkgs",
-        "rev": "522d86121cbd413aff922c54f38106ecf8740107",
+        "rev": "4ecd9e0da0a955a180a429196f59a8716d1dd138",
         "type": "github"
       }
     },
@@ -426,21 +426,23 @@
           "fenix"
         ],
         "flake-utils": "flake-utils_8",
-        "nixpkgs": "nixpkgs_4",
+        "nixpkgs": [
+          "nixpkgs"
+        ],
         "systems": "systems_9"
       },
       "locked": {
-        "lastModified": 1732420395,
-        "narHash": "sha256-6vl14hsUtnPVt6NFYSE+Lq0KSsKDe5lYh7otWQR1F7E=",
+        "lastModified": 1732580446,
+        "narHash": "sha256-A7Y0FHFVEns8m/Az3S4XT9iujTpQ//xhB3TJ6rwPZdw=",
         "owner": "dpc",
         "repo": "flakebox",
-        "rev": "f794efbb5dc49236d0f515156dc0b921b23f3ef1",
+        "rev": "8e152e27b55df489192b86a14e946e1c983daabe",
         "type": "github"
       },
       "original": {
         "owner": "dpc",
         "repo": "flakebox",
-        "rev": "f794efbb5dc49236d0f515156dc0b921b23f3ef1",
+        "rev": "8e152e27b55df489192b86a14e946e1c983daabe",
         "type": "github"
       }
     },
@@ -531,22 +533,6 @@
     },
     "nixpkgs_4": {
       "locked": {
-        "lastModified": 1732014248,
-        "narHash": "sha256-y/MEyuJ5oBWrWAic/14LaIr/u5E0wRVzyYsouYY3W6w=",
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "23e89b7da85c3640bbc2173fe04f4bd114342367",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nixos",
-        "ref": "nixos-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "nixpkgs_5": {
-      "locked": {
         "lastModified": 1731755305,
         "narHash": "sha256-v5P3dk5JdiT+4x69ZaB18B8+Rcu3TIOrcdG4uEX7WZ8=",
         "owner": "nixos",
@@ -569,7 +555,7 @@
         "fenix": "fenix_2",
         "flake-utils": "flake-utils_5",
         "flakebox": "flakebox_2",
-        "nixpkgs": "nixpkgs_5"
+        "nixpkgs": "nixpkgs_4"
       }
     },
     "rust-analyzer-src": {

@@ -9,9 +9,8 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     flakebox = {
-      url = "github:dpc/flakebox?rev=f794efbb5dc49236d0f515156dc0b921b23f3ef1";
-      # TODO: enable eventually
-      # inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:dpc/flakebox?rev=8e152e27b55df489192b86a14e946e1c983daabe";
+      inputs.nixpkgs.follows = "nixpkgs";
       inputs.fenix.follows = "fenix";
     };
     cargo-deluxe = {
