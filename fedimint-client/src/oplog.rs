@@ -84,9 +84,18 @@ impl OperationLog {
         .await;
     }
 
+    #[deprecated(since = "0.6.0", note = "Use `paginate_operations_rev` instead")]
+    pub async fn list_operations(
+        &self,
+        limit: usize,
+        last_seen: Option<ChronologicalOperationLogKey>,
+    ) -> Vec<(ChronologicalOperationLogKey, OperationLogEntry)> {
+        self.paginate_operations_rev(limit, last_seen).await
+    }
+
     /// Returns the last `limit` operations. To fetch the next page, pass the
     /// last operation's [`ChronologicalOperationLogKey`] as `start_after`.
-    pub async fn list_operations(
+    pub async fn paginate_operations_rev(
         &self,
         limit: usize,
         last_seen: Option<ChronologicalOperationLogKey>,
@@ -589,13 +598,17 @@ mod tests {
 
         let mut previous_last_element = None;
         for page_idx in 0u8..9 {
-            let page = op_log.list_operations(10, previous_last_element).await;
+            let page = op_log
+                .paginate_operations_rev(10, previous_last_element)
+                .await;
             assert_eq!(page.len(), 10);
             previous_last_element = Some(page[9].0);
             assert_page_entries(page, page_idx);
         }
 
-        let page = op_log.list_operations(10, previous_last_element).await;
+        let page = op_log
+            .paginate_operations_rev(10, previous_last_element)
+            .await;
         assert_eq!(page.len(), 8);
         assert_page_entries(page, 9);
     }
@@ -605,7 +618,7 @@ mod tests {
         let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         let op_log = OperationLog::new(db.clone());
 
-        let page = op_log.list_operations(10, None).await;
+        let page = op_log.paginate_operations_rev(10, None).await;
         assert!(page.is_empty());
     }
 
@@ -641,7 +654,7 @@ mod tests {
             let mut previous_last_element: Option<ChronologicalOperationLogKey> = None;
             for reference_page in pages {
                 let page = operation_log
-                    .list_operations(10, previous_last_element)
+                    .paginate_operations_rev(10, previous_last_element)
                     .await;
                 assert_eq!(page.len(), reference_page.len());
                 assert_eq!(
@@ -715,7 +728,7 @@ mod tests {
         let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         let op_log = OperationLog::new(db.clone());
 
-        let page = op_log.list_operations(10, None).await;
+        let page = op_log.paginate_operations_rev(10, None).await;
         assert!(page.is_empty());
 
         let mut dbtx = db.begin_transaction().await;
@@ -724,7 +737,7 @@ mod tests {
             .await;
         dbtx.commit_tx().await;
 
-        let page = op_log.list_operations(10, None).await;
+        let page = op_log.paginate_operations_rev(10, None).await;
         assert_eq!(page.len(), 1);
     }
 }
