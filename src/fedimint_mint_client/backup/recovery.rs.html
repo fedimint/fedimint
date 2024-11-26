@@ -556,7 +556,16 @@
 <a href="#555" id="555">555</a>
 <a href="#556" id="556">556</a>
 <a href="#557" id="557">557</a>
-<a href="#558" id="558">558</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::max;
+<a href="#558" id="558">558</a>
+<a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::max;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt;
 
@@ -579,7 +588,9 @@
 
 <span class="kw">use </span><span class="kw">super</span>::EcashBackup;
 <span class="kw">use </span><span class="kw">crate</span>::backup::EcashBackupV0;
-<span class="kw">use </span><span class="kw">crate</span>::client_db::{NextECashNoteIndexKey, NoteKey, RecoveryFinalizedKey, RecoveryStateKey};
+<span class="kw">use </span><span class="kw">crate</span>::client_db::{
+    NextECashNoteIndexKey, NoteKey, RecoveryFinalizedKey, RecoveryStateKey, ReusedNoteIndices,
+};
 <span class="kw">use </span><span class="kw">crate</span>::event::NoteCreated;
 <span class="kw">use </span><span class="kw">crate</span>::output::{
     MintOutputCommon, MintOutputStateMachine, MintOutputStatesCreated, NoteIssuanceRequest,
@@ -588,7 +599,7 @@
 
 <span class="attr">#[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>MintRecovery {
-    state: MintRecoveryStateV0,
+    state: MintRecoveryStateV2,
     secret: DerivableSecret,
     client_ctx: ClientContext&lt;MintClientModule&gt;,
 }
@@ -622,7 +633,7 @@
 
         <span class="prelude-val">Ok</span>((
             MintRecovery {
-                state: MintRecoveryStateV0::from_backup(
+                state: MintRecoveryStateV2::from_backup(
                     snapshot,
                     <span class="number">100</span>,
                     config.tbs_pks.clone(),
@@ -645,7 +656,7 @@
             .get_value(<span class="kw-2">&amp;</span>RecoveryStateKey)
             .<span class="kw">await
             </span>.and_then(|(state, common)| {
-                <span class="kw">if let </span>MintRecoveryState::V1(state) = state {
+                <span class="kw">if let </span>MintRecoveryState::V2(state) = state {
                     <span class="prelude-val">Some</span>((state, common))
                 } <span class="kw">else </span>{
                     <span class="macro">warn!</span>(target: LOG_CLIENT_RECOVERY, <span class="string">"Found unknown version recovery state. Ignoring"</span>);
@@ -671,7 +682,7 @@
     ) {
         dbtx.insert_entry(
             <span class="kw-2">&amp;</span>RecoveryStateKey,
-            <span class="kw-2">&amp;</span>(MintRecoveryState::V1(<span class="self">self</span>.state.clone()), common.clone()),
+            <span class="kw-2">&amp;</span>(MintRecoveryState::V2(<span class="self">self</span>.state.clone()), common.clone()),
         )
         .<span class="kw">await</span>;
     }
@@ -727,6 +738,8 @@
             <span class="string">"Finalizing mint recovery"
         </span>);
 
+        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>ReusedNoteIndices, <span class="kw-2">&amp;</span>finalized.reused_note_indices)
+            .<span class="kw">await</span>;
         <span class="macro">debug!</span>(
             target: LOG_CLIENT_RECOVERY_MINT,
             len = finalized.spendable_notes.count_items(),
@@ -811,6 +824,8 @@
     </span><span class="kw">pub </span>next_note_idx: Tiered&lt;NoteIndex&gt;,
     <span class="doccomment">/// Total burned amount
     </span><span class="kw">pub </span>burned_total: Amount,
+    <span class="doccomment">/// Note indices that were reused.
+    </span><span class="kw">pub </span>reused_note_indices: Vec&lt;(Amount, NoteIndex)&gt;,
 }
 
 <span class="doccomment">/// Newtype over [`BlindedMessage`] to enable `Ord`
@@ -836,12 +851,10 @@
 
 <span class="attr">#[derive(Debug, Clone, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>MintRecoveryState {
-    V1(MintRecoveryStateV0),
+    <span class="attr">#[encodable(index = <span class="number">2</span>)]
+    </span>V2(MintRecoveryStateV2),
     <span class="attr">#[encodable_default]
-    </span>Default {
-        variant: u64,
-        bytes: Vec&lt;u8&gt;,
-    },
+    </span>Default { variant: u64, bytes: Vec&lt;u8&gt; },
 }
 
 <span class="doccomment">/// The state machine used for fast-forwarding backup from point when it was
@@ -852,7 +865,7 @@
 /// valid consensus items from the epoch history between time taken (or even
 /// somewhat before it) and present time.
 </span><span class="attr">#[derive(Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>MintRecoveryStateV0 {
+</span><span class="kw">pub struct </span>MintRecoveryStateV2 {
     spendable_notes: BTreeMap&lt;Nonce, (Amount, SpendableNote)&gt;,
     <span class="doccomment">/// Nonces that we track that are currently spendable.
     </span>pending_outputs: BTreeMap&lt;Nonce, (OutPoint, Amount, NoteIssuanceRequest)&gt;,
@@ -866,6 +879,8 @@
     <span class="doccomment">/// Nonces that we have already used. Used for detecting double-used nonces
     /// (accidentally burning funds).
     </span>used_nonces: BTreeMap&lt;CompressedBlindedMessage, (NoteIssuanceRequest, NoteIndex, Amount)&gt;,
+    <span class="doccomment">/// Note indices that were reused.
+    </span>reused_note_indices: Vec&lt;(Amount, NoteIndex)&gt;,
     <span class="doccomment">/// Total amount probably burned due to re-using nonces
     </span>burned_total: Amount,
     <span class="doccomment">/// Tail of `pending`. `pending_notes` is filled by generating note with
@@ -890,7 +905,7 @@
     </span>gap_limit: u64,
 }
 
-<span class="kw">impl </span>fmt::Debug <span class="kw">for </span>MintRecoveryStateV0 {
+<span class="kw">impl </span>fmt::Debug <span class="kw">for </span>MintRecoveryStateV2 {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
         f.write_fmt(<span class="macro">format_args!</span>(
             <span class="string">"MintRestoreInProgressState(pending_outputs: {}, pending_nonces: {}, used_nonces: {}, burned_total: {})"</span>,
@@ -902,7 +917,7 @@
     }
 }
 
-<span class="kw">impl </span>MintRecoveryStateV0 {
+<span class="kw">impl </span>MintRecoveryStateV2 {
     <span class="kw">pub fn </span>from_backup(
         backup: EcashBackupV0,
         gap_limit: u64,
@@ -927,6 +942,7 @@
                     )
                 })
                 .collect(),
+            reused_note_indices: Vec::new(),
             pending_nonces: BTreeMap::default(),
             used_nonces: BTreeMap::default(),
             burned_total: Amount::ZERO,
@@ -1007,6 +1023,7 @@
             <span class="self">self</span>.used_nonces.get(<span class="kw-2">&amp;</span>output.blind_nonce.<span class="number">0</span>.into())
         {
             <span class="self">self</span>.burned_total += <span class="kw-2">*</span>amount;
+            <span class="self">self</span>.reused_note_indices.push((<span class="kw-2">*</span>amount, <span class="kw-2">*</span>note_idx));
             <span class="macro">warn!</span>(
                 target: LOG_CLIENT_RECOVERY_MINT,
                 %note_idx,
@@ -1110,6 +1127,7 @@
                 .iter()
                 .map(|(amount, value)| (amount, value.next()))
                 .collect(),
+            reused_note_indices: <span class="self">self</span>.reused_note_indices,
             burned_total: <span class="self">self</span>.burned_total,
         }
     }

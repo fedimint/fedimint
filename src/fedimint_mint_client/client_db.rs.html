@@ -179,7 +179,17 @@
 <a href="#178" id="178">178</a>
 <a href="#179" id="179">179</a>
 <a href="#180" id="180">180</a>
-<a href="#181" id="181">181</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
 
 <span class="kw">use </span>fedimint_client::module::init::recovery::RecoveryFromHistoryCommon;
 <span class="kw">use </span>fedimint_client::module::{IdxRange, OutPointRange};
@@ -196,7 +206,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::input::{MintInputCommon, MintInputStateMachine, MintInputStateMachineV0};
 <span class="kw">use </span><span class="kw">crate</span>::oob::{MintOOBStateMachine, MintOOBStateMachineV0, MintOOBStates, MintOOBStatesV0};
 <span class="kw">use </span><span class="kw">crate</span>::output::{MintOutputCommon, MintOutputStateMachine, MintOutputStateMachineV0};
-<span class="kw">use crate</span>::{MintClientStateMachines, SpendableNoteUndecoded};
+<span class="kw">use crate</span>::{MintClientStateMachines, NoteIndex, SpendableNoteUndecoded};
 
 <span class="attr">#[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -206,6 +216,7 @@
     CancelledOOBSpend = <span class="number">0x2b</span>,
     RecoveryState = <span class="number">0x2c</span>,
     RecoveryFinalized = <span class="number">0x2d</span>,
+    ReusedNoteIndices = <span class="number">0x2e</span>,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
@@ -268,6 +279,15 @@
     key = RecoveryFinalizedKey,
     value = bool,
     db_prefix = DbKeyPrefix::RecoveryFinalized,
+);
+
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+</span><span class="kw">pub struct </span>ReusedNoteIndices;
+
+<span class="macro">impl_db_record!</span>(
+    key = ReusedNoteIndices,
+    value = Vec&lt;(Amount, NoteIndex)&gt;,
+    db_prefix = DbKeyPrefix::ReusedNoteIndices,
 );
 
 <span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
