@@ -68,6 +68,7 @@ jobs:
                 -- \
             scripts/ci/run-in-fs-dir-cache.sh backward-compat \
             env -u RUSTC_WRAPPER \
+            env FM_DEVIMINT_DISABLE_MODULE_LNV2=1 \
             ./scripts/tests/test-ci-all-backcompat.sh v0.4.4
 
   notifications:
