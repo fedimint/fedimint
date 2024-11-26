@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::fmt::Display;
 use std::str::FromStr;
 use std::time::UNIX_EPOCH;
 
@@ -44,7 +45,7 @@ impl AuthManager {
 
     /// Create a new challenge
     pub fn create_challenge(&mut self) -> anyhow::Result<String> {
-        let challenge = AuthChallenge::new(self.gateway_id.clone(), self.gateway_api.clone());
+        let challenge = AuthChallenge::new(self.gateway_id, self.gateway_api.clone());
         self.challenges.insert(challenge.clone());
         let encode_challenge = urlencoding::encode(challenge.to_string().as_ref()).to_string();
         Ok(encode_challenge)
@@ -54,9 +55,9 @@ impl AuthManager {
     pub fn sign_challenge(
         &self,
         ctx: &bitcoin::secp256k1::global::GlobalContext,
-        challenge_payload: String,
+        challenge_payload: &str,
     ) -> anyhow::Result<Signature> {
-        let decode_challenge = urlencoding::decode(&challenge_payload)?;
+        let decode_challenge = urlencoding::decode(challenge_payload)?;
         let challenge = AuthChallenge::from_str(&decode_challenge)?;
         if !self.challenges.contains(&challenge)
             || challenge.gateway_id != self.gateway_id
@@ -163,9 +164,13 @@ impl FromStr for AuthChallenge {
     }
 }
 
-impl ToString for AuthChallenge {
-    fn to_string(&self) -> String {
-        format!("{}-{}-{}", self.gateway_id, self.gateway_api, self.expiry)
+impl Display for AuthChallenge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}-{}-{}",
+            self.gateway_id, self.gateway_api, self.expiry
+        )
     }
 }
 

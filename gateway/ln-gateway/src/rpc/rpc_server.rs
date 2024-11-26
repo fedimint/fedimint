@@ -97,56 +97,29 @@ async fn auth_jwt_middleware_with_password_fallback(
 ) -> Result<impl IntoResponse, StatusCode> {
     let jwt_token = extract_bearer_token(&request)?;
     let auth_manager = gateway.auth_manager.lock().await;
-    match jsonwebtoken::decode::<crate::auth_manager::Session>(
+    if let Ok(decoded_token_data) = jsonwebtoken::decode::<crate::auth_manager::Session>(
         &jwt_token,
         &jsonwebtoken::DecodingKey::from_secret(auth_manager.encoding_secret.as_ref()),
         &jsonwebtoken::Validation::default(),
     ) {
-        Ok(decoded_token_data) => {
-            let now = fedimint_core::time::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("Time went backwards")
-                .as_secs();
-            if now > decoded_token_data.claims.exp {
-                Err(StatusCode::UNAUTHORIZED)
-            } else {
-                Ok(next.run(request).await)
-            }
+        let now = fedimint_core::time::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_secs();
+        if now > decoded_token_data.claims.exp {
+            Err(StatusCode::UNAUTHORIZED)
+        } else {
+            Ok(next.run(request).await)
         }
-        Err(_) => {
-            let gateway_config = gateway
-                .clone_gateway_config()
-                .await
-                .ok_or(StatusCode::NOT_FOUND)?;
-            let gateway_hashed_password = gateway_config.hashed_password;
-            let password_salt = gateway_config.password_salt;
-            authenticate(gateway_hashed_password, password_salt, request, next).await
-        } // fallback to check for password
-    }
-}
-
-/// Middleware to authenticate an incoming request. Routes that are
-/// authenticated with this middleware are un-authenticated if the gateway has
-/// not yet been configured. After the gateway is configured, this middleware
-/// enforces that a Bearer token must be supplied in the Authorization header.
-async fn auth_after_config_middleware(
-    Extension(gateway): Extension<Arc<Gateway>>,
-    request: Request,
-    next: Next,
-) -> Result<impl IntoResponse, StatusCode> {
-    // If the gateway's config has not been set, allow the request to continue, so
-    // that the gateway can be configured
-    let gateway_config = gateway.clone_gateway_config().await;
-    if gateway_config.is_none() {
-        return Ok(next.run(request).await);
-    }
-
-    // Otherwise, validate that the Bearer token matches the gateway's hashed
-    // password
-    let gateway_config = gateway_config.expect("Already validated the gateway config is not none");
-    let gateway_hashed_password = gateway_config.hashed_password;
-    let password_salt = gateway_config.password_salt;
-    authenticate(gateway_hashed_password, password_salt, request, next).await
+    } else {
+        let gateway_config = gateway
+            .clone_gateway_config()
+            .await
+            .ok_or(StatusCode::NOT_FOUND)?;
+        let gateway_hashed_password = gateway_config.hashed_password;
+        let password_salt = gateway_config.password_salt;
+        authenticate(gateway_hashed_password, password_salt, request, next).await
+    } // fallback to check for password
 }
 
 /// Validate that the Bearer token matches the gateway's hashed password
@@ -278,7 +251,7 @@ async fn auth_sign_challenge(
 ) -> Result<impl IntoResponse, AdminGatewayError> {
     let auth_manager = gateway.auth_manager.lock().await;
     let signature =
-        auth_manager.sign_challenge(bitcoin::secp256k1::SECP256K1, payload.challenge)?;
+        auth_manager.sign_challenge(bitcoin::secp256k1::SECP256K1, &payload.challenge)?;
     Ok(Json(json!(signature)))
 }
 
@@ -291,7 +264,7 @@ async fn auth_get_jwt_session(
     let session = auth_manager
         .verify_challenge_response(bitcoin::secp256k1::SECP256K1, &payload)
         .map_err(|err| AdminGatewayError::Unauthorized {
-            failure_reason: format!("Unauthorized {}", err),
+            failure_reason: format!("Unauthorized {err}"),
         })?;
     let token = session.encode_jwt(&auth_manager.encoding_secret)?;
     Ok(Json(json!(token)))
