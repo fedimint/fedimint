@@ -11,7 +11,6 @@
 use std::sync::Arc;
 
 use fedimint_core::fedimint_build_code_version_env;
-use fedimint_core::task::TaskGroup;
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_logging::TracingSetup;
 #[cfg(not(target_env = "msvc"))]
@@ -29,10 +28,8 @@ fn main() -> Result<(), anyhow::Error> {
     runtime.block_on(async {
         handle_version_hash_command(fedimint_build_code_version_env!());
         TracingSetup::default().init()?;
-        let tg = TaskGroup::new();
-        tg.install_kill_handler();
         let gatewayd = Gateway::new_with_default_modules().await?;
-        let shutdown_receiver = gatewayd.clone().run(tg, runtime.clone()).await?;
+        let shutdown_receiver = gatewayd.clone().run(runtime.clone()).await?;
         shutdown_receiver.await;
         gatewayd.unannounce_from_all_federations().await;
         info!("Gatewayd exiting...");
