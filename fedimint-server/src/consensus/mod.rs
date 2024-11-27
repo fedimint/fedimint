@@ -232,7 +232,7 @@ fn submit_module_ci_proposals(
     });
 
     task_group.spawn(
-        "submit_module_ci_proposals_{module_id}",
+        format!("citem_proposals_{module_id}"),
         move |task_handle| async move {
             while !task_handle.is_shutting_down() {
                 let module_consensus_items = tokio::time::timeout(

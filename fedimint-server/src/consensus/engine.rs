@@ -185,9 +185,11 @@ impl ConsensusEngine {
 
             CONSENSUS_SESSION_COUNT.set(session_index as i64);
 
+            info!(target: LOG_CONSENSUS, session_index, "Starting consensus session");
+
             self.run_session(connections.clone(), session_index).await?;
 
-            info!(target: LOG_CONSENSUS, "Session {session_index} completed");
+            info!(target: LOG_CONSENSUS, session_index, "Completed consensus session");
 
             if Some(session_index) == self.shutdown_receiver.borrow().to_owned() {
                 info!(target: LOG_CONSENSUS, "Initiating shutdown, waiting for peers to complete the session...");
