@@ -899,19 +899,17 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let final_cln_outgoing_gateway_balance = gw_cln.ecash_balance(fed_id.clone()).await?;
 
     // TODO: actually fix, but for now need to unblock further failures
-    if gatewayd_version >= *VERSION_0_5_0_ALPHA {
-        let expected_diff = 1_200_000;
-        anyhow::ensure!(
-            initial_client_balance - final_cln_outgoing_client_balance == expected_diff,
-            "Client balance changed by {} on CLN outgoing payment, expected {expected_diff}",
-            (initial_client_balance - final_cln_outgoing_client_balance)
-        );
-        anyhow::ensure!(
-            final_cln_outgoing_gateway_balance - initial_cln_gateway_balance == expected_diff,
-            "CLN Gateway balance changed by {} on CLN outgoing payment, expected {expected_diff}",
-            (final_cln_outgoing_gateway_balance - initial_cln_gateway_balance)
-        );
-    }
+    let expected_diff = 1_200_000;
+    anyhow::ensure!(
+        initial_client_balance - final_cln_outgoing_client_balance == expected_diff,
+        "Client balance changed by {} on CLN outgoing payment, expected {expected_diff}",
+        (initial_client_balance - final_cln_outgoing_client_balance)
+    );
+    anyhow::ensure!(
+        final_cln_outgoing_gateway_balance - initial_cln_gateway_balance == expected_diff,
+        "CLN Gateway balance changed by {} on CLN outgoing payment, expected {expected_diff}",
+        (final_cln_outgoing_gateway_balance - initial_cln_gateway_balance)
+    );
 
     let ln_invoice_response = ln_invoice(
         &client,
@@ -933,19 +931,16 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // Assert balances changed by 1100000 msat
     let final_cln_incoming_client_balance = client.balance().await?;
     let final_cln_incoming_gateway_balance = gw_cln.ecash_balance(fed_id.clone()).await?;
-    // TODO: actually fix, but for now need to unblock further failures
-    if gatewayd_version >= *VERSION_0_5_0_ALPHA {
-        anyhow::ensure!(
-            final_cln_incoming_client_balance - final_cln_outgoing_client_balance == 1_100_000,
-            "Client balance changed by {} on CLN incoming payment, expected 1100000",
-            (final_cln_incoming_client_balance - final_cln_outgoing_client_balance)
-        );
-        anyhow::ensure!(
-            final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance == 1_100_000,
-            "CLN Gateway balance changed by {} on CLN incoming payment, expected 1100000",
-            (final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance)
-        );
-    }
+    anyhow::ensure!(
+        final_cln_incoming_client_balance - final_cln_outgoing_client_balance == 1_100_000,
+        "Client balance changed by {} on CLN incoming payment, expected 1100000",
+        (final_cln_incoming_client_balance - final_cln_outgoing_client_balance)
+    );
+    anyhow::ensure!(
+        final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance == 1_100_000,
+        "CLN Gateway balance changed by {} on CLN incoming payment, expected 1100000",
+        (final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance)
+    );
 
     // LND gateway tests
     info!("Testing LND gateway");
@@ -969,19 +964,16 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // Assert balances changed by 2_000_000 msat (amount sent) + 0 msat (fee)
     let final_lnd_outgoing_client_balance = client.balance().await?;
     let final_lnd_outgoing_gateway_balance = gw_lnd.ecash_balance(fed_id.clone()).await?;
-    // TODO: actually fix, but for now need to unblock further failures
-    if gatewayd_version >= *VERSION_0_5_0_ALPHA {
-        anyhow::ensure!(
-            final_cln_incoming_client_balance - final_lnd_outgoing_client_balance == 2_000_000,
-            "Client balance changed by {} on LND outgoing payment, expected 2_000_000",
-            (final_cln_incoming_client_balance - final_lnd_outgoing_client_balance)
-        );
-        anyhow::ensure!(
-            final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance == 2_000_000,
-            "LND Gateway balance changed by {} on LND outgoing payment, expected 2_000_000",
-            (final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance)
-        );
-    }
+    anyhow::ensure!(
+        final_cln_incoming_client_balance - final_lnd_outgoing_client_balance == 2_000_000,
+        "Client balance changed by {} on LND outgoing payment, expected 2_000_000",
+        (final_cln_incoming_client_balance - final_lnd_outgoing_client_balance)
+    );
+    anyhow::ensure!(
+        final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance == 2_000_000,
+        "LND Gateway balance changed by {} on LND outgoing payment, expected 2_000_000",
+        (final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance)
+    );
 
     // INCOMING: fedimint-cli receives from CLN via LND gateway
     info!("Testing incoming payment from CLN to client via LND gateway");
