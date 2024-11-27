@@ -286,6 +286,7 @@ impl From<CompressedBlindedMessage> for BlindedMessage {
 pub enum MintRecoveryState {
     #[encodable(index = 2)]
     V2(MintRecoveryStateV2),
+    // index 0 has incompatible db encoding, index 1 was skipped to match with V2
     #[encodable_default]
     Default { variant: u64, bytes: Vec<u8> },
 }
