@@ -17,6 +17,7 @@ use async_channel::Sender;
 use db::get_global_database_migrations;
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::DynGlobalApi;
+use fedimint_core::bitcoin_rpc::DynBitcoindRpc;
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{apply_migrations, apply_migrations_server, Database};
@@ -54,6 +55,7 @@ pub async fn run(
     force_api_secrets: ApiSecrets,
     data_dir: PathBuf,
     code_version_str: String,
+    dyn_bitcoin_rpc: DynBitcoindRpc,
 ) -> anyhow::Result<()> {
     cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
 
@@ -87,6 +89,7 @@ pub async fn run(
                         db.with_prefix_module_id(*module_id).0,
                         task_group,
                         cfg.local.identity,
+                        dyn_bitcoin_rpc.clone(),
                     )
                     .await?;
 
