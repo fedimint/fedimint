@@ -2218,7 +2218,34 @@
 <a href="#2217" id="2217">2217</a>
 <a href="#2218" id="2218">2218</a>
 <a href="#2219" id="2219">2219</a>
-<a href="#2220" id="2220">2220</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2220" id="2220">2220</a>
+<a href="#2221" id="2221">2221</a>
+<a href="#2222" id="2222">2222</a>
+<a href="#2223" id="2223">2223</a>
+<a href="#2224" id="2224">2224</a>
+<a href="#2225" id="2225">2225</a>
+<a href="#2226" id="2226">2226</a>
+<a href="#2227" id="2227">2227</a>
+<a href="#2228" id="2228">2228</a>
+<a href="#2229" id="2229">2229</a>
+<a href="#2230" id="2230">2230</a>
+<a href="#2231" id="2231">2231</a>
+<a href="#2232" id="2232">2232</a>
+<a href="#2233" id="2233">2233</a>
+<a href="#2234" id="2234">2234</a>
+<a href="#2235" id="2235">2235</a>
+<a href="#2236" id="2236">2236</a>
+<a href="#2237" id="2237">2237</a>
+<a href="#2238" id="2238">2238</a>
+<a href="#2239" id="2239">2239</a>
+<a href="#2240" id="2240">2240</a>
+<a href="#2241" id="2241">2241</a>
+<a href="#2242" id="2242">2242</a>
+<a href="#2243" id="2243">2243</a>
+<a href="#2244" id="2244">2244</a>
+<a href="#2245" id="2245">2245</a>
+<a href="#2246" id="2246">2246</a>
+<a href="#2247" id="2247">2247</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -2646,23 +2673,30 @@
         // node is delayed processing of change outputs for the federation, which is an
         // acceptable risk since subsequent rounds of consensus will reattempt to fetch
         // the latest block count.
-        </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(block_count) = <span class="self">self</span>.get_block_count() {
-            <span class="kw">let </span>block_count_vote = block_count.saturating_sub(<span class="self">self</span>.cfg.consensus.finality_delay);
+        </span><span class="kw">match </span><span class="self">self</span>.get_block_count() {
+            <span class="prelude-val">Ok</span>(block_count) =&gt; {
+                <span class="kw">let </span>block_count_vote =
+                    block_count.saturating_sub(<span class="self">self</span>.cfg.consensus.finality_delay);
 
-            <span class="kw">let </span>current_vote = dbtx
-                .get_value(<span class="kw-2">&amp;</span>BlockCountVoteKey(<span class="self">self</span>.our_peer_id))
-                .<span class="kw">await
-                </span>.unwrap_or(<span class="number">0</span>);
+                <span class="kw">let </span>current_vote = dbtx
+                    .get_value(<span class="kw-2">&amp;</span>BlockCountVoteKey(<span class="self">self</span>.our_peer_id))
+                    .<span class="kw">await
+                    </span>.unwrap_or(<span class="number">0</span>);
 
-            <span class="macro">debug!</span>(
-                <span class="question-mark">?</span>current_vote,
-                <span class="question-mark">?</span>block_count_vote,
-                <span class="question-mark">?</span>block_count,
-                <span class="string">"Proposing block count"
-            </span>);
+                <span class="macro">debug!</span>(
+                    target: LOG_MODULE_WALLET,
+                    <span class="question-mark">?</span>current_vote,
+                    <span class="question-mark">?</span>block_count_vote,
+                    <span class="question-mark">?</span>block_count,
+                    <span class="string">"Proposing block count"
+                </span>);
 
-            WALLET_BLOCK_COUNT.set(i64::from(block_count_vote));
-            items.push(WalletConsensusItem::BlockCount(block_count_vote));
+                WALLET_BLOCK_COUNT.set(i64::from(block_count_vote));
+                items.push(WalletConsensusItem::BlockCount(block_count_vote));
+            }
+            <span class="prelude-val">Err</span>(err) =&gt; {
+                <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, %err, <span class="string">"Can't update block count"</span>);
+            }
         }
 
         <span class="kw">let </span>fee_rate_proposal = <span class="self">self</span>.get_fee_rate_opt();
@@ -2698,7 +2732,7 @@
                 <span class="kw">let </span>current_vote = dbtx.get_value(<span class="kw-2">&amp;</span>BlockCountVoteKey(peer)).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>);
 
                 <span class="kw">if </span>block_count_vote &lt; current_vote {
-                    <span class="macro">warn!</span>(<span class="question-mark">?</span>peer, <span class="question-mark">?</span>block_count_vote, <span class="string">"Block count vote is outdated"</span>);
+                    <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, <span class="question-mark">?</span>peer, <span class="question-mark">?</span>block_count_vote, <span class="string">"Block count vote is outdated"</span>);
                 }
 
                 <span class="macro">ensure!</span>(
@@ -2735,6 +2769,7 @@
                         .<span class="kw">await</span>;
                     } <span class="kw">else </span>{
                         <span class="macro">info!</span>(
+                            target: LOG_MODULE_WALLET,
                             <span class="question-mark">?</span>old_consensus_block_count,
                             <span class="question-mark">?</span>new_consensus_block_count,
                             <span class="string">"Not syncing up to consensus block count because we are at block 0"
@@ -2906,7 +2941,7 @@
             // enable this variable until they've successfully synced, then restart with
             // this disabled.
             </span><span class="kw">if </span>is_rbf_withdrawal_enabled() {
-                <span class="macro">warn!</span>(<span class="string">"processing rbf withdrawal"</span>);
+                <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, <span class="string">"processing rbf withdrawal"</span>);
             } <span class="kw">else </span>{
                 <span class="kw">return </span><span class="prelude-val">Err</span>(DEPRECATED_RBF_ERROR);
             }
@@ -2925,6 +2960,7 @@
         <span class="kw">let </span>txid = tx.psbt.unsigned_tx.compute_txid();
 
         <span class="macro">info!</span>(
+            target: LOG_MODULE_WALLET,
             %txid,
             <span class="string">"Signing peg out"</span>,
         );
@@ -3082,7 +3118,7 @@
                     <span class="kw">match </span>tx {
                         <span class="prelude-val">Err</span>(error) =&gt; {
                             <span class="comment">// Usually from not enough spendable UTXOs
-                            </span><span class="macro">warn!</span>(<span class="string">"Error returning peg-out fees {error}"</span>);
+                            </span><span class="macro">warn!</span>(target: LOG_MODULE_WALLET, <span class="string">"Error returning peg-out fees {error}"</span>);
                             <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
                         }
                         <span class="prelude-val">Ok</span>(tx) =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(tx.fees))
@@ -3416,6 +3452,7 @@
         new_count: u32,
     ) {
         <span class="macro">info!</span>(
+            target: LOG_MODULE_WALLET,
             new_count,
             blocks_to_go = new_count - old_count,
             <span class="string">"New consensus count, syncing up"</span>,
@@ -3427,7 +3464,10 @@
 
         <span class="kw">for </span>height <span class="kw">in </span>old_count..new_count {
             <span class="kw">if </span>height % <span class="number">100 </span>== <span class="number">0 </span>{
-                <span class="macro">debug!</span>(<span class="string">"Caught up to block {height}"</span>);
+                <span class="macro">debug!</span>(
+                    target: LOG_MODULE_WALLET,
+                    <span class="string">"Caught up to block {height}"
+                </span>);
             }
 
             <span class="comment">// TODO: use batching for mainnet syncing
@@ -3484,6 +3524,7 @@
             <span class="kw">let </span>pending_transactions_len = pending_transactions.len();
 
             <span class="macro">debug!</span>(
+                target: LOG_MODULE_WALLET,
                 <span class="question-mark">?</span>height,
                 <span class="question-mark">?</span>pending_transactions_len,
                 <span class="string">"Recognizing change UTXOs"
@@ -3500,10 +3541,14 @@
                     });
 
                 <span class="kw">if </span>is_tx_in_block {
-                    <span class="macro">debug!</span>(<span class="question-mark">?</span>txid, <span class="question-mark">?</span>height, <span class="question-mark">?</span>block_hash, <span class="string">"Recognizing change UTXO"</span>);
+                    <span class="macro">debug!</span>(
+                        target: LOG_MODULE_WALLET,
+                        <span class="question-mark">?</span>txid, <span class="question-mark">?</span>height, <span class="question-mark">?</span>block_hash, <span class="string">"Recognizing change UTXO"
+                    </span>);
                     <span class="self">self</span>.recognize_change_utxo(dbtx, tx).<span class="kw">await</span>;
                 } <span class="kw">else </span>{
                     <span class="macro">debug!</span>(
+                        target: LOG_MODULE_WALLET,
                         <span class="question-mark">?</span>txid,
                         <span class="question-mark">?</span>height,
                         <span class="question-mark">?</span>block_hash,
@@ -3784,7 +3829,7 @@
                 };
 
                 <span class="kw">let </span>update_fee_rate = || <span class="kw">async </span>{
-                    <span class="macro">debug!</span>(target: LOG_MODULE_WALLET, <span class="string">"Updating bitcoin fee rate"</span>);
+                    <span class="macro">trace!</span>(target: LOG_MODULE_WALLET, <span class="string">"Updating bitcoin fee rate"</span>);
 
                     <span class="kw">let </span>res = bitcoind
                        .get_fee_rate(CONFIRMATION_TARGET).<span class="kw">await</span>;
@@ -3795,7 +3840,10 @@
                             <span class="kw">let _ </span>= fee_rate_tx.send(feerate_with_multiplier);
                         }
                         <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; {
-                            <span class="macro">debug!</span>(target: LOG_MODULE_WALLET, <span class="string">"Bitcoin node did not return a fee rate"</span>);
+                            <span class="comment">// Regtest node never returns fee rate, so no point spamming about it
+                            </span><span class="kw">if </span>!is_running_in_test_env() {
+                                <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, <span class="string">"Bitcoin node did not return a fee rate"</span>);
+                            }
                         }
                         <span class="prelude-val">Err</span>(err) =&gt; {
                             <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, %err, <span class="string">"Unable to get fee rate from the node"</span>);
@@ -3890,6 +3938,7 @@
         .filter_map(|tx| tx.rbf.clone().map(|rbf| rbf.txid))
         .collect();
     <span class="macro">debug!</span>(
+        target: LOG_MODULE_WALLET,
         <span class="string">"Broadcasting pending transactions (total={}, rbf={})"</span>,
         pending_tx.len(),
         rbf_txids.len()
@@ -3898,6 +3947,7 @@
     <span class="kw">for </span>PendingTransaction { tx, .. } <span class="kw">in </span>pending_tx {
         <span class="kw">if </span>!rbf_txids.contains(<span class="kw-2">&amp;</span>tx.compute_txid()) {
             <span class="macro">debug!</span>(
+                target: LOG_MODULE_WALLET,
                 tx = %tx.compute_txid(),
                 weight = tx.weight().to_wu(),
                 output = <span class="question-mark">?</span>tx.output,
@@ -4061,6 +4111,7 @@
             .insert(proprietary_tweak_key(), change_tweak.to_vec());
 
         <span class="macro">info!</span>(
+            target: LOG_MODULE_WALLET,
             inputs = selected_utxos.len(),
             input_sats = total_selected_value.to_sat(),
             peg_out_sats = peg_out_amount.to_sat(),
@@ -4085,7 +4136,10 @@
                 .collect(),
             output,
         };
-        <span class="macro">info!</span>(txid = %transaction.compute_txid(), <span class="string">"Creating peg-out tx"</span>);
+        <span class="macro">info!</span>(
+            target: LOG_MODULE_WALLET,
+            txid = %transaction.compute_txid(), <span class="string">"Creating peg-out tx"
+        </span>);
 
         <span class="comment">// FIXME: use custom data structure that guarantees more invariants and only
         // convert to PSBT for finalization
