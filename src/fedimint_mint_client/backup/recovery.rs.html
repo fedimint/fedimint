@@ -565,7 +565,8 @@
 <a href="#564" id="564">564</a>
 <a href="#565" id="565">565</a>
 <a href="#566" id="566">566</a>
-<a href="#567" id="567">567</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::max;
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::max;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt;
 
@@ -853,7 +854,8 @@
 </span><span class="kw">pub enum </span>MintRecoveryState {
     <span class="attr">#[encodable(index = <span class="number">2</span>)]
     </span>V2(MintRecoveryStateV2),
-    <span class="attr">#[encodable_default]
+    <span class="comment">// index 0 has incompatible db encoding, index 1 was skipped to match with V2
+    </span><span class="attr">#[encodable_default]
     </span>Default { variant: u64, bytes: Vec&lt;u8&gt; },
 }
 
