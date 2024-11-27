@@ -26,8 +26,7 @@ use fedimint_wallet_client::WalletClientInit;
 use futures::StreamExt;
 use lightning_invoice::Bolt11Invoice;
 use tokio::sync::mpsc;
-use tracing::info;
-use tracing::log::warn;
+use tracing::{info, warn};
 
 use crate::MetricEvent;
 
