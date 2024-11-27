@@ -22,7 +22,6 @@ fi
 
 >&2 echo "Building..."
 
-# TODO: add gateway-cln-extension once available as an output
 for bin in fedimintd fedimint-cli fedimint-dbtool gateway-cli gatewayd ; do
   # We need to use rev= , see https://github.com/NixOS/nix/issues/11266
   # NOTE: '^{commit}' is not a mistake, but git rev-parse syntaxh

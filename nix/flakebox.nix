@@ -721,11 +721,6 @@ in
       bin = "gateway-cli";
     };
 
-    gateway-cln-extension = flakeboxLib.pickBinary {
-      pkg = gateway-pkgs;
-      bin = "gateway-cln-extension";
-    };
-
     fedimint-recoverytool = flakeboxLib.pickBinary {
       pkg = fedimint-pkgs;
       bin = "fedimint-recoverytool";
@@ -779,40 +774,6 @@ in
             Cmd = [ "${gateway-pkgs}/bin/gatewayd" ];
           };
         };
-
-        cln-light-gateway =
-          let
-            entrypoint = pkgs.writeShellScriptBin "entrypoint.sh" ''
-              ${pkgs.clightning}/bin/lightningd \
-                --lightning-dir=/lightning \
-                --disable-plugin=bcli \
-                --network=$NETWORK \
-                --plugin=${pkgs.trustedcoin}/bin/trustedcoin \
-                --plugin=${gateway-pkgs}/bin/gateway-cln-extension \
-                --fm-gateway-listen=0.0.0.0:3301 \
-                $@
-            '';
-          in
-          pkgs.dockerTools.buildLayeredImage {
-            name = "cln-light-gateway";
-            contents = [
-              gateway-pkgs
-              pkgs.clightning
-              pkgs.trustedcoin
-              pkgs.cacert
-            ] ++ defaultPackages;
-            config = {
-              Cmd = [ "${entrypoint}/bin/entrypoint.sh" ];
-              Volumes = {
-                "/lightning" = { };
-              };
-              ExposedPorts = {
-                "9735/tcp" = { };
-                "3301/tcp" = { };
-              };
-              Env = [ "NETWORK=bitcoin" ];
-            };
-          };
 
         gateway-cli = pkgs.dockerTools.buildLayeredImage {
           name = "gateway-cli";
