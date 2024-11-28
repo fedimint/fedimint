@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use bitcoin::address::NetworkUnchecked;
+use bitcoin::secp256k1::schnorr::Signature;
 use bitcoin::{Address, Network};
 use fedimint_core::config::{FederationId, JsonClientConfig};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
@@ -22,6 +23,11 @@ use crate::SafeUrl;
 pub const V1_API_ENDPOINT: &str = "v1";
 
 pub const ADDRESS_ENDPOINT: &str = "/address";
+pub const AUTH_CHALLENGE_ENDPOINT: &str = "/auth/challenge";
+// TODO: reserved for 2FA
+pub const AUTH_LOGIN_ENDPOINT: &str = "/auth/login";
+pub const AUTH_SESSION_ENDPOINT: &str = "/auth/session";
+pub const AUTH_SIGN_CHALLENGE_ENDPOINT: &str = "/auth/sign";
 pub const BACKUP_ENDPOINT: &str = "/backup";
 pub const CONFIGURATION_ENDPOINT: &str = "/config";
 pub const CONNECT_FED_ENDPOINT: &str = "/connect_fed";
@@ -287,7 +293,6 @@ pub struct PaymentLogPayload {
     // this `EventLogId`. If it is `None`, the last `EventLogId` is used.
     pub end_position: Option<EventLogId>,
 
-    // The number of events to return
     pub pagination_size: usize,
 
     pub federation_id: FederationId,
@@ -296,3 +301,16 @@ pub struct PaymentLogPayload {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PaymentLogResponse(pub Vec<GatewayTransactionEvent>);
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct AuthChallengePayload {
+    /// The challenge string
+    pub challenge: String,
+    /// The response string
+    pub response: Signature,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct AuthChallengeResponse {
+    pub challenge: String,
+}
