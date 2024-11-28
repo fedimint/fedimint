@@ -366,10 +366,7 @@ impl ServerModule for Lightning {
                     .await
                     .unwrap_or(0);
 
-                ensure!(
-                    current_vote < vote,
-                    "Unix time vote is redundant {current_vote} < {vote}"
-                );
+                ensure!(current_vote < vote, "Unix time vote is redundant");
 
                 Ok(())
             }
@@ -647,21 +644,17 @@ impl Lightning {
             .collect::<Vec<u64>>()
             .await;
 
-        while counts.len() < num_peers.total() {
-            counts.push(0);
-        }
-
-        assert_eq!(counts.len(), num_peers.total());
-
         counts.sort_unstable();
 
-        assert!(counts.first() <= counts.last());
+        counts.reverse();
+
+        assert!(counts.last() <= counts.first());
 
         // The block count we select guarantees that any threshold of correct peers can
         // increase the consensus block count and any consensus block count has been
         // confirmed by a threshold of peers.
 
-        counts[num_peers.max_evil()]
+        counts.get(num_peers.threshold() - 1).copied().unwrap_or(0)
     }
 
     async fn consensus_unix_time(&self, dbtx: &mut DatabaseTransaction<'_>) -> u64 {
@@ -674,21 +667,17 @@ impl Lightning {
             .collect::<Vec<u64>>()
             .await;
 
-        while times.len() < num_peers.total() {
-            times.push(0);
-        }
-
-        assert_eq!(times.len(), num_peers.total());
-
         times.sort_unstable();
 
-        assert!(times.first() <= times.last());
+        times.reverse();
+
+        assert!(times.last() <= times.first());
 
         // The unix time we select guarantees that any threshold of correct peers can
         // advance the consensus unix time and any consensus unix time has been
         // confirmed by a threshold of peers.
 
-        times[num_peers.max_evil()]
+        times.get(num_peers.threshold() - 1).copied().unwrap_or(0)
     }
 
     async fn await_incoming_contract(
