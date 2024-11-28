@@ -386,11 +386,7 @@
 <a href="#385" id="385">385</a>
 <a href="#386" id="386">386</a>
 <a href="#387" id="387">387</a>
-<a href="#388" id="388">388</a>
-<a href="#389" id="389">389</a>
-<a href="#390" id="390">390</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
-
-<span class="kw">use </span>devimint::devfed::DevJitFed;
+<a href="#388" id="388">388</a></pre></div><pre class="rust"><code><span class="kw">use </span>devimint::devfed::DevJitFed;
 <span class="kw">use </span>devimint::federation::Client;
 <span class="kw">use </span>devimint::version_constants::VERSION_0_5_0_ALPHA;
 <span class="kw">use </span>devimint::{cmd, util};
@@ -558,7 +554,6 @@
     <span class="kw">let </span>lnd = dev_fed.lnd().<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>(hold_preimage, hold_invoice, hold_payment_hash) = lnd.create_hold_invoice(<span class="number">60000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>hold_invoice = Bolt11Invoice::from_str(<span class="kw-2">&amp;</span>hold_invoice).expect(<span class="string">"Could not parse invoice"</span>);
 
     <span class="kw">let </span>gateway_pairs = [(gw_lnd, gw_ldk), (gw_ldk, gw_lnd)];
 
@@ -583,7 +578,7 @@
         test_send(
             <span class="kw-2">&amp;</span>client,
             <span class="kw-2">&amp;</span>gw_send.addr,
-            <span class="kw-2">&amp;</span>invoice,
+            <span class="kw-2">&amp;</span>invoice.to_string(),
             FinalSendOperationState::Refunded,
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -609,7 +604,7 @@
         test_send(
             <span class="kw-2">&amp;</span>client,
             <span class="kw-2">&amp;</span>gw_send.addr,
-            <span class="kw-2">&amp;</span>invoice,
+            <span class="kw-2">&amp;</span>invoice.to_string(),
             FinalSendOperationState::Success,
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -631,7 +626,7 @@
         test_send(
             <span class="kw-2">&amp;</span>client,
             <span class="kw-2">&amp;</span>gw_send.addr,
-            <span class="kw-2">&amp;</span>invoice,
+            <span class="kw-2">&amp;</span>invoice.to_string(),
             FinalSendOperationState::Success,
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -654,6 +649,7 @@
     }
 
     <span class="macro">info!</span>(<span class="string">"Testing LDK Gateway can pay HOLD invoice..."</span>);
+
     <span class="macro">try_join!</span>(
         test_send(
             <span class="kw-2">&amp;</span>client,
@@ -728,7 +724,7 @@
 <span class="kw">async fn </span>test_send(
     client: <span class="kw-2">&amp;</span>Client,
     gateway: <span class="kw-2">&amp;</span>String,
-    invoice: <span class="kw-2">&amp;</span>Bolt11Invoice,
+    invoice: <span class="kw-2">&amp;</span>String,
     final_state: FinalSendOperationState,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>send_op = serde_json::from_value::&lt;OperationId&gt;(
@@ -737,7 +733,7 @@
             <span class="string">"module"</span>,
             <span class="string">"lnv2"</span>,
             <span class="string">"send"</span>,
-            invoice.to_string(),
+            invoice,
             <span class="string">"--gateway"</span>,
             gateway
         )

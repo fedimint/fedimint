@@ -780,18 +780,7 @@
 <a href="#779" id="779">779</a>
 <a href="#780" id="780">780</a>
 <a href="#781" id="781">781</a>
-<a href="#782" id="782">782</a>
-<a href="#783" id="783">783</a>
-<a href="#784" id="784">784</a>
-<a href="#785" id="785">785</a>
-<a href="#786" id="786">786</a>
-<a href="#787" id="787">787</a>
-<a href="#788" id="788">788</a>
-<a href="#789" id="789">789</a>
-<a href="#790" id="790">790</a>
-<a href="#791" id="791">791</a>
-<a href="#792" id="792">792</a>
-<a href="#793" id="793">793</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#782" id="782">782</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 
@@ -1159,10 +1148,7 @@
                     .<span class="kw">await
                     </span>.unwrap_or(<span class="number">0</span>);
 
-                <span class="macro">ensure!</span>(
-                    current_vote &lt; vote,
-                    <span class="string">"Unix time vote is redundant {current_vote} &lt; {vote}"
-                </span>);
+                <span class="macro">ensure!</span>(current_vote &lt; vote, <span class="string">"Unix time vote is redundant"</span>);
 
                 <span class="prelude-val">Ok</span>(())
             }
@@ -1440,21 +1426,17 @@
             .collect::&lt;Vec&lt;u64&gt;&gt;()
             .<span class="kw">await</span>;
 
-        <span class="kw">while </span>counts.len() &lt; num_peers.total() {
-            counts.push(<span class="number">0</span>);
-        }
-
-        <span class="macro">assert_eq!</span>(counts.len(), num_peers.total());
-
         counts.sort_unstable();
 
-        <span class="macro">assert!</span>(counts.first() &lt;= counts.last());
+        counts.reverse();
+
+        <span class="macro">assert!</span>(counts.last() &lt;= counts.first());
 
         <span class="comment">// The block count we select guarantees that any threshold of correct peers can
         // increase the consensus block count and any consensus block count has been
         // confirmed by a threshold of peers.
 
-        </span>counts[num_peers.max_evil()]
+        </span>counts.get(num_peers.threshold() - <span class="number">1</span>).copied().unwrap_or(<span class="number">0</span>)
     }
 
     <span class="kw">async fn </span>consensus_unix_time(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; u64 {
@@ -1467,21 +1449,17 @@
             .collect::&lt;Vec&lt;u64&gt;&gt;()
             .<span class="kw">await</span>;
 
-        <span class="kw">while </span>times.len() &lt; num_peers.total() {
-            times.push(<span class="number">0</span>);
-        }
-
-        <span class="macro">assert_eq!</span>(times.len(), num_peers.total());
-
         times.sort_unstable();
 
-        <span class="macro">assert!</span>(times.first() &lt;= times.last());
+        times.reverse();
+
+        <span class="macro">assert!</span>(times.last() &lt;= times.first());
 
         <span class="comment">// The unix time we select guarantees that any threshold of correct peers can
         // advance the consensus unix time and any consensus unix time has been
         // confirmed by a threshold of peers.
 
-        </span>times[num_peers.max_evil()]
+        </span>times.get(num_peers.threshold() - <span class="number">1</span>).copied().unwrap_or(<span class="number">0</span>)
     }
 
     <span class="kw">async fn </span>await_incoming_contract(
