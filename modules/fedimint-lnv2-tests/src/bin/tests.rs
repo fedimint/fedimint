@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use devimint::devfed::DevJitFed;
 use devimint::federation::Client;
 use devimint::version_constants::VERSION_0_5_0_ALPHA;
@@ -168,7 +166,6 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     let lnd = dev_fed.lnd().await?;
 
     let (hold_preimage, hold_invoice, hold_payment_hash) = lnd.create_hold_invoice(60000).await?;
-    let hold_invoice = Bolt11Invoice::from_str(&hold_invoice).expect("Could not parse invoice");
 
     let gateway_pairs = [(gw_lnd, gw_ldk), (gw_ldk, gw_lnd)];
 
@@ -193,7 +190,7 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         test_send(
             &client,
             &gw_send.addr,
-            &invoice,
+            &invoice.to_string(),
             FinalSendOperationState::Refunded,
         )
         .await?;
@@ -219,7 +216,7 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         test_send(
             &client,
             &gw_send.addr,
-            &invoice,
+            &invoice.to_string(),
             FinalSendOperationState::Success,
         )
         .await?;
@@ -241,7 +238,7 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         test_send(
             &client,
             &gw_send.addr,
-            &invoice,
+            &invoice.to_string(),
             FinalSendOperationState::Success,
         )
         .await?;
@@ -264,6 +261,7 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     }
 
     info!("Testing LDK Gateway can pay HOLD invoice...");
+
     try_join!(
         test_send(
             &client,
@@ -338,7 +336,7 @@ async fn receive(
 async fn test_send(
     client: &Client,
     gateway: &String,
-    invoice: &Bolt11Invoice,
+    invoice: &String,
     final_state: FinalSendOperationState,
 ) -> anyhow::Result<()> {
     let send_op = serde_json::from_value::<OperationId>(
@@ -347,7 +345,7 @@ async fn test_send(
             "module",
             "lnv2",
             "send",
-            invoice.to_string(),
+            invoice,
             "--gateway",
             gateway
         )
