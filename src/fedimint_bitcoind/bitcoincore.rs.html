@@ -191,7 +191,12 @@
 <a href="#190" id="190">190</a>
 <a href="#191" id="191">191</a>
 <a href="#192" id="192">192</a>
-<a href="#193" id="193">193</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::path::PathBuf;
 
@@ -340,6 +345,11 @@
             <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
         )
         .map_err(|error| <span class="macro">format_err!</span>(<span class="string">"Could not decode tx: {}"</span>, error))
+    }
+
+    <span class="kw">async fn </span>get_sync_percentage(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;f64&gt;&gt; {
+        <span class="kw">let </span>blockchain_info = block_in_place(|| <span class="self">self</span>.client.get_blockchain_info())<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(blockchain_info.verification_progress))
     }
 
     <span class="kw">fn </span>get_bitcoin_rpc_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcConfig {

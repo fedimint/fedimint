@@ -179,7 +179,11 @@
 <a href="#178" id="178">178</a>
 <a href="#179" id="179">179</a>
 <a href="#180" id="180">180</a>
-<a href="#181" id="181">181</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::missing_errors_doc)]
@@ -351,6 +355,10 @@
 
     <span class="doccomment">/// Returns a proof that a tx is included in the bitcoin blockchain
     </span><span class="kw">async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: Txid) -&gt; <span class="prelude-ty">Result</span>&lt;TxOutProof&gt;;
+
+    <span class="doccomment">/// Returns the node's estimated chain sync percentage as a float between
+    /// 0.0 and 1.0, or `None` if the node doesn't support this feature.
+    </span><span class="kw">async fn </span>get_sync_percentage(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;f64&gt;&gt;;
 
     <span class="doccomment">/// Returns the Bitcoin RPC config
     </span><span class="kw">fn </span>get_bitcoin_rpc_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcConfig;
