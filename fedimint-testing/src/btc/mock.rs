@@ -413,6 +413,10 @@ impl IBitcoindRpc for FakeBitcoinTest {
         Ok(proof.ok_or(format_err!("No proof stored"))?.clone())
     }
 
+    async fn get_sync_percentage(&self) -> anyhow::Result<Option<f64>> {
+        Ok(None)
+    }
+
     fn get_bitcoin_rpc_config(&self) -> BitcoinRpcConfig {
         BitcoinRpcConfig {
             kind: "mock_kind".to_string(),

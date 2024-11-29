@@ -171,6 +171,10 @@ pub trait IBitcoindRpc: Debug {
     /// Returns a proof that a tx is included in the bitcoin blockchain
     async fn get_txout_proof(&self, txid: Txid) -> Result<TxOutProof>;
 
+    /// Returns the node's estimated chain sync percentage as a float between
+    /// 0.0 and 1.0, or `None` if the node doesn't support this feature.
+    async fn get_sync_percentage(&self) -> Result<Option<f64>>;
+
     /// Returns the Bitcoin RPC config
     fn get_bitcoin_rpc_config(&self) -> BitcoinRpcConfig;
 }

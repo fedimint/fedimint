@@ -168,6 +168,10 @@ impl IBitcoindRpc for EsploraClient {
         })
     }
 
+    async fn get_sync_percentage(&self) -> anyhow::Result<Option<f64>> {
+        Ok(None)
+    }
+
     fn get_bitcoin_rpc_config(&self) -> BitcoinRpcConfig {
         BitcoinRpcConfig {
             kind: "esplora".to_string(),

@@ -149,6 +149,11 @@ impl IBitcoindRpc for BitcoindClient {
         .map_err(|error| format_err!("Could not decode tx: {}", error))
     }
 
+    async fn get_sync_percentage(&self) -> anyhow::Result<Option<f64>> {
+        let blockchain_info = block_in_place(|| self.client.get_blockchain_info())?;
+        Ok(Some(blockchain_info.verification_progress))
+    }
+
     fn get_bitcoin_rpc_config(&self) -> BitcoinRpcConfig {
         BitcoinRpcConfig {
             kind: "bitcoind".to_string(),

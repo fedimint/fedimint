@@ -5,7 +5,6 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use bitcoin::hashes::sha256;
-use bitcoincore_rpc::RpcApi;
 use fedimint_api_client::api::{DynGlobalApi, StatusResponse};
 use fedimint_bitcoind::create_bitcoind;
 use fedimint_core::admin_client::{
@@ -30,13 +29,13 @@ use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::{
     api_endpoint, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
 };
-use fedimint_core::task::{block_in_place, sleep, TaskGroup};
+use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
-use tokio::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use tokio::sync::{Mutex, MutexGuard, RwLock};
 use tokio::time::Instant;
 use tokio_rustls::rustls;
 use tracing::{error, info};
@@ -501,8 +500,7 @@ impl ConfigGenApi {
     pub async fn check_bitcoin_status(&self) -> ApiResult<BitcoinRpcConnectionStatus> {
         // Check the cache first
         {
-            let cached_status: RwLockReadGuard<'_, Option<(Instant, BitcoinRpcConnectionStatus)>> =
-                self.bitcoin_status_cache.read().await;
+            let cached_status = self.bitcoin_status_cache.read().await;
             if let Some((timestamp, status)) = cached_status.as_ref() {
                 if timestamp.elapsed() < self.bitcoin_status_cache_duration {
                     return Ok(*status);
@@ -511,66 +509,59 @@ impl ConfigGenApi {
         }
 
         // If cache is invalid or expired, fetch new status
-        let bitcoin_rpc_config = BitcoinRpcConfig::get_defaults_from_env_vars().map_err(|e| {
-            ApiError::server_error(format!("Failed to get bitcoin rpc env vars: {e}"))
-        })?;
-        let status = match bitcoin_rpc_config.kind.as_str() {
-            "bitcoind" => check_bitcoind_status(&bitcoin_rpc_config),
-            "esplora" => self.check_esplora_status(&bitcoin_rpc_config).await,
-            _ => Err(ApiError::bad_request(format!(
-                "Unsupported bitcoin rpc kind: {}",
-                bitcoin_rpc_config.kind
-            ))),
-        }?;
+        let status = Self::fetch_bitcoin_status().await?;
 
         // Update the bitcoin status cache
-        let mut cached_status: RwLockWriteGuard<'_, Option<(Instant, BitcoinRpcConnectionStatus)>> =
-            self.bitcoin_status_cache.write().await;
+        let mut cached_status = self.bitcoin_status_cache.write().await;
         *cached_status = Some((Instant::now(), status));
 
         Ok(status)
     }
 
-    async fn check_esplora_status(
-        &self,
-        bitcoin_rpc_config: &BitcoinRpcConfig,
-    ) -> ApiResult<BitcoinRpcConnectionStatus> {
-        let client = create_bitcoind(bitcoin_rpc_config).map_err(|e| {
+    async fn fetch_bitcoin_status() -> ApiResult<BitcoinRpcConnectionStatus> {
+        let bitcoin_rpc_config = BitcoinRpcConfig::get_defaults_from_env_vars().map_err(|e| {
+            ApiError::server_error(format!("Failed to get bitcoin rpc env vars: {e}"))
+        })?;
+        let client = create_bitcoind(&bitcoin_rpc_config).map_err(|e| {
             ApiError::server_error(format!("Failed to connect to bitcoin rpc: {e}"))
         })?;
-        // TODO: Find a better way to check if esplora is synced, just returning Synced
-        // if it connects
-        let _network_info = client
-            .get_network()
+        let block_count = client.get_block_count().await.map_err(|e| {
+            ApiError::server_error(format!("Failed to get block count from bitcoin rpc: {e}"))
+        })?;
+        let chain_tip_block_height = block_count - 1;
+        let chain_tip_block_hash = client
+            .get_block_hash(chain_tip_block_height)
             .await
-            .map_err(|e| ApiError::server_error(format!("Failed to get esplora info: {e}")))?;
-        Ok(BitcoinRpcConnectionStatus::Synced)
+            .map_err(|e| {
+                ApiError::server_error(format!(
+                    "Failed to get block hash for block count {block_count} from bitcoin rpc: {e}"
+                ))
+            })?;
+        let chain_tip_block = client.get_block(&chain_tip_block_hash).await.map_err(|e| {
+            ApiError::server_error(format!(
+                "Failed to get block for block hash {chain_tip_block_hash} from bitcoin rpc: {e}"
+            ))
+        })?;
+        let chain_tip_block_time = chain_tip_block.header.time;
+        let sync_percentage = client.get_sync_percentage().await.map_err(|e| {
+            ApiError::server_error(format!(
+                "Failed to get sync percentage from bitcoin rpc: {e}"
+            ))
+        })?;
+
+        Ok(BitcoinRpcConnectionStatus {
+            chain_tip_block_height,
+            chain_tip_block_time,
+            sync_percentage,
+        })
     }
-}
-
-fn check_bitcoind_status(
-    bitcoin_rpc_config: &BitcoinRpcConfig,
-) -> ApiResult<BitcoinRpcConnectionStatus> {
-    let (url, auth) = fedimint_bitcoind::bitcoincore::from_url_to_url_auth(&bitcoin_rpc_config.url)
-        .map_err(|e| ApiError::server_error(format!("Failed to parse bitcoin rpc url: {e}")))?;
-    let client = bitcoincore_rpc::Client::new(&url, auth)
-        .map_err(|e| ApiError::server_error(format!("Failed to connect to bitcoin rpc: {e}")))?;
-    let blockchain_info = block_in_place(|| client.get_blockchain_info())
-        .map_err(|e| ApiError::server_error(format!("Failed to get blockchain info: {e}")))?;
-
-    if blockchain_info.initial_block_download {
-        return Ok(BitcoinRpcConnectionStatus::Syncing(
-            blockchain_info.verification_progress,
-        ));
-    }
-
-    Ok(BitcoinRpcConnectionStatus::Synced)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
-pub enum BitcoinRpcConnectionStatus {
-    Synced,
-    Syncing(f64),
+pub struct BitcoinRpcConnectionStatus {
+    chain_tip_block_height: u64,
+    chain_tip_block_time: u32,
+    sync_percentage: Option<f64>,
 }
 
 /// Config gen params that are only used locally, shouldn't be shared
