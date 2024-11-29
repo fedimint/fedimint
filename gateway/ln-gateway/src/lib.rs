@@ -233,6 +233,9 @@ pub struct Gateway {
 
     /// The "module mode" of the gateway. Options are LNv1, LNv2, or All.
     lightning_module_mode: LightningModuleMode,
+
+    /// The task group for all tasks related to the gateway.
+    task_group: TaskGroup,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -365,6 +368,9 @@ impl Gateway {
         let gateway_config =
             Self::get_gateway_configuration(gateway_db.clone(), &gateway_parameters).await;
 
+        let task_group = TaskGroup::new();
+        task_group.install_kill_handler();
+
         Ok(Self {
             federation_manager: Arc::new(RwLock::new(FederationManager::new())),
             lightning_builder,
@@ -376,6 +382,7 @@ impl Gateway {
             versioned_api: gateway_parameters.versioned_api,
             listen: gateway_parameters.listen,
             lightning_module_mode: gateway_parameters.lightning_module_mode,
+            task_group,
         })
     }
 
@@ -418,27 +425,26 @@ impl Gateway {
     /// to service requests.
     pub async fn run(
         self,
-        tg: TaskGroup,
         runtime: Arc<tokio::runtime::Runtime>,
     ) -> anyhow::Result<TaskShutdownToken> {
-        self.register_clients_timer(&tg);
+        self.register_clients_timer();
         self.load_clients().await?;
-        self.start_gateway(&tg, runtime);
+        self.start_gateway(runtime);
         // start webserver last to avoid handling requests before fully initialized
-        let handle = tg.make_handle();
-        run_webserver(Arc::new(self), tg).await?;
+        let handle = self.task_group.make_handle();
+        run_webserver(Arc::new(self)).await?;
         let shutdown_receiver = handle.make_shutdown_rx();
         Ok(shutdown_receiver)
     }
 
     /// Begins the task for listening for intercepted payments from the
     /// lightning node.
-    fn start_gateway(&self, task_group: &TaskGroup, runtime: Arc<tokio::runtime::Runtime>) {
+    fn start_gateway(&self, runtime: Arc<tokio::runtime::Runtime>) {
         const PAYMENT_STREAM_RETRY_SECONDS: u64 = 5;
 
         let self_copy = self.clone();
-        let tg = task_group.clone();
-        task_group.spawn(
+        let tg = self.task_group.clone();
+        self.task_group.spawn(
             "Subscribe to intercepted lightning payments in stream",
             |handle| async move {
                 // Repeatedly attempt to establish a connection to the lightning node and create a payment stream, re-trying if the connection is broken.
@@ -1860,14 +1866,14 @@ impl Gateway {
     /// connected federations every 8.5 mins. Only registers the Gateway if it
     /// has successfully connected to the Lightning node, so that it can
     /// include route hints in the registration.
-    fn register_clients_timer(&self, task_group: &TaskGroup) {
+    fn register_clients_timer(&self) {
         // Only spawn background registration thread if gateway is running LNv1
         if self.is_running_lnv1() {
             let lightning_module_mode = self.lightning_module_mode;
             info!(?lightning_module_mode, "Spawning register task...");
             let gateway = self.clone();
-            let register_task_group = task_group.make_subgroup();
-            task_group.spawn_cancellable("register clients", async move {
+            let register_task_group = self.task_group.make_subgroup();
+            self.task_group.spawn_cancellable("register clients", async move {
                 loop {
                     let gateway_config = gateway.clone_gateway_config().await;
                     if let Some(gateway_config) = gateway_config {

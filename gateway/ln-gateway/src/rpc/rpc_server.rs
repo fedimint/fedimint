@@ -41,7 +41,8 @@ use crate::rpc::ConfigPayload;
 use crate::Gateway;
 
 /// Creates the webserver's routes and spawns the webserver in a separate task.
-pub async fn run_webserver(gateway: Arc<Gateway>, task_group: TaskGroup) -> anyhow::Result<()> {
+pub async fn run_webserver(gateway: Arc<Gateway>) -> anyhow::Result<()> {
+    let task_group = gateway.task_group.clone();
     let v1_routes = v1_routes(gateway.clone(), task_group.clone());
     let api_v1 = Router::new()
         .nest(&format!("/{V1_API_ENDPOINT}"), v1_routes.clone())
