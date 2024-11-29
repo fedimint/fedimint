@@ -486,7 +486,8 @@
 <a href="#485" id="485">485</a>
 <a href="#486" id="486">486</a>
 <a href="#487" id="487">487</a>
-<a href="#488" id="488">488</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>axum::extract::Request;
 <span class="kw">use </span>axum::http::{header, StatusCode};
@@ -529,7 +530,8 @@
 <span class="kw">use </span><span class="kw">crate</span>::Gateway;
 
 <span class="doccomment">/// Creates the webserver's routes and spawns the webserver in a separate task.
-</span><span class="kw">pub async fn </span>run_webserver(gateway: Arc&lt;Gateway&gt;, task_group: TaskGroup) -&gt; anyhow::Result&lt;()&gt; {
+</span><span class="kw">pub async fn </span>run_webserver(gateway: Arc&lt;Gateway&gt;) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">let </span>task_group = gateway.task_group.clone();
     <span class="kw">let </span>v1_routes = v1_routes(gateway.clone(), task_group.clone());
     <span class="kw">let </span>api_v1 = Router::new()
         .nest(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"/{V1_API_ENDPOINT}"</span>), v1_routes.clone())

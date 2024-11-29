@@ -2227,7 +2227,13 @@
 <a href="#2226" id="2226">2226</a>
 <a href="#2227" id="2227">2227</a>
 <a href="#2228" id="2228">2228</a>
-<a href="#2229" id="2229">2229</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2229" id="2229">2229</a>
+<a href="#2230" id="2230">2230</a>
+<a href="#2231" id="2231">2231</a>
+<a href="#2232" id="2232">2232</a>
+<a href="#2233" id="2233">2233</a>
+<a href="#2234" id="2234">2234</a>
+<a href="#2235" id="2235">2235</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2462,6 +2468,9 @@
 
     <span class="doccomment">/// The "module mode" of the gateway. Options are LNv1, LNv2, or All.
     </span>lightning_module_mode: LightningModuleMode,
+
+    <span class="doccomment">/// The task group for all tasks related to the gateway.
+    </span>task_group: TaskGroup,
 }
 
 <span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span>Gateway {
@@ -2594,6 +2603,9 @@
         </span><span class="kw">let </span>gateway_config =
             <span class="self">Self</span>::get_gateway_configuration(gateway_db.clone(), <span class="kw-2">&amp;</span>gateway_parameters).<span class="kw">await</span>;
 
+        <span class="kw">let </span>task_group = TaskGroup::new();
+        task_group.install_kill_handler();
+
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             federation_manager: Arc::new(RwLock::new(FederationManager::new())),
             lightning_builder,
@@ -2605,6 +2617,7 @@
             versioned_api: gateway_parameters.versioned_api,
             listen: gateway_parameters.listen,
             lightning_module_mode: gateway_parameters.lightning_module_mode,
+            task_group,
         })
     }
 
@@ -2647,27 +2660,26 @@
     /// to service requests.
     </span><span class="kw">pub async fn </span>run(
         <span class="self">self</span>,
-        tg: TaskGroup,
         runtime: Arc&lt;tokio::runtime::Runtime&gt;,
     ) -&gt; anyhow::Result&lt;TaskShutdownToken&gt; {
-        <span class="self">self</span>.register_clients_timer(<span class="kw-2">&amp;</span>tg);
+        <span class="self">self</span>.register_clients_timer();
         <span class="self">self</span>.load_clients().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="self">self</span>.start_gateway(<span class="kw-2">&amp;</span>tg, runtime);
+        <span class="self">self</span>.start_gateway(runtime);
         <span class="comment">// start webserver last to avoid handling requests before fully initialized
-        </span><span class="kw">let </span>handle = tg.make_handle();
-        run_webserver(Arc::new(<span class="self">self</span>), tg).<span class="kw">await</span><span class="question-mark">?</span>;
+        </span><span class="kw">let </span>handle = <span class="self">self</span>.task_group.make_handle();
+        run_webserver(Arc::new(<span class="self">self</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>shutdown_receiver = handle.make_shutdown_rx();
         <span class="prelude-val">Ok</span>(shutdown_receiver)
     }
 
     <span class="doccomment">/// Begins the task for listening for intercepted payments from the
     /// lightning node.
-    </span><span class="kw">fn </span>start_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, task_group: <span class="kw-2">&amp;</span>TaskGroup, runtime: Arc&lt;tokio::runtime::Runtime&gt;) {
+    </span><span class="kw">fn </span>start_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, runtime: Arc&lt;tokio::runtime::Runtime&gt;) {
         <span class="kw">const </span>PAYMENT_STREAM_RETRY_SECONDS: u64 = <span class="number">5</span>;
 
         <span class="kw">let </span>self_copy = <span class="self">self</span>.clone();
-        <span class="kw">let </span>tg = task_group.clone();
-        task_group.spawn(
+        <span class="kw">let </span>tg = <span class="self">self</span>.task_group.clone();
+        <span class="self">self</span>.task_group.spawn(
             <span class="string">"Subscribe to intercepted lightning payments in stream"</span>,
             |handle| <span class="kw">async move </span>{
                 <span class="comment">// Repeatedly attempt to establish a connection to the lightning node and create a payment stream, re-trying if the connection is broken.
@@ -4089,14 +4101,14 @@
     /// connected federations every 8.5 mins. Only registers the Gateway if it
     /// has successfully connected to the Lightning node, so that it can
     /// include route hints in the registration.
-    </span><span class="kw">fn </span>register_clients_timer(<span class="kw-2">&amp;</span><span class="self">self</span>, task_group: <span class="kw-2">&amp;</span>TaskGroup) {
+    </span><span class="kw">fn </span>register_clients_timer(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="comment">// Only spawn background registration thread if gateway is running LNv1
         </span><span class="kw">if </span><span class="self">self</span>.is_running_lnv1() {
             <span class="kw">let </span>lightning_module_mode = <span class="self">self</span>.lightning_module_mode;
             <span class="macro">info!</span>(<span class="question-mark">?</span>lightning_module_mode, <span class="string">"Spawning register task..."</span>);
             <span class="kw">let </span>gateway = <span class="self">self</span>.clone();
-            <span class="kw">let </span>register_task_group = task_group.make_subgroup();
-            task_group.spawn_cancellable(<span class="string">"register clients"</span>, <span class="kw">async move </span>{
+            <span class="kw">let </span>register_task_group = <span class="self">self</span>.task_group.make_subgroup();
+            <span class="self">self</span>.task_group.spawn_cancellable(<span class="string">"register clients"</span>, <span class="kw">async move </span>{
                 <span class="kw">loop </span>{
                     <span class="kw">let </span>gateway_config = gateway.clone_gateway_config().<span class="kw">await</span>;
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_config) = gateway_config {
