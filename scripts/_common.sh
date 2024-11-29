@@ -117,11 +117,6 @@ function nix_build_binary_for_version() {
   binary="$1"
   version="$2"
 
-  # nix flake did not build gateway-cln-extension prior to v0.4.0
-  if [[ ("$version" =~ ^v0\.[23]) && "$binary" == "gateway-cln-extension" ]] ; then
-    version="v0.4.0"
-  fi
-
   >&2 echo "Compiling ${binary} for version ${version} ..."
   echo "$(nix build 'github:fedimint/fedimint/'"$version"'#'"$binary" --no-link --print-out-paths)/bin/$binary"
 }
@@ -173,10 +168,6 @@ function use_gateway_binaries_for_version() {
     var_name=$(nix_binary_version_var_name gateway-cli "$version")
     FM_GATEWAY_CLI_BASE_EXECUTABLE="${!var_name}"
     export FM_GATEWAY_CLI_BASE_EXECUTABLE
-
-    var_name=$(nix_binary_version_var_name gateway-cln-extension "$version")
-    FM_GATEWAY_CLN_EXTENSION_BASE_EXECUTABLE="${!var_name}"
-    export FM_GATEWAY_CLN_EXTENSION_BASE_EXECUTABLE
   fi
 }
 export -f use_gateway_binaries_for_version
