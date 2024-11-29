@@ -103,7 +103,10 @@ impl OperationLog {
         const EPOCH_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 7);
 
         let start_after_key = last_seen.unwrap_or_else(|| ChronologicalOperationLogKey {
-            creation_time: now(),
+            // We don't expect any operations from the future to exist, since SystemTime isn't
+            // monotone and CI can be overloaded at times we add a small buffer to avoid flakiness
+            // in tests.
+            creation_time: now() + Duration::from_secs(30),
             operation_id: OperationId([0; 32]),
         });
 
