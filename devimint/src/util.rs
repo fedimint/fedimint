@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
+use std::fs::File;
 use std::future::Future;
 use std::ops::ControlFlow;
 use std::process::Stdio;
@@ -300,7 +301,7 @@ impl Command {
     }
 
     pub async fn run_inner(&mut self, expect_success: bool) -> Result<std::process::Output> {
-        debug!(target: LOG_DEVIMINT, "> {}", self.command_debug());
+        debug!(target: LOG_DEVIMINT, "> started {}", self.command_debug());
         let output = self
             .cmd
             .stdout(Stdio::piped())
@@ -312,6 +313,14 @@ impl Command {
             .spawn()?
             .wait_with_output()
             .await?;
+
+        debug!(
+            target: LOG_DEVIMINT,
+            "> {} returned: {}\nstdout:\n{}\nstderr:\n{}\n",
+            self.command_debug(), output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
 
         if output.status.success() != expect_success {
             bail!(
@@ -335,16 +344,7 @@ impl Command {
 
     /// Run the command logging the output and error
     pub async fn run_with_logging(&mut self, name: String) -> Result<()> {
-        let logs_dir = env::var(FM_LOGS_DIR_ENV)?;
-        let path = format!("{logs_dir}/{name}.log");
-        let log = OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(&path)
-            .await
-            .with_context(|| format!("path: {path} cmd: {name}"))?
-            .into_std()
-            .await;
+        let log = open_log_file(&name).await?;
         self.cmd.stdout(log.try_clone()?);
         self.cmd.stderr(log);
         let status = self
@@ -358,6 +358,21 @@ impl Command {
         }
         Ok(())
     }
+}
+
+async fn open_log_file(name: &str) -> Result<File> {
+    let logs_dir = env::var(FM_LOGS_DIR_ENV)?;
+    let path = format!("{logs_dir}/{name}.log");
+    let file = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(&path)
+        .await
+        .with_context(|| format!("path: {path} cmd: {name}"))?
+        .into_std()
+        .await;
+
+    Ok(file)
 }
 
 /// easy syntax to create a Command
