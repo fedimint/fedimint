@@ -69,8 +69,6 @@ pub enum LightningRpcError {
     FailedToListActiveChannels { failure_reason: String },
     #[error("Failed to get balances: {failure_reason}")]
     FailedToGetBalances { failure_reason: String },
-    #[error("Failed to subscribe to invoice updates: {failure_reason}")]
-    FailedToSubscribeToInvoiceUpdates { failure_reason: String },
     #[error("Failed to sync to chain: {failure_reason}")]
     FailedToSyncToChain { failure_reason: String },
     #[error("Invalid metadata: {failure_reason}")]
