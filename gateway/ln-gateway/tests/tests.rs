@@ -266,7 +266,6 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
             let fee = "10,10000".to_string();
             let federation_fee = FederationRoutingFees::from_str(&fee)?;
             let set_configuration_payload = SetConfigurationPayload {
-                password: None,
                 num_route_hints: None,
                 routing_fees: None,
                 network: None,
@@ -826,7 +825,6 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
         // setting specific routing fees for fed1
         let fed_routing_fees = FederationRoutingFees::from_str("10,10000")?;
         let set_configuration_payload = SetConfigurationPayload {
-            password: None,
             num_route_hints: None,
             routing_fees: None,
             network: None,

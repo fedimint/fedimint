@@ -6,9 +6,7 @@ use axum::middleware::{self, Next};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
-use bitcoin::hashes::{sha256, Hash};
 use fedimint_core::config::FederationId;
-use fedimint_core::encoding::Encodable;
 use fedimint_core::task::TaskGroup;
 use fedimint_ln_common::gateway_endpoint_constants::{
     GET_GATEWAY_ID_ENDPOINT, PAY_INVOICE_ENDPOINT,
@@ -92,50 +90,10 @@ async fn auth_middleware(
     request: Request,
     next: Next,
 ) -> Result<impl IntoResponse, StatusCode> {
-    // These routes are not available unless the gateway's configuration is set.
-    let gateway_config = gateway
-        .clone_gateway_config()
-        .await
-        .ok_or(StatusCode::NOT_FOUND)?;
-    let gateway_hashed_password = gateway_config.hashed_password;
-    let password_salt = gateway_config.password_salt;
-    authenticate(gateway_hashed_password, password_salt, request, next).await
-}
-
-/// Middleware to authenticate an incoming request. Routes that are
-/// authenticated with this middleware are un-authenticated if the gateway has
-/// not yet been configured. After the gateway is configured, this middleware
-/// enforces that a Bearer token must be supplied in the Authorization header.
-async fn auth_after_config_middleware(
-    Extension(gateway): Extension<Arc<Gateway>>,
-    request: Request,
-    next: Next,
-) -> Result<impl IntoResponse, StatusCode> {
-    // If the gateway's config has not been set, allow the request to continue, so
-    // that the gateway can be configured
-    let gateway_config = gateway.clone_gateway_config().await;
-    if gateway_config.is_none() {
-        return Ok(next.run(request).await);
-    }
-
-    // Otherwise, validate that the Bearer token matches the gateway's hashed
-    // password
-    let gateway_config = gateway_config.expect("Already validated the gateway config is not none");
-    let gateway_hashed_password = gateway_config.hashed_password;
-    let password_salt = gateway_config.password_salt;
-    authenticate(gateway_hashed_password, password_salt, request, next).await
-}
-
-/// Validate that the Bearer token matches the gateway's hashed password
-async fn authenticate(
-    gateway_hashed_password: sha256::Hash,
-    password_salt: [u8; 16],
-    request: Request,
-    next: Next,
-) -> Result<axum::response::Response, StatusCode> {
     let token = extract_bearer_token(&request)?;
-    let hashed_password = hash_password(&token, password_salt);
-    if gateway_hashed_password == hashed_password {
+    if bcrypt::verify(token, &gateway.bcrypt_password_hash.to_string())
+        .expect("Bcrypt hash is valid since we just stringified it")
+    {
         return Ok(next.run(request).await);
     }
 
@@ -180,8 +138,8 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
         public_routes = public_routes.merge(lnv2_routes());
     }
 
-    // Authenticated, public routes used for gateway administration
-    let always_authenticated_routes = Router::new()
+    // Authenticated routes used for gateway administration
+    let authenticated_routes = Router::new()
         .route(ADDRESS_ENDPOINT, post(address))
         .route(WITHDRAW_ENDPOINT, post(withdraw))
         .route(CONNECT_FED_ENDPOINT, post(connect_fed))
@@ -208,34 +166,19 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
         .route(MNEMONIC_ENDPOINT, get(mnemonic))
         .route(STOP_ENDPOINT, get(stop))
         .route(PAYMENT_LOG_ENDPOINT, post(payment_log))
-        .layer(middleware::from_fn(auth_middleware));
-
-    // Routes that are un-authenticated before gateway configuration, then become
-    // authenticated after a password has been set.
-    let authenticated_after_config_routes = Router::new()
         .route(SET_CONFIGURATION_ENDPOINT, post(set_configuration))
         .route(CONFIGURATION_ENDPOINT, post(configuration))
         // FIXME: deprecated >= 0.3.0
         .route(GATEWAY_INFO_POST_ENDPOINT, post(handle_post_info))
         .route(GATEWAY_INFO_ENDPOINT, get(info))
-        .layer(middleware::from_fn(auth_after_config_middleware));
+        .layer(middleware::from_fn(auth_middleware));
 
     Router::new()
         .merge(public_routes)
-        .merge(always_authenticated_routes)
-        .merge(authenticated_after_config_routes)
+        .merge(authenticated_routes)
         .layer(Extension(gateway))
         .layer(Extension(task_group))
         .layer(CorsLayer::permissive())
-}
-
-/// Creates a password hash by appending a 4 byte salt to the plaintext
-/// password.
-pub fn hash_password(plaintext_password: &str, salt: [u8; 16]) -> sha256::Hash {
-    let mut bytes = Vec::new();
-    bytes.append(&mut plaintext_password.consensus_encode_to_vec());
-    bytes.append(&mut salt.consensus_encode_to_vec());
-    sha256::Hash::hash(&bytes)
 }
 
 /// Display high-level information about the Gateway

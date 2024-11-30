@@ -166,9 +166,13 @@ declare_vars! {
         FM_LND_TLS_CERT: PathBuf = FM_LND_DIR.join("tls.cert"); env: "FM_LND_TLS_CERT";
         FM_LND_MACAROON: PathBuf = FM_LND_DIR.join("data/chain/bitcoin/regtest/admin.macaroon"); env: "FM_LND_MACAROON";
 
+        // TODO(support:v0.5): Remove this. It was used prior to `FM_GATEWAY_BCRYPT_PASSWORD_HASH` to provide a plaintext password to the gateway.
         FM_GATEWAY_PASSWORD: String = "theresnosecondbest"; env: "FM_GATEWAY_PASSWORD";
 
-         // Enable to us to make an unbounded number of payments
+        // Bcrypt hash of "theresnosecondbest" with a cost of 10.
+        FM_GATEWAY_BCRYPT_PASSWORD_HASH: String = "$2y$10$Q/UTDeO84VGG1mRncxw.Nubqyi/HsNRJ40k0TSexFy9eVess1yi/u"; env: "FM_GATEWAY_BCRYPT_PASSWORD_HASH";
+
+        // Enable to us to make an unbounded number of payments
         FM_DEFAULT_GATEWAY_FEES: String = "0,0"; env: "FM_DEFAULT_GATEWAY_FEES";
         FM_GATEWAY_SKIP_WAIT_FOR_SYNC: String = "1"; env: "FM_GATEWAY_SKIP_WAIT_FOR_SYNC";
 

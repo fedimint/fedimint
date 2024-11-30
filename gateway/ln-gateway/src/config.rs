@@ -32,9 +32,9 @@ pub struct GatewayOpts {
     #[arg(long = "api-addr", env = envs::FM_GATEWAY_API_ADDR_ENV)]
     api_addr: SafeUrl,
 
-    /// Gateway webserver authentication password
-    #[arg(long = "password", env = envs::FM_GATEWAY_PASSWORD_ENV)]
-    password: Option<String>,
+    /// Gateway webserver authentication bcrypt password hash
+    #[arg(long = "bcrypt-password-hash", env = envs::FM_GATEWAY_BCRYPT_PASSWORD_HASH_ENV)]
+    bcrypt_password_hash: String,
 
     /// Bitcoin network this gateway will be running on
     #[arg(long = "network", env = envs::FM_GATEWAY_NETWORK_ENV)]
@@ -68,10 +68,13 @@ impl GatewayOpts {
                 api_addr = self.api_addr,
             )
         })?;
+
+        let bcrypt_password_hash = bcrypt::HashParts::from_str(&self.bcrypt_password_hash)?;
+
         Ok(GatewayParameters {
             listen: self.listen,
             versioned_api,
-            password: self.password.clone(),
+            bcrypt_password_hash,
             network: self.network,
             num_route_hints: self.num_route_hints,
             fees: self.default_fees.clone(),
@@ -86,11 +89,11 @@ impl GatewayOpts {
 ///
 /// If `GatewayConfiguration is set in the database, that takes precedence and
 /// the optional parameters will have no affect.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct GatewayParameters {
     pub listen: SocketAddr,
     pub versioned_api: SafeUrl,
-    pub password: Option<String>,
+    pub bcrypt_password_hash: bcrypt::HashParts,
     pub network: Option<Network>,
     pub num_route_hints: u32,
     pub fees: Option<GatewayFee>,

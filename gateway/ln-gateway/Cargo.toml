@@ -30,6 +30,7 @@ aquamarine = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 axum = { version = "0.7.9", features = [ "json" ] }
+bcrypt = { workspace = true }
 bitcoin = { workspace = true }
 clap = { workspace = true }
 erased-serde = { workspace = true }

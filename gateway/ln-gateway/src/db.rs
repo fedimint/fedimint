@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use bitcoin::hashes::sha256;
+use bitcoin::hashes::{sha256, Hash};
 use fedimint_api_client::api::net::Connector;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{
@@ -21,8 +21,6 @@ use secp256k1::{Keypair, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
-
-use crate::rpc::rpc_server::hash_password;
 
 pub trait GatewayDbtxNcExt {
     async fn save_federation_config(&mut self, config: &FederationConfig);
@@ -330,10 +328,10 @@ struct GatewayConfigurationV0 {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
-pub struct GatewayConfigurationKey;
+pub struct GatewayConfigurationKeyV1;
 
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
-pub struct GatewayConfiguration {
+pub struct GatewayConfigurationV1 {
     pub hashed_password: sha256::Hash,
     pub num_route_hints: u32,
     #[serde(with = "serde_routing_fees")]
@@ -342,9 +340,26 @@ pub struct GatewayConfiguration {
     pub password_salt: [u8; 16],
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
+pub struct GatewayConfigurationKey;
+
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+pub struct GatewayConfiguration {
+    pub num_route_hints: u32,
+    #[serde(with = "serde_routing_fees")]
+    pub routing_fees: RoutingFees,
+    pub network: NetworkLegacyEncodingWrapper,
+}
+
 impl_db_record!(
     key = GatewayConfigurationKeyV0,
     value = GatewayConfigurationV0,
+    db_prefix = DbKeyPrefix::GatewayConfiguration,
+);
+
+impl_db_record!(
+    key = GatewayConfigurationKeyV1,
+    value = GatewayConfigurationV1,
     db_prefix = DbKeyPrefix::GatewayConfiguration,
 );
 
@@ -378,24 +393,34 @@ pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, CoreMigra
     let mut migrations: BTreeMap<DatabaseVersion, CoreMigrationFn> = BTreeMap::new();
     migrations.insert(DatabaseVersion(0), |ctx| migrate_to_v1(ctx).boxed());
     migrations.insert(DatabaseVersion(1), |ctx| migrate_to_v2(ctx).boxed());
+    migrations.insert(DatabaseVersion(2), |ctx| migrate_to_v3(ctx).boxed());
     migrations
 }
 
 async fn migrate_to_v1(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Error> {
+    /// Creates a password hash by appending a 4 byte salt to the plaintext
+    /// password.
+    fn hash_password(plaintext_password: &str, salt: [u8; 16]) -> sha256::Hash {
+        let mut bytes = Vec::new();
+        bytes.append(&mut plaintext_password.consensus_encode_to_vec());
+        bytes.append(&mut salt.consensus_encode_to_vec());
+        sha256::Hash::hash(&bytes)
+    }
+
     let mut dbtx = ctx.dbtx();
 
     // If there is no old gateway configuration, there is nothing to do.
     if let Some(old_gateway_config) = dbtx.remove_entry(&GatewayConfigurationKeyV0).await {
         let password_salt: [u8; 16] = rand::thread_rng().gen();
         let hashed_password = hash_password(&old_gateway_config.password, password_salt);
-        let new_gateway_config = GatewayConfiguration {
+        let new_gateway_config = GatewayConfigurationV1 {
             hashed_password,
             num_route_hints: old_gateway_config.num_route_hints,
             routing_fees: old_gateway_config.routing_fees,
             network: old_gateway_config.network,
             password_salt,
         };
-        dbtx.insert_entry(&GatewayConfigurationKey, &new_gateway_config)
+        dbtx.insert_entry(&GatewayConfigurationKeyV1, &new_gateway_config)
             .await;
     }
 
@@ -427,6 +452,23 @@ async fn migrate_to_v2(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Erro
                 .await;
         }
     }
+    Ok(())
+}
+
+async fn migrate_to_v3(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Error> {
+    let mut dbtx = ctx.dbtx();
+
+    // If there is no old gateway configuration, there is nothing to do.
+    if let Some(old_gateway_config) = dbtx.remove_entry(&GatewayConfigurationKeyV1).await {
+        let new_gateway_config = GatewayConfiguration {
+            num_route_hints: old_gateway_config.num_route_hints,
+            routing_fees: old_gateway_config.routing_fees,
+            network: old_gateway_config.network,
+        };
+        dbtx.insert_entry(&GatewayConfigurationKey, &new_gateway_config)
+            .await;
+    }
+
     Ok(())
 }
 
