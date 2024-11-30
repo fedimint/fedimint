@@ -31,7 +31,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::core::ModuleInstanceId;
-use crate::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
+use crate::module::registry::ModuleDecoderRegistry;
 use crate::util::SafeUrl;
 
 /// Object-safe trait for things that can encode themselves
@@ -289,28 +289,6 @@ macro_rules! impl_encode_decode_num_as_bigsize {
             }
         }
     };
-}
-
-impl<T> Encodable for std::ops::RangeInclusive<T>
-where
-    T: Encodable,
-{
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        (self.start(), self.end()).consensus_encode(writer)
-    }
-}
-
-impl<T> Decodable for std::ops::RangeInclusive<T>
-where
-    T: Decodable,
-{
-    fn consensus_decode<D: std::io::Read>(
-        d: &mut D,
-        _modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, crate::encoding::DecodeError> {
-        let r = <(T, T)>::consensus_decode(d, &ModuleRegistry::default())?;
-        Ok(Self::new(r.0, r.1))
-    }
 }
 
 impl_encode_decode_num_as_bigsize!(u64);
@@ -784,6 +762,7 @@ mod tests {
 
     use super::*;
     use crate::encoding::{Decodable, Encodable};
+    use crate::module::registry::ModuleRegistry;
 
     pub(crate) fn test_roundtrip<T>(value: &T)
     where
