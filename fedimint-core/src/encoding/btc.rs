@@ -9,7 +9,6 @@ use lightning::util::ser::{BigSize, Readable, Writeable};
 use miniscript::{Descriptor, MiniscriptKey};
 use serde::{Deserialize, Serialize};
 
-use super::CountWrite;
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::get_network_for_address;
 use crate::module::registry::ModuleDecoderRegistry;
@@ -287,6 +286,24 @@ impl Decodable for lightning_invoice::RoutingFees {
     }
 }
 
+impl Encodable for BigSize {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+        let mut writer = CountWrite::from(writer);
+        self.write(&mut writer)?;
+        Ok(usize::try_from(writer.count()).expect("can't overflow"))
+    }
+}
+
+impl Decodable for BigSize {
+    fn consensus_decode<R: std::io::Read>(
+        r: &mut R,
+        _modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Self::read(&mut SimpleBitcoinRead(r))
+            .map_err(|e| DecodeError::new_custom(anyhow::anyhow!("BigSize decoding error: {e:?}")))
+    }
+}
+
 // Simple decoder implementing `bitcoin_io::Read` for `std::io::Read`.
 // This is needed because `bitcoin::consensus::Decodable` requires a
 // `bitcoin_io::Read`.
@@ -375,21 +392,38 @@ impl<'a, R: std::io::Read> bitcoin_io::BufRead for BufBitcoinReader<'a, R> {
     }
 }
 
-impl Encodable for BigSize {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        let mut writer = CountWrite::from(writer);
-        self.write(&mut writer)?;
-        Ok(usize::try_from(writer.count()).expect("can't overflow"))
+/// A writer counting number of bytes written to it
+///
+/// Copy&pasted from <https://github.com/SOF3/count-write> which
+/// uses Apache license (and it's a trivial amount of code, repeating
+/// on stack overflow).
+struct CountWrite<W> {
+    inner: W,
+    count: u64,
+}
+
+impl<W> CountWrite<W> {
+    /// Returns the number of bytes successfully written so far
+    fn count(&self) -> u64 {
+        self.count
     }
 }
 
-impl Decodable for BigSize {
-    fn consensus_decode<R: std::io::Read>(
-        r: &mut R,
-        _modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        Self::read(&mut SimpleBitcoinRead(r))
-            .map_err(|e| DecodeError::new_custom(anyhow::anyhow!("BigSize decoding error: {e:?}")))
+impl<W> From<W> for CountWrite<W> {
+    fn from(inner: W) -> Self {
+        Self { inner, count: 0 }
+    }
+}
+
+impl<W: Write> bitcoin_io::Write for CountWrite<W> {
+    fn write(&mut self, buf: &[u8]) -> bitcoin_io::Result<usize> {
+        let written = self.inner.write(buf)?;
+        self.count += written as u64;
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> bitcoin_io::Result<()> {
+        self.inner.flush().map_err(bitcoin_io::Error::from)
     }
 }
 

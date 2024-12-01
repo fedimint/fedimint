@@ -590,46 +590,6 @@ impl Decodable for Cow<'static, str> {
     }
 }
 
-/// A writer counting number of writes written to it
-///
-/// Copy&pasted from <https://github.com/SOF3/count-write> which
-/// uses Apache license (and it's a trivial amount of code, repeating
-/// on stack overflow).
-pub struct CountWrite<W> {
-    inner: W,
-    count: u64,
-}
-
-impl<W> CountWrite<W> {
-    /// Returns the number of bytes successfully written so far
-    pub fn count(&self) -> u64 {
-        self.count
-    }
-
-    /// Extracts the inner writer, discarding this wrapper
-    pub fn into_inner(self) -> W {
-        self.inner
-    }
-}
-
-impl<W> From<W> for CountWrite<W> {
-    fn from(inner: W) -> Self {
-        Self { inner, count: 0 }
-    }
-}
-
-impl<W: Write> bitcoin_io::Write for CountWrite<W> {
-    fn write(&mut self, buf: &[u8]) -> bitcoin_io::Result<usize> {
-        let written = self.inner.write(buf)?;
-        self.count += written as u64;
-        Ok(written)
-    }
-
-    fn flush(&mut self) -> bitcoin_io::Result<()> {
-        self.inner.flush().map_err(bitcoin_io::Error::from)
-    }
-}
-
 /// A type that decodes `module_instance_id`-prefixed `T`s even
 /// when corresponding `Decoder` is not available.
 ///
