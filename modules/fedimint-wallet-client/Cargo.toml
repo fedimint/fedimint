@@ -30,6 +30,7 @@ erased-serde = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
+fedimint-eventlog = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-wallet-common = { workspace = true }
 futures = { workspace = true }

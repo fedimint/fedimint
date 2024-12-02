@@ -276,7 +276,7 @@ pub(crate) async fn transition_btc_tx_confirmed(
 
     let pegin_proof = PegInProof::new(
         txout_proof,
-        awaiting_confirmation_state.btc_transaction,
+        awaiting_confirmation_state.btc_transaction.clone(),
         awaiting_confirmation_state.out_idx,
         awaiting_confirmation_state.tweak_key.public_key(),
     )

@@ -15,6 +15,7 @@ pub mod client_db;
 /// Legacy, state-machine based peg-ins, replaced by `pegin_monitor`
 /// but retained for time being to ensure existing peg-ins complete.
 mod deposit;
+pub mod events;
 /// Peg-in monitor: a task monitoring deposit addresses for peg-ins.
 mod pegin_monitor;
 mod withdraw;
@@ -391,6 +392,7 @@ impl ClientModule for WalletClientModule {
             wallet_descriptor: self.cfg().peg_in_descriptor.clone(),
             wallet_decoder: self.decoder(),
             secp: Secp256k1::default(),
+            client_ctx: self.client_ctx.clone(),
         }
     }
 
@@ -478,6 +480,7 @@ pub struct WalletClientContext {
     wallet_descriptor: PegInDescriptor,
     wallet_decoder: Decoder,
     secp: Secp256k1<All>,
+    pub client_ctx: ClientContext<WalletClientModule>,
 }
 
 impl Context for WalletClientContext {

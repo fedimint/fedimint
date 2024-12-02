@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use bitcoin::Txid;
-use fedimint_client::sm::{State, StateTransition};
+use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -10,6 +10,7 @@ use fedimint_core::OutPoint;
 use fedimint_wallet_common::WalletOutputOutcome;
 use tracing::debug;
 
+use crate::events::WithdrawRequest;
 use crate::WalletClientContext;
 
 const RETRY_DELAY: Duration = Duration::from_secs(1);
@@ -33,6 +34,7 @@ impl State for WithdrawStateMachine {
         context: &Self::ModuleContext,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
+        let wallet_context = context.clone();
         match &self.state {
             WithdrawStates::Created(created) => {
                 vec![StateTransition::new(
@@ -42,8 +44,13 @@ impl State for WithdrawStateMachine {
                         self.operation_id,
                         created.clone(),
                     ),
-                    |_dbtx, res, old_state| {
-                        Box::pin(async move { transition_withdraw_processed(res, &old_state) })
+                    move |dbtx, res, old_state| {
+                        Box::pin(transition_withdraw_processed(
+                            res,
+                            old_state,
+                            wallet_context.clone(),
+                            dbtx,
+                        ))
                     },
                 )]
             }
@@ -103,9 +110,11 @@ async fn await_withdraw_processed(
     }
 }
 
-fn transition_withdraw_processed(
+async fn transition_withdraw_processed(
     res: Result<Txid, String>,
-    old_state: &WithdrawStateMachine,
+    old_state: WithdrawStateMachine,
+    client_ctx: WalletClientContext,
+    dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
 ) -> WithdrawStateMachine {
     assert!(
         matches!(old_state.state, WithdrawStates::Created(_)),
@@ -114,7 +123,13 @@ fn transition_withdraw_processed(
     );
 
     let new_state = match res {
-        Ok(txid) => WithdrawStates::Success(SuccessWithdrawState { txid }),
+        Ok(txid) => {
+            client_ctx
+                .client_ctx
+                .log_event(&mut dbtx.module_tx(), WithdrawRequest { txid })
+                .await;
+            WithdrawStates::Success(SuccessWithdrawState { txid })
+        }
         Err(error) => WithdrawStates::Aborted(AbortedWithdrawState { error }),
     };
 
