@@ -2128,7 +2128,7 @@ impl Client {
                 }
                 "list_operations" => {
                     // TODO: support pagination
-                    let operations = self.operation_log().list_operations(usize::MAX, None).await;
+                    let operations = self.operation_log().paginate_operations_rev(usize::MAX, None).await;
                     yield serde_json::to_value(operations)?;
                 }
                 "has_pending_recoveries" => {

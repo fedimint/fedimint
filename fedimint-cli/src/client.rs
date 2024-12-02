@@ -532,7 +532,7 @@ pub async fn handle_command(
 
             let operations = client
                 .operation_log()
-                .list_operations(limit, None)
+                .paginate_operations_rev(limit, None)
                 .await
                 .into_iter()
                 .map(|(k, v)| {

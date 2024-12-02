@@ -187,7 +187,10 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
         .await?;
 
     // Test operation is created
-    let operations = client.operation_log().list_operations(10, None).await;
+    let operations = client
+        .operation_log()
+        .paginate_operations_rev(10, None)
+        .await;
     assert_eq!(operations.len(), 1, "Expecting only the peg-in operation");
 
     let deposit_operation_id = operations[0].0.operation_id;
