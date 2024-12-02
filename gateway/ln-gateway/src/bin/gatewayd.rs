@@ -13,9 +13,9 @@ use std::sync::Arc;
 use fedimint_core::fedimint_build_code_version_env;
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_logging::TracingSetup;
-#[cfg(not(target_env = "msvc"))]
-use jemallocator::Jemalloc;
 use ln_gateway::Gateway;
+#[cfg(not(target_env = "msvc"))]
+use tikv_jemallocator::Jemalloc;
 use tracing::info;
 
 #[cfg(not(target_env = "msvc"))]
