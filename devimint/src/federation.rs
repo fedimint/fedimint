@@ -664,13 +664,18 @@ impl Federation {
         process_mgr: &ProcessManager,
         bin_path: &PathBuf,
     ) -> Result<()> {
+        let current_fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+
         // get the version we're upgrading to, temporarily updating the fedimintd path
         let current_fedimintd_path = std::env::var("FM_FEDIMINTD_BASE_EXECUTABLE")?;
         std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", bin_path);
         let new_fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
         std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", current_fedimintd_path);
 
-        if Self::version_requires_coordinated_shutdown(&new_fedimintd_version) {
+        if Self::version_requires_coordinated_shutdown(
+            &current_fedimintd_version,
+            &new_fedimintd_version,
+        ) {
             self.restart_all_with_bin_after_session(process_mgr, bin_path)
                 .await
         } else {
@@ -679,8 +684,15 @@ impl Federation {
         }
     }
 
-    fn version_requires_coordinated_shutdown(version: &semver::Version) -> bool {
-        matches!((version.major, version.minor), (0, 4 | 5))
+    fn version_requires_coordinated_shutdown(
+        from_version: &semver::Version,
+        to_version: &semver::Version,
+    ) -> bool {
+        from_version.major == 0
+            && from_version.minor == 3
+            && from_version.patch >= 3
+            && to_version.major == 0
+            && to_version.minor >= 4
     }
 
     pub async fn degrade_federation(&mut self, process_mgr: &ProcessManager) -> Result<()> {
