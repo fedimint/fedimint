@@ -92,4 +92,4 @@ fedimint-unknown-server = { workspace = true }
 fedimint-build = { workspace = true }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-jemallocator = { workspace = true }
+tikv-jemallocator = { workspace = true }
