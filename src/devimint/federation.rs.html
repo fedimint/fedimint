@@ -1436,7 +1436,25 @@
 <a href="#1435" id="1435">1435</a>
 <a href="#1436" id="1436">1436</a>
 <a href="#1437" id="1437">1437</a>
-<a href="#1438" id="1438">1438</a></pre></div><pre class="rust"><code><span class="kw">mod </span>config;
+<a href="#1438" id="1438">1438</a>
+<a href="#1439" id="1439">1439</a>
+<a href="#1440" id="1440">1440</a>
+<a href="#1441" id="1441">1441</a>
+<a href="#1442" id="1442">1442</a>
+<a href="#1443" id="1443">1443</a>
+<a href="#1444" id="1444">1444</a>
+<a href="#1445" id="1445">1445</a>
+<a href="#1446" id="1446">1446</a>
+<a href="#1447" id="1447">1447</a>
+<a href="#1448" id="1448">1448</a>
+<a href="#1449" id="1449">1449</a>
+<a href="#1450" id="1450">1450</a>
+<a href="#1451" id="1451">1451</a>
+<a href="#1452" id="1452">1452</a>
+<a href="#1453" id="1453">1453</a>
+<a href="#1454" id="1454">1454</a>
+<a href="#1455" id="1455">1455</a>
+<a href="#1456" id="1456">1456</a></pre></div><pre class="rust"><code><span class="kw">mod </span>config;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2102,13 +2120,18 @@
         process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
         bin_path: <span class="kw-2">&amp;</span>PathBuf,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>current_fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
+
         <span class="comment">// get the version we're upgrading to, temporarily updating the fedimintd path
         </span><span class="kw">let </span>current_fedimintd_path = std::env::var(<span class="string">"FM_FEDIMINTD_BASE_EXECUTABLE"</span>)<span class="question-mark">?</span>;
         std::env::set_var(<span class="string">"FM_FEDIMINTD_BASE_EXECUTABLE"</span>, bin_path);
         <span class="kw">let </span>new_fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
         std::env::set_var(<span class="string">"FM_FEDIMINTD_BASE_EXECUTABLE"</span>, current_fedimintd_path);
 
-        <span class="kw">if </span><span class="self">Self</span>::version_requires_coordinated_shutdown(<span class="kw-2">&amp;</span>new_fedimintd_version) {
+        <span class="kw">if </span><span class="self">Self</span>::version_requires_coordinated_shutdown(
+            <span class="kw-2">&amp;</span>current_fedimintd_version,
+            <span class="kw-2">&amp;</span>new_fedimintd_version,
+        ) {
             <span class="self">self</span>.restart_all_with_bin_after_session(process_mgr, bin_path)
                 .<span class="kw">await
         </span>} <span class="kw">else </span>{
@@ -2117,8 +2140,21 @@
         </span>}
     }
 
-    <span class="kw">fn </span>version_requires_coordinated_shutdown(version: <span class="kw-2">&amp;</span>semver::Version) -&gt; bool {
-        <span class="macro">matches!</span>((version.major, version.minor), (<span class="number">0</span>, <span class="number">4 </span>| <span class="number">5</span>))
+    <span class="doccomment">/// Determines if the upgrade path requires a coordinated shutdown
+    ///
+    /// The only versions that require a coordinated shutdown for fedimintd are
+    /// v0.3.3 and v0.3.4-rc.1 to greater minor version (e.g. v0.4.0)
+    </span><span class="kw">fn </span>version_requires_coordinated_shutdown(
+        from_version: <span class="kw-2">&amp;</span>semver::Version,
+        to_version: <span class="kw-2">&amp;</span>semver::Version,
+    ) -&gt; bool {
+        <span class="kw">let </span>from_version_requires_coordinated_shutdown =
+            from_version.major == <span class="number">0 </span>&amp;&amp; from_version.minor == <span class="number">3 </span>&amp;&amp; from_version.patch &gt;= <span class="number">3</span>;
+
+        <span class="kw">let </span>to_version_requires_coordinated_shutdown =
+            to_version.major == <span class="number">0 </span>&amp;&amp; to_version.minor &gt;= <span class="number">4</span>;
+
+        from_version_requires_coordinated_shutdown &amp;&amp; to_version_requires_coordinated_shutdown
     }
 
     <span class="kw">pub async fn </span>degrade_federation(<span class="kw-2">&amp;mut </span><span class="self">self</span>, process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
