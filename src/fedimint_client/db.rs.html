@@ -898,7 +898,7 @@
 );
 
 <span class="doccomment">/// Key used to lookup operation log entries in chronological order
-</span><span class="attr">#[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
+</span><span class="attr">#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>ChronologicalOperationLogKey {
     <span class="kw">pub </span>creation_time: std::time::SystemTime,
     <span class="kw">pub </span>operation_id: OperationId,

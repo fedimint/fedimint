@@ -5249,7 +5249,7 @@
                 }
                 <span class="string">"list_operations" </span>=&gt; {
                     <span class="comment">// TODO: support pagination
-                    </span><span class="kw">let </span>operations = <span class="self">self</span>.operation_log().list_operations(usize::MAX, <span class="prelude-val">None</span>).<span class="kw">await</span>;
+                    </span><span class="kw">let </span>operations = <span class="self">self</span>.operation_log().paginate_operations_rev(usize::MAX, <span class="prelude-val">None</span>).<span class="kw">await</span>;
                     <span class="kw">yield </span>serde_json::to_value(operations)<span class="question-mark">?</span>;
                 }
                 <span class="string">"has_pending_recoveries" </span>=&gt; {

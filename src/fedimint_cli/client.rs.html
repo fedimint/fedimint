@@ -1243,7 +1243,7 @@
 
             <span class="kw">let </span>operations = client
                 .operation_log()
-                .list_operations(limit, <span class="prelude-val">None</span>)
+                .paginate_operations_rev(limit, <span class="prelude-val">None</span>)
                 .<span class="kw">await
                 </span>.into_iter()
                 .map(|(k, v)| {
