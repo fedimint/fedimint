@@ -21,7 +21,6 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Layer};
 
-pub const LOG_BLOCKCHAIN: &str = "fm::net::blockchain";
 pub const LOG_CONSENSUS: &str = "fm::consensus";
 pub const LOG_CORE: &str = "fm::core";
 pub const LOG_DB: &str = "fm::db";
@@ -45,7 +44,6 @@ pub const LOG_CLIENT_NET_API: &str = "fm::client::net::api";
 pub const LOG_CLIENT_BACKUP: &str = "fm::client::backup";
 pub const LOG_CLIENT_RECOVERY: &str = "fm::client::recovery";
 pub const LOG_CLIENT_RECOVERY_MINT: &str = "fm::client::recovery::mint";
-pub const LOG_CLIENT_MODULE_META: &str = "fm::client::module::meta";
 pub const LOG_CLIENT_MODULE_MINT: &str = "fm::client::module::mint";
 pub const LOG_CLIENT_MODULE_LN: &str = "fm::client::module::ln";
 pub const LOG_CLIENT_MODULE_WALLET: &str = "fm::client::module::wallet";
@@ -59,8 +57,6 @@ pub struct TracingSetup {
     tokio_console_bind: Option<std::net::SocketAddr>,
     #[cfg(feature = "telemetry")]
     with_jaeger: bool,
-    #[cfg(feature = "telemetry")]
-    with_chrome: bool,
     with_file: Option<File>,
 }
 
@@ -76,13 +72,6 @@ impl TracingSetup {
     #[cfg(feature = "telemetry")]
     pub fn with_jaeger(&mut self, enabled: bool) -> &mut Self {
         self.with_jaeger = enabled;
-        self
-    }
-
-    /// Setup telemetry through Chrome <https://docs.rs/tracing-chrome>
-    #[cfg(feature = "telemetry")]
-    pub fn with_chrome(&mut self, enabled: bool) -> &mut Self {
-        self.with_chrome = enabled;
         self
     }
 
