@@ -29,8 +29,7 @@ use fedimint_core::NumPeers;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
 use jsonrpsee::server::ServerHandle;
 use tokio::sync::{watch, RwLock};
-use tracing::info;
-use tracing::log::warn;
+use tracing::{info, warn};
 
 use crate::config::{ServerConfig, ServerConfigLocal};
 use crate::consensus::api::ConsensusApi;
@@ -233,7 +232,7 @@ fn submit_module_ci_proposals(
     });
 
     task_group.spawn(
-        "submit_module_ci_proposals_{module_id}",
+        format!("citem_proposals_{module_id}"),
         move |task_handle| async move {
             while !task_handle.is_shutting_down() {
                 let module_consensus_items = tokio::time::timeout(
@@ -242,7 +241,8 @@ fn submit_module_ci_proposals(
                         &mut db
                             .begin_transaction_nc()
                             .await
-                            .to_ref_with_prefix_module_id(module_id).0
+                            .to_ref_with_prefix_module_id(module_id)
+                            .0
                             .into_nc(),
                         module_id,
                     ),
@@ -252,16 +252,25 @@ fn submit_module_ci_proposals(
                 match module_consensus_items {
                     Ok(items) => {
                         for item in items {
-                            submission_sender
+                            if submission_sender
                                 .send(ConsensusItem::Module(item))
                                 .await
-                                .ok();
+                                .is_err()
+                            {
+                                warn!(
+                                    target: LOG_CONSENSUS,
+                                    module_id,
+                                    "Unable to submit module consensus item proposal via channel"
+                                );
+                            }
                         }
                     }
                     Err(..) => {
                         warn!(
                             target: LOG_CONSENSUS,
-                            "Module {module_id} of kind {kind} failed to propose consensus items on time"
+                            module_id,
+                            %kind,
+                            "Module failed to propose consensus items on time"
                         );
                     }
                 }
