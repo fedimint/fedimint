@@ -89,6 +89,11 @@ jobs:
     timeout-minutes: ${{ matrix.timeout }}
 
     steps:
+      - name: Record hostname
+        if: github.event_name != 'pull_request' || matrix.build-in-pr
+        # the name of the runner is in the CWD
+        run: pwd
+
       - uses: actions/checkout@v4
         if: github.event_name != 'pull_request' || matrix.build-in-pr
 
@@ -135,6 +140,11 @@ jobs:
     timeout-minutes: ${{ matrix.timeout }}
 
     steps:
+      - name: Record hostname
+        if: github.event_name != 'pull_request' || matrix.build-in-pr
+        # the name of the runner is in the CWD
+        run: pwd
+
       - uses: actions/checkout@v4
         if: github.event_name != 'pull_request' || matrix.build-in-pr
 
@@ -256,6 +266,10 @@ jobs:
     runs-on: [self-hosted, linux]
     timeout-minutes: 45
     steps:
+      - name: Record hostname
+        # the name of the runner is in the CWD
+        run: pwd
+
       - uses: actions/checkout@v4
       - name: Prepare
         uses: ./.github/actions/prepare
@@ -337,6 +351,11 @@ jobs:
     timeout-minutes: ${{ matrix.timeout }}
 
     steps:
+      - name: Record hostname
+        if: github.event_name != 'pull_request' || matrix.build-in-pr
+        # the name of the runner is in the CWD
+        run: pwd
+
       - uses: actions/checkout@v4
         if: github.event_name != 'pull_request' || matrix.build-in-pr
 
