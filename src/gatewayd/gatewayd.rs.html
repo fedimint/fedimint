@@ -51,9 +51,9 @@
 <span class="kw">use </span>fedimint_core::fedimint_build_code_version_env;
 <span class="kw">use </span>fedimint_core::util::handle_version_hash_command;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
-<span class="attr">#[cfg(not(target_env = <span class="string">"msvc"</span>))]
-</span><span class="kw">use </span>jemallocator::Jemalloc;
 <span class="kw">use </span>ln_gateway::Gateway;
+<span class="attr">#[cfg(not(target_env = <span class="string">"msvc"</span>))]
+</span><span class="kw">use </span>tikv_jemallocator::Jemalloc;
 <span class="kw">use </span>tracing::info;
 
 <span class="attr">#[cfg(not(target_env = <span class="string">"msvc"</span>))]
