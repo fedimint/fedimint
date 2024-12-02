@@ -1,7 +1,7 @@
 use fedimint_cli::FedimintCli;
 use fedimint_core::fedimint_build_code_version_env;
 #[cfg(not(target_env = "msvc"))]
-use jemallocator::Jemalloc;
+use tikv_jemallocator::Jemalloc;
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
