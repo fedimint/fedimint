@@ -28,6 +28,7 @@ use crate::client_db::{
     ClaimedPegInData, ClaimedPegInKey, PegInTweakIndexData, PegInTweakIndexKey,
     PegInTweakIndexPrefix, TweakIdx,
 };
+use crate::events::DepositConfirmed;
 use crate::{WalletClientModule, WalletClientModuleData};
 
 /// A helper struct meant to combined data from all addresses/records
@@ -439,6 +440,17 @@ async fn claim_peg_in(
             keys: vec![tweak_key],
             amount,
         };
+
+        client_ctx
+            .log_event(
+                dbtx,
+                DepositConfirmed {
+                    txid: btc_transaction.compute_txid(),
+                    out_idx,
+                    amount,
+                },
+            )
+            .await;
 
         client_ctx
             .claim_inputs(
