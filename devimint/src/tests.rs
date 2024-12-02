@@ -1070,7 +1070,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // # peer-version command
 
     // TODO(support:v0.4): peer-version command was introduced in 0.5
-    if fedimintd_version >= *VERSION_0_5_0_ALPHA {
+    if fedimintd_version >= *VERSION_0_5_0_ALPHA && fedimint_cli_version >= *VERSION_0_5_0_ALPHA {
         let peer_0_fedimintd_version = cmd!(client, "dev", "peer-version", "--peer-id", "0")
             .out_json()
             .await?
