@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["NoteCreated","NoteSpent"]};
+window.SIDEBAR_ITEMS = {"struct":["NoteCreated","NoteSpent","OOBNotesReissued","OOBNotesSpent"]};

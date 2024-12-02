@@ -1373,7 +1373,10 @@
 <a href="#1372" id="1372">1372</a>
 <a href="#1373" id="1373">1373</a>
 <a href="#1374" id="1374">1374</a>
-<a href="#1375" id="1375">1375</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1375" id="1375">1375</a>
+<a href="#1376" id="1376">1376</a>
+<a href="#1377" id="1377">1377</a>
+<a href="#1378" id="1378">1378</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1390,6 +1393,7 @@
 <span class="doccomment">/// Legacy, state-machine based peg-ins, replaced by `pegin_monitor`
 /// but retained for time being to ensure existing peg-ins complete.
 </span><span class="kw">mod </span>deposit;
+<span class="kw">pub mod </span>events;
 <span class="doccomment">/// Peg-in monitor: a task monitoring deposit addresses for peg-ins.
 </span><span class="kw">mod </span>pegin_monitor;
 <span class="kw">mod </span>withdraw;
@@ -1766,6 +1770,7 @@
             wallet_descriptor: <span class="self">self</span>.cfg().peg_in_descriptor.clone(),
             wallet_decoder: <span class="self">self</span>.decoder(),
             secp: Secp256k1::default(),
+            client_ctx: <span class="self">self</span>.client_ctx.clone(),
         }
     }
 
@@ -1853,6 +1858,7 @@
     wallet_descriptor: PegInDescriptor,
     wallet_decoder: Decoder,
     secp: Secp256k1&lt;All&gt;,
+    <span class="kw">pub </span>client_ctx: ClientContext&lt;WalletClientModule&gt;,
 }
 
 <span class="kw">impl </span>Context <span class="kw">for </span>WalletClientContext {

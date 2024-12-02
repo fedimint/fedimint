@@ -145,10 +145,25 @@
 <a href="#144" id="144">144</a>
 <a href="#145" id="145">145</a>
 <a href="#146" id="146">146</a>
-<a href="#147" id="147">147</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::Txid;
-<span class="kw">use </span>fedimint_client::sm::{State, StateTransition};
+<span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -157,6 +172,7 @@
 <span class="kw">use </span>fedimint_wallet_common::WalletOutputOutcome;
 <span class="kw">use </span>tracing::debug;
 
+<span class="kw">use </span><span class="kw">crate</span>::events::WithdrawRequest;
 <span class="kw">use </span><span class="kw">crate</span>::WalletClientContext;
 
 <span class="kw">const </span>RETRY_DELAY: Duration = Duration::from_secs(<span class="number">1</span>);
@@ -180,6 +196,7 @@
         context: <span class="kw-2">&amp;</span><span class="self">Self</span>::ModuleContext,
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
+        <span class="kw">let </span>wallet_context = context.clone();
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.state {
             WithdrawStates::Created(created) =&gt; {
                 <span class="macro">vec!</span>[StateTransition::new(
@@ -189,8 +206,13 @@
                         <span class="self">self</span>.operation_id,
                         created.clone(),
                     ),
-                    |_dbtx, res, old_state| {
-                        Box::pin(<span class="kw">async move </span>{ transition_withdraw_processed(res, <span class="kw-2">&amp;</span>old_state) })
+                    <span class="kw">move </span>|dbtx, res, old_state| {
+                        Box::pin(transition_withdraw_processed(
+                            res,
+                            old_state,
+                            wallet_context.clone(),
+                            dbtx,
+                        ))
                     },
                 )]
             }
@@ -250,9 +272,11 @@
     }
 }
 
-<span class="kw">fn </span>transition_withdraw_processed(
+<span class="kw">async fn </span>transition_withdraw_processed(
     res: <span class="prelude-ty">Result</span>&lt;Txid, String&gt;,
-    old_state: <span class="kw-2">&amp;</span>WithdrawStateMachine,
+    old_state: WithdrawStateMachine,
+    client_ctx: WalletClientContext,
+    dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
 ) -&gt; WithdrawStateMachine {
     <span class="macro">assert!</span>(
         <span class="macro">matches!</span>(old_state.state, WithdrawStates::Created(<span class="kw">_</span>)),
@@ -261,7 +285,13 @@
     );
 
     <span class="kw">let </span>new_state = <span class="kw">match </span>res {
-        <span class="prelude-val">Ok</span>(txid) =&gt; WithdrawStates::Success(SuccessWithdrawState { txid }),
+        <span class="prelude-val">Ok</span>(txid) =&gt; {
+            client_ctx
+                .client_ctx
+                .log_event(<span class="kw-2">&amp;mut </span>dbtx.module_tx(), WithdrawRequest { txid })
+                .<span class="kw">await</span>;
+            WithdrawStates::Success(SuccessWithdrawState { txid })
+        }
         <span class="prelude-val">Err</span>(error) =&gt; WithdrawStates::Aborted(AbortedWithdrawState { error }),
     };
 

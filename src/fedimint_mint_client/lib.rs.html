@@ -2776,7 +2776,23 @@
 <a href="#2775" id="2775">2775</a>
 <a href="#2776" id="2776">2776</a>
 <a href="#2777" id="2777">2777</a>
-<a href="#2778" id="2778">2778</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2778" id="2778">2778</a>
+<a href="#2779" id="2779">2779</a>
+<a href="#2780" id="2780">2780</a>
+<a href="#2781" id="2781">2781</a>
+<a href="#2782" id="2782">2782</a>
+<a href="#2783" id="2783">2783</a>
+<a href="#2784" id="2784">2784</a>
+<a href="#2785" id="2785">2785</a>
+<a href="#2786" id="2786">2786</a>
+<a href="#2787" id="2787">2787</a>
+<a href="#2788" id="2788">2788</a>
+<a href="#2789" id="2789">2789</a>
+<a href="#2790" id="2790">2790</a>
+<a href="#2791" id="2791">2791</a>
+<a href="#2792" id="2792">2792</a>
+<a href="#2793" id="2793">2793</a>
+<a href="#2794" id="2794">2794</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2820,7 +2836,7 @@
     migrate_state_to_v2, migrate_to_v1, DbKeyPrefix, NoteKeyPrefix, RecoveryFinalizedKey,
     ReusedNoteIndices,
 };
-<span class="kw">use </span>event::NoteSpent;
+<span class="kw">use </span>event::{NoteSpent, OOBNotesReissued, OOBNotesSpent};
 <span class="kw">use </span>fedimint_client::db::{migrate_state, ClientMigrationFn};
 <span class="kw">use </span>fedimint_client::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
@@ -4295,6 +4311,11 @@
             )
             .<span class="kw">await
             </span>.context(ReissueExternalNotesError::AlreadyReissued)<span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.client_ctx.module_db().begin_transaction().<span class="kw">await</span>;
+        <span class="self">self</span>.client_ctx
+            .log_event(<span class="kw-2">&amp;mut </span>dbtx, OOBNotesReissued { amount })
+            .<span class="kw">await</span>;
+        dbtx.commit_tx().<span class="kw">await</span>;
 
         <span class="prelude-val">Ok</span>(operation_id)
     }
@@ -4462,6 +4483,17 @@
                                     },
                                     amount: oob_notes.total_amount(),
                                     extra_meta,
+                                },
+                            )
+                            .<span class="kw">await</span>;
+                        <span class="self">self</span>.client_ctx
+                            .log_event(
+                                dbtx,
+                                OOBNotesSpent {
+                                    requested_amount,
+                                    spent_amount: oob_notes.total_amount(),
+                                    timeout: try_cancel_after,
+                                    include_invite,
                                 },
                             )
                             .<span class="kw">await</span>;

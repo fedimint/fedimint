@@ -17,7 +17,15 @@
 <a href="#16" id="16">16</a>
 <a href="#17" id="17">17</a>
 <a href="#18" id="18">18</a>
-<a href="#19" id="19">19</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_eventlog::{Event, EventKind};
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_eventlog::{Event, EventKind};
+<span class="kw">use </span>fedimint_mint_client::event::{OOBNotesReissued, OOBNotesSpent};
+<span class="kw">use </span>fedimint_wallet_client::events::{DepositConfirmed, WithdrawRequest};
 
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::events::{
     CompleteLightningPaymentSucceeded, IncomingPaymentFailed, IncomingPaymentStarted,
@@ -25,7 +33,7 @@
     OutgoingPaymentSucceeded,
 };
 
-<span class="kw">pub const </span>ALL_GATEWAY_EVENTS: [EventKind; <span class="number">7</span>] = [
+<span class="kw">pub const </span>ALL_GATEWAY_EVENTS: [EventKind; <span class="number">11</span>] = [
     OutgoingPaymentStarted::KIND,
     OutgoingPaymentSucceeded::KIND,
     OutgoingPaymentFailed::KIND,
@@ -33,6 +41,10 @@
     IncomingPaymentSucceeded::KIND,
     IncomingPaymentFailed::KIND,
     CompleteLightningPaymentSucceeded::KIND,
+    OOBNotesSpent::KIND,
+    OOBNotesReissued::KIND,
+    WithdrawRequest::KIND,
+    DepositConfirmed::KIND,
 ];
 
 <span class="comment">// TODO: Add Gateway specific events
