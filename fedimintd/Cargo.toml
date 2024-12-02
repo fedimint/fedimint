@@ -36,7 +36,7 @@ bytes = "1.6.0"
 clap = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
-jemallocator = { workspace = true }
+tikv-jemallocator = { workspace = true }
 jsonrpsee = { version = "0.24.0", features = ["server"] }
 fedimint-bitcoind = { version = "=0.4.4-rc.0", path = "../fedimint-bitcoind" }
 fedimint-core = { workspace = true }
@@ -78,3 +78,6 @@ console-subscriber = "0.3.0"
 
 [build-dependencies]
 fedimint-build = { version = "=0.4.4-rc.0", path = "../fedimint-build" }
+
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+tikv-jemallocator = { workspace = true }
