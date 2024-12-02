@@ -314,7 +314,7 @@ tests_to_run_in_parallel+=(
   # "gateway_restore_test"
   # "gateway_liquidity_test"
   # "lnv2_module"
-  "devimint_cli_test"
+  # "devimint_cli_test"
   # "devimint_cli_test_single"
   # "load_test_tool_test"
   # "recoverytool_tests"
@@ -324,7 +324,7 @@ tests_to_run_in_parallel+=(
   # "mint_client_restore"
   # "cannot_replay_tx"
   # "circular_deposit"
-  # "wallet_recovery"
+  "wallet_recovery"
 )
 done
 
