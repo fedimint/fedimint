@@ -752,8 +752,19 @@ impl Federation {
         }
 
         self.bitcoind.mine_blocks(21).await?;
+        let bitcoind_block_height: u64 = self.bitcoind.get_block_count().await? - 1;
         try_join_all(gateways.into_iter().map(|gw| {
             poll("gateway pegin", || async {
+                let gw_info = gw.get_info().await.map_err(ControlFlow::Continue)?;
+                let block_height: u64 = gw_info["block_height"]
+                    .as_u64()
+                    .expect("Could not parse block height");
+                if bitcoind_block_height != block_height {
+                    return Err(std::ops::ControlFlow::Continue(anyhow::anyhow!(
+                        "gateway block height is not synced"
+                    )));
+                }
+
                 let gateway_balance = gw
                     .ecash_balance(fed_id.clone())
                     .await
