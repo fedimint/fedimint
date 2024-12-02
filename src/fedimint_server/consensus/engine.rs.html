@@ -848,7 +848,9 @@
 <a href="#847" id="847">847</a>
 <a href="#848" id="848">848</a>
 <a href="#849" id="849">849</a>
-<a href="#850" id="850">850</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#850" id="850">850</a>
+<a href="#851" id="851">851</a>
+<a href="#852" id="852">852</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -1035,9 +1037,11 @@
 
             CONSENSUS_SESSION_COUNT.set(session_index <span class="kw">as </span>i64);
 
+            <span class="macro">info!</span>(target: LOG_CONSENSUS, session_index, <span class="string">"Starting consensus session"</span>);
+
             <span class="self">self</span>.run_session(connections.clone(), session_index).<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Session {session_index} completed"</span>);
+            <span class="macro">info!</span>(target: LOG_CONSENSUS, session_index, <span class="string">"Completed consensus session"</span>);
 
             <span class="kw">if </span><span class="prelude-val">Some</span>(session_index) == <span class="self">self</span>.shutdown_receiver.borrow().to_owned() {
                 <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Initiating shutdown, waiting for peers to complete the session..."</span>);
