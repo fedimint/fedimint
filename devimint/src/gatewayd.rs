@@ -537,10 +537,10 @@ impl Gatewayd {
             info!("inside wait_for_block_height");
             info!("calling self.get_info()");
             let info = self.get_info().await.map_err(ControlFlow::Continue)?;
-            info!("past calling self.get_info()");
-            info!("info: {:?}", info);
+            // info!("past calling self.get_info()");
+            // info!("info: {:?}", info);
             let value = info.get("block_height");
-            info!("past calling info.get(block_height)");
+            // info!("past calling info.get(block_height)");
             info!("value: {:?}", value);
             if let Some(height) = value {
                 let block_height: u32 =

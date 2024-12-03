@@ -31,7 +31,7 @@ use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASS
 use crate::federation::{Client, Federation};
 use crate::util::{poll, LoadTestTool, ProcessManager};
 use crate::version_constants::{
-    VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA,
+    VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA,
 };
 use crate::{cmd, dev_fed, poll_eq, DevFed, Gatewayd, LightningNode, Lightningd, Lnd};
 
@@ -1647,19 +1647,23 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     client.use_gateway(&gw_cln).await?;
     fed.pegin_client(10_000, &client).await?;
 
-    // Wait for gateways to sync to chain
-    let block_height = bitcoind.get_block_count().await? - 1;
-    if let Some(gw_ldk) = &gw_ldk {
-        try_join!(
-            gw_cln.wait_for_block_height(block_height),
-            gw_lnd.wait_for_block_height(block_height),
-            gw_ldk.wait_for_block_height(block_height),
-        )?;
-    } else {
-        try_join!(
-            gw_cln.wait_for_block_height(block_height),
-            gw_lnd.wait_for_block_height(block_height),
-        )?;
+    // TODO(support:v0.3): liquidity api was introduced v0.4.0
+    // see: https://github.com/fedimint/fedimint/pull/4514
+    if gatewayd_version >= *VERSION_0_4_0 {
+        // Wait for gateways to sync to chain
+        let block_height = bitcoind.get_block_count().await? - 1;
+        if let Some(gw_ldk) = &gw_ldk {
+            try_join!(
+                gw_cln.wait_for_block_height(block_height),
+                gw_lnd.wait_for_block_height(block_height),
+                gw_ldk.wait_for_block_height(block_height),
+            )?;
+        } else {
+            try_join!(
+                gw_cln.wait_for_block_height(block_height),
+                gw_lnd.wait_for_block_height(block_height),
+            )?;
+        }
     }
 
     // Query current gateway infos
