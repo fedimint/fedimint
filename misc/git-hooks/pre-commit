@@ -39,7 +39,6 @@ function check_cargo_sort() {
     set -eo pipefail
 
     cargo sort -w -g --order package,features,bin,lib,test,bench,dependencies,dev-dependencies,build-dependencies --check >/dev/null
-
 }
 export -f check_cargo_sort
 
@@ -47,7 +46,6 @@ function check_cargo_fmt() {
     set -euo pipefail
 
     flakebox-in-each-cargo-workspace cargo fmt --all --check
-
 }
 export -f check_cargo_fmt
 
@@ -56,7 +54,6 @@ function check_cargo_lock() {
 
     # https://users.rust-lang.org/t/check-if-the-cargo-lock-is-up-to-date-without-building-anything/91048/5
     flakebox-in-each-cargo-workspace cargo update --workspace --locked |& while read -r note ; do echo "$note    (cargo)"; done
-
 }
 export -f check_cargo_lock
 
@@ -93,7 +90,6 @@ function check_check_forbidden_dependencies() {
         return 1
       fi
     done
-
 }
 export -f check_check_forbidden_dependencies
 
@@ -112,9 +108,17 @@ function check_leftover_dbg() {
       >&2 echo "Fix the problems above or use --no-verify" 1>&2
       return 1
     fi
-
 }
 export -f check_leftover_dbg
+
+function check_nixfmt() {
+    set -euo pipefail
+
+    # we actually rely on word splitting here
+    # shellcheck disable=SC2046
+    nixfmt -c $(echo "$FLAKEBOX_GIT_LS_TEXT" | grep "\.nix$")
+}
+export -f check_nixfmt
 
 function check_semgrep() {
     set -euo pipefail
@@ -137,7 +141,6 @@ function check_semgrep() {
 
     env SEMGREP_ENABLE_VERSION_CHECK=0 \
       semgrep -q --error --no-rewrite-rule-ids --config .config/semgrep.yaml
-
 }
 export -f check_semgrep
 
@@ -147,7 +150,6 @@ function check_shellcheck() {
     for path in $(echo "$FLAKEBOX_GIT_LS_TEXT" | grep -E '.*\.sh$'); do
       shellcheck --severity=warning "$path"
     done
-
 }
 export -f check_shellcheck
 
@@ -163,7 +165,6 @@ function check_trailing_whitespace() {
       >&2 echo "Trailing whitespace detected. Please remove them before committing."
       return 1
     fi
-
 }
 export -f check_trailing_whitespace
 
@@ -174,7 +175,6 @@ function check_typos() {
       >&2 echo "Typos found: Valid new words can be added to '.typos.toml'"
       return 1
     fi
-
 }
 export -f check_typos
 
@@ -186,6 +186,7 @@ parallel \
     check_cargo_lock \
     check_check_forbidden_dependencies \
     check_leftover_dbg \
+    check_nixfmt \
     check_semgrep \
     check_shellcheck \
     check_trailing_whitespace \

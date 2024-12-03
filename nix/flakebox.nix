@@ -125,7 +125,9 @@ let
     }
     // pkgs.lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
       "ROCKSDB_${build_arch_underscores}_STATIC" = "true";
-      "ROCKSDB_${build_arch_underscores}_LIB_DIR" = "${pkgs.rocksdb}/lib/";
+      "ROCKSDB_${build_arch_underscores}_LIB_DIR" = "${
+        pkgs.rocksdb_8_11.override { enableLiburing = false; }
+      }/lib/";
 
       # does not produce static lib in most versions
       "SNAPPY_${build_arch_underscores}_STATIC" = "true";
@@ -489,7 +491,10 @@ in
       src = filterWorkspaceAuditFiles commonSrc;
     };
 
-    cargoDeny = craneLib.cargoDeny { src = filterWorkspaceAuditFiles commonSrc; };
+    cargoDeny = craneLib.cargoDeny {
+      src = filterWorkspaceAuditFiles commonSrc;
+      cargoDenyChecks = "--hide-inclusion-graph bans licenses sources";
+    };
 
     # Build only deps, but with llvm-cov so `workspaceCov` can reuse them cached
     workspaceDepsCov = craneLib.buildDepsOnly {

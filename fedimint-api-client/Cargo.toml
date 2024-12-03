@@ -18,7 +18,7 @@ tor = [
     "dep:curve25519-dalek",
     "arti-client/tokio",
     "arti-client/rustls",
-    "arti-client/onion-service-client",
+    "arti-client/onion-service-client"
 ]
 
 [lib]

@@ -21,6 +21,7 @@ path = "src/lib.rs"
 
 [[bench]]
 name = "notes"
+path = "benches/notes.rs"
 harness = false
 
 [dependencies]

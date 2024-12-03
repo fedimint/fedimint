@@ -1,7 +1,10 @@
 {
   inputs = {
     nixpkgs = {
-      url = "github:nixos/nixpkgs/nixos-24.05";
+      url = "github:nixos/nixpkgs/nixos-24.11";
+    };
+    nixpkgs-old = {
+      url = "github:nixos/nixpkgs/nixos-23.05";
     };
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
@@ -9,7 +12,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     flakebox = {
-      url = "github:dpc/flakebox?rev=171f3a1d83652d9db33992322f8793326a3b4df3";
+      url = "github:dpc/flakebox?rev=8e152e27b55df489192b86a14e946e1c983daabe";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.fenix.follows = "fenix";
     };
@@ -31,6 +34,7 @@
     {
       self,
       nixpkgs,
+      nixpkgs-old,
       flake-utils,
       flakebox,
       cargo-deluxe,
@@ -41,7 +45,6 @@
     let
       # overlay combining all overlays we use
       overlayAll = nixpkgs.lib.composeManyExtensions [
-        (import ./nix/overlays/rocksdb.nix)
         (import ./nix/overlays/wasm-bindgen.nix)
         (import ./nix/overlays/cargo-nextest.nix)
         (import ./nix/overlays/esplora-electrs.nix)
@@ -68,12 +71,24 @@
     // flake-utils.lib.eachDefaultSystem (
       system:
       let
+        pkgs-old = import nixpkgs-old {
+          inherit system;
+          overlays = [
+            overlayAll
+          ];
+        };
         pkgs = import nixpkgs {
           inherit system;
           overlays = [
             overlayAll
 
-            (final: prev: { cargo-deluxe = cargo-deluxe.packages.${system}.default; })
+            (final: prev: {
+              cargo-deluxe = cargo-deluxe.packages.${system}.default;
+              # use old CLN, until https://github.com/NixOS/nixpkgs/pull/358063 possibly
+              # resolves some python on darwin breakage
+              # https://github.com/NixOS/nixpkgs/blob/470e6e641f412894086b6df2f204847bd3905f17/pkgs/development/python-modules/jaraco-path/default.nix#L34
+              clightning = pkgs-old.clightning;
+            })
           ];
         };
 
@@ -130,7 +145,16 @@
           };
         };
 
-        toolchainArgs = { };
+        toolchainArgs = lib.optionalAttrs stdenv.isLinux {
+          # TODO: we seem to be hitting some miscompilation(?) with
+          # the new (as of nixos-24.11 default: clang 18), which causes
+          # fedimint-cli segfault randomly, but only in Nix sandbox.
+          # Supper weird.
+          stdenv = pkgs.clang14Stdenv;
+          clang = pkgs.llvmPackages_14.clang;
+          libclang = pkgs.llvmPackages_14.libclang.lib;
+          clang-unwrapped = pkgs.llvmPackages_14.clang-unwrapped;
+        };
 
         stdTargets = flakeboxLib.mkStdTargets { };
         stdToolchains = flakeboxLib.mkStdToolchains toolchainArgs;
@@ -277,6 +301,7 @@
                     pkgs.cargo-deny
                     pkgs.cargo-sort
                     pkgs.parallel
+                    pkgs.nixfmt-rfc-style
                     pkgs.just
                     pkgs.time
                     pkgs.gawk
@@ -288,17 +313,6 @@
                     (pkgs.hiPrio pkgs.bashInteractive)
                     pkgs.tmux
                     pkgs.tmuxinator
-                    (pkgs.mprocs.overrideAttrs (
-                      final: prev: {
-                        patches = prev.patches ++ [
-                          (pkgs.fetchurl {
-                            url = "https://github.com/pvolok/mprocs/pull/88.patch";
-                            name = "clipboard-fix.patch";
-                            sha256 = "sha256-9dx1vaEQ6kD66M+vsJLIq1FK+nEObuXSi3cmpSZuQWk=";
-                          })
-                        ];
-                      }
-                    ))
                     pkgs.docker-compose
                     pkgs.tokio-console
                     pkgs.git
@@ -379,10 +393,11 @@
                     libbfd_2_38
                     libunwind.dev
                     libopcodes_2_38
-                    libblocksruntime
+                    pkgsStatic.libblocksruntime
                     lldb
                     clang
                   ];
+
               }
             );
 
