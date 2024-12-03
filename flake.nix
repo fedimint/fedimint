@@ -130,7 +130,16 @@
           };
         };
 
-        toolchainArgs = { };
+        toolchainArgs = lib.optionals stdenv.isLinux {
+          # TODO: we seem to be hitting some miscompilation(?) with
+          # the new (as of nixos-24.11 default: clang 18), which causes
+          # fedimint-cli segfault randomly, but only in Nix sandbox.
+          # Supper weird.
+          stdenv = pkgs.clang14Stdenv;
+          clang = pkgs.llvmPackages_14.clang;
+          libclang = pkgs.llvmPackages_14.libclang.lib;
+          clang-unwrapped = pkgs.llvmPackages_14.clang-unwrapped;
+        };
 
         stdTargets = flakeboxLib.mkStdTargets { };
         stdToolchains = flakeboxLib.mkStdToolchains toolchainArgs;
