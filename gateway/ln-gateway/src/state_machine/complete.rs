@@ -1,7 +1,7 @@
 use std::fmt;
 use std::time::Duration;
 
-use fedimint_client::sm::{State, StateTransition};
+use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -13,6 +13,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, info, warn};
 
+use super::events::{
+    CompleteLightningPaymentSucceeded, IncomingPaymentFailed, IncomingPaymentSucceeded,
+};
 use super::{GatewayClientContext, GatewayClientStateMachines};
 use crate::lightning::{InterceptPaymentResponse, PaymentAction};
 
@@ -113,11 +116,17 @@ impl WaitForPreimageState {
         context: GatewayClientContext,
         common: GatewayCompleteCommon,
     ) -> Vec<StateTransition<GatewayCompleteStateMachine>> {
+        let gw_context = context.clone();
         vec![StateTransition::new(
             Self::await_preimage(context, common.clone()),
-            move |_dbtx, result, _old_state| {
+            move |dbtx, result, _old_state| {
                 let common = common.clone();
-                Box::pin(async { Self::transition_complete_htlc(result, common) })
+                Box::pin(Self::transition_complete_htlc(
+                    result,
+                    common,
+                    gw_context.clone(),
+                    dbtx,
+                ))
             },
         )]
     }
@@ -151,23 +160,51 @@ impl WaitForPreimageState {
         }
     }
 
-    fn transition_complete_htlc(
+    async fn transition_complete_htlc(
         result: Result<Preimage, CompleteHtlcError>,
         common: GatewayCompleteCommon,
+        context: GatewayClientContext,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
     ) -> GatewayCompleteStateMachine {
         match result {
-            Ok(preimage) => GatewayCompleteStateMachine {
-                common,
-                state: GatewayCompleteStates::CompleteHtlc(CompleteHtlcState {
-                    outcome: HtlcOutcome::Success(preimage),
-                }),
-            },
-            Err(e) => GatewayCompleteStateMachine {
-                common,
-                state: GatewayCompleteStates::CompleteHtlc(CompleteHtlcState {
-                    outcome: HtlcOutcome::Failure(e.to_string()),
-                }),
-            },
+            Ok(preimage) => {
+                context
+                    .client_ctx
+                    .log_event(
+                        &mut dbtx.module_tx(),
+                        IncomingPaymentSucceeded {
+                            payment_hash: common.payment_hash,
+                            preimage: preimage.consensus_encode_to_hex(),
+                        },
+                    )
+                    .await;
+
+                GatewayCompleteStateMachine {
+                    common,
+                    state: GatewayCompleteStates::CompleteHtlc(CompleteHtlcState {
+                        outcome: HtlcOutcome::Success(preimage),
+                    }),
+                }
+            }
+            Err(e) => {
+                context
+                    .client_ctx
+                    .log_event(
+                        &mut dbtx.module_tx(),
+                        IncomingPaymentFailed {
+                            payment_hash: common.payment_hash,
+                            error: e.to_string(),
+                        },
+                    )
+                    .await;
+
+                GatewayCompleteStateMachine {
+                    common,
+                    state: GatewayCompleteStates::CompleteHtlc(CompleteHtlcState {
+                        outcome: HtlcOutcome::Failure(e.to_string()),
+                    }),
+                }
+            }
         }
     }
 }
@@ -189,11 +226,17 @@ impl CompleteHtlcState {
         context: GatewayClientContext,
         common: GatewayCompleteCommon,
     ) -> Vec<StateTransition<GatewayCompleteStateMachine>> {
+        let gw_context = context.clone();
         vec![StateTransition::new(
             Self::await_complete_htlc(context, common.clone(), self.outcome.clone()),
-            move |_dbtx, result, _| {
+            move |dbtx, result, _| {
                 let common = common.clone();
-                Box::pin(async move { Self::transition_success(&result, common) })
+                Box::pin(Self::transition_success(
+                    result,
+                    common,
+                    dbtx,
+                    gw_context.clone(),
+                ))
             },
         )]
     }
@@ -232,14 +275,27 @@ impl CompleteHtlcState {
             .map_err(|_| CompleteHtlcError::FailedToCompleteHtlc)
     }
 
-    fn transition_success(
-        result: &Result<(), CompleteHtlcError>,
+    async fn transition_success(
+        result: Result<(), CompleteHtlcError>,
         common: GatewayCompleteCommon,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        context: GatewayClientContext,
     ) -> GatewayCompleteStateMachine {
         GatewayCompleteStateMachine {
-            common,
+            common: common.clone(),
             state: match result {
-                Ok(()) => GatewayCompleteStates::HtlcFinished,
+                Ok(()) => {
+                    context
+                        .client_ctx
+                        .log_event(
+                            &mut dbtx.module_tx(),
+                            CompleteLightningPaymentSucceeded {
+                                payment_hash: common.payment_hash,
+                            },
+                        )
+                        .await;
+                    GatewayCompleteStates::HtlcFinished
+                }
                 Err(_) => GatewayCompleteStates::Failure,
             },
         }
