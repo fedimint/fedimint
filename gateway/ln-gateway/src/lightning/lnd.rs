@@ -30,7 +30,8 @@ use tonic_lnd::lnrpc::payment::PaymentStatus;
 use tonic_lnd::lnrpc::{
     ChanInfoRequest, ChannelBalanceRequest, ChannelPoint, CloseChannelRequest, ConnectPeerRequest,
     GetInfoRequest, Invoice, InvoiceSubscription, LightningAddress, ListChannelsRequest,
-    ListInvoiceRequest, OpenChannelRequest, SendCoinsRequest, WalletBalanceRequest,
+    ListInvoiceRequest, ListPeersRequest, OpenChannelRequest, SendCoinsRequest,
+    WalletBalanceRequest,
 };
 use tonic_lnd::routerrpc::{
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, SendPaymentRequest,
@@ -1165,21 +1166,34 @@ impl ILnRpcClient for GatewayLndClient {
     ) -> Result<OpenChannelResponse, LightningRpcError> {
         let mut client = self.connect().await?;
 
-        // Connect to the peer first
-        client
+        let peers = client
             .lightning()
-            .connect_peer(ConnectPeerRequest {
-                addr: Some(LightningAddress {
-                    pubkey: pubkey.to_string(),
-                    host,
-                }),
-                perm: false,
-                timeout: 10,
-            })
+            .list_peers(ListPeersRequest { latest_error: true })
             .await
             .map_err(|e| LightningRpcError::FailedToConnectToPeer {
-                failure_reason: format!("Failed to connect to peer {e:?}"),
-            })?;
+                failure_reason: format!("Could not list peers: {e:?}"),
+            })?
+            .into_inner();
+
+        // Connect to the peer first if we are not connected already
+        if !peers.peers.into_iter().any(|peer| {
+            PublicKey::from_str(&peer.pub_key).expect("could not parse public key") == pubkey
+        }) {
+            client
+                .lightning()
+                .connect_peer(ConnectPeerRequest {
+                    addr: Some(LightningAddress {
+                        pubkey: pubkey.to_string(),
+                        host,
+                    }),
+                    perm: false,
+                    timeout: 10,
+                })
+                .await
+                .map_err(|e| LightningRpcError::FailedToConnectToPeer {
+                    failure_reason: format!("Failed to connect to peer {e:?}"),
+                })?;
+        }
 
         // Open the channel
         match client
