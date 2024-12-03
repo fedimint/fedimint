@@ -3,6 +3,7 @@ use std::future::Future;
 use anyhow::{bail, Result};
 use devimint::federation::Client;
 use devimint::util::poll_simple;
+use devimint::version_constants::{VERSION_0_4_0, VERSION_0_5_0_ALPHA};
 use devimint::{cmd, util};
 use fedimint_core::PeerId;
 use semver::Version;
@@ -145,54 +146,62 @@ async fn main() -> anyhow::Result<()> {
             serde_json::Value::Bool(true)
         );
 
-        info!(expected = %submission_value, "Checking consensus");
-        if let Err(e) = poll_value(
-            "consensus set",
-            || async { get_consensus(&client).await },
-            json! {
-                {
-                    "revision": 0,
-                    "value":submission_value
-                }
-            },
-        )
-        .await
-        {
-            let submissions = get_submissions(&client, PeerId::from(3)).await?;
-            warn!(%submissions, "Getting expected consensus value failed");
-            return Err(e);
-        }
-
-        // minority vote should be still visible
-        poll_value(
-            "minor submission visible",
-            || async { get_submissions(&client, PeerId::from(0)).await },
-            json! {
-                {  "0": minority_submission_value}
-            },
-        )
-        .await?;
-
-        // If the peer with outstanding vote votes for the consensu value,
-        // their submission will clear.
-        submit(&client, PeerId::from(0), &submission_value).await?;
-        poll_value(
-            "submission cleared",
-            || async { get_submissions(&client, PeerId::from(1)).await },
-            json! { {} },
-        )
-        .await?;
-
-        let meta_fields = get_meta_fields(&client).await?;
-        assert_eq!(
-            meta_fields,
-            json! {
-                {
-                    "revision": 0,
-                    "values": submission_value,
-                }
+        // TODO(support:v0.3): a fix for a race condition was introduced in v0.4.0
+        // see: https://github.com/fedimint/fedimint/pull/4772
+        if fedimintd_version >= *VERSION_0_4_0 {
+            info!(expected = %submission_value, "Checking consensus");
+            if let Err(e) = poll_value(
+                "consensus set",
+                || async { get_consensus(&client).await },
+                json! {
+                    {
+                        "revision": 0,
+                        "value":submission_value
+                    }
+                },
+            )
+            .await
+            {
+                let submissions = get_submissions(&client, PeerId::from(3)).await?;
+                warn!(%submissions, "Getting expected consensus value failed");
+                return Err(e);
             }
-        );
+
+            // minority vote should be still visible
+            poll_value(
+                "minor submission visible",
+                || async { get_submissions(&client, PeerId::from(0)).await },
+                json! {
+                    {  "0": minority_submission_value}
+                },
+            )
+            .await?;
+
+            // If the peer with outstanding vote votes for the consensu value,
+            // their submission will clear.
+            submit(&client, PeerId::from(0), &submission_value).await?;
+            poll_value(
+                "submission cleared",
+                || async { get_submissions(&client, PeerId::from(1)).await },
+                json! { {} },
+            )
+            .await?;
+
+            // TODO(support:v0.4): meta fields were introduced in v0.5.0
+            // see: https://github.com/fedimint/fedimint/pull/5781
+            if fedimint_cli_version >= *VERSION_0_5_0_ALPHA {
+                let meta_fields = get_meta_fields(&client).await?;
+                assert_eq!(
+                    meta_fields,
+                    json! {
+                        {
+                            "revision": 0,
+                            "values": submission_value,
+                        }
+                    }
+                );
+            }
+        }
 
         Ok(())
     })

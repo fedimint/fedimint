@@ -319,12 +319,12 @@ tests_to_run_in_parallel+=(
   # "load_test_tool_test"
   # "recoverytool_tests"
   # "guardian_backup"
-  # "meta_module"
+  "meta_module"
   # "mint_client_sanity"
   # "mint_client_restore"
   # "cannot_replay_tx"
   # "circular_deposit"
-  "wallet_recovery"
+  # "wallet_recovery"
 )
 done
 

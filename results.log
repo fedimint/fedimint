@@ -1,43 +1,43 @@
-./scripts/tests/test-ci-all-backcompat.sh v0.3.4-rc.1
+./scripts/tests/test-ci-all-backcompat.sh v0.4.4
 Pre-building workspace...
 Lowering IO priority with chrt -i 0 ionice -c 3
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.39s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.43s
 Pre-building tests...
 Lowering IO priority with chrt -i 0 ionice -c 3
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.42s
-Compiling fedimintd for version v0.3.4-rc.1 ...
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.39s
+Compiling fedimintd for version v0.4.4 ...
 Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
-Compiling fedimint-cli for version v0.3.4-rc.1 ...
+Compiling fedimint-cli for version v0.4.4 ...
 Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
-Compiling gateway-cli for version v0.3.4-rc.1 ...
+Compiling gateway-cli for version v0.4.4 ...
 Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
-Compiling gatewayd for version v0.3.4-rc.1 ...
+Compiling gatewayd for version v0.4.4 ...
 Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
-Compiling gateway-cln-extension for version v0.4.0 ...
+Compiling gateway-cln-extension for version v0.4.4 ...
 Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
 ## Starting all tests in parallel...
-parallel --jobs 1 --timeout 300 --load 5 --delay 10 --joblog /tmp/nix-shell.LbYM7O/f2v14/joblog --noswap --memfree 2G
-## RUN:  wallet_recovery (FM: current, CLI: current, GW: v0.3.4-rc.1)
-## STAT:    53.48s   316896B   545395W    15378c
-## DONE: wallet_recovery (FM: current, CLI: current, GW: v0.3.4-rc.1)
-## RUN:  always_success_test (FM: v0.3.4-rc.1, CLI: current, GW: current)
-## STAT:     0.00s     3516B        3W        0c
-## DONE: always_success_test (FM: v0.3.4-rc.1, CLI: current, GW: current)
-## RUN:  wallet_recovery (FM: v0.3.4-rc.1, CLI: current, GW: current)
-## STAT:    11.27s  1535624B    64758W    10241c
-## DONE: wallet_recovery (FM: v0.3.4-rc.1, CLI: current, GW: current)
-## RUN:  always_success_test (FM: current, CLI: current, GW: v0.3.4-rc.1)
-## STAT:     0.00s     3608B        3W        0c
-## DONE: always_success_test (FM: current, CLI: current, GW: v0.3.4-rc.1)
-## RUN:  always_success_test (FM: current, CLI: v0.3.4-rc.1, GW: current)
-## STAT:     0.00s     3504B        3W        0c
-## DONE: always_success_test (FM: current, CLI: v0.3.4-rc.1, GW: current)
-## RUN:  wallet_recovery (FM: current, CLI: v0.3.4-rc.1, GW: current)
-## STAT:    11.88s  1535676B    81478W    10358c
-## DONE: wallet_recovery (FM: current, CLI: v0.3.4-rc.1, GW: current)
+parallel --jobs 1 --timeout 300 --load 5 --delay 10 --joblog /tmp/nix-shell.LbYM7O/v82kH/joblog --noswap --memfree 2G
+## RUN:  always_success_test (FM: current, CLI: current, GW: v0.4.4)
+## STAT:     0.00s     3476B        3W        0c
+## DONE: always_success_test (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  meta_module (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    14.88s  1535624B   101678W    10149c
+## DONE: meta_module (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  always_success_test (FM: current, CLI: v0.4.4, GW: current)
+## STAT:     0.00s     3584B        3W        0c
+## DONE: always_success_test (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  always_success_test (FM: v0.4.4, CLI: current, GW: current)
+## STAT:     0.00s     3584B        3W        0c
+## DONE: always_success_test (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  meta_module (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    15.09s   318140B   121691W     8339c
+## DONE: meta_module (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  meta_module (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    21.20s  1535912B   112801W     8355c
+## DONE: meta_module (FM: current, CLI: v0.4.4, GW: current)
 All tests successful
