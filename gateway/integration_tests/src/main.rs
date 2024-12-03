@@ -10,7 +10,9 @@ use clap::{Parser, Subcommand};
 use devimint::envs::FM_DATA_DIR_ENV;
 use devimint::federation::Federation;
 use devimint::util::ProcessManager;
-use devimint::version_constants::{VERSION_0_3_0, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA};
+use devimint::version_constants::{
+    VERSION_0_3_0, VERSION_0_4_0, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA,
+};
 use devimint::{cmd, util, Gatewayd, LightningNode};
 use fedimint_core::config::FederationId;
 use fedimint_core::envs::{is_env_var_set, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV};
@@ -363,9 +365,9 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                 return Ok(());
             }
 
-            // TODO: unblocking for now, just skip
-            // might be worth circling back, but not now
-            if gatewayd_version < *VERSION_0_4_0_ALPHA {
+            // TODO(support:v0.3): config tests were introduced in v0.4.0
+            // see: https://github.com/fedimint/fedimint/pull/5231
+            if gatewayd_version < *VERSION_0_4_0 {
                 return Ok(());
             }
 
