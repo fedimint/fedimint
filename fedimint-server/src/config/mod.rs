@@ -538,7 +538,9 @@ impl ServerConfig {
                     Ok((peer_id, DkgPeerMsg::Done)) => {
                         info!(
                             target: LOG_NET_PEER_DKG,
-                            pper_id = %peer_id, "Got completion confirmation");
+                            peer_id = %peer_id,
+                            "Got completion confirmation"
+                        );
                         done_peers.insert(peer_id);
                     },
                     Ok((peer_id, msg)) => {
