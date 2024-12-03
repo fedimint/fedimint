@@ -15,3 +15,6 @@ slow-timeout = { period = "30s", terminate-after = 3 }
 # possibly due to writing to a shared tracing file(?)
 [profile.nix-ccov]
 slow-timeout = { period = "30s", terminate-after = 4 }
+
+[profile.release]
+slow-timeout = { period = "30s", terminate-after = 4 }
