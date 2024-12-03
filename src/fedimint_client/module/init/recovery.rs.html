@@ -738,7 +738,7 @@
         ) -&gt; <span class="kw">impl </span>futures::Stream&lt;Item = <span class="prelude-ty">Result</span>&lt;(u64, Vec&lt;AcceptedItem&gt;), ShuttingDownError&gt;&gt; + <span class="lifetime">'a
         </span>{
             <span class="comment">// How many request for blocks to run in parallel (streaming).
-            </span><span class="kw">const </span>PARALLISM_LEVEL: usize = <span class="number">64</span>;
+            </span><span class="kw">const </span>PARALLELISM_LEVEL: usize = <span class="number">64</span>;
             <span class="kw">const </span>VERSION_THAT_INTRODUCED_GET_SESSION_STATUS: ApiVersion =
                 ApiVersion { major: <span class="number">0</span>, minor: <span class="number">1 </span>};
 
@@ -782,7 +782,7 @@
                                         <span class="kw">const </span>MAX_SLEEP: Duration = Duration::from_secs(<span class="number">120</span>);
 
                                         <span class="macro">warn!</span>(target: LOG_CLIENT_RECOVERY, e = %e, session_idx, <span class="string">"Error trying to fetch signed block"</span>);
-                                        <span class="comment">// We don't want PARALLISM_LEVEL tasks hammering Federation
+                                        <span class="comment">// We don't want PARALLELISM_LEVEL tasks hammering Federation
                                         // with requests, so max sleep is significant
                                         </span><span class="kw">if </span>retry_sleep &lt;= MAX_SLEEP {
                                             retry_sleep = retry_sleep
@@ -798,7 +798,7 @@
                         }).<span class="kw">await</span>.expect(<span class="string">"Can't fail"</span>)
                     })
                 })
-                .buffered(PARALLISM_LEVEL)
+                .buffered(PARALLELISM_LEVEL)
         }
 
         <span class="doccomment">/// Make enough progress to justify saving a state snapshot

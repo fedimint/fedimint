@@ -2148,7 +2148,7 @@
 
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_ctx.outcome_or_updates(<span class="kw-2">&amp;</span>operation, operation_id, || {
             <span class="kw">let </span>stream_rpc = <span class="self">self</span>.rpc.clone();
-            <span class="kw">let </span>stream_cient_ctx = <span class="self">self</span>.client_ctx.clone();
+            <span class="kw">let </span>stream_client_ctx = <span class="self">self</span>.client_ctx.clone();
             <span class="kw">let </span>stream_script_pub_key = address.assume_checked().script_pubkey();
 
             <span class="macro">stream!</span> {
@@ -2187,7 +2187,7 @@
                     btc_out_point
                 };
 
-                <span class="kw">let </span>claim_data = stream_cient_ctx.module_db().wait_key_exists(<span class="kw-2">&amp;</span>ClaimedPegInKey {
+                <span class="kw">let </span>claim_data = stream_client_ctx.module_db().wait_key_exists(<span class="kw-2">&amp;</span>ClaimedPegInKey {
                     peg_in_index: tweak_idx,
                     btc_out_point,
                 }).<span class="kw">await</span>;
@@ -2197,7 +2197,7 @@
                     btc_out_point
                 };
 
-                <span class="kw">match </span>stream_cient_ctx.await_primary_module_outputs(operation_id, claim_data.change).<span class="kw">await </span>{
+                <span class="kw">match </span>stream_client_ctx.await_primary_module_outputs(operation_id, claim_data.change).<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">yield </span>DepositStateV2::Claimed {
                         btc_deposited,
                         btc_out_point
