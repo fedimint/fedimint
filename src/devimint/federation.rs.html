@@ -1454,7 +1454,18 @@
 <a href="#1453" id="1453">1453</a>
 <a href="#1454" id="1454">1454</a>
 <a href="#1455" id="1455">1455</a>
-<a href="#1456" id="1456">1456</a></pre></div><pre class="rust"><code><span class="kw">mod </span>config;
+<a href="#1456" id="1456">1456</a>
+<a href="#1457" id="1457">1457</a>
+<a href="#1458" id="1458">1458</a>
+<a href="#1459" id="1459">1459</a>
+<a href="#1460" id="1460">1460</a>
+<a href="#1461" id="1461">1461</a>
+<a href="#1462" id="1462">1462</a>
+<a href="#1463" id="1463">1463</a>
+<a href="#1464" id="1464">1464</a>
+<a href="#1465" id="1465">1465</a>
+<a href="#1466" id="1466">1466</a>
+<a href="#1467" id="1467">1467</a></pre></div><pre class="rust"><code><span class="kw">mod </span>config;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2226,8 +2237,19 @@
         }
 
         <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">21</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>bitcoind_block_height: u64 = <span class="self">self</span>.bitcoind.get_block_count().<span class="kw">await</span><span class="question-mark">? </span>- <span class="number">1</span>;
         try_join_all(gateways.into_iter().map(|gw| {
             poll(<span class="string">"gateway pegin"</span>, || <span class="kw">async </span>{
+                <span class="kw">let </span>gw_info = gw.get_info().<span class="kw">await</span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
+                <span class="kw">let </span>block_height: u64 = gw_info[<span class="string">"block_height"</span>]
+                    .as_u64()
+                    .expect(<span class="string">"Could not parse block height"</span>);
+                <span class="kw">if </span>bitcoind_block_height != block_height {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(std::ops::ControlFlow::Continue(<span class="macro">anyhow::anyhow!</span>(
+                        <span class="string">"gateway block height is not synced"
+                    </span>)));
+                }
+
                 <span class="kw">let </span>gateway_balance = gw
                     .ecash_balance(fed_id.clone())
                     .<span class="kw">await
