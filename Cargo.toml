@@ -224,6 +224,9 @@ rand_chacha = { opt-level = 3 }
 rand_core = { opt-level = 3 }
 rand = { opt-level = 3 }
 ring = { opt-level = 3 }
+# due to some miscompilation(?) this seems actually neccessary,
+# otherwise we see segfaults in Nix sandbox
+librocksdb-sys = { opt-level = 3 }
 rustls = { opt-level = 3 }
 secp256k1 = { opt-level = 3 }
 secp256k1-sys = { opt-level = 3 }
