@@ -1,4 +1,5 @@
 mod complete;
+pub mod events;
 pub mod pay;
 
 use std::collections::BTreeMap;
@@ -11,6 +12,7 @@ use async_stream::stream;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::key::Secp256k1;
 use bitcoin::secp256k1::All;
+use events::OutgoingPaymentStarted;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::derivable_secret::ChildId;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -164,6 +166,7 @@ pub struct GatewayClientContext {
     pub ln_decoder: Decoder,
     notifier: ModuleNotifier<GatewayClientStateMachines>,
     gateway: Arc<Gateway>,
+    pub client_ctx: ClientContext<GatewayClientModule>,
 }
 
 impl Context for GatewayClientContext {
@@ -211,6 +214,7 @@ impl ClientModule for GatewayClientModule {
             ln_decoder: self.decoder(),
             notifier: self.notifier.clone(),
             gateway: self.gateway.clone(),
+            client_ctx: self.client_ctx.clone(),
         }
     }
 
@@ -596,6 +600,11 @@ impl GatewayClientModule {
                 |dbtx, _| {
                     Box::pin(async {
                         let operation_id = OperationId(payload.contract_id.to_byte_array());
+
+                        self.client_ctx.log_event(dbtx, OutgoingPaymentStarted {
+                            contract_id: payload.contract_id,
+                            invoice_amount: payload.payment_data.amount().expect("LNv1 invoices should have an amount"),
+                        }).await;
 
                         let state_machines =
                             vec![GatewayClientStateMachines::Pay(GatewayPayStateMachine {
