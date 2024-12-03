@@ -2228,12 +2228,7 @@
 <a href="#2227" id="2227">2227</a>
 <a href="#2228" id="2228">2228</a>
 <a href="#2229" id="2229">2229</a>
-<a href="#2230" id="2230">2230</a>
-<a href="#2231" id="2231">2231</a>
-<a href="#2232" id="2232">2232</a>
-<a href="#2233" id="2233">2233</a>
-<a href="#2234" id="2234">2234</a>
-<a href="#2235" id="2235">2235</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2230" id="2230">2230</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2812,37 +2807,32 @@
         </span><span class="kw">if </span>handle
             .cancel_on_shutdown(<span class="kw">async move </span>{
                 <span class="kw">loop </span>{
-                    <span class="kw">let </span>payment_request = <span class="macro">tokio::select!</span> {
-                        payment_request = stream.next() =&gt; {
-                            payment_request
+                    <span class="kw">let </span>payment_request_or = <span class="macro">tokio::select!</span> {
+                        payment_request_or = stream.next() =&gt; {
+                            payment_request_or
                         }
                         () = <span class="self">self</span>.is_shutting_down_safely() =&gt; {
                             <span class="kw">break</span>;
                         }
                     };
 
-                    <span class="comment">// Hold the Gateway state's lock so that it doesn't change before `handle_lightning_payment`.
-                    </span><span class="kw">let </span>state_guard = <span class="self">self</span>.state.read().<span class="kw">await</span>;
-                    <span class="kw">let </span>GatewayState::Running { <span class="kw-2">ref </span>lightning_context } = <span class="kw-2">*</span>state_guard <span class="kw">else </span>{
+                    <span class="kw">let </span><span class="prelude-val">Some</span>(payment_request) = payment_request_or <span class="kw">else </span>{
+                        <span class="macro">warn!</span>(
+                            <span class="string">"Unexpected response from incoming lightning payment stream. Exiting from loop..."
+                        </span>);
+                        <span class="kw">break</span>;
+                    };
+
+                    <span class="kw">let </span>state_guard = <span class="self">self</span>.state.read().<span class="kw">await</span>;
+                    <span class="kw">if let </span>GatewayState::Running { <span class="kw-2">ref </span>lightning_context } = <span class="kw-2">*</span>state_guard {
+                        <span class="self">self</span>.handle_lightning_payment(payment_request, lightning_context).<span class="kw">await</span>;
+                    } <span class="kw">else </span>{
                         <span class="macro">warn!</span>(
                             <span class="question-mark">?</span>state_guard,
                             <span class="string">"Gateway isn't in a running state, cannot handle incoming payments."
                         </span>);
                         <span class="kw">break</span>;
                     };
-
-                    <span class="kw">let </span>payment_request = <span class="kw">match </span>payment_request {
-                        <span class="prelude-val">Some</span>(payment_request) =&gt; payment_request,
-                        other =&gt; {
-                            <span class="macro">warn!</span>(
-                                <span class="question-mark">?</span>other,
-                                <span class="string">"Unexpected response from incoming lightning payment stream. Exiting from loop..."
-                            </span>);
-                            <span class="kw">break</span>;
-                        }
-                    };
-
-                    <span class="self">self</span>.handle_lightning_payment(payment_request, lightning_context).<span class="kw">await</span>;
                 }
             })
             .<span class="kw">await
