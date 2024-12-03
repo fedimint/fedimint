@@ -577,37 +577,32 @@ impl Gateway {
         if handle
             .cancel_on_shutdown(async move {
                 loop {
-                    let payment_request = tokio::select! {
-                        payment_request = stream.next() => {
-                            payment_request
+                    let payment_request_or = tokio::select! {
+                        payment_request_or = stream.next() => {
+                            payment_request_or
                         }
                         () = self.is_shutting_down_safely() => {
                             break;
                         }
                     };
 
-                    // Hold the Gateway state's lock so that it doesn't change before `handle_lightning_payment`.
+                    let Some(payment_request) = payment_request_or else {
+                        warn!(
+                            "Unexpected response from incoming lightning payment stream. Exiting from loop..."
+                        );
+                        break;
+                    };
+
                     let state_guard = self.state.read().await;
-                    let GatewayState::Running { ref lightning_context } = *state_guard else {
+                    if let GatewayState::Running { ref lightning_context } = *state_guard {
+                        self.handle_lightning_payment(payment_request, lightning_context).await;
+                    } else {
                         warn!(
                             ?state_guard,
                             "Gateway isn't in a running state, cannot handle incoming payments."
                         );
                         break;
                     };
-
-                    let payment_request = match payment_request {
-                        Some(payment_request) => payment_request,
-                        other => {
-                            warn!(
-                                ?other,
-                                "Unexpected response from incoming lightning payment stream. Exiting from loop..."
-                            );
-                            break;
-                        }
-                    };
-
-                    self.handle_lightning_payment(payment_request, lightning_context).await;
                 }
             })
             .await
