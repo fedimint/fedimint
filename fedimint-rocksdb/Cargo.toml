@@ -21,7 +21,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 fedimint-core = { workspace = true }
 futures = { workspace = true }
-rocksdb = { version = "0.22.0" }
+rocksdb = { version = "0.22.0", features = [ "jemalloc" ] }
 tracing = { workspace = true }
 
 [dev-dependencies]

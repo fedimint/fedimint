@@ -39,7 +39,7 @@ clap = { workspace = true }
 # cln-plugin made semver incompatible change
 cln-plugin = "=0.1.7"
 cln-rpc = { workspace = true }
-jemallocator = { workspace = true }
+tikv-jemallocator = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
@@ -93,3 +93,6 @@ assert_matches = { workspace = true }
 [build-dependencies]
 fedimint-build = { version = "=0.4.4-rc.0", path = "../../fedimint-build" }
 tonic-build = "0.11.0"
+
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+tikv-jemallocator = { workspace = true }

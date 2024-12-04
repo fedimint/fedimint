@@ -30,7 +30,7 @@ time = { version = "0.3.36", features = ["formatting"] }
 clap = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
-jemallocator = { workspace = true }
+tikv-jemallocator = { workspace = true }
 lightning-invoice = { workspace = true }
 fedimint-aead = { version = "=0.4.4-rc.0", path = "../crypto/aead" }
 fedimint-bip39 = { version = "=0.4.4-rc.0", path = "../fedimint-bip39" }
@@ -63,3 +63,6 @@ reqwest = { workspace = true }
 
 [build-dependencies]
 fedimint-build = { version = "=0.4.4-rc.0", path = "../fedimint-build" }
+
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+tikv-jemallocator = { workspace = true }
