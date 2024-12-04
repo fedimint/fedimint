@@ -5,7 +5,7 @@ use secp256k1::ecdsa::Signature;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
-use crate::{FederationWallet, UnsignedTransaction, WalletOutputOutcome};
+use crate::{FederationWallet, PendingTransaction, UnsignedTransaction, WalletOutputOutcome};
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -117,7 +117,7 @@ pub struct PendingTransactionPrefix;
 
 impl_db_record!(
     key = PendingTransactionKey,
-    value = bitcoin::Transaction,
+    value = PendingTransaction,
     db_prefix = DbKeyPrefix::PendingTransaction,
 );
 

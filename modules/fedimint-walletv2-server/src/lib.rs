@@ -96,6 +96,15 @@ pub const CONFIRMATION_TARGET: u16 = 1;
 pub struct UnsignedTransaction {
     pub transaction: Transaction,
     pub spent_tx_outs: Vec<SpentTxOut>,
+    pub vbytes: u64,
+    pub fee: Amount,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Encodable, Decodable)]
+pub struct PendingTransaction {
+    pub transaction: Transaction,
+    pub vbytes: u64,
+    pub fee: Amount,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
@@ -383,13 +392,13 @@ impl ServerModule for Wallet {
                 }
             }
             WalletConsensusItem::Feerate(feerate) => {
-                let old_median = self.consensus_feerate_median(dbtx).await;
+                let old_median = self.consensus_feerate(dbtx).await;
 
                 if Some(feerate) == dbtx.insert_entry(&FeeRateVoteKey(peer), &feerate).await {
                     bail!("Fee rate vote is redundant");
                 }
 
-                if old_median != self.consensus_feerate_median(dbtx).await {
+                if old_median != self.consensus_feerate(dbtx).await {
                     self.increment_feerate_index(dbtx).await;
                 }
             }
@@ -428,10 +437,17 @@ impl ServerModule for Wallet {
                 if signatures.len() == self.cfg.consensus.bitcoin_pks.to_num_peers().threshold() {
                     dbtx.remove_entry(&UnsignedTransactionKey(txid)).await;
 
-                    let transaction = self.finalize_transaction(unsigned_transaction, &signatures);
+                    let transaction = self.finalize_transaction(&unsigned_transaction, &signatures);
 
-                    dbtx.insert_new_entry(&PendingTransactionKey(txid), &transaction)
-                        .await;
+                    dbtx.insert_new_entry(
+                        &PendingTransactionKey(txid),
+                        &PendingTransaction {
+                            transaction,
+                            vbytes: unsigned_transaction.vbytes,
+                            fee: unsigned_transaction.fee,
+                        },
+                    )
+                    .await;
                 }
             }
             WalletConsensusItem::Default { variant, .. } => {
@@ -554,6 +570,8 @@ impl ServerModule for Wallet {
                                 tweak: input.tweak.consensus_hash(),
                             },
                         ],
+                        vbytes: self.cfg.consensus.send_tx_vbytes,
+                        fee: input.fee.value,
                     },
                 )
                 .await;
@@ -683,6 +701,8 @@ impl ServerModule for Wallet {
                     value: federation_utxo.value,
                     tweak: federation_utxo.tweak,
                 }],
+                vbytes: self.cfg.consensus.send_tx_vbytes,
+                fee: output.fee.value,
             },
         )
         .await;
@@ -829,11 +849,11 @@ impl Wallet {
                             .find_by_prefix(&PendingTransactionPrefix)
                             .await
                             .map(|entry| entry.1)
-                            .collect::<Vec<Transaction>>()
+                            .collect::<Vec<PendingTransaction>>()
                             .await;
 
                         for transaction in pending_transactions {
-                            bitcoind.submit_transaction(transaction).await;
+                            bitcoind.submit_transaction(transaction.transaction).await;
                         }
                     },
                     () = &mut shutdown_rx => { break },
@@ -882,45 +902,6 @@ impl Wallet {
     }
 
     pub async fn consensus_feerate(&self, dbtx: &mut DatabaseTransaction<'_>) -> Option<u64> {
-        let transaction_count = self.consensus_transaction_count(dbtx).await;
-
-        // Stacking 45 unconfirmed transactions on top of each other would require a
-        // feerate over 50msats << 44 satoshis per virtual byte.
-
-        assert!(transaction_count < 45);
-
-        // Due to the above assertion the following shifts cannot wrap.
-
-        self.consensus_feerate_median(dbtx)
-            .await
-            .map(|mut msats_per_vbyte| {
-                // Unconfirmed | Last Multiplier | Average Multiplier
-                // ------------|-----------------|-------------------
-                // 1           | 1.00            | 1.00
-                // 2           | 1.33            | 1.17
-                // 3           | 1.78            | 1.37
-                // 4           | 2.37            | 1.62
-                // 5           | 3.16            | 1.93
-                // 6           | 4.21            | 2.31
-                // 7           | 5.62            | 2.78
-                // 8           | 7.49            | 3.28
-
-                for _ in 0..transaction_count {
-                    msats_per_vbyte = msats_per_vbyte.saturating_mul(4).saturating_div(3);
-                }
-
-                // A stack of 25 unconfirmed transactions will have a minimum average feerate
-                // of (50msats << 25) / 25 / 1000 = 67.108  satoshis per virtual byte. This
-                // protects us against a otherwise catastrophic failure of feerate estimation.
-
-                msats_per_vbyte.max(50 << transaction_count)
-            })
-    }
-
-    pub async fn consensus_feerate_median(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-    ) -> Option<u64> {
         let num_peers = self.cfg.consensus.bitcoin_pks.to_num_peers();
 
         let mut rates = dbtx
@@ -939,25 +920,6 @@ impl Wallet {
         rates.get(num_peers.threshold() - 1).copied()
     }
 
-    async fn consensus_transaction_count(&self, dbtx: &mut DatabaseTransaction<'_>) -> u32 {
-        let unsigned_count = dbtx
-            .find_by_prefix(&UnsignedTransactionPrefix)
-            .await
-            .count()
-            .await;
-
-        let pending_count = dbtx
-            .find_by_prefix(&PendingTransactionPrefix)
-            .await
-            .count()
-            .await;
-
-        // Since the total number of transactions is bound the following addition
-        // and cast cannot overflow or truncate.
-
-        (unsigned_count + pending_count) as u32
-    }
-
     // The index needs to be incremented every time the consensus feerate changes
     async fn increment_feerate_index(&self, dbtx: &mut DatabaseTransaction<'_>) {
         let index = dbtx
@@ -973,35 +935,77 @@ impl Wallet {
     pub async fn send_fee(&self, dbtx: &mut DatabaseTransaction<'_>) -> Option<SendFee> {
         let index = dbtx.get_value(&FeeRateIndexKey).await.unwrap_or(0);
 
-        self.consensus_feerate(dbtx)
+        self.consensus_bitcoin_fee(dbtx, self.cfg.consensus.send_tx_vbytes)
             .await
-            .map(|msats_per_vbyte| SendFee {
-                index,
-                value: Amount::from_sat(
-                    self.cfg
-                        .consensus
-                        .send_tx_vbytes
-                        .saturating_mul(msats_per_vbyte)
-                        .saturating_div(1000),
-                ),
-            })
+            .map(|value| SendFee { index, value })
     }
 
     pub async fn receive_fee(&self, dbtx: &mut DatabaseTransaction<'_>) -> Option<ReceiveFee> {
         let index = dbtx.get_value(&FeeRateIndexKey).await.unwrap_or(0);
 
-        self.consensus_feerate(dbtx)
+        self.consensus_bitcoin_fee(dbtx, self.cfg.consensus.receive_tx_vbytes)
             .await
-            .map(|msats_per_vbyte| ReceiveFee {
-                index,
-                value: Amount::from_sat(
-                    self.cfg
-                        .consensus
-                        .receive_tx_vbytes
-                        .saturating_mul(msats_per_vbyte)
-                        .saturating_div(1000),
-                ),
-            })
+            .map(|value| ReceiveFee { index, value })
+    }
+
+    pub async fn consensus_bitcoin_fee(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        vbytes: u64,
+    ) -> Option<Amount> {
+        let unsigned = dbtx
+            .find_by_prefix(&UnsignedTransactionPrefix)
+            .await
+            .map(|entry| entry.1)
+            .collect::<Vec<UnsignedTransaction>>()
+            .await;
+
+        let pending = dbtx
+            .find_by_prefix(&PendingTransactionPrefix)
+            .await
+            .map(|entry| entry.1)
+            .collect::<Vec<PendingTransaction>>()
+            .await;
+
+        let mut msats_per_vbyte = self.consensus_feerate(dbtx).await?;
+
+        // Unconfirmed | Multiplier
+        // ------------|-----------
+        // 1           | 1.00
+        // 2           | 1.33
+        // 3           | 1.78
+        // 4           | 2.37
+        // 5           | 3.16
+        // 6           | 4.21
+        // 7           | 5.62
+        // 8           | 7.49
+
+        let transaction_count = unsigned.len() + pending.len();
+
+        for _ in 0..transaction_count {
+            msats_per_vbyte = msats_per_vbyte.saturating_mul(4).saturating_div(3);
+        }
+
+        // A stack of 25 unconfirmed transactions will have a minimum average feerate
+        // of (50msats << 25) / 1000 = 1.677.700  satoshis per virtual byte. This
+        // protects us against a otherwise catastrophic failure of feerate estimation.
+
+        msats_per_vbyte = msats_per_vbyte.max(50 << transaction_count);
+
+        let total_vbytes = vbytes
+            + unsigned.iter().map(|u| u.vbytes).sum::<u64>()
+            + pending.iter().map(|p| p.vbytes).sum::<u64>();
+
+        let fee = std::cmp::max(
+            total_vbytes
+                .saturating_mul(msats_per_vbyte)
+                .saturating_div(1000)
+                .saturating_sub(unsigned.iter().map(|u| u.fee.to_sat()).sum())
+                .saturating_sub(pending.iter().map(|u| u.fee.to_sat()).sum()),
+            vbytes.saturating_mul(msats_per_vbyte).saturating_div(1000),
+        );
+
+        Some(Amount::from_sat(fee))
     }
 
     fn descriptor(&self, tweak: &sha256::Hash) -> Wsh<secp256k1::PublicKey> {
@@ -1084,11 +1088,11 @@ impl Wallet {
 
     fn finalize_transaction(
         &self,
-        unsigned_transaction: UnsignedTransaction,
+        unsigned_transaction: &UnsignedTransaction,
         signatures: &BTreeMap<PeerId, Vec<Signature>>,
     ) -> Transaction {
         Psbt {
-            unsigned_tx: unsigned_transaction.transaction,
+            unsigned_tx: unsigned_transaction.transaction.clone(),
             version: 0,
             xpub: Default::default(),
             proprietary: Default::default(),
