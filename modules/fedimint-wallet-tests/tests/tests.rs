@@ -6,7 +6,7 @@ use anyhow::{bail, Context};
 use assert_matches::assert_matches;
 use bitcoin::secp256k1;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-use fedimint_client::ClientHandleArc;
+use fedimint_client::ClientHandle;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
 use fedimint_core::envs::BitcoinRpcConfig;
@@ -47,7 +47,7 @@ const PEG_IN_AMOUNT_SATS: u64 = 10000;
 const PEG_OUT_AMOUNT_SATS: u64 = 1000;
 
 async fn peg_in<'a>(
-    client: &'a ClientHandleArc,
+    client: &'a ClientHandle,
     bitcoin: &dyn BitcoinTest,
     finality_delay: u64,
 ) -> anyhow::Result<(BoxStream<'a, Amount>, bitcoin::Transaction)> {
@@ -98,7 +98,7 @@ async fn peg_in<'a>(
 }
 
 async fn await_consensus_to_catch_up(
-    client: &ClientHandleArc,
+    client: &ClientHandle,
     block_count: u64,
 ) -> anyhow::Result<u64> {
     let wallet = client.get_first_module::<WalletClientModule>()?;

@@ -38,7 +38,7 @@ use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::meta::{FetchKind, LegacyMetaSource, MetaSource};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
-use fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandleArc};
+use fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandle};
 use fedimint_core::admin_client::{ConfigGenConnectionsRequest, ConfigGenParamsRequest};
 use fedimint_core::config::{
     FederationId, FederationIdPrefix, ServerModuleConfigGenParamsRegistry,
@@ -668,7 +668,7 @@ impl FedimintCli {
         &mut self,
         cli: &Opts,
         invite_code: InviteCode,
-    ) -> CliResult<ClientHandleArc> {
+    ) -> CliResult<ClientHandle> {
         let client_config = cli
             .connector()
             .download_from_invite_code(&invite_code)
@@ -689,11 +689,10 @@ impl FedimintCli {
                 invite_code.api_secret(),
             )
             .await
-            .map(Arc::new)
             .map_err_cli()
     }
 
-    async fn client_open(&self, cli: &Opts) -> CliResult<ClientHandleArc> {
+    async fn client_open(&self, cli: &Opts) -> CliResult<ClientHandle> {
         let mut client_builder = self.make_client_builder(cli).await?;
 
         if let Some(our_id) = cli.our_id {
@@ -720,7 +719,6 @@ impl FedimintCli {
                 &federation_id,
             ))
             .await
-            .map(Arc::new)
             .map_err_cli()
     }
 
@@ -729,7 +727,7 @@ impl FedimintCli {
         cli: &Opts,
         mnemonic: Mnemonic,
         invite_code: InviteCode,
-    ) -> CliResult<ClientHandleArc> {
+    ) -> CliResult<ClientHandle> {
         let builder = self.make_client_builder(cli).await?;
 
         let client_config = cli
@@ -773,7 +771,6 @@ impl FedimintCli {
                 backup,
             )
             .await
-            .map(Arc::new)
             .map_err_cli()
     }
 

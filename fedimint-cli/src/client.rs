@@ -9,7 +9,7 @@ use bitcoin::{secp256k1, Network};
 use clap::Subcommand;
 use fedimint_bip39::Mnemonic;
 use fedimint_client::backup::Metadata;
-use fedimint_client::ClientHandleArc;
+use fedimint_client::ClientHandle;
 use fedimint_core::config::{ClientModuleConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::Encodable;
@@ -199,7 +199,7 @@ pub enum ClientCmd {
 
 pub async fn handle_command(
     command: ClientCmd,
-    client: ClientHandleArc,
+    client: ClientHandle,
 ) -> anyhow::Result<serde_json::Value> {
     match command {
         ClientCmd::Info => get_note_summary(&client).await,
@@ -658,7 +658,7 @@ pub async fn handle_command(
     }
 }
 
-async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json::Value> {
+async fn get_note_summary(client: &ClientHandle) -> anyhow::Result<serde_json::Value> {
     let mint_client = client.get_first_module::<MintClientModule>()?;
     let wallet_client = client.get_first_module::<WalletClientModule>()?;
     let summary = mint_client

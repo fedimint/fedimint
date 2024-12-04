@@ -11,7 +11,7 @@ use bitcoin::hashes::{sha256, Hash};
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
-use fedimint_client::ClientHandleArc;
+use fedimint_client::ClientHandle;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::encoding::Encodable;
@@ -102,7 +102,7 @@ async fn single_federation_test<B>(
             Gateway,
             FakeLightningTest,
             FederationTest,
-            ClientHandleArc, // User Client
+            ClientHandle, // User Client
             Arc<dyn BitcoinTest>,
         ) -> B
         + Copy,
@@ -165,8 +165,8 @@ fn get_payment_data(gateway: Option<LightningGateway>, invoice: Bolt11Invoice) -
 /// specified by `gateway_id`.
 async fn gateway_pay_valid_invoice(
     invoice: Bolt11Invoice,
-    user_client: &ClientHandleArc,
-    gateway_client: &ClientHandleArc,
+    user_client: &ClientHandle,
+    gateway_client: &ClientHandle,
     gateway_id: &PublicKey,
 ) -> anyhow::Result<()> {
     let user_lightning_module = &user_client.get_first_module::<LightningClientModule>()?;

@@ -9,7 +9,7 @@ use async_stream::try_stream;
 use db::MemAndIndexedDb;
 use fedimint_client::module::IClientModule;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-use fedimint_client::ClientHandleArc;
+use fedimint_client::ClientHandle;
 use fedimint_core::db::Database;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_ln_client::{LightningClientInit, LightningClientModule};
@@ -22,7 +22,7 @@ use wasm_bindgen::{JsError, JsValue};
 
 #[wasm_bindgen]
 pub struct WasmClient {
-    client: ClientHandleArc,
+    client: ClientHandle,
 }
 
 #[wasm_bindgen]
@@ -160,7 +160,7 @@ impl WasmClient {
         rpc_handle
     }
     fn rpc_inner<'a>(
-        client: &'a ClientHandleArc,
+        client: &'a ClientHandle,
         module: &'a str,
         method: &'a str,
         payload: String,

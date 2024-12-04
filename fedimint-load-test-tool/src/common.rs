@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -8,7 +7,7 @@ use devimint::cmd;
 use devimint::util::{ClnLightningCli, FedimintCli, LnCli};
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::transaction::TransactionBuilder;
-use fedimint_client::{Client, ClientHandleArc};
+use fedimint_client::{Client, ClientHandle};
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::db::Database;
 use fedimint_core::invite_code::InviteCode;
@@ -62,7 +61,7 @@ pub async fn try_get_notes_cli(amount: &Amount, tries: usize) -> anyhow::Result<
 }
 
 pub async fn reissue_notes(
-    client: &ClientHandleArc,
+    client: &ClientHandle,
     oob_notes: OOBNotes,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<()> {
@@ -86,7 +85,7 @@ pub async fn reissue_notes(
 }
 
 pub async fn do_spend_notes(
-    mint: &ClientHandleArc,
+    mint: &ClientHandle,
     amount: Amount,
 ) -> anyhow::Result<(OperationId, OOBNotes)> {
     let mint = &mint.get_first_module::<MintClientModule>()?;
@@ -116,7 +115,7 @@ pub async fn do_spend_notes(
 }
 
 pub async fn await_spend_notes_finish(
-    client: &ClientHandleArc,
+    client: &ClientHandle,
     operation_id: OperationId,
 ) -> anyhow::Result<()> {
     let mut updates = client
@@ -140,7 +139,7 @@ pub async fn await_spend_notes_finish(
 pub async fn build_client(
     invite_code: Option<InviteCode>,
     rocksdb: Option<&PathBuf>,
-) -> anyhow::Result<(ClientHandleArc, Option<InviteCode>)> {
+) -> anyhow::Result<(ClientHandle, Option<InviteCode>)> {
     let db = if let Some(rocksdb) = rocksdb {
         Database::new(
             fedimint_rocksdb::RocksDb::open(rocksdb)?,
@@ -170,7 +169,7 @@ pub async fn build_client(
     } else {
         bail!("Database not initialize and invite code not provided");
     }?;
-    Ok((Arc::new(client), invite_code))
+    Ok((client, invite_code))
 }
 
 pub async fn lnd_create_invoice(amount: Amount) -> anyhow::Result<(Bolt11Invoice, String)> {
@@ -223,7 +222,7 @@ pub async fn lnd_wait_invoice_payment(r_hash: String) -> anyhow::Result<()> {
 pub async fn gateway_pay_invoice(
     prefix: &str,
     gateway_name: &str,
-    client: &ClientHandleArc,
+    client: &ClientHandle,
     invoice: Bolt11Invoice,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
     ln_gateway: Option<LightningGateway>,
@@ -335,7 +334,7 @@ pub fn parse_gateway_id(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Erro
     secp256k1::PublicKey::from_str(s)
 }
 
-pub async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<TieredCounts> {
+pub async fn get_note_summary(client: &ClientHandle) -> anyhow::Result<TieredCounts> {
     let mint_client = client.get_first_module::<MintClientModule>()?;
     let summary = mint_client
         .get_note_counts_by_denomination(
@@ -351,7 +350,7 @@ pub async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<Tiered
 }
 
 pub async fn remint_denomination(
-    client: &ClientHandleArc,
+    client: &ClientHandle,
     denomination: Amount,
     quantity: u16,
 ) -> anyhow::Result<()> {

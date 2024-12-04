@@ -145,7 +145,7 @@ impl GatewayClientBuilder {
         config: FederationConfig,
         gateway: Arc<Gateway>,
         mnemonic: &Mnemonic,
-    ) -> AdminResult<fedimint_client::ClientHandleArc> {
+    ) -> AdminResult<fedimint_client::ClientHandle> {
         let invite_code = config.invite_code.clone();
         let federation_id = invite_code.federation_id();
         let db_path = self.work_dir.join(format!("{federation_id}.db"));
@@ -180,7 +180,6 @@ impl GatewayClientBuilder {
                 .join(root_secret, client_config.clone(), invite_code.api_secret())
                 .await
         }
-        .map(Arc::new)
         .map_err(AdminGatewayError::ClientCreationError)
     }
 

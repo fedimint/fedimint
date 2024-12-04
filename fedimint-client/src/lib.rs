@@ -647,15 +647,10 @@ fn states_add_instance(
 ///
 /// Notably it [`ops::Deref`]s to the [`Client`] where most
 /// methods live.
-///
-/// Put this in an Arc to clone it (see [`ClientHandleArc`]).
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ClientHandle {
     inner: Arc<Client>,
 }
-
-/// An alias for a reference counted [`ClientHandle`]
-pub type ClientHandleArc = Arc<ClientHandle>;
 
 impl ClientHandle {
     fn new(inner: Arc<Client>) -> Self {

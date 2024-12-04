@@ -48,7 +48,7 @@ use fedimint_api_client::api::net::Connector;
 use fedimint_bip39::{Bip39RootSecretStrategy, Language, Mnemonic};
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
-use fedimint_client::{Client, ClientHandleArc};
+use fedimint_client::{Client, ClientHandle};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -1772,13 +1772,12 @@ impl Gateway {
         Some(gateway_config)
     }
 
-    /// Retrieves a `ClientHandleArc` from the Gateway's in memory structures
+    /// Retrieves a `ClientHandle` from the Gateway's in memory structures
     /// that keep track of available clients, given a `federation_id`.
     pub async fn select_client(
         &self,
         federation_id: FederationId,
-    ) -> std::result::Result<Spanned<fedimint_client::ClientHandleArc>, FederationNotConnected>
-    {
+    ) -> std::result::Result<Spanned<fedimint_client::ClientHandle>, FederationNotConnected> {
         self.federation_manager
             .read()
             .await
@@ -1899,7 +1898,7 @@ impl Gateway {
     /// Verifies that the supplied `network` matches the Bitcoin network in the
     /// connected client's LNv1 configuration.
     async fn check_lnv1_federation_network(
-        client: &ClientHandleArc,
+        client: &ClientHandle,
         network: Network,
     ) -> AdminResult<()> {
         let federation_id = client.federation_id();
@@ -1930,7 +1929,7 @@ impl Gateway {
     /// Verifies that the supplied `network` matches the Bitcoin network in the
     /// connected client's LNv2 configuration.
     async fn check_lnv2_federation_network(
-        client: &ClientHandleArc,
+        client: &ClientHandle,
         network: Network,
     ) -> AdminResult<()> {
         let federation_id = client.federation_id();
@@ -2184,13 +2183,13 @@ impl Gateway {
     }
 
     /// Retrieves the persisted `CreateInvoicePayload` from the database
-    /// specified by the `payment_hash` and the `ClientHandleArc` specified
+    /// specified by the `payment_hash` and the `ClientHandle` specified
     /// by the payload's `federation_id`.
     pub async fn get_registered_incoming_contract_and_client_v2(
         &self,
         payment_image: PaymentImage,
         amount_msats: u64,
-    ) -> Result<(IncomingContract, ClientHandleArc)> {
+    ) -> Result<(IncomingContract, ClientHandle)> {
         let registered_incoming_contract = self
             .gateway_db
             .begin_transaction_nc()

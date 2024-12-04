@@ -5,7 +5,7 @@ use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle,
 };
-use fedimint_client::{ClientHandleArc, DynGlobalClientContext};
+use fedimint_client::{ClientHandle, DynGlobalClientContext};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -479,7 +479,7 @@ impl GatewayPayInvoice {
     }
 
     async fn buy_preimage_via_direct_swap(
-        client: ClientHandleArc,
+        client: ClientHandle,
         payment_data: PaymentData,
         contract: OutgoingContractAccount,
         common: GatewayPayCommon,
@@ -641,7 +641,7 @@ impl GatewayPayInvoice {
     async fn check_swap_to_federation(
         context: GatewayClientContext,
         payment_data: PaymentData,
-    ) -> Option<Spanned<ClientHandleArc>> {
+    ) -> Option<Spanned<ClientHandle>> {
         let rhints = payment_data.route_hints();
         match rhints.first().and_then(|rh| rh.0.last()) {
             None => None,

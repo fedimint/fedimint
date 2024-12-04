@@ -1,12 +1,11 @@
 use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
 use std::time::Duration;
 
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt};
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-use fedimint_client::{AdminCreds, Client, ClientHandleArc};
+use fedimint_client::{AdminCreds, Client, ClientHandle};
 use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 use fedimint_core::config::{
     ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
@@ -43,12 +42,12 @@ pub struct FederationTest {
 
 impl FederationTest {
     /// Create two clients, useful for send/receive tests
-    pub async fn two_clients(&self) -> (ClientHandleArc, ClientHandleArc) {
+    pub async fn two_clients(&self) -> (ClientHandle, ClientHandle) {
         (self.new_client().await, self.new_client().await)
     }
 
     /// Create a client connected to this fed
-    pub async fn new_client(&self) -> ClientHandleArc {
+    pub async fn new_client(&self) -> ClientHandle {
         let client_config = self.configs[&PeerId::from(0)]
             .consensus
             .to_client_config(&self.server_init)
@@ -59,7 +58,7 @@ impl FederationTest {
     }
 
     /// Create a client connected to this fed but using RocksDB instead of MemDB
-    pub async fn new_client_rocksdb(&self) -> ClientHandleArc {
+    pub async fn new_client_rocksdb(&self) -> ClientHandle {
         let client_config = self.configs[&PeerId::from(0)]
             .consensus
             .to_client_config(&self.server_init)
@@ -76,7 +75,7 @@ impl FederationTest {
     }
 
     /// Create a new admin client connected to this fed
-    pub async fn new_admin_client(&self, peer_id: PeerId, auth: ApiAuth) -> ClientHandleArc {
+    pub async fn new_admin_client(&self, peer_id: PeerId, auth: ApiAuth) -> ClientHandle {
         let client_config = self.configs[&PeerId::from(0)]
             .consensus
             .to_client_config(&self.server_init)
@@ -93,7 +92,7 @@ impl FederationTest {
         client_config: ClientConfig,
         db: Database,
         admin_creds: Option<AdminCreds>,
-    ) -> ClientHandleArc {
+    ) -> ClientHandle {
         info!(target: LOG_TEST, "Setting new client with config");
         let mut client_builder = Client::builder(db).await.expect("Failed to build client");
         client_builder.with_module_inits(self.client_init.clone());
@@ -111,7 +110,6 @@ impl FederationTest {
                 None,
             )
             .await
-            .map(Arc::new)
             .expect("Failed to build client")
     }
 

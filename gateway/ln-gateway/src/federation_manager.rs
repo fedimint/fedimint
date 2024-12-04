@@ -1,9 +1,8 @@
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 
 use bitcoin::secp256k1::Keypair;
-use fedimint_client::ClientHandleArc;
+use fedimint_client::ClientHandle;
 use fedimint_core::config::{FederationId, FederationIdPrefix, JsonClientConfig};
 use fedimint_core::db::{DatabaseTransaction, NonCommittable};
 use fedimint_core::util::Spanned;
@@ -26,7 +25,7 @@ const INITIAL_INDEX: u64 = 1;
 pub struct FederationManager {
     /// Map of `FederationId` -> `Client`. Used for efficient retrieval of the
     /// client while handling incoming HTLCs.
-    clients: BTreeMap<FederationId, Spanned<fedimint_client::ClientHandleArc>>,
+    clients: BTreeMap<FederationId, Spanned<fedimint_client::ClientHandle>>,
 
     /// Map of federation indices to `FederationId`. Use for efficient retrieval
     /// of the client while handling incoming HTLCs.
@@ -52,7 +51,7 @@ impl FederationManager {
         self.clients.is_empty()
     }
 
-    pub fn add_client(&mut self, index: u64, client: Spanned<fedimint_client::ClientHandleArc>) {
+    pub fn add_client(&mut self, index: u64, client: Spanned<fedimint_client::ClientHandle>) {
         let federation_id = client.borrow().with_sync(|c| c.federation_id());
         self.clients.insert(federation_id, client);
         self.index_to_federation.insert(index, federation_id);
@@ -87,14 +86,9 @@ impl FederationManager {
         self.index_to_federation
             .retain(|_, fid| *fid != federation_id);
 
-        if let Some(client) = Arc::into_inner(client) {
-            client.shutdown().await;
-            Ok(())
-        } else {
-            Err(AdminGatewayError::ClientRemovalError(format!(
-                "Federation client {federation_id} is not unique, failed to shutdown client"
-            )))
-        }
+        client.shutdown().await;
+
+        Ok(())
     }
 
     /// Waits for ongoing incoming LNv1 and LNv2 payments to complete before
@@ -166,7 +160,7 @@ impl FederationManager {
         futures::future::join_all(removal_futures).await;
     }
 
-    pub fn get_client_for_index(&self, short_channel_id: u64) -> Option<Spanned<ClientHandleArc>> {
+    pub fn get_client_for_index(&self, short_channel_id: u64) -> Option<Spanned<ClientHandle>> {
         let federation_id = self.index_to_federation.get(&short_channel_id)?;
         // TODO(tvolk131): Cloning the client here could cause issues with client
         // shutdown (see `remove_client` above). Perhaps this function should take a
@@ -191,7 +185,7 @@ impl FederationManager {
     pub fn get_client_for_federation_id_prefix(
         &self,
         federation_id_prefix: FederationIdPrefix,
-    ) -> Option<Spanned<ClientHandleArc>> {
+    ) -> Option<Spanned<ClientHandle>> {
         self.clients.iter().find_map(|(fid, client)| {
             if fid.to_prefix() == federation_id_prefix {
                 Some(client.clone())
@@ -205,7 +199,7 @@ impl FederationManager {
         self.clients.contains_key(&federation_id)
     }
 
-    pub fn client(&self, federation_id: &FederationId) -> Option<&Spanned<ClientHandleArc>> {
+    pub fn client(&self, federation_id: &FederationId) -> Option<&Spanned<ClientHandle>> {
         self.clients.get(federation_id)
     }
 
@@ -243,7 +237,7 @@ impl FederationManager {
             .await
     }
 
-    pub async fn federation_name(&self, client: &ClientHandleArc) -> Option<String> {
+    pub async fn federation_name(&self, client: &ClientHandle) -> Option<String> {
         let client_config = client.config().await;
         let federation_name = client_config.global.federation_name();
         federation_name.map(String::from)

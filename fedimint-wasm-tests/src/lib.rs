@@ -1,7 +1,5 @@
 #![deny(clippy::pedantic)]
 
-use std::sync::Arc;
-
 use anyhow::Result;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::Client;
@@ -36,7 +34,7 @@ async fn make_client_builder() -> Result<fedimint_client::ClientBuilder> {
     Ok(builder)
 }
 
-async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientHandleArc> {
+async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientHandle> {
     let client_config = fedimint_api_client::api::net::Connector::default()
         .download_from_invite_code(invite_code)
         .await?;
@@ -49,8 +47,7 @@ async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientHandl
             client_config.clone(),
             None,
         )
-        .await
-        .map(Arc::new)?;
+        .await?;
     if let Ok(ln_client) = client.get_first_module::<LightningClientModule>() {
         let _ = ln_client.update_gateway_cache().await;
     }
@@ -132,7 +129,7 @@ mod tests {
     }
 
     async fn get_gateway(
-        client: &fedimint_client::ClientHandleArc,
+        client: &fedimint_client::ClientHandle,
     ) -> anyhow::Result<LightningGateway> {
         let lightning_module = client.get_first_module::<LightningClientModule>()?;
         let gws = lightning_module.list_gateways().await;
@@ -159,7 +156,7 @@ mod tests {
     }
 
     async fn receive_once(
-        client: fedimint_client::ClientHandleArc,
+        client: fedimint_client::ClientHandle,
         amount: Amount,
         gateway: LightningGateway,
     ) -> Result<()> {
@@ -205,7 +202,7 @@ mod tests {
     }
 
     async fn pay_once(
-        client: fedimint_client::ClientHandleArc,
+        client: fedimint_client::ClientHandle,
         ln_gateway: LightningGateway,
     ) -> Result<(), anyhow::Error> {
         let lightning_module = client.get_first_module::<LightningClientModule>()?;
@@ -260,7 +257,7 @@ mod tests {
     }
 
     async fn send_and_recv_ecash_once(
-        client: fedimint_client::ClientHandleArc,
+        client: fedimint_client::ClientHandle,
     ) -> Result<(), anyhow::Error> {
         let mint = client.get_first_module::<MintClientModule>()?;
         let (_, notes) = mint
@@ -293,7 +290,7 @@ mod tests {
     }
 
     async fn send_ecash_exact(
-        client: fedimint_client::ClientHandleArc,
+        client: fedimint_client::ClientHandle,
         amount: Amount,
     ) -> Result<(), anyhow::Error> {
         let mint = client.get_first_module::<MintClientModule>()?;
