@@ -174,6 +174,7 @@ declare_vars! {
 
         // Enable to us to make an unbounded number of payments
         FM_DEFAULT_GATEWAY_FEES: String = "0,0"; env: "FM_DEFAULT_GATEWAY_FEES";
+        FM_GATEWAY_FEES: String = "0,0"; env: "FM_GATEWAY_FEES";
         FM_GATEWAY_SKIP_WAIT_FOR_SYNC: String = "1"; env: "FM_GATEWAY_SKIP_WAIT_FOR_SYNC";
 
         FM_FAUCET_BIND_ADDR: String = f!("0.0.0.0:{FM_PORT_FAUCET}"); env: "FM_FAUCET_BIND_ADDR";
