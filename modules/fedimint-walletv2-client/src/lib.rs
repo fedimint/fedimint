@@ -77,7 +77,15 @@ pub enum FinalOperationState {
     Aborted,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
+pub struct AddressInfo {
+    /// Child index of this address
+    pub index: u64,
+    /// Address
+    pub address: Address,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnspentDeposit {
     /// The amount that has been deposited.
     pub value: bitcoin::Amount,
@@ -296,20 +304,23 @@ impl WalletClientModule {
     }
 
     /// Generate a new address controlled by the federation.
-    pub async fn generate_new_address(&self) -> Address {
+    pub async fn generate_new_address(&self) -> AddressInfo {
         let mut dbtx = self.db.begin_transaction().await;
 
-        let count = dbtx.get_value(&AddressCounterKey).await.unwrap_or(0);
+        let index = dbtx.get_value(&AddressCounterKey).await.unwrap_or(0);
 
-        dbtx.insert_entry(&AddressCounterKey, &(count + 1)).await;
+        dbtx.insert_entry(&AddressCounterKey, &(index + 1)).await;
 
         dbtx.commit_tx().await;
 
-        self.derive_address(count)
+        AddressInfo {
+            index,
+            address: self.derive_address(index),
+        }
     }
 
     /// List all previously generated addresses.
-    pub async fn list_addresses(&self) -> Vec<Address> {
+    pub async fn list_addresses(&self) -> Vec<AddressInfo> {
         let count = self
             .db
             .begin_transaction_nc()
@@ -318,7 +329,12 @@ impl WalletClientModule {
             .await
             .unwrap_or(0);
 
-        (0..count).map(|index| self.derive_address(index)).collect()
+        (0..count)
+            .map(|index| AddressInfo {
+                index,
+                address: self.derive_address(index),
+            })
+            .collect()
     }
 
     fn derive_address(&self, index: u64) -> Address {
@@ -335,7 +351,8 @@ impl WalletClientModule {
             .to_secp_key(secp256k1::SECP256K1)
     }
 
-    /// Check an address for unspent deposits.
+    /// Check an address for unspent deposits and return the deposits in
+    /// descending order by value.
     pub async fn check_address_for_deposits(
         &self,
         esplora: SafeUrl,
@@ -347,7 +364,7 @@ impl WalletClientModule {
             .map_err(|e| CheckError::FederationError(e.to_string()))?
             .saturating_sub(1);
 
-        let deposits = self
+        let mut deposits = self
             .esplora_rpc
             .get_address_utxo(esplora, self.derive_address(index))
             .await
@@ -366,6 +383,10 @@ impl WalletClientModule {
                 index,
             })
             .collect::<Vec<UnspentDeposit>>();
+
+        deposits.sort_by_key(|d1| d1.value);
+
+        deposits.reverse();
 
         let unspent_outpoints = self
             .module_api
@@ -390,7 +411,7 @@ impl WalletClientModule {
             .ok_or(ReceiveError::NoConsensusFeerateAvailable)
     }
 
-    /// Receive an unspent deposit with a given fee.
+    /// Issue ecash for an unspent deposit with a given fee.
     pub async fn receive(
         &self,
         unspent_deposit: &UnspentDeposit,
