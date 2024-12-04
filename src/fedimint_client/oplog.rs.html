@@ -744,7 +744,9 @@
 <a href="#743" id="743">743</a>
 <a href="#744" id="744">744</a>
 <a href="#745" id="745">745</a>
-<a href="#746" id="746">746</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future;
 <span class="kw">use </span>std::io::{Read, Write};
@@ -867,7 +869,9 @@
         // not introduce a find_by_range_rev function we have to jump through some
         // hoops, see also the comments in rev_epoch_ranges.
         // TODO: Implement using find_by_range_rev if ever introduced
-        </span><span class="kw">for </span>key_range_rev <span class="kw">in </span>rev_epoch_ranges(start_after_key, oldest_entry_key, EPOCH_DURATION) {
+        </span><span class="lifetime">'outer</span>: <span class="kw">for </span>key_range_rev <span class="kw">in
+            </span>rev_epoch_ranges(start_after_key, oldest_entry_key, EPOCH_DURATION)
+        {
             <span class="kw">let </span>epoch_operation_log_keys_rev = dbtx
                 .find_by_range(key_range_rev)
                 .<span class="kw">await
@@ -878,7 +882,7 @@
             <span class="kw">for </span>operation_log_key <span class="kw">in </span>epoch_operation_log_keys_rev.into_iter().rev() {
                 operation_log_keys.push(operation_log_key);
                 <span class="kw">if </span>operation_log_keys.len() &gt;= limit {
-                    <span class="kw">break</span>;
+                    <span class="kw">break </span><span class="lifetime">'outer</span>;
                 }
             }
         }
