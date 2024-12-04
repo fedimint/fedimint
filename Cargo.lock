@@ -64,7 +64,7 @@ checksum = "7fdf0c124883ef234a6262e43b9ed1d214e9f9c8744a88f1f2451c2b6efe4290"
 dependencies = [
  "async-trait",
  "bit-vec",
- "derive_more",
+ "derive_more 0.99.17",
  "log",
  "parity-scale-codec",
 ]
@@ -1723,8 +1723,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive_more"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a9b99b9cbbe49445b21764dc0625032a89b145a2642e67603e1c936f5458d05"
+dependencies = [
+ "derive_more-impl",
+]
+
+[[package]]
+name = "derive_more-impl"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb7330aeadfbe296029522e6c40f315320aba36fc43a5b3632f3795348f3bd22"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.87",
+ "unicode-xid",
+]
+
+[[package]]
 name = "devimint"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "axum 0.7.7",
@@ -2059,7 +2080,7 @@ checksum = "e8c02a5121d4ea3eb16a80748c74f5549a5665e4c21333c6098f283870fbdea6"
 
 [[package]]
 name = "fedimint-aead"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "argon2",
@@ -2091,7 +2112,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-api-client"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2128,7 +2149,7 @@ dependencies = [
  "cfg-if",
  "derive-deftly",
  "derive_builder_fork_arti",
- "derive_more",
+ "derive_more 0.99.17",
  "educe",
  "fedimint-tor-dirmgr",
  "fs-mistrust",
@@ -2164,7 +2185,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-bip39"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "bip39",
  "fedimint-client",
@@ -2174,7 +2195,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-bitcoind"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2191,14 +2212,14 @@ dependencies = [
 
 [[package]]
 name = "fedimint-build"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "fedimint-cli"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2222,12 +2243,12 @@ dependencies = [
  "futures",
  "hex",
  "itertools 0.13.0",
- "jemallocator",
  "lightning-invoice",
  "rand",
  "serde",
  "serde_json",
  "thiserror",
+ "tikv-jemallocator",
  "time",
  "tokio",
  "tracing",
@@ -2235,7 +2256,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-client"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -2266,7 +2287,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-client-wasm"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -2306,7 +2327,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-core"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "async-lock",
@@ -2360,7 +2381,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-dbtool"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2394,7 +2415,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-derive"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "itertools 0.13.0",
  "proc-macro2",
@@ -2404,7 +2425,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-derive-secret"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "bitcoin_hashes 0.14.0",
@@ -2416,11 +2437,11 @@ dependencies = [
 
 [[package]]
 name = "fedimint-docs"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 
 [[package]]
 name = "fedimint-dummy-client"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2440,7 +2461,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-dummy-common"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "fedimint-core",
@@ -2450,7 +2471,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-dummy-server"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2465,7 +2486,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-dummy-tests"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "fedimint-client",
@@ -2484,7 +2505,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-empty-client"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2501,7 +2522,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-empty-common"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "fedimint-core",
@@ -2511,7 +2532,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-empty-server"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2526,7 +2547,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-fuzz"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "fedimint-core",
  "fedimint-ln-common",
@@ -2539,7 +2560,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-gateway-cli"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "bitcoin",
@@ -2558,14 +2579,14 @@ dependencies = [
 
 [[package]]
 name = "fedimint-hkdf"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "bitcoin_hashes 0.14.0",
 ]
 
 [[package]]
 name = "fedimint-ln-client"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -2596,7 +2617,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ln-common"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "bitcoin",
@@ -2614,7 +2635,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ln-gateway"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -2655,10 +2676,10 @@ dependencies = [
  "futures",
  "futures-util",
  "hex",
- "jemallocator",
  "ldk-node",
  "lightning",
  "lightning-invoice",
+ "lockable",
  "prost 0.13.3",
  "rand",
  "reqwest 0.12.9",
@@ -2667,6 +2688,7 @@ dependencies = [
  "strum 0.26.3",
  "strum_macros 0.26.4",
  "thiserror",
+ "tikv-jemallocator",
  "tokio",
  "tokio-stream",
  "tonic 0.12.3",
@@ -2677,7 +2699,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ln-server"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2702,7 +2724,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ln-tests"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2729,7 +2751,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-lnv2-client"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -2756,7 +2778,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-lnv2-common"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2776,7 +2798,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-lnv2-server"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2797,7 +2819,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-lnv2-tests"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2823,7 +2845,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-load-test-tool"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -2850,7 +2872,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-logging"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "console-subscriber",
@@ -2862,7 +2884,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-meta-client"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2883,7 +2905,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-meta-common"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "fedimint-core",
@@ -2896,7 +2918,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-meta-server"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2914,7 +2936,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-meta-tests"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "devimint",
@@ -2927,7 +2949,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-metrics"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "axum 0.7.7",
@@ -2939,7 +2961,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mint-client"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -2978,7 +3000,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mint-common"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "bincode",
@@ -2992,7 +3014,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mint-server"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -3018,7 +3040,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mint-tests"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "bitcoin_hashes 0.14.0",
@@ -3047,7 +3069,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-portalloc"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "dirs",
@@ -3061,7 +3083,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-recoverytool"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "bitcoin",
@@ -3084,7 +3106,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-rocksdb"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3098,7 +3120,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-server"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "async-channel 2.3.1",
@@ -3151,7 +3173,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-tbs"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "bls12_381",
  "criterion",
@@ -3166,7 +3188,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-testing"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -3195,7 +3217,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-testing-core"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "fedimint-client",
@@ -3260,7 +3282,7 @@ dependencies = [
  "async-trait",
  "base64ct",
  "derive_builder_fork_arti",
- "derive_more",
+ "derive_more 0.99.17",
  "digest",
  "educe",
  "event-listener 5.2.0",
@@ -3304,7 +3326,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-tpe"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "bitcoin_hashes 0.14.0",
  "bls12_381",
@@ -3318,7 +3340,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-unknown-common"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "fedimint-core",
@@ -3328,7 +3350,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-unknown-server"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3341,7 +3363,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-wallet-client"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -3368,7 +3390,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-wallet-common"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "bitcoin",
@@ -3384,7 +3406,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-wallet-server"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3409,7 +3431,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-wallet-tests"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -3435,7 +3457,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-wasm-tests"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "fedimint-api-client",
@@ -3453,7 +3475,7 @@ dependencies = [
 
 [[package]]
 name = "fedimintd"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "bitcoin",
@@ -3475,8 +3497,8 @@ dependencies = [
  "fedimint-unknown-server",
  "fedimint-wallet-server",
  "futures",
- "jemallocator",
  "serde_json",
+ "tikv-jemallocator",
  "tokio",
  "tracing",
 ]
@@ -3752,7 +3774,7 @@ dependencies = [
 
 [[package]]
 name = "gateway-tests"
-version = "0.5.0-rc.1"
+version = "0.5.0-rc.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -4650,26 +4672,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1a46d1a171d865aa5f83f92695765caa047a9b4cbae2cbf37dbd613a793fd4c"
 
 [[package]]
-name = "jemalloc-sys"
-version = "0.5.4+5.3.0-patched"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac6c1946e1cea1788cbfde01c993b52a10e2da07f4bac608228d1bed20bfebf2"
-dependencies = [
- "cc",
- "libc",
-]
-
-[[package]]
-name = "jemallocator"
-version = "0.5.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0de374a9f8e63150e6f5e8a60cc14c668226d7a347d8aee1a45766e3c4dd3bc"
-dependencies = [
- "jemalloc-sys",
- "libc",
-]
-
-[[package]]
 name = "jobserver"
 version = "0.1.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4940,6 +4942,7 @@ dependencies = [
  "libc",
  "libz-sys",
  "lz4-sys",
+ "tikv-jemalloc-sys",
  "zstd-sys",
 ]
 
@@ -5123,6 +5126,19 @@ checksum = "3c168f8615b12bc01f9c17e2eb0cc07dcae1940121185446edc3744920e8ef45"
 dependencies = [
  "autocfg",
  "scopeguard",
+]
+
+[[package]]
+name = "lockable"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e251a4db7189cc05077d5585541ec5a8c4fb47e561edff84c46c1e35671027b"
+dependencies = [
+ "derive_more 1.0.0",
+ "futures",
+ "itertools 0.13.0",
+ "lru",
+ "tokio",
 ]
 
 [[package]]
@@ -6682,7 +6698,7 @@ version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a1e9cd092ef5e122f1a34f3fe15de8e9685f8f610e31c4c0643976aa5e31737"
 dependencies = [
- "derive_more",
+ "derive_more 0.99.17",
  "educe",
  "either",
  "fluid-let",
@@ -7370,6 +7386,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "tikv-jemalloc-sys"
+version = "0.5.4+5.3.0-patched"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9402443cb8fd499b6f327e40565234ff34dbda27460c5b47db0db77443dd85d1"
+dependencies = [
+ "cc",
+ "libc",
+]
+
+[[package]]
+name = "tikv-jemallocator"
+version = "0.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "965fe0c26be5c56c94e38ba547249074803efd52adfb66de62107d95aab3eaca"
+dependencies = [
+ "libc",
+ "tikv-jemalloc-sys",
+]
+
+[[package]]
 name = "time"
 version = "0.3.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7739,7 +7775,7 @@ dependencies = [
  "bitflags 2.4.2",
  "bytes",
  "caret",
- "derive_more",
+ "derive_more 0.99.17",
  "educe",
  "paste",
  "rand",
@@ -7762,7 +7798,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d788592147d24f6269cea9bf43c18393905a8778540f4ab77065306e8158d105"
 dependencies = [
  "caret",
- "derive_more",
+ "derive_more 0.99.17",
  "digest",
  "thiserror",
  "tor-bytes",
@@ -7778,7 +7814,7 @@ checksum = "48f70c19181bb19d58eb8e135146d617c6b7497c69e08a23c0967f42040926b4"
 dependencies = [
  "async-trait",
  "derive_builder_fork_arti",
- "derive_more",
+ "derive_more 0.99.17",
  "educe",
  "futures",
  "postage",
@@ -7825,7 +7861,7 @@ dependencies = [
  "bounded-vec-deque",
  "cfg-if",
  "derive_builder_fork_arti",
- "derive_more",
+ "derive_more 0.99.17",
  "downcast-rs",
  "dyn-clone",
  "educe",
@@ -7909,7 +7945,7 @@ checksum = "4ad3fc105b351b327a7f21348fa6ebf8b89c8e2106be77c94eb8d69f01dbfaa7"
 dependencies = [
  "async-compression",
  "base64ct",
- "derive_more",
+ "derive_more 0.99.17",
  "futures",
  "hex",
  "http 1.1.0",
@@ -7936,7 +7972,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cab4f75d5d8e00890261b9ff22e7c40354fdf88b375d83a6974d8128207f4db3"
 dependencies = [
  "backtrace",
- "derive_more",
+ "derive_more 0.99.17",
  "futures",
  "once_cell",
  "paste",
@@ -7957,7 +7993,7 @@ dependencies = [
  "base64ct",
  "derive-deftly",
  "derive_builder_fork_arti",
- "derive_more",
+ "derive_more 0.99.17",
  "dyn-clone",
  "educe",
  "futures",
@@ -7996,7 +8032,7 @@ checksum = "40668cea7d86ebcff26a07ed728f6006f9a89f320e32b659990d12602ae9c980"
 dependencies = [
  "async-trait",
  "derive-deftly",
- "derive_more",
+ "derive_more 0.99.17",
  "educe",
  "either",
  "futures",
@@ -8036,7 +8072,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6045a6105e8159e86a73d9e925c67d7ef85dec1cbf160230c02fd94430ea7192"
 dependencies = [
  "data-encoding",
- "derive_more",
+ "derive_more 0.99.17",
  "digest",
  "itertools 0.13.0",
  "paste",
@@ -8062,7 +8098,7 @@ dependencies = [
  "arrayvec",
  "derive-deftly",
  "derive_builder_fork_arti",
- "derive_more",
+ "derive_more 0.99.17",
  "downcast-rs",
  "dyn-clone",
  "fs-mistrust",
@@ -8095,7 +8131,7 @@ dependencies = [
  "caret",
  "derive-deftly",
  "derive_builder_fork_arti",
- "derive_more",
+ "derive_more 0.99.17",
  "hex",
  "itertools 0.13.0",
  "safelog",
@@ -8120,7 +8156,7 @@ dependencies = [
  "base64ct",
  "ctr",
  "curve25519-dalek",
- "derive_more",
+ "derive_more 0.99.17",
  "digest",
  "ed25519-dalek",
  "educe",
@@ -8164,7 +8200,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37b39f8f3dcad5504634b66a4ae209a2d0dd9936752f6e5a3722c8ff6831ab5e"
 dependencies = [
  "bitflags 2.4.2",
- "derive_more",
+ "derive_more 0.99.17",
  "digest",
  "futures",
  "hex",
@@ -8200,7 +8236,7 @@ dependencies = [
  "bitflags 2.4.2",
  "cipher",
  "derive_builder_fork_arti",
- "derive_more",
+ "derive_more 0.99.17",
  "digest",
  "educe",
  "hex",
@@ -8239,7 +8275,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c114ebe5597c0e6c5e692130f9343a46673e821f3318b69791a84076628c4e2"
 dependencies = [
  "derive-deftly",
- "derive_more",
+ "derive_more 0.99.17",
  "filetime",
  "fs-mistrust",
  "fslock",
@@ -8266,7 +8302,7 @@ dependencies = [
  "cipher",
  "coarsetime",
  "derive_builder_fork_arti",
- "derive_more",
+ "derive_more 0.99.17",
  "digest",
  "educe",
  "futures",
@@ -8335,7 +8371,7 @@ dependencies = [
  "async-trait",
  "async_executors",
  "coarsetime",
- "derive_more",
+ "derive_more 0.99.17",
  "educe",
  "futures",
  "futures-rustls",
@@ -8360,7 +8396,7 @@ dependencies = [
  "async-trait",
  "backtrace",
  "derive-deftly",
- "derive_more",
+ "derive_more 0.99.17",
  "educe",
  "futures",
  "humantime",
@@ -8397,7 +8433,7 @@ version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dae1da9b62c697ba9924f26051ed346ae3b8b57eab7b4d367cb2f5462e05902a"
 dependencies = [
- "derive_more",
+ "derive_more 0.99.17",
  "thiserror",
 ]
 
@@ -8613,6 +8649,12 @@ checksum = "5c5713f0fc4b5db668a2ac63cdb7bb4469d8c9fed047b1d0292cc7b0ce2ba921"
 dependencies = [
  "tinyvec",
 ]
+
+[[package]]
+name = "unicode-xid"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
 name = "untrusted"
