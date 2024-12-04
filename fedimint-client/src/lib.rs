@@ -651,22 +651,19 @@ fn states_add_instance(
 /// Put this in an Arc to clone it (see [`ClientHandleArc`]).
 #[derive(Debug)]
 pub struct ClientHandle {
-    inner: Option<Arc<Client>>,
+    inner: Arc<Client>,
 }
 
 /// An alias for a reference counted [`ClientHandle`]
 pub type ClientHandleArc = Arc<ClientHandle>;
 
 impl ClientHandle {
-    /// Create
     fn new(inner: Arc<Client>) -> Self {
-        ClientHandle {
-            inner: inner.into(),
-        }
+        ClientHandle { inner }
     }
 
     fn as_inner(&self) -> &Arc<Client> {
-        self.inner.as_ref().expect("Inner always set")
+        &self.inner
     }
 
     pub fn start_executor(&self) {
@@ -678,18 +675,12 @@ impl ClientHandle {
         self.shutdown_inner().await;
     }
 
+    /// Shutdown the client. `self` MUST be dropped after this call.
     async fn shutdown_inner(&mut self) {
-        let Some(inner) = self.inner.take() else {
-            error!(
-                target: LOG_CLIENT,
-                "ClientHandleShared::shutdown called twice"
-            );
-            return;
-        };
-        inner.executor.stop_executor();
-        let db = inner.db.clone();
+        self.inner.executor.stop_executor();
         debug!(target: LOG_CLIENT, "Waiting for client task group to shut down");
-        if let Err(err) = inner
+        if let Err(err) = self
+            .inner
             .task_group
             .clone()
             .shutdown_join_all(Some(Duration::from_secs(30)))
@@ -698,17 +689,14 @@ impl ClientHandle {
             warn!(target: LOG_CLIENT, %err, "Error waiting for client task group to shut down");
         }
 
-        let client_strong_count = Arc::strong_count(&inner);
-        debug!(target: LOG_CLIENT, "Dropping last handle to Client");
-        // We are sure that no background tasks are running in the client anymore, so we
-        // can drop the (usually) last inner reference.
-        drop(inner);
-
-        if client_strong_count != 1 {
-            debug!(target: LOG_CLIENT, count = client_strong_count - 1, LOG_CLIENT, "External Client references remaining after last handle dropped");
+        let client_strong_count = Arc::strong_count(&self.inner);
+        if client_strong_count == 1 {
+            debug!(target: LOG_CLIENT, "Dropping last handle to Client");
+        } else {
+            debug!(target: LOG_CLIENT, count = client_strong_count - 1, LOG_CLIENT, "External Client references remaining after dropping ClientHandle");
         }
 
-        let db_strong_count = db.strong_count();
+        let db_strong_count = self.inner.db.strong_count();
         if db_strong_count != 1 {
             debug!(target: LOG_CLIENT, count = db_strong_count - 1, "External DB references remaining after last handle dropped");
         }
@@ -724,14 +712,10 @@ impl ClientHandle {
     /// to open it again.
     pub async fn restart(self) -> anyhow::Result<ClientHandle> {
         let (builder, config, api_secret, root_secret) = {
-            let client = self
-                .inner
-                .as_ref()
-                .ok_or_else(|| format_err!("Already stopped"))?;
-            let builder = ClientBuilder::from_existing(client);
-            let config = client.config().await;
-            let api_secret = client.api_secret.clone();
-            let root_secret = client.root_secret.clone();
+            let builder = ClientBuilder::from_existing(&self.inner);
+            let config = self.inner.config().await;
+            let api_secret = self.inner.api_secret.clone();
+            let root_secret = self.inner.root_secret.clone();
 
             (builder, config, api_secret, root_secret)
         };
@@ -745,14 +729,14 @@ impl ops::Deref for ClientHandle {
     type Target = Client;
 
     fn deref(&self) -> &Self::Target {
-        self.inner.as_ref().expect("Must have inner client set")
+        self.inner.as_ref()
     }
 }
 
 impl ClientHandle {
     pub(crate) fn downgrade(&self) -> ClientWeak {
         ClientWeak {
-            inner: Arc::downgrade(self.inner.as_ref().expect("Inner always set")),
+            inner: Arc::downgrade(&self.inner),
         }
     }
 }
@@ -792,10 +776,6 @@ impl ClientWeak {
 /// `Arc<Client>`s such that at least one `Executor` never gets dropped.
 impl Drop for ClientHandle {
     fn drop(&mut self) {
-        if self.inner.is_none() {
-            return;
-        }
-
         // We can't use block_on in single-threaded mode or wasm
         #[cfg(target_family = "wasm")]
         let can_block = false;
@@ -803,8 +783,7 @@ impl Drop for ClientHandle {
         // nosemgrep: ban-raw-block-on
         let can_block = RuntimeHandle::current().runtime_flavor() != RuntimeFlavor::CurrentThread;
         if !can_block {
-            let inner = self.inner.take().expect("Must have inner client set");
-            inner.executor.stop_executor();
+            self.inner.executor.stop_executor();
             if cfg!(target_family = "wasm") {
                 error!(target: LOG_CLIENT, "Automatic client shutdown is not possible on wasm, call ClientHandle::shutdown manually.");
             } else {
