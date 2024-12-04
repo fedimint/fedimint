@@ -127,14 +127,9 @@ async fn test_send_and_receive() -> anyhow::Result<()> {
 
     assert_eq!(unspent_deposits.len(), 2);
 
-    let receive_fee = client
-        .get_first_module::<WalletClientModule>()?
-        .receive_fee()
-        .await?;
-
     let receive_op = client
         .get_first_module::<WalletClientModule>()?
-        .receive(&unspent_deposits[0], receive_fee)
+        .receive(&unspent_deposits[0], None)
         .await?;
 
     assert_eq!(
@@ -162,14 +157,9 @@ async fn test_send_and_receive() -> anyhow::Result<()> {
 
     assert_eq!(unspent_deposits.len(), 1);
 
-    let receive_fee = client
-        .get_first_module::<WalletClientModule>()?
-        .receive_fee()
-        .await?;
-
     let receive_op = client
         .get_first_module::<WalletClientModule>()?
-        .receive(&unspent_deposits[0], receive_fee)
+        .receive(&unspent_deposits[0], None)
         .await?;
 
     assert_eq!(
@@ -194,14 +184,9 @@ async fn test_send_and_receive() -> anyhow::Result<()> {
 
     let address = bitcoin.get_new_address().await;
 
-    let send_fee = client
-        .get_first_module::<WalletClientModule>()?
-        .send_fee()
-        .await?;
-
     let send_op = client
         .get_first_module::<WalletClientModule>()?
-        .send(address.as_unchecked(), bsats(250_000), send_fee)
+        .send(address.as_unchecked(), bsats(250_000), None)
         .await?;
 
     assert_eq!(
@@ -289,14 +274,9 @@ async fn fee_exceeds_one_bitcoin_within_twenty_five_pending_transactions() -> an
 
     assert_eq!(unspent_deposits.len(), 1);
 
-    let receive_fee = client
-        .get_first_module::<WalletClientModule>()?
-        .receive_fee()
-        .await?;
-
     let receive_op = client
         .get_first_module::<WalletClientModule>()?
-        .receive(&unspent_deposits[0], receive_fee)
+        .receive(&unspent_deposits[0], None)
         .await?;
 
     assert_eq!(
@@ -319,13 +299,13 @@ async fn fee_exceeds_one_bitcoin_within_twenty_five_pending_transactions() -> an
             .send_fee()
             .await?;
 
-        if send_fee.value >= Amount::from_int_btc(1) {
+        if send_fee >= Amount::from_int_btc(1) {
             return Ok(());
         }
 
         let send_op = client
             .get_first_module::<WalletClientModule>()?
-            .send(address.as_unchecked(), Amount::from_sat(10_000), send_fee)
+            .send(address.as_unchecked(), Amount::from_sat(10_000), None)
             .await?;
 
         assert_eq!(

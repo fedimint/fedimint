@@ -1,6 +1,6 @@
 use std::{ffi, iter};
 
-use anyhow::{ensure, Context};
+use anyhow::Context;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::Address;
 use clap::Parser;
@@ -28,7 +28,6 @@ enum Opts {
     /// Check an address for unspent deposits and return the deposits in
     /// descending order by value.
     Check { esplora: SafeUrl, index: u64 },
-
     /// Fetch the current fee required to issue ecash for an unspent deposit.
     ReceiveFee,
     /// Issue ecash for the claimable unspent deposit of largest value.
@@ -47,22 +46,13 @@ pub(crate) async fn handle_cli_command(
     let opts = Opts::parse_from(iter::once(&ffi::OsString::from("walletv2")).chain(args.iter()));
 
     let value = match opts {
-        Opts::SendFee => json(wallet.send_fee().await.map(|fee| fee.value)?),
+        Opts::SendFee => json(wallet.send_fee().await?),
         Opts::Send {
             address,
             amount,
-            fee_limit: fee,
+            fee_limit,
         } => {
-            let send_fee = wallet.send_fee().await?;
-
-            if let Some(fee) = fee {
-                ensure!(
-                    send_fee.value <= fee,
-                    "The currently required fee exceeds the specified limit of {fee}"
-                );
-            }
-
-            let operation_id = wallet.send(&address, amount, send_fee).await?;
+            let operation_id = wallet.send(&address, amount, fee_limit).await?;
 
             json(wallet.await_final_operation_state(operation_id).await)
         }
@@ -71,11 +61,11 @@ pub(crate) async fn handle_cli_command(
         Opts::Check { esplora, index } => {
             json(wallet.check_address_for_deposits(esplora, index).await?)
         }
-        Opts::ReceiveFee => json(wallet.receive_fee().await.map(|fee| fee.value)?),
+        Opts::ReceiveFee => json(wallet.receive_fee().await?),
         Opts::Receive {
             esplora,
             index,
-            fee_limit: fee,
+            fee_limit,
         } => {
             let deposit = wallet
                 .check_address_for_deposits(esplora, index)
@@ -84,16 +74,7 @@ pub(crate) async fn handle_cli_command(
                 .find(|deposit| deposit.confirmations_required == Some(0))
                 .context("No unspent deposits are ready to be claimed")?;
 
-            let receive_fee = wallet.receive_fee().await?;
-
-            if let Some(fee) = fee {
-                ensure!(
-                    receive_fee.value <= fee,
-                    "The currently required fee exceeds the specified limit of {fee}"
-                );
-            }
-
-            let operation_id = wallet.receive(&deposit, receive_fee).await?;
+            let operation_id = wallet.receive(&deposit, fee_limit).await?;
 
             json(wallet.await_final_operation_state(operation_id).await)
         }
