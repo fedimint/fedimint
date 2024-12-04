@@ -657,12 +657,28 @@ impl ClientHandle {
         ClientHandle { inner }
     }
 
-    fn as_inner(&self) -> &Arc<Client> {
-        &self.inner
+    pub fn start_executor(&self) {
+        debug!(
+            target: LOG_CLIENT,
+            "Starting fedimint client executor (version: {})",
+            fedimint_build_code_version_env!()
+        );
+        self.executor.start_executor(self.context_gen());
     }
 
-    pub fn start_executor(&self) {
-        self.as_inner().start_executor();
+    fn context_gen(&self) -> ModuleGlobalContextGen {
+        let client_inner = Arc::downgrade(&self.inner);
+        Arc::new(move |module_instance, operation| {
+            ModuleGlobalClientContext {
+                client: client_inner
+                    .clone()
+                    .upgrade()
+                    .expect("ModuleGlobalContextGen called after client was dropped"),
+                module_instance_id: module_instance,
+                operation,
+            }
+            .into()
+        })
     }
 
     /// Shutdown the client.
@@ -979,32 +995,8 @@ impl Client {
         Self::get_config_from_db(db).await.is_some()
     }
 
-    pub fn start_executor(self: &Arc<Self>) {
-        debug!(
-            target: LOG_CLIENT,
-            "Starting fedimint client executor (version: {})",
-            fedimint_build_code_version_env!()
-        );
-        self.executor.start_executor(self.context_gen());
-    }
-
     pub fn federation_id(&self) -> FederationId {
         self.federation_id
-    }
-
-    fn context_gen(self: &Arc<Self>) -> ModuleGlobalContextGen {
-        let client_inner = Arc::downgrade(self);
-        Arc::new(move |module_instance, operation| {
-            ModuleGlobalClientContext {
-                client: client_inner
-                    .clone()
-                    .upgrade()
-                    .expect("ModuleGlobalContextGen called after client was dropped"),
-                module_instance_id: module_instance,
-                operation,
-            }
-            .into()
-        })
     }
 
     pub async fn config(&self) -> ClientConfig {
@@ -2624,7 +2616,7 @@ impl ClientBuilder {
             )
             .await?;
         if !stopped {
-            client.as_inner().start_executor();
+            client.start_executor();
         }
         Ok(client)
     }
@@ -2647,7 +2639,7 @@ impl ClientBuilder {
             )
             .await?;
         if !stopped {
-            client.as_inner().start_executor();
+            client.start_executor();
         }
 
         Ok(client)
