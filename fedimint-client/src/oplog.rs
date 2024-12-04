@@ -121,7 +121,9 @@ impl OperationLog {
         // not introduce a find_by_range_rev function we have to jump through some
         // hoops, see also the comments in rev_epoch_ranges.
         // TODO: Implement using find_by_range_rev if ever introduced
-        for key_range_rev in rev_epoch_ranges(start_after_key, oldest_entry_key, EPOCH_DURATION) {
+        'outer: for key_range_rev in
+            rev_epoch_ranges(start_after_key, oldest_entry_key, EPOCH_DURATION)
+        {
             let epoch_operation_log_keys_rev = dbtx
                 .find_by_range(key_range_rev)
                 .await
@@ -132,7 +134,7 @@ impl OperationLog {
             for operation_log_key in epoch_operation_log_keys_rev.into_iter().rev() {
                 operation_log_keys.push(operation_log_key);
                 if operation_log_keys.len() >= limit {
-                    break;
+                    break 'outer;
                 }
             }
         }
