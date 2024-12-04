@@ -2606,19 +2606,8 @@ impl ClientBuilder {
         let api_secret = Client::get_api_secret_from_db(&self.db_no_decoders).await;
         let stopped = self.stopped;
 
-        let log_event_added_transient_tx = self.log_event_added_transient_tx.clone();
-        let client = self
-            .build_stopped(
-                pre_root_secret,
-                &config,
-                api_secret,
-                log_event_added_transient_tx,
-            )
-            .await?;
-        if !stopped {
-            client.start_executor();
-        }
-        Ok(client)
+        self.build(pre_root_secret, config, api_secret, stopped)
+            .await
     }
 
     /// Build a [`Client`] and start the executor
@@ -2641,7 +2630,6 @@ impl ClientBuilder {
         if !stopped {
             client.start_executor();
         }
-
         Ok(client)
     }
 
