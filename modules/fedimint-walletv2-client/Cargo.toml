@@ -21,7 +21,6 @@ async-stream = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
 clap = { workspace = true }
-dialoguer = "0.11.0"
 erased-serde = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }

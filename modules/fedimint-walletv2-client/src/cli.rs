@@ -4,28 +4,39 @@ use anyhow::{ensure, Context};
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::Address;
 use clap::Parser;
-use dialoguer::{Confirm, Select};
 use fedimint_core::util::SafeUrl;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::{UnspentDeposit, WalletClientModule};
+use crate::WalletClientModule;
 
 #[derive(Parser, Serialize)]
 enum Opts {
+    /// Fetch the current fee required to send an on-chain payment.
+    SendFee,
+    /// Send an on-chain payment.
     Send {
         address: Address<NetworkUnchecked>,
         amount: bitcoin::Amount,
+        #[arg(long)]
+        fee_limit: Option<bitcoin::Amount>,
     },
+    /// Generate a new address controlled by the federation.
     Generate,
+    /// List all previously generated addresses.
     List,
-    Check {
-        esplora: SafeUrl,
-        index: u64,
-    },
+    /// Check an address for unspent deposits and return the deposits in
+    /// descending order by value.
+    Check { esplora: SafeUrl, index: u64 },
+
+    /// Fetch the current fee required to issue ecash for an unspent deposit.
+    ReceiveFee,
+    /// Issue ecash for the claimable unspent deposit of largest value.
     Receive {
         esplora: SafeUrl,
         index: u64,
+        #[arg(long)]
+        fee_limit: Option<bitcoin::Amount>,
     },
 }
 
@@ -36,16 +47,19 @@ pub(crate) async fn handle_cli_command(
     let opts = Opts::parse_from(iter::once(&ffi::OsString::from("walletv2")).chain(args.iter()));
 
     let value = match opts {
-        Opts::Send { address, amount } => {
+        Opts::SendFee => json(wallet.send_fee().await.map(|fee| fee.value)?),
+        Opts::Send {
+            address,
+            amount,
+            fee_limit: fee,
+        } => {
             let send_fee = wallet.send_fee().await?;
 
-            if !Confirm::new()
-                .with_prompt("Dou you want to continue with a fee of {send_fee.amount}")
-                .default(false)
-                .interact()
-                .context("Failed to confirm fee")?
-            {
-                return Ok(json(()));
+            if let Some(fee) = fee {
+                ensure!(
+                    send_fee.value <= fee,
+                    "The currently required fee exceeds the specified limit of {fee}"
+                );
             }
 
             let operation_id = wallet.send(&address, amount, send_fee).await?;
@@ -53,69 +67,33 @@ pub(crate) async fn handle_cli_command(
             json(wallet.await_final_operation_state(operation_id).await)
         }
         Opts::Generate => json(wallet.generate_new_address().await),
-        Opts::List => {
-            for (index, address) in wallet.list_addresses().await.iter().enumerate() {
-                println!("{index} - {address}");
-            }
-
-            json(())
-        }
+        Opts::List => json(wallet.list_addresses().await),
         Opts::Check { esplora, index } => {
-            for deposit in wallet.check_address_for_deposits(esplora, index).await? {
-                println!(
-                    "{}",
-                    match deposit.confirmations_required {
-                        Some(0) => {
-                            format!("{} - Confirmed", deposit.value)
-                        }
-                        Some(confirmations) => format!(
-                            "{} - Requires {} additional confirmations",
-                            deposit.value, confirmations
-                        ),
-                        None => format!("{} - Pending", deposit.value),
-                    }
-                );
-            }
-
-            json(())
+            json(wallet.check_address_for_deposits(esplora, index).await?)
         }
-        Opts::Receive { esplora, index } => {
-            let unspent_deposits = wallet
+        Opts::ReceiveFee => json(wallet.receive_fee().await.map(|fee| fee.value)?),
+        Opts::Receive {
+            esplora,
+            index,
+            fee_limit: fee,
+        } => {
+            let deposit = wallet
                 .check_address_for_deposits(esplora, index)
                 .await?
                 .into_iter()
-                .filter(|deposit| deposit.confirmations_required == Some(0))
-                .collect::<Vec<UnspentDeposit>>();
-
-            ensure!(
-                !unspent_deposits.is_empty(),
-                "No unspent deposits are ready to be claimed"
-            );
-
-            let index = Select::new()
-                .items(
-                    &unspent_deposits
-                        .iter()
-                        .map(|deposit| format!("{}", deposit.value))
-                        .collect::<Vec<String>>(),
-                )
-                .interact()
-                .context("Failed to select unspent deposit for consolidation")?;
+                .find(|deposit| deposit.confirmations_required == Some(0))
+                .context("No unspent deposits are ready to be claimed")?;
 
             let receive_fee = wallet.receive_fee().await?;
 
-            if !Confirm::new()
-                .with_prompt("Dou you want to continue with a fee of {receive_fee.amount}")
-                .default(false)
-                .interact()
-                .context("Failed to confirm fee")?
-            {
-                return Ok(json(()));
+            if let Some(fee) = fee {
+                ensure!(
+                    receive_fee.value <= fee,
+                    "The currently required fee exceeds the specified limit of {fee}"
+                );
             }
 
-            let operation_id = wallet
-                .receive(&unspent_deposits[index], receive_fee)
-                .await?;
+            let operation_id = wallet.receive(&deposit, receive_fee).await?;
 
             json(wallet.await_final_operation_state(operation_id).await)
         }

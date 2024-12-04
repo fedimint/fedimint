@@ -100,11 +100,11 @@ async fn test_send_and_receive() -> anyhow::Result<()> {
         .await;
 
     bitcoin
-        .send_and_mine_block(&federation_address, bsats(100_000))
+        .send_and_mine_block(&federation_address.address, bsats(100_000))
         .await;
 
     bitcoin
-        .send_and_mine_block(&federation_address, bsats(200_000))
+        .send_and_mine_block(&federation_address.address, bsats(200_000))
         .await;
 
     info!("Wait for the finality delay of six blocks...");
@@ -118,7 +118,7 @@ async fn test_send_and_receive() -> anyhow::Result<()> {
 
     await_consensus_block_count(&client, current_consensus + 6).await?;
 
-    info!("Claim ecash for the first deposit...");
+    info!("Claim ecash for the second deposit...");
 
     let unspent_deposits = client
         .get_first_module::<WalletClientModule>()?
@@ -150,10 +150,10 @@ async fn test_send_and_receive() -> anyhow::Result<()> {
             .get_first_module::<WalletClientModule>()?
             .federation_assets()
             .await?,
-        bsats(100_000)
+        bsats(200_000)
     );
 
-    info!("Claim ecash for the second deposit...");
+    info!("Claim ecash for the first deposit...");
 
     let unspent_deposits = client
         .get_first_module::<WalletClientModule>()?
@@ -266,7 +266,7 @@ async fn fee_exceeds_one_bitcoin_within_twenty_five_pending_transactions() -> an
         .await;
 
     bitcoin
-        .send_and_mine_block(&federation_address, Amount::from_int_btc(100))
+        .send_and_mine_block(&federation_address.address, Amount::from_int_btc(100))
         .await;
 
     info!("Wait for the finality delay of six blocks...");
