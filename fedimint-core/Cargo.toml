@@ -34,6 +34,7 @@ fedimint-derive = { workspace = true }
 fedimint-logging = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true, features = ["serde"] }
+hex-conservative = { workspace = true }
 imbl = "3.0.0"
 itertools = { workspace = true }
 jsonrpsee-core = { version = "0.24.7", features = ["client"] }
