@@ -62,6 +62,14 @@ pub const FM_FORCE_BITCOIN_RPC_KIND_ENV: &str = "FM_FORCE_BITCOIND_RPC_KIND";
 /// Env var for bitcoin URL (default, takes priority over config settings)
 pub const FM_FORCE_BITCOIN_RPC_URL_ENV: &str = "FM_FORCE_BITCOIND_RPC_URL";
 
+/// List of json api endpoint sources to use as a source of
+/// fee rate estimation.
+///
+/// `;`-separated list of urls with part after `#`
+/// ("fragment") specifying jq filter to extract sats/vB fee rate.
+/// Eg. `https://mempool.space/api/v1/fees/recommended#.halfHourFee`
+pub const FM_WALLET_FEERATE_SOURCES_ENV: &str = "FM_WALLET_FEERATE_SOURCES";
+
 /// Env var that can be set to point at the bitcoind's cookie file to use for
 /// auth
 pub const FM_BITCOIND_COOKIE_FILE_ENV: &str = "FM_BITCOIND_COOKIE_FILE";
