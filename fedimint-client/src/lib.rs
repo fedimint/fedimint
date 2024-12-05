@@ -152,7 +152,7 @@ use thiserror::Error;
 use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
 use tokio::sync::{broadcast, watch, RwLock};
 use tokio_stream::wrappers::WatchStream;
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info, warn};
 use transaction::{
     ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputSM, TxSubmissionStatesSM,
 };
@@ -682,36 +682,20 @@ impl ClientHandle {
     }
 
     /// Shutdown the client.
-    pub async fn shutdown(mut self) {
-        self.shutdown_inner().await;
-    }
-
-    /// Shutdown the client. `self` MUST be dropped after this call.
-    async fn shutdown_inner(&mut self) {
-        self.inner.executor.stop_executor();
-        let db = self.inner.db.clone();
-        debug!(target: LOG_CLIENT, "Waiting for client task group to shut down");
-        if let Err(err) = self
-            .inner
-            .task_group
-            .clone()
-            .shutdown_join_all(Some(Duration::from_secs(30)))
-            .await
-        {
-            warn!(target: LOG_CLIENT, %err, "Error waiting for client task group to shut down");
-        }
-
-        debug!(target: LOG_CLIENT, "Dropping last handle to Client");
-        let client_strong_count = Arc::strong_count(&self.inner);
-        if client_strong_count != 1 {
-            debug!(target: LOG_CLIENT, count = client_strong_count - 1, LOG_CLIENT, "External Client references remaining after last handle dropped");
-        }
-
-        let db_strong_count = db.strong_count();
-        if db_strong_count != 1 {
-            debug!(target: LOG_CLIENT, count = db_strong_count - 1, "External DB references remaining after last handle dropped");
-        }
-        trace!(target: LOG_CLIENT, "Dropped last handle to Client");
+    pub async fn shutdown(self) {
+        match Arc::try_unwrap(self.inner) {
+            Ok(mut client) => {
+                client.shutdown().await;
+                debug!(target: LOG_CLIENT, "Dropping last handle to Client");
+            }
+            Err(client) => {
+                // Subtract the current reference to get all external references.
+                // Use saturating subtraction in case all other references were
+                // dropped between the `try_unwrap` and now.
+                let external_ref_count = Arc::strong_count(&client).saturating_sub(1);
+                debug!(target: LOG_CLIENT, count = external_ref_count, LOG_CLIENT, "External Client references remaining after ClientHandle shutdown attempt");
+            }
+        };
     }
 
     /// Restart the client
@@ -777,37 +761,6 @@ pub(crate) struct ClientWeak {
 impl ClientWeak {
     pub fn upgrade(&self) -> Option<ClientStrong> {
         Weak::upgrade(&self.inner).map(|inner| ClientStrong { inner })
-    }
-}
-
-/// We need a separate drop implementation for `Client` that triggers
-/// `Executor::stop_executor` even though the `Drop` implementation of
-/// `ExecutorInner` should already take care of that. The reason is that as long
-/// as the executor task is active there may be a cycle in the
-/// `Arc<Client>`s such that at least one `Executor` never gets dropped.
-impl Drop for ClientHandle {
-    fn drop(&mut self) {
-        // We can't use block_on in single-threaded mode or wasm
-        #[cfg(target_family = "wasm")]
-        let can_block = false;
-        #[cfg(not(target_family = "wasm"))]
-        // nosemgrep: ban-raw-block-on
-        let can_block = RuntimeHandle::current().runtime_flavor() != RuntimeFlavor::CurrentThread;
-        if !can_block {
-            self.inner.executor.stop_executor();
-            if cfg!(target_family = "wasm") {
-                error!(target: LOG_CLIENT, "Automatic client shutdown is not possible on wasm, call ClientHandle::shutdown manually.");
-            } else {
-                error!(target: LOG_CLIENT, "Automatic client shutdown is not possible on current thread runtime, call ClientHandle::shutdown manually.");
-            }
-            return;
-        }
-
-        debug!(target: LOG_CLIENT, "Shutting down the Client on last handle drop");
-        #[cfg(not(target_family = "wasm"))]
-        runtime::block_in_place(|| {
-            runtime::block_on(self.shutdown_inner());
-        });
     }
 }
 
@@ -892,6 +845,36 @@ pub struct Client {
     /// Receiver for events fired every time (ordered) log event is added.
     log_event_added_rx: watch::Receiver<()>,
     log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
+}
+
+/// We need a separate drop implementation for `Client` that triggers
+/// `Executor::stop_executor` even though the `Drop` implementation of
+/// `ExecutorInner` should already take care of that. The reason is that as long
+/// as the executor task is active there may be a cycle in the
+/// `Arc<Client>`s such that at least one `Executor` never gets dropped.
+impl Drop for Client {
+    fn drop(&mut self) {
+        // We can't use block_on in single-threaded mode or wasm
+        #[cfg(target_family = "wasm")]
+        let can_block = false;
+        #[cfg(not(target_family = "wasm"))]
+        // nosemgrep: ban-raw-block-on
+        let can_block = RuntimeHandle::current().runtime_flavor() != RuntimeFlavor::CurrentThread;
+        if !can_block {
+            self.executor.stop_executor();
+            if cfg!(target_family = "wasm") {
+                error!(target: LOG_CLIENT, "Automatic client shutdown is not possible on wasm, call ClientHandle::shutdown manually.");
+            } else {
+                error!(target: LOG_CLIENT, "Automatic client shutdown is not possible on current thread runtime, call ClientHandle::shutdown manually.");
+            }
+            return;
+        }
+
+        #[cfg(not(target_family = "wasm"))]
+        runtime::block_in_place(|| {
+            runtime::block_on(self.shutdown());
+        });
+    }
 }
 
 impl Client {
@@ -2219,6 +2202,26 @@ impl Client {
     /// Register to receiver all new transient (unpersisted) events
     pub fn get_event_log_transient_receiver(&self) -> broadcast::Receiver<EventLogEntry> {
         self.log_event_added_transient_tx.subscribe()
+    }
+
+    /// Shutdown the client. `self` MUST be dropped after this call.
+    async fn shutdown(&mut self) {
+        self.executor.stop_executor();
+        let db = self.db.clone();
+        debug!(target: LOG_CLIENT, "Waiting for client task group to shut down");
+        if let Err(err) = self
+            .task_group
+            .clone()
+            .shutdown_join_all(Some(Duration::from_secs(30)))
+            .await
+        {
+            warn!(target: LOG_CLIENT, %err, "Error waiting for client task group to shut down");
+        }
+
+        let db_strong_count = db.strong_count();
+        if db_strong_count != 1 {
+            debug!(target: LOG_CLIENT, count = db_strong_count - 1, "External DB references remaining after last handle dropped");
+        }
     }
 }
 
