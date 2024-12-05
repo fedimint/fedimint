@@ -9,9 +9,13 @@
 #![allow(clippy::too_many_lines)]
 
 pub mod db;
+mod feerate_source;
 
+use std::clone::Clone;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::convert::Infallible;
+use std::iter;
+use std::sync::Arc;
 #[cfg(not(target_family = "wasm"))]
 use std::time::Duration;
 
@@ -29,8 +33,8 @@ use common::config::WalletConfigConsensus;
 use common::{
     proprietary_tweak_key, PegOutFees, PegOutSignatureItem, ProcessPegOutSigError, SpendableUTXO,
     TxOutputSummary, WalletCommonInit, WalletConsensusItem, WalletCreationError, WalletInput,
-    WalletModuleTypes, WalletOutput, WalletOutputOutcome, WalletSummary, CONFIRMATION_TARGET,
-    DEPRECATED_RBF_ERROR, FEERATE_MULTIPLIER,
+    WalletModuleTypes, WalletOutput, WalletOutputOutcome, WalletSummary, DEPRECATED_RBF_ERROR,
+    FEERATE_MULTIPLIER,
 };
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
@@ -44,7 +48,10 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::{is_rbf_withdrawal_enabled, is_running_in_test_env, BitcoinRpcConfig};
+use fedimint_core::envs::{
+    is_rbf_withdrawal_enabled, is_running_in_test_env, BitcoinRpcConfig,
+    FM_WALLET_FEERATE_SOURCES_ENV,
+};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
@@ -77,6 +84,7 @@ use fedimint_wallet_common::{
     Rbf, UnknownWalletInputVariantError, WalletInputError, WalletOutputError, WalletOutputV0,
     MODULE_CONSENSUS_VERSION,
 };
+use feerate_source::{FeeRateSource, FetchJson};
 use futures::{FutureExt, StreamExt};
 use metrics::{
     WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS, WALLET_PEGIN_SATS,
@@ -982,7 +990,8 @@ impl Wallet {
         Self::spawn_broadcast_pending_task(task_group, &bitcoind, db);
 
         let (block_count_rx, fee_rate_rx) =
-            Self::spawn_bitcoin_update_task(&cfg, task_group, &bitcoind);
+            Self::spawn_bitcoin_update_task(&cfg, task_group, &bitcoind)
+                .map_err(|e| WalletCreationError::FeerateSourceError(e.to_string()))?;
 
         let bitcoind_rpc = bitcoind;
 
@@ -1547,9 +1556,23 @@ impl Wallet {
         cfg: &WalletConfig,
         task_group: &TaskGroup,
         bitcoind: &DynBitcoindRpc,
-    ) -> (watch::Receiver<Option<u32>>, watch::Receiver<Feerate>) {
+    ) -> anyhow::Result<(watch::Receiver<Option<u32>>, watch::Receiver<Feerate>)> {
         let (block_count_tx, block_count_rx) = watch::channel(None);
         let (fee_rate_tx, fee_rate_rx) = watch::channel(cfg.consensus.default_fee);
+
+        let sources = std::env::var(FM_WALLET_FEERATE_SOURCES_ENV)
+            .unwrap_or_else(|_| match cfg.consensus.network.0 {
+                Network::Bitcoin => "https://mempool.space/api/v1/fees/recommended#.;https://blockstream.info/api/fee-estimates#.%221%22".to_owned(),
+                _ => String::new(),
+            })
+            .split(';')
+            .filter(|s| !s.is_empty())
+            .map(|s| Ok(Box::new(FetchJson::from_str(s)?) as Box<dyn FeeRateSource>))
+            .chain(iter::once(Ok(
+                Box::new(bitcoind.clone()) as Box<dyn FeeRateSource>
+            )))
+            .collect::<anyhow::Result<Vec<Box<dyn FeeRateSource>>>>()?;
+        let feerates = Arc::new(std::sync::Mutex::new(vec![None; sources.len()]));
 
         let mut desired_interval = tokio::time::interval(if is_running_in_test_env() {
             // In devimint, the setup is blocked by detecting block height changes,
@@ -1584,22 +1607,29 @@ impl Wallet {
                 let update_fee_rate = || async {
                     trace!(target: LOG_MODULE_WALLET, "Updating bitcoin fee rate");
 
-                    let res = bitcoind
-                       .get_fee_rate(CONFIRMATION_TARGET).await;
+                    let feerates_new = futures::future::join_all(sources.iter().map(|s| async { (s.name(), s.fetch().await) } )).await;
 
-                    match res {
-                        Ok(Some(r)) => {
-                            let feerate_with_multiplier = Feerate { sats_per_kvb: r.sats_per_kvb * FEERATE_MULTIPLIER };
-                            let _ = fee_rate_tx.send(feerate_with_multiplier);
+                    let mut feerates = feerates.lock().expect("lock poisoned");
+                    for (i, (name, res)) in feerates_new.into_iter().enumerate() {
+                        match res {
+                            Ok(ok) => feerates[i] = Some(ok),
+                            Err(err) => {
+                                warn!(target: LOG_MODULE_WALLET, %err, %name, "Error getting feerate from source");
+                            },
                         }
-                        Ok(None) => {
-                            // Regtest node never returns fee rate, so no point spamming about it
-                            if !is_running_in_test_env() {
-                                warn!(target: LOG_MODULE_WALLET, "Bitcoin node did not return a fee rate");
-                            }
-                        }
-                        Err(err) => {
-                            warn!(target: LOG_MODULE_WALLET, %err, "Unable to get fee rate from the node");
+                    }
+
+                    let mut available_feerates : Vec<_> = feerates.iter().filter_map(Clone::clone).map(|r| r.sats_per_kvb).collect();
+
+                    available_feerates.sort_unstable();
+
+                    if let Some(r) = get_median(&available_feerates) {
+                        let feerate_with_multiplier = Feerate { sats_per_kvb: r * FEERATE_MULTIPLIER };
+                        let _ = fee_rate_tx.send(feerate_with_multiplier);
+                    } else {
+                        // Regtest node never returns fee rate, so no point spamming about it
+                        if !is_running_in_test_env() {
+                            warn!(target: LOG_MODULE_WALLET, "Bitcoin node did not return a fee rate");
                         }
                     }
                 };
@@ -1616,7 +1646,7 @@ impl Wallet {
                 }
             }
         });
-        (block_count_rx, fee_rate_rx)
+        Ok((block_count_rx, fee_rate_rx))
     }
 
     /// Shutdown the task group shared throughout fedimintd, giving 60 seconds
@@ -2112,6 +2142,20 @@ impl Serialize for UnsignedTransaction {
         } else {
             serializer.serialize_bytes(&self.consensus_encode_to_vec())
         }
+    }
+}
+
+fn get_median(vals: &[u64]) -> Option<u64> {
+    if vals.is_empty() {
+        return None;
+    }
+    let len = vals.len();
+    let mid = len / 2;
+
+    if len % 2 == 0 {
+        Some((vals[mid - 1] + vals[mid]) / 2)
+    } else {
+        Some(vals[mid])
     }
 }
 

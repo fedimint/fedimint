@@ -28,9 +28,13 @@ fedimint-server = { workspace = true }
 fedimint-wallet-common = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
+jaq-core = { workspace = true }
+jaq-json = { workspace = true }
 miniscript = { workspace = true }
 rand = { workspace = true }
+reqwest = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 tokio = { workspace = true }
