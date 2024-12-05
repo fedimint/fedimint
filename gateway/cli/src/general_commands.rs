@@ -74,9 +74,6 @@ pub enum GeneralCommands {
     /// Set or update the gateway configuration.
     SetConfiguration {
         #[clap(long)]
-        password: Option<String>,
-
-        #[clap(long)]
         num_route_hints: Option<u32>,
 
         /// Default routing fee for all new federations. Setting it won't affect
@@ -168,7 +165,6 @@ impl GeneralCommands {
                 print_response(response);
             }
             Self::SetConfiguration {
-                password,
                 num_route_hints,
                 routing_fees,
                 network,
@@ -178,7 +174,6 @@ impl GeneralCommands {
                     .map(|input| input.into_iter().map(Into::into).collect());
                 create_client()
                     .set_configuration(SetConfigurationPayload {
-                        password,
                         num_route_hints,
                         routing_fees,
                         network,

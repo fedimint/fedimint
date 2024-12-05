@@ -1,5 +1,6 @@
 use std::env;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -206,7 +207,10 @@ impl Fixtures {
             client_builder,
             listen,
             address.clone(),
-            Some(DEFAULT_GATEWAY_PASSWORD.to_string()),
+            bcrypt::HashParts::from_str(
+                &bcrypt::hash(DEFAULT_GATEWAY_PASSWORD, bcrypt::DEFAULT_COST).unwrap(),
+            )
+            .unwrap(),
             Some(bitcoin::Network::Regtest),
             RoutingFees {
                 base_msat: 0,

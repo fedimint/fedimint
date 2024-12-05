@@ -388,21 +388,12 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                 );
                 info!("Verified per-federation routing fees changed");
 
-                // Change password for gateway
-                gw.change_password("theresnosecondbest", "newpassword")
-                    .run()
-                    .await?;
-                get_gateway_info(gw)
-                    .await
-                    .expect_err("Expected info to return error since the password has changed");
-                gw.change_password("newpassword", "theresnosecondbest")
-                    .run()
-                    .await?;
+                // Try to change the network while connected to a lightning node
                 cmd!(gw, "set-configuration", "--network", "regtest")
                     .run()
                     .await
                     .expect_err("Cannot change the network while connected to a federation");
-                info!("Verified password change and network cannot be changed.");
+                info!("Verified network cannot be changed.");
 
                 // Get the federation's config and verify it parses correctly
                 let config_val = cmd!(gw, "config", "--federation-id", fed_id)

@@ -175,7 +175,6 @@ impl FromStr for FederationRoutingFees {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SetConfigurationPayload {
-    pub password: Option<String>,
     pub num_route_hints: Option<u32>,
     pub routing_fees: Option<FederationRoutingFees>,
     pub network: Option<Network>,
