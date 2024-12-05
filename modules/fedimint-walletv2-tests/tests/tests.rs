@@ -96,15 +96,14 @@ async fn test_send_and_receive() -> anyhow::Result<()> {
 
     let federation_address = client
         .get_first_module::<WalletClientModule>()?
-        .generate_new_address()
+        .derive_address(0);
+
+    bitcoin
+        .send_and_mine_block(&federation_address, bsats(100_000))
         .await;
 
     bitcoin
-        .send_and_mine_block(&federation_address.address, bsats(100_000))
-        .await;
-
-    bitcoin
-        .send_and_mine_block(&federation_address.address, bsats(200_000))
+        .send_and_mine_block(&federation_address, bsats(200_000))
         .await;
 
     info!("Wait for the finality delay of six blocks...");
@@ -247,11 +246,10 @@ async fn fee_exceeds_one_bitcoin_within_twenty_five_pending_transactions() -> an
 
     let federation_address = client
         .get_first_module::<WalletClientModule>()?
-        .generate_new_address()
-        .await;
+        .derive_address(0);
 
     bitcoin
-        .send_and_mine_block(&federation_address.address, Amount::from_int_btc(100))
+        .send_and_mine_block(&federation_address, Amount::from_int_btc(100))
         .await;
 
     info!("Wait for the finality delay of six blocks...");
