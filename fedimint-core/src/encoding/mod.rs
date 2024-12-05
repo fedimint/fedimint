@@ -24,6 +24,7 @@ use std::io::{self, Error, Read, Write};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
+use bitcoin::hashes::sha256;
 pub use fedimint_derive::{Decodable, Encodable};
 use hex::{FromHex, ToHex};
 use lightning::util::ser::BigSize;
@@ -122,6 +123,11 @@ pub trait Encodable {
         self.consensus_encode(&mut engine)
             .expect("writing to HashEngine cannot fail");
         H::from_engine(engine)
+    }
+
+    /// [`Self::consensus_hash`] for [`bitcoin::hashes::sha256::Hash`]
+    fn consensus_hash_sha256(&self) -> sha256::Hash {
+        self.consensus_hash()
     }
 }
 
