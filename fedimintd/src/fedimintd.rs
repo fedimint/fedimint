@@ -368,6 +368,27 @@ impl Fedimintd {
             s
         };
 
+        let s = if is_env_var_set(FM_ENABLE_MODULE_LNV2_ENV) {
+            s.with_module_kind(fedimint_lnv2_server::LightningInit)
+                .with_module_instance(
+                    fedimint_walletv2_server::WalletInit::kind(),
+                    fedimint_walletv2_common::config::WalletGenParams {
+                        local: fedimint_walletv2_common::config::WalletGenParamsLocal {
+                            bitcoin_rpc: bitcoind_rpc.clone(),
+                        },
+                        consensus: fedimint_walletv2_common::config::WalletGenParamsConsensus {
+                            // TODO: actually make the relative fee configurable
+                            fee_consensus: fedimint_walletv2_common::config::FeeConsensus::new(
+                                10_000,
+                            )?,
+                            network,
+                        },
+                    },
+                )
+        } else {
+            s
+        };
+
         let s = if is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
             s
         } else {
