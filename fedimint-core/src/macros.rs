@@ -205,9 +205,15 @@ macro_rules! _dyn_newtype_define_with_instance_id_inner {
 
         impl std::fmt::Debug for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.debug_struct(stringify!($name))
-                    .field("id", &self.module_instance_id)
-                    .field("kind", &self.module_kind())
+                let mut d = f.debug_struct(stringify!($name));
+                d.field("id", &self.module_instance_id);
+                if let Some(kind) = self.module_kind() {
+                    d.field("kind", &kind);
+                } else {
+                    d.field("kind", &"?");
+
+                }
+                d
                     .field("inner", &self.inner)
                     .finish()
             }
