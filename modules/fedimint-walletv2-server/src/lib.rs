@@ -22,7 +22,7 @@ use bitcoin::psbt::Input;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::sighash::{EcdsaSighashType, SighashCache};
 use bitcoin::transaction::Version;
-use bitcoin::{Amount, Psbt, Sequence, Transaction, TxIn, TxOut};
+use bitcoin::{Amount, Network, Psbt, Sequence, Transaction, TxIn, TxOut};
 use common::config::WalletConfigConsensus;
 use common::{
     WalletCommonInit, WalletConsensusItem, WalletInput, WalletModuleTypes, WalletOutput,
@@ -299,7 +299,12 @@ impl ServerModule for Wallet {
         if let Ok(Some(fee_rate)) = self.btc_rpc.get_fee_rate(CONFIRMATION_TARGET).await {
             items.push(WalletConsensusItem::Feerate(Some(fee_rate.sats_per_kvb)));
         } else {
-            items.push(WalletConsensusItem::Feerate(None));
+            // Regtest node never returns fee rate
+            if self.cfg.consensus.network == Network::Regtest {
+                items.push(WalletConsensusItem::Feerate(Some(1000)));
+            } else {
+                items.push(WalletConsensusItem::Feerate(None));
+            }
         }
 
         items
