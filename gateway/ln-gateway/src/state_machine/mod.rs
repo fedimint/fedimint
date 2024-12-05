@@ -476,6 +476,7 @@ impl GatewayClientModule {
                     payment_hash: htlc.payment_hash,
                     invoice_amount: htlc.outgoing_amount_msat,
                     contract_amount: amount,
+                    operation_id,
                 },
             )
             .await;
@@ -624,6 +625,7 @@ impl GatewayClientModule {
                         self.client_ctx.log_event(dbtx, OutgoingPaymentStarted {
                             contract_id: payload.contract_id,
                             invoice_amount: payload.payment_data.amount().expect("LNv1 invoices should have an amount"),
+                            operation_id,
                         }).await;
 
                         let state_machines =

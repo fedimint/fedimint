@@ -1,4 +1,4 @@
-use fedimint_core::core::ModuleKind;
+use fedimint_core::core::{ModuleKind, OperationId};
 use fedimint_core::Amount;
 use fedimint_eventlog::{Event, EventKind};
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
@@ -15,6 +15,9 @@ pub struct OutgoingPaymentStarted {
 
     /// The amount of the invoice that is being paid.
     pub invoice_amount: Amount,
+
+    /// The operation ID of the outgoing payment
+    pub operation_id: OperationId,
 }
 
 impl Event for OutgoingPaymentStarted {
@@ -75,6 +78,9 @@ pub struct IncomingPaymentStarted {
 
     /// The amount offered in the contract.
     pub contract_amount: Amount,
+
+    /// The operation ID of the outgoing payment
+    pub operation_id: OperationId,
 }
 
 impl Event for IncomingPaymentStarted {
