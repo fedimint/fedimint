@@ -8,6 +8,8 @@
 use core::fmt;
 use std::hash::Hash;
 
+use bitcoin_hashes::hex::DisplayHex;
+use bitcoin_hashes::Hash as _;
 pub use common::{BackupRequest, SignedBackupRequest};
 use config::MintClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
@@ -116,8 +118,17 @@ impl fmt::Display for Nonce {
 ///
 /// By signing it, the mint commits to the underlying (unblinded) [`Nonce`] as
 /// valid (until eventually spent).
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct BlindNonce(pub tbs::BlindedMessage);
+
+impl fmt::Debug for BlindNonce {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "BlindNonce({})",
+            self.0.consensus_hash_sha256().as_byte_array()[0..8].as_hex()
+        ))
+    }
+}
 
 #[derive(Debug)]
 pub struct MintCommonInit;

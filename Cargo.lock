@@ -822,7 +822,7 @@ dependencies = [
  "bitcoin-io",
  "bitcoin-units",
  "bitcoin_hashes 0.14.0",
- "hex-conservative",
+ "hex-conservative 0.2.1",
  "hex_lit",
  "secp256k1",
  "serde",
@@ -875,7 +875,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb18c03d0db0247e147a21a6faafd5a7eb851c743db062de72018b6b7e8e4d16"
 dependencies = [
  "bitcoin-io",
- "hex-conservative",
+ "hex-conservative 0.2.1",
  "serde",
 ]
 
@@ -1966,7 +1966,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b546e91283ebfc56337de34e0cf814e3ad98083afde593b8e58495ee5355d0e"
 dependencies = [
  "bitcoin",
- "hex-conservative",
+ "hex-conservative 0.2.1",
  "log",
  "reqwest 0.11.27",
  "serde",
@@ -1980,7 +1980,7 @@ checksum = "23be31c97b2e505ac6af0d72a201caead71298a957639061a10314f6d4860cd7"
 dependencies = [
  "async-std",
  "bitcoin",
- "hex-conservative",
+ "hex-conservative 0.2.1",
  "log",
  "reqwest 0.11.27",
  "serde",
@@ -2305,6 +2305,7 @@ dependencies = [
  "getrandom",
  "gloo-timers 0.3.0",
  "hex",
+ "hex-conservative 0.3.0",
  "imbl",
  "itertools 0.13.0",
  "js-sys",
@@ -4021,6 +4022,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hex-conservative"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4afe881d0527571892c4034822e59bb10c6c991cce6abe8199b6f5cf10766f55"
+dependencies = [
+ "arrayvec",
+]
+
+[[package]]
 name = "hex_fmt"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5056,7 +5066,7 @@ checksum = "1083b8d9137000edf3bfcb1ff011c0d25e0cdd2feb98cc21d6765e64a494148f"
 dependencies = [
  "bech32 0.9.1",
  "bitcoin",
- "hex-conservative",
+ "hex-conservative 0.2.1",
 ]
 
 [[package]]

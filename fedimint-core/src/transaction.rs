@@ -1,4 +1,7 @@
+use std::fmt;
+
 use bitcoin::hashes::Hash;
+use bitcoin::hex::DisplayHex as _;
 use fedimint_core::core::{DynInput, DynOutput};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::SerdeModuleEncoding;
@@ -112,7 +115,7 @@ impl Transaction {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+#[derive(Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub enum TransactionSignature {
     NaiveMultisig(Vec<fedimint_core::secp256k1::schnorr::Signature>),
     #[encodable_default]
@@ -120,6 +123,25 @@ pub enum TransactionSignature {
         variant: u64,
         bytes: Vec<u8>,
     },
+}
+
+impl fmt::Debug for TransactionSignature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NaiveMultisig(multi) => {
+                f.debug_struct("NaiveMultisig")
+                    .field("len", &multi.len())
+                    .finish()?;
+            }
+            Self::Default { variant, bytes } => {
+                f.debug_struct(stringify!($name))
+                    .field("variant", variant)
+                    .field("bytes", &bytes.as_hex())
+                    .finish()?;
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Error, Encodable, Decodable, Clone, Eq, PartialEq)]

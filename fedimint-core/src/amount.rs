@@ -23,18 +23,7 @@ pub fn sats(amount: u64) -> Amount {
 /// Represents an amount of BTC. The base denomination is millisatoshis, which
 /// is why the `Amount` type from rust-bitcoin isn't used instead.
 #[derive(
-    Debug,
-    Clone,
-    Copy,
-    Eq,
-    PartialEq,
-    Ord,
-    PartialOrd,
-    Hash,
-    Deserialize,
-    Serialize,
-    Encodable,
-    Decodable,
+    Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize, Encodable, Decodable,
 )]
 #[serde(transparent)]
 pub struct Amount {
@@ -121,6 +110,14 @@ impl Amount {
 impl std::fmt::Display for Amount {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} msat", self.msats)
+    }
+}
+
+impl std::fmt::Debug for Amount {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Note: lack of space is intentional: in large Debug outputs extra space just
+        // make it harder to tell where fields being and end.
+        write!(f, "{}msat", self.msats)
     }
 }
 

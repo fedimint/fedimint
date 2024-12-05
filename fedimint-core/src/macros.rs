@@ -205,9 +205,15 @@ macro_rules! _dyn_newtype_define_with_instance_id_inner {
 
         impl std::fmt::Debug for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.debug_struct(stringify!($name))
-                    .field("id", &self.module_instance_id)
-                    .field("kind", &self.module_kind())
+                let mut d = f.debug_struct(stringify!($name));
+                d.field("id", &self.module_instance_id);
+                if let Some(kind) = self.module_kind() {
+                    d.field("kind", &kind);
+                } else {
+                    d.field("kind", &"?");
+
+                }
+                d
                     .field("inner", &self.inner)
                     .finish()
             }
@@ -741,7 +747,6 @@ macro_rules! module_plugin_dyn_newtype_display_passthrough {
 macro_rules! extensible_associated_module_type {
     ($name:ident, $name_v0:ident, $error:ident) => {
         #[derive(
-            Debug,
             Clone,
             Eq,
             PartialEq,
@@ -773,6 +778,24 @@ macro_rules! extensible_associated_module_type {
                     $name::V0(v0) => Ok(v0),
                     $name::Default { variant, .. } => Err($error { variant: *variant }),
                 }
+            }
+        }
+
+        impl std::fmt::Debug for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                use $crate::bitcoin::hashes::hex::DisplayHex;
+                match self {
+                    $name::V0(v0) => {
+                        v0.fmt(f)?;
+                    }
+                    $name::Default { variant, bytes } => {
+                        f.debug_struct(stringify!($name))
+                            .field("variant", variant)
+                            .field("bytes", &bytes.as_hex())
+                            .finish()?;
+                    }
+                }
+                Ok(())
             }
         }
 
