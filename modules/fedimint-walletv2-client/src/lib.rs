@@ -77,14 +77,6 @@ pub enum FinalOperationState {
     Aborted,
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct AddressInfo {
-    /// Child index of this address
-    pub index: u64,
-    /// Address
-    pub address: Address,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnspentDeposit {
     /// The amount that has been deposited.
@@ -317,8 +309,8 @@ impl WalletClientModule {
         }
     }
 
-    /// Generate a new address controlled by the federation.
-    pub async fn generate_new_address(&self) -> AddressInfo {
+    /// Increment the address counter and return the new highest index.
+    pub async fn increment_address_index(&self) -> u64 {
         let mut dbtx = self.db.begin_transaction().await;
 
         let index = dbtx.get_value(&AddressCounterKey).await.unwrap_or(0);
@@ -327,31 +319,21 @@ impl WalletClientModule {
 
         dbtx.commit_tx().await;
 
-        AddressInfo {
-            index,
-            address: self.derive_address(index),
-        }
+        index
     }
 
-    /// List all previously generated addresses.
-    pub async fn list_addresses(&self) -> Vec<AddressInfo> {
-        let count = self
-            .db
-            .begin_transaction_nc()
+    /// Return the number of all previously derived addresses.
+    pub async fn address_count(&self) -> u64 {
+        self.db
+            .begin_transaction()
             .await
             .get_value(&AddressCounterKey)
             .await
-            .unwrap_or(0);
-
-        (0..count)
-            .map(|index| AddressInfo {
-                index,
-                address: self.derive_address(index),
-            })
-            .collect()
+            .unwrap_or(0)
     }
 
-    fn derive_address(&self, index: u64) -> Address {
+    /// Derive address for an index.
+    pub fn derive_address(&self, index: u64) -> Address {
         descriptor(
             &self.cfg.bitcoin_pks,
             &self.derive_tweak(index).public_key().consensus_hash(),
