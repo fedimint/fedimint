@@ -669,10 +669,6 @@ impl ClientHandle {
         self.inner.as_ref().expect("Inner always set")
     }
 
-    pub fn start_executor(&self) {
-        self.as_inner().start_executor();
-    }
-
     /// Shutdown the client.
     pub async fn shutdown(mut self) {
         self.shutdown_inner().await;
@@ -737,7 +733,7 @@ impl ClientHandle {
         };
         self.shutdown().await;
 
-        builder.build(root_secret, config, api_secret, false).await
+        builder.build(root_secret, config, api_secret).await
     }
 }
 
@@ -2304,7 +2300,6 @@ pub struct ClientBuilder {
     db_no_decoders: Database,
     meta_service: Arc<MetaService>,
     connector: Connector,
-    stopped: bool,
     log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
 }
 
@@ -2319,7 +2314,6 @@ impl ClientBuilder {
             connector: Connector::default(),
             admin_creds: None,
             db_no_decoders: db,
-            stopped: false,
             meta_service,
             log_event_added_transient_tx,
         }
@@ -2331,7 +2325,6 @@ impl ClientBuilder {
             primary_module_instance: Some(client.primary_module_instance),
             admin_creds: None,
             db_no_decoders: client.db.with_decoders(ModuleRegistry::default()),
-            stopped: false,
             // non unique
             meta_service: client.meta_service.clone(),
             connector: client.connector,
@@ -2347,10 +2340,6 @@ impl ClientBuilder {
     /// Make module generator available when reading the config
     pub fn with_module<M: ClientModuleInit>(&mut self, module_init: M) {
         self.module_inits.attach(module_init);
-    }
-
-    pub fn stopped(&mut self) {
-        self.stopped = true;
     }
 
     /// Uses this module with the given instance id as the primary module. See
@@ -2464,9 +2453,7 @@ impl ClientBuilder {
             dbtx.commit_tx_result().await?;
         }
 
-        let stopped = self.stopped;
-        self.build(pre_root_secret, config, api_secret, stopped)
-            .await
+        self.build(pre_root_secret, config, api_secret).await
     }
 
     /// Join a new Federation
@@ -2638,21 +2625,8 @@ impl ClientBuilder {
         }
 
         let api_secret = Client::get_api_secret_from_db(&self.db_no_decoders).await;
-        let stopped = self.stopped;
 
-        let log_event_added_transient_tx = self.log_event_added_transient_tx.clone();
-        let client = self
-            .build_stopped(
-                pre_root_secret,
-                &config,
-                api_secret,
-                log_event_added_transient_tx,
-            )
-            .await?;
-        if !stopped {
-            client.as_inner().start_executor();
-        }
-        Ok(client)
+        self.build(pre_root_secret, config, api_secret).await
     }
 
     /// Build a [`Client`] and start the executor
@@ -2661,7 +2635,6 @@ impl ClientBuilder {
         pre_root_secret: DerivableSecret,
         config: ClientConfig,
         api_secret: Option<String>,
-        stopped: bool,
     ) -> anyhow::Result<ClientHandle> {
         let log_event_added_transient_tx = self.log_event_added_transient_tx.clone();
         let client = self
@@ -2672,10 +2645,7 @@ impl ClientBuilder {
                 log_event_added_transient_tx,
             )
             .await?;
-        if !stopped {
-            client.as_inner().start_executor();
-        }
-
+        client.as_inner().start_executor();
         Ok(client)
     }
 
