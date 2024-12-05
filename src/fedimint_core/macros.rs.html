@@ -805,7 +805,30 @@
 <a href="#804" id="804">804</a>
 <a href="#805" id="805">805</a>
 <a href="#806" id="806">806</a>
-<a href="#807" id="807">807</a></pre></div><pre class="rust"><code><span class="doccomment">/// Define "dyn newtype" (a newtype over `dyn Trait`)
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a></pre></div><pre class="rust"><code><span class="doccomment">/// Define "dyn newtype" (a newtype over `dyn Trait`)
 ///
 /// This is a simple pattern that make working with `dyn Trait`s
 /// easier, by hiding their details.
@@ -1012,9 +1035,15 @@
 
         <span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
             <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
-                f.debug_struct(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>))
-                    .field(<span class="string">"id"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.module_instance_id)
-                    .field(<span class="string">"kind"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.module_kind())
+                <span class="kw">let </span><span class="kw-2">mut </span>d = f.debug_struct(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>));
+                d.field(<span class="string">"id"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.module_instance_id);
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(kind) = <span class="self">self</span>.module_kind() {
+                    d.field(<span class="string">"kind"</span>, <span class="kw-2">&amp;</span>kind);
+                } <span class="kw">else </span>{
+                    d.field(<span class="string">"kind"</span>, <span class="kw-2">&amp;</span><span class="string">"?"</span>);
+
+                }
+                d
                     .field(<span class="string">"inner"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.inner)
                     .finish()
             }
@@ -1548,7 +1577,6 @@
 </span><span class="macro">macro_rules!</span> extensible_associated_module_type {
     (<span class="macro-nonterminal">$name</span>:ident, <span class="macro-nonterminal">$name_v0</span>:ident, <span class="macro-nonterminal">$error</span>:ident) =&gt; {
         <span class="attr">#[derive(
-            Debug,
             Clone,
             Eq,
             PartialEq,
@@ -1580,6 +1608,24 @@
                     <span class="macro-nonterminal">$name::V0</span>(v0) =&gt; <span class="prelude-val">Ok</span>(v0),
                     <span class="macro-nonterminal">$name::Default </span>{ variant, .. } =&gt; <span class="prelude-val">Err</span>(<span class="macro-nonterminal">$error </span>{ variant: <span class="kw-2">*</span>variant }),
                 }
+            }
+        }
+
+        <span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
+            <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+                <span class="kw">use </span><span class="macro-nonterminal">$crate::bitcoin::hashes::hex::DisplayHex</span>;
+                <span class="kw">match </span><span class="self">self </span>{
+                    <span class="macro-nonterminal">$name::V0</span>(v0) =&gt; {
+                        v0.fmt(f)<span class="question-mark">?</span>;
+                    }
+                    <span class="macro-nonterminal">$name::Default </span>{ variant, bytes } =&gt; {
+                        f.debug_struct(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>))
+                            .field(<span class="string">"variant"</span>, variant)
+                            .field(<span class="string">"bytes"</span>, <span class="kw-2">&amp;</span>bytes.as_hex())
+                            .finish()<span class="question-mark">?</span>;
+                    }
+                }
+                <span class="prelude-val">Ok</span>(())
             }
         }
 
