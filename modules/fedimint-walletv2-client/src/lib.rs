@@ -9,7 +9,7 @@ use std::fmt::Debug;
 
 use api::WalletFederationApi;
 use bitcoin::address::NetworkUnchecked;
-use bitcoin::Address;
+use bitcoin::{Address, Network};
 use db::AddressCounterKey;
 use fedimint_api_client::api::{DynModuleApi, FederationResult};
 use fedimint_client::db::ClientMigrationFn;
@@ -199,7 +199,7 @@ impl ClientModuleInit for WalletClientInit {
 
 impl WalletClientModule {
     /// Fetch the total value of bitcoin controlled by the federation.
-    pub async fn federation_assets(&self) -> FederationResult<bitcoin::Amount> {
+    pub async fn federation_value(&self) -> FederationResult<bitcoin::Amount> {
         self.module_api
             .federation_wallet()
             .await
@@ -207,7 +207,7 @@ impl WalletClientModule {
     }
 
     /// Fetch the consensus block count of the federation which trails the
-    /// bitcoin block count by at least twelve blocks.
+    /// bitcoin block count by at least six blocks.
     pub async fn consensus_block_count(&self) -> FederationResult<u64> {
         self.module_api.consensus_block_count().await
     }
@@ -347,13 +347,33 @@ impl WalletClientModule {
             .to_secp_key(secp256k1::SECP256K1)
     }
 
+    fn default_esplora_server(&self) -> Option<SafeUrl> {
+        let url = match self.cfg.network {
+            Network::Bitcoin => "https://blockstream.info/api/",
+            Network::Testnet => "https://blockstream.info/testnet/api/",
+            Network::Signet => "https://blockstream.info/signet/api/",
+            _ => return None,
+        };
+
+        Some(SafeUrl::parse(url).expect("Failed to parse default esplora server"))
+    }
+
     /// Check an address for unspent deposits and return the deposits in
-    /// descending order by value.
+    /// descending order by value. If no esplora api is set and the network is
+    /// either Mainnet, Testnet 3 or Signet the client will default to the
+    /// blockstream api.
     pub async fn check_address_for_deposits(
         &self,
-        esplora: SafeUrl,
         index: u64,
+        esplora: Option<SafeUrl>,
     ) -> Result<Vec<UnspentDeposit>, CheckError> {
+        let esplora = match esplora {
+            Some(esplora) => esplora,
+            None => self
+                .default_esplora_server()
+                .ok_or(CheckError::NoEsploraDefault)?,
+        };
+
         let consensus_block_height = self
             .consensus_block_count()
             .await
@@ -476,7 +496,7 @@ pub enum SendError {
     DustAmount,
     #[error("Federation returned an error: {0}")]
     FederationError(String),
-    #[error("The federation has no vetted gateways")]
+    #[error("No consensus feerate is available at this time")]
     NoConsensusFeerateAvailable,
     #[error("The currently required fee exceeds the specified limit")]
     FeeExceedsLimit,
@@ -486,6 +506,8 @@ pub enum SendError {
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
 pub enum CheckError {
+    #[error("There is no default esplora server for this network")]
+    NoEsploraDefault,
     #[error("Esplora returned an error: {0}")]
     EsploraError(String),
     #[error("Federation returned an error: {0}")]
@@ -496,7 +518,7 @@ pub enum CheckError {
 pub enum ReceiveError {
     #[error("Federation returned an error: {0}")]
     FederationError(String),
-    #[error("The federation has no vetted gateways")]
+    #[error("No consensus feerate is available at this time")]
     NoConsensusFeerateAvailable,
     #[error("The currently required fee exceeds the specified limit")]
     FeeExceedsLimit,

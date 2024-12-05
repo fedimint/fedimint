@@ -1,8 +1,14 @@
+use std::time::Duration;
+
 use bitcoin::address::NetworkUnchecked;
-use bitcoin::Address;
+use bitcoin::{Address, Amount};
+use devimint::federation::Client;
 use devimint::version_constants::VERSION_0_5_0_ALPHA;
 use devimint::{cmd, util};
-use fedimint_walletv2_client::FinalOperationState;
+use fedimint_core::task::sleep_in_test;
+use fedimint_core::util::SafeUrl;
+use fedimint_testing::envs::FM_PORT_ESPLORA_ENV;
+use fedimint_walletv2_client::{FinalOperationState, UnspentDeposit};
 use tracing::info;
 
 #[tokio::main]
@@ -64,51 +70,154 @@ async fn main() -> anyhow::Result<()> {
             .send_to_address(address.to_string(), 200_000)
             .await?;
 
-        assert_eq!(
-            cmd!(client, "module", "walletv2", "check", "esplora.xyz", "0")
+        let esplora = SafeUrl::parse(&format!(
+            "http://127.0.0.1:{}",
+            std::env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from("50002"))
+        ))
+        .expect("Failed to parse esplora api");
+
+        await_claimable_deposit_count(&client, &esplora, 2).await?;
+
+        loop {
+            if cmd!(client, "module", "walletv2", "receive-fee")
                 .out_json()
-                .await?
-                .as_array()
-                .expect("JSON Value is not an array")
-                .len(),
-            2
-        );
+                .await
+                .is_ok()
+            {
+                break;
+            }
+
+            sleep_in_test(
+                "Waiting for consensus feerate to become available".to_string(),
+                Duration::from_secs(1),
+            )
+            .await;
+        }
 
         assert_eq!(
-            cmd!(client, "module", "walletv2", "receive", "esplora.xyz", "0")
-                .out_json()
-                .await?,
+            cmd!(
+                client,
+                "module",
+                "walletv2",
+                "receive",
+                "0",
+                "--esplora",
+                esplora
+            )
+            .out_json()
+            .await?,
             serde_json::to_value(FinalOperationState::Success).expect("JSON serialization failed"),
         );
 
-        assert_eq!(
-            cmd!(client, "module", "walletv2", "check", "esplora.xyz", "0")
-                .out_json()
-                .await?
-                .as_array()
-                .expect("JSON Value is not an array")
-                .len(),
-            1
-        );
+        await_claimable_deposit_count(&client, &esplora, 1).await?;
 
         assert_eq!(
-            cmd!(client, "module", "walletv2", "receive", "esplora.xyz", "0")
-                .out_json()
-                .await?,
+            cmd!(
+                client,
+                "module",
+                "walletv2",
+                "receive",
+                "0",
+                "--esplora",
+                esplora
+            )
+            .out_json()
+            .await?,
             serde_json::to_value(FinalOperationState::Success).expect("JSON serialization failed"),
         );
 
+        await_claimable_deposit_count(&client, &esplora, 0).await?;
+
+        // This is a temporary fix until we find out why the received balance is not
+        // available.
+        dev_fed.fed().await?.pegin_client(300_000, &client).await?;
+
+        loop {
+            if client.balance().await? >= 280_000 {
+                break;
+            }
+
+            sleep_in_test(
+                "Waiting for balance to become available".to_string(),
+                Duration::from_secs(1),
+            )
+            .await;
+        }
+
         assert_eq!(
-            cmd!(client, "module", "walletv2", "check", "esplora.xyz", "0")
-                .out_json()
-                .await?
-                .as_array()
-                .expect("JSON Value is not an array")
-                .len(),
-            0
+            cmd!(
+                client,
+                "module",
+                "walletv2",
+                "send",
+                address,
+                Amount::from_sat(10_000)
+            )
+            .out_json()
+            .await?,
+            serde_json::to_value(FinalOperationState::Success).expect("JSON serialization failed"),
         );
+
+        dev_fed.fed().await?.bitcoind.mine_blocks(21).await?;
+
+        await_claimable_deposit_count(&client, &esplora, 1).await?;
+
+        assert_eq!(
+            cmd!(
+                client,
+                "module",
+                "walletv2",
+                "receive",
+                "0",
+                "--esplora",
+                esplora
+            )
+            .out_json()
+            .await?,
+            serde_json::to_value(FinalOperationState::Success).expect("JSON serialization failed"),
+        );
+
+        await_claimable_deposit_count(&client, &esplora, 0).await?;
 
         Ok(())
     })
     .await
+}
+
+async fn await_claimable_deposit_count(
+    client: &Client,
+    esplora: &SafeUrl,
+    deposit_count: usize,
+) -> anyhow::Result<()> {
+    loop {
+        let deposits = serde_json::from_value::<Vec<UnspentDeposit>>(
+            cmd!(
+                client,
+                "module",
+                "walletv2",
+                "address",
+                "check",
+                "0",
+                "--esplora",
+                esplora
+            )
+            .out_json()
+            .await?,
+        )?;
+
+        if deposits
+            .iter()
+            .filter(|d| d.confirmations_required == Some(0))
+            .count()
+            == deposit_count
+        {
+            return Ok(());
+        }
+
+        sleep_in_test(
+            format!("Waiting for {deposit_count} deposits to be claimable"),
+            Duration::from_secs(1),
+        )
+        .await;
+    }
 }

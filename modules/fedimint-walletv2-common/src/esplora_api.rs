@@ -44,7 +44,7 @@ impl IEsploraConnection for RealEsploraConnection {
         address: Address,
     ) -> anyhow::Result<Vec<AddressUnspentTxOut>> {
         Ok(reqwest::Client::new()
-            .get(format!("{esplora}/address/{address}"))
+            .get(format!("{esplora}address/{address}/utxo"))
             .send()
             .await?
             .json::<Vec<AddressUnspentTxOut>>()

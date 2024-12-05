@@ -7,19 +7,20 @@ description = "fedimint-walletv2-tests contains all tests for the walletv2 modul
 license = "MIT"
 publish = false
 
-[[test]]
-name = "fedimint_walletv2_tests"
-path = "tests/tests.rs"
-
 [[bin]]
 name = "fedimint-walletv2-devimint-tests"
 path = "bin/tests.rs"
+
+[[test]]
+name = "fedimint_walletv2_tests"
+path = "tests/tests.rs"
 
 [dependencies]
 anyhow = { workspace = true }
 bitcoin = { workspace = true }
 bitcoincore-rpc = { workspace = true }
 devimint = { workspace = true }
+fedimint-bitcoind = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-dummy-client = { workspace = true }

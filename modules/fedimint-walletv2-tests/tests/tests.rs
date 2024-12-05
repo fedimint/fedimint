@@ -121,7 +121,7 @@ async fn test_send_and_receive() -> anyhow::Result<()> {
 
     let unspent_deposits = client
         .get_first_module::<WalletClientModule>()?
-        .check_address_for_deposits(fixtures.esplora_api(), 0)
+        .check_address_for_deposits(0, Some(fixtures.esplora_api()))
         .await?;
 
     assert_eq!(unspent_deposits.len(), 2);
@@ -142,7 +142,7 @@ async fn test_send_and_receive() -> anyhow::Result<()> {
     assert_eq!(
         client
             .get_first_module::<WalletClientModule>()?
-            .federation_assets()
+            .federation_value()
             .await?,
         bsats(200_000)
     );
@@ -151,7 +151,7 @@ async fn test_send_and_receive() -> anyhow::Result<()> {
 
     let unspent_deposits = client
         .get_first_module::<WalletClientModule>()?
-        .check_address_for_deposits(fixtures.esplora_api(), 0)
+        .check_address_for_deposits(0, Some(fixtures.esplora_api()))
         .await?;
 
     assert_eq!(unspent_deposits.len(), 1);
@@ -172,7 +172,7 @@ async fn test_send_and_receive() -> anyhow::Result<()> {
     assert!(
         client
             .get_first_module::<WalletClientModule>()?
-            .federation_assets()
+            .federation_value()
             .await?
             >= bsats(295_000)
     );
@@ -199,7 +199,7 @@ async fn test_send_and_receive() -> anyhow::Result<()> {
     assert!(
         client
             .get_first_module::<WalletClientModule>()?
-            .federation_assets()
+            .federation_value()
             .await?
             < bsats(50_000)
     );
@@ -267,7 +267,7 @@ async fn fee_exceeds_one_bitcoin_within_twenty_five_pending_transactions() -> an
 
     let unspent_deposits = client
         .get_first_module::<WalletClientModule>()?
-        .check_address_for_deposits(fixtures.esplora_api(), 0)
+        .check_address_for_deposits(0, Some(fixtures.esplora_api()))
         .await?;
 
     assert_eq!(unspent_deposits.len(), 1);

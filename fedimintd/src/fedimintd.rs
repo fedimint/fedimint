@@ -369,7 +369,7 @@ impl Fedimintd {
         };
 
         let s = if is_env_var_set(FM_ENABLE_MODULE_LNV2_ENV) {
-            s.with_module_kind(fedimint_lnv2_server::LightningInit)
+            s.with_module_kind(fedimint_walletv2_server::WalletInit)
                 .with_module_instance(
                     fedimint_walletv2_server::WalletInit::kind(),
                     fedimint_walletv2_common::config::WalletGenParams {
