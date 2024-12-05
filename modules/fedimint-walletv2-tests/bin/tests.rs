@@ -1,8 +1,7 @@
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::Address;
-use devimint::cmd;
-use devimint::util;
 use devimint::version_constants::VERSION_0_5_0_ALPHA;
+use devimint::{cmd, util};
 use fedimint_walletv2_client::FinalOperationState;
 use tracing::info;
 
