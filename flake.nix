@@ -313,6 +313,7 @@
                     (pkgs.hiPrio pkgs.bashInteractive)
                     pkgs.tmux
                     pkgs.tmuxinator
+                    pkgs.mprocs
                     pkgs.docker-compose
                     pkgs.tokio-console
                     pkgs.git
