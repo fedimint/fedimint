@@ -267,7 +267,7 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     while client.balance().await? < 9000 * 1000 {
         sleep_in_test(
-            format!("Waiting for the full balance to become available to the client"),
+            "Waiting for the full balance to become available to the client",
             Duration::from_secs(1),
         )
         .await;
