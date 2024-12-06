@@ -1,11 +1,10 @@
-use std::time::Duration;
-
+use anyhow::ensure;
 use devimint::devfed::DevJitFed;
 use devimint::federation::Client;
 use devimint::version_constants::VERSION_0_5_0_ALPHA;
 use devimint::{cmd, util};
 use fedimint_core::core::OperationId;
-use fedimint_core::task::sleep_in_test;
+use fedimint_core::util::{backoff_util, retry};
 use fedimint_lnv2_client::{FinalReceiveOperationState, FinalSendOperationState};
 use lightning_invoice::Bolt11Invoice;
 use substring::Substring;
@@ -265,13 +264,16 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         await_receive_claimed(&client, receive_op).await?;
     }
 
-    while client.balance().await? < 9000 * 1000 {
-        sleep_in_test(
-            "Waiting for the full balance to become available to the client",
-            Duration::from_secs(1),
-        )
-        .await;
-    }
+    retry(
+        "Waiting for the full balance to become available to the client".to_string(),
+        backoff_util::background_backoff(),
+        || async {
+            ensure!(client.balance().await? >= 9000 * 1000);
+
+            Ok(())
+        },
+    )
+    .await?;
 
     info!("Testing Client can pay LND HOLD invoice via LDK Gateway...");
 
