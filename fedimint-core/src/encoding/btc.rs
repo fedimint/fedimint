@@ -203,10 +203,13 @@ impl Decodable for bitcoin::Amount {
 impl Encodable for bitcoin::Address<NetworkUnchecked> {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         let mut len = 0;
-        len += NetworkLegacyEncodingWrapper(get_network_for_address(self.as_unchecked()))
-            .consensus_encode(writer)?;
+        len +=
+            NetworkLegacyEncodingWrapper(get_network_for_address(self)).consensus_encode(writer)?;
         len += self
             .clone()
+            // We need an `Address<NetworkChecked>` in order to get the script pubkey.
+            // Calling `assume_checked` is generally a bad idea, but it's safe here where we're
+            // encoding the address because addresses are always decoded as unchecked.
             .assume_checked()
             .script_pubkey()
             .consensus_encode(writer)?;
@@ -225,7 +228,7 @@ impl Decodable for bitcoin::Address<NetworkUnchecked> {
         let address = bitcoin::Address::from_script(&script_pk, network)
             .map_err(|e| DecodeError::new_custom(e.into()))?;
 
-        Ok(address.as_unchecked().clone())
+        Ok(address.into_unchecked())
     }
 }
 

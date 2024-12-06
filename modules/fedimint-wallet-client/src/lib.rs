@@ -25,7 +25,7 @@ use std::future;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use anyhow::{anyhow, bail, ensure, Context as AnyhowContext};
+use anyhow::{anyhow, bail, Context as AnyhowContext};
 use async_stream::stream;
 use backup::WalletModuleBackup;
 use bitcoin::address::NetworkUnchecked;
@@ -549,13 +549,11 @@ impl WalletClientModule {
     /// The caller should be prepared to retry with a new fee estimate.
     pub async fn get_withdraw_fees(
         &self,
-        address: bitcoin::Address<NetworkUnchecked>,
+        address: &bitcoin::Address,
         amount: bitcoin::Amount,
     ) -> anyhow::Result<PegOutFees> {
-        check_address(&address, self.cfg().network.0)?;
-
         self.module_api
-            .fetch_peg_out_fees(&address.assume_checked(), amount)
+            .fetch_peg_out_fees(address, amount)
             .await?
             .context("Federation didn't return peg-out fees")
     }
@@ -568,13 +566,11 @@ impl WalletClientModule {
     pub fn create_withdraw_output(
         &self,
         operation_id: OperationId,
-        address: &bitcoin::Address<NetworkUnchecked>,
+        address: bitcoin::Address,
         amount: bitcoin::Amount,
         fees: PegOutFees,
     ) -> anyhow::Result<ClientOutputBundle<WalletOutput, WalletClientStates>> {
-        check_address(address, self.cfg().network.0)?;
-
-        let output = WalletOutput::new_v0_peg_out(address.clone(), amount, fees);
+        let output = WalletOutput::new_v0_peg_out(address, amount, fees);
 
         let amount = output.maybe_v0_ref().expect("v0 output").amount().into();
 
@@ -677,8 +673,7 @@ impl WalletClientModule {
                             WalletCommonInit::KIND.as_str(),
                             WalletOperationMeta {
                                 variant: WalletOperationMetaVariant::Deposit {
-                                    // TODO(bitcoin 0.32): use as_unchecked
-                                    address: address.to_string().parse().expect("can be parsed"),
+                                    address: address.clone().into_unchecked(),
                                     tweak_idx: Some(tweak_idx),
                                     expires_at: None,
                                 },
@@ -744,6 +739,8 @@ impl WalletClientModule {
             bail!("Operation is not a deposit operation");
         };
 
+        let address = address.require_network(self.cfg().network.0)?;
+
         // The old deposit operations don't have tweak_idx set
         let Some(tweak_idx) = tweak_idx else {
             // In case we are dealing with an old deposit that still uses state machines we
@@ -771,7 +768,7 @@ impl WalletClientModule {
         Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, || {
             let stream_rpc = self.rpc.clone();
             let stream_client_ctx = self.client_ctx.clone();
-            let stream_script_pub_key = address.assume_checked().script_pubkey();
+            let stream_script_pub_key = address.script_pubkey();
 
             stream! {
                 yield DepositStateV2::WaitingForTransaction;
@@ -1009,7 +1006,7 @@ impl WalletClientModule {
     /// acknowledged by the user since it can be unexpectedly high.
     pub async fn withdraw<M: Serialize + MaybeSend + MaybeSync>(
         &self,
-        address: bitcoin::Address<NetworkUnchecked>,
+        address: &bitcoin::Address,
         amount: bitcoin::Amount,
         fee: PegOutFees,
         extra_meta: M,
@@ -1018,7 +1015,7 @@ impl WalletClientModule {
             let operation_id = OperationId(thread_rng().gen());
 
             let withdraw_output =
-                self.create_withdraw_output(operation_id, &address, amount, fee)?;
+                self.create_withdraw_output(operation_id, address.clone(), amount, fee)?;
             let tx_builder = TransactionBuilder::new()
                 .with_outputs(self.client_ctx.make_client_outputs(withdraw_output));
 
@@ -1030,7 +1027,7 @@ impl WalletClientModule {
                     WalletCommonInit::KIND.as_str(),
                     |_, change| WalletOperationMeta {
                         variant: WalletOperationMetaVariant::Withdraw {
-                            address: address.clone(),
+                            address: address.clone().into_unchecked(),
                             amount,
                             fee,
                             change,
@@ -1146,15 +1143,6 @@ impl WalletClientModule {
                 }
             }))
     }
-}
-
-fn check_address(address: &Address<NetworkUnchecked>, network: Network) -> anyhow::Result<()> {
-    ensure!(
-        address.is_valid_for_network(network),
-        "Address isn't compatible with the federation's network: {network:?}"
-    );
-
-    Ok(())
 }
 
 /// Returns the child index to derive the next peg-in tweak key from.

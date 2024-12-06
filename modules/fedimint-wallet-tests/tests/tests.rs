@@ -282,16 +282,12 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     // Peg-out test, requires block to recognize change UTXOs
     let address = bitcoin.get_new_address().await;
     let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
-    let fees = wallet_module
-        .get_withdraw_fees(address.as_unchecked().clone(), peg_out)
-        .await?;
+    let fees = wallet_module.get_withdraw_fees(&address, peg_out).await?;
     assert_eq!(
         fees.total_weight, 871,
         "stateless wallet should have constructed a tx with a total weight=871"
     );
-    let op = wallet_module
-        .withdraw(address.as_unchecked().clone(), peg_out, fees, ())
-        .await?;
+    let op = wallet_module.withdraw(&address, peg_out, fees, ()).await?;
 
     let balance_after_peg_out =
         sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - fees.amount().to_sat());
@@ -429,9 +425,7 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
     };
 
     let wallet_module = client.get_first_module::<WalletClientModule>()?;
-    let op = wallet_module
-        .withdraw(address.as_unchecked().clone(), peg_out, fees, ())
-        .await?;
+    let op = wallet_module.withdraw(&address, peg_out, fees, ()).await?;
     assert_eq!(
         balance_sub.next().await.unwrap(),
         sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS)
@@ -469,12 +463,8 @@ async fn rbf_withdrawals_are_rejected() -> anyhow::Result<()> {
     let address = bitcoin.get_new_address().await;
     let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
     let wallet_module = client.get_first_module::<WalletClientModule>()?;
-    let fees = wallet_module
-        .get_withdraw_fees(address.as_unchecked().clone(), peg_out)
-        .await?;
-    let op = wallet_module
-        .withdraw(address.as_unchecked().clone(), peg_out, fees, ())
-        .await?;
+    let fees = wallet_module.get_withdraw_fees(&address, peg_out).await?;
+    let op = wallet_module.withdraw(&address, peg_out, fees, ()).await?;
 
     let sub = wallet_module.subscribe_withdraw_updates(op).await?;
     let mut sub = sub.into_stream();
@@ -568,10 +558,10 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     let peg_out1 = PEG_OUT_AMOUNT_SATS;
     let wallet_module = client.get_first_module::<WalletClientModule>()?;
     let fees1 = wallet_module
-        .get_withdraw_fees(address.as_unchecked().clone(), bsats(peg_out1))
+        .get_withdraw_fees(&address, bsats(peg_out1))
         .await?;
     let op = wallet_module
-        .withdraw(address.as_unchecked().clone(), bsats(peg_out1), fees1, ())
+        .withdraw(&address, bsats(peg_out1), fees1, ())
         .await?;
     let balance_after_peg_out =
         sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - fees1.amount().to_sat());
@@ -594,7 +584,7 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     let address = bitcoin.get_new_address().await;
     let peg_out2 = PEG_OUT_AMOUNT_SATS;
     let fees2 = wallet_module
-        .get_withdraw_fees(address.as_unchecked().clone(), bsats(peg_out2))
+        .get_withdraw_fees(&address, bsats(peg_out2))
         .await;
     // Must fail because change UTXOs are still being confirmed
     assert!(fees2.is_err());
@@ -604,10 +594,10 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     await_consensus_to_catch_up(&client, current_block + 1).await?;
     // Now change UTXOs are available and we can peg-out again
     let fees2 = wallet_module
-        .get_withdraw_fees(address.as_unchecked().clone(), bsats(peg_out2))
+        .get_withdraw_fees(&address, bsats(peg_out2))
         .await?;
     let op = wallet_module
-        .withdraw(address.as_unchecked().clone(), bsats(peg_out2), fees2, ())
+        .withdraw(&address, bsats(peg_out2), fees2, ())
         .await?;
     let sub = wallet_module.subscribe_withdraw_updates(op).await?;
     let mut sub = sub.into_stream();
@@ -825,12 +815,8 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
     //   - after the tx is mined and finalized
     let address = bitcoin.get_new_address().await;
     let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
-    let fees = wallet_module
-        .get_withdraw_fees(address.as_unchecked().clone(), peg_out)
-        .await?;
-    let op = wallet_module
-        .withdraw(address.as_unchecked().clone(), peg_out, fees, ())
-        .await?;
+    let fees = wallet_module.get_withdraw_fees(&address, peg_out).await?;
+    let op = wallet_module.withdraw(&address, peg_out, fees, ()).await?;
 
     let sub = wallet_module.subscribe_withdraw_updates(op).await?;
     let mut sub = sub.into_stream();
