@@ -554,15 +554,14 @@ pub async fn handle_command(
         }
         ClientCmd::Withdraw { amount, address } => {
             let wallet_module = client.get_first_module::<WalletClientModule>()?;
+            let address = address.require_network(wallet_module.get_network())?;
             let (amount, fees) = match amount {
                 // If the amount is "all", then we need to subtract the fees from
                 // the amount we are withdrawing
                 BitcoinAmountOrAll::All => {
                     let balance =
                         bitcoin::Amount::from_sat(client.get_balance().await.msats / 1000);
-                    let fees = wallet_module
-                        .get_withdraw_fees(address.clone(), balance)
-                        .await?;
+                    let fees = wallet_module.get_withdraw_fees(&address, balance).await?;
                     let amount = balance.checked_sub(fees.amount());
                     if amount.is_none() {
                         bail!("Not enough funds to pay fees");
@@ -571,9 +570,7 @@ pub async fn handle_command(
                 }
                 BitcoinAmountOrAll::Amount(amount) => (
                     amount,
-                    wallet_module
-                        .get_withdraw_fees(address.clone(), amount)
-                        .await?,
+                    wallet_module.get_withdraw_fees(&address, amount).await?,
                 ),
             };
             let absolute_fees = fees.amount();
@@ -583,7 +580,7 @@ pub async fn handle_command(
                 "Attempting withdraw with fees: {fees:?}"
             );
 
-            let operation_id = wallet_module.withdraw(address, amount, fees, ()).await?;
+            let operation_id = wallet_module.withdraw(&address, amount, fees, ()).await?;
 
             let mut updates = wallet_module
                 .subscribe_withdraw_updates(operation_id)
