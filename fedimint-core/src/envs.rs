@@ -68,6 +68,9 @@ pub const FM_FORCE_BITCOIN_RPC_URL_ENV: &str = "FM_FORCE_BITCOIND_RPC_URL";
 /// `;`-separated list of urls with part after `#`
 /// ("fragment") specifying jq filter to extract sats/vB fee rate.
 /// Eg. `https://mempool.space/api/v1/fees/recommended#.halfHourFee`
+///
+/// Note that `#` is a standalone separator and *not* parsed as a part of the
+/// Url. Which means there's no need to escape it.
 pub const FM_WALLET_FEERATE_SOURCES_ENV: &str = "FM_WALLET_FEERATE_SOURCES";
 
 /// Env var that can be set to point at the bitcoind's cookie file to use for

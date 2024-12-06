@@ -1562,7 +1562,7 @@ impl Wallet {
 
         let sources = std::env::var(FM_WALLET_FEERATE_SOURCES_ENV)
             .unwrap_or_else(|_| match cfg.consensus.network.0 {
-                Network::Bitcoin => "https://mempool.space/api/v1/fees/recommended#.;https://blockstream.info/api/fee-estimates#.%221%22".to_owned(),
+                Network::Bitcoin => "https://mempool.space/api/v1/fees/recommended#.;https://blockstream.info/api/fee-estimates#.\"1\"".to_owned(),
                 _ => String::new(),
             })
             .split(';')
@@ -1580,7 +1580,7 @@ impl Wallet {
             debug!(target: LOG_MODULE_WALLET, "Running in devimint, using fast node polling");
             Duration::from_millis(100)
         } else {
-            Duration::from_secs(10)
+            Duration::from_secs(30)
         });
 
         task_group.spawn_cancellable("wallet module: background update", {
