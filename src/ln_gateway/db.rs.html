@@ -574,9 +574,51 @@
 <a href="#573" id="573">573</a>
 <a href="#574" id="574">574</a>
 <a href="#575" id="575">575</a>
-<a href="#576" id="576">576</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+<a href="#585" id="585">585</a>
+<a href="#586" id="586">586</a>
+<a href="#587" id="587">587</a>
+<a href="#588" id="588">588</a>
+<a href="#589" id="589">589</a>
+<a href="#590" id="590">590</a>
+<a href="#591" id="591">591</a>
+<a href="#592" id="592">592</a>
+<a href="#593" id="593">593</a>
+<a href="#594" id="594">594</a>
+<a href="#595" id="595">595</a>
+<a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a>
+<a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
-<span class="kw">use </span>bitcoin::hashes::sha256;
+<span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::db::{
@@ -597,8 +639,6 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>strum_macros::EnumIter;
-
-<span class="kw">use </span><span class="kw">crate</span>::rpc::rpc_server::hash_password;
 
 <span class="kw">pub trait </span>GatewayDbtxNcExt {
     <span class="kw">async fn </span>save_federation_config(<span class="kw-2">&amp;mut </span><span class="self">self</span>, config: <span class="kw-2">&amp;</span>FederationConfig);
@@ -906,10 +946,10 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>GatewayConfigurationKey;
+</span><span class="kw">pub struct </span>GatewayConfigurationKeyV1;
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>GatewayConfiguration {
+</span><span class="kw">pub struct </span>GatewayConfigurationV1 {
     <span class="kw">pub </span>hashed_password: sha256::Hash,
     <span class="kw">pub </span>num_route_hints: u32,
     <span class="attr">#[serde(with = <span class="string">"serde_routing_fees"</span>)]
@@ -918,9 +958,26 @@
     <span class="kw">pub </span>password_salt: [u8; <span class="number">16</span>],
 }
 
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>GatewayConfigurationKey;
+
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>GatewayConfiguration {
+    <span class="kw">pub </span>num_route_hints: u32,
+    <span class="attr">#[serde(with = <span class="string">"serde_routing_fees"</span>)]
+    </span><span class="kw">pub </span>routing_fees: RoutingFees,
+    <span class="kw">pub </span>network: NetworkLegacyEncodingWrapper,
+}
+
 <span class="macro">impl_db_record!</span>(
     key = GatewayConfigurationKeyV0,
     value = GatewayConfigurationV0,
+    db_prefix = DbKeyPrefix::GatewayConfiguration,
+);
+
+<span class="macro">impl_db_record!</span>(
+    key = GatewayConfigurationKeyV1,
+    value = GatewayConfigurationV1,
     db_prefix = DbKeyPrefix::GatewayConfiguration,
 );
 
@@ -954,24 +1011,34 @@
     <span class="kw">let </span><span class="kw-2">mut </span>migrations: BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt; = BTreeMap::new();
     migrations.insert(DatabaseVersion(<span class="number">0</span>), |ctx| migrate_to_v1(ctx).boxed());
     migrations.insert(DatabaseVersion(<span class="number">1</span>), |ctx| migrate_to_v2(ctx).boxed());
+    migrations.insert(DatabaseVersion(<span class="number">2</span>), |ctx| migrate_to_v3(ctx).boxed());
     migrations
 }
 
 <span class="kw">async fn </span>migrate_to_v1(<span class="kw-2">mut </span>ctx: MigrationContext&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+    <span class="doccomment">/// Creates a password hash by appending a 4 byte salt to the plaintext
+    /// password.
+    </span><span class="kw">fn </span>hash_password(plaintext_password: <span class="kw-2">&amp;</span>str, salt: [u8; <span class="number">16</span>]) -&gt; sha256::Hash {
+        <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::new();
+        bytes.append(<span class="kw-2">&amp;mut </span>plaintext_password.consensus_encode_to_vec());
+        bytes.append(<span class="kw-2">&amp;mut </span>salt.consensus_encode_to_vec());
+        sha256::Hash::hash(<span class="kw-2">&amp;</span>bytes)
+    }
+
     <span class="kw">let </span><span class="kw-2">mut </span>dbtx = ctx.dbtx();
 
     <span class="comment">// If there is no old gateway configuration, there is nothing to do.
     </span><span class="kw">if let </span><span class="prelude-val">Some</span>(old_gateway_config) = dbtx.remove_entry(<span class="kw-2">&amp;</span>GatewayConfigurationKeyV0).<span class="kw">await </span>{
         <span class="kw">let </span>password_salt: [u8; <span class="number">16</span>] = rand::thread_rng().gen();
         <span class="kw">let </span>hashed_password = hash_password(<span class="kw-2">&amp;</span>old_gateway_config.password, password_salt);
-        <span class="kw">let </span>new_gateway_config = GatewayConfiguration {
+        <span class="kw">let </span>new_gateway_config = GatewayConfigurationV1 {
             hashed_password,
             num_route_hints: old_gateway_config.num_route_hints,
             routing_fees: old_gateway_config.routing_fees,
             network: old_gateway_config.network,
             password_salt,
         };
-        dbtx.insert_entry(<span class="kw-2">&amp;</span>GatewayConfigurationKey, <span class="kw-2">&amp;</span>new_gateway_config)
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>GatewayConfigurationKeyV1, <span class="kw-2">&amp;</span>new_gateway_config)
             .<span class="kw">await</span>;
     }
 
@@ -1003,6 +1070,23 @@
                 .<span class="kw">await</span>;
         }
     }
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">async fn </span>migrate_to_v3(<span class="kw-2">mut </span>ctx: MigrationContext&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = ctx.dbtx();
+
+    <span class="comment">// If there is no old gateway configuration, there is nothing to do.
+    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(old_gateway_config) = dbtx.remove_entry(<span class="kw-2">&amp;</span>GatewayConfigurationKeyV1).<span class="kw">await </span>{
+        <span class="kw">let </span>new_gateway_config = GatewayConfiguration {
+            num_route_hints: old_gateway_config.num_route_hints,
+            routing_fees: old_gateway_config.routing_fees,
+            network: old_gateway_config.network,
+        };
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>GatewayConfigurationKey, <span class="kw-2">&amp;</span>new_gateway_config)
+            .<span class="kw">await</span>;
+    }
+
     <span class="prelude-val">Ok</span>(())
 }
 

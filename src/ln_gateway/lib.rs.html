@@ -2171,64 +2171,7 @@
 <a href="#2170" id="2170">2170</a>
 <a href="#2171" id="2171">2171</a>
 <a href="#2172" id="2172">2172</a>
-<a href="#2173" id="2173">2173</a>
-<a href="#2174" id="2174">2174</a>
-<a href="#2175" id="2175">2175</a>
-<a href="#2176" id="2176">2176</a>
-<a href="#2177" id="2177">2177</a>
-<a href="#2178" id="2178">2178</a>
-<a href="#2179" id="2179">2179</a>
-<a href="#2180" id="2180">2180</a>
-<a href="#2181" id="2181">2181</a>
-<a href="#2182" id="2182">2182</a>
-<a href="#2183" id="2183">2183</a>
-<a href="#2184" id="2184">2184</a>
-<a href="#2185" id="2185">2185</a>
-<a href="#2186" id="2186">2186</a>
-<a href="#2187" id="2187">2187</a>
-<a href="#2188" id="2188">2188</a>
-<a href="#2189" id="2189">2189</a>
-<a href="#2190" id="2190">2190</a>
-<a href="#2191" id="2191">2191</a>
-<a href="#2192" id="2192">2192</a>
-<a href="#2193" id="2193">2193</a>
-<a href="#2194" id="2194">2194</a>
-<a href="#2195" id="2195">2195</a>
-<a href="#2196" id="2196">2196</a>
-<a href="#2197" id="2197">2197</a>
-<a href="#2198" id="2198">2198</a>
-<a href="#2199" id="2199">2199</a>
-<a href="#2200" id="2200">2200</a>
-<a href="#2201" id="2201">2201</a>
-<a href="#2202" id="2202">2202</a>
-<a href="#2203" id="2203">2203</a>
-<a href="#2204" id="2204">2204</a>
-<a href="#2205" id="2205">2205</a>
-<a href="#2206" id="2206">2206</a>
-<a href="#2207" id="2207">2207</a>
-<a href="#2208" id="2208">2208</a>
-<a href="#2209" id="2209">2209</a>
-<a href="#2210" id="2210">2210</a>
-<a href="#2211" id="2211">2211</a>
-<a href="#2212" id="2212">2212</a>
-<a href="#2213" id="2213">2213</a>
-<a href="#2214" id="2214">2214</a>
-<a href="#2215" id="2215">2215</a>
-<a href="#2216" id="2216">2216</a>
-<a href="#2217" id="2217">2217</a>
-<a href="#2218" id="2218">2218</a>
-<a href="#2219" id="2219">2219</a>
-<a href="#2220" id="2220">2220</a>
-<a href="#2221" id="2221">2221</a>
-<a href="#2222" id="2222">2222</a>
-<a href="#2223" id="2223">2223</a>
-<a href="#2224" id="2224">2224</a>
-<a href="#2225" id="2225">2225</a>
-<a href="#2226" id="2226">2226</a>
-<a href="#2227" id="2227">2227</a>
-<a href="#2228" id="2228">2228</a>
-<a href="#2229" id="2229">2229</a>
-<a href="#2230" id="2230">2230</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2173" id="2173">2173</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2270,7 +2213,7 @@
 <span class="kw">use </span>client::GatewayClientBuilder;
 <span class="kw">use </span>config::GatewayOpts;
 <span class="kw">pub use </span>config::GatewayParameters;
-<span class="kw">use </span>db::{GatewayConfiguration, GatewayConfigurationKey, GatewayDbtxNcExt};
+<span class="kw">use </span>db::{GatewayConfiguration, GatewayDbtxNcExt};
 <span class="kw">use </span>error::FederationNotConnected;
 <span class="kw">use </span>events::ALL_GATEWAY_EVENTS;
 <span class="kw">use </span>federation_manager::FederationManager;
@@ -2317,7 +2260,7 @@
     PaymentAction,
 };
 <span class="kw">use </span>lightning_invoice::{Bolt11Invoice, RoutingFees};
-<span class="kw">use </span>rand::{thread_rng, Rng};
+<span class="kw">use </span>rand::thread_rng;
 <span class="kw">use </span>rpc::{
     CloseChannelsWithPeerPayload, CreateInvoiceForOperatorPayload, FederationInfo,
     GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelPayload,
@@ -2335,7 +2278,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::error::{AdminGatewayError, LNv1Error, LNv2Error, PublicGatewayError};
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::GatewayClientModuleV2;
 <span class="kw">use </span><span class="kw">crate</span>::lightning::{GatewayLightningBuilder, LightningContext, LightningMode, RouteHtlcStream};
-<span class="kw">use </span><span class="kw">crate</span>::rpc::rpc_server::{hash_password, run_webserver};
+<span class="kw">use </span><span class="kw">crate</span>::rpc::rpc_server::run_webserver;
 <span class="kw">use </span><span class="kw">crate</span>::rpc::{
     BackupPayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
     GatewayBalances, WithdrawPayload,
@@ -2387,36 +2330,29 @@
 /// graph LR
 /// classDef virtual fill:#fff,stroke-dasharray: 5 5
 ///
-///    Initializing -- begin intercepting lightning payments --&gt; Connected
-///    Initializing -- gateway needs config --&gt; Configuring
-///    Configuring -- configuration set --&gt; Connected
+///    Disconnected -- establish lightning connection --&gt; Connected
 ///    Connected -- load federation clients --&gt; Running
 ///    Connected -- not synced to chain --&gt; Syncing
 ///    Syncing -- load federation clients --&gt; Running
 ///    Running -- disconnected from lightning node --&gt; Disconnected
 ///    Running -- shutdown initiated --&gt; ShuttingDown
-///    Disconnected -- re-established lightning connection --&gt; Connected
 /// ```
 </span><span class="attr">#[derive(Clone, Debug)]
 </span><span class="kw">pub enum </span>GatewayState {
-    Initializing,
-    Configuring,
+    Disconnected,
     Syncing,
     Connected,
     Running { lightning_context: LightningContext },
-    Disconnected,
     ShuttingDown { lightning_context: LightningContext },
 }
 
 <span class="kw">impl </span>Display <span class="kw">for </span>GatewayState {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter) -&gt; std::fmt::Result {
         <span class="kw">match </span><span class="self">self </span>{
-            GatewayState::Initializing =&gt; <span class="macro">write!</span>(f, <span class="string">"Initializing"</span>),
-            GatewayState::Configuring =&gt; <span class="macro">write!</span>(f, <span class="string">"Configuring"</span>),
+            GatewayState::Disconnected =&gt; <span class="macro">write!</span>(f, <span class="string">"Disconnected"</span>),
             GatewayState::Syncing =&gt; <span class="macro">write!</span>(f, <span class="string">"Syncing"</span>),
             GatewayState::Connected =&gt; <span class="macro">write!</span>(f, <span class="string">"Connected"</span>),
             GatewayState::Running { .. } =&gt; <span class="macro">write!</span>(f, <span class="string">"Running"</span>),
-            GatewayState::Disconnected =&gt; <span class="macro">write!</span>(f, <span class="string">"Disconnected"</span>),
             GatewayState::ShuttingDown { .. } =&gt; <span class="macro">write!</span>(f, <span class="string">"ShuttingDown"</span>),
         }
     }
@@ -2439,7 +2375,7 @@
     </span>lightning_builder: Arc&lt;<span class="kw">dyn </span>LightningBuilder + Send + Sync&gt;,
 
     <span class="doccomment">/// The gateway's current configuration
-    </span>gateway_config: Arc&lt;RwLock&lt;<span class="prelude-ty">Option</span>&lt;GatewayConfiguration&gt;&gt;&gt;,
+    </span>gateway_config: Arc&lt;RwLock&lt;GatewayConfiguration&gt;&gt;,
 
     <span class="doccomment">/// The current state of the Gateway.
     </span>state: Arc&lt;RwLock&lt;GatewayState&gt;&gt;,
@@ -2466,6 +2402,10 @@
 
     <span class="doccomment">/// The task group for all tasks related to the gateway.
     </span>task_group: TaskGroup,
+
+    <span class="doccomment">/// The bcrypt password hash used to authenticate the gateway.
+    /// This is an `Arc` because `bcrypt::HashParts` does not implement `Clone`.
+    </span>bcrypt_password_hash: Arc&lt;bcrypt::HashParts&gt;,
 }
 
 <span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span>Gateway {
@@ -2492,7 +2432,7 @@
         client_builder: GatewayClientBuilder,
         listen: SocketAddr,
         api_addr: SafeUrl,
-        cli_password: <span class="prelude-ty">Option</span>&lt;String&gt;,
+        bcrypt_password_hash: bcrypt::HashParts,
         network: <span class="prelude-ty">Option</span>&lt;Network&gt;,
         fees: RoutingFees,
         num_route_hints: u32,
@@ -2508,7 +2448,7 @@
             GatewayParameters {
                 listen,
                 versioned_api,
-                password: cli_password,
+                bcrypt_password_hash,
                 num_route_hints,
                 fees: <span class="prelude-val">Some</span>(GatewayFee(fees)),
                 network,
@@ -2570,7 +2510,7 @@
             gateway_parameters,
             gateway_db,
             client_builder,
-            GatewayState::Initializing,
+            GatewayState::Disconnected,
         )
         .<span class="kw">await
     </span>}
@@ -2613,6 +2553,7 @@
             listen: gateway_parameters.listen,
             lightning_module_mode: gateway_parameters.lightning_module_mode,
             task_group,
+            bcrypt_password_hash: Arc::new(gateway_parameters.bcrypt_password_hash),
         })
     }
 
@@ -2632,7 +2573,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>.versioned_api
     }
 
-    <span class="kw">pub async fn </span>clone_gateway_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;GatewayConfiguration&gt; {
+    <span class="kw">pub async fn </span>clone_gateway_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; GatewayConfiguration {
         <span class="self">self</span>.gateway_config.read().<span class="kw">await</span>.clone()
     }
 
@@ -2751,15 +2692,7 @@
                 }
             };
 
-        <span class="kw">let </span>gateway_config = <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = <span class="self">self</span>.clone_gateway_config().<span class="kw">await </span>{
-            config
-        } <span class="kw">else </span>{
-            <span class="self">self</span>.set_gateway_state(GatewayState::Configuring).<span class="kw">await</span>;
-            <span class="macro">info!</span>(<span class="string">"Waiting for gateway to be configured..."</span>);
-            <span class="self">self</span>.gateway_db
-                .wait_key_exists(<span class="kw-2">&amp;</span>GatewayConfigurationKey)
-                .<span class="kw">await
-        </span>};
+        <span class="kw">let </span>gateway_config = <span class="self">self</span>.clone_gateway_config().<span class="kw">await</span>;
 
         <span class="kw">if </span>gateway_config.network.<span class="number">0 </span>!= lightning_network {
             <span class="macro">warn!</span>(
@@ -2771,7 +2704,6 @@
                 lightning_network
             );
             <span class="self">self</span>.handle_set_configuration_msg(SetConfigurationPayload {
-                password: <span class="prelude-val">None</span>,
                 network: <span class="prelude-val">Some</span>(lightning_network),
                 num_route_hints: <span class="prelude-val">None</span>,
                 routing_fees: <span class="prelude-val">None</span>,
@@ -3033,10 +2965,7 @@
 
         <span class="comment">// `GatewayConfiguration` should always exist in the database when we are in the
         // `Running` state.
-        </span><span class="kw">let </span>gateway_config = <span class="self">self
-            </span>.clone_gateway_config()
-            .<span class="kw">await
-            </span>.expect(<span class="string">"Gateway configuration should be set"</span>);
+        </span><span class="kw">let </span>gateway_config = <span class="self">self</span>.clone_gateway_config().<span class="kw">await</span>;
 
         <span class="kw">let </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
         <span class="kw">let </span>federations = <span class="self">self
@@ -3367,10 +3296,7 @@
 
         <span class="comment">// `GatewayConfiguration` should always exist in the database when we are in the
         // `Running` state.
-        </span><span class="kw">let </span>gateway_config = <span class="self">self
-            </span>.clone_gateway_config()
-            .<span class="kw">await
-            </span>.expect(<span class="string">"Gateway configuration should be set"</span>);
+        </span><span class="kw">let </span>gateway_config = <span class="self">self</span>.clone_gateway_config().<span class="kw">await</span>;
 
         <span class="comment">// The gateway deterministically assigns a unique identifier (u64) to each
         // federation connected.
@@ -3525,39 +3451,26 @@
     </span><span class="kw">pub async fn </span>handle_set_configuration_msg(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         SetConfigurationPayload {
-            password,
             network,
             num_route_hints,
             routing_fees,
             per_federation_routing_fees,
         }: SetConfigurationPayload,
     ) -&gt; AdminResult&lt;()&gt; {
-        <span class="kw">let </span>gw_state = <span class="self">self</span>.get_state().<span class="kw">await</span>;
-        <span class="kw">let </span>lightning_network = <span class="kw">match </span>gw_state {
-            GatewayState::Running { lightning_context } =&gt; {
-                <span class="kw">if </span>network.is_some() &amp;&amp; network != <span class="prelude-val">Some</span>(lightning_context.lightning_network) {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(network) = network {
+            <span class="kw">if let </span>GatewayState::Running { lightning_context } = <span class="self">self</span>.get_state().<span class="kw">await </span>{
+                <span class="kw">if </span>network != lightning_context.lightning_network {
                     <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::GatewayConfigurationError(
                         <span class="string">"Cannot change network while connected to a lightning node"</span>.to_string(),
                     ));
                 }
-                lightning_context.lightning_network
             }
-            <span class="comment">// In the case the gateway is not yet running and not yet connected to a lightning node,
-            // we start off with a default network configuration. This default gets replaced later
-            // when the gateway connects to a lightning node, or when a user sets a different
-            // configuration
-            </span><span class="kw">_ </span>=&gt; DEFAULT_NETWORK,
-        };
+        }
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
 
-        <span class="kw">let </span>prev_gateway_config = <span class="self">self</span>.clone_gateway_config().<span class="kw">await</span>;
-        <span class="kw">let </span>new_gateway_config = <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>prev_config) = prev_gateway_config {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(password) = password.as_ref() {
-                <span class="kw">let </span>hashed_password = hash_password(password, prev_config.password_salt);
-                prev_config.hashed_password = hashed_password;
-            }
-
+        <span class="kw">let </span><span class="kw-2">mut </span>prev_config = <span class="self">self</span>.clone_gateway_config().<span class="kw">await</span>;
+        <span class="kw">let </span>new_gateway_config = {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(network) = network {
                 <span class="kw">if </span>!<span class="self">self</span>.federation_manager.read().<span class="kw">await</span>.is_empty() {
                     <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::GatewayConfigurationError(
@@ -3579,20 +3492,6 @@
             }
 
             prev_config
-        } <span class="kw">else </span>{
-            <span class="kw">let </span>password = password.ok_or(AdminGatewayError::GatewayConfigurationError(
-                <span class="string">"The password field is required when initially configuring the gateway"</span>.to_string(),
-            ))<span class="question-mark">?</span>;
-            <span class="kw">let </span>password_salt: [u8; <span class="number">16</span>] = rand::thread_rng().gen();
-            <span class="kw">let </span>hashed_password = hash_password(<span class="kw-2">&amp;</span>password, password_salt);
-
-            GatewayConfiguration {
-                hashed_password,
-                network: NetworkLegacyEncodingWrapper(lightning_network),
-                num_route_hints: DEFAULT_NUM_ROUTE_HINTS,
-                routing_fees: DEFAULT_FEES,
-                password_salt,
-            }
         };
         dbtx.set_gateway_config(<span class="kw-2">&amp;</span>new_gateway_config).<span class="kw">await</span>;
 
@@ -3635,7 +3534,7 @@
         dbtx.commit_tx().<span class="kw">await</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>curr_gateway_config = <span class="self">self</span>.gateway_config.write().<span class="kw">await</span>;
-        <span class="kw-2">*</span>curr_gateway_config = <span class="prelude-val">Some</span>(new_gateway_config.clone());
+        <span class="kw-2">*</span>curr_gateway_config = new_gateway_config.clone();
 
         <span class="macro">info!</span>(<span class="string">"Set GatewayConfiguration successfully."</span>);
 
@@ -3968,16 +3867,13 @@
     </span><span class="kw">async fn </span>get_gateway_configuration(
         gateway_db: Database,
         gateway_parameters: <span class="kw-2">&amp;</span>GatewayParameters,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;GatewayConfiguration&gt; {
+    ) -&gt; GatewayConfiguration {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = gateway_db.begin_transaction_nc().<span class="kw">await</span>;
 
         <span class="comment">// Always use the gateway configuration from the database if it exists.
         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_config) = dbtx.load_gateway_config().<span class="kw">await </span>{
-            <span class="kw">return </span><span class="prelude-val">Some</span>(gateway_config);
+            <span class="kw">return </span>gateway_config;
         }
-
-        <span class="comment">// If the password is not provided, return None
-        </span><span class="kw">let </span>password = gateway_parameters.password.as_ref()<span class="question-mark">?</span>;
 
         <span class="comment">// If the DB does not have the gateway configuration, we can construct one from
         // the provided password (required) and the defaults.
@@ -3989,17 +3885,11 @@
             .unwrap_or(GatewayFee(DEFAULT_FEES));
         <span class="kw">let </span>network =
             NetworkLegacyEncodingWrapper(gateway_parameters.network.unwrap_or(DEFAULT_NETWORK));
-        <span class="kw">let </span>password_salt: [u8; <span class="number">16</span>] = rand::thread_rng().gen();
-        <span class="kw">let </span>hashed_password = hash_password(password, password_salt);
-        <span class="kw">let </span>gateway_config = GatewayConfiguration {
-            hashed_password,
+        GatewayConfiguration {
             network,
             num_route_hints,
             routing_fees: routing_fees.<span class="number">0</span>,
-            password_salt,
-        };
-
-        <span class="prelude-val">Some</span>(gateway_config)
+        }
     }
 
     <span class="doccomment">/// Retrieves a `ClientHandleArc` from the Gateway's in memory structures
@@ -4101,21 +3991,17 @@
             <span class="self">self</span>.task_group.spawn_cancellable(<span class="string">"register clients"</span>, <span class="kw">async move </span>{
                 <span class="kw">loop </span>{
                     <span class="kw">let </span>gateway_config = gateway.clone_gateway_config().<span class="kw">await</span>;
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_config) = gateway_config {
-                        <span class="kw">let </span>gateway_state = gateway.get_state().<span class="kw">await</span>;
-                        <span class="kw">if let </span>GatewayState::Running { .. } = <span class="kw-2">&amp;</span>gateway_state {
-                            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = gateway.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
-                            <span class="kw">let </span>all_federations_configs: Vec&lt;<span class="kw">_</span>&gt; = dbtx.load_federation_configs().<span class="kw">await</span>.into_iter().collect();
-                            gateway.register_federations(<span class="kw-2">&amp;</span>gateway_config, <span class="kw-2">&amp;</span>all_federations_configs, <span class="kw-2">&amp;</span>register_task_group).<span class="kw">await</span>;
-                        } <span class="kw">else </span>{
-                            <span class="comment">// We need to retry more often if the gateway is not in the Running state
-                            </span><span class="kw">const </span>NOT_RUNNING_RETRY: Duration = Duration::from_secs(<span class="number">10</span>);
-                            <span class="macro">info!</span>(<span class="string">"Will not register federation yet because gateway still not in Running state. Current state: {gateway_state:?}. Will keep waiting, next retry in {NOT_RUNNING_RETRY:?}..."</span>);
-                            sleep(NOT_RUNNING_RETRY).<span class="kw">await</span>;
-                            <span class="kw">continue</span>;
-                        }
+                    <span class="kw">let </span>gateway_state = gateway.get_state().<span class="kw">await</span>;
+                    <span class="kw">if let </span>GatewayState::Running { .. } = <span class="kw-2">&amp;</span>gateway_state {
+                        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = gateway.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
+                        <span class="kw">let </span>all_federations_configs: Vec&lt;<span class="kw">_</span>&gt; = dbtx.load_federation_configs().<span class="kw">await</span>.into_iter().collect();
+                        gateway.register_federations(<span class="kw-2">&amp;</span>gateway_config, <span class="kw-2">&amp;</span>all_federations_configs, <span class="kw-2">&amp;</span>register_task_group).<span class="kw">await</span>;
                     } <span class="kw">else </span>{
-                        <span class="macro">warn!</span>(<span class="string">"Cannot register clients because gateway configuration is not set."</span>);
+                        <span class="comment">// We need to retry more often if the gateway is not in the Running state
+                        </span><span class="kw">const </span>NOT_RUNNING_RETRY: Duration = Duration::from_secs(<span class="number">10</span>);
+                        <span class="macro">info!</span>(<span class="string">"Will not register federation yet because gateway still not in Running state. Current state: {gateway_state:?}. Will keep waiting, next retry in {NOT_RUNNING_RETRY:?}..."</span>);
+                        sleep(NOT_RUNNING_RETRY).<span class="kw">await</span>;
+                        <span class="kw">continue</span>;
                     }
 
                     <span class="comment">// Allow a 15% buffer of the TTL before the re-registering gateway

@@ -231,7 +231,11 @@
 <a href="#230" id="230">230</a>
 <a href="#231" id="231">231</a>
 <a href="#232" id="232">232</a>
-<a href="#233" id="233">233</a></pre></div><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a></pre></div><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
 
 </span><span class="kw">use </span>std::path::{Path, PathBuf};
 <span class="kw">use </span>std::str::FromStr <span class="kw">as _</span>;
@@ -399,9 +403,13 @@
         FM_LND_TLS_CERT: PathBuf = FM_LND_DIR.join(<span class="string">"tls.cert"</span>); env: <span class="string">"FM_LND_TLS_CERT"</span>;
         FM_LND_MACAROON: PathBuf = FM_LND_DIR.join(<span class="string">"data/chain/bitcoin/regtest/admin.macaroon"</span>); env: <span class="string">"FM_LND_MACAROON"</span>;
 
-        FM_GATEWAY_PASSWORD: String = <span class="string">"theresnosecondbest"</span>; env: <span class="string">"FM_GATEWAY_PASSWORD"</span>;
+        <span class="comment">// TODO(support:v0.5): Remove this. It was used prior to `FM_GATEWAY_BCRYPT_PASSWORD_HASH` to provide a plaintext password to the gateway.
+        </span>FM_GATEWAY_PASSWORD: String = <span class="string">"theresnosecondbest"</span>; env: <span class="string">"FM_GATEWAY_PASSWORD"</span>;
 
-         <span class="comment">// Enable to us to make an unbounded number of payments
+        <span class="comment">// Bcrypt hash of "theresnosecondbest" with a cost of 10.
+        </span>FM_GATEWAY_BCRYPT_PASSWORD_HASH: String = <span class="string">"$2y$10$Q/UTDeO84VGG1mRncxw.Nubqyi/HsNRJ40k0TSexFy9eVess1yi/u"</span>; env: <span class="string">"FM_GATEWAY_BCRYPT_PASSWORD_HASH"</span>;
+
+        <span class="comment">// Enable to us to make an unbounded number of payments
         </span>FM_DEFAULT_GATEWAY_FEES: String = <span class="string">"0,0"</span>; env: <span class="string">"FM_DEFAULT_GATEWAY_FEES"</span>;
         FM_GATEWAY_SKIP_WAIT_FOR_SYNC: String = <span class="string">"1"</span>; env: <span class="string">"FM_GATEWAY_SKIP_WAIT_FOR_SYNC"</span>;
 

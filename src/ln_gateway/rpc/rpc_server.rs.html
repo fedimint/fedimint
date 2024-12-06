@@ -430,64 +430,7 @@
 <a href="#429" id="429">429</a>
 <a href="#430" id="430">430</a>
 <a href="#431" id="431">431</a>
-<a href="#432" id="432">432</a>
-<a href="#433" id="433">433</a>
-<a href="#434" id="434">434</a>
-<a href="#435" id="435">435</a>
-<a href="#436" id="436">436</a>
-<a href="#437" id="437">437</a>
-<a href="#438" id="438">438</a>
-<a href="#439" id="439">439</a>
-<a href="#440" id="440">440</a>
-<a href="#441" id="441">441</a>
-<a href="#442" id="442">442</a>
-<a href="#443" id="443">443</a>
-<a href="#444" id="444">444</a>
-<a href="#445" id="445">445</a>
-<a href="#446" id="446">446</a>
-<a href="#447" id="447">447</a>
-<a href="#448" id="448">448</a>
-<a href="#449" id="449">449</a>
-<a href="#450" id="450">450</a>
-<a href="#451" id="451">451</a>
-<a href="#452" id="452">452</a>
-<a href="#453" id="453">453</a>
-<a href="#454" id="454">454</a>
-<a href="#455" id="455">455</a>
-<a href="#456" id="456">456</a>
-<a href="#457" id="457">457</a>
-<a href="#458" id="458">458</a>
-<a href="#459" id="459">459</a>
-<a href="#460" id="460">460</a>
-<a href="#461" id="461">461</a>
-<a href="#462" id="462">462</a>
-<a href="#463" id="463">463</a>
-<a href="#464" id="464">464</a>
-<a href="#465" id="465">465</a>
-<a href="#466" id="466">466</a>
-<a href="#467" id="467">467</a>
-<a href="#468" id="468">468</a>
-<a href="#469" id="469">469</a>
-<a href="#470" id="470">470</a>
-<a href="#471" id="471">471</a>
-<a href="#472" id="472">472</a>
-<a href="#473" id="473">473</a>
-<a href="#474" id="474">474</a>
-<a href="#475" id="475">475</a>
-<a href="#476" id="476">476</a>
-<a href="#477" id="477">477</a>
-<a href="#478" id="478">478</a>
-<a href="#479" id="479">479</a>
-<a href="#480" id="480">480</a>
-<a href="#481" id="481">481</a>
-<a href="#482" id="482">482</a>
-<a href="#483" id="483">483</a>
-<a href="#484" id="484">484</a>
-<a href="#485" id="485">485</a>
-<a href="#486" id="486">486</a>
-<a href="#487" id="487">487</a>
-<a href="#488" id="488">488</a>
-<a href="#489" id="489">489</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#432" id="432">432</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>axum::extract::Request;
 <span class="kw">use </span>axum::http::{header, StatusCode};
@@ -495,9 +438,7 @@
 <span class="kw">use </span>axum::response::IntoResponse;
 <span class="kw">use </span>axum::routing::{get, post};
 <span class="kw">use </span>axum::{Extension, Json, Router};
-<span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_core::config::FederationId;
-<span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_ln_common::gateway_endpoint_constants::{
     GET_GATEWAY_ID_ENDPOINT, PAY_INVOICE_ENDPOINT,
@@ -581,50 +522,10 @@
     request: Request,
     next: Next,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, StatusCode&gt; {
-    <span class="comment">// These routes are not available unless the gateway's configuration is set.
-    </span><span class="kw">let </span>gateway_config = gateway
-        .clone_gateway_config()
-        .<span class="kw">await
-        </span>.ok_or(StatusCode::NOT_FOUND)<span class="question-mark">?</span>;
-    <span class="kw">let </span>gateway_hashed_password = gateway_config.hashed_password;
-    <span class="kw">let </span>password_salt = gateway_config.password_salt;
-    authenticate(gateway_hashed_password, password_salt, request, next).<span class="kw">await
-</span>}
-
-<span class="doccomment">/// Middleware to authenticate an incoming request. Routes that are
-/// authenticated with this middleware are un-authenticated if the gateway has
-/// not yet been configured. After the gateway is configured, this middleware
-/// enforces that a Bearer token must be supplied in the Authorization header.
-</span><span class="kw">async fn </span>auth_after_config_middleware(
-    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
-    request: Request,
-    next: Next,
-) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, StatusCode&gt; {
-    <span class="comment">// If the gateway's config has not been set, allow the request to continue, so
-    // that the gateway can be configured
-    </span><span class="kw">let </span>gateway_config = gateway.clone_gateway_config().<span class="kw">await</span>;
-    <span class="kw">if </span>gateway_config.is_none() {
-        <span class="kw">return </span><span class="prelude-val">Ok</span>(next.run(request).<span class="kw">await</span>);
-    }
-
-    <span class="comment">// Otherwise, validate that the Bearer token matches the gateway's hashed
-    // password
-    </span><span class="kw">let </span>gateway_config = gateway_config.expect(<span class="string">"Already validated the gateway config is not none"</span>);
-    <span class="kw">let </span>gateway_hashed_password = gateway_config.hashed_password;
-    <span class="kw">let </span>password_salt = gateway_config.password_salt;
-    authenticate(gateway_hashed_password, password_salt, request, next).<span class="kw">await
-</span>}
-
-<span class="doccomment">/// Validate that the Bearer token matches the gateway's hashed password
-</span><span class="kw">async fn </span>authenticate(
-    gateway_hashed_password: sha256::Hash,
-    password_salt: [u8; <span class="number">16</span>],
-    request: Request,
-    next: Next,
-) -&gt; <span class="prelude-ty">Result</span>&lt;axum::response::Response, StatusCode&gt; {
     <span class="kw">let </span>token = extract_bearer_token(<span class="kw-2">&amp;</span>request)<span class="question-mark">?</span>;
-    <span class="kw">let </span>hashed_password = hash_password(<span class="kw-2">&amp;</span>token, password_salt);
-    <span class="kw">if </span>gateway_hashed_password == hashed_password {
+    <span class="kw">if </span>bcrypt::verify(token, <span class="kw-2">&amp;</span>gateway.bcrypt_password_hash.to_string())
+        .expect(<span class="string">"Bcrypt hash is valid since we just stringified it"</span>)
+    {
         <span class="kw">return </span><span class="prelude-val">Ok</span>(next.run(request).<span class="kw">await</span>);
     }
 
@@ -669,8 +570,8 @@
         public_routes = public_routes.merge(lnv2_routes());
     }
 
-    <span class="comment">// Authenticated, public routes used for gateway administration
-    </span><span class="kw">let </span>always_authenticated_routes = Router::new()
+    <span class="comment">// Authenticated routes used for gateway administration
+    </span><span class="kw">let </span>authenticated_routes = Router::new()
         .route(ADDRESS_ENDPOINT, post(address))
         .route(WITHDRAW_ENDPOINT, post(withdraw))
         .route(CONNECT_FED_ENDPOINT, post(connect_fed))
@@ -697,34 +598,19 @@
         .route(MNEMONIC_ENDPOINT, get(mnemonic))
         .route(STOP_ENDPOINT, get(stop))
         .route(PAYMENT_LOG_ENDPOINT, post(payment_log))
-        .layer(middleware::from_fn(auth_middleware));
-
-    <span class="comment">// Routes that are un-authenticated before gateway configuration, then become
-    // authenticated after a password has been set.
-    </span><span class="kw">let </span>authenticated_after_config_routes = Router::new()
         .route(SET_CONFIGURATION_ENDPOINT, post(set_configuration))
         .route(CONFIGURATION_ENDPOINT, post(configuration))
         <span class="comment">// FIXME: deprecated &gt;= 0.3.0
         </span>.route(GATEWAY_INFO_POST_ENDPOINT, post(handle_post_info))
         .route(GATEWAY_INFO_ENDPOINT, get(info))
-        .layer(middleware::from_fn(auth_after_config_middleware));
+        .layer(middleware::from_fn(auth_middleware));
 
     Router::new()
         .merge(public_routes)
-        .merge(always_authenticated_routes)
-        .merge(authenticated_after_config_routes)
+        .merge(authenticated_routes)
         .layer(Extension(gateway))
         .layer(Extension(task_group))
         .layer(CorsLayer::permissive())
-}
-
-<span class="doccomment">/// Creates a password hash by appending a 4 byte salt to the plaintext
-/// password.
-</span><span class="kw">pub fn </span>hash_password(plaintext_password: <span class="kw-2">&amp;</span>str, salt: [u8; <span class="number">16</span>]) -&gt; sha256::Hash {
-    <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::new();
-    bytes.append(<span class="kw-2">&amp;mut </span>plaintext_password.consensus_encode_to_vec());
-    bytes.append(<span class="kw-2">&amp;mut </span>salt.consensus_encode_to_vec());
-    sha256::Hash::hash(<span class="kw-2">&amp;</span>bytes)
 }
 
 <span class="doccomment">/// Display high-level information about the Gateway
