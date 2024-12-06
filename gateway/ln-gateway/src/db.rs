@@ -498,6 +498,7 @@ mod fedimint_migration_tests {
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::util::SafeUrl;
+    use fedimint_lnv2_common::gateway_api::PaymentFee;
     use fedimint_logging::TracingSetup;
     use fedimint_testing::db::{
         snapshot_db_migrations_with_decoders, validate_migrations_global, BYTE_32,
@@ -506,7 +507,6 @@ mod fedimint_migration_tests {
     use tracing::info;
 
     use super::*;
-    use crate::DEFAULT_FEES;
 
     async fn create_gatewayd_db_data(db: Database) {
         let mut dbtx = db.begin_transaction().await;
@@ -521,7 +521,7 @@ mod fedimint_migration_tests {
             invite_code,
             federation_index: 2,
             timelock_delta: 10,
-            fees: DEFAULT_FEES,
+            fees: PaymentFee::SEND_FEE_DEFAULT.into(),
         };
 
         dbtx.insert_new_entry(&FederationIdKeyV0 { id: federation_id }, &federation_config)
@@ -535,7 +535,7 @@ mod fedimint_migration_tests {
         let gateway_configuration = GatewayConfigurationV0 {
             password: "EXAMPLE".to_string(),
             num_route_hints: 2,
-            routing_fees: DEFAULT_FEES,
+            routing_fees: PaymentFee::SEND_FEE_DEFAULT.into(),
             network: NetworkLegacyEncodingWrapper(bitcoin::Network::Regtest),
         };
 

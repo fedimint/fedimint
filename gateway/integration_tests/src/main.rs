@@ -355,15 +355,8 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
 
                 // Change the routing fees for a specific federation
                 let fed_id = dev_fed.fed().await?.calculate_federation_id();
-                let new_fed_routing_fees = format!("{},20,20000", fed_id.clone());
-                cmd!(
-                    gw,
-                    "set-configuration",
-                    "--per-federation-routing-fees",
-                    new_fed_routing_fees
-                )
-                .run()
-                .await?;
+                gw.set_federation_routing_fee(fed_id.clone(), 20, 20000)
+                    .await?;
 
                 let gateway_info = get_gateway_info(gw).await?;
                 assert_eq!(

@@ -23,7 +23,7 @@ use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
 use crate::util::{poll, Command, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
-use crate::version_constants::VERSION_0_5_0_ALPHA;
+use crate::version_constants::{VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA};
 
 #[derive(Clone)]
 pub struct Gatewayd {
@@ -479,6 +479,28 @@ impl Gatewayd {
             Err(ControlFlow::Continue(anyhow!("Not synced to block")))
         })
         .await?;
+        Ok(())
+    }
+
+    pub async fn set_federation_routing_fee(
+        &self,
+        fed_id: String,
+        base: u64,
+        ppm: u64,
+    ) -> Result<()> {
+        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+        if gatewayd_version >= *VERSION_0_4_0_ALPHA {
+            let new_fed_routing_fees = format!("{fed_id},{base},{ppm}");
+            cmd!(
+                self,
+                "set-configuration",
+                "--per-federation-routing-fees",
+                new_fed_routing_fees
+            )
+            .run()
+            .await?;
+        }
+
         Ok(())
     }
 }

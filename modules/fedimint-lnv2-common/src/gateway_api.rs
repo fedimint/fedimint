@@ -3,7 +3,7 @@ use bitcoin::secp256k1::PublicKey;
 use fedimint_core::config::FederationId;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Amount};
-use lightning_invoice::Bolt11Invoice;
+use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -207,6 +207,13 @@ impl PaymentFee {
         parts_per_million: 15_000,
     };
 
+    /// This is the fee the gateway uses to cover transaction fees with the
+    /// federation.
+    pub const SEND_FEE_DEFAULT: PaymentFee = PaymentFee {
+        base: Amount::from_sats(50),
+        parts_per_million: 5_000,
+    };
+
     /// This is the maximum receive fee of half of one percent plus fifty
     /// satoshis a correct gateway may recommend as a default.
     pub const RECEIVE_FEE_LIMIT: PaymentFee = PaymentFee {
@@ -228,5 +235,30 @@ impl PaymentFee {
             .saturating_div(1_000_000)
             .checked_add(self.base.msats)
             .expect("The division creates sufficient headroom to add the base fee")
+    }
+}
+
+impl From<RoutingFees> for PaymentFee {
+    fn from(value: RoutingFees) -> Self {
+        PaymentFee {
+            base: Amount::from_msats(u64::from(value.base_msat)),
+            parts_per_million: u64::from(value.proportional_millionths),
+        }
+    }
+}
+
+impl From<PaymentFee> for RoutingFees {
+    fn from(value: PaymentFee) -> Self {
+        RoutingFees {
+            base_msat: u32::try_from(value.base.msats).expect("base msat was truncated from u64"),
+            proportional_millionths: u32::try_from(value.parts_per_million)
+                .expect("ppm was truncated from u64"),
+        }
+    }
+}
+
+impl std::fmt::Display for PaymentFee {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{},{}", self.base, self.parts_per_million)
     }
 }

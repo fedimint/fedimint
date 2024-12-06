@@ -209,7 +209,7 @@ impl FederationManager {
         self.clients.get(federation_id)
     }
 
-    async fn federation_info(
+    pub async fn federation_info(
         &self,
         federation_id: FederationId,
         dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
