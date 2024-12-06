@@ -1580,7 +1580,7 @@ impl Wallet {
             debug!(target: LOG_MODULE_WALLET, "Running in devimint, using fast node polling");
             Duration::from_millis(100)
         } else {
-            Duration::from_secs(10)
+            Duration::from_secs(30)
         });
 
         task_group.spawn_cancellable("wallet module: background update", {
