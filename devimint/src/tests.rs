@@ -1420,6 +1420,7 @@ pub async fn lightning_gw_reconnect_test(
 
     info!("Pegging-in both gateways");
     fed.pegin_gateways(99_999, vec![&gw_lnd]).await?;
+    info!("past pegging-in both gateways");
 
     // Drop other references to LND so that the test can kill it
     drop(lnd);
@@ -1433,8 +1434,14 @@ pub async fn lightning_gw_reconnect_test(
     // node public key since the lightning node is unreachable.
     gw_lnd.stop_lightning_node().await?;
     let lightning_info = info_cmd.out_json().await?;
-    let gateway_info: GatewayInfo = serde_json::from_value(lightning_info)?;
-    assert!(gateway_info.lightning_pub_key.is_none());
+    // here
+    if gatewayd_version < *VERSION_0_5_0_ALPHA {
+        let gateway_info: LegacyGatewayInfo = serde_json::from_value(lightning_info)?;
+        assert!(gateway_info.lightning_pub_key.is_none());
+    } else {
+        let gateway_info: GatewayInfo = serde_json::from_value(lightning_info)?;
+        assert!(gateway_info.lightning_pub_key.is_none());
+    }
 
     // Restart LND
     tracing::info!("Restarting LND...");
