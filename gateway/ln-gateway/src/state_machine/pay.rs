@@ -26,6 +26,7 @@ use tracing::{debug, error, info, warn, Instrument};
 use super::{GatewayClientContext, GatewayExtReceiveStates};
 use crate::db::GatewayDbtxNcExt;
 use crate::lightning::{LightningRpcError, PayInvoiceResponse};
+use crate::state_machine::events::{OutgoingPaymentFailed, OutgoingPaymentSucceeded};
 use crate::state_machine::GatewayClientModule;
 use crate::{GatewayState, RoutingFees};
 
@@ -710,6 +711,19 @@ impl GatewayPayClaimOutgoingContract {
         preimage: Preimage,
     ) -> GatewayPayStateMachine {
         debug!("Claiming outgoing contract {contract:?}");
+
+        context
+            .client_ctx
+            .log_event(
+                &mut dbtx.module_tx(),
+                OutgoingPaymentSucceeded {
+                    outgoing_contract: contract.clone(),
+                    contract_id: contract.contract.contract_id(),
+                    preimage: preimage.consensus_encode_to_hex(),
+                },
+            )
+            .await;
+
         let claim_input = contract.claim(preimage.clone());
         let client_input = ClientInput::<LightningInput> {
             input: claim_input,
@@ -897,6 +911,19 @@ impl GatewayPayCancelContract {
         error: OutgoingPaymentError,
     ) -> GatewayPayStateMachine {
         info!("Canceling outgoing contract {contract:?}");
+
+        context
+            .client_ctx
+            .log_event(
+                &mut dbtx.module_tx(),
+                OutgoingPaymentFailed {
+                    outgoing_contract: contract.clone(),
+                    contract_id: contract.contract.contract_id(),
+                    error: error.clone(),
+                },
+            )
+            .await;
+
         let cancel_signature = context.secp.sign_schnorr(
             &bitcoin::secp256k1::Message::from_digest(
                 *contract.contract.cancellation_message().as_ref(),

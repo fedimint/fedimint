@@ -1,4 +1,5 @@
 mod complete;
+pub mod events;
 pub mod pay;
 
 use std::collections::BTreeMap;
@@ -11,6 +12,7 @@ use async_stream::stream;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::key::Secp256k1;
 use bitcoin::secp256k1::All;
+use events::{IncomingPaymentStarted, OutgoingPaymentStarted};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::derivable_secret::ChildId;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -164,6 +166,7 @@ pub struct GatewayClientContext {
     pub ln_decoder: Decoder,
     notifier: ModuleNotifier<GatewayClientStateMachines>,
     gateway: Arc<Gateway>,
+    pub client_ctx: ClientContext<GatewayClientModule>,
 }
 
 impl Context for GatewayClientContext {
@@ -211,6 +214,7 @@ impl ClientModule for GatewayClientModule {
             ln_decoder: self.decoder(),
             notifier: self.notifier.clone(),
             gateway: self.gateway.clone(),
+            client_ctx: self.client_ctx.clone(),
         }
     }
 
@@ -270,6 +274,7 @@ impl GatewayClientModule {
             Amount,
             ClientOutput<LightningOutputV0>,
             ClientOutputSM<GatewayClientStateMachines>,
+            ContractId,
         ),
         IncomingSmError,
     > {
@@ -312,7 +317,13 @@ impl GatewayClientModule {
                 ]
             }),
         };
-        Ok((operation_id, amount, client_output, client_output_sm))
+        Ok((
+            operation_id,
+            amount,
+            client_output,
+            client_output_sm,
+            contract_id,
+        ))
     }
 
     async fn create_funding_incoming_contract_output_from_swap(
@@ -439,7 +450,7 @@ impl GatewayClientModule {
     /// Attempt fulfill HTLC by buying preimage from the federation
     pub async fn gateway_handle_intercepted_htlc(&self, htlc: Htlc) -> anyhow::Result<OperationId> {
         debug!("Handling intercepted HTLC {htlc:?}");
-        let (operation_id, amount, client_output, client_output_sm) = self
+        let (operation_id, amount, client_output, client_output_sm, contract_id) = self
             .create_funding_incoming_contract_output_from_htlc(htlc.clone())
             .await?;
 
@@ -456,6 +467,20 @@ impl GatewayClientModule {
             .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
             .await?;
         debug!(?operation_id, "Submitted transaction for HTLC {htlc:?}");
+        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        self.client_ctx
+            .log_event(
+                &mut dbtx,
+                IncomingPaymentStarted {
+                    contract_id,
+                    payment_hash: htlc.payment_hash,
+                    invoice_amount: htlc.outgoing_amount_msat,
+                    contract_amount: amount,
+                    operation_id,
+                },
+            )
+            .await;
+        dbtx.commit_tx().await;
         Ok(operation_id)
     }
 
@@ -596,6 +621,12 @@ impl GatewayClientModule {
                 |dbtx, _| {
                     Box::pin(async {
                         let operation_id = OperationId(payload.contract_id.to_byte_array());
+
+                        self.client_ctx.log_event(dbtx, OutgoingPaymentStarted {
+                            contract_id: payload.contract_id,
+                            invoice_amount: payload.payment_data.amount().expect("LNv1 invoices should have an amount"),
+                            operation_id,
+                        }).await;
 
                         let state_machines =
                             vec![GatewayClientStateMachines::Pay(GatewayPayStateMachine {
