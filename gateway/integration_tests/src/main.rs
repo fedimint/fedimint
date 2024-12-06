@@ -610,7 +610,7 @@ async fn liquidity_test() -> anyhow::Result<()> {
         let gatewayd_version = util::Gatewayd::version_or_default().await;
         // LDK Gateway is not available when fedimintd version is < v0.5
         let fedimintd_version = util::FedimintdCmd::version_or_default().await;
-        if gatewayd_version < *VERSION_0_5_0_ALPHA || fedimintd_version < *VERSION_0_5_0_ALPHA {
+        if gatewayd_version < *VERSION_0_5_0_ALPHA || fedimintd_version < *VERSION_0_5_0_ALPHA || is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV) {
             info!(%gatewayd_version, "Version did not support gateway liquidity management, skipping");
             return Ok(());
         }
