@@ -155,6 +155,8 @@ hex-conservative = "0.3.0"
 hkdf = { package = "fedimint-hkdf", path = "./crypto/hkdf", version = "=0.6.0-alpha" }
 hyper = "1.5"
 itertools = "0.13.0"
+jaq-core = "2.0.0"
+jaq-json = { version = "1.0.0", features = ["serde_json"] }
 lightning = "0.0.125"
 lightning-invoice = { version = "0.32.0", features = ["std"] }
 ln-gateway = { package = "fedimint-ln-gateway", path = "./gateway/ln-gateway", version = "=0.6.0-alpha" }
