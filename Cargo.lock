@@ -1768,6 +1768,8 @@ dependencies = [
  "fedimint-unknown-server",
  "fedimint-wallet-client",
  "fedimint-wallet-server",
+ "fedimint-walletv2-common",
+ "fedimint-walletv2-server",
  "fedimintd",
  "fs-lock",
  "futures",
@@ -2215,6 +2217,7 @@ dependencies = [
  "fedimint-mint-client",
  "fedimint-rocksdb",
  "fedimint-wallet-client",
+ "fedimint-walletv2-client",
  "fs-lock",
  "futures",
  "hex",
@@ -2381,6 +2384,8 @@ dependencies = [
  "fedimint-server",
  "fedimint-wallet-client",
  "fedimint-wallet-server",
+ "fedimint-walletv2-client",
+ "fedimint-walletv2-server",
  "futures",
  "hex",
  "serde",
@@ -3203,6 +3208,7 @@ dependencies = [
  "fedimint-rocksdb",
  "fedimint-server",
  "fedimint-testing-core",
+ "fedimint-walletv2-common",
  "fs-lock",
  "lightning-invoice",
  "rand",
@@ -3454,6 +3460,98 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-walletv2-client"
+version = "0.6.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-stream",
+ "async-trait",
+ "bitcoin",
+ "clap",
+ "erased-serde",
+ "fedimint-api-client",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-walletv2-common",
+ "reqwest 0.12.9",
+ "secp256k1",
+ "serde",
+ "serde_json",
+ "strum 0.26.3",
+ "strum_macros 0.26.4",
+ "thiserror",
+]
+
+[[package]]
+name = "fedimint-walletv2-common"
+version = "0.6.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bitcoin",
+ "fedimint-core",
+ "miniscript",
+ "reqwest 0.12.9",
+ "secp256k1",
+ "serde",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-walletv2-server"
+version = "0.6.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bitcoin",
+ "erased-serde",
+ "fedimint-bitcoind",
+ "fedimint-core",
+ "fedimint-logging",
+ "fedimint-metrics",
+ "fedimint-server",
+ "fedimint-walletv2-common",
+ "futures",
+ "hex",
+ "miniscript",
+ "rand",
+ "secp256k1",
+ "serde",
+ "strum 0.26.3",
+ "strum_macros 0.26.4",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-walletv2-tests"
+version = "0.6.0-alpha"
+dependencies = [
+ "anyhow",
+ "bitcoin",
+ "bitcoincore-rpc",
+ "devimint",
+ "fedimint-bitcoind",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-dummy-client",
+ "fedimint-dummy-common",
+ "fedimint-dummy-server",
+ "fedimint-logging",
+ "fedimint-testing",
+ "fedimint-walletv2-client",
+ "fedimint-walletv2-common",
+ "fedimint-walletv2-server",
+ "futures",
+ "rand",
+ "serde_json",
+ "strum 0.26.3",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "fedimint-wasm-tests"
 version = "0.6.0-alpha"
 dependencies = [
@@ -3494,6 +3592,8 @@ dependencies = [
  "fedimint-unknown-common",
  "fedimint-unknown-server",
  "fedimint-wallet-server",
+ "fedimint-walletv2-common",
+ "fedimint-walletv2-server",
  "futures",
  "serde_json",
  "tikv-jemallocator",
