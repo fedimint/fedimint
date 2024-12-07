@@ -2289,6 +2289,7 @@ impl ClientBuilder {
         ClientBuilder {
             module_inits: ModuleInitRegistry::new(),
             primary_module_instance: None,
+            primary_module_kind: None,
             connector: Connector::default(),
             admin_creds: None,
             db_no_decoders: db,
@@ -2302,6 +2303,7 @@ impl ClientBuilder {
         ClientBuilder {
             module_inits: client.module_inits.clone(),
             primary_module_instance: Some(client.primary_module_instance),
+            primary_module_kind: None,
             admin_creds: None,
             db_no_decoders: client.db.with_decoders(ModuleRegistry::default()),
             stopped: false,
