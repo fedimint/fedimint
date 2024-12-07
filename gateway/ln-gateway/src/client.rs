@@ -10,7 +10,7 @@ use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::{Client, ClientBuilder};
 use fedimint_core::config::FederationId;
-use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::core::ModuleKind;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -25,19 +25,19 @@ use crate::{AdminResult, Gateway};
 pub struct GatewayClientBuilder {
     work_dir: PathBuf,
     registry: ClientModuleInitRegistry,
-    primary_module: ModuleInstanceId,
+    primary_module_kind: ModuleKind,
 }
 
 impl GatewayClientBuilder {
     pub fn new(
         work_dir: PathBuf,
         registry: ClientModuleInitRegistry,
-        primary_module: ModuleInstanceId,
+        primary_module_kind: ModuleKind,
     ) -> Self {
         Self {
             work_dir,
             registry,
-            primary_module,
+            primary_module_kind,
         }
     }
 
@@ -85,7 +85,7 @@ impl GatewayClientBuilder {
             .await
             .map_err(AdminGatewayError::ClientCreationError)?;
         client_builder.with_module_inits(registry);
-        client_builder.with_primary_module(self.primary_module);
+        client_builder.with_primary_module_kind(self.primary_module_kind.clone());
         client_builder.with_connector(connector);
         Ok(client_builder)
     }

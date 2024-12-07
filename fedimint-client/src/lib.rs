@@ -2300,6 +2300,7 @@ pub struct AdminCreds {
 pub struct ClientBuilder {
     module_inits: ClientModuleInitRegistry,
     primary_module_instance: Option<ModuleInstanceId>,
+    primary_module_kind: Option<ModuleKind>,
     admin_creds: Option<AdminCreds>,
     db_no_decoders: Database,
     meta_service: Arc<MetaService>,
@@ -2316,6 +2317,7 @@ impl ClientBuilder {
         ClientBuilder {
             module_inits: ModuleInitRegistry::new(),
             primary_module_instance: None,
+            primary_module_kind: None,
             connector: Connector::default(),
             admin_creds: None,
             db_no_decoders: db,
@@ -2329,6 +2331,7 @@ impl ClientBuilder {
         ClientBuilder {
             module_inits: client.module_inits.clone(),
             primary_module_instance: Some(client.primary_module_instance),
+            primary_module_kind: None,
             admin_creds: None,
             db_no_decoders: client.db.with_decoders(ModuleRegistry::default()),
             stopped: false,
@@ -2358,6 +2361,10 @@ impl ClientBuilder {
     ///
     /// ## Panics
     /// If there was a primary module specified previously
+    #[deprecated(
+        since = "0.6.0",
+        note = "Use `with_primary_module_kind` instead, as the instance id can't be known upfront"
+    )]
     pub fn with_primary_module(&mut self, primary_module_instance: ModuleInstanceId) {
         let was_replaced = self
             .primary_module_instance
@@ -2366,6 +2373,22 @@ impl ClientBuilder {
         assert!(
             !was_replaced,
             "Only one primary module can be given to the builder."
+        );
+    }
+
+    /// Uses this module kind as the primary module if present in the config.
+    /// See [`ClientModule::supports_being_primary`] for more information.
+    ///
+    /// ## Panics
+    /// If there was a primary module kind specified previously
+    pub fn with_primary_module_kind(&mut self, primary_module_kind: ModuleKind) {
+        let was_replaced = self
+            .primary_module_kind
+            .replace(primary_module_kind)
+            .is_some();
+        assert!(
+            !was_replaced,
+            "Only one primary module kind can be given to the builder."
         );
     }
 
@@ -2726,7 +2749,17 @@ impl ClientBuilder {
 
         let primary_module_instance = self
             .primary_module_instance
-            .ok_or(anyhow!("No primary module instance id was provided"))?;
+            .or_else(|| {
+                let primary_module_kind = self.primary_module_kind?;
+                config
+                    .modules
+                    .iter()
+                    .find_map(|(module_instance_id, module_config)| {
+                        (module_config.kind() == &primary_module_kind)
+                            .then_some(*module_instance_id)
+                    })
+            })
+            .ok_or(anyhow!("No primary module set or found"))?;
 
         let notifier = Notifier::new(db.clone());
 
