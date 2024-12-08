@@ -84,7 +84,7 @@ keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
 name = "fedimint"
 
 [workspace.dependencies]
-anyhow = "1.0.93"
+anyhow = "1.0.94"
 aquamarine = "0.5.0"
 assert_matches = "1.5.0"
 async-stream = "0.3.6"
@@ -99,7 +99,7 @@ bitcoincore-rpc = "0.19.0"
 bitcoin_hashes = "0.14.0"
 bls12_381 = "0.8.0"
 bytes = "1.9.0"
-clap = { version = "4.5.21", features = ["derive", "env"] }
+clap = { version = "4.5.23", features = ["derive", "env"] }
 cln-rpc = { package = "fedimint-cln-rpc", version = "0.5.0" }
 criterion = "0.5.1"
 devimint = { path = "./devimint", version = "=0.6.0-alpha" }
@@ -146,7 +146,7 @@ fedimint-unknown-server = { path = "./modules/fedimint-unknown-server", version 
 fedimint-wallet-client = { path = "./modules/fedimint-wallet-client", version = "=0.6.0-alpha" }
 fedimint-wallet-common = { path = "./modules/fedimint-wallet-common", version = "=0.6.0-alpha" }
 fedimint-wallet-server = { path = "./modules/fedimint-wallet-server", version = "=0.6.0-alpha" }
-fs-lock = "0.1.6"
+fs-lock = "0.1.7"
 futures = "0.3.31"
 futures-util = "0.3.30"
 group = "0.13.0"
@@ -187,7 +187,7 @@ threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
 tokio = "1.41.1"
 tikv-jemallocator = "0.5"
 tokio-rustls = "0.24.1"
-tokio-stream = "0.1.16"
+tokio-stream = "0.1.17"
 tonic_lnd = { version = "0.2.0", package = "fedimint-tonic-lnd", features = [
     "lightningrpc",
     "routerrpc",
