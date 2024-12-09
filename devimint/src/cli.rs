@@ -266,13 +266,11 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                 Ok(operation_id)
                             },
                             async {
-                                info!("about to call get_pegin_addr in devimint/src/cli.rs");
                                 let pegin_addr = dev_fed
                                     .gw_lnd_registered()
                                     .await?
                                     .get_pegin_addr(&dev_fed.fed().await?.calculate_federation_id())
                                     .await?;
-                                info!("past get_pegin_addr in devimint/src/cli.rs");
                                 dev_fed
                                     .bitcoind()
                                     .await?
@@ -282,13 +280,11 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                             },
                             async {
                                 if let Some(gw_ldk) = dev_fed.gw_ldk_connected().await? {
-                                    info!("about to call get_pegin_addr in devimint/src/cli.rs");
                                     let pegin_addr = gw_ldk
                                         .get_pegin_addr(
                                             &dev_fed.fed().await?.calculate_federation_id(),
                                         )
                                         .await?;
-                                    info!("past get_pegin_addr in devimint/src/cli.rs");
                                     dev_fed
                                         .bitcoind()
                                         .await?

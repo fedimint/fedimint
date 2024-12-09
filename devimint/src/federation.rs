@@ -763,9 +763,7 @@ impl Federation {
         info!(amount, deposit_fees, "Pegging-in gateway funds");
         let fed_id = self.calculate_federation_id();
         for gw in gateways.clone() {
-            info!("about to call get_pegin_addr in devimint/src/federation.rs");
             let pegin_addr = gw.get_pegin_addr(&fed_id).await?;
-            info!("past to call get_pegin_addr in devimint/src/federation.rs");
             self.bitcoind
                 .send_to(pegin_addr, amount + deposit_fees)
                 .await?;
@@ -814,7 +812,6 @@ impl Federation {
         let fed_id = self.calculate_federation_id();
         let mut peg_outs: BTreeMap<LightningNodeType, (Amount, WithdrawResponse)> = BTreeMap::new();
         for gw in gateways.clone() {
-            info!("calling get_balances from pegout_gateways");
             let prev_fed_ecash_balance = gw
                 .get_balances()
                 .await?
@@ -824,7 +821,6 @@ impl Federation {
                 .expect("Gateway has not joined federation")
                 .ecash_balance_msats;
 
-            info!("past get_balances from pegout_gateways");
             let pegout_address = self.bitcoind.get_new_address().await?;
             let value = cmd!(
                 gw,
@@ -852,7 +848,6 @@ impl Federation {
         .await?;
 
         for gw in gateways.clone() {
-            info!("calling get_balances from pegout_gateways for loop");
             let after_fed_ecash_balance = gw
                 .get_balances()
                 .await?
@@ -861,7 +856,6 @@ impl Federation {
                 .find(|fed| fed.federation_id.to_string() == fed_id)
                 .expect("Gateway has not joined federation")
                 .ecash_balance_msats;
-            info!("past calling get_balances from pegout_gateways for loop");
 
             let ln_type = gw.ln_type();
             let prev_balance = peg_outs

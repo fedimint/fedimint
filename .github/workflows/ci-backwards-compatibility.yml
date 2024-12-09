@@ -69,7 +69,9 @@ jobs:
             scripts/ci/run-in-fs-dir-cache.sh backward-compat \
             env -u RUSTC_WRAPPER \
             env FM_DEVIMINT_DISABLE_MODULE_LNV2=1 \
-            ./scripts/tests/test-ci-all-backcompat.sh v0.3.4-rc.1
+            ./scripts/tests/test-ci-all-backcompat.sh v0.3.4-rc.1 \
+            ./scripts/tests/test-ci-all-backcompat.sh v0.4.4 \
+            ./scripts/tests/test-ci-all-backcompat.sh v0.5.0-rc.2
 
   notifications:
     if: always() && github.repository == 'fedimint/fedimint' && github.event_name != 'merge_group'

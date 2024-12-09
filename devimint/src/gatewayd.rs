@@ -234,7 +234,6 @@ impl Gatewayd {
     }
 
     pub async fn get_pegin_addr(&self, fed_id: &str) -> Result<String> {
-        info!("inside get_pegin_addr");
         let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
         let address = if gateway_cli_version < *VERSION_0_5_0_ALPHA {
             cmd!(self, "address", "--federation-id={fed_id}")
@@ -252,12 +251,6 @@ impl Gatewayd {
                 .to_owned()
         };
         Ok(address)
-        // Ok(cmd!(self, "ecash", "pegin", "--federation-id={fed_id}")
-        //     .out_json()
-        //     .await?
-        //     .as_str()
-        //     .context("address must be a string")?
-        //     .to_owned())
     }
 
     pub async fn get_ln_onchain_address(&self) -> Result<String> {
@@ -344,18 +337,14 @@ impl Gatewayd {
         let federation_id = FederationId::from_str(&federation_id)?;
         let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
         if gateway_cli_version < *VERSION_0_5_0_ALPHA {
-            info!("calling get_balances from ecash_balance");
             let ecash_balance = cmd!(self, "balance", "--federation-id={federation_id}",)
                 .out_json()
                 .await?
                 .as_u64()
                 .unwrap();
-            info!("past calling get_balances from ecash_balance");
             Ok(ecash_balance)
         } else {
-            info!("calling get_balances from ecash_balance");
             let balances = self.get_balances().await?;
-            info!("past calling get_balances from ecash_balance");
             let ecash_balance = balances
                 .ecash_balances
                 .into_iter()
@@ -495,14 +484,8 @@ impl Gatewayd {
 
     pub async fn wait_for_block_height(&self, target_block_height: u64) -> Result<()> {
         poll("waiting for block height", || async {
-            info!("inside wait_for_block_height");
-            info!("calling self.get_info()");
             let info = self.get_info().await.map_err(ControlFlow::Continue)?;
-            // info!("past calling self.get_info()");
-            // info!("info: {:?}", info);
             let value = info.get("block_height");
-            // info!("past calling info.get(block_height)");
-            info!("value: {:?}", value);
             if let Some(height) = value {
                 let block_height: Option<u32> = serde_json::from_value(height.clone())
                     .context("Could not parse block height")

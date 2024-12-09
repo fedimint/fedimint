@@ -667,9 +667,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         "config-decrypt/encrypt failed"
     );
 
-    info!("calling fed.pegin_gateways");
     fed.pegin_gateways(10_000_000, vec![&gw_lnd]).await?;
-    info!("past fed.pegin_gateways");
 
     let fed_id = fed.calculate_federation_id();
     let invite = fed.invite_code()?;
@@ -1420,7 +1418,6 @@ pub async fn lightning_gw_reconnect_test(
 
     info!("Pegging-in both gateways");
     fed.pegin_gateways(99_999, vec![&gw_lnd]).await?;
-    info!("past pegging-in both gateways");
 
     // Drop other references to LND so that the test can kill it
     drop(lnd);
@@ -1434,7 +1431,6 @@ pub async fn lightning_gw_reconnect_test(
     // node public key since the lightning node is unreachable.
     gw_lnd.stop_lightning_node().await?;
     let lightning_info = info_cmd.out_json().await?;
-    // here
     if gatewayd_version < *VERSION_0_5_0_ALPHA {
         let gateway_info: LegacyGatewayInfo = serde_json::from_value(lightning_info)?;
         assert!(gateway_info.lightning_pub_key.is_none());
