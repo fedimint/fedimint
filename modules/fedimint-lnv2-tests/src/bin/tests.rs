@@ -272,6 +272,30 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         lnd.settle_hold_invoice(hold_preimage, hold_payment_hash),
     )?;
 
+    info!("Testing LNv2 lightning fees");
+    let fed_id = federation.calculate_federation_id();
+    gw_lnd
+        .set_federation_routing_fee(fed_id.clone(), 0, 0)
+        .await?;
+    let gw_lnd_ecash_prev = gw_lnd.ecash_balance(fed_id.clone()).await?;
+    let (invoice, receive_op) = receive(&client, &gw_ldk.addr, 1_000_000).await?;
+    test_send(
+        &client,
+        &gw_lnd.addr,
+        &invoice.to_string(),
+        FinalSendOperationState::Success,
+    )
+    .await?;
+    await_receive_claimed(&client, receive_op).await?;
+    // Gateway pays: 1_000 msat LNv2 federation base fee, 1_055 msat LNv2 federation
+    // relative fee. Gateway receives: 1_000_000 payment, 50_000 msat base TX
+    // fee, 5_000 msat relative TX fee
+    let gw_lnd_ecash_after = gw_lnd.ecash_balance(fed_id.clone()).await?;
+    assert_eq!(
+        gw_lnd_ecash_prev + 1_055_000 - 1_055 - 1000,
+        gw_lnd_ecash_after
+    );
+
     Ok(())
 }
 
