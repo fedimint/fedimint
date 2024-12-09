@@ -79,6 +79,9 @@ pub struct WalletConfigConsensus {
     pub send_tx_vbytes: u64,
     /// Total weight of a pegin bitcoin transaction
     pub receive_tx_vbytes: u64,
+    /// For a stack of n unconfirmed transactions we require a feerate
+    /// multiplier of (1/divisor)^n
+    pub divisor: u64,
     /// The minimum amount a user can send on chain
     pub dust_limit: bitcoin::Amount,
     /// Fees taken by the guardians to process wallet inputs and outputs
@@ -157,6 +160,17 @@ impl WalletConfigConsensus {
                     + change_input_weight
                     + change_output_weight,
             ),
+            // Unconfirmed | Multiplier
+            // ------------|-----------
+            // 1           | 1.00
+            // 2           | 1.33
+            // 3           | 1.78
+            // 4           | 2.37
+            // 5           | 3.16
+            // 6           | 4.21
+            // 7           | 5.62
+            // 8           | 7.49
+            divisor: 3,
             dust_limit: bitcoin::Amount::from_sat(10_000),
             fee_consensus,
             network,

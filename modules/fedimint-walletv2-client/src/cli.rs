@@ -27,7 +27,7 @@ enum Opts {
         address: Address<NetworkUnchecked>,
         amount: bitcoin::Amount,
         #[arg(long)]
-        fee_limit: Option<bitcoin::Amount>,
+        fee: Option<bitcoin::Amount>,
     },
     /// Subcommands to manage addresses
     #[command(subcommand)]
@@ -38,7 +38,7 @@ enum Opts {
     Receive {
         index: u64,
         #[arg(long)]
-        fee_limit: Option<bitcoin::Amount>,
+        fee: Option<bitcoin::Amount>,
         #[arg(long)]
         esplora: Option<SafeUrl>,
     },
@@ -75,10 +75,10 @@ pub(crate) async fn handle_cli_command(
         Opts::Send {
             address,
             amount,
-            fee_limit,
+            fee,
         } => json(
             wallet
-                .await_final_operation_state(wallet.send(&address, amount, fee_limit).await?)
+                .await_final_operation_state(wallet.send(&address, amount, fee).await?)
                 .await,
         ),
         Opts::Address(subcommand) => match subcommand {
@@ -92,7 +92,7 @@ pub(crate) async fn handle_cli_command(
         Opts::ReceiveFee => json(wallet.receive_fee().await?),
         Opts::Receive {
             index,
-            fee_limit,
+            fee,
             esplora,
         } => {
             let deposit = wallet
@@ -102,7 +102,7 @@ pub(crate) async fn handle_cli_command(
                 .find(|deposit| deposit.confirmations_required == Some(0))
                 .context("No unspent deposits are ready to be claimed")?;
 
-            let operation_id = wallet.receive(&deposit, fee_limit).await?;
+            let operation_id = wallet.receive(&deposit, fee).await?;
 
             json(wallet.await_final_operation_state(operation_id).await)
         }

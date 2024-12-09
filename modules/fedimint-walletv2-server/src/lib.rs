@@ -974,21 +974,14 @@ impl Wallet {
 
         let mut msats_per_vbyte = self.consensus_feerate(dbtx).await?;
 
-        // Unconfirmed | Multiplier
-        // ------------|-----------
-        // 1           | 1.00
-        // 2           | 1.33
-        // 3           | 1.78
-        // 4           | 2.37
-        // 5           | 3.16
-        // 6           | 4.21
-        // 7           | 5.62
-        // 8           | 7.49
-
         let transaction_count = unsigned.len() + pending.len();
 
+        // We multiply the feerate by (1/divisor)^n for every unconfirmed transaction
+
         for _ in 0..transaction_count {
-            msats_per_vbyte = msats_per_vbyte.saturating_mul(4).saturating_div(3);
+            msats_per_vbyte = msats_per_vbyte
+                .saturating_mul(self.cfg.consensus.divisor + 1)
+                .saturating_div(self.cfg.consensus.divisor);
         }
 
         // A stack of 25 unconfirmed transactions will have a minimum average feerate
