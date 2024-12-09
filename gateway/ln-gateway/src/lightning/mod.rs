@@ -215,7 +215,7 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError>;
 
     /// Lists the lightning node's active channels with all peers.
-    async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError>;
+    async fn list_active_channels(&self) -> Result<ListActiveChannelsResponse, LightningRpcError>;
 
     /// Returns a summary of the lightning node's balance, including the onchain
     /// wallet, outbound liquidity, and inbound liquidity.
@@ -421,33 +421,13 @@ pub enum PaymentAction {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GetRouteHintsRequest {
-    pub num_route_hints: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GetRouteHintsResponse {
     pub route_hints: Vec<RouteHint>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PayInvoiceRequest {
-    pub invoice: String,
-    pub max_delay: u64,
-    pub max_fee_msat: u64,
-    pub payment_hash: Vec<u8>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PayInvoiceResponse {
     pub preimage: Preimage,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PayPrunedInvoiceRequest {
-    pub pruned_invoice: Option<PrunedInvoice>,
-    pub max_delay: u64,
-    pub max_fee_msat: Amount,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

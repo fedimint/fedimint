@@ -18,10 +18,11 @@ use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, DEFAULT_EXPIRY_TIME,
 };
 use ln_gateway::lightning::{
-    ChannelInfo, CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
+    CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse, LightningRpcError,
-    OpenChannelResponse, PayInvoiceResponse, RouteHtlcStream, SendOnchainResponse,
+    ListActiveChannelsResponse, OpenChannelResponse, PayInvoiceResponse, RouteHtlcStream,
+    SendOnchainResponse,
 };
 use ln_gateway::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, SendOnchainPayload};
 use rand::rngs::OsRng;
@@ -281,7 +282,7 @@ impl ILnRpcClient for FakeLightningTest {
         })
     }
 
-    async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError> {
+    async fn list_active_channels(&self) -> Result<ListActiveChannelsResponse, LightningRpcError> {
         Err(LightningRpcError::FailedToListActiveChannels {
             failure_reason: "FakeLightningTest does not support listing active channels"
                 .to_string(),

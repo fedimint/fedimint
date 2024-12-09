@@ -23,7 +23,9 @@ use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{error, info};
 
-use super::{ChannelInfo, ILnRpcClient, LightningRpcError, RouteHtlcStream};
+use super::{
+    ChannelInfo, ILnRpcClient, LightningRpcError, ListActiveChannelsResponse, RouteHtlcStream,
+};
 use crate::lightning::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
@@ -579,7 +581,7 @@ impl ILnRpcClient for GatewayLdkClient {
         })
     }
 
-    async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError> {
+    async fn list_active_channels(&self) -> Result<ListActiveChannelsResponse, LightningRpcError> {
         let mut channels = Vec::new();
 
         for channel_details in self
@@ -600,7 +602,7 @@ impl ILnRpcClient for GatewayLdkClient {
             });
         }
 
-        Ok(channels)
+        Ok(ListActiveChannelsResponse { channels })
     }
 
     async fn get_balances(&self) -> Result<GetBalancesResponse, LightningRpcError> {
