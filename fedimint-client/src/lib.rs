@@ -2363,9 +2363,26 @@ impl ClientBuilder {
     /// If there was a primary module specified previously
     #[deprecated(
         since = "0.6.0",
-        note = "Use `with_primary_module_kind` instead, as the instance id can't be known upfront"
+        note = "Use `with_primary_module_kind` instead, as the instance id can't be known upfront. If you *really* need the old behavior you can use `with_primary_module_instance_id`."
     )]
     pub fn with_primary_module(&mut self, primary_module_instance: ModuleInstanceId) {
+        self.with_primary_module_instance_id(primary_module_instance);
+    }
+
+    /// **You are likely looking for
+    /// [`ClientBuilder::with_primary_module_kind`]. This function is rarely
+    /// useful and often dangerous, handle with care.**
+    ///
+    /// Uses this module with the given instance id as the primary module. See
+    /// [`ClientModule::supports_being_primary`] for more information. Since the
+    /// module instance id of modules of a specific kind may differ between
+    /// different federations it is generally not recommended to specify it, but
+    /// rather to specify the module kind that should be used as primary. See
+    /// [`ClientBuilder::with_primary_module_kind`].
+    ///
+    /// ## Panics
+    /// If there was a primary module specified previously
+    pub fn with_primary_module_instance_id(&mut self, primary_module_instance: ModuleInstanceId) {
         let was_replaced = self
             .primary_module_instance
             .replace(primary_module_instance)
