@@ -31,7 +31,7 @@ async fn make_client_builder() -> Result<fedimint_client::ClientBuilder> {
     builder.with_module(LightningClientInit::default());
     builder.with_module(MintClientInit);
     builder.with_module(WalletClientInit::default());
-    builder.with_primary_module(1);
+    builder.with_primary_module_kind(fedimint_mint_client::KIND);
 
     Ok(builder)
 }
