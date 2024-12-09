@@ -35,8 +35,8 @@ use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, Transaction
 use fedimint_walletv2_common::config::WalletClientConfig;
 use fedimint_walletv2_common::esplora_api::{DynEsploraConnection, RealEsploraConnection};
 use fedimint_walletv2_common::{
-    descriptor, DestinationScript, WalletCommonInit, WalletInput, WalletInputV0, WalletModuleTypes,
-    WalletOutput, WalletOutputV0,
+    descriptor, DestinationScript, ReceiveFee, SendFee, WalletCommonInit, WalletInput,
+    WalletInputV0, WalletModuleTypes, WalletOutput, WalletOutputV0,
 };
 use secp256k1::Keypair;
 use serde::{Deserialize, Serialize};
@@ -233,7 +233,7 @@ impl WalletClientModule {
         &self,
         address: &Address<NetworkUnchecked>,
         amount: bitcoin::Amount,
-        fee_limit: Option<bitcoin::Amount>,
+        fee: Option<bitcoin::Amount>,
     ) -> Result<OperationId, SendError> {
         if !address.is_valid_for_network(self.cfg.network) {
             return Err(SendError::WrongNetwork);
@@ -250,11 +250,19 @@ impl WalletClientModule {
             .map_err(|e| SendError::FederationError(e.to_string()))?
             .ok_or(SendError::NoConsensusFeerateAvailable)?;
 
-        if let Some(fee_limit) = fee_limit {
-            if fee_limit < send_fee.value {
-                return Err(SendError::FeeExceedsLimit);
+        let send_fee = match fee {
+            Some(value) => {
+                if value < send_fee.value {
+                    return Err(SendError::InsufficientFee);
+                }
+
+                SendFee {
+                    index: send_fee.index,
+                    value,
+                }
             }
-        }
+            None => send_fee,
+        };
 
         let operation_id = OperationId::new_random();
 
@@ -432,7 +440,7 @@ impl WalletClientModule {
     pub async fn receive(
         &self,
         unspent_deposit: &UnspentDeposit,
-        fee_limit: Option<bitcoin::Amount>,
+        fee: Option<bitcoin::Amount>,
     ) -> Result<OperationId, ReceiveError> {
         let receive_fee = self
             .module_api
@@ -441,11 +449,19 @@ impl WalletClientModule {
             .map_err(|e| ReceiveError::FederationError(e.to_string()))?
             .ok_or(ReceiveError::NoConsensusFeerateAvailable)?;
 
-        if let Some(fee_limit) = fee_limit {
-            if fee_limit < receive_fee.value {
-                return Err(ReceiveError::FeeExceedsLimit);
+        let receive_fee = match fee {
+            Some(value) => {
+                if value < receive_fee.value {
+                    return Err(ReceiveError::InsufficientFee);
+                }
+
+                ReceiveFee {
+                    index: receive_fee.index,
+                    value,
+                }
             }
-        }
+            None => receive_fee,
+        };
 
         if unspent_deposit.value < receive_fee.value + bitcoin::Amount::from_sat(100) {
             return Err(ReceiveError::DustDeposit);
@@ -498,8 +514,8 @@ pub enum SendError {
     FederationError(String),
     #[error("No consensus feerate is available at this time")]
     NoConsensusFeerateAvailable,
-    #[error("The currently required fee exceeds the specified limit")]
-    FeeExceedsLimit,
+    #[error("The currently required fee exceeds the specified fee")]
+    InsufficientFee,
     #[error("The client does not have sufficicent funds to send the payment")]
     InsufficientFunds,
 }
@@ -520,9 +536,9 @@ pub enum ReceiveError {
     FederationError(String),
     #[error("No consensus feerate is available at this time")]
     NoConsensusFeerateAvailable,
-    #[error("The currently required fee exceeds the specified limit")]
-    FeeExceedsLimit,
-    #[error("The unspent deposit is to small to be consolidated at the current feerate")]
+    #[error("The currently required fee exceeds the specified fee")]
+    InsufficientFee,
+    #[error("The unspent deposit cannot be claimed with the given fee without additional funds")]
     DustDeposit,
 }
 

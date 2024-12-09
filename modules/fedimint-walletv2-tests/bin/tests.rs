@@ -151,12 +151,14 @@ async fn main() -> anyhow::Result<()> {
                 "walletv2",
                 "send",
                 address,
-                Amount::from_sat(10_000)
+                Amount::from_sat(250_000)
             )
             .out_json()
             .await?,
             serde_json::to_value(FinalOperationState::Success).expect("JSON serialization failed"),
         );
+
+        await_deposit_count(&client, &esplora, 1).await?;
 
         dev_fed.fed().await?.bitcoind.mine_blocks(21).await?;
 
@@ -170,7 +172,9 @@ async fn main() -> anyhow::Result<()> {
                 "receive",
                 "0",
                 "--esplora",
-                esplora
+                esplora,
+                "--fee",
+                Amount::from_sat(200_000)
             )
             .out_json()
             .await?,
@@ -216,6 +220,39 @@ async fn await_claimable_deposit_count(
 
         sleep_in_test(
             format!("Waiting for {deposit_count} deposits to be claimable"),
+            Duration::from_secs(1),
+        )
+        .await;
+    }
+}
+
+async fn await_deposit_count(
+    client: &Client,
+    esplora: &SafeUrl,
+    deposit_count: usize,
+) -> anyhow::Result<()> {
+    loop {
+        let deposits = serde_json::from_value::<Vec<UnspentDeposit>>(
+            cmd!(
+                client,
+                "module",
+                "walletv2",
+                "address",
+                "check",
+                "0",
+                "--esplora",
+                esplora
+            )
+            .out_json()
+            .await?,
+        )?;
+
+        if deposits.len() == deposit_count {
+            return Ok(());
+        }
+
+        sleep_in_test(
+            format!("Waiting for {deposit_count} deposits"),
             Duration::from_secs(1),
         )
         .await;
