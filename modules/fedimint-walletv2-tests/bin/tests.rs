@@ -151,7 +151,7 @@ async fn main() -> anyhow::Result<()> {
                 "walletv2",
                 "send",
                 address,
-                Amount::from_sat(10_000)
+                Amount::from_sat(250_000)
             )
             .out_json()
             .await?,
@@ -170,7 +170,9 @@ async fn main() -> anyhow::Result<()> {
                 "receive",
                 "0",
                 "--esplora",
-                esplora
+                esplora,
+                "--fee",
+                Amount::from_sat(240_000)
             )
             .out_json()
             .await?,
