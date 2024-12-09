@@ -1410,8 +1410,8 @@ impl Gateway {
         &self,
     ) -> AdminResult<Vec<lightning::ChannelInfo>> {
         let context = self.get_lightning_context().await?;
-        let channels = context.lnrpc.list_active_channels().await?;
-        Ok(channels)
+        let response = context.lnrpc.list_active_channels().await?;
+        Ok(response.channels)
     }
 
     /// Send funds from the gateway's lightning node on-chain wallet.
