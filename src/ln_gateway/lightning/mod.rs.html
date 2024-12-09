@@ -480,27 +480,7 @@
 <a href="#479" id="479">479</a>
 <a href="#480" id="480">480</a>
 <a href="#481" id="481">481</a>
-<a href="#482" id="482">482</a>
-<a href="#483" id="483">483</a>
-<a href="#484" id="484">484</a>
-<a href="#485" id="485">485</a>
-<a href="#486" id="486">486</a>
-<a href="#487" id="487">487</a>
-<a href="#488" id="488">488</a>
-<a href="#489" id="489">489</a>
-<a href="#490" id="490">490</a>
-<a href="#491" id="491">491</a>
-<a href="#492" id="492">492</a>
-<a href="#493" id="493">493</a>
-<a href="#494" id="494">494</a>
-<a href="#495" id="495">495</a>
-<a href="#496" id="496">496</a>
-<a href="#497" id="497">497</a>
-<a href="#498" id="498">498</a>
-<a href="#499" id="499">499</a>
-<a href="#500" id="500">500</a>
-<a href="#501" id="501">501</a>
-<a href="#502" id="502">502</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>ldk;
+<a href="#482" id="482">482</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>ldk;
 <span class="kw">pub mod </span>lnd;
 
 <span class="kw">use </span>std::fmt::Debug;
@@ -717,7 +697,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CloseChannelsWithPeerResponse, LightningRpcError&gt;;
 
     <span class="doccomment">/// Lists the lightning node's active channels with all peers.
-    </span><span class="kw">async fn </span>list_active_channels(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;ChannelInfo&gt;, LightningRpcError&gt;;
+    </span><span class="kw">async fn </span>list_active_channels(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ListActiveChannelsResponse, LightningRpcError&gt;;
 
     <span class="doccomment">/// Returns a summary of the lightning node's balance, including the onchain
     /// wallet, outbound liquidity, and inbound liquidity.
@@ -923,33 +903,13 @@
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
-</span><span class="kw">pub struct </span>GetRouteHintsRequest {
-    <span class="kw">pub </span>num_route_hints: u64,
-}
-
-<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>GetRouteHintsResponse {
     <span class="kw">pub </span>route_hints: Vec&lt;RouteHint&gt;,
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
-</span><span class="kw">pub struct </span>PayInvoiceRequest {
-    <span class="kw">pub </span>invoice: String,
-    <span class="kw">pub </span>max_delay: u64,
-    <span class="kw">pub </span>max_fee_msat: u64,
-    <span class="kw">pub </span>payment_hash: Vec&lt;u8&gt;,
-}
-
-<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>PayInvoiceResponse {
     <span class="kw">pub </span>preimage: Preimage,
-}
-
-<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
-</span><span class="kw">pub struct </span>PayPrunedInvoiceRequest {
-    <span class="kw">pub </span>pruned_invoice: <span class="prelude-ty">Option</span>&lt;PrunedInvoice&gt;,
-    <span class="kw">pub </span>max_delay: u64,
-    <span class="kw">pub </span>max_fee_msat: Amount,
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]

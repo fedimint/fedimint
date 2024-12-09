@@ -3583,8 +3583,8 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
     ) -&gt; AdminResult&lt;Vec&lt;lightning::ChannelInfo&gt;&gt; {
         <span class="kw">let </span>context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>channels = context.lnrpc.list_active_channels().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(channels)
+        <span class="kw">let </span>response = context.lnrpc.list_active_channels().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(response.channels)
     }
 
     <span class="doccomment">/// Send funds from the gateway's lightning node on-chain wallet.

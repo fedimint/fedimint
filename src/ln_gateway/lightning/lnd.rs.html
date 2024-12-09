@@ -1491,7 +1491,12 @@
 <a href="#1490" id="1490">1490</a>
 <a href="#1491" id="1491">1491</a>
 <a href="#1492" id="1492">1492</a>
-<a href="#1493" id="1493">1493</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
+<a href="#1493" id="1493">1493</a>
+<a href="#1494" id="1494">1494</a>
+<a href="#1495" id="1495">1495</a>
+<a href="#1496" id="1496">1496</a>
+<a href="#1497" id="1497">1497</a>
+<a href="#1498" id="1498">1498</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -1535,7 +1540,10 @@
 <span class="kw">use </span>tonic_lnd::{connect, Client <span class="kw">as </span>LndClient};
 <span class="kw">use </span>tracing::{debug, error, info, trace, warn};
 
-<span class="kw">use super</span>::{ChannelInfo, ILnRpcClient, LightningRpcError, RouteHtlcStream, MAX_LIGHTNING_RETRIES};
+<span class="kw">use super</span>::{
+    ChannelInfo, ILnRpcClient, LightningRpcError, ListActiveChannelsResponse, RouteHtlcStream,
+    MAX_LIGHTNING_RETRIES,
+};
 <span class="kw">use </span><span class="kw">crate</span>::db::GatewayDbtxNcExt;
 <span class="kw">use </span><span class="kw">crate</span>::lightning::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
@@ -2772,7 +2780,7 @@
         })
     }
 
-    <span class="kw">async fn </span>list_active_channels(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;ChannelInfo&gt;, LightningRpcError&gt; {
+    <span class="kw">async fn </span>list_active_channels(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ListActiveChannelsResponse, LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">match </span>client
@@ -2786,57 +2794,59 @@
             })
             .<span class="kw">await
         </span>{
-            <span class="prelude-val">Ok</span>(response) =&gt; <span class="prelude-val">Ok</span>(response
-                .into_inner()
-                .channels
-                .into_iter()
-                .map(|channel| {
-                    <span class="kw">let </span>channel_size_sats = channel.capacity.try_into().expect(<span class="string">"i64 -&gt; u64"</span>);
+            <span class="prelude-val">Ok</span>(response) =&gt; <span class="prelude-val">Ok</span>(ListActiveChannelsResponse {
+                channels: response
+                    .into_inner()
+                    .channels
+                    .into_iter()
+                    .map(|channel| {
+                        <span class="kw">let </span>channel_size_sats = channel.capacity.try_into().expect(<span class="string">"i64 -&gt; u64"</span>);
 
-                    <span class="kw">let </span>local_balance_sats: u64 =
-                        channel.local_balance.try_into().expect(<span class="string">"i64 -&gt; u64"</span>);
-                    <span class="kw">let </span>local_channel_reserve_sats: u64 = <span class="kw">match </span>channel.local_constraints {
-                        <span class="prelude-val">Some</span>(constraints) =&gt; constraints.chan_reserve_sat,
-                        <span class="prelude-val">None </span>=&gt; <span class="number">0</span>,
-                    };
+                        <span class="kw">let </span>local_balance_sats: u64 =
+                            channel.local_balance.try_into().expect(<span class="string">"i64 -&gt; u64"</span>);
+                        <span class="kw">let </span>local_channel_reserve_sats: u64 = <span class="kw">match </span>channel.local_constraints {
+                            <span class="prelude-val">Some</span>(constraints) =&gt; constraints.chan_reserve_sat,
+                            <span class="prelude-val">None </span>=&gt; <span class="number">0</span>,
+                        };
 
-                    <span class="kw">let </span>outbound_liquidity_sats =
-                        <span class="kw">if </span>local_balance_sats &gt;= local_channel_reserve_sats {
-                            <span class="comment">// We must only perform this subtraction if the local balance is
-                            // greater than or equal to the channel reserve, otherwise we would
-                            // underflow and panic.
-                            </span>local_balance_sats - local_channel_reserve_sats
-                        } <span class="kw">else </span>{
-                            <span class="number">0
-                        </span>};
+                        <span class="kw">let </span>outbound_liquidity_sats =
+                            <span class="kw">if </span>local_balance_sats &gt;= local_channel_reserve_sats {
+                                <span class="comment">// We must only perform this subtraction if the local balance is
+                                // greater than or equal to the channel reserve, otherwise we would
+                                // underflow and panic.
+                                </span>local_balance_sats - local_channel_reserve_sats
+                            } <span class="kw">else </span>{
+                                <span class="number">0
+                            </span>};
 
-                    <span class="kw">let </span>remote_balance_sats: u64 =
-                        channel.remote_balance.try_into().expect(<span class="string">"i64 -&gt; u64"</span>);
-                    <span class="kw">let </span>remote_channel_reserve_sats: u64 = <span class="kw">match </span>channel.remote_constraints {
-                        <span class="prelude-val">Some</span>(constraints) =&gt; constraints.chan_reserve_sat,
-                        <span class="prelude-val">None </span>=&gt; <span class="number">0</span>,
-                    };
+                        <span class="kw">let </span>remote_balance_sats: u64 =
+                            channel.remote_balance.try_into().expect(<span class="string">"i64 -&gt; u64"</span>);
+                        <span class="kw">let </span>remote_channel_reserve_sats: u64 = <span class="kw">match </span>channel.remote_constraints {
+                            <span class="prelude-val">Some</span>(constraints) =&gt; constraints.chan_reserve_sat,
+                            <span class="prelude-val">None </span>=&gt; <span class="number">0</span>,
+                        };
 
-                    <span class="kw">let </span>inbound_liquidity_sats =
-                        <span class="kw">if </span>remote_balance_sats &gt;= remote_channel_reserve_sats {
-                            <span class="comment">// We must only perform this subtraction if the remote balance is
-                            // greater than or equal to the channel reserve, otherwise we would
-                            // underflow and panic.
-                            </span>remote_balance_sats - remote_channel_reserve_sats
-                        } <span class="kw">else </span>{
-                            <span class="number">0
-                        </span>};
+                        <span class="kw">let </span>inbound_liquidity_sats =
+                            <span class="kw">if </span>remote_balance_sats &gt;= remote_channel_reserve_sats {
+                                <span class="comment">// We must only perform this subtraction if the remote balance is
+                                // greater than or equal to the channel reserve, otherwise we would
+                                // underflow and panic.
+                                </span>remote_balance_sats - remote_channel_reserve_sats
+                            } <span class="kw">else </span>{
+                                <span class="number">0
+                            </span>};
 
-                    ChannelInfo {
-                        remote_pubkey: PublicKey::from_str(<span class="kw-2">&amp;</span>channel.remote_pubkey)
-                            .expect(<span class="string">"Lightning node returned invalid remote channel pubkey"</span>),
-                        channel_size_sats,
-                        outbound_liquidity_sats,
-                        inbound_liquidity_sats,
-                        short_channel_id: channel.chan_id,
-                    }
-                })
-                .collect()),
+                        ChannelInfo {
+                            remote_pubkey: PublicKey::from_str(<span class="kw-2">&amp;</span>channel.remote_pubkey)
+                                .expect(<span class="string">"Lightning node returned invalid remote channel pubkey"</span>),
+                            channel_size_sats,
+                            outbound_liquidity_sats,
+                            inbound_liquidity_sats,
+                            short_channel_id: channel.chan_id,
+                        }
+                    })
+                    .collect(),
+            }),
             <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(LightningRpcError::FailedToListActiveChannels {
                 failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to list active channels {e:?}"</span>),
             }),
