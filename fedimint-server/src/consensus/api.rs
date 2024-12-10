@@ -50,7 +50,7 @@ use fedimint_core::{secp256k1, OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
 use futures::StreamExt;
 use tokio::sync::{watch, RwLock};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use crate::config::io::{
     CONSENSUS_CONFIG, ENCRYPTED_EXT, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG, SALT_FILE,
@@ -128,12 +128,18 @@ impl ConsensusApi {
             &transaction,
             self.cfg.consensus.version,
         )
-        .await?;
+        .await
+        .inspect_err(|e| {
+            debug!(target: LOG_NET_API, %txid, %e, "Transaction rejected");
+        })?;
 
-        self.submission_sender
-            .send(ConsensusItem::Transaction(transaction))
+        let _ = self
+            .submission_sender
+            .send(ConsensusItem::Transaction(transaction.clone()))
             .await
-            .ok();
+            .inspect_err(|e| {
+                warn!(target: LOG_NET_API, %txid, %e, "Unable to submit the tx into consensus");
+            });
 
         Ok(txid)
     }
@@ -543,11 +549,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             AWAIT_TRANSACTION_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, tx_hash: TransactionId| -> TransactionId {
-                debug!(transaction = %tx_hash, "Received request");
-
                 fedimint.await_transaction(tx_hash).await;
-
-                debug!(transaction = %tx_hash, "Sending outcome");
 
                 Ok(tx_hash)
             }
