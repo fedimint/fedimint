@@ -12,6 +12,7 @@
 #![allow(clippy::similar_names)]
 #![allow(clippy::too_many_lines)]
 
+pub mod auth_manager;
 pub mod client;
 pub mod config;
 mod db;
@@ -34,6 +35,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context};
+use auth_manager::AuthManager;
 use bitcoin::hashes::sha256;
 use bitcoin::{Address, Network, Txid};
 use clap::Parser;
@@ -87,7 +89,7 @@ use lightning::{
     PaymentAction,
 };
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
-use rand::thread_rng;
+use rand::{thread_rng, Rng};
 use rpc::{
     CloseChannelsWithPeerPayload, CreateInvoiceForOperatorPayload, FederationInfo,
     GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelPayload,
@@ -96,7 +98,7 @@ use rpc::{
     SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
 };
 use state_machine::{GatewayClientModule, GatewayExtPayStates};
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use tracing::{debug, error, info, info_span, warn};
 
 use crate::config::LightningModuleMode;
@@ -196,6 +198,9 @@ enum ReceivePaymentStreamAction {
 pub struct Gateway {
     /// The gateway's federation manager.
     federation_manager: Arc<RwLock<FederationManager>>,
+
+    /// The gateway's authentication manager
+    auth_manager: Arc<Mutex<AuthManager>>,
 
     /// Builder struct that allows the gateway to build a `ILnRpcClient`, which
     /// represents a connection to a lightning node.
@@ -368,13 +373,22 @@ impl Gateway {
         let task_group = TaskGroup::new();
         task_group.install_kill_handler();
 
+        let gateway_id = Self::load_or_create_gateway_id(&gateway_db).await;
+
+        // for JWT it is necessary to create an encoding secret that will be used each
+        // time a new JWT token is generated. The encoding secret ensures token's
+        // integrity and authenticity, so it is necessary to use a secure random
+        // number generator to generate strong keys.
+        let encoding_secret: [u8; 16] = rand::thread_rng().gen();
+
         Ok(Self {
             federation_manager: Arc::new(RwLock::new(FederationManager::new())),
+            auth_manager: Arc::new(Mutex::new(AuthManager::new(encoding_secret, gateway_id))),
             lightning_builder,
             gateway_config: Arc::new(RwLock::new(gateway_config)),
             state: Arc::new(RwLock::new(gateway_state)),
             client_builder,
-            gateway_id: Self::load_or_create_gateway_id(&gateway_db).await,
+            gateway_id,
             gateway_db,
             versioned_api: gateway_parameters.versioned_api,
             listen: gateway_parameters.listen,
