@@ -301,11 +301,8 @@ impl Gateway {
             decoders,
         );
 
-        let client_builder = GatewayClientBuilder::new(
-            opts.data_dir.clone(),
-            registry,
-            LEGACY_HARDCODED_INSTANCE_ID_MINT,
-        );
+        let client_builder =
+            GatewayClientBuilder::new(opts.data_dir.clone(), registry, fedimint_mint_client::KIND);
 
         info!(
             "Starting gatewayd (version: {})",
