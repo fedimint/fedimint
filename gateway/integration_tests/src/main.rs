@@ -1,5 +1,6 @@
 #![deny(clippy::pedantic)]
 
+use std::collections::BTreeMap;
 use std::env;
 use std::fs::remove_dir_all;
 use std::path::PathBuf;
@@ -20,7 +21,9 @@ use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_testing::gateway::LightningNodeType;
 use itertools::Itertools;
 use ln_gateway::rpc::legacy_types::{LegacyFederationInfo, LegacyGatewayInfo};
-use ln_gateway::rpc::{FederationInfo, GatewayBalances, GatewayFedConfig, GatewayInfo};
+use ln_gateway::rpc::{
+    FederationInfo, FederationRoutingFees, GatewayBalances, GatewayFedConfig, GatewayInfo,
+};
 use tracing::{info, warn};
 
 #[derive(Parser)]
@@ -379,19 +382,27 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                 .run()
                 .await?;
 
-                let gateway_info = get_gateway_info(gw).await?;
+                let info_value = cmd!(gw, "info").out_json().await?;
+                let federations = info_value["federations"]
+                    .as_array()
+                    .expect("federations is an array");
                 assert_eq!(
-                    gateway_info.federations.len(),
+                    federations.len(),
                     1,
                     "Gateway did not have one connected federation"
                 );
-                let federation_fees = gateway_info
-                    .federations
+                let federation_fees_value = federations
                     .first()
                     .expect("Must have a connected federation")
-                    .routing_fees
-                    .as_ref()
-                    .expect("Federation routing fees should be set");
+                    .get("routing_fees")
+                    .expect("federation must have routing fees")
+                    .to_owned();
+
+                let federation_fees =
+                    serde_json::from_value::<Option<FederationRoutingFees>>(federation_fees_value)
+                        .expect("could not parse federation routing fees")
+                        .expect("Federation routing fees should be set");
+
                 assert_eq!(
                     federation_fees.base_msat, 20,
                     "Federation base msat is not 20"
@@ -400,51 +411,6 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                     federation_fees.proportional_millionths, 20000,
                     "Federation proportional millionths is not 20000"
                 );
-                // if gatewayd_version < *VERSION_0_5_0_ALPHA {
-                //     let gateway_info = get_legacy_gateway_info(gw).await?;
-                //     assert_eq!(
-                //         gateway_info.federations.len(),
-                //         1,
-                //         "Gateway did not have one connected federation"
-                //     );
-                //     let federation_fees = gateway_info
-                //         .federations
-                //         .first()
-                //         .expect("Must have a connected federation")
-                //         .routing_fees
-                //         .as_ref()
-                //         .expect("Federation routing fees should be set");
-                //     assert_eq!(
-                //         federation_fees.base_msat, 20,
-                //         "Federation base msat is not 20"
-                //     );
-                //     assert_eq!(
-                //         federation_fees.proportional_millionths, 20000,
-                //         "Federation proportional millionths is not 20000"
-                //     );
-                // } else {
-                //     let gateway_info = get_gateway_info(gw).await?;
-                //     assert_eq!(
-                //         gateway_info.federations.len(),
-                //         1,
-                //         "Gateway did not have one connected federation"
-                //     );
-                //     let federation_fees = gateway_info
-                //         .federations
-                //         .first()
-                //         .expect("Must have a connected federation")
-                //         .routing_fees
-                //         .as_ref()
-                //         .expect("Federation routing fees should be set");
-                //     assert_eq!(
-                //         federation_fees.base_msat, 20,
-                //         "Federation base msat is not 20"
-                //     );
-                //     assert_eq!(
-                //         federation_fees.proportional_millionths, 20000,
-                //         "Federation proportional millionths is not 20000"
-                //     );
-                // }
                 info!("Verified per-federation routing fees changed");
 
                 // Try to change the network while connected to a lightning node
@@ -482,37 +448,20 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                     .out_json()
                     .await?;
 
-                if gatewayd_version < *VERSION_0_5_0_ALPHA {
-                    let federation_info: LegacyFederationInfo =
-                        serde_json::from_value(output).expect("Could not parse FederationInfo");
-                    // New federation should have the default fees
-                    let fees = federation_info
-                        .routing_fees
-                        .expect("Routing fees were none");
-                    assert_eq!(
-                        fees.base_msat, 10,
-                        "Default Base msat for new federation was not correct"
-                    );
-                    assert_eq!(
-                        fees.proportional_millionths, 10000,
-                        "Default Base msat for new federation was not correct"
-                    );
-                } else {
-                    let federation_info: FederationInfo =
-                        serde_json::from_value(output).expect("Could not parse FederationInfo");
-                    // New federation should have the default fees
-                    let fees = federation_info
-                        .routing_fees
-                        .expect("Routing fees were none");
-                    assert_eq!(
-                        fees.base_msat, 10,
-                        "Default Base msat for new federation was not correct"
-                    );
-                    assert_eq!(
-                        fees.proportional_millionths, 10000,
-                        "Default Base msat for new federation was not correct"
-                    );
-                }
+                let routing_fees_value = output["routing_fees"].to_owned();
+
+                let routing_fees =
+                    serde_json::from_value::<Option<FederationRoutingFees>>(routing_fees_value)
+                        .expect("could not parse federation routing fees")
+                        .expect("Federation routing fees should be set");
+                assert_eq!(
+                    routing_fees.base_msat, 10,
+                    "Default Base msat for new federation was not correct"
+                );
+                assert_eq!(
+                    routing_fees.proportional_millionths, 10000,
+                    "Default Base msat for new federation was not correct"
+                );
 
                 info!(?new_fed_id, "Verified new federation");
 
@@ -523,95 +472,73 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                     .await?;
 
                 // Verify `info` returns multiple federations
-                if gatewayd_version < *VERSION_0_5_0_ALPHA {
-                    let gateway_info = get_legacy_gateway_info(gw).await?;
-                    assert_eq!(
-                        gateway_info.federations.len(),
-                        2,
-                        "Gateway did not have two connected federations"
-                    );
-                    assert_eq!(
-                        gateway_info
-                            .federation_fake_scids
-                            .unwrap()
-                            .keys()
-                            .copied()
-                            .collect::<Vec<u64>>(),
-                        vec![1, 2]
-                    );
+                let info_value = cmd!(gw, "info").out_json().await?;
+                let federations = info_value["federations"]
+                    .as_array()
+                    .expect("federations is an array");
 
-                    let first_fed_info = gateway_info
-                        .federations
-                        .iter()
-                        .find(|i| i.federation_id.to_string() == fed_id)
-                        .expect("Could not find federation");
-                    let second_fed_info = gateway_info
-                        .federations
-                        .iter()
-                        .find(|i| i.federation_id.to_string() == new_fed_id)
-                        .expect("Could not find federation");
-                    assert_eq!(first_fed_info.balance_msat, Amount::ZERO);
-                    assert_eq!(second_fed_info.balance_msat, pegin_amount);
+                assert_eq!(
+                    federations.len(),
+                    2,
+                    "Gateway did not have two connected federations"
+                );
 
-                    leave_federation(gw, fed_id, 1).await?;
-                    leave_federation(gw, new_fed_id, 2).await?;
+                let federation_fake_scids = serde_json::from_value::<
+                    Option<BTreeMap<u64, FederationId>>,
+                >(info_value["channels"].to_owned())
+                .expect("should parse")
+                .expect("should have scids");
 
-                    // Rejoin new federation, verify that the balance is the same
-                    let output = cmd!(gw, "connect-fed", new_invite_code.clone())
-                        .out_json()
-                        .await?;
-                    let rejoined_federation_info: LegacyFederationInfo =
-                        serde_json::from_value(output).expect("Could not parse FederationInfo");
-                    info!(?rejoined_federation_info, "Rejoined Federation Info");
-                    assert_eq!(
-                        second_fed_info.balance_msat,
-                        rejoined_federation_info.balance_msat
-                    );
-                } else {
-                    let gateway_info = get_gateway_info(gw).await?;
-                    assert_eq!(
-                        gateway_info.federations.len(),
-                        2,
-                        "Gateway did not have two connected federations"
-                    );
-                    assert_eq!(
-                        gateway_info
-                            .federation_fake_scids
-                            .unwrap()
-                            .keys()
-                            .copied()
-                            .collect::<Vec<u64>>(),
-                        vec![1, 2]
-                    );
+                assert_eq!(
+                    federation_fake_scids.keys().copied().collect::<Vec<u64>>(),
+                    vec![1, 2]
+                );
 
-                    let first_fed_info = gateway_info
-                        .federations
-                        .iter()
-                        .find(|i| i.federation_id.to_string() == fed_id)
-                        .expect("Could not find federation");
-                    let second_fed_info = gateway_info
-                        .federations
-                        .iter()
-                        .find(|i| i.federation_id.to_string() == new_fed_id)
-                        .expect("Could not find federation");
-                    assert_eq!(first_fed_info.balance_msat, Amount::ZERO);
-                    assert_eq!(second_fed_info.balance_msat, pegin_amount);
+                let first_fed_info = federations
+                    .iter()
+                    .find(|i| {
+                        i["federation_id"]
+                            .as_str()
+                            .expect("should parse as str")
+                            .to_string()
+                            == fed_id
+                    })
+                    .expect("Could not find federation");
 
-                    leave_federation(gw, fed_id, 1).await?;
-                    leave_federation(gw, new_fed_id, 2).await?;
+                let second_fed_info = federations
+                    .iter()
+                    .find(|i| {
+                        i["federation_id"]
+                            .as_str()
+                            .expect("should parse as str")
+                            .to_string()
+                            == new_fed_id
+                    })
+                    .expect("Could not find federation");
 
-                    // Rejoin new federation, verify that the balance is the same
-                    let output = cmd!(gw, "connect-fed", new_invite_code.clone())
-                        .out_json()
-                        .await?;
-                    let rejoined_federation_info: FederationInfo =
-                        serde_json::from_value(output).expect("Could not parse FederationInfo");
-                    info!(?rejoined_federation_info, "Rejoined Federation Info");
-                    assert_eq!(
-                        second_fed_info.balance_msat,
-                        rejoined_federation_info.balance_msat
-                    );
-                }
+                let first_fed_balance_msat =
+                    serde_json::from_value::<Amount>(first_fed_info["balance_msat"].to_owned())
+                        .expect("fed should have balance");
+
+                let second_fed_balance_msat =
+                    serde_json::from_value::<Amount>(second_fed_info["balance_msat"].to_owned())
+                        .expect("fed should have balance");
+
+                assert_eq!(first_fed_balance_msat, Amount::ZERO);
+                assert_eq!(second_fed_balance_msat, pegin_amount);
+
+                leave_federation(gw, fed_id, 1).await?;
+                leave_federation(gw, new_fed_id, 2).await?;
+
+                // Rejoin new federation, verify that the balance is the same
+                let output = cmd!(gw, "connect-fed", new_invite_code.clone())
+                    .out_json()
+                    .await?;
+                let rejoined_federation_balance_msat =
+                    serde_json::from_value::<Amount>(output["balance_msat"].to_owned())
+                        .expect("fed has balance");
+
+                assert_eq!(second_fed_balance_msat, rejoined_federation_balance_msat);
             }
 
             info!("Gateway configuration test successful");
@@ -718,20 +645,6 @@ async fn liquidity_test() -> anyhow::Result<()> {
 
         Ok(())
     }).await
-}
-
-/// Retrieves the `GatewayInfo` by issuing an `info` GET request to the gateway.
-async fn get_gateway_info(gw: &Gatewayd) -> anyhow::Result<GatewayInfo> {
-    let info_value = cmd!(gw, "info").out_json().await?;
-    Ok(serde_json::from_value::<GatewayInfo>(info_value).expect("Could not parse GatewayInfo"))
-}
-
-/// Retrieves the `LegacyGatewayInfo` by issuing an `info` GET request to the
-/// gateway.
-async fn get_legacy_gateway_info(gw: &Gatewayd) -> anyhow::Result<LegacyGatewayInfo> {
-    let info_value = cmd!(gw, "info").out_json().await?;
-    Ok(serde_json::from_value::<LegacyGatewayInfo>(info_value)
-        .expect("Could not parse GatewayInfo"))
 }
 
 /// Leaves the specified federation by issuing a `leave-fed` POST request to the
