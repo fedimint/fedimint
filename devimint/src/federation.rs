@@ -773,7 +773,6 @@ impl Federation {
         let bitcoind_block_height: u64 = self.bitcoind.get_block_count().await? - 1;
         try_join_all(gateways.into_iter().map(|gw| {
             poll("gateway pegin", || async {
-                // todo: version check here
                 let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
                 // TODO(support:v0.3): `block_height` was introduced in v0.4.0
                 // see: https://github.com/fedimint/fedimint/commit/20cb1b6c868ea7c1466ba6798bb0a2d511a3fd5a

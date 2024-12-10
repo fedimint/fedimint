@@ -235,6 +235,9 @@ impl Gatewayd {
 
     pub async fn get_pegin_addr(&self, fed_id: &str) -> Result<String> {
         let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
+
+        // TODO(support:v0.4): `ecash pegin` was introduced in v0.5.0
+        // see: https://github.com/fedimint/fedimint/pull/6270
         let address = if gateway_cli_version < *VERSION_0_5_0_ALPHA {
             cmd!(self, "address", "--federation-id={fed_id}")
                 .out_json()

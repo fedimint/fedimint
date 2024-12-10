@@ -379,51 +379,72 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                 .run()
                 .await?;
 
-                if gatewayd_version < *VERSION_0_5_0_ALPHA {
-                    let gateway_info = get_legacy_gateway_info(gw).await?;
-                    assert_eq!(
-                        gateway_info.federations.len(),
-                        1,
-                        "Gateway did not have one connected federation"
-                    );
-                    let federation_fees = gateway_info
-                        .federations
-                        .first()
-                        .expect("Must have a connected federation")
-                        .routing_fees
-                        .as_ref()
-                        .expect("Federation routing fees should be set");
-                    assert_eq!(
-                        federation_fees.base_msat, 20,
-                        "Federation base msat is not 20"
-                    );
-                    assert_eq!(
-                        federation_fees.proportional_millionths, 20000,
-                        "Federation proportional millionths is not 20000"
-                    );
-                } else {
-                    let gateway_info = get_gateway_info(gw).await?;
-                    assert_eq!(
-                        gateway_info.federations.len(),
-                        1,
-                        "Gateway did not have one connected federation"
-                    );
-                    let federation_fees = gateway_info
-                        .federations
-                        .first()
-                        .expect("Must have a connected federation")
-                        .routing_fees
-                        .as_ref()
-                        .expect("Federation routing fees should be set");
-                    assert_eq!(
-                        federation_fees.base_msat, 20,
-                        "Federation base msat is not 20"
-                    );
-                    assert_eq!(
-                        federation_fees.proportional_millionths, 20000,
-                        "Federation proportional millionths is not 20000"
-                    );
-                }
+                let gateway_info = get_gateway_info(gw).await?;
+                assert_eq!(
+                    gateway_info.federations.len(),
+                    1,
+                    "Gateway did not have one connected federation"
+                );
+                let federation_fees = gateway_info
+                    .federations
+                    .first()
+                    .expect("Must have a connected federation")
+                    .routing_fees
+                    .as_ref()
+                    .expect("Federation routing fees should be set");
+                assert_eq!(
+                    federation_fees.base_msat, 20,
+                    "Federation base msat is not 20"
+                );
+                assert_eq!(
+                    federation_fees.proportional_millionths, 20000,
+                    "Federation proportional millionths is not 20000"
+                );
+                // if gatewayd_version < *VERSION_0_5_0_ALPHA {
+                //     let gateway_info = get_legacy_gateway_info(gw).await?;
+                //     assert_eq!(
+                //         gateway_info.federations.len(),
+                //         1,
+                //         "Gateway did not have one connected federation"
+                //     );
+                //     let federation_fees = gateway_info
+                //         .federations
+                //         .first()
+                //         .expect("Must have a connected federation")
+                //         .routing_fees
+                //         .as_ref()
+                //         .expect("Federation routing fees should be set");
+                //     assert_eq!(
+                //         federation_fees.base_msat, 20,
+                //         "Federation base msat is not 20"
+                //     );
+                //     assert_eq!(
+                //         federation_fees.proportional_millionths, 20000,
+                //         "Federation proportional millionths is not 20000"
+                //     );
+                // } else {
+                //     let gateway_info = get_gateway_info(gw).await?;
+                //     assert_eq!(
+                //         gateway_info.federations.len(),
+                //         1,
+                //         "Gateway did not have one connected federation"
+                //     );
+                //     let federation_fees = gateway_info
+                //         .federations
+                //         .first()
+                //         .expect("Must have a connected federation")
+                //         .routing_fees
+                //         .as_ref()
+                //         .expect("Federation routing fees should be set");
+                //     assert_eq!(
+                //         federation_fees.base_msat, 20,
+                //         "Federation base msat is not 20"
+                //     );
+                //     assert_eq!(
+                //         federation_fees.proportional_millionths, 20000,
+                //         "Federation proportional millionths is not 20000"
+                //     );
+                // }
                 info!("Verified per-federation routing fees changed");
 
                 // Try to change the network while connected to a lightning node
