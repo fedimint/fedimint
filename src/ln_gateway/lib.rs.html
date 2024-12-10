@@ -2168,10 +2168,7 @@
 <a href="#2167" id="2167">2167</a>
 <a href="#2168" id="2168">2168</a>
 <a href="#2169" id="2169">2169</a>
-<a href="#2170" id="2170">2170</a>
-<a href="#2171" id="2171">2171</a>
-<a href="#2172" id="2172">2172</a>
-<a href="#2173" id="2173">2173</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2170" id="2170">2170</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2479,11 +2476,8 @@
             decoders,
         );
 
-        <span class="kw">let </span>client_builder = GatewayClientBuilder::new(
-            opts.data_dir.clone(),
-            registry,
-            LEGACY_HARDCODED_INSTANCE_ID_MINT,
-        );
+        <span class="kw">let </span>client_builder =
+            GatewayClientBuilder::new(opts.data_dir.clone(), registry, fedimint_mint_client::KIND);
 
         <span class="macro">info!</span>(
             <span class="string">"Starting gatewayd (version: {})"</span>,

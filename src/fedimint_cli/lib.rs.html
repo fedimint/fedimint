@@ -1982,7 +1982,7 @@ Examples:
         <span class="kw">let </span>db = cli.load_rocks_db().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(db).<span class="kw">await</span>.map_err_cli()<span class="question-mark">?</span>;
         client_builder.with_module_inits(<span class="self">self</span>.module_inits.clone());
-        client_builder.with_primary_module(<span class="number">1</span>);
+        client_builder.with_primary_module_kind(fedimint_mint_client::KIND);
 
         <span class="attr">#[cfg(feature = <span class="string">"tor"</span>)]
         </span><span class="kw">if </span>cli.use_tor {

@@ -235,7 +235,7 @@
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 <span class="kw">use </span>fedimint_client::{Client, ClientBuilder};
 <span class="kw">use </span>fedimint_core::config::FederationId;
-<span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
+<span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -250,19 +250,19 @@
 </span><span class="kw">pub struct </span>GatewayClientBuilder {
     work_dir: PathBuf,
     registry: ClientModuleInitRegistry,
-    primary_module: ModuleInstanceId,
+    primary_module_kind: ModuleKind,
 }
 
 <span class="kw">impl </span>GatewayClientBuilder {
     <span class="kw">pub fn </span>new(
         work_dir: PathBuf,
         registry: ClientModuleInitRegistry,
-        primary_module: ModuleInstanceId,
+        primary_module_kind: ModuleKind,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             work_dir,
             registry,
-            primary_module,
+            primary_module_kind,
         }
     }
 
@@ -310,7 +310,7 @@
             .<span class="kw">await
             </span>.map_err(AdminGatewayError::ClientCreationError)<span class="question-mark">?</span>;
         client_builder.with_module_inits(registry);
-        client_builder.with_primary_module(<span class="self">self</span>.primary_module);
+        client_builder.with_primary_module_kind(<span class="self">self</span>.primary_module_kind.clone());
         client_builder.with_connector(connector);
         <span class="prelude-val">Ok</span>(client_builder)
     }

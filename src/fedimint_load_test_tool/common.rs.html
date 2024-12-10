@@ -555,7 +555,7 @@
     client_builder.with_module(MintClientInit);
     client_builder.with_module(LightningClientInit::default());
     client_builder.with_module(WalletClientInit::default());
-    client_builder.with_primary_module(<span class="number">1</span>);
+    client_builder.with_primary_module_kind(fedimint_mint_client::KIND);
     <span class="kw">let </span>client_secret =
         Client::load_or_generate_client_secret(client_builder.db_no_decoders()).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>root_secret = PlainRootSecretStrategy::to_root_secret(<span class="kw-2">&amp;</span>client_secret);

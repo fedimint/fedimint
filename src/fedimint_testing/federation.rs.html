@@ -349,7 +349,8 @@
 <a href="#348" id="348">348</a>
 <a href="#349" id="349">349</a>
 <a href="#350" id="350">350</a>
-<a href="#351" id="351">351</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -363,7 +364,7 @@
     ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
     META_FEDERATION_NAME_KEY,
 };
-<span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
+<span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
@@ -388,7 +389,7 @@
     configs: BTreeMap&lt;PeerId, ServerConfig&gt;,
     server_init: ServerModuleInitRegistry,
     client_init: ClientModuleInitRegistry,
-    primary_client: ModuleInstanceId,
+    primary_module_kind: ModuleKind,
     _task: TaskGroup,
 }
 
@@ -448,7 +449,7 @@
         <span class="macro">info!</span>(target: LOG_TEST, <span class="string">"Setting new client with config"</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(db).<span class="kw">await</span>.expect(<span class="string">"Failed to build client"</span>);
         client_builder.with_module_inits(<span class="self">self</span>.client_init.clone());
-        client_builder.with_primary_module(<span class="self">self</span>.primary_client);
+        client_builder.with_primary_module_kind(<span class="self">self</span>.primary_module_kind.clone());
         <span class="kw">if let </span><span class="prelude-val">Some</span>(admin_creds) = admin_creds {
             client_builder.set_admin_creds(admin_creds);
         }
@@ -500,7 +501,7 @@
     num_peers: u16,
     num_offline: u16,
     base_port: u16,
-    primary_client: ModuleInstanceId,
+    primary_module_kind: ModuleKind,
     version_hash: String,
     params: ServerModuleConfigGenParamsRegistry,
     server_init: ServerModuleInitRegistry,
@@ -512,6 +513,7 @@
         params: ServerModuleConfigGenParamsRegistry,
         server_init: ServerModuleInitRegistry,
         client_init: ClientModuleInitRegistry,
+        primary_module_kind: ModuleKind,
     ) -&gt; FederationTestBuilder {
         <span class="kw">let </span>num_peers = <span class="number">4</span>;
         <span class="self">Self </span>{
@@ -519,7 +521,7 @@
             num_offline: <span class="number">1</span>,
             base_port: block_in_place(|| fedimint_portalloc::port_alloc(num_peers * <span class="number">2</span>))
                 .expect(<span class="string">"Failed to allocate a port range"</span>),
-            primary_client: <span class="number">0</span>,
+            primary_module_kind,
             version_hash: <span class="string">"fedimint-testing-dummy-version-hash"</span>.to_owned(),
             params,
             server_init,
@@ -542,8 +544,8 @@
         <span class="self">self
     </span>}
 
-    <span class="kw">pub fn </span>primary_client(<span class="kw-2">mut </span><span class="self">self</span>, primary_client: ModuleInstanceId) -&gt; FederationTestBuilder {
-        <span class="self">self</span>.primary_client = primary_client;
+    <span class="kw">pub fn </span>primary_module_kind(<span class="kw-2">mut </span><span class="self">self</span>, primary_module_kind: ModuleKind) -&gt; FederationTestBuilder {
+        <span class="self">self</span>.primary_module_kind = primary_module_kind;
         <span class="self">self
     </span>}
 
@@ -628,7 +630,7 @@
             configs,
             server_init: <span class="self">self</span>.server_init,
             client_init: <span class="self">self</span>.client_init,
-            primary_client: <span class="self">self</span>.primary_client,
+            primary_module_kind: <span class="self">self</span>.primary_module_kind,
             _task: task_group,
         }
     }
