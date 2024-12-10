@@ -50,6 +50,8 @@ pub enum GeneralCommands {
         #[clap(long)]
         event_kinds: Vec<EventKind>,
     },
+    /// request a JWT token for future interactions
+    GetSessionJwtAuth,
 }
 
 impl GeneralCommands {
@@ -124,8 +126,11 @@ impl GeneralCommands {
                     .await?;
                 print_response(payment_log);
             }
+            Self::GetSessionJwtAuth => {
+                let response = create_client().get_session_jwt_auth().await?;
+                print_response(response);
+            }
         }
-
         Ok(())
     }
 }

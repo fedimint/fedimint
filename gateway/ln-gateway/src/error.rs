@@ -92,6 +92,8 @@ pub enum AdminGatewayError {
     RegistrationError { federation_id: FederationId },
     #[error("Error withdrawing funds onchain: {failure_reason}")]
     WithdrawError { failure_reason: String },
+    #[error("Unauthorized")]
+    Unauthorized,
 }
 
 impl IntoResponse for AdminGatewayError {
