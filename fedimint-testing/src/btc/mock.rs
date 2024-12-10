@@ -14,7 +14,7 @@ use bitcoin::merkle_tree::PartialMerkleTree;
 use bitcoin::{
     Address, Block, BlockHash, CompactTarget, Network, OutPoint, ScriptBuf, Transaction, TxOut,
 };
-use fedimint_bitcoind::{register_bitcoind, IBitcoindRpcFactory};
+use fedimint_bitcoind::IBitcoindRpcFactory;
 use fedimint_core::bitcoin_rpc::{DynBitcoindRpc, IBitcoindRpc};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::sleep_in_test;
@@ -36,15 +36,13 @@ impl FakeBitcoinFactory {
     /// Registers a fake bitcoin rpc factory for testing
     pub fn register_new() -> FakeBitcoinFactory {
         let kind = format!("test_btc-{}", rand::random::<u64>());
-        let factory = FakeBitcoinFactory {
+        FakeBitcoinFactory {
             bitcoin: FakeBitcoinTest::new(),
             config: BitcoinRpcConfig {
                 kind: kind.clone(),
                 url: "http://ignored".parse().unwrap(),
             },
-        };
-        register_bitcoind(kind, factory.clone().into());
-        factory
+        }
     }
 }
 

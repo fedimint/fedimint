@@ -76,12 +76,6 @@ pub fn create_bitcoind(config: &BitcoinRpcConfig) -> Result<DynBitcoindRpc> {
     factory.create_connection(&url)
 }
 
-/// Register a new factory for creating bitcoin RPCs
-pub fn register_bitcoind(kind: String, factory: DynBitcoindRpcFactory) {
-    let mut registry = BITCOIN_RPC_REGISTRY.lock().expect("lock poisoned");
-    registry.insert(kind, factory);
-}
-
 /// Trait for creating new bitcoin RPC clients
 pub trait IBitcoindRpcFactory: Debug + Send + Sync {
     /// Creates a new bitcoin RPC client connection
