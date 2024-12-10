@@ -3,9 +3,13 @@ name = "fedimint-lnv2-tests"
 version = { workspace = true }
 authors = ["The Fedimint Developers"]
 edition = "2021"
-description = "fedimint-ln-tests contains integration tests for the lightning module"
+description = "fedimint-lnv2-tests contains integration tests for the lnv2 module"
 license = "MIT"
 publish = false
+
+[[bin]]
+name = "fedimint-lnv2-devimint-tests"
+path = "bin/tests.rs"
 
 [[test]]
 name = "fedimint_lnv2_tests"
