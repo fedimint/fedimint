@@ -3,6 +3,7 @@ use devimint::federation::Client;
 use devimint::version_constants::VERSION_0_5_0_ALPHA;
 use devimint::{cmd, util};
 use fedimint_core::core::OperationId;
+use fedimint_core::envs::{is_env_var_set, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV};
 use fedimint_lnv2_client::{FinalReceiveOperationState, FinalSendOperationState};
 use lightning_invoice::Bolt11Invoice;
 use substring::Substring;
@@ -28,6 +29,11 @@ async fn main() -> anyhow::Result<()> {
 
         if gatewayd_version < *VERSION_0_5_0_ALPHA {
             info!(%gatewayd_version, "Version did not support lnv2 module, skipping");
+            return Ok(());
+        }
+
+        if is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV) {
+            info!("lnv2 is disabled, skipping");
             return Ok(());
         }
 
