@@ -6,7 +6,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 use bitcoin::{Address, Transaction, Txid};
 use bitcoincore_rpc::{Client, RpcApi};
-use fedimint_bitcoind::DynBitcoindRpc;
+use fedimint_core::bitcoin_rpc::DynBitcoindRpc;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{block_in_place, sleep_in_test};

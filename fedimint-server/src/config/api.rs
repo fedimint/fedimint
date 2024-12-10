@@ -947,6 +947,7 @@ mod tests {
     use fedimint_core::config::{ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry};
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::IRawDatabaseExt;
+    use fedimint_core::envs::BitcoinRpcConfig;
     use fedimint_core::module::ApiAuth;
     use fedimint_core::runtime::spawn;
     use fedimint_core::task::{sleep, TaskGroup};
@@ -1028,6 +1029,12 @@ mod tests {
                     "dummyversionhash".to_owned(),
                     &module_inits,
                     TaskGroup::new(),
+                    // This is unused and is just here to get this test to work
+                    BitcoinRpcConfig {
+                        kind: "esplora".to_string(),
+                        url: SafeUrl::parse("http://127.0.0.1:50002")
+                            .expect("Failed to parse default esplora server"),
+                    },
                 )
                 .await
                 .expect("Failed to run fedimint server");
