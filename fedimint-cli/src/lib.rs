@@ -654,7 +654,7 @@ impl FedimintCli {
         let db = cli.load_rocks_db().await?;
         let mut client_builder = Client::builder(db).await.map_err_cli()?;
         client_builder.with_module_inits(self.module_inits.clone());
-        client_builder.with_primary_module(1);
+        client_builder.with_primary_module_kind(fedimint_mint_client::KIND);
 
         #[cfg(feature = "tor")]
         if cli.use_tor {

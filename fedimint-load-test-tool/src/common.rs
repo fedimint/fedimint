@@ -153,7 +153,7 @@ pub async fn build_client(
     client_builder.with_module(MintClientInit);
     client_builder.with_module(LightningClientInit::default());
     client_builder.with_module(WalletClientInit::default());
-    client_builder.with_primary_module(1);
+    client_builder.with_primary_module_kind(fedimint_mint_client::KIND);
     let client_secret =
         Client::load_or_generate_client_secret(client_builder.db_no_decoders()).await?;
     let root_secret = PlainRootSecretStrategy::to_root_secret(&client_secret);
