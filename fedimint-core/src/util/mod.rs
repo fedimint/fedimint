@@ -185,6 +185,14 @@ impl SafeUrl {
 
         host.ends_with(".onion")
     }
+
+    pub fn fragment(&self) -> Option<&str> {
+        self.0.fragment()
+    }
+
+    pub fn set_fragment(&mut self, arg: Option<&str>) {
+        self.0.set_fragment(arg);
+    }
 }
 
 impl Display for SafeUrl {
