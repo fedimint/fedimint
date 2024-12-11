@@ -671,6 +671,11 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let fed_id = fed.calculate_federation_id();
     let invite = fed.invite_code()?;
 
+    // LNv1 expects no gateway routing fees
+    gw_lnd
+        .set_federation_routing_fee(fed_id.clone(), 0, 0)
+        .await?;
+
     let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
 
     let invite_code = if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
@@ -1105,6 +1110,10 @@ pub async fn cli_load_test_tool_test(dev_fed: DevFed) -> Result<()> {
         .pegin_client(10_000, dev_fed.fed.internal_client().await?)
         .await?;
     let invite_code = dev_fed.fed.invite_code()?;
+    dev_fed
+        .gw_lnd
+        .set_federation_routing_fee(dev_fed.fed.calculate_federation_id(), 0, 0)
+        .await?;
     run_standard_load_test(&load_test_temp, &invite_code).await?;
     run_ln_circular_load_test(&load_test_temp, &invite_code).await?;
     Ok(())
@@ -2259,6 +2268,10 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
                 let task_group = task_group.clone();
                 async move {
                     let dev_fed = dev_fed(&process_mgr).await?;
+                    dev_fed
+                        .gw_lnd
+                        .set_federation_routing_fee(dev_fed.fed.calculate_federation_id(), 0, 0)
+                        .await?;
                     let ((), faucet) = try_join!(
                         dev_fed.fed.pegin_gateways(20_000, vec![&dev_fed.gw_lnd]),
                         async {

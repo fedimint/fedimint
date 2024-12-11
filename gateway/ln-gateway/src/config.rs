@@ -6,7 +6,6 @@ use std::str::FromStr;
 use bitcoin::Network;
 use clap::Parser;
 use fedimint_core::util::SafeUrl;
-use fedimint_ln_common::config::GatewayFee;
 
 use super::envs;
 use super::lightning::LightningMode;
@@ -40,11 +39,6 @@ pub struct GatewayOpts {
     #[arg(long = "network", env = envs::FM_GATEWAY_NETWORK_ENV)]
     network: Option<Network>,
 
-    /// Configured gateway routing fees
-    /// Format: <base_msat>,<proportional_millionths>
-    #[arg(long = "default-fees", env = envs::FM_DEFAULT_GATEWAY_FEES_ENV)]
-    default_fees: Option<GatewayFee>,
-
     /// Number of route hints to return in invoices
     #[arg(
         long = "num-route-hints",
@@ -77,7 +71,6 @@ impl GatewayOpts {
             bcrypt_password_hash,
             network: self.network,
             num_route_hints: self.num_route_hints,
-            fees: self.default_fees.clone(),
             lightning_module_mode: self.lightning_module_mode,
         })
     }
@@ -96,7 +89,6 @@ pub struct GatewayParameters {
     pub bcrypt_password_hash: bcrypt::HashParts,
     pub network: Option<Network>,
     pub num_route_hints: u32,
-    pub fees: Option<GatewayFee>,
     pub lightning_module_mode: LightningModuleMode,
 }
 
