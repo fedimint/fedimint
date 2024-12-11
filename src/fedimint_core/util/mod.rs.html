@@ -598,7 +598,15 @@
 <a href="#597" id="597">597</a>
 <a href="#598" id="598">598</a>
 <a href="#599" id="599">599</a>
-<a href="#600" id="600">600</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>backoff_util;
+<a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>backoff_util;
 <span class="doccomment">/// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
 </span><span class="kw">pub mod </span>broadcaststream;
 <span class="kw">pub mod </span>update_merge;
@@ -784,6 +792,14 @@
         <span class="kw">let </span>host = <span class="self">self</span>.host_str().unwrap_or_default();
 
         host.ends_with(<span class="string">".onion"</span>)
+    }
+
+    <span class="kw">pub fn </span>fragment(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.fragment()
+    }
+
+    <span class="kw">pub fn </span>set_fragment(<span class="kw-2">&amp;mut </span><span class="self">self</span>, arg: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;) {
+        <span class="self">self</span>.<span class="number">0</span>.set_fragment(arg);
     }
 }
 

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["broadcast_pending_tx","calculate_pegin_metrics","calculate_pegout_metrics","nonce_from_idx","run_broadcast_pending_tx"],"mod":["db","metrics"],"struct":["PendingTransaction","StatelessWallet","UnsignedTransaction","Wallet","WalletInit"]};
+window.SIDEBAR_ITEMS = {"fn":["broadcast_pending_tx","calculate_pegin_metrics","calculate_pegout_metrics","get_median","nonce_from_idx","run_broadcast_pending_tx"],"mod":["db","feerate_source","metrics"],"struct":["PendingTransaction","StatelessWallet","UnsignedTransaction","Wallet","WalletInit"]};

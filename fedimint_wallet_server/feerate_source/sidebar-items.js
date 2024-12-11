@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["FEERATE_SOURCE_MAX_FEERATE_SATS_PER_VB","FEERATE_SOURCE_MIN_FEERATE_SATS_PER_VB"],"struct":["FetchJson"],"trait":["FeeRateSource"]};
