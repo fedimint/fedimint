@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Debug;
 use std::pin::Pin;
+use std::result;
 use std::sync::Arc;
 use std::time::Duration;
-use std::{cmp, result};
 
 use anyhow::anyhow;
 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
@@ -21,7 +21,6 @@ use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
-use fedimint_core::fmt_utils::AbbreviateDebug;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -30,12 +29,14 @@ use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::session_outcome::{SessionOutcome, SessionStatus};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
+use fedimint_core::util::backoff_util::api_networking_backoff;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, runtime, NumPeersExt, OutPoint, PeerId,
+    apply, async_trait_maybe_send, dyn_newtype_define, util, NumPeersExt, OutPoint, PeerId,
     TransactionId,
 };
 use fedimint_logging::LOG_CLIENT_NET_API;
+use futures::future::pending;
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
 use itertools::Itertools;
@@ -55,7 +56,7 @@ use serde_json::Value;
 use tokio_rustls::rustls::RootCertStore;
 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
 use tokio_rustls::{rustls::ClientConfig as TlsClientConfig, TlsConnector};
-use tracing::{debug, instrument, trace};
+use tracing::{debug, instrument, trace, warn};
 
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 mod error;
@@ -194,92 +195,157 @@ pub trait FederationApiExt: IRawFederationApi {
         #[cfg(target_family = "wasm")]
         let mut futures = FuturesUnordered::<Pin<Box<dyn Future<Output = _>>>>::new();
 
-        let peers = self.all_peers();
+        for peer in self.all_peers() {
+            futures.push(Box::pin({
+                let method = &method;
+                let params = &params;
+                async move {
+                    let result = self
+                        .request_single_peer_typed(None, method.clone(), params.clone(), *peer)
+                        .await;
 
-        for peer_id in peers {
-            futures.push(Box::pin(async {
-                let request = async {
-                    self.request_raw(*peer_id, &method, &[params.to_json()])
-                        .await
-                        .map(AbbreviateDebug)
-                };
-
-                PeerResponse {
-                    peer: *peer_id,
-                    result: request.await,
+                    (*peer, result)
                 }
             }));
         }
 
-        let mut peer_delay_ms = BTreeMap::new();
+        let mut peers = BTreeMap::new();
 
-        // Delegates the response handling to the `QueryStrategy` with an exponential
-        // back-off with every new set of requests
-        let max_delay_ms = 1000;
         loop {
-            let response = futures.next().await;
-            trace!(target: LOG_CLIENT_NET_API, ?response, method, params = ?AbbreviateDebug(params.to_json()), "Received peer response");
-            match response {
-                Some(PeerResponse { peer, result }) => {
-                    let result: PeerResult<PeerRet> =
-                        result.map_err(PeerError::Rpc).and_then(|o| {
-                            serde_json::from_value::<PeerRet>(o.0)
-                                .map_err(|e| PeerError::ResponseDeserialization(e.into()))
-                        });
+            let (peer, result) = futures
+                .next()
+                .await
+                .expect("Query strategy ran out of peers to query without returning a result");
 
-                    let strategy_step = strategy.process(peer, result);
-                    trace!(
-                        target: LOG_CLIENT_NET_API,
-                        method,
-                        ?params,
-                        ?strategy_step,
-                        "Taking strategy step to the response after peer response"
-                    );
-                    match strategy_step {
-                        QueryStep::Retry(peers) => {
-                            for retry_peer in peers {
-                                let mut delay_ms =
-                                    peer_delay_ms.get(&retry_peer).copied().unwrap_or(10);
-                                delay_ms = cmp::min(max_delay_ms, delay_ms * 2);
-                                peer_delay_ms.insert(retry_peer, delay_ms);
+            match result {
+                Ok(response) => match strategy.process(peer, response) {
+                    QueryStep::Retry(peers) => {
+                        for peer in peers {
+                            futures.push(Box::pin({
+                                let method = &method;
+                                let params = &params;
+                                async move {
+                                    let result = self
+                                        .request_single_peer_typed(
+                                            None,
+                                            method.clone(),
+                                            params.clone(),
+                                            peer,
+                                        )
+                                        .await;
 
-                                futures.push(Box::pin({
-                                    let method = &method;
-                                    let params = &params;
-                                    async move {
-                                        // Note: we need to sleep inside the retrying future,
-                                        // so that `futures` is being polled continuously
-                                        runtime::sleep(Duration::from_millis(delay_ms)).await;
-                                        PeerResponse {
-                                            peer: retry_peer,
-                                            result: self
-                                                .request_raw(
-                                                    retry_peer,
-                                                    method,
-                                                    &[params.to_json()],
-                                                )
-                                                .await
-                                                .map(AbbreviateDebug),
-                                        }
-                                    }
-                                }));
+                                    (peer, result)
+                                }
+                            }));
+                        }
+                    }
+                    QueryStep::Success(response) => return Ok(response),
+                    QueryStep::Failure(e) => {
+                        peers.insert(peer, PeerError::InvalidResponse(e.to_string()));
+                    }
+                    QueryStep::Continue => {}
+                },
+                Err(e) => {
+                    e.report_if_important(peer);
+
+                    peers.insert(peer, e);
+                }
+            }
+
+            if peers.len() == self.all_peers().to_num_peers().one_honest() {
+                return Err(FederationError {
+                    method: method.clone(),
+                    params: params.params.clone(),
+                    general: None,
+                    peers,
+                });
+            }
+        }
+    }
+
+    async fn request_with_strategy_and_retry<PR: DeserializeOwned + MaybeSend, FR: Debug>(
+        &self,
+        mut strategy: impl QueryStrategy<PR, FR> + MaybeSend,
+        method: String,
+        params: ApiRequestErased,
+    ) -> FR {
+        // NOTE: `FuturesUnorderded` is a footgun, but all we do here is polling
+        // completed results from it and we don't do any `await`s when
+        // processing them, it should be totally OK.
+        #[cfg(not(target_family = "wasm"))]
+        let mut futures = FuturesUnordered::<Pin<Box<dyn Future<Output = _> + Send>>>::new();
+        #[cfg(target_family = "wasm")]
+        let mut futures = FuturesUnordered::<Pin<Box<dyn Future<Output = _>>>>::new();
+
+        for peer in self.all_peers() {
+            futures.push(Box::pin({
+                let method = &method;
+                let params = &params;
+                async move {
+                    let response = util::retry(
+                        "api-request-{method}-{peer}",
+                        api_networking_backoff(),
+                        || async {
+                            self.request_single_peer_typed(
+                                None,
+                                method.clone(),
+                                params.clone(),
+                                *peer,
+                            )
+                            .await
+                            .inspect_err(|e| e.report_if_important(*peer))
+                            .map_err(|e| anyhow!(e.to_string()))
+                        },
+                    )
+                    .await
+                    .expect("Number of retries has no limit");
+
+                    (*peer, response)
+                }
+            }));
+        }
+
+        loop {
+            let (peer, response) = match futures.next().await {
+                Some(t) => t,
+                None => pending().await,
+            };
+
+            match strategy.process(peer, response) {
+                QueryStep::Retry(peers) => {
+                    for peer in peers {
+                        futures.push(Box::pin({
+                            let method = &method;
+                            let params = &params;
+                            async move {
+                                let response = util::retry(
+                                    "api-request-{method}-{peer}",
+                                    api_networking_backoff(),
+                                    || async {
+                                        self.request_single_peer_typed(
+                                            None,
+                                            method.clone(),
+                                            params.clone(),
+                                            peer,
+                                        )
+                                        .await
+                                        .inspect_err(|e| e.report_if_important(peer))
+                                        .map_err(|e| anyhow!(e.to_string()))
+                                    },
+                                )
+                                .await
+                                .expect("Number of retries has no limit");
+
+                                (peer, response)
                             }
-                        }
-                        QueryStep::Continue => {}
-                        QueryStep::Failure { general, peers } => {
-                            return Err(FederationError {
-                                method: method.clone(),
-                                params: params.params.clone(),
-                                general,
-                                peers,
-                            })
-                        }
-                        QueryStep::Success(response) => return Ok(response),
+                        }));
                     }
                 }
-                None => {
-                    panic!("Query strategy ran out of peers to query without returning a result");
+                QueryStep::Success(response) => return response,
+                QueryStep::Failure(e) => {
+                    warn!("Query strategy returned non-retryable failure for peer {peer}: {e}");
                 }
+                QueryStep::Continue => {}
             }
         }
     }
@@ -293,6 +359,22 @@ pub trait FederationApiExt: IRawFederationApi {
         Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         self.request_with_strategy(
+            ThresholdConsensus::new(self.all_peers().to_num_peers()),
+            method,
+            params,
+        )
+        .await
+    }
+
+    async fn request_current_consensus_retry<Ret>(
+        &self,
+        method: String,
+        params: ApiRequestErased,
+    ) -> Ret
+    where
+        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
+    {
+        self.request_with_strategy_and_retry(
             ThresholdConsensus::new(self.all_peers().to_num_peers()),
             method,
             params,
@@ -458,7 +540,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     async fn submit_transaction(
         &self,
         tx: Transaction,
-    ) -> FederationResult<SerdeModuleEncoding<TransactionSubmissionOutcome>>;
+    ) -> SerdeModuleEncoding<TransactionSubmissionOutcome>;
 
     async fn await_block(
         &self,
@@ -474,7 +556,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
 
     async fn session_count(&self) -> FederationResult<u64>;
 
-    async fn await_transaction(&self, txid: TransactionId) -> FederationResult<TransactionId>;
+    async fn await_transaction(&self, txid: TransactionId) -> TransactionId;
 
     /// Fetches the server consensus hash if enough peers agree on it
     async fn server_config_consensus_hash(&self) -> FederationResult<sha256::Hash>;
@@ -959,12 +1041,6 @@ where
             module_id: None,
         }
     }
-}
-
-#[derive(Debug)]
-pub struct PeerResponse<R> {
-    pub peer: PeerId,
-    pub result: JsonRpcResult<R>,
 }
 
 impl<C> FederationPeer<C>

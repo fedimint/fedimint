@@ -127,19 +127,17 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
     let tx = TransactionBuilder::new()
         .with_outputs(ClientOutputBundle::new_no_sm(vec![output]).into_dyn(dummy_module.id));
     let (tx, _) = tx.build(&Secp256k1::new(), rand::thread_rng());
-    let result = client.api().submit_transaction(tx).await;
-    match result {
-        Ok(submission_outcome) => {
-            if submission_outcome
-                .try_into_inner(client.decoders())
-                .unwrap()
-                .0
-                .is_ok()
-            {
-                bail!("Should have been rejected")
-            }
-        }
-        Err(e) => bail!("Submission unsuccessful: {}", e),
+
+    if client
+        .api()
+        .submit_transaction(tx)
+        .await
+        .try_into_inner(client.decoders())
+        .unwrap()
+        .0
+        .is_ok()
+    {
+        bail!("Should have been rejected")
     }
 
     Ok(())
