@@ -318,7 +318,8 @@ impl ReceiveStateMachine {
             )
             .await
             .expect("Cannot claim input, additional funding needed")
-            .1;
+            .into_iter()
+            .collect();
 
         client_ctx
             .module

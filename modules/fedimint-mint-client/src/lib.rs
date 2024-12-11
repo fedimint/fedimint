@@ -1488,24 +1488,17 @@ impl MintClientModule {
 
         let extra_meta = serde_json::to_value(extra_meta)
             .expect("MintClientModule::reissue_external_notes extra_meta is serializable");
-        let operation_meta_gen = |txid, out_points: Vec<OutPoint>| {
-            assert!(
-                out_points.iter().all(|out_point| out_point.txid == txid),
-                "Change outpoints didn't all have consistent transaction id."
-            );
-
-            MintOperationMeta {
-                variant: MintOperationMetaVariant::Reissuance {
-                    legacy_out_point: None,
-                    txid: Some(txid),
-                    out_point_indices: out_points
-                        .iter()
-                        .map(|out_point| out_point.out_idx)
-                        .collect(),
-                },
-                amount,
-                extra_meta: extra_meta.clone(),
-            }
+        let operation_meta_gen = |change_range: OutPointRange| MintOperationMeta {
+            variant: MintOperationMetaVariant::Reissuance {
+                legacy_out_point: None,
+                txid: Some(change_range.txid()),
+                out_point_indices: change_range
+                    .into_iter()
+                    .map(|out_point| out_point.out_idx)
+                    .collect(),
+            },
+            amount,
+            extra_meta: extra_meta.clone(),
         };
 
         self.client_ctx

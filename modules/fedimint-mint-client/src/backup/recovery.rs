@@ -224,7 +224,8 @@ impl RecoveryFromHistory for MintRecovery {
                                     out_point_range: OutPointRange::new_single(
                                         out_point.txid,
                                         out_point.out_idx,
-                                    ),
+                                    )
+                                    .expect("Can't overflow"),
                                 },
                                 state: crate::output::MintOutputStates::Created(
                                     MintOutputStatesCreated {

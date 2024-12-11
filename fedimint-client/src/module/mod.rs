@@ -1,6 +1,7 @@
 use core::fmt;
 use std::any::Any;
 use std::fmt::Debug;
+use std::ops::Range;
 use std::sync::Arc;
 use std::{ffi, marker, ops};
 
@@ -240,11 +241,11 @@ where
         &self,
         operation_id: OperationId,
         operation_type: &str,
-        operation_meta: F,
+        operation_meta_gen: F,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
+    ) -> anyhow::Result<OutPointRange>
     where
-        F: Fn(TransactionId, Vec<OutPoint>) -> Meta + Clone + MaybeSend + MaybeSync,
+        F: Fn(OutPointRange) -> Meta + Clone + MaybeSend + MaybeSync,
         Meta: serde::Serialize + MaybeSend,
     {
         self.client
@@ -252,7 +253,7 @@ where
             .finalize_and_submit_transaction(
                 operation_id,
                 operation_type,
-                operation_meta,
+                operation_meta_gen,
                 tx_builder,
             )
             .await
@@ -267,6 +268,7 @@ where
     pub async fn await_primary_module_outputs(
         &self,
         operation_id: OperationId,
+        // TODO: make `impl Iterator<Item = ...>`
         outputs: Vec<OutPoint>,
     ) -> anyhow::Result<()> {
         self.client
@@ -472,7 +474,7 @@ where
         dbtx: &mut DatabaseTransaction<'_>,
         inputs: ClientInputBundle<I, S>,
         operation_id: OperationId,
-    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
+    ) -> anyhow::Result<OutPointRange>
     where
         I: IInput + MaybeSend + MaybeSync + 'static,
         S: sm::IState + MaybeSend + MaybeSync + 'static,
@@ -486,7 +488,7 @@ where
         dbtx: &mut DatabaseTransaction<'_>,
         inputs: InstancelessDynClientInputBundle,
         operation_id: OperationId,
-    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
+    ) -> anyhow::Result<OutPointRange> {
         let tx_builder =
             TransactionBuilder::new().with_inputs(inputs.into_dyn(self.module_instance_id));
 
@@ -964,15 +966,12 @@ impl AsRef<maybe_add_send_sync!(dyn IClientModule + 'static)> for DynClientModul
 #[derive(Copy, Clone, Encodable, Decodable, PartialEq, Eq, Hash, Debug)]
 pub struct IdxRange {
     start: u64,
-    end_inclusive: u64,
+    end: u64,
 }
 
 impl IdxRange {
-    pub fn new_single(start: u64) -> Self {
-        Self {
-            start,
-            end_inclusive: start,
-        }
+    pub fn new_single(start: u64) -> Option<Self> {
+        start.checked_add(1).map(|end| Self { start, end })
     }
 
     pub fn start(self) -> u64 {
@@ -982,30 +981,37 @@ impl IdxRange {
     pub fn count(self) -> usize {
         self.into_iter().count()
     }
+
+    pub fn from_inclusive(range: ops::RangeInclusive<u64>) -> Option<Self> {
+        range.end().checked_add(1).map(|end| Self {
+            start: *range.start(),
+            end,
+        })
+    }
+}
+
+impl From<Range<u64>> for IdxRange {
+    fn from(Range { start, end }: Range<u64>) -> Self {
+        Self { start, end }
+    }
 }
 
 impl IntoIterator for IdxRange {
     type Item = u64;
 
-    type IntoIter = ops::RangeInclusive<u64>;
+    type IntoIter = ops::Range<u64>;
 
     fn into_iter(self) -> Self::IntoIter {
-        ops::RangeInclusive::new(self.start, self.end_inclusive)
-    }
-}
-
-impl From<ops::RangeInclusive<u64>> for IdxRange {
-    fn from(value: ops::RangeInclusive<u64>) -> Self {
-        Self {
-            start: *value.start(),
-            end_inclusive: *value.end(),
+        ops::Range {
+            start: self.start,
+            end: self.end,
         }
     }
 }
 
 #[derive(Copy, Clone, Encodable, Decodable, PartialEq, Eq, Hash, Debug)]
 pub struct OutPointRange {
-    txid: TransactionId,
+    pub txid: TransactionId,
     idx_range: IdxRange,
 }
 
@@ -1014,11 +1020,8 @@ impl OutPointRange {
         Self { txid, idx_range }
     }
 
-    pub fn new_single(txid: TransactionId, idx: u64) -> Self {
-        Self {
-            txid,
-            idx_range: IdxRange::new_single(idx),
-        }
+    pub fn new_single(txid: TransactionId, idx: u64) -> Option<Self> {
+        IdxRange::new_single(idx).map(|idx_range| Self { txid, idx_range })
     }
 
     pub fn start_idx(self) -> u64 {
@@ -1050,7 +1053,7 @@ impl IntoIterator for OutPointRange {
 pub struct OutPointRangeIter {
     txid: TransactionId,
 
-    inner: ops::RangeInclusive<u64>,
+    inner: ops::Range<u64>,
 }
 
 impl OutPointRange {

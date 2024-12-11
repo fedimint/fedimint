@@ -258,7 +258,8 @@ impl SendStateMachine {
                     .claim_inputs(dbtx, ClientInputBundle::new_no_sm(vec![client_input]))
                     .await
                     .expect("Cannot claim input, additional funding needed")
-                    .1;
+                    .into_iter()
+                    .collect();
 
                 old_state.update(SendSMState::Claiming(Claiming {
                     preimage: payment_response.preimage,

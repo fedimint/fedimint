@@ -148,7 +148,8 @@ pub(crate) fn migrate_state_to_v2(
                     out_point_range: OutPointRange::new_single(
                         old_state.common.out_point.txid,
                         old_state.common.out_point.out_idx,
-                    ),
+                    )
+                    .expect("Can't possibly overflow"),
                 },
                 state: old_state.state,
             })
@@ -162,7 +163,8 @@ pub(crate) fn migrate_state_to_v2(
                     operation_id: old_state.common.operation_id,
                     out_point_range: OutPointRange::new(
                         old_state.common.txid,
-                        IdxRange::new_single(old_state.common.input_idx),
+                        IdxRange::new_single(old_state.common.input_idx)
+                            .expect("Can't possibly overflow"),
                     ),
                 },
                 state: old_state.state,

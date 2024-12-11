@@ -735,7 +735,8 @@ impl GatewayPayClaimOutgoingContract {
             .claim_inputs(dbtx, ClientInputBundle::new_no_sm(vec![client_input]))
             .await
             .expect("Cannot claim input, additional funding needed")
-            .1;
+            .into_iter()
+            .collect();
         debug!("Claimed outgoing contract {contract:?} with out points {out_points:?}");
         GatewayPayStateMachine {
             common,
@@ -943,12 +944,15 @@ impl GatewayPayCancelContract {
             .fund_output(dbtx, ClientOutputBundle::new_no_sm(vec![client_output]))
             .await
         {
-            Ok((txid, _)) => {
-                info!("Canceled outgoing contract {contract:?} with txid {txid:?}");
+            Ok(change_range) => {
+                info!(
+                    "Canceled outgoing contract {contract:?} with txid {:?}",
+                    change_range.txid()
+                );
                 GatewayPayStateMachine {
                     common,
                     state: GatewayPayStates::Canceled {
-                        txid,
+                        txid: change_range.txid(),
                         contract_id: contract.contract.contract_id(),
                         error,
                     },

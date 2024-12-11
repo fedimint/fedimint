@@ -1220,12 +1220,15 @@ impl LightningClientModule {
         let tx = TransactionBuilder::new().with_outputs(output);
         let extra_meta =
             serde_json::to_value(extra_meta).context("Failed to serialize extra meta")?;
-        let operation_meta_gen = |txid, change| LightningOperationMeta {
+        let operation_meta_gen = |change_range: OutPointRange| LightningOperationMeta {
             variant: LightningOperationMetaVariant::Pay(LightningOperationMetaPay {
-                out_point: OutPoint { txid, out_idx: 0 },
+                out_point: OutPoint {
+                    txid: change_range.txid(),
+                    out_idx: 0,
+                },
                 invoice: invoice.clone(),
                 fee,
-                change,
+                change: change_range.into_iter().collect(),
                 is_internal_payment,
                 contract_id,
                 gateway_id: maybe_gateway_id,
@@ -1505,8 +1508,10 @@ impl LightningClientModule {
                 .make_client_inputs(ClientInputBundle::new_no_sm(vec![client_input])),
         );
         let extra_meta = serde_json::to_value(extra_meta).expect("extra_meta is serializable");
-        let operation_meta_gen = |_, out_points| LightningOperationMeta {
-            variant: LightningOperationMetaVariant::Claim { out_points },
+        let operation_meta_gen = |change_range: OutPointRange| LightningOperationMeta {
+            variant: LightningOperationMetaVariant::Claim {
+                out_points: change_range.into_iter().collect(),
+            },
             extra_meta: extra_meta.clone(),
         };
         let operation_id = OperationId::new_random();
@@ -1630,15 +1635,18 @@ impl LightningClientModule {
         let tx =
             TransactionBuilder::new().with_outputs(self.client_ctx.make_client_outputs(output));
         let extra_meta = serde_json::to_value(extra_meta).expect("extra_meta is serializable");
-        let operation_meta_gen = |txid, _| LightningOperationMeta {
+        let operation_meta_gen = |change_range: OutPointRange| LightningOperationMeta {
             variant: LightningOperationMetaVariant::Receive {
-                out_point: OutPoint { txid, out_idx: 0 },
+                out_point: OutPoint {
+                    txid: change_range.txid(),
+                    out_idx: 0,
+                },
                 invoice: invoice.clone(),
                 gateway_id,
             },
             extra_meta: extra_meta.clone(),
         };
-        let (txid, _) = self
+        let change_range = self
             .client_ctx
             .finalize_and_submit_transaction(
                 operation_id,
@@ -1648,14 +1656,14 @@ impl LightningClientModule {
             )
             .await?;
 
-        debug!(target: LOG_CLIENT_MODULE_LN, ?txid, ?operation_id, "Waiting for LN invoice to be confirmed");
+        debug!(target: LOG_CLIENT_MODULE_LN, txid = ?change_range.txid(), ?operation_id, "Waiting for LN invoice to be confirmed");
 
         // Wait for the transaction to be accepted by the federation, otherwise the
         // invoice will not be able to be paid
         self.client_ctx
             .transaction_updates(operation_id)
             .await
-            .await_tx_accepted(txid)
+            .await_tx_accepted(change_range.txid())
             .await
             .map_err(|e| anyhow!("Offer transaction was not accepted: {e:?}"))?;
 

@@ -29,7 +29,7 @@ use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind
 use fedimint_core::db::{AutocommitError, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion};
-use fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint, TransactionId};
+use fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint};
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
@@ -462,7 +462,7 @@ impl GatewayClientModule {
         let tx = TransactionBuilder::new().with_outputs(self.client_ctx.make_client_outputs(
             ClientOutputBundle::new(vec![output], vec![client_output_sm]),
         ));
-        let operation_meta_gen = |_: TransactionId, _: Vec<OutPoint>| GatewayMeta::Receive;
+        let operation_meta_gen = |_: OutPointRange| GatewayMeta::Receive;
         self.client_ctx
             .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
             .await?;
@@ -503,7 +503,7 @@ impl GatewayClientModule {
         let tx = TransactionBuilder::new().with_outputs(self.client_ctx.make_client_outputs(
             ClientOutputBundle::new(vec![output], vec![client_output_sm]),
         ));
-        let operation_meta_gen = |_: TransactionId, _: Vec<OutPoint>| GatewayMeta::Receive;
+        let operation_meta_gen = |_: OutPointRange| GatewayMeta::Receive;
         self.client_ctx
             .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
             .await?;

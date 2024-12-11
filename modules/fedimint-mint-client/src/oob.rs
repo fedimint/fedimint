@@ -353,5 +353,5 @@ async fn try_cancel_oob_spend_multi(
         .claim_inputs(dbtx, ClientInputBundle::new(inputs, vec![sm]))
         .await
         .expect("Cannot claim input, additional funding needed")
-        .0
+        .txid()
 }
