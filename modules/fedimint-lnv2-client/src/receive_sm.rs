@@ -117,12 +117,11 @@ impl ReceiveStateMachine {
             keys: vec![old_state.common.claim_keypair],
         };
 
-        let out_points = global_context
+        let change_range = global_context
             .claim_inputs(dbtx, ClientInputBundle::new_no_sm(vec![client_input]))
             .await
-            .expect("Cannot claim input, additional funding needed")
-            .1;
+            .expect("Cannot claim input, additional funding needed");
 
-        old_state.update(ReceiveSMState::Claiming(out_points))
+        old_state.update(ReceiveSMState::Claiming(change_range.into_iter().collect()))
     }
 }

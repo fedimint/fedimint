@@ -1,4 +1,5 @@
 use anyhow::bail;
+use fedimint_client::module::OutPointRange;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
@@ -96,9 +97,12 @@ async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Resul
 
     let tx = TransactionBuilder::new()
         .with_inputs(ClientInputBundle::new_no_sm(vec![input]).into_dyn(dummy.id));
-    let outpoint = |txid, _| OutPoint { txid, out_idx: 0 };
+    let meta_gen = |change_range: OutPointRange| OutPoint {
+        txid: change_range.txid(),
+        out_idx: 0,
+    };
     client
-        .finalize_and_submit_transaction(op_id, KIND.as_str(), outpoint, tx)
+        .finalize_and_submit_transaction(op_id, KIND.as_str(), meta_gen, tx)
         .await?;
 
     // Make sure we panicked with the right message

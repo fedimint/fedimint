@@ -142,7 +142,7 @@ use futures::stream::FuturesUnordered;
 use futures::{Future, Stream, StreamExt};
 use meta::{LegacyMetaSource, MetaService};
 use module::recovery::RecoveryProgress;
-use module::{DynClientModule, FinalClient};
+use module::{DynClientModule, FinalClient, IdxRange, OutPointRange};
 use rand::thread_rng;
 use secp256k1::{PublicKey, Secp256k1};
 use secret::{DeriveableSecretClientExt, PlainRootSecretStrategy, RootSecretStrategy as _};
@@ -313,7 +313,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         inputs: InstancelessDynClientInputBundle,
-    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>;
+    ) -> anyhow::Result<OutPointRange>;
 
     /// This function is mostly meant for internal use, you are probably looking
     /// for [`DynGlobalClientContext::fund_output`].
@@ -323,7 +323,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         outputs: InstancelessDynClientOutputBundle,
-    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>;
+    ) -> anyhow::Result<OutPointRange>;
 
     /// Adds a state machine to the executor.
     async fn add_state_machine_dyn(
@@ -366,7 +366,7 @@ impl IGlobalClientContext for () {
         &self,
         _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         _input: InstancelessDynClientInputBundle,
-    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
+    ) -> anyhow::Result<OutPointRange> {
         unimplemented!("fake implementation, only for tests");
     }
 
@@ -374,7 +374,7 @@ impl IGlobalClientContext for () {
         &self,
         _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         _outputs: InstancelessDynClientOutputBundle,
-    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
+    ) -> anyhow::Result<OutPointRange> {
         unimplemented!("fake implementation, only for tests");
     }
 
@@ -434,7 +434,7 @@ impl DynGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         inputs: ClientInputBundle<I, S>,
-    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
+    ) -> anyhow::Result<OutPointRange>
     where
         I: IInput + MaybeSend + MaybeSync + 'static,
         S: IState + MaybeSend + MaybeSync + 'static,
@@ -455,7 +455,7 @@ impl DynGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         outputs: ClientOutputBundle<O, S>,
-    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
+    ) -> anyhow::Result<OutPointRange>
     where
         O: IOutput + MaybeSend + MaybeSync + 'static,
         S: IState + MaybeSend + MaybeSync + 'static,
@@ -559,7 +559,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         inputs: InstancelessDynClientInputBundle,
-    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
+    ) -> anyhow::Result<OutPointRange> {
         let tx_builder =
             TransactionBuilder::new().with_inputs(inputs.into_dyn(self.module_instance_id));
 
@@ -576,7 +576,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         outputs: InstancelessDynClientOutputBundle,
-    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
+    ) -> anyhow::Result<OutPointRange> {
         let tx_builder =
             TransactionBuilder::new().with_outputs(outputs.into_dyn(self.module_instance_id));
 
@@ -1203,9 +1203,9 @@ impl Client {
         operation_type: &str,
         operation_meta_gen: F,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
+    ) -> anyhow::Result<OutPointRange>
     where
-        F: Fn(TransactionId, Vec<OutPoint>) -> M + Clone + MaybeSend + MaybeSync,
+        F: Fn(OutPointRange) -> M + Clone + MaybeSend + MaybeSync,
         M: serde::Serialize + MaybeSend,
     {
         let operation_type = operation_type.to_owned();
@@ -1222,7 +1222,7 @@ impl Client {
                             bail!("There already exists an operation with id {operation_id:?}")
                         }
 
-                        let (txid, change) = self
+                        let out_point_range = self
                             .finalize_and_submit_transaction_inner(dbtx, operation_id, tx_builder)
                             .await?;
 
@@ -1231,11 +1231,11 @@ impl Client {
                                 dbtx,
                                 operation_id,
                                 &operation_type,
-                                operation_meta_gen(txid, change.clone()),
+                                operation_meta_gen(out_point_range),
                             )
                             .await;
 
-                        Ok((txid, change))
+                        Ok(out_point_range)
                     })
                 },
                 Some(100), // TODO: handle what happens after 100 retries
@@ -1259,7 +1259,7 @@ impl Client {
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
+    ) -> anyhow::Result<OutPointRange> {
         let (transaction, mut states, change_range) = self
             .finalize_transaction(&mut dbtx.to_ref_nc(), operation_id, tx_builder)
             .await?;
@@ -1292,11 +1292,6 @@ impl Client {
 
         debug!(target: LOG_CLIENT_NET_API, %txid, ?transaction,  "Finalized and submitting transaction");
 
-        let change_outpoints = change_range
-            .into_iter()
-            .map(|out_idx| OutPoint { txid, out_idx })
-            .collect();
-
         let tx_submission_sm = DynState::from_typed(
             TRANSACTION_SUBMISSION_MODULE_INSTANCE,
             TxSubmissionStatesSM {
@@ -1311,7 +1306,7 @@ impl Client {
         self.log_event_dbtx(dbtx, None, TxCreatedEvent { txid, operation_id })
             .await;
 
-        Ok((txid, change_outpoints))
+        Ok(OutPointRange::new(txid, IdxRange::from(change_range)))
     }
 
     async fn transaction_update_stream(

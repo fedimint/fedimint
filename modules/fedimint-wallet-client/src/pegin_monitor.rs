@@ -4,7 +4,7 @@ use std::time::{Duration, SystemTime};
 use bitcoin::ScriptBuf;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_bitcoind::DynBitcoindRpc;
-use fedimint_client::module::ClientContext;
+use fedimint_client::module::{ClientContext, OutPointRange};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
@@ -418,7 +418,7 @@ async fn claim_peg_in(
         txout_proof: TxOutProof,
         operation_id: OperationId,
         consensus_version: ModuleConsensusVersion,
-    ) -> (fedimint_core::TransactionId, Vec<fedimint_core::OutPoint>) {
+    ) -> OutPointRange {
         let pegin_proof = PegInProof::new(
             txout_proof,
             btc_transaction.clone(),
@@ -471,7 +471,7 @@ async fn claim_peg_in(
         .autocommit(
             |dbtx, _| {
                 Box::pin(async {
-                    let (claim_txid, change) = claim_peg_in_inner(
+                    let change_range = claim_peg_in_inner(
                         client_ctx,
                         dbtx,
                         transaction,
@@ -488,7 +488,10 @@ async fn claim_peg_in(
                             peg_in_index: tweak_idx,
                             btc_out_point: out_point,
                         },
-                        &ClaimedPegInData { claim_txid, change },
+                        &ClaimedPegInData {
+                            claim_txid: change_range.txid(),
+                            change: change_range.into_iter().collect(),
+                        },
                     )
                     .await;
 

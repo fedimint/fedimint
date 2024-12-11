@@ -355,17 +355,16 @@ impl DecryptingPreimageState {
             keys: vec![context.redeem_key],
         };
 
-        let out_points = global_context
+        let change_range = global_context
             .claim_inputs(dbtx, ClientInputBundle::new_no_sm(vec![client_input]))
             .await
-            .expect("Cannot claim input, additional funding needed")
-            .1;
-        debug!("Refunded incoming contract {contract:?} with {out_points:?}");
+            .expect("Cannot claim input, additional funding needed");
+        debug!("Refunded incoming contract {contract:?} with {change_range:?}");
 
         IncomingStateMachine {
             common: old_state.common,
             state: IncomingSmStates::RefundSubmitted {
-                out_points,
+                out_points: change_range.into_iter().collect(),
                 error: IncomingSmError::InvalidPreimage { contract },
             },
         }

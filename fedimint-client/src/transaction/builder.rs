@@ -464,7 +464,7 @@ impl TransactionBuilder {
                     if let Some(input_idxs) = input_idxs.as_ref() {
                         (sm.state_machines)(OutPointRange::new(
                             txid,
-                            IdxRange::from(input_idxs.clone()),
+                            IdxRange::from_inclusive(input_idxs.clone()).expect("can't overflow"),
                         ))
                     } else {
                         vec![]
@@ -483,7 +483,8 @@ impl TransactionBuilder {
                         if let Some(output_idxs) = output_idxs.as_ref() {
                             (sm.state_machines)(OutPointRange::new(
                                 txid,
-                                IdxRange::from(output_idxs.clone()),
+                                IdxRange::from_inclusive(output_idxs.clone())
+                                    .expect("can't possibly overflow"),
                             ))
                         } else {
                             vec![]

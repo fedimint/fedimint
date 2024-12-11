@@ -549,7 +549,7 @@ async fn try_refund_outgoing_contract(
         keys: vec![refund_key],
     };
 
-    let (txid, out_points) = global_context
+    let change_range = global_context
         .claim_inputs(
             dbtx,
             // The input of the refund tx is managed by this state machine, so no new state
@@ -562,8 +562,8 @@ async fn try_refund_outgoing_contract(
     LightningPayStateMachine {
         common: old_state.common,
         state: LightningPayStates::Refund(LightningPayRefund {
-            txid,
-            out_points,
+            txid: change_range.txid(),
+            out_points: change_range.into_iter().collect(),
             error_reason,
         }),
     }

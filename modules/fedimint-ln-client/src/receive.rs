@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use fedimint_api_client::api::DynModuleApi;
+use fedimint_client::module::OutPointRange;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, DynState, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
@@ -247,14 +248,14 @@ impl LightningReceiveConfirmedInvoice {
             Ok(contract) => {
                 match receiving_key {
                     ReceivingKey::Personal(keypair) => {
-                        let (txid, out_points) =
+                        let change_range =
                             Self::claim_incoming_contract(dbtx, contract, keypair, global_context)
                                 .await;
                         LightningReceiveStateMachine {
                             operation_id: old_state.operation_id,
                             state: LightningReceiveStates::Funded(LightningReceiveFunded {
-                                txid,
-                                out_points,
+                                txid: change_range.txid(),
+                                out_points: change_range.into_iter().collect(),
                             }),
                         }
                     }
@@ -279,7 +280,7 @@ impl LightningReceiveConfirmedInvoice {
         contract: IncomingContractAccount,
         keypair: Keypair,
         global_context: DynGlobalClientContext,
-    ) -> (TransactionId, Vec<OutPoint>) {
+    ) -> OutPointRange {
         let input = contract.claim();
         let client_input = ClientInput::<LightningInput> {
             input,

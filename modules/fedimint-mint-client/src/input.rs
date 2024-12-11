@@ -182,7 +182,7 @@ impl MintInputStateCreated {
             amount,
         };
 
-        let (refund_txid, _) = global_context
+        let change_range = global_context
             .claim_inputs(
                 dbtx,
                 // The input of the refund tx is managed by this state machine, so no new state
@@ -194,7 +194,9 @@ impl MintInputStateCreated {
 
         MintInputStateMachine {
             common: old_state.common,
-            state: MintInputStates::Refund(MintInputStateRefund { refund_txid }),
+            state: MintInputStates::Refund(MintInputStateRefund {
+                refund_txid: change_range.txid(),
+            }),
         }
     }
 }
@@ -276,7 +278,7 @@ impl MintInputStateCreatedBundle {
             });
         }
 
-        let (refund_txid, _) = global_context
+        let change_range = global_context
             .claim_inputs(
                 dbtx,
                 // We are inside an input state machine, so no need to spawn new ones
@@ -285,6 +287,7 @@ impl MintInputStateCreatedBundle {
             .await
             .expect("Cannot claim input, additional funding needed");
 
+        let refund_txid = change_range.txid();
         MintInputStateMachine {
             common: old_state.common,
             state: if spendable_notes.len() == 1 {
@@ -380,7 +383,7 @@ impl MintInputStateRefundedBundle {
                 keys: vec![spendable_note.spend_key],
                 amount,
             };
-            let (refund_txid, _) = global_context
+            let change_range = global_context
                 .claim_inputs(
                     dbtx,
                     // The input of the refund tx is managed by this state machine, so no new state
@@ -390,7 +393,7 @@ impl MintInputStateRefundedBundle {
                 .await
                 .expect("Cannot claim input, additional funding needed");
 
-            refund_txids.push(refund_txid);
+            refund_txids.push(change_range.txid());
         }
 
         assert!(!refund_txids.is_empty());
