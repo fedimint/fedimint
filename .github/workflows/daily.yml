@@ -8,12 +8,13 @@ name: Daily check
 
 jobs:
   audit:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux]
     steps:
       - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run cargo audit
+        run: |
+          nix flake update advisory-db || nix flake lock --update-input advisory-db
+          nix build -L .#ci.cargoAudit
 
   notifications:
     if: always() && github.repository == 'fedimint/fedimint'
