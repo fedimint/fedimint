@@ -11,9 +11,11 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{Transaction, TransactionSignature};
 use fedimint_core::Amount;
+use fedimint_logging::LOG_CLIENT;
 use itertools::multiunzip;
 use rand::{CryptoRng, Rng, RngCore};
 use secp256k1::Secp256k1;
+use tracing::warn;
 
 use crate::module::{IdxRange, OutPointRange, StateGenerator};
 use crate::sm::{self, DynState};
@@ -94,6 +96,10 @@ impl<I> ClientInputBundle<I, NeverClientStateMachine> {
     ///
     /// This avoids type inference issues of `S`, and saves some typing.
     pub fn new_no_sm(inputs: Vec<ClientInput<I>>) -> Self {
+        if inputs.is_empty() {
+            // TODO: Make it return Result or assert?
+            warn!(target: LOG_CLIENT, "Empty input bundle will be illegal in the future");
+        }
         Self {
             inputs,
             sms: vec![],
@@ -107,6 +113,10 @@ where
     S: sm::IState + MaybeSend + MaybeSync + 'static,
 {
     pub fn new(inputs: Vec<ClientInput<I>>, sms: Vec<ClientInputSM<S>>) -> Self {
+        if inputs.is_empty() {
+            // TODO: Make it return Result or assert?
+            warn!(target: LOG_CLIENT, "Empty input bundle will be illegal in the future");
+        }
         Self { inputs, sms }
     }
 
@@ -249,6 +259,10 @@ impl<O> ClientOutputBundle<O, NeverClientStateMachine> {
     ///
     /// This avoids type inference issues of `S`, and saves some typing.
     pub fn new_no_sm(outputs: Vec<ClientOutput<O>>) -> Self {
+        if outputs.is_empty() {
+            // TODO: Make it return Result or assert?
+            warn!(target: LOG_CLIENT, "Empty output bundle will be illegal in the future");
+        }
         Self {
             outputs,
             sms: vec![],
@@ -262,6 +276,10 @@ where
     S: sm::IState + MaybeSend + MaybeSync + 'static,
 {
     pub fn new(outputs: Vec<ClientOutput<O>>, sms: Vec<ClientOutputSM<S>>) -> Self {
+        if outputs.is_empty() {
+            // TODO: Make it return Result or assert?
+            warn!(target: LOG_CLIENT, "Empty output bundle will be illegal in the future");
+        }
         Self { outputs, sms }
     }
 
@@ -467,6 +485,8 @@ impl TransactionBuilder {
                             IdxRange::from_inclusive(input_idxs.clone()).expect("can't overflow"),
                         ))
                     } else {
+                        // TODO: In the future `InputBundle` and `OutputBundle` should make empty
+                        // bundles impossible, so this should not be possible
                         vec![]
                     }
                 })
@@ -487,6 +507,8 @@ impl TransactionBuilder {
                                     .expect("can't possibly overflow"),
                             ))
                         } else {
+                            // TODO: In the future `InputBundle` and `OutputBundle` should make
+                            // empty bundles impossible, so this should not be possible
                             vec![]
                         }
                     })
