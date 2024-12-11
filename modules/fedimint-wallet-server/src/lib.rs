@@ -36,7 +36,8 @@ use common::{
     WalletModuleTypes, WalletOutput, WalletOutputOutcome, WalletSummary, DEPRECATED_RBF_ERROR,
     FEERATE_MULTIPLIER,
 };
-use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+use fedimint_bitcoind::create_bitcoind;
+use fedimint_core::bitcoin_rpc::DynBitcoindRpc;
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,

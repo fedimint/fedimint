@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, ensure, Context};
 use bls12_381::{G1Projective, Scalar};
-use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+use fedimint_core::bitcoin_rpc::DynBitcoindRpc;
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -178,7 +178,7 @@ impl ServerModuleInit for LightningInit {
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
-        Ok(Lightning::new(args.cfg().to_typed()?)?.into())
+        Ok(Lightning::new(args.cfg().to_typed()?, args.dyn_bitcoin_rpc()).into())
     }
 
     fn trusted_dealer_gen(
@@ -628,10 +628,8 @@ impl ServerModule for Lightning {
 }
 
 impl Lightning {
-    fn new(cfg: LightningConfig) -> anyhow::Result<Self> {
-        let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
-
-        Ok(Lightning { cfg, btc_rpc })
+    fn new(cfg: LightningConfig, btc_rpc: DynBitcoindRpc) -> Self {
+        Lightning { cfg, btc_rpc }
     }
 
     async fn consensus_block_count(&self, dbtx: &mut DatabaseTransaction<'_>) -> u64 {
