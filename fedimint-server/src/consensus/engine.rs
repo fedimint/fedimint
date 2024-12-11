@@ -821,7 +821,7 @@ impl ConsensusEngine {
         loop {
             let result = federation_api
                 .request_with_strategy(
-                    FilterMap::new(filter_map.clone(), self.num_peers()),
+                    FilterMap::new(filter_map.clone()),
                     AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT.to_string(),
                     ApiRequestErased::new(index),
                 )

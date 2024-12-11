@@ -13,7 +13,6 @@ use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::util::backoff_util;
-use fedimint_core::NumPeers;
 use query::FilterMap;
 use tracing::debug;
 
@@ -52,16 +51,13 @@ impl Connector {
         api_secret: Option<String>,
     ) -> anyhow::Result<ClientConfig> {
         // TODO: use new download approach based on guardian PKs
-        let query_strategy = FilterMap::new(
-            move |cfg: ClientConfig| {
-                if federation_id != cfg.global.calculate_federation_id() {
-                    bail!("FederationId in invite code does not match client config")
-                }
+        let query_strategy = FilterMap::new(move |cfg: ClientConfig| {
+            if federation_id != cfg.global.calculate_federation_id() {
+                bail!("FederationId in invite code does not match client config")
+            }
 
-                Ok(cfg.global.api_endpoints)
-            },
-            NumPeers::from(1),
-        );
+            Ok(cfg.global.api_endpoints)
+        });
 
         let api_endpoints = api
             .request_with_strategy(
