@@ -24,6 +24,7 @@ pub const SET_CONFIG_GEN_PARAMS_ENDPOINT: &str = "set_config_gen_params";
 pub const SET_PASSWORD_ENDPOINT: &str = "set_password";
 pub const START_CONSENSUS_ENDPOINT: &str = "start_consensus";
 pub const STATUS_ENDPOINT: &str = "status";
+pub const SUBMIT_TRANSACTION_V2_ENDPOINT: &str = "submit_transaction_v2";
 pub const SUBMIT_TRANSACTION_ENDPOINT: &str = "submit_transaction";
 pub const VERIFIED_CONFIGS_ENDPOINT: &str = "verified_configs";
 pub const VERSION_ENDPOINT: &str = "version";

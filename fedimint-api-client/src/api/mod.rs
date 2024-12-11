@@ -455,6 +455,11 @@ impl DynGlobalApi {
 /// The API for the global (non-module) endpoints
 #[apply(async_trait_maybe_send!)]
 pub trait IGlobalFederationApi: IRawFederationApi {
+    async fn submit_transaction_v2(
+        &self,
+        tx: Transaction,
+    ) -> FederationResult<SerdeModuleEncoding<TransactionSubmissionOutcome>>;
+
     async fn submit_transaction(
         &self,
         tx: Transaction,

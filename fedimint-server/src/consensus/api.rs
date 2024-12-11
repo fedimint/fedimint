@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -27,7 +28,8 @@ use fedimint_core::endpoint_constants::{
     GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT,
     SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
     SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT,
-    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, SUBMIT_TRANSACTION_V2_ENDPOINT,
+    VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -50,7 +52,7 @@ use fedimint_core::{secp256k1, OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
 use futures::StreamExt;
 use tokio::sync::{watch, RwLock};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use crate::config::io::{
     CONSENSUS_CONFIG, ENCRYPTED_EXT, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG, SALT_FILE,
@@ -99,7 +101,7 @@ impl ConsensusApi {
 
     // we want to return an error if and only if the submitted transaction is
     // invalid and will be rejected if we were to submit it to consensus
-    pub async fn submit_transaction(
+    pub async fn submit_transaction_v2(
         &self,
         transaction: Transaction,
     ) -> Result<TransactionId, TransactionError> {
@@ -128,7 +130,52 @@ impl ConsensusApi {
             &transaction,
             self.cfg.consensus.version,
         )
-        .await?;
+        .await
+        .inspect_err(|e| {
+            debug!(target: LOG_NET_API, %txid, %e, "Transaction rejected");
+        })?;
+
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
+
+        loop {
+            tokio::select! {
+                _  = &mut Box::pin(interval.tick()) => {
+                    let _ = self.submission_sender
+                        .send(ConsensusItem::Transaction(transaction.clone()))
+                        .await
+                        .inspect_err(|e| {
+                            warn!(target: LOG_NET_API, %txid, %e, "Unable to submit tx to consensus");
+                        });
+                },
+                _ = self.await_transaction(txid) => return Ok(txid),
+            };
+        }
+    }
+
+    // we want to return an error if and only if the submitted transaction is
+    // invalid and will be rejected if we were to submit it to consensus
+    pub async fn submit_transaction(
+        &self,
+        transaction: Transaction,
+    ) -> Result<TransactionId, TransactionError> {
+        let txid = transaction.tx_hash();
+
+        debug!(target: LOG_NET_API, %txid, "Received a submitted transaction");
+
+        // Create read-only DB tx so that the read state is consistent
+        let mut dbtx = self.db.begin_transaction_nc().await;
+        // we already processed the transaction before
+        if dbtx
+            .get_value(&AcceptedTransactionKey(txid))
+            .await
+            .is_some()
+        {
+            debug!(target: LOG_NET_API, %txid, "Transaction already accepted");
+            return Ok(txid);
+        }
+
+        // We ignore any writes, as we only verify if the transaction is valid here
+        dbtx.ignore_uncommitted();
 
         self.submission_sender
             .send(ConsensusItem::Transaction(transaction))
@@ -524,6 +571,19 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> SupportedApiVersionsSummary {
                 Ok(fedimint.api_versions_summary().to_owned())
+            }
+        },
+        api_endpoint! {
+            SUBMIT_TRANSACTION_V2_ENDPOINT,
+            ApiVersion::new(0, 0),
+            async |fedimint: &ConsensusApi, _context, transaction: SerdeTransaction| -> SerdeModuleEncoding<TransactionSubmissionOutcome> {
+                let transaction = transaction
+                    .try_into_inner(&fedimint.modules.decoder_registry())
+                    .map_err(|e| ApiError::bad_request(e.to_string()))?;
+
+                // we return an inner error if and only if the submitted transaction is
+                // invalid and will be rejected if we were to submit it to consensus
+                Ok((&TransactionSubmissionOutcome(fedimint.submit_transaction_v2(transaction).await)).into())
             }
         },
         api_endpoint! {

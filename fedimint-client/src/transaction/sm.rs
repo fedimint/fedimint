@@ -85,6 +85,51 @@ impl State for TxSubmissionStatesSM {
                 let txid = transaction.tx_hash();
                 vec![
                     StateTransition::new(
+                        TxSubmissionStates::trigger_submit_v2(
+                            transaction.clone(),
+                            global_context.clone(),
+                        ),
+                        {
+                            let global_context = global_context.clone();
+                            move |sm_dbtx, result, _| {
+                                let global_context = global_context.clone();
+                                Box::pin(async move {
+                                    TxSubmissionStatesSM {
+                                        state: match result {
+                                            Ok(txid) => {
+                                                global_context
+                                                    .clone()
+                                                    .log_event(
+                                                        sm_dbtx,
+                                                        TxAcceptedEvent { txid, operation_id },
+                                                    )
+                                                    .await;
+
+                                                TxSubmissionStates::Accepted(txid)
+                                            }
+                                            Err(error) => {
+                                                global_context
+                                                    .clone()
+                                                    .log_event(
+                                                        sm_dbtx,
+                                                        TxRejectedEvent {
+                                                            txid,
+                                                            operation_id,
+                                                            error: error.clone(),
+                                                        },
+                                                    )
+                                                    .await;
+
+                                                TxSubmissionStates::Rejected(txid, error)
+                                            }
+                                        },
+                                        operation_id,
+                                    }
+                                })
+                            }
+                        },
+                    ),
+                    StateTransition::new(
                         TxSubmissionStates::trigger_created_rejected(
                             transaction.clone(),
                             global_context.clone(),
@@ -146,6 +191,31 @@ impl State for TxSubmissionStatesSM {
 }
 
 impl TxSubmissionStates {
+    async fn trigger_submit_v2(
+        transaction: Transaction,
+        context: DynGlobalClientContext,
+    ) -> Result<TransactionId, String> {
+        loop {
+            match context
+                .api()
+                .submit_transaction_v2(transaction.clone())
+                .await
+            {
+                Ok(serde_outcome) => match serde_outcome.try_into_inner(context.decoders()) {
+                    Ok(outcome) => return outcome.0.map_err(|e| e.to_string()),
+                    Err(decode_error) => {
+                        warn!(target: LOG_CLIENT_NET_API, error = %decode_error, "Failed to decode SerdeModuleEncoding");
+                    }
+                },
+                Err(error) => {
+                    error.report_if_important();
+                }
+            }
+
+            sleep(RETRY_INTERVAL).await;
+        }
+    }
+
     async fn trigger_created_rejected(tx: Transaction, context: DynGlobalClientContext) -> String {
         loop {
             match context.api().submit_transaction(tx.clone()).await {

@@ -23,7 +23,8 @@ use fedimint_core::endpoint_constants::{
     SESSION_STATUS_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT, SET_CONFIG_GEN_PARAMS_ENDPOINT,
     SET_PASSWORD_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT,
     START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
-    SUBMIT_TRANSACTION_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, SUBMIT_TRANSACTION_V2_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT,
+    VERIFY_CONFIG_HASH_ENDPOINT,
 };
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -235,6 +236,17 @@ where
             Err(NoCacheErr::Pending(s)) => Ok(SessionStatus::Pending(s)),
             Err(NoCacheErr::Err(e)) => Err(e),
         }
+    }
+
+    async fn submit_transaction_v2(
+        &self,
+        tx: Transaction,
+    ) -> FederationResult<SerdeModuleEncoding<TransactionSubmissionOutcome>> {
+        self.request_current_consensus(
+            SUBMIT_TRANSACTION_V2_ENDPOINT.to_owned(),
+            ApiRequestErased::new(SerdeTransaction::from(&tx)),
+        )
+        .await
     }
 
     /// Submit a transaction for inclusion
