@@ -1201,7 +1201,7 @@ impl Client {
         &self,
         operation_id: OperationId,
         operation_type: &str,
-        operation_meta: F,
+        operation_meta_gen: F,
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
     where
@@ -1216,7 +1216,7 @@ impl Client {
                 |dbtx, _| {
                     let operation_type = operation_type.clone();
                     let tx_builder = tx_builder.clone();
-                    let operation_meta = operation_meta.clone();
+                    let operation_meta_gen = operation_meta_gen.clone();
                     Box::pin(async move {
                         if Client::operation_exists_dbtx(dbtx, operation_id).await {
                             bail!("There already exists an operation with id {operation_id:?}")
@@ -1231,7 +1231,7 @@ impl Client {
                                 dbtx,
                                 operation_id,
                                 &operation_type,
-                                operation_meta(txid, change.clone()),
+                                operation_meta_gen(txid, change.clone()),
                             )
                             .await;
 
