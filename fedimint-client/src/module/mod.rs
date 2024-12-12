@@ -268,7 +268,7 @@ where
         &self,
         operation_id: OperationId,
         outputs: Vec<OutPoint>,
-    ) -> anyhow::Result<Amount> {
+    ) -> anyhow::Result<()> {
         self.client
             .get()
             .await_primary_module_outputs(operation_id, outputs)
@@ -693,7 +693,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         &self,
         _operation_id: OperationId,
         _out_point: OutPoint,
-    ) -> anyhow::Result<Amount> {
+    ) -> anyhow::Result<()> {
         unimplemented!()
     }
 
@@ -813,7 +813,7 @@ pub trait IClientModule: Debug {
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -> anyhow::Result<Amount>;
+    ) -> anyhow::Result<()>;
 
     async fn get_balance(
         &self,
@@ -928,7 +928,7 @@ where
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -> anyhow::Result<Amount> {
+    ) -> anyhow::Result<()> {
         <T as ClientModule>::await_primary_module_output(self, operation_id, out_point).await
     }
 

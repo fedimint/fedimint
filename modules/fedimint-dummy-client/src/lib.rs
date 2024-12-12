@@ -185,18 +185,18 @@ impl ClientModule for DummyClientModule {
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -> anyhow::Result<Amount> {
+    ) -> anyhow::Result<()> {
         let stream = self
             .notifier
             .subscribe(operation_id)
             .await
             .filter_map(|state| async move {
                 match state {
-                    DummyStateMachine::OutputDone(amount, txid, _) => {
+                    DummyStateMachine::OutputDone(_, txid, _) => {
                         if txid != out_point.txid {
                             return None;
                         }
-                        Some(Ok(amount))
+                        Some(Ok(()))
                     }
                     DummyStateMachine::Refund(_) => Some(Err(anyhow::anyhow!(
                         "Error occurred processing the dummy transaction"

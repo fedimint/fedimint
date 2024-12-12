@@ -1301,7 +1301,7 @@ impl LightningClientModule {
                             IncomingSmStates::Preimage(preimage) => break InternalPayState::Preimage(preimage),
                             IncomingSmStates::RefundSubmitted{ out_points, error } => {
                                 match client_ctx.await_primary_module_outputs(operation_id, out_points.clone()).await {
-                                    Ok(_) => break InternalPayState::RefundSuccess { out_points, error },
+                                    Ok(()) => break InternalPayState::RefundSuccess { out_points, error },
                                     Err(e) => break InternalPayState::RefundError{ error_message: e.to_string(), error },
                                 }
                             },
@@ -1403,7 +1403,7 @@ impl LightningClientModule {
                         } else {
                             yield LnPayState::AwaitingChange;
                             match client_ctx.await_primary_module_outputs(operation_id, change.clone()).await {
-                                Ok(_) => {
+                                Ok(()) => {
                                     yield LnPayState::Success { preimage };
                                 }
                                 Err(e) => {
@@ -1418,7 +1418,7 @@ impl LightningClientModule {
                         };
 
                         match client_ctx.await_primary_module_outputs(operation_id, refund.out_points).await {
-                            Ok(_) => {
+                            Ok(()) => {
                                 let gateway_error = GatewayPayError::GatewayInternalError { error_code: Some(500), error_message: refund.error_reason };
                                 yield LnPayState::Refunded { gateway_error };
                             }
