@@ -1410,30 +1410,15 @@ impl Wallet {
         change_tweak: &[u8; 33],
     ) -> Result<UnsignedTransaction, WalletOutputError> {
         match output {
-            WalletOutputV0::PegOut(peg_out) => {
-                let recipient = peg_out
-                    .recipient
-                    .clone()
-                    .require_network(self.cfg.consensus.network.0)
-                    .map_err(|_| {
-                        WalletOutputError::WrongNetwork(
-                            self.cfg.consensus.network.clone(),
-                            NetworkLegacyEncodingWrapper(get_network_for_address(
-                                &peg_out.recipient,
-                            )),
-                        )
-                    })?;
-
-                self.offline_wallet().create_tx(
-                    peg_out.amount,
-                    recipient.script_pubkey(),
-                    vec![],
-                    self.available_utxos(dbtx).await,
-                    peg_out.fees.fee_rate,
-                    change_tweak,
-                    None,
-                )
-            }
+            WalletOutputV0::PegOut(peg_out) => self.offline_wallet().create_tx(
+                peg_out.amount,
+                peg_out.recipient.script_pubkey(),
+                vec![],
+                self.available_utxos(dbtx).await,
+                peg_out.fees.fee_rate,
+                change_tweak,
+                None,
+            ),
             WalletOutputV0::Rbf(rbf) => {
                 let tx = dbtx
                     .get_value(&PendingTransactionKey(rbf.txid))
@@ -1775,10 +1760,16 @@ impl<'a> StatelessWallet<'a> {
         network: Network,
     ) -> Result<(), WalletOutputError> {
         if let WalletOutputV0::PegOut(peg_out) = output {
-            if !peg_out.recipient.is_valid_for_network(network) {
+            if !peg_out
+                .recipient
+                .as_unchecked()
+                .is_valid_for_network(network)
+            {
                 return Err(WalletOutputError::WrongNetwork(
                     NetworkLegacyEncodingWrapper(network),
-                    NetworkLegacyEncodingWrapper(get_network_for_address(&peg_out.recipient)),
+                    NetworkLegacyEncodingWrapper(get_network_for_address(
+                        peg_out.recipient.as_unchecked(),
+                    )),
                 ));
             }
         }
@@ -2222,7 +2213,9 @@ mod tests {
             amount: bitcoin::Amount::from_sat(3000),
         };
 
-        let recipient = Address::from_str("32iVBEu4dxkUQk9dJbZUiBiQdmypcEyJRf").unwrap();
+        let recipient = Address::from_str("32iVBEu4dxkUQk9dJbZUiBiQdmypcEyJRf")
+            .unwrap()
+            .assume_checked();
 
         let fee = Feerate { sats_per_kvb: 1000 };
         let weight = 875;
@@ -2233,7 +2226,7 @@ mod tests {
         // spendable sats = 3000 - 219 - 330 = 2451
         let tx = wallet.create_tx(
             Amount::from_sat(2452),
-            recipient.clone().assume_checked().script_pubkey(),
+            recipient.script_pubkey(),
             vec![],
             vec![(UTXOKey(OutPoint::null()), spendable.clone())],
             fee,
@@ -2246,7 +2239,7 @@ mod tests {
         let mut tx = wallet
             .create_tx(
                 Amount::from_sat(1000),
-                recipient.clone().assume_checked().script_pubkey(),
+                recipient.script_pubkey(),
                 vec![],
                 vec![(UTXOKey(OutPoint::null()), spendable)],
                 fee,

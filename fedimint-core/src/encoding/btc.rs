@@ -2,7 +2,6 @@ use std::io::{Error, Write};
 use std::str::FromStr;
 
 use anyhow::format_err;
-use bitcoin::address::NetworkUnchecked;
 use bitcoin::hashes::Hash as BitcoinHash;
 use hex::{FromHex, ToHex};
 use lightning::util::ser::{BigSize, Readable, Writeable};
@@ -200,24 +199,17 @@ impl Decodable for bitcoin::Amount {
     }
 }
 
-impl Encodable for bitcoin::Address<NetworkUnchecked> {
+impl Encodable for bitcoin::Address {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         let mut len = 0;
-        len +=
-            NetworkLegacyEncodingWrapper(get_network_for_address(self)).consensus_encode(writer)?;
-        len += self
-            .clone()
-            // We need an `Address<NetworkChecked>` in order to get the script pubkey.
-            // Calling `assume_checked` is generally a bad idea, but it's safe here where we're
-            // encoding the address because addresses are always decoded as unchecked.
-            .assume_checked()
-            .script_pubkey()
+        len += NetworkLegacyEncodingWrapper(get_network_for_address(self.as_unchecked()))
             .consensus_encode(writer)?;
+        len += self.script_pubkey().consensus_encode(writer)?;
         Ok(len)
     }
 }
 
-impl Decodable for bitcoin::Address<NetworkUnchecked> {
+impl Decodable for bitcoin::Address {
     fn consensus_decode<D: std::io::Read>(
         mut d: &mut D,
         modules: &ModuleDecoderRegistry,
@@ -225,10 +217,10 @@ impl Decodable for bitcoin::Address<NetworkUnchecked> {
         let network = NetworkLegacyEncodingWrapper::consensus_decode(&mut d, modules)?.0;
         let script_pk = bitcoin::ScriptBuf::consensus_decode(&mut d, modules)?;
 
-        let address = bitcoin::Address::from_script(&script_pk, network)
+        let address = Self::from_script(&script_pk, network)
             .map_err(|e| DecodeError::new_custom(e.into()))?;
 
-        Ok(address.into_unchecked())
+        Ok(address)
     }
 }
 
@@ -569,8 +561,9 @@ mod tests {
         ];
 
         for address_str in addresses {
-            let address =
-                bitcoin::Address::from_str(address_str).expect("All tested addresses are valid");
+            let address = bitcoin::Address::from_str(address_str)
+                .expect("All tested addresses are valid")
+                .assume_checked();
             let encoding = address.consensus_encode_to_vec();
             let mut cursor = Cursor::new(encoding);
             let parsed_address =

@@ -7,7 +7,6 @@
 
 use std::hash::Hasher;
 
-use bitcoin::address::NetworkUnchecked;
 use bitcoin::psbt::raw::ProprietaryKey;
 use bitcoin::{secp256k1, Address, Amount, BlockHash, TxOut, Txid};
 use config::WalletClientConfig;
@@ -243,9 +242,9 @@ impl PegOutFees {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Encodable, Decodable)]
 pub struct PegOut {
-    pub recipient: Address<NetworkUnchecked>,
+    pub recipient: Address,
     #[serde(with = "bitcoin::amount::serde::as_sat")]
     pub amount: bitcoin::Amount,
     pub fees: PegOutFees,
@@ -391,7 +390,7 @@ impl WalletOutput {
         fees: PegOutFees,
     ) -> WalletOutput {
         WalletOutput::V0(WalletOutputV0::PegOut(PegOut {
-            recipient: recipient.into_unchecked(),
+            recipient,
             amount,
             fees,
         }))
@@ -401,7 +400,7 @@ impl WalletOutput {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Encodable, Decodable)]
 pub enum WalletOutputV0 {
     PegOut(PegOut),
     Rbf(Rbf),
@@ -429,12 +428,7 @@ impl std::fmt::Display for WalletOutputV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             WalletOutputV0::PegOut(pegout) => {
-                write!(
-                    f,
-                    "Wallet PegOut {} to {}",
-                    pegout.amount,
-                    pegout.recipient.clone().assume_checked()
-                )
+                write!(f, "Wallet PegOut {} to {}", pegout.amount, pegout.recipient)
             }
             WalletOutputV0::Rbf(rbf) => write!(f, "Wallet RBF {:?} to {}", rbf.fees, rbf.txid),
         }

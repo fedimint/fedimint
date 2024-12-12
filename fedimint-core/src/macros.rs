@@ -751,7 +751,6 @@ macro_rules! extensible_associated_module_type {
             Eq,
             PartialEq,
             Hash,
-            serde::Deserialize,
             serde::Serialize,
             fedimint_core::encoding::Encodable,
             fedimint_core::encoding::Decodable,
