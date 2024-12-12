@@ -1531,7 +1531,7 @@ impl Client {
             runtime::sleep(delay).await;
             (
                 peer_id,
-                api.request_single_peer_typed::<SupportedApiVersionsSummary>(
+                api.request_single_peer::<SupportedApiVersionsSummary>(
                     VERSION_ENDPOINT.to_owned(),
                     ApiRequestErased::default(),
                     peer_id,

@@ -116,19 +116,7 @@ pub trait IRawFederationApi: Debug + MaybeSend + MaybeSync {
 /// [`IRawFederationApi`].
 #[apply(async_trait_maybe_send!)]
 pub trait FederationApiExt: IRawFederationApi {
-    /// Make a request to a single peer in the federation with an optional
-    /// timeout.
-    async fn request_single_peer(
-        &self,
-        method: String,
-        params: ApiRequestErased,
-        peer_id: PeerId,
-    ) -> JsonRpcResult<jsonrpsee_core::JsonValue> {
-        self.request_raw(peer_id, &method, &[params.to_json()])
-            .await
-    }
-
-    async fn request_single_peer_typed<Ret>(
+    async fn request_single_peer<Ret>(
         &self,
         method: String,
         params: ApiRequestErased,
@@ -137,7 +125,7 @@ pub trait FederationApiExt: IRawFederationApi {
     where
         Ret: DeserializeOwned,
     {
-        self.request_single_peer(method, params, peer_id)
+        self.request_raw(peer_id, &method, &[params.to_json()])
             .await
             .map_err(PeerError::Rpc)
             .and_then(|v| {
@@ -145,8 +133,6 @@ pub trait FederationApiExt: IRawFederationApi {
             })
     }
 
-    /// Like [`Self::request_single_peer`], but API more like
-    /// [`Self::request_with_strategy`].
     async fn request_single_peer_federation<FedRet>(
         &self,
         method: String,
@@ -156,25 +142,24 @@ pub trait FederationApiExt: IRawFederationApi {
     where
         FedRet: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
-        Ok(self
-            .request_single_peer(method.clone(), params.clone(), peer_id)
+        self.request_raw(peer_id, &method, &[params.to_json()])
             .await
             .map_err(PeerError::Rpc)
             .and_then(|v| {
                 serde_json::from_value(v).map_err(|e| PeerError::ResponseDeserialization(e.into()))
             })
-            .map_err(|e| error::FederationError::new_one_peer(peer_id, method, params, e))?)
+            .map_err(|e| error::FederationError::new_one_peer(peer_id, method, params, e))
     }
 
     /// Make an aggregate request to federation, using `strategy` to logically
     /// merge the responses.
     #[instrument(target = "fm::api", skip_all, fields(method=method))]
-    async fn request_with_strategy<PeerRet: serde::de::DeserializeOwned, FedRet: Debug>(
+    async fn request_with_strategy<PR: DeserializeOwned, FR: Debug>(
         &self,
-        mut strategy: impl QueryStrategy<PeerRet, FedRet> + MaybeSend,
+        mut strategy: impl QueryStrategy<PR, FR> + MaybeSend,
         method: String,
         params: ApiRequestErased,
-    ) -> FederationResult<FedRet> {
+    ) -> FederationResult<FR> {
         // NOTE: `FuturesUnorderded` is a footgun, but all we do here is polling
         // completed results from it and we don't do any `await`s when
         // processing them, it should be totally OK.
@@ -189,7 +174,7 @@ pub trait FederationApiExt: IRawFederationApi {
                 let params = &params;
                 async move {
                     let result = self
-                        .request_single_peer_typed(method.clone(), params.clone(), *peer)
+                        .request_single_peer(method.clone(), params.clone(), *peer)
                         .await;
 
                     (*peer, result)
@@ -215,11 +200,7 @@ pub trait FederationApiExt: IRawFederationApi {
                                 let params = &params;
                                 async move {
                                     let result = self
-                                        .request_single_peer_typed(
-                                            method.clone(),
-                                            params.clone(),
-                                            peer,
-                                        )
+                                        .request_single_peer(method.clone(), params.clone(), peer)
                                         .await;
 
                                     (peer, result)
@@ -250,8 +231,7 @@ pub trait FederationApiExt: IRawFederationApi {
         }
     }
 
-    #[instrument(target = "fm::api", skip_all, fields(method=method))]
-    async fn request_with_strategy_and_retry<PR: DeserializeOwned + MaybeSend, FR: Debug>(
+    async fn request_with_strategy_retry<PR: DeserializeOwned + MaybeSend, FR: Debug>(
         &self,
         mut strategy: impl QueryStrategy<PR, FR> + MaybeSend,
         method: String,
@@ -274,7 +254,7 @@ pub trait FederationApiExt: IRawFederationApi {
                         "api-request-{method}-{peer}",
                         api_networking_backoff(),
                         || async {
-                            self.request_single_peer_typed(method.clone(), params.clone(), *peer)
+                            self.request_single_peer(method.clone(), params.clone(), *peer)
                                 .await
                                 .inspect_err(|e| e.report_if_important(*peer))
                                 .map_err(|e| anyhow!(e.to_string()))
@@ -305,7 +285,7 @@ pub trait FederationApiExt: IRawFederationApi {
                                     "api-request-{method}-{peer}",
                                     api_networking_backoff(),
                                     || async {
-                                        self.request_single_peer_typed(
+                                        self.request_single_peer(
                                             method.clone(),
                                             params.clone(),
                                             peer,
@@ -338,7 +318,7 @@ pub trait FederationApiExt: IRawFederationApi {
         params: ApiRequestErased,
     ) -> FederationResult<Ret>
     where
-        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
+        Ret: DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         self.request_with_strategy(
             ThresholdConsensus::new(self.all_peers().to_num_peers()),
@@ -354,9 +334,9 @@ pub trait FederationApiExt: IRawFederationApi {
         params: ApiRequestErased,
     ) -> Ret
     where
-        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
+        Ret: DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
-        self.request_with_strategy_and_retry(
+        self.request_with_strategy_retry(
             ThresholdConsensus::new(self.all_peers().to_num_peers()),
             method,
             params,
@@ -371,7 +351,7 @@ pub trait FederationApiExt: IRawFederationApi {
         auth: ApiAuth,
     ) -> FederationResult<Ret>
     where
-        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
+        Ret: DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         let Some(self_peer_id) = self.self_peer() else {
             return Err(FederationError::general(
@@ -390,7 +370,7 @@ pub trait FederationApiExt: IRawFederationApi {
         params: ApiRequestErased,
     ) -> FederationResult<Ret>
     where
-        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
+        Ret: DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         let Some(self_peer_id) = self.self_peer() else {
             return Err(FederationError::general(
