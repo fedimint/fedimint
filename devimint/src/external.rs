@@ -847,12 +847,9 @@ pub async fn open_channel(
     cln: &Lightningd,
     lnd: &Lnd,
 ) -> Result<()> {
-    debug!(target: LOG_DEVIMINT, "Opening channel between gateways (the old way)");
-
     debug!(target: LOG_DEVIMINT, "Await block ln nodes block processing");
     tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
 
-    info!(target: LOG_DEVIMINT, "Opening LN channel between CLN and LND");
     let cln_addr = cln
         .request(cln_rpc::model::requests::NewaddrRequest { addresstype: None })
         .await?
@@ -998,7 +995,7 @@ pub async fn open_channels_between_gateways(
             let gw_b_name = (*gw_b_name).to_string();
 
             let sats_per_side = 5_000_000;
-            info!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Opening channel with {sats_per_side} sats on each side...");
+            debug!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Opening channel with {sats_per_side} sats on each side...");
             tokio::task::spawn(async move {
                 // Sometimes channel openings just after funding the lightning nodes don't work right away.
                 let res = poll_with_timeout(&format!("Open channel from {gw_a_name} to {gw_b_name}"), Duration::from_secs(30), || async {
