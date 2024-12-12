@@ -45,7 +45,7 @@ where
             .await;
 
         if let Err(e) = &response {
-            for e in e.peers.values() {
+            for e in e.peer_errors.values() {
                 if e.to_string().contains("Method not found") {
                     return Ok(ModuleConsensusVersion::new(2, 0));
                 }

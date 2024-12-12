@@ -454,7 +454,7 @@ where
                 method: SUBMIT_API_ANNOUNCEMENT_ENDPOINT.to_string(),
                 params: serde_json::to_value(announcement).expect("can be serialized"),
                 general: None,
-                peers: peer_errors,
+                peer_errors,
             })
         }
     }

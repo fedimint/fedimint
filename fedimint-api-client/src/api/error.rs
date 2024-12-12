@@ -67,7 +67,7 @@ pub struct FederationError {
     pub method: String,
     pub params: serde_json::Value,
     pub general: Option<anyhow::Error>,
-    pub peers: BTreeMap<PeerId, PeerError>,
+    pub peer_errors: BTreeMap<PeerId, PeerError>,
 }
 
 impl Display for FederationError {
@@ -80,13 +80,13 @@ impl Display for FederationError {
                 AbbreviateJson(&self.params)
             ))?;
             f.write_fmt(format_args!("general => {general})"))?;
-            if !self.peers.is_empty() {
+            if !self.peer_errors.is_empty() {
                 f.write_str(", ")?;
             }
         }
-        for (i, (peer, e)) in self.peers.iter().enumerate() {
+        for (i, (peer, e)) in self.peer_errors.iter().enumerate() {
             f.write_fmt(format_args!("{peer} => {e})"))?;
-            if i == self.peers.len() - 1 {
+            if i == self.peer_errors.len() - 1 {
                 f.write_str(", ")?;
             }
         }
@@ -105,7 +105,32 @@ impl FederationError {
             method: method.into(),
             params: serde_json::to_value(params).unwrap_or_default(),
             general: Some(e.into()),
-            peers: BTreeMap::default(),
+            peer_errors: BTreeMap::default(),
+        }
+    }
+
+    pub(crate) fn peer_errors(
+        method: impl Into<String>,
+        params: impl Serialize,
+        peer_errors: BTreeMap<PeerId, PeerError>,
+    ) -> Self {
+        use std::fmt::Write;
+        let general_fmt = peer_errors
+            .iter()
+            .fold(String::new(), |mut s, (peer_id, e)| {
+                if !s.is_empty() {
+                    write!(s, ", ").expect("can't fail");
+                }
+                write!(s, "peer-{peer_id}: {e}").expect("can't fail");
+
+                s
+            });
+
+        Self {
+            method: method.into(),
+            params: serde_json::to_value(params).unwrap_or_default(),
+            general: Some(anyhow::anyhow!("Received errors from peers: {general_fmt}",)),
+            peer_errors,
         }
     }
 
@@ -119,7 +144,7 @@ impl FederationError {
             method: method.into(),
             params: serde_json::to_value(params).expect("Serialization of valid params won't fail"),
             general: None,
-            peers: [(peer_id, error)].into_iter().collect(),
+            peer_errors: [(peer_id, error)].into_iter().collect(),
         }
     }
 
@@ -128,7 +153,7 @@ impl FederationError {
         if let Some(error) = self.general.as_ref() {
             warn!(target: LOG_CLIENT_NET_API, %error, "General FederationError");
         }
-        for (peer_id, e) in &self.peers {
+        for (peer_id, e) in &self.peer_errors {
             e.report_if_important(*peer_id);
         }
     }
@@ -140,7 +165,7 @@ impl FederationError {
 
     /// Get errors from different peers.
     pub fn get_peer_errors(&self) -> impl Iterator<Item = (PeerId, &PeerError)> {
-        self.peers.iter().map(|(peer, error)| (*peer, error))
+        self.peer_errors.iter().map(|(peer, error)| (*peer, error))
     }
 }
 
