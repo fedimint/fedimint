@@ -1262,7 +1262,9 @@
 <a href="#1261" id="1261">1261</a>
 <a href="#1262" id="1262">1262</a>
 <a href="#1263" id="1263">1263</a>
-<a href="#1264" id="1264">1264</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
+<a href="#1264" id="1264">1264</a>
+<a href="#1265" id="1265">1265</a>
+<a href="#1266" id="1266">1266</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::result;
@@ -1445,6 +1447,7 @@
 
     <span class="doccomment">/// Make an aggregate request to federation, using `strategy` to logically
     /// merge the responses.
+    </span><span class="attr">#[instrument(target = <span class="string">"fm::api"</span>, skip_all, fields(method=method))]
     </span><span class="kw">async fn </span>request_with_strategy&lt;PeerRet: serde::de::DeserializeOwned, FedRet: Debug&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="kw-2">mut </span>strategy: <span class="kw">impl </span>QueryStrategy&lt;PeerRet, FedRet&gt; + MaybeSend,
@@ -1527,7 +1530,8 @@
         }
     }
 
-    <span class="kw">async fn </span>request_with_strategy_and_retry&lt;PR: DeserializeOwned + MaybeSend, FR: Debug&gt;(
+    <span class="attr">#[instrument(target = <span class="string">"fm::api"</span>, skip_all, fields(method=method))]
+    </span><span class="kw">async fn </span>request_with_strategy_and_retry&lt;PR: DeserializeOwned + MaybeSend, FR: Debug&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="kw-2">mut </span>strategy: <span class="kw">impl </span>QueryStrategy&lt;PR, FR&gt; + MaybeSend,
         method: String,
