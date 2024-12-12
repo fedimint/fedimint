@@ -296,7 +296,7 @@ pub(crate) async fn transition_btc_tx_confirmed(
         amount,
     };
 
-    let (fm_txid, change) = global_context
+    let change_range = global_context
         .claim_inputs(dbtx, ClientInputBundle::new_no_sm(vec![client_input]))
         .await
         .expect("Cannot claim input, additional funding needed");
@@ -304,8 +304,8 @@ pub(crate) async fn transition_btc_tx_confirmed(
     DepositStateMachine {
         operation_id: old_state.operation_id,
         state: DepositStates::Claiming(ClaimingDepositState {
-            transaction_id: fm_txid,
-            change,
+            transaction_id: change_range.txid(),
+            change: change_range.into_iter().collect(),
         }),
     }
 }

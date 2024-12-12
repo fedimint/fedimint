@@ -218,7 +218,7 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
         .finalize_and_submit_transaction(
             OperationId::new_random(),
             "Claiming Outgoing Contract",
-            |_, _| (),
+            |_| (),
             TransactionBuilder::new().with_inputs(
                 ClientInputBundle::new_no_sm(vec![client_input]).into_dyn(lnv2_module_id),
             ),

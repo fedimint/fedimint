@@ -820,7 +820,7 @@ impl WalletClientModule {
                 };
 
                 match stream_client_ctx.await_primary_module_outputs(operation_id, claim_data.change).await {
-                    Ok(_) => yield DepositStateV2::Claimed {
+                    Ok(()) => yield DepositStateV2::Claimed {
                         btc_deposited,
                         btc_out_point
                     },
@@ -1028,12 +1028,12 @@ impl WalletClientModule {
                 .finalize_and_submit_transaction(
                     operation_id,
                     WalletCommonInit::KIND.as_str(),
-                    |_, change| WalletOperationMeta {
+                    |change_range: OutPointRange| WalletOperationMeta {
                         variant: WalletOperationMetaVariant::Withdraw {
                             address: address.clone(),
                             amount,
                             fee,
-                            change,
+                            change: change_range.into_iter().collect(),
                         },
                         extra_meta: extra_meta.clone(),
                     },
@@ -1069,10 +1069,10 @@ impl WalletClientModule {
             .finalize_and_submit_transaction(
                 operation_id,
                 WalletCommonInit::KIND.as_str(),
-                |_, change| WalletOperationMeta {
+                |change_range: OutPointRange| WalletOperationMeta {
                     variant: WalletOperationMetaVariant::RbfWithdraw {
                         rbf: rbf.clone(),
-                        change,
+                        change: change_range.into_iter().collect(),
                     },
                     extra_meta: extra_meta.clone(),
                 },
