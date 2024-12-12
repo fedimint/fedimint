@@ -3166,10 +3166,7 @@
 <a href="#3165" id="3165">3165</a>
 <a href="#3166" id="3166">3166</a>
 <a href="#3167" id="3167">3167</a>
-<a href="#3168" id="3168">3168</a>
-<a href="#3169" id="3169">3169</a>
-<a href="#3170" id="3170">3170</a>
-<a href="#3171" id="3171">3171</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#3168" id="3168">3168</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
@@ -4540,7 +4537,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -&gt; anyhow::Result&lt;Amount&gt; {
+    ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="self">self</span>.primary_module()
             .await_primary_module_output(operation_id, out_point)
             .<span class="kw">await
@@ -4617,16 +4614,13 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         outputs: Vec&lt;OutPoint&gt;,
-    ) -&gt; anyhow::Result&lt;Amount&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>amount = Amount::ZERO;
-
+    ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">for </span>out_point <span class="kw">in </span>outputs {
-            amount += <span class="self">self
-                </span>.await_primary_module_output(operation_id, out_point)
+            <span class="self">self</span>.await_primary_module_output(operation_id, out_point)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
         }
 
-        <span class="prelude-val">Ok</span>(amount)
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="doccomment">/// Returns the config of the client in JSON format.

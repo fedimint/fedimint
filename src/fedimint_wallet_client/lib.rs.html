@@ -2198,7 +2198,7 @@
                 };
 
                 <span class="kw">match </span>stream_client_ctx.await_primary_module_outputs(operation_id, claim_data.change).<span class="kw">await </span>{
-                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">yield </span>DepositStateV2::Claimed {
+                    <span class="prelude-val">Ok</span>(()) =&gt; <span class="kw">yield </span>DepositStateV2::Claimed {
                         btc_deposited,
                         btc_out_point
                     },

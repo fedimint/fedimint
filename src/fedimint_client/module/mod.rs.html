@@ -1341,7 +1341,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         outputs: Vec&lt;OutPoint&gt;,
-    ) -&gt; anyhow::Result&lt;Amount&gt; {
+    ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="self">self</span>.client
             .get()
             .await_primary_module_outputs(operation_id, outputs)
@@ -1766,7 +1766,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _operation_id: OperationId,
         _out_point: OutPoint,
-    ) -&gt; anyhow::Result&lt;Amount&gt; {
+    ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">unimplemented!</span>()
     }
 
@@ -1886,7 +1886,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -&gt; anyhow::Result&lt;Amount&gt;;
+    ) -&gt; anyhow::Result&lt;()&gt;;
 
     <span class="kw">async fn </span>get_balance(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -2001,7 +2001,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -&gt; anyhow::Result&lt;Amount&gt; {
+    ) -&gt; anyhow::Result&lt;()&gt; {
         &lt;T <span class="kw">as </span>ClientModule&gt;::await_primary_module_output(<span class="self">self</span>, operation_id, out_point).<span class="kw">await
     </span>}
 
