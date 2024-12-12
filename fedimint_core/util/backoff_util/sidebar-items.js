@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["aggressive_backoff","aggressive_backoff_long","background_backoff","custom_backoff","fibonacci_max_one_hour"],"trait":["Backoff"]};
+window.SIDEBAR_ITEMS = {"fn":["aggressive_backoff","aggressive_backoff_long","api_networking_backoff","background_backoff","custom_backoff","fibonacci_max_one_hour"],"trait":["Backoff"]};

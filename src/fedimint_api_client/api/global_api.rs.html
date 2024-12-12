@@ -500,8 +500,7 @@
 <a href="#499" id="499">499</a>
 <a href="#500" id="500">500</a>
 <a href="#501" id="501">501</a>
-<a href="#502" id="502">502</a>
-<a href="#503" id="503">503</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
+<a href="#502" id="502">502</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::num::NonZeroUsize;
 <span class="kw">use </span>std::result;
@@ -740,12 +739,11 @@
         }
     }
 
-    <span class="doccomment">/// Submit a transaction for inclusion
-    </span><span class="kw">async fn </span>submit_transaction(
+    <span class="kw">async fn </span>submit_transaction(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         tx: Transaction,
-    ) -&gt; FederationResult&lt;SerdeModuleEncoding&lt;TransactionSubmissionOutcome&gt;&gt; {
-        <span class="self">self</span>.request_current_consensus(
+    ) -&gt; SerdeModuleEncoding&lt;TransactionSubmissionOutcome&gt; {
+        <span class="self">self</span>.request_current_consensus_retry(
             SUBMIT_TRANSACTION_ENDPOINT.to_owned(),
             ApiRequestErased::new(SerdeTransaction::from(<span class="kw-2">&amp;</span>tx)),
         )
@@ -760,8 +758,8 @@
         .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>await_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: TransactionId) -&gt; FederationResult&lt;TransactionId&gt; {
-        <span class="self">self</span>.request_current_consensus(
+    <span class="kw">async fn </span>await_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: TransactionId) -&gt; TransactionId {
+        <span class="self">self</span>.request_current_consensus_retry(
             AWAIT_TRANSACTION_ENDPOINT.to_owned(),
             ApiRequestErased::new(txid),
         )

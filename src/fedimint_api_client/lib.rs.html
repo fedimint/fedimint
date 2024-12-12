@@ -84,11 +84,7 @@
 <a href="#83" id="83">83</a>
 <a href="#84" id="84">84</a>
 <a href="#85" id="85">85</a>
-<a href="#86" id="86">86</a>
-<a href="#87" id="87">87</a>
-<a href="#88" id="88">88</a>
-<a href="#89" id="89">89</a>
-<a href="#90" id="90">90</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#86" id="86">86</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -103,7 +99,6 @@
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::util::backoff_util;
-<span class="kw">use </span>fedimint_core::NumPeers;
 <span class="kw">use </span>query::FilterMap;
 <span class="kw">use </span>tracing::debug;
 
@@ -142,16 +137,13 @@
         api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
     ) -&gt; anyhow::Result&lt;ClientConfig&gt; {
         <span class="comment">// TODO: use new download approach based on guardian PKs
-        </span><span class="kw">let </span>query_strategy = FilterMap::new(
-            <span class="kw">move </span>|cfg: ClientConfig| {
-                <span class="kw">if </span>federation_id != cfg.global.calculate_federation_id() {
-                    <span class="macro">bail!</span>(<span class="string">"FederationId in invite code does not match client config"</span>)
-                }
+        </span><span class="kw">let </span>query_strategy = FilterMap::new(<span class="kw">move </span>|cfg: ClientConfig| {
+            <span class="kw">if </span>federation_id != cfg.global.calculate_federation_id() {
+                <span class="macro">bail!</span>(<span class="string">"FederationId in invite code does not match client config"</span>)
+            }
 
-                <span class="prelude-val">Ok</span>(cfg.global.api_endpoints)
-            },
-            NumPeers::from(<span class="number">1</span>),
-        );
+            <span class="prelude-val">Ok</span>(cfg.global.api_endpoints)
+        });
 
         <span class="kw">let </span>api_endpoints = api
             .request_with_strategy(

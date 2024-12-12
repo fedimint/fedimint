@@ -185,25 +185,16 @@
 <a href="#184" id="184">184</a>
 <a href="#185" id="185">185</a>
 <a href="#186" id="186">186</a>
-<a href="#187" id="187">187</a>
-<a href="#188" id="188">188</a>
-<a href="#189" id="189">189</a>
-<a href="#190" id="190">190</a>
-<a href="#191" id="191">191</a>
-<a href="#192" id="192">192</a>
-<a href="#193" id="193">193</a>
-<a href="#194" id="194">194</a>
-<a href="#195" id="195">195</a></pre></div><pre class="rust"><code><span class="doccomment">//! State machine for submitting transactions
+<a href="#187" id="187">187</a></pre></div><pre class="rust"><code><span class="doccomment">//! State machine for submitting transactions
 
 </span><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::runtime::sleep;
 <span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
+<span class="kw">use </span>fedimint_core::util::backoff_util::custom_backoff;
+<span class="kw">use </span>fedimint_core::util::retry;
 <span class="kw">use </span>fedimint_core::TransactionId;
-<span class="kw">use </span>fedimint_logging::LOG_CLIENT_NET_API;
-<span class="kw">use </span>tracing::warn;
 
 <span class="kw">use </span><span class="kw">crate</span>::sm::{Context, DynContext, State, StateTransition};
 <span class="kw">use crate</span>::{DynGlobalClientContext, DynState, TxAcceptedEvent, TxRejectedEvent};
@@ -211,8 +202,6 @@
 <span class="comment">// TODO: how to prevent collisions? Generally reserve some range for custom IDs?
 </span><span class="doccomment">/// Reserved module instance id used for client-internal state machines
 </span><span class="kw">pub const </span>TRANSACTION_SUBMISSION_MODULE_INSTANCE: ModuleInstanceId = <span class="number">0xffff</span>;
-
-<span class="kw">const </span>RETRY_INTERVAL: Duration = Duration::from_secs(<span class="number">5</span>);
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>TxSubmissionContext;
@@ -341,37 +330,32 @@
 }
 
 <span class="kw">impl </span>TxSubmissionStates {
-    <span class="kw">async fn </span>trigger_created_rejected(tx: Transaction, context: DynGlobalClientContext) -&gt; String {
-        <span class="kw">loop </span>{
-            <span class="kw">match </span>context.api().submit_transaction(tx.clone()).<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(serde_outcome) =&gt; <span class="kw">match </span>serde_outcome.try_into_inner(context.decoders()) {
-                    <span class="prelude-val">Ok</span>(outcome) =&gt; {
-                        <span class="kw">if let </span>TransactionSubmissionOutcome(<span class="prelude-val">Err</span>(transaction_error)) = outcome {
-                            <span class="kw">return </span>transaction_error.to_string();
-                        }
-                    }
-                    <span class="prelude-val">Err</span>(decode_error) =&gt; {
-                        <span class="macro">warn!</span>(target: LOG_CLIENT_NET_API, error = %decode_error, <span class="string">"Failed to decode SerdeModuleEncoding"</span>);
-                    }
-                },
-                <span class="prelude-val">Err</span>(error) =&gt; {
-                    error.report_if_important();
+    <span class="kw">async fn </span>trigger_created_rejected(
+        transaction: Transaction,
+        context: DynGlobalClientContext,
+    ) -&gt; String {
+        retry(
+            <span class="string">"tx-submit-sm"</span>,
+            custom_backoff(Duration::from_secs(<span class="number">2</span>), Duration::from_secs(<span class="number">600</span>), <span class="prelude-val">None</span>),
+            || <span class="kw">async </span>{
+                <span class="kw">if let </span>TransactionSubmissionOutcome(<span class="prelude-val">Err</span>(transaction_error)) = context
+                    .api()
+                    .submit_transaction(transaction.clone())
+                    .<span class="kw">await
+                    </span>.try_into_inner(context.decoders())<span class="question-mark">?
+                </span>{
+                    <span class="prelude-val">Ok</span>(transaction_error.to_string())
+                } <span class="kw">else </span>{
+                    <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Transaction is still valid"</span>))
                 }
-            }
-
-            sleep(RETRY_INTERVAL).<span class="kw">await</span>;
-        }
+            },
+        )
+        .<span class="kw">await
+        </span>.expect(<span class="string">"Number of retries is has no limit"</span>)
     }
 
     <span class="kw">async fn </span>trigger_created_accepted(txid: TransactionId, context: DynGlobalClientContext) {
-        <span class="kw">loop </span>{
-            <span class="kw">match </span>context.api().await_transaction(txid).<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(..) =&gt; <span class="kw">return</span>,
-                <span class="prelude-val">Err</span>(error) =&gt; error.report_if_important(),
-            }
-
-            sleep(RETRY_INTERVAL).<span class="kw">await</span>;
-        }
+        context.api().await_transaction(txid).<span class="kw">await</span>;
     }
 }
 

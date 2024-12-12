@@ -1186,12 +1186,88 @@
 <a href="#1185" id="1185">1185</a>
 <a href="#1186" id="1186">1186</a>
 <a href="#1187" id="1187">1187</a>
-<a href="#1188" id="1188">1188</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
+<a href="#1188" id="1188">1188</a>
+<a href="#1189" id="1189">1189</a>
+<a href="#1190" id="1190">1190</a>
+<a href="#1191" id="1191">1191</a>
+<a href="#1192" id="1192">1192</a>
+<a href="#1193" id="1193">1193</a>
+<a href="#1194" id="1194">1194</a>
+<a href="#1195" id="1195">1195</a>
+<a href="#1196" id="1196">1196</a>
+<a href="#1197" id="1197">1197</a>
+<a href="#1198" id="1198">1198</a>
+<a href="#1199" id="1199">1199</a>
+<a href="#1200" id="1200">1200</a>
+<a href="#1201" id="1201">1201</a>
+<a href="#1202" id="1202">1202</a>
+<a href="#1203" id="1203">1203</a>
+<a href="#1204" id="1204">1204</a>
+<a href="#1205" id="1205">1205</a>
+<a href="#1206" id="1206">1206</a>
+<a href="#1207" id="1207">1207</a>
+<a href="#1208" id="1208">1208</a>
+<a href="#1209" id="1209">1209</a>
+<a href="#1210" id="1210">1210</a>
+<a href="#1211" id="1211">1211</a>
+<a href="#1212" id="1212">1212</a>
+<a href="#1213" id="1213">1213</a>
+<a href="#1214" id="1214">1214</a>
+<a href="#1215" id="1215">1215</a>
+<a href="#1216" id="1216">1216</a>
+<a href="#1217" id="1217">1217</a>
+<a href="#1218" id="1218">1218</a>
+<a href="#1219" id="1219">1219</a>
+<a href="#1220" id="1220">1220</a>
+<a href="#1221" id="1221">1221</a>
+<a href="#1222" id="1222">1222</a>
+<a href="#1223" id="1223">1223</a>
+<a href="#1224" id="1224">1224</a>
+<a href="#1225" id="1225">1225</a>
+<a href="#1226" id="1226">1226</a>
+<a href="#1227" id="1227">1227</a>
+<a href="#1228" id="1228">1228</a>
+<a href="#1229" id="1229">1229</a>
+<a href="#1230" id="1230">1230</a>
+<a href="#1231" id="1231">1231</a>
+<a href="#1232" id="1232">1232</a>
+<a href="#1233" id="1233">1233</a>
+<a href="#1234" id="1234">1234</a>
+<a href="#1235" id="1235">1235</a>
+<a href="#1236" id="1236">1236</a>
+<a href="#1237" id="1237">1237</a>
+<a href="#1238" id="1238">1238</a>
+<a href="#1239" id="1239">1239</a>
+<a href="#1240" id="1240">1240</a>
+<a href="#1241" id="1241">1241</a>
+<a href="#1242" id="1242">1242</a>
+<a href="#1243" id="1243">1243</a>
+<a href="#1244" id="1244">1244</a>
+<a href="#1245" id="1245">1245</a>
+<a href="#1246" id="1246">1246</a>
+<a href="#1247" id="1247">1247</a>
+<a href="#1248" id="1248">1248</a>
+<a href="#1249" id="1249">1249</a>
+<a href="#1250" id="1250">1250</a>
+<a href="#1251" id="1251">1251</a>
+<a href="#1252" id="1252">1252</a>
+<a href="#1253" id="1253">1253</a>
+<a href="#1254" id="1254">1254</a>
+<a href="#1255" id="1255">1255</a>
+<a href="#1256" id="1256">1256</a>
+<a href="#1257" id="1257">1257</a>
+<a href="#1258" id="1258">1258</a>
+<a href="#1259" id="1259">1259</a>
+<a href="#1260" id="1260">1260</a>
+<a href="#1261" id="1261">1261</a>
+<a href="#1262" id="1262">1262</a>
+<a href="#1263" id="1263">1263</a>
+<a href="#1264" id="1264">1264</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::pin::Pin;
+<span class="kw">use </span>std::result;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
-<span class="kw">use </span>std::{cmp, result};
 
 <span class="kw">use </span>anyhow::anyhow;
 <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
@@ -1209,7 +1285,6 @@
 <span class="kw">use </span>fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
-<span class="kw">use </span>fedimint_core::fmt_utils::AbbreviateDebug;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::audit::AuditSummary;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -1218,12 +1293,14 @@
 <span class="kw">use </span>fedimint_core::session_outcome::{SessionOutcome, SessionStatus};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
+<span class="kw">use </span>fedimint_core::util::backoff_util::api_networking_backoff;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, runtime, NumPeersExt, OutPoint, PeerId,
+    apply, async_trait_maybe_send, dyn_newtype_define, util, NumPeersExt, OutPoint, PeerId,
     TransactionId,
 };
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_NET_API;
+<span class="kw">use </span>futures::future::pending;
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>futures::{Future, StreamExt};
 <span class="kw">use </span>itertools::Itertools;
@@ -1243,7 +1320,7 @@
 </span><span class="kw">use </span>tokio_rustls::rustls::RootCertStore;
 <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
 </span><span class="kw">use </span>tokio_rustls::{rustls::ClientConfig <span class="kw">as </span>TlsClientConfig, TlsConnector};
-<span class="kw">use </span>tracing::{debug, instrument, trace};
+<span class="kw">use </span>tracing::{debug, instrument, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 <span class="kw">mod </span>error;
@@ -1382,92 +1459,157 @@
         <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
         </span><span class="kw">let </span><span class="kw-2">mut </span>futures = FuturesUnordered::&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="kw">_</span>&gt;&gt;&gt;&gt;::new();
 
-        <span class="kw">let </span>peers = <span class="self">self</span>.all_peers();
+        <span class="kw">for </span>peer <span class="kw">in </span><span class="self">self</span>.all_peers() {
+            futures.push(Box::pin({
+                <span class="kw">let </span>method = <span class="kw-2">&amp;</span>method;
+                <span class="kw">let </span>params = <span class="kw-2">&amp;</span>params;
+                <span class="kw">async move </span>{
+                    <span class="kw">let </span>result = <span class="self">self
+                        </span>.request_single_peer_typed(<span class="prelude-val">None</span>, method.clone(), params.clone(), <span class="kw-2">*</span>peer)
+                        .<span class="kw">await</span>;
 
-        <span class="kw">for </span>peer_id <span class="kw">in </span>peers {
-            futures.push(Box::pin(<span class="kw">async </span>{
-                <span class="kw">let </span>request = <span class="kw">async </span>{
-                    <span class="self">self</span>.request_raw(<span class="kw-2">*</span>peer_id, <span class="kw-2">&amp;</span>method, <span class="kw-2">&amp;</span>[params.to_json()])
-                        .<span class="kw">await
-                        </span>.map(AbbreviateDebug)
-                };
-
-                PeerResponse {
-                    peer: <span class="kw-2">*</span>peer_id,
-                    result: request.<span class="kw">await</span>,
+                    (<span class="kw-2">*</span>peer, result)
                 }
             }));
         }
 
-        <span class="kw">let </span><span class="kw-2">mut </span>peer_delay_ms = BTreeMap::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>peers = BTreeMap::new();
 
-        <span class="comment">// Delegates the response handling to the `QueryStrategy` with an exponential
-        // back-off with every new set of requests
-        </span><span class="kw">let </span>max_delay_ms = <span class="number">1000</span>;
         <span class="kw">loop </span>{
-            <span class="kw">let </span>response = futures.next().<span class="kw">await</span>;
-            <span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, <span class="question-mark">?</span>response, method, params = <span class="question-mark">?</span>AbbreviateDebug(params.to_json()), <span class="string">"Received peer response"</span>);
-            <span class="kw">match </span>response {
-                <span class="prelude-val">Some</span>(PeerResponse { peer, result }) =&gt; {
-                    <span class="kw">let </span>result: PeerResult&lt;PeerRet&gt; =
-                        result.map_err(PeerError::Rpc).and_then(|o| {
-                            serde_json::from_value::&lt;PeerRet&gt;(o.<span class="number">0</span>)
-                                .map_err(|e| PeerError::ResponseDeserialization(e.into()))
-                        });
+            <span class="kw">let </span>(peer, result) = futures
+                .next()
+                .<span class="kw">await
+                </span>.expect(<span class="string">"Query strategy ran out of peers to query without returning a result"</span>);
 
-                    <span class="kw">let </span>strategy_step = strategy.process(peer, result);
-                    <span class="macro">trace!</span>(
-                        target: LOG_CLIENT_NET_API,
-                        method,
-                        <span class="question-mark">?</span>params,
-                        <span class="question-mark">?</span>strategy_step,
-                        <span class="string">"Taking strategy step to the response after peer response"
-                    </span>);
-                    <span class="kw">match </span>strategy_step {
-                        QueryStep::Retry(peers) =&gt; {
-                            <span class="kw">for </span>retry_peer <span class="kw">in </span>peers {
-                                <span class="kw">let </span><span class="kw-2">mut </span>delay_ms =
-                                    peer_delay_ms.get(<span class="kw-2">&amp;</span>retry_peer).copied().unwrap_or(<span class="number">10</span>);
-                                delay_ms = cmp::min(max_delay_ms, delay_ms * <span class="number">2</span>);
-                                peer_delay_ms.insert(retry_peer, delay_ms);
+            <span class="kw">match </span>result {
+                <span class="prelude-val">Ok</span>(response) =&gt; <span class="kw">match </span>strategy.process(peer, response) {
+                    QueryStep::Retry(peers) =&gt; {
+                        <span class="kw">for </span>peer <span class="kw">in </span>peers {
+                            futures.push(Box::pin({
+                                <span class="kw">let </span>method = <span class="kw-2">&amp;</span>method;
+                                <span class="kw">let </span>params = <span class="kw-2">&amp;</span>params;
+                                <span class="kw">async move </span>{
+                                    <span class="kw">let </span>result = <span class="self">self
+                                        </span>.request_single_peer_typed(
+                                            <span class="prelude-val">None</span>,
+                                            method.clone(),
+                                            params.clone(),
+                                            peer,
+                                        )
+                                        .<span class="kw">await</span>;
 
-                                futures.push(Box::pin({
-                                    <span class="kw">let </span>method = <span class="kw-2">&amp;</span>method;
-                                    <span class="kw">let </span>params = <span class="kw-2">&amp;</span>params;
-                                    <span class="kw">async move </span>{
-                                        <span class="comment">// Note: we need to sleep inside the retrying future,
-                                        // so that `futures` is being polled continuously
-                                        </span>runtime::sleep(Duration::from_millis(delay_ms)).<span class="kw">await</span>;
-                                        PeerResponse {
-                                            peer: retry_peer,
-                                            result: <span class="self">self
-                                                </span>.request_raw(
-                                                    retry_peer,
-                                                    method,
-                                                    <span class="kw-2">&amp;</span>[params.to_json()],
-                                                )
-                                                .<span class="kw">await
-                                                </span>.map(AbbreviateDebug),
-                                        }
-                                    }
-                                }));
+                                    (peer, result)
+                                }
+                            }));
+                        }
+                    }
+                    QueryStep::Success(response) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(response),
+                    QueryStep::Failure(e) =&gt; {
+                        peers.insert(peer, PeerError::InvalidResponse(e.to_string()));
+                    }
+                    QueryStep::Continue =&gt; {}
+                },
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    e.report_if_important(peer);
+
+                    peers.insert(peer, e);
+                }
+            }
+
+            <span class="kw">if </span>peers.len() == <span class="self">self</span>.all_peers().to_num_peers().one_honest() {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(FederationError {
+                    method: method.clone(),
+                    params: params.params.clone(),
+                    general: <span class="prelude-val">None</span>,
+                    peers,
+                });
+            }
+        }
+    }
+
+    <span class="kw">async fn </span>request_with_strategy_and_retry&lt;PR: DeserializeOwned + MaybeSend, FR: Debug&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="kw-2">mut </span>strategy: <span class="kw">impl </span>QueryStrategy&lt;PR, FR&gt; + MaybeSend,
+        method: String,
+        params: ApiRequestErased,
+    ) -&gt; FR {
+        <span class="comment">// NOTE: `FuturesUnorderded` is a footgun, but all we do here is polling
+        // completed results from it and we don't do any `await`s when
+        // processing them, it should be totally OK.
+        </span><span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+        </span><span class="kw">let </span><span class="kw-2">mut </span>futures = FuturesUnordered::&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="kw">_</span>&gt; + Send&gt;&gt;&gt;::new();
+        <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
+        </span><span class="kw">let </span><span class="kw-2">mut </span>futures = FuturesUnordered::&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="kw">_</span>&gt;&gt;&gt;&gt;::new();
+
+        <span class="kw">for </span>peer <span class="kw">in </span><span class="self">self</span>.all_peers() {
+            futures.push(Box::pin({
+                <span class="kw">let </span>method = <span class="kw-2">&amp;</span>method;
+                <span class="kw">let </span>params = <span class="kw-2">&amp;</span>params;
+                <span class="kw">async move </span>{
+                    <span class="kw">let </span>response = util::retry(
+                        <span class="string">"api-request-{method}-{peer}"</span>,
+                        api_networking_backoff(),
+                        || <span class="kw">async </span>{
+                            <span class="self">self</span>.request_single_peer_typed(
+                                <span class="prelude-val">None</span>,
+                                method.clone(),
+                                params.clone(),
+                                <span class="kw-2">*</span>peer,
+                            )
+                            .<span class="kw">await
+                            </span>.inspect_err(|e| e.report_if_important(<span class="kw-2">*</span>peer))
+                            .map_err(|e| <span class="macro">anyhow!</span>(e.to_string()))
+                        },
+                    )
+                    .<span class="kw">await
+                    </span>.expect(<span class="string">"Number of retries has no limit"</span>);
+
+                    (<span class="kw-2">*</span>peer, response)
+                }
+            }));
+        }
+
+        <span class="kw">loop </span>{
+            <span class="kw">let </span>(peer, response) = <span class="kw">match </span>futures.next().<span class="kw">await </span>{
+                <span class="prelude-val">Some</span>(t) =&gt; t,
+                <span class="prelude-val">None </span>=&gt; pending().<span class="kw">await</span>,
+            };
+
+            <span class="kw">match </span>strategy.process(peer, response) {
+                QueryStep::Retry(peers) =&gt; {
+                    <span class="kw">for </span>peer <span class="kw">in </span>peers {
+                        futures.push(Box::pin({
+                            <span class="kw">let </span>method = <span class="kw-2">&amp;</span>method;
+                            <span class="kw">let </span>params = <span class="kw-2">&amp;</span>params;
+                            <span class="kw">async move </span>{
+                                <span class="kw">let </span>response = util::retry(
+                                    <span class="string">"api-request-{method}-{peer}"</span>,
+                                    api_networking_backoff(),
+                                    || <span class="kw">async </span>{
+                                        <span class="self">self</span>.request_single_peer_typed(
+                                            <span class="prelude-val">None</span>,
+                                            method.clone(),
+                                            params.clone(),
+                                            peer,
+                                        )
+                                        .<span class="kw">await
+                                        </span>.inspect_err(|e| e.report_if_important(peer))
+                                        .map_err(|e| <span class="macro">anyhow!</span>(e.to_string()))
+                                    },
+                                )
+                                .<span class="kw">await
+                                </span>.expect(<span class="string">"Number of retries has no limit"</span>);
+
+                                (peer, response)
                             }
-                        }
-                        QueryStep::Continue =&gt; {}
-                        QueryStep::Failure { general, peers } =&gt; {
-                            <span class="kw">return </span><span class="prelude-val">Err</span>(FederationError {
-                                method: method.clone(),
-                                params: params.params.clone(),
-                                general,
-                                peers,
-                            })
-                        }
-                        QueryStep::Success(response) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(response),
+                        }));
                     }
                 }
-                <span class="prelude-val">None </span>=&gt; {
-                    <span class="macro">panic!</span>(<span class="string">"Query strategy ran out of peers to query without returning a result"</span>);
+                QueryStep::Success(response) =&gt; <span class="kw">return </span>response,
+                QueryStep::Failure(e) =&gt; {
+                    <span class="macro">warn!</span>(<span class="string">"Query strategy returned non-retryable failure for peer {peer}: {e}"</span>);
                 }
+                QueryStep::Continue =&gt; {}
             }
         }
     }
@@ -1481,6 +1623,22 @@
         </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         <span class="self">self</span>.request_with_strategy(
+            ThresholdConsensus::new(<span class="self">self</span>.all_peers().to_num_peers()),
+            method,
+            params,
+        )
+        .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>request_current_consensus_retry&lt;Ret&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        method: String,
+        params: ApiRequestErased,
+    ) -&gt; Ret
+    <span class="kw">where
+        </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
+    {
+        <span class="self">self</span>.request_with_strategy_and_retry(
             ThresholdConsensus::new(<span class="self">self</span>.all_peers().to_num_peers()),
             method,
             params,
@@ -1646,7 +1804,7 @@
     <span class="kw">async fn </span>submit_transaction(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         tx: Transaction,
-    ) -&gt; FederationResult&lt;SerdeModuleEncoding&lt;TransactionSubmissionOutcome&gt;&gt;;
+    ) -&gt; SerdeModuleEncoding&lt;TransactionSubmissionOutcome&gt;;
 
     <span class="kw">async fn </span>await_block(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1662,7 +1820,7 @@
 
     <span class="kw">async fn </span>session_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt;;
 
-    <span class="kw">async fn </span>await_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: TransactionId) -&gt; FederationResult&lt;TransactionId&gt;;
+    <span class="kw">async fn </span>await_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: TransactionId) -&gt; TransactionId;
 
     <span class="doccomment">/// Fetches the server consensus hash if enough peers agree on it
     </span><span class="kw">async fn </span>server_config_consensus_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;sha256::Hash&gt;;
@@ -2147,12 +2305,6 @@
             module_id: <span class="prelude-val">None</span>,
         }
     }
-}
-
-<span class="attr">#[derive(Debug)]
-</span><span class="kw">pub struct </span>PeerResponse&lt;R&gt; {
-    <span class="kw">pub </span>peer: PeerId,
-    <span class="kw">pub </span>result: JsonRpcResult&lt;R&gt;,
 }
 
 <span class="kw">impl</span>&lt;C&gt; FederationPeer&lt;C&gt;

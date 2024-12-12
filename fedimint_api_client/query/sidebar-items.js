@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["QueryStep"],"struct":["ErrorStrategy","FilterMap","FilterMapThreshold","ThresholdConsensus"],"trait":["QueryStrategy"]};
+window.SIDEBAR_ITEMS = {"enum":["QueryStep"],"struct":["FilterMap","FilterMapThreshold","ThresholdConsensus"],"trait":["QueryStrategy"]};
