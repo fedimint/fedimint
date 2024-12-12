@@ -181,6 +181,7 @@ pub trait FederationApiExt: IRawFederationApi {
 
     /// Make an aggregate request to federation, using `strategy` to logically
     /// merge the responses.
+    #[instrument(target = "fm::api", skip_all, fields(method=method))]
     async fn request_with_strategy<PeerRet: serde::de::DeserializeOwned, FedRet: Debug>(
         &self,
         mut strategy: impl QueryStrategy<PeerRet, FedRet> + MaybeSend,
@@ -263,6 +264,7 @@ pub trait FederationApiExt: IRawFederationApi {
         }
     }
 
+    #[instrument(target = "fm::api", skip_all, fields(method=method))]
     async fn request_with_strategy_and_retry<PR: DeserializeOwned + MaybeSend, FR: Debug>(
         &self,
         mut strategy: impl QueryStrategy<PR, FR> + MaybeSend,
