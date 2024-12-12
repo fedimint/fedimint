@@ -244,6 +244,7 @@ impl DevJitFed {
                 if gateway_cli_version <= *VERSION_0_4_0_ALPHA
                     || gatewayd_version <= *VERSION_0_4_0_ALPHA
                     || fedimintd_version <= *VERSION_0_4_0_ALPHA
+                    || is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV)
                 {
                     let lnd = lnd.get_try().await?.deref().clone();
                     let cln = cln.get_try().await?.deref().clone();

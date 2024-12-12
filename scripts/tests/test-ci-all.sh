@@ -249,7 +249,13 @@ function always_success_test() {
 }
 export -f always_success_test
 
-tagged_versions=("$@")
+# allows versions to be passed in as either a single string or multiple params
+# e.g. `"v0.3.0 v0.4.0"` is the same as `v0.3.0 v0.4.0`
+if [ "$#" -eq 1 ]; then
+  IFS=' ' read -r -a tagged_versions <<< "$1"
+else
+  tagged_versions=("$@")
+fi
 num_versions="$#"
 versions=( "${tagged_versions[@]}" "current" )
 if [[ "$num_versions" == "0" ]]; then

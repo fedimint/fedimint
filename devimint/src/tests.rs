@@ -30,7 +30,7 @@ use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASS
 use crate::federation::{Client, Federation};
 use crate::util::{poll, LoadTestTool, ProcessManager};
 use crate::version_constants::{
-    VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA,
+    VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA,
 };
 use crate::{cmd, dev_fed, poll_eq, DevFed, Gatewayd, LightningNode, Lightningd, Lnd};
 
@@ -966,7 +966,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // # peer-version command
 
     // TODO(support:v0.4): peer-version command was introduced in 0.5
-    if fedimintd_version >= *VERSION_0_5_0_ALPHA {
+    if fedimintd_version >= *VERSION_0_5_0_ALPHA && fedimint_cli_version >= *VERSION_0_5_0_ALPHA {
         let peer_0_fedimintd_version = cmd!(client, "dev", "peer-version", "--peer-id", "0")
             .out_json()
             .await?
@@ -1430,8 +1430,10 @@ pub async fn lightning_gw_reconnect_test(
     // node public key since the lightning node is unreachable.
     gw_lnd.stop_lightning_node().await?;
     let lightning_info = info_cmd.out_json().await?;
-    let gateway_info: GatewayInfo = serde_json::from_value(lightning_info)?;
-    assert!(gateway_info.lightning_pub_key.is_none());
+    let lightning_pub_key: Option<String> =
+        serde_json::from_value(lightning_info["lightning_pub_key"].clone())?;
+
+    assert!(lightning_pub_key.is_none());
 
     // Restart LND
     tracing::info!("Restarting LND...");
@@ -1496,14 +1498,19 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     fed.pegin_client(10_000, &client).await?;
 
     // Wait for gateways to sync to chain
-    let block_height = bitcoind.get_block_count().await? - 1;
-    if let Some(gw_ldk) = &gw_ldk {
-        try_join!(
-            gw_lnd.wait_for_block_height(block_height),
-            gw_ldk.wait_for_block_height(block_height),
-        )?;
-    } else {
-        try_join!(gw_lnd.wait_for_block_height(block_height),)?;
+    let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+    // TODO(support:v0.3): `block_height` field was introduced in v0.4.0
+    // see: https://github.com/fedimint/fedimint/pull/4514
+    if gatewayd_version >= *VERSION_0_4_0 {
+        let block_height = bitcoind.get_block_count().await? - 1;
+        if let Some(gw_ldk) = &gw_ldk {
+            try_join!(
+                gw_lnd.wait_for_block_height(block_height),
+                gw_ldk.wait_for_block_height(block_height),
+            )?;
+        } else {
+            try_join!(gw_lnd.wait_for_block_height(block_height),)?;
+        }
     }
 
     // Query current gateway infos
@@ -1555,18 +1562,22 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
         (new_gw_lnd, None)
     };
 
-    let lnd_info: GatewayInfo = serde_json::from_value(lnd_value)?;
+    let lnd_gateway_id: fedimint_core::secp256k1::PublicKey =
+        serde_json::from_value(lnd_value["gateway_id"].clone())?;
+
     poll(
         "Waiting for LND Gateway Running state after reboot",
         || async {
             let mut new_lnd_cmd = cmd!(new_gw_lnd, "info");
             let lnd_value = new_lnd_cmd.out_json().await.map_err(ControlFlow::Continue)?;
-            let reboot_info: GatewayInfo = serde_json::from_value(lnd_value).context("json invalid").map_err(ControlFlow::Break)?;
+            let reboot_gateway_state: String = serde_json::from_value(lnd_value["gateway_state"].clone()).context("invalid gateway state").map_err(ControlFlow::Break)?;
+            let reboot_gateway_id: fedimint_core::secp256k1::PublicKey =
+        serde_json::from_value(lnd_value["gateway_id"].clone()).context("invalid gateway id").map_err(ControlFlow::Break)?;
 
-            if reboot_info.gateway_state == "Running" {
+            if reboot_gateway_state == "Running" {
                 info!(target: LOG_DEVIMINT, "LND Gateway restarted, with auto-rejoin to federation");
                 // Assert that the gateway info is the same as before the reboot
-                assert_eq!(lnd_info, reboot_info);
+                assert_eq!(lnd_gateway_id, reboot_gateway_id);
                 return Ok(());
             }
             Err(ControlFlow::Continue(anyhow!("gateway not running")))
@@ -1608,12 +1619,18 @@ pub async fn do_try_create_and_pay_invoice(
     // automatically reconnects and can query the lightning node
     // info again.
     poll("Waiting for info to succeed after restart", || async {
-        let mut info_cmd = cmd!(gw, "info");
-        let lightning_info = info_cmd.out_json().await.map_err(ControlFlow::Continue)?;
-        let gateway_info: GatewayInfo = serde_json::from_value(lightning_info)
-            .context("invalid json")
-            .map_err(ControlFlow::Break)?;
-        poll_eq!(gateway_info.lightning_pub_key.is_some(), true)
+        let lightning_pub_key = cmd!(gw, "info")
+            .out_json()
+            .await
+            .map_err(ControlFlow::Continue)?
+            .get("lightning_pub_key")
+            .map(|ln_pk| {
+                serde_json::from_value::<Option<String>>(ln_pk.clone())
+                    .expect("could not parse lightning_pub_key")
+            })
+            .expect("missing lightning_pub_key");
+
+        poll_eq!(lightning_pub_key.is_some(), true)
     })
     .await?;
 
