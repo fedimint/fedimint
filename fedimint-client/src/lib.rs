@@ -1369,7 +1369,7 @@ impl Client {
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -> anyhow::Result<Amount> {
+    ) -> anyhow::Result<()> {
         self.primary_module()
             .await_primary_module_output(operation_id, out_point)
             .await
@@ -1446,16 +1446,13 @@ impl Client {
         &self,
         operation_id: OperationId,
         outputs: Vec<OutPoint>,
-    ) -> anyhow::Result<Amount> {
-        let mut amount = Amount::ZERO;
-
+    ) -> anyhow::Result<()> {
         for out_point in outputs {
-            amount += self
-                .await_primary_module_output(operation_id, out_point)
+            self.await_primary_module_output(operation_id, out_point)
                 .await?;
         }
 
-        Ok(amount)
+        Ok(())
     }
 
     /// Returns the config of the client in JSON format.
