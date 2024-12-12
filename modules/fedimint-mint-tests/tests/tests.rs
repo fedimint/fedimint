@@ -7,8 +7,7 @@ use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBu
 use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::OperationId;
 use fedimint_core::task::sleep_in_test;
-use fedimint_core::util::backoff_util::aggressive_backoff;
-use fedimint_core::util::{retry, NextOrPending};
+use fedimint_core::util::NextOrPending;
 use fedimint_core::{sats, secp256k1, Amount, TieredMulti};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
@@ -176,18 +175,8 @@ async fn blind_nonce_index() -> anyhow::Result<()> {
         .client_ctx
         .finalize_and_submit_transaction(operation_id, "mint", |_, _| (), tx)
         .await?;
-    retry(
-        "Waiting for tx confirmation",
-        aggressive_backoff(),
-        || async {
-            client
-                .api()
-                .await_transaction(txid)
-                .await
-                .map_err(anyhow::Error::new)
-        },
-    )
-    .await?;
+
+    client.api().await_transaction(txid).await;
 
     assert!(
         client_mint.api.check_blind_nonce_used(blind_nonce).await?,
