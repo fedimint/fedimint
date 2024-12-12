@@ -956,7 +956,7 @@
                 method: SUBMIT_API_ANNOUNCEMENT_ENDPOINT.to_string(),
                 params: serde_json::to_value(announcement).expect(<span class="string">"can be serialized"</span>),
                 general: <span class="prelude-val">None</span>,
-                peers: peer_errors,
+                peer_errors,
             })
         }
     }

@@ -1476,7 +1476,8 @@
             }));
         }
 
-        <span class="kw">let </span><span class="kw-2">mut </span>peers = BTreeMap::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>peer_errors = BTreeMap::new();
+        <span class="kw">let </span>peer_error_threshold = <span class="self">self</span>.all_peers().to_num_peers().one_honest();
 
         <span class="kw">loop </span>{
             <span class="kw">let </span>(peer, result) = futures
@@ -1508,24 +1509,23 @@
                     }
                     QueryStep::Success(response) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(response),
                     QueryStep::Failure(e) =&gt; {
-                        peers.insert(peer, PeerError::InvalidResponse(e.to_string()));
+                        peer_errors.insert(peer, PeerError::InvalidResponse(e.to_string()));
                     }
                     QueryStep::Continue =&gt; {}
                 },
                 <span class="prelude-val">Err</span>(e) =&gt; {
                     e.report_if_important(peer);
 
-                    peers.insert(peer, e);
+                    peer_errors.insert(peer, e);
                 }
             }
 
-            <span class="kw">if </span>peers.len() == <span class="self">self</span>.all_peers().to_num_peers().one_honest() {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(FederationError {
-                    method: method.clone(),
-                    params: params.params.clone(),
-                    general: <span class="prelude-val">None</span>,
-                    peers,
-                });
+            <span class="kw">if </span>peer_errors.len() == peer_error_threshold {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(FederationError::peer_errors(
+                    method.clone(),
+                    params.params.clone(),
+                    peer_errors,
+                ));
             }
         }
     }

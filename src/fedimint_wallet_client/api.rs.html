@@ -149,7 +149,7 @@
             .<span class="kw">await</span>;
 
         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="kw-2">&amp;</span>response {
-            <span class="kw">for </span>e <span class="kw">in </span>e.peers.values() {
+            <span class="kw">for </span>e <span class="kw">in </span>e.peer_errors.values() {
                 <span class="kw">if </span>e.to_string().contains(<span class="string">"Method not found"</span>) {
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(ModuleConsensusVersion::new(<span class="number">2</span>, <span class="number">0</span>));
                 }

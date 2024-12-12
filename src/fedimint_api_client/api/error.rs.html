@@ -188,7 +188,32 @@
 <a href="#187" id="187">187</a>
 <a href="#188" id="188">188</a>
 <a href="#189" id="189">189</a>
-<a href="#190" id="190">190</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display};
 <span class="kw">use </span>std::time::Duration;
 
@@ -257,7 +282,7 @@
     <span class="kw">pub </span>method: String,
     <span class="kw">pub </span>params: serde_json::Value,
     <span class="kw">pub </span>general: <span class="prelude-ty">Option</span>&lt;anyhow::Error&gt;,
-    <span class="kw">pub </span>peers: BTreeMap&lt;PeerId, PeerError&gt;,
+    <span class="kw">pub </span>peer_errors: BTreeMap&lt;PeerId, PeerError&gt;,
 }
 
 <span class="kw">impl </span>Display <span class="kw">for </span>FederationError {
@@ -270,13 +295,13 @@
                 AbbreviateJson(<span class="kw-2">&amp;</span><span class="self">self</span>.params)
             ))<span class="question-mark">?</span>;
             f.write_fmt(<span class="macro">format_args!</span>(<span class="string">"general =&gt; {general})"</span>))<span class="question-mark">?</span>;
-            <span class="kw">if </span>!<span class="self">self</span>.peers.is_empty() {
+            <span class="kw">if </span>!<span class="self">self</span>.peer_errors.is_empty() {
                 f.write_str(<span class="string">", "</span>)<span class="question-mark">?</span>;
             }
         }
-        <span class="kw">for </span>(i, (peer, e)) <span class="kw">in </span><span class="self">self</span>.peers.iter().enumerate() {
+        <span class="kw">for </span>(i, (peer, e)) <span class="kw">in </span><span class="self">self</span>.peer_errors.iter().enumerate() {
             f.write_fmt(<span class="macro">format_args!</span>(<span class="string">"{peer} =&gt; {e})"</span>))<span class="question-mark">?</span>;
-            <span class="kw">if </span>i == <span class="self">self</span>.peers.len() - <span class="number">1 </span>{
+            <span class="kw">if </span>i == <span class="self">self</span>.peer_errors.len() - <span class="number">1 </span>{
                 f.write_str(<span class="string">", "</span>)<span class="question-mark">?</span>;
             }
         }
@@ -295,7 +320,32 @@
             method: method.into(),
             params: serde_json::to_value(params).unwrap_or_default(),
             general: <span class="prelude-val">Some</span>(e.into()),
-            peers: BTreeMap::default(),
+            peer_errors: BTreeMap::default(),
+        }
+    }
+
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>peer_errors(
+        method: <span class="kw">impl </span>Into&lt;String&gt;,
+        params: <span class="kw">impl </span>Serialize,
+        peer_errors: BTreeMap&lt;PeerId, PeerError&gt;,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="kw">use </span>std::fmt::Write;
+        <span class="kw">let </span>general_fmt = peer_errors
+            .iter()
+            .fold(String::new(), |<span class="kw-2">mut </span>s, (peer_id, e)| {
+                <span class="kw">if </span>!s.is_empty() {
+                    <span class="macro">write!</span>(s, <span class="string">", "</span>).expect(<span class="string">"can't fail"</span>);
+                }
+                <span class="macro">write!</span>(s, <span class="string">"peer-{peer_id}: {e}"</span>).expect(<span class="string">"can't fail"</span>);
+
+                s
+            });
+
+        <span class="self">Self </span>{
+            method: method.into(),
+            params: serde_json::to_value(params).unwrap_or_default(),
+            general: <span class="prelude-val">Some</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Received errors from peers: {general_fmt}"</span>,)),
+            peer_errors,
         }
     }
 
@@ -309,7 +359,7 @@
             method: method.into(),
             params: serde_json::to_value(params).expect(<span class="string">"Serialization of valid params won't fail"</span>),
             general: <span class="prelude-val">None</span>,
-            peers: [(peer_id, error)].into_iter().collect(),
+            peer_errors: [(peer_id, error)].into_iter().collect(),
         }
     }
 
@@ -318,7 +368,7 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>(error) = <span class="self">self</span>.general.as_ref() {
             <span class="macro">warn!</span>(target: LOG_CLIENT_NET_API, %error, <span class="string">"General FederationError"</span>);
         }
-        <span class="kw">for </span>(peer_id, e) <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.peers {
+        <span class="kw">for </span>(peer_id, e) <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.peer_errors {
             e.report_if_important(<span class="kw-2">*</span>peer_id);
         }
     }
@@ -330,7 +380,7 @@
 
     <span class="doccomment">/// Get errors from different peers.
     </span><span class="kw">pub fn </span>get_peer_errors(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (PeerId, <span class="kw-2">&amp;</span>PeerError)&gt; {
-        <span class="self">self</span>.peers.iter().map(|(peer, error)| (<span class="kw-2">*</span>peer, error))
+        <span class="self">self</span>.peer_errors.iter().map(|(peer, error)| (<span class="kw-2">*</span>peer, error))
     }
 }
 
