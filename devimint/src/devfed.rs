@@ -249,19 +249,26 @@ impl DevJitFed {
 
                     open_channel(&process_mgr, &bitcoind, &cln, &lnd).await?;
                 } else {
-                    let gw_lnd = gw_lnd.get_try().await?.deref();
-                    let gw_ldk = gw_ldk
-                        .get_try()
-                        .await?
-                        .deref()
-                        .as_ref()
-                        .expect("GW LDK should be present");
-                    let gateways: &[NamedGateway<'_>] = &[(gw_lnd, "LND"), (gw_ldk, "LDK")];
-                    open_channels_between_gateways(&bitcoind, gateways).await?;
+                    tokio::try_join!(
+                        async {
+                            let gw_lnd = gw_lnd.get_try().await?.deref();
+                            let gw_ldk = gw_ldk
+                                .get_try()
+                                .await?
+                                .deref()
+                                .as_ref()
+                                .expect("GW LDK should be present");
+                            let gateways: &[NamedGateway<'_>] = &[(gw_lnd, "LND"), (gw_ldk, "LDK")];
 
-                    let lnd = lnd.get_try().await?.deref().clone();
-                    let cln = cln.get_try().await?.deref().clone();
-                    open_channel(&process_mgr, &bitcoind, &cln, &lnd).await?;
+                            open_channels_between_gateways(&bitcoind, gateways).await
+                        },
+                        async {
+                            let lnd = lnd.get_try().await?.deref().clone();
+                            let cln = cln.get_try().await?.deref().clone();
+
+                            open_channel(&process_mgr, &bitcoind, &cln, &lnd).await
+                        }
+                    )?;
                 }
 
                 Ok(Arc::new(()))
