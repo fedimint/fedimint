@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 use async_trait::async_trait;
-use fedimint_core::net::peers::{IMuxPeerConnections, PeerConnections};
+use fedimint_core::net::peers::{IMuxPeerConnections, PeerConnections, Recipient};
 use fedimint_core::runtime::spawn;
 use fedimint_core::task::{Cancellable, Cancelled};
 use fedimint_core::PeerId;
@@ -26,7 +26,10 @@ pub const MAX_PEER_OUT_OF_ORDER_MESSAGES: u64 = 10000;
 
 /// A `Msg` that can target a specific destination module
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ModuleMultiplexed<MuxKey, Msg> {
+pub struct ModuleMultiplexed<MuxKey, Msg>
+where
+    Msg: Clone,
+{
     pub key: MuxKey,
     pub msg: Msg,
 }
@@ -69,7 +72,7 @@ type Callback<MuxKey, Msg> = (MuxKey, oneshot::Sender<(PeerId, Msg)>);
 
 impl<MuxKey, Msg> PeerConnectionMultiplexer<MuxKey, Msg>
 where
-    Msg: Serialize + DeserializeOwned + Unpin + Send + Debug + 'static,
+    Msg: Serialize + DeserializeOwned + Unpin + Send + Debug + Clone + 'static,
     MuxKey: Serialize + DeserializeOwned + Unpin + Send + Debug + Eq + Hash + Clone + 'static,
 {
     pub fn new(connections: PeerConnections<ModuleMultiplexed<MuxKey, Msg>>) -> Self {
@@ -104,7 +107,12 @@ where
                  // Send requests are forwarded to underlying connections
                  send_request = send_requests_rx.recv() => {
                     let (peers, key, msg) = send_request.ok_or(Cancelled)?;
-                    connections.send(&peers, ModuleMultiplexed { key, msg }).await?;
+
+                    let msg = ModuleMultiplexed { key, msg };
+
+                    for peer in peers {
+                        connections.send(Recipient::Peer(peer), msg.clone()).await;
+                    }
                 }
                 // Receive callbacks are added to callback queue by key
                 receive_callback = receive_callbacks_rx.recv() => {

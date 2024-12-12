@@ -9,14 +9,13 @@ use std::cmp::{max, min};
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
 use std::net::SocketAddr;
-use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
 use async_trait::async_trait;
 use fedimint_api_client::api::PeerConnectionStatus;
-use fedimint_core::net::peers::IPeerConnections;
+use fedimint_core::net::peers::{IPeerConnections, Recipient};
 use fedimint_core::task::{sleep_until, Cancellable, Cancelled, TaskGroup, TaskHandle};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
@@ -31,7 +30,6 @@ use tokio::sync::RwLock;
 use tokio::time::Instant;
 use tracing::{debug, info, instrument, trace, warn};
 
-use crate::consensus::aleph_bft::Recipient;
 use crate::metrics::{PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT};
 use crate::net::connect::{AnyConnector, SharedAnyConnector};
 use crate::net::framed::AnyFramedTransport;
@@ -60,7 +58,6 @@ pub struct ReconnectPeerConnections<T> {
 #[derive(Clone)]
 struct PeerConnection<T> {
     outgoing: async_channel::Sender<T>,
-    outgoing_send_err_count: Arc<AtomicU64>,
     incoming: async_channel::Receiver<T>,
 }
 
@@ -261,43 +258,48 @@ where
             }
         }
     }
-    pub fn send_sync(&self, msg: &T, recipient: Recipient) {
+}
+
+#[async_trait]
+impl<M> IPeerConnections<M> for ReconnectPeerConnections<M>
+where
+    M: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + 'static,
+{
+    async fn send(&mut self, recipient: Recipient, msg: M) {
         match recipient {
             Recipient::Everyone => {
                 for connection in self.connections.values() {
-                    connection.send(msg.clone());
+                    connection.send(msg.clone()).await;
                 }
             }
             Recipient::Peer(peer) => {
                 if let Some(connection) = self.connections.get(&peer) {
-                    connection.send(msg.clone());
+                    connection.send(msg).await;
                 } else {
-                    trace!(target: LOG_NET_PEER,peer = ?peer, "Not sending message to unknown peer (maybe banned)");
+                    warn!(target: LOG_NET_PEER, "No connection for peer {peer}");
                 }
             }
         }
     }
-}
 
-#[async_trait]
-impl<T> IPeerConnections<T> for ReconnectPeerConnections<T>
-where
-    T: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + 'static,
-{
-    #[must_use]
-    async fn send(&mut self, peers: &[PeerId], msg: T) -> Cancellable<()> {
-        for peer_id in peers {
-            trace!(target: LOG_NET_PEER, ?peer_id, "Sending message to");
-            if let Some(peer) = self.connections.get_mut(peer_id) {
-                peer.send(msg.clone());
-            } else {
-                trace!(target: LOG_NET_PEER,peer = ?peer_id, "Not sending message to unknown peer (maybe banned)");
+    fn try_send(&self, recipient: Recipient, msg: M) {
+        match recipient {
+            Recipient::Everyone => {
+                for connection in self.connections.values() {
+                    connection.try_send(msg.clone());
+                }
+            }
+            Recipient::Peer(peer) => {
+                if let Some(connection) = self.connections.get(&peer) {
+                    connection.try_send(msg);
+                } else {
+                    warn!(target: LOG_NET_PEER, "No connection for peer {peer}");
+                }
             }
         }
-        Ok(())
     }
 
-    async fn receive(&mut self) -> Cancellable<(PeerId, T)> {
+    async fn receive(&mut self) -> Cancellable<(PeerId, M)> {
         // if all peers banned (or just solo-federation), just hang here as there's
         // never going to be any message. This avoids panic on `select_all` with
         // no futures.
@@ -419,7 +421,7 @@ where
                     Ok(peer_message) => {
                         if let PeerMessage::Message(msg) = peer_message {
                             PEER_MESSAGES_COUNT.with_label_values(&[&self.our_id_str, &self.peer_id_str, "incoming"]).inc();
-                            if self.incoming.try_send(msg).is_err(){
+                            if self.incoming.send(msg).await.is_err(){
                                 debug!(target: LOG_NET_PEER, "Could not relay incoming message since the channel is full");
                             }
                         }
@@ -640,23 +642,16 @@ where
 
         PeerConnection {
             outgoing: outgoing_sender,
-            outgoing_send_err_count: Arc::new(AtomicU64::new(0)),
             incoming: incoming_receiver,
         }
     }
 
-    fn send(&self, msg: M) {
-        if self.outgoing.try_send(msg).is_err() {
-            let count = self
-                .outgoing_send_err_count
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            if count % 100 == 0 {
-                debug!(target: LOG_NET_PEER, count, "Could not send outgoing message since the channel is full");
-            }
-        } else {
-            self.outgoing_send_err_count
-                .store(0, std::sync::atomic::Ordering::Relaxed);
-        }
+    async fn send(&self, msg: M) {
+        self.outgoing.send(msg).await.ok();
+    }
+
+    fn try_send(&self, msg: M) {
+        self.outgoing.try_send(msg).ok();
     }
 
     async fn receive(&mut self) -> Cancellable<M> {

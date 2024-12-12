@@ -1,11 +1,11 @@
 use bitcoin::hashes::{sha256, Hash};
 use fedimint_core::encoding::Encodable;
-use fedimint_core::net::peers::IPeerConnections;
+use fedimint_core::net::peers::{IPeerConnections, Recipient};
 use parity_scale_codec::{Decode, Encode, IoReader};
 
 use super::data_provider::UnitData;
 use super::keychain::Keychain;
-use super::{Message, Recipient};
+use super::Message;
 use crate::net::peers::ReconnectPeerConnections;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -51,7 +51,7 @@ impl aleph_bft::Network<NetworkData> for Network {
         // parity_scale_codec::Encode to serialize it such that Message can
         // implement Encodable
         self.connections
-            .send_sync(&Message(network_data.encode()), recipient);
+            .try_send(recipient, Message(network_data.encode()));
     }
 
     async fn next_event(&mut self) -> Option<NetworkData> {

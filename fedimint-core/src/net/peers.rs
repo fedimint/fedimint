@@ -29,28 +29,14 @@ impl<Msg> DerefMut for PeerConnections<Msg> {
 }
 
 /// Connection manager that tries to keep connections open to all peers
-///
-/// Production implementations of this trait have to ensure that:
-/// * Connections to peers are authenticated and encrypted
-/// * Messages are received exactly once and in the order they were sent
-/// * Connections are reopened when closed
-/// * Messages are cached in case of short-lived network interruptions and
-///   resent on reconnect, this avoids the need to rejoin the consensus, which
-///   is more tricky.
-///
-/// In case of longer term interruptions the message cache has to be dropped to
-/// avoid DoS attacks. The thus disconnected peer will need to rejoin the
-/// consensus at a later time.
 #[async_trait]
 pub trait IPeerConnections<Msg>
 where
     Msg: Serialize + DeserializeOwned + Unpin + Send,
 {
-    /// Send a message to a specific peer.
-    ///
-    /// The message is sent immediately and cached if the peer is reachable and
-    /// only cached otherwise.
-    async fn send(&mut self, peers: &[PeerId], msg: Msg) -> Cancellable<()>;
+    async fn send(&mut self, recipient: Recipient, msg: Msg);
+
+    fn try_send(&self, recipient: Recipient, msg: Msg);
 
     /// Await receipt of a message from any connected peer.
     async fn receive(&mut self) -> Cancellable<(PeerId, Msg)>;
@@ -62,6 +48,13 @@ where
     {
         PeerConnections(Box::new(self))
     }
+}
+
+/// This enum defines the intended recipient of a p2p message.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Recipient {
+    Everyone,
+    Peer(PeerId),
 }
 
 /// Owned [`MuxPeerConnections`] trait object type
