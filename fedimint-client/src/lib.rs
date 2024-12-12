@@ -1532,7 +1532,6 @@ impl Client {
             (
                 peer_id,
                 api.request_single_peer_typed::<SupportedApiVersionsSummary>(
-                    None,
                     VERSION_ENDPOINT.to_owned(),
                     ApiRequestErased::default(),
                     peer_id,

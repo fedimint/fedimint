@@ -218,7 +218,6 @@ where
             if let Ok(response) = self
                 // Only wait a second since removing a gateway is "best effort"
                 .request_single_peer_federation::<Option<sha256::Hash>>(
-                    Some(Duration::from_secs(1)),
                     REMOVE_GATEWAY_CHALLENGE_ENDPOINT.to_string(),
                     ApiRequestErased::new(gateway_id),
                     *peer,
@@ -238,8 +237,6 @@ where
         for peer in self.all_peers() {
             if let Ok(response) = self
                 .request_single_peer_federation::<bool>(
-                    // Only wait a second since removing a gateway is "best effort"
-                    Some(Duration::from_secs(1)),
                     REMOVE_GATEWAY_ENDPOINT.to_string(),
                     ApiRequestErased::new(remove_gateway_request.clone()),
                     *peer,

@@ -120,28 +120,16 @@ pub trait FederationApiExt: IRawFederationApi {
     /// timeout.
     async fn request_single_peer(
         &self,
-        timeout: Option<Duration>,
         method: String,
         params: ApiRequestErased,
         peer_id: PeerId,
     ) -> JsonRpcResult<jsonrpsee_core::JsonValue> {
-        let request = async {
-            self.request_raw(peer_id, &method, &[params.to_json()])
-                .await
-        };
-
-        if let Some(timeout) = timeout {
-            match fedimint_core::runtime::timeout(timeout, request).await {
-                Ok(result) => result,
-                Err(_timeout) => Err(JsonRpcClientError::RequestTimeout),
-            }
-        } else {
-            request.await
-        }
+        self.request_raw(peer_id, &method, &[params.to_json()])
+            .await
     }
+
     async fn request_single_peer_typed<Ret>(
         &self,
-        timeout: Option<Duration>,
         method: String,
         params: ApiRequestErased,
         peer_id: PeerId,
@@ -149,7 +137,7 @@ pub trait FederationApiExt: IRawFederationApi {
     where
         Ret: DeserializeOwned,
     {
-        self.request_single_peer(timeout, method, params, peer_id)
+        self.request_single_peer(method, params, peer_id)
             .await
             .map_err(PeerError::Rpc)
             .and_then(|v| {
@@ -161,7 +149,6 @@ pub trait FederationApiExt: IRawFederationApi {
     /// [`Self::request_with_strategy`].
     async fn request_single_peer_federation<FedRet>(
         &self,
-        timeout: Option<Duration>,
         method: String,
         params: ApiRequestErased,
         peer_id: PeerId,
@@ -170,7 +157,7 @@ pub trait FederationApiExt: IRawFederationApi {
         FedRet: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         Ok(self
-            .request_single_peer(timeout, method.clone(), params.clone(), peer_id)
+            .request_single_peer(method.clone(), params.clone(), peer_id)
             .await
             .map_err(PeerError::Rpc)
             .and_then(|v| {
@@ -202,7 +189,7 @@ pub trait FederationApiExt: IRawFederationApi {
                 let params = &params;
                 async move {
                     let result = self
-                        .request_single_peer_typed(None, method.clone(), params.clone(), *peer)
+                        .request_single_peer_typed(method.clone(), params.clone(), *peer)
                         .await;
 
                     (*peer, result)
@@ -229,7 +216,6 @@ pub trait FederationApiExt: IRawFederationApi {
                                 async move {
                                     let result = self
                                         .request_single_peer_typed(
-                                            None,
                                             method.clone(),
                                             params.clone(),
                                             peer,
@@ -288,15 +274,10 @@ pub trait FederationApiExt: IRawFederationApi {
                         "api-request-{method}-{peer}",
                         api_networking_backoff(),
                         || async {
-                            self.request_single_peer_typed(
-                                None,
-                                method.clone(),
-                                params.clone(),
-                                *peer,
-                            )
-                            .await
-                            .inspect_err(|e| e.report_if_important(*peer))
-                            .map_err(|e| anyhow!(e.to_string()))
+                            self.request_single_peer_typed(method.clone(), params.clone(), *peer)
+                                .await
+                                .inspect_err(|e| e.report_if_important(*peer))
+                                .map_err(|e| anyhow!(e.to_string()))
                         },
                     )
                     .await
@@ -325,7 +306,6 @@ pub trait FederationApiExt: IRawFederationApi {
                                     api_networking_backoff(),
                                     || async {
                                         self.request_single_peer_typed(
-                                            None,
                                             method.clone(),
                                             params.clone(),
                                             peer,
@@ -400,13 +380,8 @@ pub trait FederationApiExt: IRawFederationApi {
                 anyhow::format_err!("Admin peer_id not set"),
             ));
         };
-        self.request_single_peer_federation(
-            None,
-            method.into(),
-            params.with_auth(auth),
-            self_peer_id,
-        )
-        .await
+        self.request_single_peer_federation(method.into(), params.with_auth(auth), self_peer_id)
+            .await
     }
 
     async fn request_admin_no_auth<Ret>(
@@ -425,7 +400,7 @@ pub trait FederationApiExt: IRawFederationApi {
             ));
         };
 
-        self.request_single_peer_federation(None, method.into(), params, self_peer_id)
+        self.request_single_peer_federation(method.into(), params, self_peer_id)
             .await
     }
 }

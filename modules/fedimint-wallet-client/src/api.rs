@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use bitcoin::{Address, Amount};
 use fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 use fedimint_core::envs::BitcoinRpcConfig;
@@ -77,7 +75,6 @@ where
 
     async fn fetch_bitcoin_rpc_kind(&self, peer_id: PeerId) -> FederationResult<String> {
         self.request_single_peer_federation(
-            Some(Duration::from_secs(10)),
             BITCOIN_KIND_ENDPOINT.to_string(),
             ApiRequestErased::default(),
             peer_id,
