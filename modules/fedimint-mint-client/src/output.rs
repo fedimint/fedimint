@@ -8,7 +8,7 @@ use fedimint_api_client::api::{
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_client::module::{ClientContext, OutPointRange};
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::DynGlobalClientContext;
+use fedimint_client::{DynGlobalClientContext, InFlightAmounts};
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -126,6 +126,21 @@ impl State for MintOutputStateMachine {
 
     fn operation_id(&self) -> OperationId {
         self.common.operation_id
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        match &self.state {
+            MintOutputStates::Created(sm) => InFlightAmounts::incoming(sm.amount),
+            MintOutputStates::CreatedMulti(sm) => InFlightAmounts::incoming(
+                sm.issuance_requests
+                    .values()
+                    .map(|(amount, _)| *amount)
+                    .sum(),
+            ),
+            MintOutputStates::Aborted(_)
+            | MintOutputStates::Failed(_)
+            | MintOutputStates::Succeeded(_) => InFlightAmounts::default(),
+        }
     }
 }
 

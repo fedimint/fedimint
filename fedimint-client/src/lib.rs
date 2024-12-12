@@ -3223,6 +3223,54 @@ impl ClientBuilder {
     }
 }
 
+/// Represents money we may be receiving, but haven't yet
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
+pub struct InFlightAmounts {
+    /// Receives that are not yet reflected in our main balance
+    pub incoming: Amount,
+    /// Sends that may be refunded
+    pub outgoing: Amount,
+}
+
+impl Default for InFlightAmounts {
+    fn default() -> Self {
+        InFlightAmounts {
+            incoming: Amount::ZERO,
+            outgoing: Amount::ZERO,
+        }
+    }
+}
+
+impl InFlightAmounts {
+    pub fn incoming(incoming: Amount) -> Self {
+        InFlightAmounts {
+            incoming,
+            outgoing: Amount::ZERO,
+        }
+    }
+
+    pub fn outgoing(outgoing: Amount) -> Self {
+        InFlightAmounts {
+            incoming: Amount::ZERO,
+            outgoing,
+        }
+    }
+
+    pub fn checked_add(&self, other: InFlightAmounts) -> Option<InFlightAmounts> {
+        Some(InFlightAmounts {
+            incoming: self.incoming.checked_add(other.incoming)?,
+            outgoing: self.outgoing.checked_add(other.outgoing)?,
+        })
+    }
+
+    pub fn checked_sub(&self, other: InFlightAmounts) -> Option<InFlightAmounts> {
+        Some(InFlightAmounts {
+            incoming: self.incoming.checked_sub(other.incoming)?,
+            outgoing: self.outgoing.checked_sub(other.outgoing)?,
+        })
+    }
+}
+
 /// Fetches the encoded client secret from the database and decodes it.
 /// If an encoded client secret is not present in the database, or if
 /// decoding fails, an error is returned.

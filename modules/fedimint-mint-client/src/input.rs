@@ -1,7 +1,7 @@
 use fedimint_client::module::OutPointRange;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
-use fedimint_client::DynGlobalClientContext;
+use fedimint_client::{DynGlobalClientContext, InFlightAmounts};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, TransactionId};
@@ -103,6 +103,22 @@ impl State for MintInputStateMachine {
 
     fn operation_id(&self) -> OperationId {
         self.common.operation_id
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        match &self.state {
+            #[allow(deprecated)]
+            MintInputStates::Created(sm) => InFlightAmounts::outgoing(sm.amount),
+            MintInputStates::CreatedBundle(sm) => {
+                InFlightAmounts::outgoing(sm.notes.iter().map(|(amount, _)| *amount).sum())
+            }
+            MintInputStates::Success(_)
+            | MintInputStates::Error(_)
+            | MintInputStates::RefundSuccess(_)
+            | MintInputStates::RefundedPerNote(_)
+            | MintInputStates::RefundedBundle(_)
+            | MintInputStates::Refund(_) => InFlightAmounts::default(),
+        }
     }
 }
 

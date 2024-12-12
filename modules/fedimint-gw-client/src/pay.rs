@@ -4,7 +4,7 @@ use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle,
 };
-use fedimint_client::{ClientHandleArc, DynGlobalClientContext};
+use fedimint_client::{ClientHandleArc, DynGlobalClientContext, InFlightAmounts};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -138,6 +138,10 @@ impl State for GatewayPayStateMachine {
 
     fn operation_id(&self) -> fedimint_core::core::OperationId {
         self.common.operation_id
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        InFlightAmounts::default()
     }
 }
 

@@ -4,7 +4,7 @@ use std::time::SystemTime;
 use fedimint_client::module::OutPointRange;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle, ClientInputSM};
-use fedimint_client::DynGlobalClientContext;
+use fedimint_client::{DynGlobalClientContext, InFlightAmounts};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{runtime, Amount, TransactionId};
@@ -127,6 +127,21 @@ impl State for MintOOBStateMachine {
 
     fn operation_id(&self) -> OperationId {
         self.operation_id
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        match &self.state {
+            MintOOBStates::CreatedMulti(sm) => InFlightAmounts::outgoing(
+                sm.spendable_notes.iter().map(|(amount, _)| *amount).sum(),
+            ),
+            MintOOBStates::Created(sm) => InFlightAmounts::outgoing(sm.amount),
+            MintOOBStates::TimeoutRefund(_)
+            | MintOOBStates::UserRefundMulti(_)
+            | MintOOBStates::UserRefund(_) => {
+                // Refund is tracked in other SMs
+                InFlightAmounts::default()
+            }
+        }
     }
 }
 

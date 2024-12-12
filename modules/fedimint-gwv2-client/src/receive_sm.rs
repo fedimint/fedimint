@@ -6,7 +6,7 @@ use fedimint_api_client::api::{FederationApiExt, PeerError};
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
-use fedimint_client::DynGlobalClientContext;
+use fedimint_client::{DynGlobalClientContext, InFlightAmounts};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::ApiRequestErased;
@@ -132,6 +132,12 @@ impl State for ReceiveStateMachine {
 
     fn operation_id(&self) -> OperationId {
         self.common.operation_id
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        // FIXME: introduce Funded state to avoid double-counting of in-flight funds
+        // while the funding tx is in-flight
+        InFlightAmounts::default()
     }
 }
 

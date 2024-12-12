@@ -1,7 +1,7 @@
 use std::fmt;
 
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::DynGlobalClientContext;
+use fedimint_client::{DynGlobalClientContext, InFlightAmounts};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_lightning::{InterceptPaymentResponse, PaymentAction, Preimage};
@@ -112,6 +112,11 @@ impl State for CompleteStateMachine {
 
     fn operation_id(&self) -> OperationId {
         self.common.operation_id
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        // TODO: what does this SM do, does it represent in-flight funds?
+        InFlightAmounts::default()
     }
 }
 

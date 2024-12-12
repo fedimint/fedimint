@@ -29,7 +29,7 @@ use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransit
 use fedimint_client::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
-use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext, InFlightAmounts};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
@@ -1088,6 +1088,13 @@ impl State for LightningClientStateMachines {
         match self {
             LightningClientStateMachines::Send(state) => state.operation_id(),
             LightningClientStateMachines::Receive(state) => state.operation_id(),
+        }
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        match self {
+            LightningClientStateMachines::Send(sm) => sm.in_flight_amounts(),
+            LightningClientStateMachines::Receive(sm) => sm.in_flight_amounts(),
         }
     }
 }

@@ -1,5 +1,5 @@
 use fedimint_client::sm::{DynState, State, StateTransition};
-use fedimint_client::DynGlobalClientContext;
+use fedimint_client::{DynGlobalClientContext, InFlightAmounts};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -69,6 +69,23 @@ impl State for DummyStateMachine {
             | DummyStateMachine::OutputDone(_, _, id)
             | DummyStateMachine::Refund(id)
             | DummyStateMachine::Unreachable(id, _) => *id,
+        }
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        match self {
+            DummyStateMachine::Input(amount, _, _) => InFlightAmounts {
+                incoming: Amount::ZERO,
+                outgoing: *amount,
+            },
+            DummyStateMachine::Output(amount, _, _) => InFlightAmounts {
+                incoming: *amount,
+                outgoing: Amount::ZERO,
+            },
+            DummyStateMachine::InputDone(_)
+            | DummyStateMachine::OutputDone(_, _, _)
+            | DummyStateMachine::Refund(_)
+            | DummyStateMachine::Unreachable(_, _) => InFlightAmounts::default(),
         }
     }
 }

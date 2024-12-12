@@ -3,7 +3,7 @@ use std::time::{Duration, SystemTime};
 
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
-use fedimint_client::DynGlobalClientContext;
+use fedimint_client::{DynGlobalClientContext, InFlightAmounts};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::ModuleConsensusVersion;
@@ -95,6 +95,17 @@ impl State for DepositStateMachine {
 
     fn operation_id(&self) -> OperationId {
         self.operation_id
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        match &self.state {
+            DepositStates::WaitingForConfirmations(w) => {
+                InFlightAmounts::incoming(w.btc_transaction.output[w.out_idx as usize].value.into())
+            }
+            DepositStates::Created(_) | DepositStates::Claiming(_) | DepositStates::TimedOut(_) => {
+                InFlightAmounts::default()
+            }
+        }
     }
 }
 

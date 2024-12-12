@@ -45,7 +45,7 @@ use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransit
 use fedimint_client::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
-use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext, InFlightAmounts};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
@@ -1346,6 +1346,13 @@ impl State for WalletClientStates {
         match self {
             WalletClientStates::Deposit(sm) => sm.operation_id(),
             WalletClientStates::Withdraw(sm) => sm.operation_id(),
+        }
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        match self {
+            WalletClientStates::Deposit(sm) => sm.in_flight_amounts(),
+            WalletClientStates::Withdraw(sm) => sm.in_flight_amounts(),
         }
     }
 }

@@ -4,7 +4,7 @@ use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::OutPointRange;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, DynState, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
-use fedimint_client::DynGlobalClientContext;
+use fedimint_client::{DynGlobalClientContext, InFlightAmounts};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::Keypair;
@@ -79,6 +79,13 @@ impl State for LightningReceiveStateMachine {
 
     fn operation_id(&self) -> fedimint_core::core::OperationId {
         self.operation_id
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        // There isn't really any time where we have funds in flight in this state
+        // machine, as soon as we detect a funded contract we claim it and produce mint
+        // incoming SMs that
+        InFlightAmounts::default()
     }
 }
 

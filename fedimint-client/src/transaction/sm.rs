@@ -11,7 +11,7 @@ use fedimint_core::TransactionId;
 use tokio::sync::watch;
 
 use crate::sm::{Context, DynContext, State, StateTransition};
-use crate::{DynGlobalClientContext, DynState, TxAcceptedEvent, TxRejectedEvent};
+use crate::{DynGlobalClientContext, DynState, InFlightAmounts, TxAcceptedEvent, TxRejectedEvent};
 
 // TODO: how to prevent collisions? Generally reserve some range for custom IDs?
 /// Reserved module instance id used for client-internal state machines
@@ -153,6 +153,10 @@ impl State for TxSubmissionStatesSM {
 
     fn operation_id(&self) -> OperationId {
         self.operation_id
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        InFlightAmounts::default()
     }
 }
 

@@ -2,13 +2,13 @@ use anyhow::ensure;
 use bitcoin::hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
-use fedimint_client::DynGlobalClientContext;
+use fedimint_client::{DynGlobalClientContext, InFlightAmounts};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::backoff_util::api_networking_backoff;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{secp256k1, util, OutPoint, TransactionId};
+use fedimint_core::{secp256k1, util, Amount, OutPoint, TransactionId};
 use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
 use fedimint_logging::LOG_CLIENT_MODULE_LNV2;
@@ -130,6 +130,13 @@ impl State for SendStateMachine {
 
     fn operation_id(&self) -> OperationId {
         self.common.operation_id
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        InFlightAmounts {
+            incoming: Amount::ZERO,
+            outgoing: self.common.contract.amount,
+        }
     }
 }
 

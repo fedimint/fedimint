@@ -20,7 +20,7 @@ use tracing::warn;
 use crate::module::{IdxRange, OutPointRange, StateGenerator};
 use crate::sm::{self, DynState};
 use crate::{
-    states_add_instance, states_to_instanceless_dyn, InstancelessDynClientInput,
+    states_add_instance, states_to_instanceless_dyn, InFlightAmounts, InstancelessDynClientInput,
     InstancelessDynClientInputBundle, InstancelessDynClientInputSM, InstancelessDynClientOutput,
     InstancelessDynClientOutputBundle, InstancelessDynClientOutputSM,
 };
@@ -77,6 +77,10 @@ impl sm::State for NeverClientStateMachine {
     }
 
     fn operation_id(&self) -> fedimint_core::core::OperationId {
+        unreachable!()
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
         unreachable!()
     }
 }

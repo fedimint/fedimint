@@ -1,5 +1,5 @@
 use fedimint_client::sm::{DynState, State, StateTransition};
-use fedimint_client::DynGlobalClientContext;
+use fedimint_client::{DynGlobalClientContext, InFlightAmounts};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use serde::{Deserialize, Serialize};
@@ -23,6 +23,10 @@ impl State for MetaStateMachine {
     }
 
     fn operation_id(&self) -> OperationId {
+        unreachable!()
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
         unreachable!()
     }
 }

@@ -26,9 +26,7 @@ use fedimint_client::sm::{Context, DynState, ModuleNotifier, State};
 use fedimint_client::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
-use fedimint_client::{
-    sm_enum_variant_translation, AddStateMachinesError, ClientHandleArc, DynGlobalClientContext,
-};
+use fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, ClientHandleArc, DynGlobalClientContext, InFlightAmounts};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction};
@@ -812,6 +810,14 @@ impl State for GatewayClientStateMachines {
             GatewayClientStateMachines::Pay(pay_state) => pay_state.operation_id(),
             GatewayClientStateMachines::Receive(receive_state) => receive_state.operation_id(),
             GatewayClientStateMachines::Complete(complete_state) => complete_state.operation_id(),
+        }
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        match self {
+            GatewayClientStateMachines::Pay(sm) => sm.in_flight_amounts(),
+            GatewayClientStateMachines::Receive(sm) => sm.in_flight_amounts(),
+            GatewayClientStateMachines::Complete(sm) => sm.in_flight_amounts(),
         }
     }
 }

@@ -23,7 +23,7 @@ use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransit
 use fedimint_client::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
-use fedimint_client::{sm_enum_variant_translation, ClientHandleArc, DynGlobalClientContext};
+use fedimint_client::{sm_enum_variant_translation, ClientHandleArc, DynGlobalClientContext, InFlightAmounts};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::DatabaseTransaction;
@@ -231,6 +231,14 @@ impl State for GatewayClientStateMachinesV2 {
             GatewayClientStateMachinesV2::Send(state) => state.operation_id(),
             GatewayClientStateMachinesV2::Receive(state) => state.operation_id(),
             GatewayClientStateMachinesV2::Complete(state) => state.operation_id(),
+        }
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        match &self {
+            GatewayClientStateMachinesV2::Send(sm) => sm.in_flight_amounts(),
+            GatewayClientStateMachinesV2::Receive(sm) => sm.in_flight_amounts(),
+            GatewayClientStateMachinesV2::Complete(sm) => sm.in_flight_amounts(),
         }
     }
 }
