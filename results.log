@@ -1,0 +1,72 @@
+./scripts/tests/test-ci-all-backcompat.sh v0.3.4-rc.1
+Pre-building workspace...
+Lowering IO priority with chrt -i 0 ionice -c 3
+   Compiling gateway-tests v0.5.0-rc.1 (/home/nix/fedimint/gateway/integration_tests)
+warning: unused import: `VERSION_0_4_0_ALPHA`
+  --> gateway/integration_tests/src/main.rs:13:35
+   |
+13 |     VERSION_0_3_0, VERSION_0_4_0, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA,
+   |                                   ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: `gateway-tests` (bin "gateway-tests" test) generated 1 warning (run `cargo fix --bin "gateway-tests" --tests` to apply 1 suggestion)
+warning: `gateway-tests` (bin "gateway-tests") generated 1 warning (1 duplicate)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.82s
+Pre-building tests...
+Lowering IO priority with chrt -i 0 ionice -c 3
+warning: unused import: `VERSION_0_4_0_ALPHA`
+  --> gateway/integration_tests/src/main.rs:13:35
+   |
+13 |     VERSION_0_3_0, VERSION_0_4_0, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA,
+   |                                   ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: `gateway-tests` (bin "gateway-tests" test) generated 1 warning (run `cargo fix --bin "gateway-tests" --tests` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.39s
+Compiling fedimintd for version v0.3.4-rc.1 ...
+Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
+Compiling fedimint-cli for version v0.3.4-rc.1 ...
+Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
+Compiling gateway-cli for version v0.3.4-rc.1 ...
+Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
+Compiling gatewayd for version v0.3.4-rc.1 ...
+Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
+Compiling gateway-cln-extension for version v0.4.0 ...
+Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
+## Starting all tests in parallel...
+parallel --jobs 1 --timeout 300 --load 5 --delay 10 --joblog /tmp/nix-shell.LbYM7O/fb0Sr/joblog --noswap --memfree 2G
+## RUN:  always_success_test (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:     0.00s     3420B        3W        0c
+## DONE: always_success_test (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  gateway_config_test_cln (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    32.67s  1536624B   238589W    17462c
+## DONE: gateway_config_test_cln (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  gateway_config_test_lnd (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    37.33s  1536504B   397652W    21348c
+## DONE: gateway_config_test_lnd (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  gateway_config_test_lnd (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    21.46s   317920B    97472W     9206c
+## DONE: gateway_config_test_lnd (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  gateway_config_test_cln (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    37.88s  1536592B   322618W    18108c
+## DONE: gateway_config_test_cln (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  gateway_config_test_lnd (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    44.90s  1536564B   315145W    13965c
+## DONE: gateway_config_test_lnd (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  always_success_test (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:     0.00s     3428B        3W        0c
+## DONE: always_success_test (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  gateway_config_test_cln (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    12.55s   316248B    80149W     9635c
+## DONE: gateway_config_test_cln (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  always_success_test (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:     0.00s     3508B        3W        0c
+## DONE: always_success_test (FM: current, CLI: v0.3.4-rc.1, GW: current)
+All tests successful

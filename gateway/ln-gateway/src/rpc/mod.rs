@@ -270,3 +270,55 @@ pub struct MnemonicResponse {
     // a separate database from the gateway's db.
     pub legacy_federations: Vec<FederationId>,
 }
+
+// TODO: docs if clean approach
+pub mod legacy_types {
+    use std::collections::BTreeMap;
+
+    use bitcoin::Network;
+    use fedimint_core::config::FederationId;
+    use fedimint_core::{secp256k1, Amount};
+    use serde::{Deserialize, Serialize};
+
+    use crate::lightning::LightningMode;
+    use crate::rpc::FederationRoutingFees;
+
+    /*
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+    pub struct LegacyFederationInfo {
+        pub federation_id: FederationId,
+        pub federation_name: Option<String>,
+        pub balance_msat: Amount,
+        pub routing_fees: Option<FederationRoutingFees>,
+    }
+    */
+
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+    pub struct LegacyFederationInfo {
+        pub federation_id: FederationId,
+        pub balance_msat: Amount,
+        pub config: fedimint_core::config::ClientConfig,
+        pub channel_id: Option<u64>,
+        pub routing_fees: Option<FederationRoutingFees>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, PartialEq)]
+    pub struct LegacyGatewayInfo {
+        pub version_hash: String,
+        pub federations: Vec<LegacyFederationInfo>,
+        /// Mapping from short channel id to the federation id that it belongs
+        /// to.
+        #[serde(alias = "channels")]
+        pub federation_fake_scids: Option<BTreeMap<u64, FederationId>>,
+        pub lightning_pub_key: Option<String>,
+        pub lightning_alias: Option<String>,
+        pub gateway_id: secp256k1::PublicKey,
+        pub gateway_state: String,
+        pub network: Option<Network>,
+        #[serde(default)]
+        pub block_height: Option<u32>,
+        #[serde(default)]
+        pub synced_to_chain: bool,
+        pub lightning_mode: Option<LightningMode>,
+    }
+}
