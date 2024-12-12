@@ -552,10 +552,10 @@ impl WalletClientModule {
         address: bitcoin::Address<NetworkUnchecked>,
         amount: bitcoin::Amount,
     ) -> anyhow::Result<PegOutFees> {
-        check_address(&address, self.cfg().network.0)?;
+        let address = address.require_network(self.cfg().network.0)?;
 
         self.module_api
-            .fetch_peg_out_fees(&address.assume_checked(), amount)
+            .fetch_peg_out_fees(&address, amount)
             .await?
             .context("Federation didn't return peg-out fees")
     }
@@ -744,6 +744,8 @@ impl WalletClientModule {
             bail!("Operation is not a deposit operation");
         };
 
+        let address = address.require_network(self.cfg().network.0)?;
+
         // The old deposit operations don't have tweak_idx set
         let Some(tweak_idx) = tweak_idx else {
             // In case we are dealing with an old deposit that still uses state machines we
@@ -771,7 +773,7 @@ impl WalletClientModule {
         Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, || {
             let stream_rpc = self.rpc.clone();
             let stream_client_ctx = self.client_ctx.clone();
-            let stream_script_pub_key = address.assume_checked().script_pubkey();
+            let stream_script_pub_key = address.script_pubkey();
 
             stream! {
                 yield DepositStateV2::WaitingForTransaction;

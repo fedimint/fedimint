@@ -866,9 +866,11 @@ impl ServerModule for Wallet {
                     // Since we are only calculating the tx size we can use an arbitrary dummy nonce.
                     let dummy_tweak = [0; 33];
 
+                    let network = module.cfg.consensus.network.0;
+
                     let tx = module.offline_wallet().create_tx(
                         bitcoin::Amount::from_sat(sats),
-                        address.assume_checked().script_pubkey(),
+                        address.require_network(network).map_err(|e| ApiError::bad_request(e.to_string()))?.script_pubkey(),
                         vec![],
                         module.available_utxos(&mut context.dbtx().into_nc()).await,
                         feerate,
@@ -1408,15 +1410,30 @@ impl Wallet {
         change_tweak: &[u8; 33],
     ) -> Result<UnsignedTransaction, WalletOutputError> {
         match output {
-            WalletOutputV0::PegOut(peg_out) => self.offline_wallet().create_tx(
-                peg_out.amount,
-                peg_out.recipient.clone().assume_checked().script_pubkey(),
-                vec![],
-                self.available_utxos(dbtx).await,
-                peg_out.fees.fee_rate,
-                change_tweak,
-                None,
-            ),
+            WalletOutputV0::PegOut(peg_out) => {
+                let recipient = peg_out
+                    .recipient
+                    .clone()
+                    .require_network(self.cfg.consensus.network.0)
+                    .map_err(|_| {
+                        WalletOutputError::WrongNetwork(
+                            self.cfg.consensus.network.clone(),
+                            NetworkLegacyEncodingWrapper(get_network_for_address(
+                                &peg_out.recipient,
+                            )),
+                        )
+                    })?;
+
+                self.offline_wallet().create_tx(
+                    peg_out.amount,
+                    recipient.script_pubkey(),
+                    vec![],
+                    self.available_utxos(dbtx).await,
+                    peg_out.fees.fee_rate,
+                    change_tweak,
+                    None,
+                )
+            }
             WalletOutputV0::Rbf(rbf) => {
                 let tx = dbtx
                     .get_value(&PendingTransactionKey(rbf.txid))
