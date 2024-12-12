@@ -63,8 +63,6 @@ pub struct PeerConnectionMultiplexer<MuxKey, Msg> {
     send_requests_tx: Sender<(Vec<PeerId>, MuxKey, Msg)>,
     /// Sender of receive callbacks
     receive_callbacks_tx: Sender<Callback<MuxKey, Msg>>,
-    /// Sender of peer bans
-    peer_bans_tx: Sender<PeerId>,
 }
 
 type Callback<MuxKey, Msg> = (MuxKey, oneshot::Sender<(PeerId, Msg)>);
@@ -77,7 +75,6 @@ where
     pub fn new(connections: PeerConnections<ModuleMultiplexed<MuxKey, Msg>>) -> Self {
         let (send_requests_tx, send_requests_rx) = channel(1000);
         let (receive_callbacks_tx, receive_callbacks_rx) = channel(1000);
-        let (peer_bans_tx, peer_bans_rx) = channel(1000);
 
         spawn(
             "peer connection multiplexer",
@@ -86,14 +83,12 @@ where
                 ModuleMultiplexerOutOfOrder::default(),
                 send_requests_rx,
                 receive_callbacks_rx,
-                peer_bans_rx,
             ),
         );
 
         Self {
             send_requests_tx,
             receive_callbacks_tx,
-            peer_bans_tx,
         }
     }
 
@@ -102,7 +97,6 @@ where
         mut out_of_order: ModuleMultiplexerOutOfOrder<MuxKey, Msg>,
         mut send_requests_rx: Receiver<(Vec<PeerId>, MuxKey, Msg)>,
         mut receive_callbacks_rx: Receiver<Callback<MuxKey, Msg>>,
-        mut peer_bans_rx: Receiver<PeerId>,
     ) -> Cancellable<()> {
         loop {
             let mut key_inserted: Option<MuxKey> = None;
@@ -111,11 +105,6 @@ where
                  send_request = send_requests_rx.recv() => {
                     let (peers, key, msg) = send_request.ok_or(Cancelled)?;
                     connections.send(&peers, ModuleMultiplexed { key, msg }).await?;
-                }
-                // Ban requests are forwarded to underlying connections
-                peer_ban = peer_bans_rx.recv() => {
-                    let peer = peer_ban.ok_or(Cancelled)?;
-                    connections.ban_peer(peer).await;
                 }
                 // Receive callbacks are added to callback queue by key
                 receive_callback = receive_callbacks_rx.recv() => {
@@ -181,11 +170,6 @@ where
             .await
             .map_err(|_e| Cancelled)?;
         callback_rx.await.map_err(|_e| Cancelled)
-    }
-
-    async fn ban_peer(&self, peer: PeerId) {
-        // We don't return a `Cancellable` for bans
-        let _ = self.peer_bans_tx.send(peer).await;
     }
 }
 

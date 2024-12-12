@@ -32,9 +32,7 @@ use tokio::time::Instant;
 use tracing::{debug, info, instrument, trace, warn};
 
 use crate::consensus::aleph_bft::Recipient;
-use crate::metrics::{
-    PEER_BANS_COUNT, PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT,
-};
+use crate::metrics::{PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT};
 use crate::net::connect::{AnyConnector, SharedAnyConnector};
 use crate::net::framed::AnyFramedTransport;
 
@@ -57,7 +55,6 @@ pub type PeerConnector<M> = AnyConnector<PeerMessage<M>>;
 #[derive(Clone)]
 pub struct ReconnectPeerConnections<T> {
     connections: HashMap<PeerId, PeerConnection<T>>,
-    self_id: PeerId,
 }
 
 #[derive(Clone)]
@@ -188,7 +185,6 @@ where
         let shared_connector: SharedAnyConnector<PeerMessage<T>> = connect.into();
         let mut connection_senders = HashMap::new();
         let mut connections = HashMap::new();
-        let self_id = cfg.identity;
 
         for (peer, peer_address) in cfg.peers.iter().filter(|(&peer, _)| peer != cfg.identity) {
             let (connection_sender, connection_receiver) =
@@ -218,10 +214,7 @@ where
             Self::run_listen_task(cfg, shared_connector, connection_senders, handle)
         });
 
-        ReconnectPeerConnections {
-            connections,
-            self_id,
-        }
+        ReconnectPeerConnections { connections }
     }
 
     async fn run_listen_task(
@@ -323,14 +316,6 @@ where
         let first_response = select_all(futures_non_banned).await;
 
         first_response.0 .1.map(|v| (first_response.0 .0, v))
-    }
-
-    async fn ban_peer(&mut self, peer: PeerId) {
-        self.connections.remove(&peer);
-        PEER_BANS_COUNT
-            .with_label_values(&[&self.self_id.to_string(), &peer.to_string()])
-            .inc();
-        warn!(target: LOG_NET_PEER, "Peer {} banned.", peer);
     }
 }
 

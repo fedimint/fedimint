@@ -43,11 +43,6 @@ where
         }
         Err(Cancelled)
     }
-
-    /// Removes a peer connection in case of misbehavior
-    async fn ban_peer(&mut self, _peer: PeerId) {
-        unimplemented!();
-    }
 }
 
 /// Create a fake link between `peer1` and `peer2` for test purposes

@@ -55,9 +55,6 @@ where
     /// Await receipt of a message from any connected peer.
     async fn receive(&mut self) -> Cancellable<(PeerId, Msg)>;
 
-    /// Removes a peer connection in case of misbehavior
-    async fn ban_peer(&mut self, peer: PeerId);
-
     /// Converts the struct to a `PeerConnection` trait object
     fn into_dyn(self) -> PeerConnections<Msg>
     where
@@ -98,9 +95,6 @@ where
 
     /// Await receipt of a message from any connected peer.
     async fn receive(&self, mux_key: MuxKey) -> Cancellable<(PeerId, Msg)>;
-
-    /// Removes a peer connection in case of misbehavior
-    async fn ban_peer(&self, peer: PeerId);
 
     /// Converts the struct to a `PeerConnection` trait object
     fn into_dyn(self) -> MuxPeerConnections<MuxKey, Msg>
