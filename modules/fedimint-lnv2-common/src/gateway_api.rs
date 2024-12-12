@@ -1,9 +1,12 @@
+use std::ops::Add;
+
 use bitcoin::secp256k1::schnorr::Signature;
 use bitcoin::secp256k1::PublicKey;
 use fedimint_core::config::FederationId;
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Amount};
-use lightning_invoice::Bolt11Invoice;
+use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -185,14 +188,26 @@ pub struct RoutingInfo {
 impl RoutingInfo {
     pub fn send_parameters(&self, invoice: &Bolt11Invoice) -> (PaymentFee, u64) {
         if invoice.recover_payee_pub_key() == self.lightning_public_key {
-            (self.send_fee_minimum.clone(), self.expiration_delta_minimum)
+            (self.send_fee_minimum, self.expiration_delta_minimum)
         } else {
-            (self.send_fee_default.clone(), self.expiration_delta_default)
+            (self.send_fee_default, self.expiration_delta_default)
         }
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Eq,
+    PartialEq,
+    PartialOrd,
+    Hash,
+    Serialize,
+    Deserialize,
+    Encodable,
+    Decodable,
+    Copy,
+)]
 pub struct PaymentFee {
     pub base: Amount,
     pub parts_per_million: u64,
@@ -205,6 +220,13 @@ impl PaymentFee {
     pub const SEND_FEE_LIMIT: PaymentFee = PaymentFee {
         base: Amount::from_sats(100),
         parts_per_million: 15_000,
+    };
+
+    /// This is the fee the gateway uses to cover transaction fees with the
+    /// federation.
+    pub const TRANSACTION_FEE_DEFAULT: PaymentFee = PaymentFee {
+        base: Amount::from_sats(50),
+        parts_per_million: 5_000,
     };
 
     /// This is the maximum receive fee of half of one percent plus fifty
@@ -228,5 +250,40 @@ impl PaymentFee {
             .saturating_div(1_000_000)
             .checked_add(self.base.msats)
             .expect("The division creates sufficient headroom to add the base fee")
+    }
+}
+
+impl Add for PaymentFee {
+    type Output = PaymentFee;
+    fn add(self, rhs: Self) -> Self::Output {
+        PaymentFee {
+            base: self.base + rhs.base,
+            parts_per_million: self.parts_per_million + rhs.parts_per_million,
+        }
+    }
+}
+
+impl From<RoutingFees> for PaymentFee {
+    fn from(value: RoutingFees) -> Self {
+        PaymentFee {
+            base: Amount::from_msats(u64::from(value.base_msat)),
+            parts_per_million: u64::from(value.proportional_millionths),
+        }
+    }
+}
+
+impl From<PaymentFee> for RoutingFees {
+    fn from(value: PaymentFee) -> Self {
+        RoutingFees {
+            base_msat: u32::try_from(value.base.msats).expect("base msat was truncated from u64"),
+            proportional_millionths: u32::try_from(value.parts_per_million)
+                .expect("ppm was truncated from u64"),
+        }
+    }
+}
+
+impl std::fmt::Display for PaymentFee {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{},{}", self.base, self.parts_per_million)
     }
 }

@@ -13,6 +13,7 @@ use fedimint_core::invite_code::InviteCode;
 use fedimint_core::{impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1, Amount};
 use fedimint_ln_common::serde_routing_fees;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
+use fedimint_lnv2_common::gateway_api::PaymentFee;
 use futures::{FutureExt, StreamExt};
 use lightning_invoice::RoutingFees;
 use rand::rngs::OsRng;
@@ -254,6 +255,9 @@ impl std::fmt::Display for DbKeyPrefix {
 struct FederationIdKeyPrefixV0;
 
 #[derive(Debug, Encodable, Decodable)]
+struct FederationIdKeyPrefixV1;
+
+#[derive(Debug, Encodable, Decodable)]
 struct FederationIdKeyPrefix;
 
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -271,6 +275,24 @@ pub struct FederationConfigV0 {
 }
 
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
+struct FederationIdKeyV1 {
+    id: FederationId,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+pub struct FederationConfigV1 {
+    pub invite_code: InviteCode,
+    // Unique integer identifier per-federation that is assigned when the gateways joins a
+    // federation.
+    #[serde(alias = "mint_channel_id")]
+    pub federation_index: u64,
+    pub timelock_delta: u64,
+    #[serde(with = "serde_routing_fees")]
+    pub fees: RoutingFees,
+    pub connector: Connector,
+}
+
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
 struct FederationIdKey {
     id: FederationId,
 }
@@ -283,14 +305,20 @@ pub struct FederationConfig {
     #[serde(alias = "mint_channel_id")]
     pub federation_index: u64,
     pub timelock_delta: u64,
-    #[serde(with = "serde_routing_fees")]
-    pub fees: RoutingFees,
+    pub fees: PaymentFee,
+    pub transaction_fees: PaymentFee,
     pub connector: Connector,
 }
 
 impl_db_record!(
     key = FederationIdKeyV0,
     value = FederationConfigV0,
+    db_prefix = DbKeyPrefix::FederationConfig,
+);
+
+impl_db_record!(
+    key = FederationIdKeyV1,
+    value = FederationConfigV1,
     db_prefix = DbKeyPrefix::FederationConfig,
 );
 
@@ -303,6 +331,10 @@ impl_db_record!(
 impl_db_lookup!(
     key = FederationIdKeyV0,
     query_prefix = FederationIdKeyPrefixV0
+);
+impl_db_lookup!(
+    key = FederationIdKeyV1,
+    query_prefix = FederationIdKeyPrefixV1
 );
 impl_db_lookup!(key = FederationIdKey, query_prefix = FederationIdKeyPrefix);
 
@@ -341,13 +373,22 @@ pub struct GatewayConfigurationV1 {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
+pub struct GatewayConfigurationKeyV2;
+
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+pub struct GatewayConfigurationV2 {
+    pub num_route_hints: u32,
+    #[serde(with = "serde_routing_fees")]
+    pub routing_fees: RoutingFees,
+    pub network: NetworkLegacyEncodingWrapper,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
 pub struct GatewayConfigurationKey;
 
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct GatewayConfiguration {
     pub num_route_hints: u32,
-    #[serde(with = "serde_routing_fees")]
-    pub routing_fees: RoutingFees,
     pub network: NetworkLegacyEncodingWrapper,
 }
 
@@ -360,6 +401,12 @@ impl_db_record!(
 impl_db_record!(
     key = GatewayConfigurationKeyV1,
     value = GatewayConfigurationV1,
+    db_prefix = DbKeyPrefix::GatewayConfiguration,
+);
+
+impl_db_record!(
+    key = GatewayConfigurationKeyV2,
+    value = GatewayConfigurationV2,
     db_prefix = DbKeyPrefix::GatewayConfiguration,
 );
 
@@ -394,6 +441,7 @@ pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, CoreMigra
     migrations.insert(DatabaseVersion(0), |ctx| migrate_to_v1(ctx).boxed());
     migrations.insert(DatabaseVersion(1), |ctx| migrate_to_v2(ctx).boxed());
     migrations.insert(DatabaseVersion(2), |ctx| migrate_to_v3(ctx).boxed());
+    migrations.insert(DatabaseVersion(3), |ctx| migrate_to_v4(ctx).boxed());
     migrations
 }
 
@@ -438,14 +486,14 @@ async fn migrate_to_v2(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Erro
             })
             .await
         {
-            let new_federation_config = FederationConfig {
+            let new_federation_config = FederationConfigV1 {
                 invite_code: old_federation_config.invite_code,
                 federation_index: old_federation_config.federation_index,
                 timelock_delta: old_federation_config.timelock_delta,
                 fees: old_federation_config.fees,
                 connector: Connector::default(),
             };
-            let new_federation_key = FederationIdKey {
+            let new_federation_key = FederationIdKeyV1 {
                 id: old_federation_id,
             };
             dbtx.insert_entry(&new_federation_key, &new_federation_config)
@@ -460,15 +508,49 @@ async fn migrate_to_v3(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Erro
 
     // If there is no old gateway configuration, there is nothing to do.
     if let Some(old_gateway_config) = dbtx.remove_entry(&GatewayConfigurationKeyV1).await {
-        let new_gateway_config = GatewayConfiguration {
+        let new_gateway_config = GatewayConfigurationV2 {
             num_route_hints: old_gateway_config.num_route_hints,
             routing_fees: old_gateway_config.routing_fees,
+            network: old_gateway_config.network,
+        };
+        dbtx.insert_entry(&GatewayConfigurationKeyV2, &new_gateway_config)
+            .await;
+    }
+
+    Ok(())
+}
+
+async fn migrate_to_v4(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Error> {
+    let mut dbtx = ctx.dbtx();
+
+    if let Some(old_gateway_config) = dbtx.remove_entry(&GatewayConfigurationKeyV2).await {
+        let new_gateway_config = GatewayConfiguration {
+            num_route_hints: old_gateway_config.num_route_hints,
             network: old_gateway_config.network,
         };
         dbtx.insert_entry(&GatewayConfigurationKey, &new_gateway_config)
             .await;
     }
 
+    let configs = dbtx
+        .find_by_prefix(&FederationIdKeyPrefixV1)
+        .await
+        .collect::<Vec<_>>()
+        .await;
+    for (fed_id, _old_config) in configs {
+        if let Some(old_federation_config) = dbtx.remove_entry(&fed_id).await {
+            let new_fed_config = FederationConfig {
+                invite_code: old_federation_config.invite_code,
+                federation_index: old_federation_config.federation_index,
+                timelock_delta: old_federation_config.timelock_delta,
+                fees: old_federation_config.fees.into(),
+                transaction_fees: PaymentFee::TRANSACTION_FEE_DEFAULT,
+                connector: Connector::default(),
+            };
+            let new_key = FederationIdKey { id: fed_id.id };
+            dbtx.insert_new_entry(&new_key, &new_fed_config).await;
+        }
+    }
     Ok(())
 }
 
@@ -498,6 +580,7 @@ mod fedimint_migration_tests {
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::util::SafeUrl;
+    use fedimint_lnv2_common::gateway_api::PaymentFee;
     use fedimint_logging::TracingSetup;
     use fedimint_testing::db::{
         snapshot_db_migrations_with_decoders, validate_migrations_global, BYTE_32,
@@ -506,7 +589,6 @@ mod fedimint_migration_tests {
     use tracing::info;
 
     use super::*;
-    use crate::DEFAULT_FEES;
 
     async fn create_gatewayd_db_data(db: Database) {
         let mut dbtx = db.begin_transaction().await;
@@ -521,7 +603,7 @@ mod fedimint_migration_tests {
             invite_code,
             federation_index: 2,
             timelock_delta: 10,
-            fees: DEFAULT_FEES,
+            fees: PaymentFee::TRANSACTION_FEE_DEFAULT.into(),
         };
 
         dbtx.insert_new_entry(&FederationIdKeyV0 { id: federation_id }, &federation_config)
@@ -535,7 +617,7 @@ mod fedimint_migration_tests {
         let gateway_configuration = GatewayConfigurationV0 {
             password: "EXAMPLE".to_string(),
             num_route_hints: 2,
-            routing_fees: DEFAULT_FEES,
+            routing_fees: PaymentFee::TRANSACTION_FEE_DEFAULT.into(),
             network: NetworkLegacyEncodingWrapper(bitcoin::Network::Regtest),
         };
 

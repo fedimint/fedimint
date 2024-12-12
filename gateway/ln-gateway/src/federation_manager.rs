@@ -209,7 +209,7 @@ impl FederationManager {
         self.clients.get(federation_id)
     }
 
-    async fn federation_info(
+    pub async fn federation_info(
         &self,
         federation_id: FederationId,
         dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
@@ -227,10 +227,11 @@ impl FederationManager {
             .with(|client| async move {
                 let balance_msat = client.get_balance().await;
 
-                let routing_fees = dbtx
-                    .load_federation_config(federation_id)
-                    .await
-                    .map(|config| config.fees.into());
+                let fed_config = dbtx.load_federation_config(federation_id).await;
+
+                let routing_fees = fed_config.clone()
+                    .map(|config| config.fees);
+                let transaction_fees = fed_config.map(|config| config.transaction_fees);
 
                 Ok(FederationInfo {
                     federation_id,
@@ -238,6 +239,7 @@ impl FederationManager {
                     balance_msat,
                     federation_index,
                     routing_fees,
+                    transaction_fees,
                 })
             })
             .await
@@ -259,10 +261,10 @@ impl FederationManager {
 
             let balance_msat = client.borrow().with(|client| client.get_balance()).await;
 
-            let routing_fees = dbtx
-                .load_federation_config(*federation_id)
-                .await
-                .map(|config| config.fees.into());
+            let fed_config = dbtx.load_federation_config(*federation_id).await;
+
+            let routing_fees = fed_config.clone().map(|config| config.fees);
+            let transaction_fees = fed_config.map(|config| config.transaction_fees);
 
             federation_infos.push(FederationInfo {
                 federation_id: *federation_id,
@@ -270,6 +272,7 @@ impl FederationManager {
                 balance_msat,
                 federation_index,
                 routing_fees,
+                transaction_fees,
             });
         }
         federation_infos

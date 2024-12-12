@@ -2,7 +2,6 @@ pub mod rpc_client;
 pub mod rpc_server;
 
 use std::collections::BTreeMap;
-use std::str::FromStr;
 
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Network};
@@ -10,10 +9,10 @@ use fedimint_core::config::{FederationId, JsonClientConfig};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 use fedimint_eventlog::{EventKind, EventLogId};
-use fedimint_ln_common::config::parse_routing_fees;
+use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_mint_client::OOBNotes;
 use fedimint_wallet_client::PegOutFees;
-use lightning_invoice::{Bolt11Invoice, RoutingFees};
+use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 
 use crate::lightning::LightningMode;
@@ -104,7 +103,8 @@ pub struct FederationInfo {
     pub federation_name: Option<String>,
     pub balance_msat: Amount,
     pub federation_index: u64,
-    pub routing_fees: Option<FederationRoutingFees>,
+    pub routing_fees: Option<PaymentFee>,
+    pub transaction_fees: Option<PaymentFee>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -137,48 +137,12 @@ pub struct GatewayFedConfig {
     pub federations: BTreeMap<FederationId, JsonClientConfig>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-pub struct FederationRoutingFees {
-    pub base_msat: u32,
-    pub proportional_millionths: u32,
-}
-
-impl From<FederationRoutingFees> for RoutingFees {
-    fn from(value: FederationRoutingFees) -> Self {
-        RoutingFees {
-            base_msat: value.base_msat,
-            proportional_millionths: value.proportional_millionths,
-        }
-    }
-}
-
-impl From<RoutingFees> for FederationRoutingFees {
-    fn from(value: RoutingFees) -> Self {
-        FederationRoutingFees {
-            base_msat: value.base_msat,
-            proportional_millionths: value.proportional_millionths,
-        }
-    }
-}
-
-impl FromStr for FederationRoutingFees {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let routing_fees = parse_routing_fees(s)?;
-        Ok(FederationRoutingFees {
-            base_msat: routing_fees.base_msat,
-            proportional_millionths: routing_fees.proportional_millionths,
-        })
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SetConfigurationPayload {
     pub num_route_hints: Option<u32>,
-    pub routing_fees: Option<FederationRoutingFees>,
     pub network: Option<Network>,
-    pub per_federation_routing_fees: Option<Vec<(FederationId, FederationRoutingFees)>>,
+    pub per_federation_routing_fees: Option<Vec<(FederationId, PaymentFee)>>,
+    pub per_federation_transaction_fees: Option<Vec<(FederationId, PaymentFee)>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

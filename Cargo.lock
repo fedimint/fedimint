@@ -2563,6 +2563,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-eventlog",
  "fedimint-ln-gateway",
+ "fedimint-lnv2-common",
  "fedimint-logging",
  "fedimint-mint-client",
  "lightning-invoice",
