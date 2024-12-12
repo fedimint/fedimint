@@ -1465,7 +1465,13 @@
 <a href="#1464" id="1464">1464</a>
 <a href="#1465" id="1465">1465</a>
 <a href="#1466" id="1466">1466</a>
-<a href="#1467" id="1467">1467</a></pre></div><pre class="rust"><code><span class="kw">mod </span>config;
+<a href="#1467" id="1467">1467</a>
+<a href="#1468" id="1468">1468</a>
+<a href="#1469" id="1469">1469</a>
+<a href="#1470" id="1470">1470</a>
+<a href="#1471" id="1471">1471</a>
+<a href="#1472" id="1472">1472</a>
+<a href="#1473" id="1473">1473</a></pre></div><pre class="rust"><code><span class="kw">mod </span>config;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -1511,7 +1517,7 @@
 <span class="kw">use </span><span class="kw">super</span>::vars::utf8;
 <span class="kw">use </span><span class="kw">crate</span>::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
 <span class="kw">use </span><span class="kw">crate</span>::util::{poll, poll_with_timeout, FedimintdCmd};
-<span class="kw">use </span><span class="kw">crate</span>::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA};
+<span class="kw">use </span><span class="kw">crate</span>::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0};
 <span class="kw">use crate</span>::{poll_eq, vars};
 
 <span class="attr">#[derive(Clone)]
@@ -2240,14 +2246,19 @@
         <span class="kw">let </span>bitcoind_block_height: u64 = <span class="self">self</span>.bitcoind.get_block_count().<span class="kw">await</span><span class="question-mark">? </span>- <span class="number">1</span>;
         try_join_all(gateways.into_iter().map(|gw| {
             poll(<span class="string">"gateway pegin"</span>, || <span class="kw">async </span>{
-                <span class="kw">let </span>gw_info = gw.get_info().<span class="kw">await</span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
-                <span class="kw">let </span>block_height: u64 = gw_info[<span class="string">"block_height"</span>]
-                    .as_u64()
-                    .expect(<span class="string">"Could not parse block height"</span>);
-                <span class="kw">if </span>bitcoind_block_height != block_height {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(std::ops::ControlFlow::Continue(<span class="macro">anyhow::anyhow!</span>(
-                        <span class="string">"gateway block height is not synced"
-                    </span>)));
+                <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
+                <span class="comment">// TODO(support:v0.3): `block_height` was introduced in v0.4.0
+                // see: https://github.com/fedimint/fedimint/commit/20cb1b6c868ea7c1466ba6798bb0a2d511a3fd5a
+                </span><span class="kw">if </span>gatewayd_version &gt;= <span class="kw-2">*</span>VERSION_0_4_0 {
+                    <span class="kw">let </span>gw_info = gw.get_info().<span class="kw">await</span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
+                    <span class="kw">let </span>block_height: u64 = gw_info[<span class="string">"block_height"</span>]
+                        .as_u64()
+                        .expect(<span class="string">"Could not parse block height"</span>);
+                    <span class="kw">if </span>bitcoind_block_height != block_height {
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(std::ops::ControlFlow::Continue(<span class="macro">anyhow::anyhow!</span>(
+                            <span class="string">"gateway block height is not synced"
+                        </span>)));
+                    }
                 }
 
                 <span class="kw">let </span>gateway_balance = gw
@@ -2317,6 +2328,7 @@
                 .find(|fed| fed.federation_id.to_string() == fed_id)
                 .expect(<span class="string">"Gateway has not joined federation"</span>)
                 .ecash_balance_msats;
+
             <span class="kw">let </span>ln_type = gw.ln_type();
             <span class="kw">let </span>prev_balance = peg_outs
                 .get(<span class="kw-2">&amp;</span>ln_type)

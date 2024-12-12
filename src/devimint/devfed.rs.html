@@ -406,7 +406,8 @@
 <a href="#405" id="405">405</a>
 <a href="#406" id="406">406</a>
 <a href="#407" id="407">407</a>
-<a href="#408" id="408">408</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::Deref <span class="kw">as _</span>;
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::Deref <span class="kw">as _</span>;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::Result;
@@ -652,6 +653,7 @@
                 <span class="kw">if </span>gateway_cli_version &lt;= <span class="kw-2">*</span>VERSION_0_4_0_ALPHA
                     || gatewayd_version &lt;= <span class="kw-2">*</span>VERSION_0_4_0_ALPHA
                     || fedimintd_version &lt;= <span class="kw-2">*</span>VERSION_0_4_0_ALPHA
+                    || is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV)
                 {
                     <span class="kw">let </span>lnd = lnd.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
                     <span class="kw">let </span>cln = cln.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();

@@ -10,7 +10,9 @@
 <a href="#9" id="9">9</a>
 <a href="#10" id="10">10</a>
 <a href="#11" id="11">11</a>
-<a href="#12" id="12">12</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::LazyLock;
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::LazyLock;
 
 <span class="kw">use </span>semver::Version;
 
@@ -20,6 +22,8 @@
     LazyLock::new(|| Version::parse(<span class="string">"0.3.0"</span>).expect(<span class="string">"version is parsable"</span>));
 <span class="kw">pub static </span>VERSION_0_4_0_ALPHA: LazyLock&lt;Version&gt; =
     LazyLock::new(|| Version::parse(<span class="string">"0.4.0-alpha"</span>).expect(<span class="string">"version is parsable"</span>));
+<span class="kw">pub static </span>VERSION_0_4_0: LazyLock&lt;Version&gt; =
+    LazyLock::new(|| Version::parse(<span class="string">"0.4.0"</span>).expect(<span class="string">"version is parsable"</span>));
 <span class="kw">pub static </span>VERSION_0_5_0_ALPHA: LazyLock&lt;Version&gt; =
     LazyLock::new(|| Version::parse(<span class="string">"0.5.0-alpha"</span>).expect(<span class="string">"version is parsable"</span>));
 </code></pre></div></section></main></body></html>

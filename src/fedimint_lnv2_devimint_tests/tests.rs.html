@@ -401,12 +401,19 @@
 <a href="#400" id="400">400</a>
 <a href="#401" id="401">401</a>
 <a href="#402" id="402">402</a>
-<a href="#403" id="403">403</a></pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::ensure;
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a></pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::ensure;
 <span class="kw">use </span>devimint::devfed::DevJitFed;
 <span class="kw">use </span>devimint::federation::Client;
 <span class="kw">use </span>devimint::version_constants::VERSION_0_5_0_ALPHA;
 <span class="kw">use </span>devimint::{cmd, util};
 <span class="kw">use </span>fedimint_core::core::OperationId;
+<span class="kw">use </span>fedimint_core::envs::{is_env_var_set, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV};
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
 <span class="kw">use </span>fedimint_lnv2_client::{FinalReceiveOperationState, FinalSendOperationState};
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
@@ -433,6 +440,11 @@
 
         <span class="kw">if </span>gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_5_0_ALPHA {
             <span class="macro">info!</span>(%gatewayd_version, <span class="string">"Version did not support lnv2 module, skipping"</span>);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+        }
+
+        <span class="kw">if </span>is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV) {
+            <span class="macro">info!</span>(<span class="string">"lnv2 is disabled, skipping"</span>);
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
 

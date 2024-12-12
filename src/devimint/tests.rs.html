@@ -2341,7 +2341,24 @@
 <a href="#2340" id="2340">2340</a>
 <a href="#2341" id="2341">2341</a>
 <a href="#2342" id="2342">2342</a>
-<a href="#2343" id="2343">2343</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
+<a href="#2343" id="2343">2343</a>
+<a href="#2344" id="2344">2344</a>
+<a href="#2345" id="2345">2345</a>
+<a href="#2346" id="2346">2346</a>
+<a href="#2347" id="2347">2347</a>
+<a href="#2348" id="2348">2348</a>
+<a href="#2349" id="2349">2349</a>
+<a href="#2350" id="2350">2350</a>
+<a href="#2351" id="2351">2351</a>
+<a href="#2352" id="2352">2352</a>
+<a href="#2353" id="2353">2353</a>
+<a href="#2354" id="2354">2354</a>
+<a href="#2355" id="2355">2355</a>
+<a href="#2356" id="2356">2356</a>
+<a href="#2357" id="2357">2357</a>
+<a href="#2358" id="2358">2358</a>
+<a href="#2359" id="2359">2359</a>
+<a href="#2360" id="2360">2360</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -2373,7 +2390,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::federation::{Client, Federation};
 <span class="kw">use </span><span class="kw">crate</span>::util::{poll, LoadTestTool, ProcessManager};
 <span class="kw">use </span><span class="kw">crate</span>::version_constants::{
-    VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA,
+    VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA,
 };
 <span class="kw">use crate</span>::{cmd, dev_fed, poll_eq, DevFed, Gatewayd, LightningNode, Lightningd, Lnd};
 
@@ -3309,7 +3326,7 @@
     <span class="comment">// # peer-version command
 
     // TODO(support:v0.4): peer-version command was introduced in 0.5
-    </span><span class="kw">if </span>fedimintd_version &gt;= <span class="kw-2">*</span>VERSION_0_5_0_ALPHA {
+    </span><span class="kw">if </span>fedimintd_version &gt;= <span class="kw-2">*</span>VERSION_0_5_0_ALPHA &amp;&amp; fedimint_cli_version &gt;= <span class="kw-2">*</span>VERSION_0_5_0_ALPHA {
         <span class="kw">let </span>peer_0_fedimintd_version = <span class="macro">cmd!</span>(client, <span class="string">"dev"</span>, <span class="string">"peer-version"</span>, <span class="string">"--peer-id"</span>, <span class="string">"0"</span>)
             .out_json()
             .<span class="kw">await</span><span class="question-mark">?
@@ -3773,8 +3790,10 @@
     // node public key since the lightning node is unreachable.
     </span>gw_lnd.stop_lightning_node().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>lightning_info = info_cmd.out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>gateway_info: GatewayInfo = serde_json::from_value(lightning_info)<span class="question-mark">?</span>;
-    <span class="macro">assert!</span>(gateway_info.lightning_pub_key.is_none());
+    <span class="kw">let </span>lightning_pub_key: <span class="prelude-ty">Option</span>&lt;String&gt; =
+        serde_json::from_value(lightning_info[<span class="string">"lightning_pub_key"</span>].clone())<span class="question-mark">?</span>;
+
+    <span class="macro">assert!</span>(lightning_pub_key.is_none());
 
     <span class="comment">// Restart LND
     </span><span class="macro">tracing::info!</span>(<span class="string">"Restarting LND..."</span>);
@@ -3839,14 +3858,19 @@
     fed.pegin_client(<span class="number">10_000</span>, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="comment">// Wait for gateways to sync to chain
-    </span><span class="kw">let </span>block_height = bitcoind.get_block_count().<span class="kw">await</span><span class="question-mark">? </span>- <span class="number">1</span>;
-    <span class="kw">if let </span><span class="prelude-val">Some</span>(gw_ldk) = <span class="kw-2">&amp;</span>gw_ldk {
-        <span class="macro">try_join!</span>(
-            gw_lnd.wait_for_block_height(block_height),
-            gw_ldk.wait_for_block_height(block_height),
-        )<span class="question-mark">?</span>;
-    } <span class="kw">else </span>{
-        <span class="macro">try_join!</span>(gw_lnd.wait_for_block_height(block_height),)<span class="question-mark">?</span>;
+    </span><span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
+    <span class="comment">// TODO(support:v0.3): `block_height` field was introduced in v0.4.0
+    // see: https://github.com/fedimint/fedimint/pull/4514
+    </span><span class="kw">if </span>gatewayd_version &gt;= <span class="kw-2">*</span>VERSION_0_4_0 {
+        <span class="kw">let </span>block_height = bitcoind.get_block_count().<span class="kw">await</span><span class="question-mark">? </span>- <span class="number">1</span>;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(gw_ldk) = <span class="kw-2">&amp;</span>gw_ldk {
+            <span class="macro">try_join!</span>(
+                gw_lnd.wait_for_block_height(block_height),
+                gw_ldk.wait_for_block_height(block_height),
+            )<span class="question-mark">?</span>;
+        } <span class="kw">else </span>{
+            <span class="macro">try_join!</span>(gw_lnd.wait_for_block_height(block_height),)<span class="question-mark">?</span>;
+        }
     }
 
     <span class="comment">// Query current gateway infos
@@ -3898,18 +3922,22 @@
         (new_gw_lnd, <span class="prelude-val">None</span>)
     };
 
-    <span class="kw">let </span>lnd_info: GatewayInfo = serde_json::from_value(lnd_value)<span class="question-mark">?</span>;
+    <span class="kw">let </span>lnd_gateway_id: fedimint_core::secp256k1::PublicKey =
+        serde_json::from_value(lnd_value[<span class="string">"gateway_id"</span>].clone())<span class="question-mark">?</span>;
+
     poll(
         <span class="string">"Waiting for LND Gateway Running state after reboot"</span>,
         || <span class="kw">async </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>new_lnd_cmd = <span class="macro">cmd!</span>(new_gw_lnd, <span class="string">"info"</span>);
             <span class="kw">let </span>lnd_value = new_lnd_cmd.out_json().<span class="kw">await</span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
-            <span class="kw">let </span>reboot_info: GatewayInfo = serde_json::from_value(lnd_value).context(<span class="string">"json invalid"</span>).map_err(ControlFlow::Break)<span class="question-mark">?</span>;
+            <span class="kw">let </span>reboot_gateway_state: String = serde_json::from_value(lnd_value[<span class="string">"gateway_state"</span>].clone()).context(<span class="string">"invalid gateway state"</span>).map_err(ControlFlow::Break)<span class="question-mark">?</span>;
+            <span class="kw">let </span>reboot_gateway_id: fedimint_core::secp256k1::PublicKey =
+        serde_json::from_value(lnd_value[<span class="string">"gateway_id"</span>].clone()).context(<span class="string">"invalid gateway id"</span>).map_err(ControlFlow::Break)<span class="question-mark">?</span>;
 
-            <span class="kw">if </span>reboot_info.gateway_state == <span class="string">"Running" </span>{
+            <span class="kw">if </span>reboot_gateway_state == <span class="string">"Running" </span>{
                 <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"LND Gateway restarted, with auto-rejoin to federation"</span>);
                 <span class="comment">// Assert that the gateway info is the same as before the reboot
-                </span><span class="macro">assert_eq!</span>(lnd_info, reboot_info);
+                </span><span class="macro">assert_eq!</span>(lnd_gateway_id, reboot_gateway_id);
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());
             }
             <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">"gateway not running"</span>)))
@@ -3951,12 +3979,18 @@
     // automatically reconnects and can query the lightning node
     // info again.
     </span>poll(<span class="string">"Waiting for info to succeed after restart"</span>, || <span class="kw">async </span>{
-        <span class="kw">let </span><span class="kw-2">mut </span>info_cmd = <span class="macro">cmd!</span>(gw, <span class="string">"info"</span>);
-        <span class="kw">let </span>lightning_info = info_cmd.out_json().<span class="kw">await</span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
-        <span class="kw">let </span>gateway_info: GatewayInfo = serde_json::from_value(lightning_info)
-            .context(<span class="string">"invalid json"</span>)
-            .map_err(ControlFlow::Break)<span class="question-mark">?</span>;
-        <span class="macro">poll_eq!</span>(gateway_info.lightning_pub_key.is_some(), <span class="bool-val">true</span>)
+        <span class="kw">let </span>lightning_pub_key = <span class="macro">cmd!</span>(gw, <span class="string">"info"</span>)
+            .out_json()
+            .<span class="kw">await
+            </span>.map_err(ControlFlow::Continue)<span class="question-mark">?
+            </span>.get(<span class="string">"lightning_pub_key"</span>)
+            .map(|ln_pk| {
+                serde_json::from_value::&lt;<span class="prelude-ty">Option</span>&lt;String&gt;&gt;(ln_pk.clone())
+                    .expect(<span class="string">"could not parse lightning_pub_key"</span>)
+            })
+            .expect(<span class="string">"missing lightning_pub_key"</span>);
+
+        <span class="macro">poll_eq!</span>(lightning_pub_key.is_some(), <span class="bool-val">true</span>)
     })
     .<span class="kw">await</span><span class="question-mark">?</span>;
 

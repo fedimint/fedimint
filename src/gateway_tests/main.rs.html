@@ -617,9 +617,61 @@
 <a href="#616" id="616">616</a>
 <a href="#617" id="617">617</a>
 <a href="#618" id="618">618</a>
-<a href="#619" id="619">619</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
+<a href="#627" id="627">627</a>
+<a href="#628" id="628">628</a>
+<a href="#629" id="629">629</a>
+<a href="#630" id="630">630</a>
+<a href="#631" id="631">631</a>
+<a href="#632" id="632">632</a>
+<a href="#633" id="633">633</a>
+<a href="#634" id="634">634</a>
+<a href="#635" id="635">635</a>
+<a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 
-</span><span class="kw">use </span>std::env;
+</span><span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::env;
 <span class="kw">use </span>std::fs::remove_dir_all;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -629,15 +681,16 @@
 <span class="kw">use </span>devimint::envs::FM_DATA_DIR_ENV;
 <span class="kw">use </span>devimint::federation::Federation;
 <span class="kw">use </span>devimint::util::ProcessManager;
-<span class="kw">use </span>devimint::version_constants::{VERSION_0_3_0, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA};
+<span class="kw">use </span>devimint::version_constants::{VERSION_0_3_0, VERSION_0_4_0, VERSION_0_5_0_ALPHA};
 <span class="kw">use </span>devimint::{cmd, util, Gatewayd, LightningNode};
 <span class="kw">use </span>fedimint_core::config::FederationId;
+<span class="kw">use </span>fedimint_core::envs::{is_env_var_set, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV};
 <span class="kw">use </span>fedimint_core::util::backoff_util::aggressive_backoff_long;
 <span class="kw">use </span>fedimint_core::util::retry;
 <span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll};
 <span class="kw">use </span>fedimint_testing::gateway::LightningNodeType;
 <span class="kw">use </span>itertools::Itertools;
-<span class="kw">use </span>ln_gateway::rpc::{FederationInfo, GatewayBalances, GatewayFedConfig, GatewayInfo};
+<span class="kw">use </span>ln_gateway::rpc::{FederationRoutingFees, GatewayBalances, GatewayFedConfig, GatewayInfo};
 <span class="kw">use </span>tracing::{info, warn};
 
 <span class="attr">#[derive(Parser)]
@@ -703,16 +756,15 @@
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());
             }
 
-            <span class="kw">let </span>fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
-            <span class="kw">let </span>gw = <span class="kw">if </span>fedimintd_version &gt;= <span class="kw-2">*</span>VERSION_0_4_0_ALPHA {
+            <span class="kw">let </span>gw = <span class="kw">if </span>is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV) {
+                dev_fed.gw_lnd_registered().<span class="kw">await</span><span class="question-mark">?
+            </span>} <span class="kw">else </span>{
                 dev_fed
                     .gw_ldk_connected()
                     .<span class="kw">await</span><span class="question-mark">?
                     </span>.as_ref()
                     .expect(<span class="string">"LDK Gateway should be available"</span>)
-            } <span class="kw">else </span>{
-                dev_fed.gw_lnd_registered().<span class="kw">await</span><span class="question-mark">?
-            </span>};
+            };
 
             <span class="kw">let </span>fed = dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>;
             fed.pegin_gateways(<span class="number">10_000_000</span>, <span class="macro">vec!</span>[gw]).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -743,7 +795,9 @@
 
             <span class="comment">// Recovery with a backup does not work properly prior to v0.3.0
             </span><span class="kw">let </span>fedimintd_version = util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
-            <span class="kw">if </span>fedimintd_version &gt;= <span class="kw-2">*</span>VERSION_0_3_0 {
+            <span class="kw">if </span>fedimintd_version &gt;= <span class="kw-2">*</span>VERSION_0_3_0
+                &amp;&amp; !is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV)
+            {
                 <span class="comment">// Recover with a backup
                 </span><span class="macro">info!</span>(<span class="string">"Wiping gateway and recovering with a backup..."</span>);
                 <span class="macro">info!</span>(<span class="string">"Creating backup..."</span>);
@@ -927,6 +981,12 @@
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());
             }
 
+            <span class="comment">// TODO(support:v0.3): config tests were introduced in v0.4.0
+            // see: https://github.com/fedimint/fedimint/pull/5231
+            </span><span class="kw">if </span>gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_4_0 {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+            }
+
             <span class="kw">let </span>gw = <span class="kw">match </span>gw_type {
                 LightningNodeType::Lnd =&gt; dev_fed.gw_lnd_registered().<span class="kw">await</span><span class="question-mark">?</span>,
                 LightningNodeType::Ldk =&gt; dev_fed
@@ -944,17 +1004,15 @@
             }
 
             <span class="comment">// Try to connect to already connected federation
-            </span><span class="kw">if </span>gatewayd_version &gt;= <span class="kw-2">*</span>VERSION_0_3_0 {
-                <span class="kw">let </span>invite_code = dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.invite_code()<span class="question-mark">?</span>;
-                <span class="kw">let </span>output = <span class="macro">cmd!</span>(gw, <span class="string">"connect-fed"</span>, invite_code.clone())
-                    .out_json()
-                    .<span class="kw">await</span>;
-                <span class="macro">assert!</span>(
-                    output.is_err(),
-                    <span class="string">"Connecting to the same federation succeeded"
-                </span>);
-                <span class="macro">info!</span>(<span class="string">"Verified that gateway couldn't connect to already connected federation"</span>);
-            }
+            </span><span class="kw">let </span>invite_code = dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.invite_code()<span class="question-mark">?</span>;
+            <span class="kw">let </span>output = <span class="macro">cmd!</span>(gw, <span class="string">"connect-fed"</span>, invite_code.clone())
+                .out_json()
+                .<span class="kw">await</span>;
+            <span class="macro">assert!</span>(
+                output.is_err(),
+                <span class="string">"Connecting to the same federation succeeded"
+            </span>);
+            <span class="macro">info!</span>(<span class="string">"Verified that gateway couldn't connect to already connected federation"</span>);
 
             <span class="kw">let </span>fedimint_cli_version = util::FedimintCli::version_or_default().<span class="kw">await</span>;
             <span class="kw">let </span>gatewayd_version = util::Gatewayd::version_or_default().<span class="kw">await</span>;
@@ -984,19 +1042,27 @@
                 .run()
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
-                <span class="kw">let </span>gateway_info = get_gateway_info(gw).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>info_value = <span class="macro">cmd!</span>(gw, <span class="string">"info"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>federations = info_value[<span class="string">"federations"</span>]
+                    .as_array()
+                    .expect(<span class="string">"federations is an array"</span>);
                 <span class="macro">assert_eq!</span>(
-                    gateway_info.federations.len(),
+                    federations.len(),
                     <span class="number">1</span>,
                     <span class="string">"Gateway did not have one connected federation"
                 </span>);
-                <span class="kw">let </span>federation_fees = gateway_info
-                    .federations
+                <span class="kw">let </span>federation_fees_value = federations
                     .first()
                     .expect(<span class="string">"Must have a connected federation"</span>)
-                    .routing_fees
-                    .as_ref()
-                    .expect(<span class="string">"Federation routing fees should be set"</span>);
+                    .get(<span class="string">"routing_fees"</span>)
+                    .expect(<span class="string">"federation must have routing fees"</span>)
+                    .to_owned();
+
+                <span class="kw">let </span>federation_fees =
+                    serde_json::from_value::&lt;<span class="prelude-ty">Option</span>&lt;FederationRoutingFees&gt;&gt;(federation_fees_value)
+                        .expect(<span class="string">"could not parse federation routing fees"</span>)
+                        .expect(<span class="string">"Federation routing fees should be set"</span>);
+
                 <span class="macro">assert_eq!</span>(
                     federation_fees.base_msat, <span class="number">20</span>,
                     <span class="string">"Federation base msat is not 20"
@@ -1014,11 +1080,15 @@
                     </span>.expect_err(<span class="string">"Cannot change the network while connected to a federation"</span>);
                 <span class="macro">info!</span>(<span class="string">"Verified network cannot be changed."</span>);
 
-                <span class="comment">// Get the federation's config and verify it parses correctly
-                </span><span class="kw">let </span>config_val = <span class="macro">cmd!</span>(gw, <span class="string">"config"</span>, <span class="string">"--federation-id"</span>, fed_id)
-                    .out_json()
-                    .<span class="kw">await</span><span class="question-mark">?</span>;
-                serde_json::from_value::&lt;GatewayFedConfig&gt;(config_val)<span class="question-mark">?</span>;
+                <span class="comment">// TODO(support:v0.4): a bug calling `gateway-cli config` was fixed in v0.5.0
+                // see: https://github.com/fedimint/fedimint/pull/5803
+                </span><span class="kw">if </span>gatewayd_version &gt;= <span class="kw-2">*</span>VERSION_0_5_0_ALPHA {
+                    <span class="comment">// Get the federation's config and verify it parses correctly
+                    </span><span class="kw">let </span>config_val = <span class="macro">cmd!</span>(gw, <span class="string">"config"</span>, <span class="string">"--federation-id"</span>, fed_id)
+                        .out_json()
+                        .<span class="kw">await</span><span class="question-mark">?</span>;
+                    serde_json::from_value::&lt;GatewayFedConfig&gt;(config_val)<span class="question-mark">?</span>;
+                }
 
                 <span class="comment">// Spawn new federation
                 </span><span class="kw">let </span>bitcoind = dev_fed.bitcoind().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1037,20 +1107,22 @@
                 <span class="kw">let </span>output = <span class="macro">cmd!</span>(gw, <span class="string">"connect-fed"</span>, new_invite_code.clone())
                     .out_json()
                     .<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span>federation_info: FederationInfo =
-                    serde_json::from_value(output).expect(<span class="string">"Could not parse FederationInfo"</span>);
-                <span class="comment">// New federation should have the default fees
-                </span><span class="kw">let </span>fees = federation_info
-                    .routing_fees
-                    .expect(<span class="string">"Routing fees were none"</span>);
+
+                <span class="kw">let </span>routing_fees_value = output[<span class="string">"routing_fees"</span>].clone();
+
+                <span class="kw">let </span>routing_fees =
+                    serde_json::from_value::&lt;<span class="prelude-ty">Option</span>&lt;FederationRoutingFees&gt;&gt;(routing_fees_value)
+                        .expect(<span class="string">"could not parse federation routing fees"</span>)
+                        .expect(<span class="string">"Federation routing fees should be set"</span>);
                 <span class="macro">assert_eq!</span>(
-                    fees.base_msat, <span class="number">10</span>,
+                    routing_fees.base_msat, <span class="number">10</span>,
                     <span class="string">"Default Base msat for new federation was not correct"
                 </span>);
                 <span class="macro">assert_eq!</span>(
-                    fees.proportional_millionths, <span class="number">10000</span>,
+                    routing_fees.proportional_millionths, <span class="number">10000</span>,
                     <span class="string">"Default Base msat for new federation was not correct"
                 </span>);
+
                 <span class="macro">info!</span>(<span class="question-mark">?</span>new_fed_id, <span class="string">"Verified new federation"</span>);
 
                 <span class="comment">// Peg-in sats to gw for the new fed
@@ -1060,34 +1132,65 @@
                     .<span class="kw">await</span><span class="question-mark">?</span>;
 
                 <span class="comment">// Verify `info` returns multiple federations
-                </span><span class="kw">let </span>gateway_info = get_gateway_info(gw).<span class="kw">await</span><span class="question-mark">?</span>;
+                </span><span class="kw">let </span>info_value = <span class="macro">cmd!</span>(gw, <span class="string">"info"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>federations = info_value[<span class="string">"federations"</span>]
+                    .as_array()
+                    .expect(<span class="string">"federations is an array"</span>);
+
                 <span class="macro">assert_eq!</span>(
-                    gateway_info.federations.len(),
+                    federations.len(),
                     <span class="number">2</span>,
                     <span class="string">"Gateway did not have two connected federations"
                 </span>);
+
+                <span class="kw">let </span>federation_fake_scids =
+                    serde_json::from_value::&lt;<span class="prelude-ty">Option</span>&lt;BTreeMap&lt;u64, FederationId&gt;&gt;&gt;(
+                        info_value
+                            .get(<span class="string">"channels"</span>)
+                            .or_else(|| info_value.get(<span class="string">"federation_fake_scids"</span>))
+                            .expect(<span class="string">"field  exists"</span>)
+                            .to_owned(),
+                    )
+                    .expect(<span class="string">"cannot parse"</span>)
+                    .expect(<span class="string">"should have scids"</span>);
+
                 <span class="macro">assert_eq!</span>(
-                    gateway_info
-                        .federation_fake_scids
-                        .unwrap()
-                        .keys()
-                        .copied()
-                        .collect::&lt;Vec&lt;u64&gt;&gt;(),
+                    federation_fake_scids.keys().copied().collect::&lt;Vec&lt;u64&gt;&gt;(),
                     <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>]
                 );
 
-                <span class="kw">let </span>first_fed_info = gateway_info
-                    .federations
+                <span class="kw">let </span>first_fed_info = federations
                     .iter()
-                    .find(|i| i.federation_id.to_string() == fed_id)
+                    .find(|i| {
+                        <span class="kw-2">*</span>i[<span class="string">"federation_id"</span>]
+                            .as_str()
+                            .expect(<span class="string">"should parse as str"</span>)
+                            .to_string()
+                            == fed_id
+                    })
                     .expect(<span class="string">"Could not find federation"</span>);
-                <span class="kw">let </span>second_fed_info = gateway_info
-                    .federations
+
+                <span class="kw">let </span>second_fed_info = federations
                     .iter()
-                    .find(|i| i.federation_id.to_string() == new_fed_id)
+                    .find(|i| {
+                        <span class="kw-2">*</span>i[<span class="string">"federation_id"</span>]
+                            .as_str()
+                            .expect(<span class="string">"should parse as str"</span>)
+                            .to_string()
+                            == new_fed_id
+                    })
                     .expect(<span class="string">"Could not find federation"</span>);
-                <span class="macro">assert_eq!</span>(first_fed_info.balance_msat, Amount::ZERO);
-                <span class="macro">assert_eq!</span>(second_fed_info.balance_msat, pegin_amount);
+
+                <span class="kw">let </span>first_fed_balance_msat =
+                    serde_json::from_value::&lt;Amount&gt;(first_fed_info[<span class="string">"balance_msat"</span>].clone())
+                        .expect(<span class="string">"fed should have balance"</span>);
+
+                <span class="kw">let </span>second_fed_balance_msat =
+                    serde_json::from_value::&lt;Amount&gt;(second_fed_info[<span class="string">"balance_msat"</span>].clone())
+                        .expect(<span class="string">"fed should have balance"</span>);
+
+                <span class="macro">assert_eq!</span>(first_fed_balance_msat, Amount::ZERO);
+                <span class="macro">assert_eq!</span>(second_fed_balance_msat, pegin_amount);
 
                 leave_federation(gw, fed_id, <span class="number">1</span>).<span class="kw">await</span><span class="question-mark">?</span>;
                 leave_federation(gw, new_fed_id, <span class="number">2</span>).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1096,13 +1199,11 @@
                 </span><span class="kw">let </span>output = <span class="macro">cmd!</span>(gw, <span class="string">"connect-fed"</span>, new_invite_code.clone())
                     .out_json()
                     .<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span>rejoined_federation_info: FederationInfo =
-                    serde_json::from_value(output).expect(<span class="string">"Could not parse FederationInfo"</span>);
-                <span class="macro">info!</span>(<span class="question-mark">?</span>rejoined_federation_info, <span class="string">"Rejoined Federation Info"</span>);
-                <span class="macro">assert_eq!</span>(
-                    second_fed_info.balance_msat,
-                    rejoined_federation_info.balance_msat
-                );
+                <span class="kw">let </span>rejoined_federation_balance_msat =
+                    serde_json::from_value::&lt;Amount&gt;(output[<span class="string">"balance_msat"</span>].clone())
+                        .expect(<span class="string">"fed has balance"</span>);
+
+                <span class="macro">assert_eq!</span>(second_fed_balance_msat, rejoined_federation_balance_msat);
             }
 
             <span class="macro">info!</span>(<span class="string">"Gateway configuration test successful"</span>);
@@ -1120,7 +1221,7 @@
         <span class="kw">let </span>gatewayd_version = util::Gatewayd::version_or_default().<span class="kw">await</span>;
         <span class="comment">// LDK Gateway is not available when fedimintd version is &lt; v0.5
         </span><span class="kw">let </span>fedimintd_version = util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
-        <span class="kw">if </span>gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_5_0_ALPHA || fedimintd_version &lt; <span class="kw-2">*</span>VERSION_0_5_0_ALPHA {
+        <span class="kw">if </span>gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_5_0_ALPHA || fedimintd_version &lt; <span class="kw-2">*</span>VERSION_0_5_0_ALPHA || is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV) {
             <span class="macro">info!</span>(%gatewayd_version, <span class="string">"Version did not support gateway liquidity management, skipping"</span>);
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
@@ -1211,29 +1312,30 @@
     }).<span class="kw">await
 </span>}
 
-<span class="doccomment">/// Retrieves the `GatewayInfo` by issuing an `info` GET request to the gateway.
-</span><span class="kw">async fn </span>get_gateway_info(gw: <span class="kw-2">&amp;</span>Gatewayd) -&gt; anyhow::Result&lt;GatewayInfo&gt; {
-    <span class="kw">let </span>info_value = <span class="macro">cmd!</span>(gw, <span class="string">"info"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(serde_json::from_value::&lt;GatewayInfo&gt;(info_value).expect(<span class="string">"Could not parse GatewayInfo"</span>))
-}
-
 <span class="doccomment">/// Leaves the specified federation by issuing a `leave-fed` POST request to the
 /// gateway.
-</span><span class="kw">async fn </span>leave_federation(
-    gw: <span class="kw-2">&amp;</span>Gatewayd,
-    fed_id: String,
-    expected_scid: u64,
-) -&gt; anyhow::Result&lt;FederationInfo&gt; {
+</span><span class="kw">async fn </span>leave_federation(gw: <span class="kw-2">&amp;</span>Gatewayd, fed_id: String, expected_scid: u64) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">let </span>gatewayd_version = util::Gatewayd::version_or_default().<span class="kw">await</span>;
     <span class="kw">let </span>leave_fed = <span class="macro">cmd!</span>(gw, <span class="string">"leave-fed"</span>, <span class="string">"--federation-id"</span>, fed_id.clone())
         .out_json()
         .<span class="kw">await
         </span>.expect(<span class="string">"Leaving the federation failed"</span>);
 
-    <span class="kw">let </span>fed_info: FederationInfo =
-        serde_json::from_value(leave_fed).expect(<span class="string">"Could not parse FederationInfo"</span>);
-    <span class="macro">assert_eq!</span>(fed_info.federation_id.to_string(), fed_id);
-    <span class="macro">assert_eq!</span>(fed_info.federation_index, expected_scid);
+    <span class="kw">let </span>federation_id: FederationId = serde_json::from_value(leave_fed[<span class="string">"federation_id"</span>].clone())<span class="question-mark">?</span>;
+    <span class="macro">assert_eq!</span>(federation_id.to_string(), fed_id);
+
+    <span class="comment">// TODO(support:v0.3): `federation_index` was introduced in v0.5.0
+    // see: https://github.com/fedimint/fedimint/pull/5971
+    </span><span class="kw">let </span>scid = <span class="kw">if </span>gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_5_0_ALPHA {
+        <span class="kw">let </span>channel_id: <span class="prelude-ty">Option</span>&lt;u64&gt; = serde_json::from_value(leave_fed[<span class="string">"channel_id"</span>].clone())<span class="question-mark">?</span>;
+        channel_id.expect(<span class="string">"must have channel id"</span>)
+    } <span class="kw">else </span>{
+        serde_json::from_value::&lt;u64&gt;(leave_fed[<span class="string">"federation_index"</span>].clone())<span class="question-mark">?
+    </span>};
+
+    <span class="macro">assert_eq!</span>(scid, expected_scid);
+
     <span class="macro">info!</span>(<span class="string">"Verified gateway left federation {fed_id}"</span>);
-    <span class="prelude-val">Ok</span>(fed_info)
+    <span class="prelude-val">Ok</span>(())
 }
 </code></pre></div></section></main></body></html>
