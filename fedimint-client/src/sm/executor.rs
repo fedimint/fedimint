@@ -22,14 +22,16 @@ use fedimint_logging::LOG_CLIENT_REACTOR;
 use futures::future::{self, select_all};
 use futures::stream::{FuturesUnordered, StreamExt};
 use tokio::select;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, watch};
 use tracing::{debug, error, info, trace, warn, Instrument};
 
 use super::state::StateTransitionFunction;
 use crate::sm::notifier::Notifier;
 use crate::sm::state::{DynContext, DynState};
 use crate::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use crate::{AddStateMachinesError, AddStateMachinesResult, DynGlobalClientContext};
+use crate::{
+    AddStateMachinesError, AddStateMachinesResult, DynGlobalClientContext, InFlightAmounts,
+};
 
 /// After how many attempts a DB transaction is aborted with an error
 const MAX_DB_ATTEMPTS: Option<usize> = Some(100);
@@ -66,6 +68,12 @@ struct ExecutorInner {
     /// Any time executor should notice state machine update (e.g. because it
     /// was created), it's must be sent through this channel for it to notice.
     sm_update_tx: mpsc::UnboundedSender<DynState>,
+    /// Estimate of value represented by active state machines.
+    ///
+    /// This value is meant for informational purposes only. Right now we update
+    /// the value incrementally, which provides some surface for mistakes during
+    /// refactoring. Hence, it's not advisable to use it for any critical logic.
+    in_flight_balance: watch::Sender<InFlightAmounts>,
     client_task_group: TaskGroup,
 }
 
@@ -411,6 +419,12 @@ impl Executor {
     pub fn notifier(&self) -> &Notifier {
         &self.inner.notifier
     }
+
+    /// Estimated in-flight value represented by active state machines. Not all
+    /// modules fully support this feature.
+    pub fn balance_in_flight(&self) -> watch::Receiver<InFlightAmounts> {
+        self.inner.in_flight_balance.subscribe()
+    }
 }
 
 impl Drop for ExecutorInner {
@@ -578,6 +592,8 @@ impl ExecutorInner {
                         continue;
                     }
                     currently_running_sms.insert(state.clone());
+                    self.add_in_flight_amounts(&state);
+
                     let futures_len = futures.len();
                     let global_context_gen = &global_context_gen;
                     trace!(target: LOG_CLIENT_REACTOR, state = ?state, "Started new active state machine, details.");
@@ -745,6 +761,7 @@ impl ExecutorInner {
                         currently_running_sms.remove(&state),
                         "State must have been recorded"
                     );
+                    self.subtract_in_flight_amounts(&state);
                 }
 
                 ExecutorLoopEvent::Completed { state, outcome } => {
@@ -765,6 +782,7 @@ impl ExecutorInner {
                         operation_id = %state.operation_id().fmt_short(), total = futures.len(),
                         "State transition complete"
                     );
+                    self.subtract_in_flight_amounts(&state);
                 }
                 ExecutorLoopEvent::Disconnected => {
                     break;
@@ -774,6 +792,34 @@ impl ExecutorInner {
 
         info!(target: LOG_CLIENT_REACTOR, "Terminated.");
         Ok(())
+    }
+
+    /// Called when a state machine becomes inactive to keep the in-flight
+    /// balance channel up to date.
+    fn add_in_flight_amounts(&self, state: &DynState) {
+        self.in_flight_balance.send_modify(|in_flight_balance| {
+            debug!(
+                target: LOG_CLIENT_REACTOR,
+                module = ?state.module_instance_id(),
+                amount = ?state.in_flight_amounts(),
+                "Adding in-flight amounts"
+            );
+            *in_flight_balance += state.in_flight_amounts();
+        });
+    }
+
+    /// Called when a state machine becomes active to keep the in-flight balance
+    /// channel up to date.
+    fn subtract_in_flight_amounts(&self, state: &DynState) {
+        self.in_flight_balance.send_modify(|in_flight_balance| {
+            debug!(
+                target: LOG_CLIENT_REACTOR,
+                module = ?state.module_instance_id(),
+                amount = ?state.in_flight_amounts(),
+                "Subtracting in-flight amounts"
+            );
+            *in_flight_balance -= state.in_flight_amounts();
+        });
     }
 
     async fn get_active_states(&self) -> Vec<(DynState, ActiveStateMeta)> {
@@ -887,6 +933,7 @@ impl ExecutorBuilder {
             valid_module_ids: self.valid_module_ids,
             notifier,
             sm_update_tx,
+            in_flight_balance: watch::channel(InFlightAmounts::default()).0,
             client_task_group,
         });
 
@@ -1262,15 +1309,16 @@ mod tests {
     use fedimint_core::db::Database;
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
-    use fedimint_core::runtime;
     use fedimint_core::task::TaskGroup;
+    use fedimint_core::{runtime, Amount};
     use fedimint_logging::LOG_CLIENT_REACTOR;
     use tokio::sync::broadcast::Sender;
-    use tracing::{info, trace};
+    use tokio::sync::watch;
+    use tracing::{debug, info, trace};
 
     use crate::sm::state::{Context, DynContext, DynState};
     use crate::sm::{Executor, Notifier, State, StateTransition};
-    use crate::DynGlobalClientContext;
+    use crate::{DynGlobalClientContext, InFlightAmounts};
 
     #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Hash)]
     enum MockStateMachine {
@@ -1345,6 +1393,16 @@ mod tests {
         fn operation_id(&self) -> OperationId {
             OperationId([0u8; 32])
         }
+
+        fn in_flight_amounts(&self) -> InFlightAmounts {
+            match self {
+                MockStateMachine::ReceivedNonNull(val) => InFlightAmounts {
+                    incoming: Amount::from_msats(*val),
+                    outgoing: Amount::from_msats(*val),
+                },
+                _ => InFlightAmounts::default(),
+            }
+        }
     }
 
     impl IntoDynInstance for MockStateMachine {
@@ -1401,6 +1459,17 @@ mod tests {
         (executor, broadcast, db)
     }
 
+    async fn expect_watch_value<T: Eq + Debug>(watch: &mut watch::Receiver<T>, value: &T) {
+        debug!("Expecting watch value: {value:?}");
+        watch
+            .wait_for(|v| {
+                debug!("Received watch value: {v:?}");
+                v == value
+            })
+            .await
+            .expect("Watch receiver returned error");
+    }
+
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn test_executor() {
@@ -1416,6 +1485,8 @@ mod tests {
             .await
             .unwrap();
 
+        let mut in_flight_balance = executor.balance_in_flight();
+
         assert!(
             executor
                 .add_state_machines(vec![DynState::from_typed(
@@ -1426,6 +1497,7 @@ mod tests {
                 .is_err(),
             "Running the same state machine a second time should fail"
         );
+        expect_watch_value(&mut in_flight_balance, &InFlightAmounts::default()).await;
 
         assert!(
             executor
@@ -1442,9 +1514,33 @@ mod tests {
 
         // TODO build await fn+timeout or allow manual driving of executor
         runtime::sleep(Duration::from_secs(1)).await;
-        sender.send(0).unwrap();
+        sender.send(1).unwrap();
         runtime::sleep(Duration::from_secs(2)).await;
 
+        expect_watch_value(
+            &mut in_flight_balance,
+            &InFlightAmounts {
+                incoming: Amount::from_msats(1),
+                outgoing: Amount::from_msats(1),
+            },
+        )
+        .await;
+        assert!(
+            executor
+                .contains_active_state(MOCK_INSTANCE_1, MockStateMachine::ReceivedNonNull(1))
+                .await,
+            "State was written to DB and waits for broadcast"
+        );
+
+        sender.send(1).expect("No receiver left alive");
+        expect_watch_value(&mut in_flight_balance, &InFlightAmounts::default()).await;
+
+        assert!(
+            executor
+                .contains_inactive_state(MOCK_INSTANCE_1, MockStateMachine::ReceivedNonNull(1))
+                .await,
+            "State was written to DB and waits for broadcast"
+        );
         assert!(
             executor
                 .contains_inactive_state(MOCK_INSTANCE_1, MockStateMachine::Final)
