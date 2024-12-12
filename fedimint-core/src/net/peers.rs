@@ -12,10 +12,10 @@ use crate::task::Cancellable;
 pub mod fake;
 
 /// Owned [`PeerConnections`] trait object type
-pub struct PeerConnections<Msg>(Box<dyn IPeerConnections<Msg> + Send + Unpin + 'static>);
+pub struct PeerConnections<Msg>(Box<dyn IPeerConnections<Msg> + Send + 'static>);
 
 impl<Msg> Deref for PeerConnections<Msg> {
-    type Target = dyn IPeerConnections<Msg> + Send + Unpin + 'static;
+    type Target = dyn IPeerConnections<Msg> + Send + 'static;
 
     fn deref(&self) -> &Self::Target {
         &*self.0
@@ -61,7 +61,7 @@ where
     /// Converts the struct to a `PeerConnection` trait object
     fn into_dyn(self) -> PeerConnections<Msg>
     where
-        Self: Sized + Send + Unpin + 'static,
+        Self: Sized + Send + 'static,
     {
         PeerConnections(Box::new(self))
     }

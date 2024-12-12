@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::env;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{bail, format_err};
@@ -26,6 +27,7 @@ use rand::rngs::OsRng;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
 use tokio_rustls::rustls;
 use tracing::{error, info};
 
@@ -36,8 +38,7 @@ use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::NumPeersExt;
 use crate::multiplexed::PeerConnectionMultiplexer;
 use crate::net::connect::{dns_sanitize, Connector, TlsConfig};
-use crate::net::peers::{DelayCalculator, NetworkConfig};
-use crate::net::peers_reliable::ReconnectPeerConnectionsReliable;
+use crate::net::peers::{DelayCalculator, NetworkConfig, ReconnectPeerConnections};
 use crate::TlsTcpConnector;
 
 pub mod api;
@@ -701,9 +702,17 @@ where
     T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + 'static,
 {
     let connector = TlsTcpConnector::new(certs, network.identity).into_dyn();
-    let (connections, _) =
-        ReconnectPeerConnectionsReliable::new(network, delay_calculator, connector, task_group)
-            .await;
+
+    let connection_status_channels = Arc::new(RwLock::new(BTreeMap::new()));
+    let connections = ReconnectPeerConnections::new(
+        network,
+        delay_calculator,
+        connector,
+        task_group,
+        connection_status_channels,
+    )
+    .await;
+
     connections.into_dyn()
 }
 
