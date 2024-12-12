@@ -540,7 +540,7 @@ impl GatewayClientModule {
                             IncomingSmStates::RefundSubmitted { out_points, error } => {
                                 debug!(?operation_id, "Refund submitted for {out_points:?} {error}");
                                 match client_ctx.await_primary_module_outputs(operation_id, out_points.clone()).await {
-                                    Ok(_) => {
+                                    Ok(()) => {
                                         debug!(?operation_id, "Refund success");
                                         break GatewayExtReceiveStates::RefundSuccess { out_points, error }
                                     },
@@ -693,7 +693,7 @@ impl GatewayClientModule {
                                 yield GatewayExtPayStates::Preimage{ preimage: preimage.clone() };
 
                                 match client_ctx.await_primary_module_outputs(operation_id, out_points.clone()).await {
-                                    Ok(_) => {
+                                    Ok(()) => {
                                         debug!(?operation_id, "Success");
                                         yield GatewayExtPayStates::Success{ preimage: preimage.clone(), out_points };
                                         return;

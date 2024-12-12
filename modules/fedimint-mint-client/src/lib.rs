@@ -806,7 +806,7 @@ impl ClientModule for MintClientModule {
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -> anyhow::Result<Amount> {
+    ) -> anyhow::Result<()> {
         self.await_output_finalized(operation_id, out_point).await
     }
 
@@ -1147,7 +1147,7 @@ impl MintClientModule {
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -> anyhow::Result<Amount> {
+    ) -> anyhow::Result<()> {
         let stream = self
             .notifier
             .subscribe(operation_id)
@@ -1168,7 +1168,7 @@ impl MintClientModule {
                 }
 
                 match state.state {
-                    MintOutputStates::Succeeded(succeeded) => Some(Ok(succeeded.amount)),
+                    MintOutputStates::Succeeded(_) => Some(Ok(())),
                     MintOutputStates::Aborted(_) => Some(Err(anyhow!("Transaction was rejected"))),
                     MintOutputStates::Failed(failed) => Some(Err(anyhow!(
                         "Failed to finalize transaction: {}",
