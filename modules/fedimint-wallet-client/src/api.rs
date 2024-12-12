@@ -45,7 +45,7 @@ where
             .await;
 
         if let Err(e) = &response {
-            if let Some(ref e) = e.general {
+            for e in e.peers.values() {
                 if e.to_string().contains("Method not found") {
                     return Ok(ModuleConsensusVersion::new(2, 0));
                 }

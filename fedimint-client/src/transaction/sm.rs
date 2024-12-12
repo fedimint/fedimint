@@ -4,11 +4,10 @@ use std::time::Duration;
 
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::runtime::sleep;
 use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
+use fedimint_core::util::backoff_util::custom_backoff;
+use fedimint_core::util::retry;
 use fedimint_core::TransactionId;
-use fedimint_logging::LOG_CLIENT_NET_API;
-use tracing::warn;
 
 use crate::sm::{Context, DynContext, State, StateTransition};
 use crate::{DynGlobalClientContext, DynState, TxAcceptedEvent, TxRejectedEvent};
@@ -16,8 +15,6 @@ use crate::{DynGlobalClientContext, DynState, TxAcceptedEvent, TxRejectedEvent};
 // TODO: how to prevent collisions? Generally reserve some range for custom IDs?
 /// Reserved module instance id used for client-internal state machines
 pub const TRANSACTION_SUBMISSION_MODULE_INSTANCE: ModuleInstanceId = 0xffff;
-
-const RETRY_INTERVAL: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone)]
 pub struct TxSubmissionContext;
@@ -146,37 +143,32 @@ impl State for TxSubmissionStatesSM {
 }
 
 impl TxSubmissionStates {
-    async fn trigger_created_rejected(tx: Transaction, context: DynGlobalClientContext) -> String {
-        loop {
-            match context.api().submit_transaction(tx.clone()).await {
-                Ok(serde_outcome) => match serde_outcome.try_into_inner(context.decoders()) {
-                    Ok(outcome) => {
-                        if let TransactionSubmissionOutcome(Err(transaction_error)) = outcome {
-                            return transaction_error.to_string();
-                        }
-                    }
-                    Err(decode_error) => {
-                        warn!(target: LOG_CLIENT_NET_API, error = %decode_error, "Failed to decode SerdeModuleEncoding");
-                    }
-                },
-                Err(error) => {
-                    error.report_if_important();
+    async fn trigger_created_rejected(
+        transaction: Transaction,
+        context: DynGlobalClientContext,
+    ) -> String {
+        retry(
+            "tx-submit-sm",
+            custom_backoff(Duration::from_secs(2), Duration::from_secs(600), None),
+            || async {
+                if let TransactionSubmissionOutcome(Err(transaction_error)) = context
+                    .api()
+                    .submit_transaction(transaction.clone())
+                    .await
+                    .try_into_inner(context.decoders())?
+                {
+                    Ok(transaction_error.to_string())
+                } else {
+                    Err(anyhow::anyhow!("Transaction is still valid"))
                 }
-            }
-
-            sleep(RETRY_INTERVAL).await;
-        }
+            },
+        )
+        .await
+        .expect("Number of retries is has no limit")
     }
 
     async fn trigger_created_accepted(txid: TransactionId, context: DynGlobalClientContext) {
-        loop {
-            match context.api().await_transaction(txid).await {
-                Ok(..) => return,
-                Err(error) => error.report_if_important(),
-            }
-
-            sleep(RETRY_INTERVAL).await;
-        }
+        context.api().await_transaction(txid).await;
     }
 }
 

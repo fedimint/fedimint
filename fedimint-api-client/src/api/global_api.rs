@@ -237,12 +237,11 @@ where
         }
     }
 
-    /// Submit a transaction for inclusion
     async fn submit_transaction(
         &self,
         tx: Transaction,
-    ) -> FederationResult<SerdeModuleEncoding<TransactionSubmissionOutcome>> {
-        self.request_current_consensus(
+    ) -> SerdeModuleEncoding<TransactionSubmissionOutcome> {
+        self.request_current_consensus_retry(
             SUBMIT_TRANSACTION_ENDPOINT.to_owned(),
             ApiRequestErased::new(SerdeTransaction::from(&tx)),
         )
@@ -257,8 +256,8 @@ where
         .await
     }
 
-    async fn await_transaction(&self, txid: TransactionId) -> FederationResult<TransactionId> {
-        self.request_current_consensus(
+    async fn await_transaction(&self, txid: TransactionId) -> TransactionId {
+        self.request_current_consensus_retry(
             AWAIT_TRANSACTION_ENDPOINT.to_owned(),
             ApiRequestErased::new(txid),
         )
