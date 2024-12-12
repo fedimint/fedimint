@@ -149,11 +149,10 @@ where
 }
 
 #[derive(Debug, Clone, Default)]
-// TODO: should probably move to DB
-pub struct WalletClientInit(pub Option<BitcoinRpcConfig>);
+pub struct WalletClientInit(pub Option<DynBitcoindRpc>);
 
 impl WalletClientInit {
-    pub fn new(rpc: BitcoinRpcConfig) -> Self {
+    pub fn new(rpc: DynBitcoindRpc) -> Self {
         Self(Some(rpc))
     }
 }
@@ -228,14 +227,13 @@ impl ClientModuleInit for WalletClientInit {
             module_root_secret: args.module_root_secret().clone(),
         };
 
-        let rpc_config = self
+        let btc_rpc = self
             .0
             .clone()
-            .unwrap_or(WalletClientModule::get_rpc_config(args.cfg()));
+            .unwrap_or(WalletClientModule::get_bitcoin_rpc(args.cfg())?);
 
         let db = args.db().clone();
 
-        let btc_rpc = create_bitcoind(&rpc_config)?;
         let module_api = args.module_api().clone();
 
         let (pegin_claimed_sender, pegin_claimed_receiver) = watch::channel(());
@@ -493,8 +491,8 @@ impl WalletClientModule {
         &self.data.cfg
     }
 
-    fn get_rpc_config(cfg: &WalletClientConfig) -> BitcoinRpcConfig {
-        if let Ok(rpc_config) = BitcoinRpcConfig::get_defaults_from_env_vars() {
+    fn get_bitcoin_rpc(cfg: &WalletClientConfig) -> anyhow::Result<DynBitcoindRpc> {
+        let rpc_config = if let Ok(rpc_config) = BitcoinRpcConfig::get_defaults_from_env_vars() {
             // TODO: Wallet client cannot support bitcoind RPC until the bitcoin dep is
             // updated to 0.30
             if rpc_config.kind == "bitcoind" {
@@ -504,7 +502,9 @@ impl WalletClientModule {
             }
         } else {
             cfg.default_bitcoin_rpc.clone()
-        }
+        };
+
+        create_bitcoind(&rpc_config)
     }
 
     pub fn get_network(&self) -> Network {

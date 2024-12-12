@@ -3,7 +3,6 @@ mod recovery_history_tracker;
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 
-use fedimint_bitcoind::create_bitcoind;
 use fedimint_client::module::init::recovery::{RecoveryFromHistory, RecoveryFromHistoryCommon};
 use fedimint_client::module::init::ClientModuleRecoverArgs;
 use fedimint_client::module::recovery::{DynModuleBackup, ModuleBackup};
@@ -136,12 +135,10 @@ impl RecoveryFromHistory for WalletRecovery {
         snapshot: Option<&WalletModuleBackup>,
     ) -> anyhow::Result<(Self, u64)> {
         trace!(target: LOG_CLIENT_MODULE_WALLET, "Starting new recovery");
-        let rpc_config = init
+        let btc_rpc = init
             .0
             .clone()
-            .unwrap_or(WalletClientModule::get_rpc_config(args.cfg()));
-
-        let btc_rpc = create_bitcoind(&rpc_config)?;
+            .unwrap_or(WalletClientModule::get_bitcoin_rpc(args.cfg())?);
 
         let data = WalletClientModuleData {
             cfg: args.cfg().clone(),
@@ -217,12 +214,10 @@ impl RecoveryFromHistory for WalletRecovery {
         args: &ClientModuleRecoverArgs<Self::Init>,
     ) -> anyhow::Result<Option<(Self, RecoveryFromHistoryCommon)>> {
         trace!(target: LOG_CLIENT_MODULE_WALLET, "Loading recovery state");
-        let rpc_config = init
+        let btc_rpc = init
             .0
             .clone()
-            .unwrap_or(WalletClientModule::get_rpc_config(args.cfg()));
-
-        let btc_rpc = create_bitcoind(&rpc_config)?;
+            .unwrap_or(WalletClientModule::get_bitcoin_rpc(args.cfg())?);
 
         let data = WalletClientModuleData {
             cfg: args.cfg().clone(),

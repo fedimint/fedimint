@@ -32,7 +32,7 @@ use crate::btc::mock::FakeBitcoinFactory;
 use crate::btc::real::RealBitcoinTest;
 use crate::btc::BitcoinTest;
 use crate::envs::{
-    FM_PORT_ESPLORA_ENV, FM_TEST_BACKEND_BITCOIN_RPC_KIND_ENV, FM_TEST_BACKEND_BITCOIN_RPC_URL_ENV,
+    FM_TEST_BACKEND_BITCOIN_RPC_KIND_ENV, FM_TEST_BACKEND_BITCOIN_RPC_URL_ENV,
     FM_TEST_BITCOIND_RPC_ENV, FM_TEST_USE_REAL_DAEMONS_ENV,
 };
 use crate::federation::{FederationTest, FederationTestBuilder};
@@ -236,24 +236,6 @@ impl Fixtures {
     /// Get a server bitcoin RPC config
     pub fn bitcoin_server(&self) -> BitcoinRpcConfig {
         self.bitcoin_rpc.clone()
-    }
-
-    /// Get a client bitcoin RPC config
-    // TODO: Right now we only support mocks or esplora, we should support others in
-    // the future
-    pub fn bitcoin_client(&self) -> BitcoinRpcConfig {
-        if Fixtures::is_real_test() {
-            BitcoinRpcConfig {
-                kind: "esplora".to_string(),
-                url: SafeUrl::parse(&format!(
-                    "http://127.0.0.1:{}/",
-                    env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from("50002"))
-                ))
-                .expect("Failed to parse default esplora server"),
-            }
-        } else {
-            self.bitcoin_rpc.clone()
-        }
     }
 
     /// Get a test bitcoin fixture
