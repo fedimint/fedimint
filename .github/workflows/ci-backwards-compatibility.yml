@@ -51,6 +51,15 @@ jobs:
 
       - name: Backwards-compatibility tests
         run: |
+          # TODO: should we create a separate perfit metric for merge queue vs pr push?
+
+          # run a slimmed down back-compat test for PR push or each major version for merge queue
+          if [[ "${{ github.event_name }}" == "merge_group" ]]; then
+            VERSIONS_TO_TEST="v0.3.4-rc.1 v0.4.4 v0.5.0-rc.2"
+          else
+            VERSIONS_TO_TEST="v0.5.0-rc.2"
+          fi
+
           # the default tmp dir is too long (/home/ubuntu/actions-runner/_work/_temp/)
           # we need to use `nix develop -c` to be able to use `nix build` inside of backwards-compatibility-test
           # Disable `sccache`, it seems incompatible with self-hosted runner sandbox for some reason, and
@@ -68,7 +77,8 @@ jobs:
                 -- \
             scripts/ci/run-in-fs-dir-cache.sh backward-compat \
             env -u RUSTC_WRAPPER \
-            ./scripts/tests/test-ci-all-backcompat.sh v0.2.1
+            env FM_DEVIMINT_DISABLE_MODULE_LNV2=1 \
+            ./scripts/tests/test-ci-all-backcompat.sh "$VERSIONS_TO_TEST"
 
   notifications:
     if: always() && github.repository == 'fedimint/fedimint' && github.event_name != 'merge_group'
