@@ -4,10 +4,12 @@ use std::time::Duration;
 
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::runtime::sleep;
+use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
+use fedimint_core::util::retry;
 use fedimint_core::TransactionId;
 use fedimint_logging::LOG_CLIENT_NET_API;
+use tokio::sync::mpsc;
 use tracing::warn;
 
 use crate::sm::{Context, DynContext, State, StateTransition};
@@ -17,7 +19,24 @@ use crate::{DynGlobalClientContext, DynState, TxAcceptedEvent, TxRejectedEvent};
 /// Reserved module instance id used for client-internal state machines
 pub const TRANSACTION_SUBMISSION_MODULE_INSTANCE: ModuleInstanceId = 0xffff;
 
-const RETRY_INTERVAL: Duration = Duration::from_secs(5);
+/// The tx submission and awaiting calls are one of the main api calls and vital
+/// for the UX. Ideally we want them to complete fast, though we have noticed in
+/// the wild, especially in areas with slow and bad connectivity, that multiple
+/// of them can just get stuck fightning and not making progress. For this
+/// reason, the max max backoff here is rather long.
+fn tx_submission_backoff() -> fedimint_core::util::backoff_util::FibonacciBackoff {
+    fedimint_core::util::backoff_util::custom_backoff(
+        Duration::from_millis(10),
+        if is_running_in_test_env() {
+            // In our testing env we often run under very high load, and with tight limits,
+            // so we want to force the retries to be relatively fast
+            Duration::from_secs(5)
+        } else {
+            Duration::from_secs(600)
+        },
+        None,
+    )
+}
 
 #[derive(Debug, Clone)]
 pub struct TxSubmissionContext;
@@ -80,6 +99,14 @@ impl State for TxSubmissionStatesSM {
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         let operation_id = self.operation_id;
+        // There is no point awaiting tx until it was submitted, so
+        // `trigger_created_rejected` which does the submitting will use this
+        // channel to let the `trigger_created_accepted` which does the awaiting
+        // know when it did the submission.
+        //
+        // Submitting tx does not guarantee that it will get into consensus, so the
+        // submitting need to continue.
+        let (tx_submitted_sender, tx_submitted_receiver) = mpsc::channel(1);
         match self.state.clone() {
             TxSubmissionStates::Created(transaction) => {
                 let txid = transaction.tx_hash();
@@ -88,6 +115,7 @@ impl State for TxSubmissionStatesSM {
                         TxSubmissionStates::trigger_created_rejected(
                             transaction.clone(),
                             global_context.clone(),
+                            tx_submitted_sender,
                         ),
                         {
                             let global_context = global_context.clone();
@@ -113,7 +141,11 @@ impl State for TxSubmissionStatesSM {
                         },
                     ),
                     StateTransition::new(
-                        TxSubmissionStates::trigger_created_accepted(txid, global_context.clone()),
+                        TxSubmissionStates::trigger_created_accepted(
+                            txid,
+                            global_context.clone(),
+                            tx_submitted_receiver,
+                        ),
                         {
                             let global_context = global_context.clone();
                             move |sm_dbtx, (), _| {
@@ -146,37 +178,56 @@ impl State for TxSubmissionStatesSM {
 }
 
 impl TxSubmissionStates {
-    async fn trigger_created_rejected(tx: Transaction, context: DynGlobalClientContext) -> String {
-        loop {
+    async fn trigger_created_rejected(
+        tx: Transaction,
+        context: DynGlobalClientContext,
+        tx_submitted: mpsc::Sender<()>,
+    ) -> String {
+        retry("tx-submit-sm",
+             tx_submission_backoff(), || async {
             match context.api().submit_transaction(tx.clone()).await {
                 Ok(serde_outcome) => match serde_outcome.try_into_inner(context.decoders()) {
                     Ok(outcome) => {
                         if let TransactionSubmissionOutcome(Err(transaction_error)) = outcome {
-                            return transaction_error.to_string();
+                            Ok(transaction_error.to_string())
+                        } else {
+                            // let the other branch know the tx was successfully submitted
+                            let _ = tx_submitted.try_send(());
+                            Err(anyhow::anyhow!("Successful submit does not guarantee the tx will be included in the consensus"))?
                         }
                     }
                     Err(decode_error) => {
                         warn!(target: LOG_CLIENT_NET_API, error = %decode_error, "Failed to decode SerdeModuleEncoding");
+                        Err(decode_error)?
                     }
                 },
                 Err(error) => {
                     error.report_if_important();
+                    Err(error)?
                 }
             }
-
-            sleep(RETRY_INTERVAL).await;
-        }
+        }).await.expect("loops forever until cancelled")
     }
 
-    async fn trigger_created_accepted(txid: TransactionId, context: DynGlobalClientContext) {
-        loop {
-            match context.api().await_transaction(txid).await {
-                Ok(..) => return,
-                Err(error) => error.report_if_important(),
-            }
-
-            sleep(RETRY_INTERVAL).await;
-        }
+    async fn trigger_created_accepted(
+        txid: TransactionId,
+        context: DynGlobalClientContext,
+        mut tx_submitted: mpsc::Receiver<()>,
+    ) {
+        let _ = tx_submitted.recv().await;
+        retry("tx-submit-sm", tx_submission_backoff(), || async {
+            // Note: tx is being submitted concurrently via `trigger_created_rejected`
+            context
+                .api()
+                .await_transaction(txid)
+                .await
+                .inspect_err(|e| {
+                    e.report_if_important();
+                })?;
+            Ok(())
+        })
+        .await
+        .expect("Succeeds or loops forever");
     }
 }
 
