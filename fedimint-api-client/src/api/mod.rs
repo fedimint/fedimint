@@ -209,7 +209,8 @@ pub trait FederationApiExt: IRawFederationApi {
             }));
         }
 
-        let mut peers = BTreeMap::new();
+        let mut peer_errors = BTreeMap::new();
+        let peer_error_threshold = self.all_peers().to_num_peers().one_honest();
 
         loop {
             let (peer, result) = futures
@@ -241,24 +242,23 @@ pub trait FederationApiExt: IRawFederationApi {
                     }
                     QueryStep::Success(response) => return Ok(response),
                     QueryStep::Failure(e) => {
-                        peers.insert(peer, PeerError::InvalidResponse(e.to_string()));
+                        peer_errors.insert(peer, PeerError::InvalidResponse(e.to_string()));
                     }
                     QueryStep::Continue => {}
                 },
                 Err(e) => {
                     e.report_if_important(peer);
 
-                    peers.insert(peer, e);
+                    peer_errors.insert(peer, e);
                 }
             }
 
-            if peers.len() == self.all_peers().to_num_peers().one_honest() {
-                return Err(FederationError {
-                    method: method.clone(),
-                    params: params.params.clone(),
-                    general: None,
-                    peers,
-                });
+            if peer_errors.len() == peer_error_threshold {
+                return Err(FederationError::peer_errors(
+                    method.clone(),
+                    params.params.clone(),
+                    peer_errors,
+                ));
             }
         }
     }
