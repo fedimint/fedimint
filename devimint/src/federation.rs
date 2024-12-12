@@ -44,7 +44,7 @@ use super::util::{cmd, parse_map, Command, ProcessHandle, ProcessManager};
 use super::vars::utf8;
 use crate::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
 use crate::util::{poll, poll_with_timeout, FedimintdCmd};
-use crate::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA};
+use crate::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0};
 use crate::{poll_eq, vars};
 
 #[derive(Clone)]
@@ -773,14 +773,19 @@ impl Federation {
         let bitcoind_block_height: u64 = self.bitcoind.get_block_count().await? - 1;
         try_join_all(gateways.into_iter().map(|gw| {
             poll("gateway pegin", || async {
-                let gw_info = gw.get_info().await.map_err(ControlFlow::Continue)?;
-                let block_height: u64 = gw_info["block_height"]
-                    .as_u64()
-                    .expect("Could not parse block height");
-                if bitcoind_block_height != block_height {
-                    return Err(std::ops::ControlFlow::Continue(anyhow::anyhow!(
-                        "gateway block height is not synced"
-                    )));
+                let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+                // TODO(support:v0.3): `block_height` was introduced in v0.4.0
+                // see: https://github.com/fedimint/fedimint/commit/20cb1b6c868ea7c1466ba6798bb0a2d511a3fd5a
+                if gatewayd_version >= *VERSION_0_4_0 {
+                    let gw_info = gw.get_info().await.map_err(ControlFlow::Continue)?;
+                    let block_height: u64 = gw_info["block_height"]
+                        .as_u64()
+                        .expect("Could not parse block height");
+                    if bitcoind_block_height != block_height {
+                        return Err(std::ops::ControlFlow::Continue(anyhow::anyhow!(
+                            "gateway block height is not synced"
+                        )));
+                    }
                 }
 
                 let gateway_balance = gw
@@ -850,6 +855,7 @@ impl Federation {
                 .find(|fed| fed.federation_id.to_string() == fed_id)
                 .expect("Gateway has not joined federation")
                 .ecash_balance_msats;
+
             let ln_type = gw.ln_type();
             let prev_balance = peg_outs
                 .get(&ln_type)

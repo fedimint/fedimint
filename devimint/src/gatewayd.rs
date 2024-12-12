@@ -234,12 +234,26 @@ impl Gatewayd {
     }
 
     pub async fn get_pegin_addr(&self, fed_id: &str) -> Result<String> {
-        Ok(cmd!(self, "ecash", "pegin", "--federation-id={fed_id}")
-            .out_json()
-            .await?
-            .as_str()
-            .context("address must be a string")?
-            .to_owned())
+        let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
+
+        // TODO(support:v0.4): `ecash pegin` was introduced in v0.5.0
+        // see: https://github.com/fedimint/fedimint/pull/6270
+        let address = if gateway_cli_version < *VERSION_0_5_0_ALPHA {
+            cmd!(self, "address", "--federation-id={fed_id}")
+                .out_json()
+                .await?
+                .as_str()
+                .context("address must be a string")?
+                .to_owned()
+        } else {
+            cmd!(self, "ecash", "pegin", "--federation-id={fed_id}")
+                .out_json()
+                .await?
+                .as_str()
+                .context("address must be a string")?
+                .to_owned()
+        };
+        Ok(address)
     }
 
     pub async fn get_ln_onchain_address(&self) -> Result<String> {
@@ -324,15 +338,27 @@ impl Gatewayd {
 
     pub async fn ecash_balance(&self, federation_id: String) -> anyhow::Result<u64> {
         let federation_id = FederationId::from_str(&federation_id)?;
-        let balances = self.get_balances().await?;
-        let ecash_balance = balances
-            .ecash_balances
-            .into_iter()
-            .find(|info| info.federation_id == federation_id)
-            .ok_or(anyhow!("Gateway is not joined to federation"))?
-            .ecash_balance_msats
-            .msats;
-        Ok(ecash_balance)
+        let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
+        // TODO(support:v0.4): `get_balances` was introduced in v0.5.0
+        // see: https://github.com/fedimint/fedimint/pull/5823
+        if gateway_cli_version < *VERSION_0_5_0_ALPHA {
+            let ecash_balance = cmd!(self, "balance", "--federation-id={federation_id}",)
+                .out_json()
+                .await?
+                .as_u64()
+                .unwrap();
+            Ok(ecash_balance)
+        } else {
+            let balances = self.get_balances().await?;
+            let ecash_balance = balances
+                .ecash_balances
+                .into_iter()
+                .find(|info| info.federation_id == federation_id)
+                .ok_or(anyhow::anyhow!("Gateway is not joined to federation"))?
+                .ecash_balance_msats
+                .msats;
+            Ok(ecash_balance)
+        }
     }
 
     pub async fn send_onchain(
