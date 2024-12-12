@@ -56,7 +56,7 @@ use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
     ClientOutputSM, TransactionBuilder,
 };
-use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext, InFlightAmounts};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
@@ -2175,6 +2175,15 @@ impl State for MintClientStateMachines {
             MintClientStateMachines::Input(redemption_state) => redemption_state.operation_id(),
             MintClientStateMachines::OOB(oob_state) => oob_state.operation_id(),
             MintClientStateMachines::Restore(r) => r.operation_id,
+        }
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        match self {
+            MintClientStateMachines::Output(sm) => sm.in_flight_amounts(),
+            MintClientStateMachines::Input(sm) => sm.in_flight_amounts(),
+            MintClientStateMachines::OOB(sm) => sm.in_flight_amounts(),
+            MintClientStateMachines::Restore(_) => InFlightAmounts::default(),
         }
     }
 }

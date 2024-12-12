@@ -2,7 +2,7 @@ use std::fmt;
 use std::time::Duration;
 
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::DynGlobalClientContext;
+use fedimint_client::{DynGlobalClientContext, InFlightAmounts};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
@@ -105,6 +105,10 @@ impl State for GatewayCompleteStateMachine {
 
     fn operation_id(&self) -> fedimint_core::core::OperationId {
         self.common.operation_id
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        unimplemented!()
     }
 }
 

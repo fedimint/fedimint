@@ -3,7 +3,7 @@ use std::time::{Duration, SystemTime};
 use bitcoin::hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
-use fedimint_client::DynGlobalClientContext;
+use fedimint_client::{DynGlobalClientContext, InFlightAmounts};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -129,6 +129,22 @@ impl State for LightningPayStateMachine {
 
     fn operation_id(&self) -> OperationId {
         self.common.operation_id
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        match &self.state {
+            LightningPayStates::Funded(sm) => {
+                // FIXME: slightly inaccurate: the fee is also refundable, but not available
+                // here
+                InFlightAmounts::outgoing(
+                    sm.payload
+                        .payment_data
+                        .amount()
+                        .expect("We can only pay invoices with amounts"),
+                )
+            }
+            _ => InFlightAmounts::default(),
+        }
     }
 }
 
