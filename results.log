@@ -1,30 +1,29 @@
-./scripts/tests/test-ci-all-backcompat.sh v0.3.4-rc.1
+./scripts/tests/test-ci-all-backcompat.sh v0.3.4-rc.1 v0.4.4
 Pre-building workspace...
 Lowering IO priority with chrt -i 0 ionice -c 3
-   Compiling gateway-tests v0.5.0-rc.1 (/home/nix/fedimint/gateway/integration_tests)
 warning: unused import: `VERSION_0_4_0_ALPHA`
-  --> gateway/integration_tests/src/main.rs:13:35
+  --> gateway/integration_tests/src/main.rs:14:35
    |
-13 |     VERSION_0_3_0, VERSION_0_4_0, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA,
+14 |     VERSION_0_3_0, VERSION_0_4_0, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA,
    |                                   ^^^^^^^^^^^^^^^^^^^
    |
    = note: `#[warn(unused_imports)]` on by default
 
-warning: `gateway-tests` (bin "gateway-tests" test) generated 1 warning (run `cargo fix --bin "gateway-tests" --tests` to apply 1 suggestion)
-warning: `gateway-tests` (bin "gateway-tests") generated 1 warning (1 duplicate)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.82s
+warning: `gateway-tests` (bin "gateway-tests") generated 1 warning (run `cargo fix --bin "gateway-tests"` to apply 1 suggestion)
+warning: `gateway-tests` (bin "gateway-tests" test) generated 1 warning (1 duplicate)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.44s
 Pre-building tests...
 Lowering IO priority with chrt -i 0 ionice -c 3
 warning: unused import: `VERSION_0_4_0_ALPHA`
-  --> gateway/integration_tests/src/main.rs:13:35
+  --> gateway/integration_tests/src/main.rs:14:35
    |
-13 |     VERSION_0_3_0, VERSION_0_4_0, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA,
+14 |     VERSION_0_3_0, VERSION_0_4_0, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA,
    |                                   ^^^^^^^^^^^^^^^^^^^
    |
    = note: `#[warn(unused_imports)]` on by default
 
 warning: `gateway-tests` (bin "gateway-tests" test) generated 1 warning (run `cargo fix --bin "gateway-tests" --tests` to apply 1 suggestion)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.39s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.43s
 Compiling fedimintd for version v0.3.4-rc.1 ...
 Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
@@ -40,33 +39,474 @@ Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJj
 Compiling gateway-cln-extension for version v0.4.0 ...
 Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
+Compiling fedimintd for version v0.4.4 ...
+Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
+Compiling fedimint-cli for version v0.4.4 ...
+Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
+Compiling gateway-cli for version v0.4.4 ...
+Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
+Compiling gatewayd for version v0.4.4 ...
+Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
+Compiling gateway-cln-extension for version v0.4.4 ...
+Using saved setting for 'extra-substituters = https://fedimint.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = fedimint.cachix.org-1:FpJJjy1iPVlvyv4OMiN5y9+/arFLPcnZhZVVCHCDYTs=' from ~/.local/share/nix/trusted-settings.json.
+this path will be fetched (41.87 MiB download, 60.57 MiB unpacked):
+  /nix/store/41fwh3zdsm7nd5a9plfav7j6ifbccg5k-gateway-cln-extension
+copying path '/nix/store/41fwh3zdsm7nd5a9plfav7j6ifbccg5k-gateway-cln-extension' from 'https://fedimint.cachix.org'...
 ## Starting all tests in parallel...
-parallel --jobs 1 --timeout 300 --load 5 --delay 10 --joblog /tmp/nix-shell.LbYM7O/fb0Sr/joblog --noswap --memfree 2G
-## RUN:  always_success_test (FM: v0.3.4-rc.1, CLI: current, GW: current)
-## STAT:     0.00s     3420B        3W        0c
-## DONE: always_success_test (FM: v0.3.4-rc.1, CLI: current, GW: current)
-## RUN:  gateway_config_test_cln (FM: v0.3.4-rc.1, CLI: current, GW: current)
-## STAT:    32.67s  1536624B   238589W    17462c
-## DONE: gateway_config_test_cln (FM: v0.3.4-rc.1, CLI: current, GW: current)
-## RUN:  gateway_config_test_lnd (FM: current, CLI: v0.3.4-rc.1, GW: current)
-## STAT:    37.33s  1536504B   397652W    21348c
-## DONE: gateway_config_test_lnd (FM: current, CLI: v0.3.4-rc.1, GW: current)
-## RUN:  gateway_config_test_lnd (FM: current, CLI: current, GW: v0.3.4-rc.1)
-## STAT:    21.46s   317920B    97472W     9206c
-## DONE: gateway_config_test_lnd (FM: current, CLI: current, GW: v0.3.4-rc.1)
+parallel --jobs 1 --timeout 300 --load 5 --delay 10 --joblog /tmp/nix-shell.w4adis/osZIv/joblog --noswap --memfree 2G
+## RUN:  recoverytool_tests (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    32.03s   316540B   318850W    18325c
+## DONE: recoverytool_tests (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  guardian_backup (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    24.19s  1537044B   138563W    10545c
+## DONE: guardian_backup (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  latency_test_reissue (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    39.66s   320128B   399326W    51341c
+## DONE: latency_test_reissue (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  devimint_cli_test_single (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    49.41s  1537072B   168438W     8643c
+## DONE: devimint_cli_test_single (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  devimint_cli_test_single (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    61.87s  1536872B   259991W     9194c
+## DONE: devimint_cli_test_single (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  lnv2_module (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    11.67s  1537076B    69209W     7966c
+## DONE: lnv2_module (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  latency_test_ln_receive (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    37.87s   317488B   365674W    28755c
+## DONE: latency_test_ln_receive (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  latency_test_ln_send (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    36.05s  1536744B   253104W    13485c
+## DONE: latency_test_ln_send (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  latency_test_fm_pay (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    58.84s  1537044B   465046W    13158c
+## DONE: latency_test_fm_pay (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  always_success_test (FM: v0.4.4, CLI: current, GW: current)
+## STAT:     0.00s     3568B        4W        0c
+## DONE: always_success_test (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  guardian_backup (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    17.51s  1537000B   107579W     8504c
+## DONE: guardian_backup (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  recoverytool_tests (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    41.09s  1537040B   383962W    23636c
+## DONE: recoverytool_tests (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  reconnect_test (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    26.84s  1354904B   301685W    25843c
+## DONE: reconnect_test (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  always_success_test (FM: current, CLI: v0.4.4, GW: current)
+## STAT:     0.00s     3444B        3W        0c
+## DONE: always_success_test (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  load_test_tool_test (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    54.17s  1536980B   458905W    12277c
+## DONE: load_test_tool_test (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  mint_client_sanity (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    36.57s  1536880B   295745W    13858c
+## DONE: mint_client_sanity (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  gateway_reboot_test (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    25.81s  1536936B   154151W    12207c
+## DONE: gateway_reboot_test (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  gateway_restore_test (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    17.22s   318924B    77626W     8587c
+## DONE: gateway_restore_test (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  gateway_restore_test (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    31.96s  1537228B   293025W    12290c
+## DONE: gateway_restore_test (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  lnv2_module (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    11.88s  1537004B    80944W    11608c
+## DONE: lnv2_module (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  mint_client_sanity (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    47.53s  1537116B   399189W    25642c
+## DONE: mint_client_sanity (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  cannot_replay_tx (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    33.16s   317768B   276193W    24310c
+## DONE: cannot_replay_tx (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  gateway_liquidity_test (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    29.96s  1537024B   311709W    13847c
+## DONE: gateway_liquidity_test (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  devimint_cli_test (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    72.89s   316712B   816152W    31372c
+## DONE: devimint_cli_test (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  lightning_reconnect_test (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    30.47s  1390676B   231116W    15711c
+## DONE: lightning_reconnect_test (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  mint_client_restore (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    11.74s  1537448B    85919W    10370c
+## DONE: mint_client_restore (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  circular_deposit (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    25.81s  1537212B   221847W    13481c
+## DONE: circular_deposit (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  circular_deposit (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    25.29s   316644B   292186W    19307c
+## DONE: circular_deposit (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  load_test_tool_test (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    46.76s   317316B   450519W    45141c
+## DONE: load_test_tool_test (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  mint_client_restore (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    17.07s  1537396B    73953W     7796c
+## DONE: mint_client_restore (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  gateway_reboot_test (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    36.63s  1537140B   230673W    11443c
+## DONE: gateway_reboot_test (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  mint_client_restore (FM: v0.4.4, CLI: current, GW: current)
+## STAT:   130.23s  1536960B   980933W    15725c
+## DONE: mint_client_restore (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  gateway_reboot_test (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    24.97s  1361472B   206900W    13561c
+## DONE: gateway_reboot_test (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  reconnect_test (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    33.87s  1536800B   303005W    21402c
+## DONE: reconnect_test (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  latency_test_reissue (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    40.95s  1536756B   375490W    60359c
+## DONE: latency_test_reissue (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  latency_test_ln_receive (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    42.23s  1537272B   286433W    13136c
+## DONE: latency_test_ln_receive (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  gateway_config_test_lnd (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    26.17s  1380080B   296197W    23774c
+## DONE: gateway_config_test_lnd (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  mint_client_restore (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:   107.22s   316040B  1007920W    93855c
+## DONE: mint_client_restore (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  wallet_recovery (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    60.29s  1537184B   494714W    13805c
+## DONE: wallet_recovery (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  wallet_recovery (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    47.15s   324328B   512229W    18057c
+## DONE: wallet_recovery (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  latency_test_fm_pay (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    48.10s  1536996B   439832W    31905c
+## DONE: latency_test_fm_pay (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  mint_client_restore (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    97.21s   315532B   994930W   103243c
+## DONE: mint_client_restore (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  latency_test_reissue (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    53.65s  1537032B   379865W    55765c
+## DONE: latency_test_reissue (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  gateway_config_test_cln (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    47.35s  1537592B   420108W    18656c
+## DONE: gateway_config_test_cln (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  load_test_tool_test (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    52.29s  1537204B   493849W    39788c
+## DONE: load_test_tool_test (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  latency_test_restore (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    22.18s   317724B   194694W    12412c
+## DONE: latency_test_restore (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  gateway_restore_test (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    26.44s  1537152B   176658W    11752c
+## DONE: gateway_restore_test (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  gateway_liquidity_test (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    30.48s  1537152B   277645W    19942c
+## DONE: gateway_liquidity_test (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  latency_test_restore (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    31.86s  1536780B   191529W     9875c
+## DONE: latency_test_restore (FM: v0.3.4-rc.1, CLI: current, GW: current)
 ## RUN:  gateway_config_test_cln (FM: current, CLI: v0.3.4-rc.1, GW: current)
-## STAT:    37.88s  1536592B   322618W    18108c
+## STAT:    37.02s  1537544B   395954W    22797c
 ## DONE: gateway_config_test_cln (FM: current, CLI: v0.3.4-rc.1, GW: current)
-## RUN:  gateway_config_test_lnd (FM: v0.3.4-rc.1, CLI: current, GW: current)
-## STAT:    44.90s  1536564B   315145W    13965c
-## DONE: gateway_config_test_lnd (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  gateway_reboot_test (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    21.29s  1359484B   180558W    12359c
+## DONE: gateway_reboot_test (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  recoverytool_tests (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    44.12s  1536948B   310330W    19201c
+## DONE: recoverytool_tests (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  devimint_cli_test (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    88.88s   317192B   901813W    28736c
+## DONE: devimint_cli_test (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  lnv2_module (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    16.76s  1537080B    71187W     7368c
+## DONE: lnv2_module (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  reconnect_test (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    42.99s  1349572B   338079W    25170c
+## DONE: reconnect_test (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  latency_test_restore (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    21.02s   318412B   189837W    13088c
+## DONE: latency_test_restore (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  devimint_cli_test (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    76.78s  1536988B   737687W    33999c
+## DONE: devimint_cli_test (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  recoverytool_tests (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    11.26s  1536912B    64312W    11550c
+## DONE: recoverytool_tests (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  mint_client_sanity (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    11.95s  1536904B    84582W    10797c
+## DONE: mint_client_sanity (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  latency_test_ln_receive (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    51.70s  1536828B   429780W    27330c
+## DONE: latency_test_ln_receive (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  devimint_cli_test_single (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    59.77s   317088B   236364W    10545c
+## DONE: devimint_cli_test_single (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  devimint_cli_test (FM: v0.4.4, CLI: current, GW: current)
+## STAT:   121.90s  1537516B   970212W    18355c
+## DONE: devimint_cli_test (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  cannot_replay_tx (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    34.33s  1536960B   286588W    26346c
+## DONE: cannot_replay_tx (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  devimint_cli_test_single (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    55.89s  1536904B   237822W     9443c
+## DONE: devimint_cli_test_single (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  latency_test_ln_send (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    41.39s   316012B   385291W    18925c
+## DONE: latency_test_ln_send (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  gateway_restore_test (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    26.85s  1537064B   214201W    11232c
+## DONE: gateway_restore_test (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  latency_test_reissue (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    46.89s   316240B   447301W    50638c
+## DONE: latency_test_reissue (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  gateway_reboot_test (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    28.95s  1537152B   206151W     9727c
+## DONE: gateway_reboot_test (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  gateway_liquidity_test (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    11.23s   318208B    81464W    10346c
+## DONE: gateway_liquidity_test (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  lightning_reconnect_test (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    22.21s   317612B   223958W    23280c
+## DONE: lightning_reconnect_test (FM: current, CLI: current, GW: v0.4.4)
 ## RUN:  always_success_test (FM: current, CLI: current, GW: v0.3.4-rc.1)
-## STAT:     0.00s     3428B        3W        0c
+## STAT:     0.00s     3444B        3W        0c
 ## DONE: always_success_test (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  devimint_cli_test_single (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    78.66s  1536984B   174974W     8180c
+## DONE: devimint_cli_test_single (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  load_test_tool_test (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    63.86s  1536984B   373857W    13478c
+## DONE: load_test_tool_test (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  guardian_backup (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    15.10s  1350672B   115005W    11006c
+## DONE: guardian_backup (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  mint_client_restore (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    76.59s  1537156B   559662W    15859c
+## DONE: mint_client_restore (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  lnv2_module (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    11.10s  1536924B    66661W    10193c
+## DONE: lnv2_module (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  meta_module (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    21.40s  1537480B   116849W     8541c
+## DONE: meta_module (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  wallet_recovery (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    44.17s  1536828B   377549W    20287c
+## DONE: wallet_recovery (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  gateway_reboot_test (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    29.50s  1537280B   234877W    15385c
+## DONE: gateway_reboot_test (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  gateway_restore_test (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    10.23s   316208B    73683W    10763c
+## DONE: gateway_restore_test (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  gateway_config_test_lnd (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    37.59s  1537616B   400409W    21644c
+## DONE: gateway_config_test_lnd (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  mint_client_sanity (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    48.94s  1536996B   452279W    11122c
+## DONE: mint_client_sanity (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  cannot_replay_tx (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    51.47s  1537192B   322411W     9850c
+## DONE: cannot_replay_tx (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  gateway_restore_test (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    32.53s  1537232B   240633W     9744c
+## DONE: gateway_restore_test (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  mint_client_sanity (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    45.35s   316520B   477553W    25689c
+## DONE: mint_client_sanity (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  circular_deposit (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    34.90s  1536988B   345141W    20895c
+## DONE: circular_deposit (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  guardian_backup (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    27.29s  1353804B   109129W    10870c
+## DONE: guardian_backup (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  latency_test_ln_send (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    42.03s  1536824B   358855W    10526c
+## DONE: latency_test_ln_send (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  latency_test_reissue (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    37.30s  1537496B   255218W    13207c
+## DONE: latency_test_reissue (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  meta_module (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    14.13s  1537332B   108226W    11800c
+## DONE: meta_module (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  latency_test_ln_send (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    40.58s   317148B   390598W    27232c
+## DONE: latency_test_ln_send (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  latency_test_fm_pay (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    42.84s   318832B   439329W    27721c
+## DONE: latency_test_fm_pay (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  gateway_config_test_lnd (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    46.58s  1537824B   325655W    18452c
+## DONE: gateway_config_test_lnd (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  always_success_test (FM: current, CLI: current, GW: v0.4.4)
+## STAT:     0.00s     3568B        3W        0c
+## DONE: always_success_test (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  wallet_recovery (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    53.72s   317244B   566868W    18983c
+## DONE: wallet_recovery (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  latency_test_fm_pay (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    48.63s  1537156B   403210W    31253c
+## DONE: latency_test_fm_pay (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  gateway_config_test_cln (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    32.82s  1537784B   248455W    16636c
+## DONE: gateway_config_test_cln (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  latency_test_fm_pay (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    57.10s  1536912B   369501W    13312c
+## DONE: latency_test_fm_pay (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  load_test_tool_test (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    50.18s   317732B   447404W    42601c
+## DONE: load_test_tool_test (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  mint_client_sanity (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    44.11s   316988B   471435W    28009c
+## DONE: mint_client_sanity (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  lnv2_module (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    12.80s   317076B    78812W    10377c
+## DONE: lnv2_module (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  latency_test_restore (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    25.73s  1537140B   202080W    10677c
+## DONE: latency_test_restore (FM: v0.4.4, CLI: current, GW: current)
 ## RUN:  gateway_config_test_cln (FM: current, CLI: current, GW: v0.3.4-rc.1)
-## STAT:    12.55s   316248B    80149W     9635c
+## STAT:    21.14s   317176B    69745W    10904c
 ## DONE: gateway_config_test_cln (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  guardian_backup (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    25.53s  1594320B   106060W     9570c
+## DONE: guardian_backup (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  devimint_cli_test (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    71.02s  1536844B   655130W    21639c
+## DONE: devimint_cli_test (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  wallet_recovery (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    11.88s  1537028B    82113W    10887c
+## DONE: wallet_recovery (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  recoverytool_tests (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    34.22s   316704B   329757W    21245c
+## DONE: recoverytool_tests (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  latency_test_restore (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    23.10s  1537104B   193359W    14331c
+## DONE: latency_test_restore (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  guardian_backup (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    21.67s  1537156B   113332W     9370c
+## DONE: guardian_backup (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  devimint_cli_test (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:   104.92s  1537228B   990009W    41521c
+## DONE: devimint_cli_test (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  gateway_config_test_cln (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    36.61s   317548B   340628W    25248c
+## DONE: gateway_config_test_cln (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  reconnect_test (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    33.63s  1536876B   258738W    22894c
+## DONE: reconnect_test (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  recoverytool_tests (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    33.28s  1537320B   303906W    12564c
+## DONE: recoverytool_tests (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  latency_test_ln_receive (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    47.94s  1537144B   434623W    24767c
+## DONE: latency_test_ln_receive (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  latency_test_ln_send (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    50.57s  1537104B   417576W    25004c
+## DONE: latency_test_ln_send (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  latency_test_restore (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    31.72s  1536896B   153321W    11662c
+## DONE: latency_test_restore (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  meta_module (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    14.50s   316476B   107187W    11256c
+## DONE: meta_module (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  latency_test_ln_receive (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    40.08s   317412B   372745W    31149c
+## DONE: latency_test_ln_receive (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  reconnect_test (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    27.32s  1536884B   305653W    24578c
+## DONE: reconnect_test (FM: current, CLI: v0.3.4-rc.1, GW: current)
 ## RUN:  always_success_test (FM: current, CLI: v0.3.4-rc.1, GW: current)
-## STAT:     0.00s     3508B        3W        0c
+## STAT:     0.00s     3540B        3W        0c
 ## DONE: always_success_test (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  lightning_reconnect_test (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    59.45s  1537072B   462987W    10950c
+## DONE: lightning_reconnect_test (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  lightning_reconnect_test (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    78.39s  1537128B   421404W    11372c
+## DONE: lightning_reconnect_test (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  always_success_test (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:     0.00s     3540B        3W        0c
+## DONE: always_success_test (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  cannot_replay_tx (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    34.70s  1537288B   259123W    25117c
+## DONE: cannot_replay_tx (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  cannot_replay_tx (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    32.42s  1537444B   263597W    11104c
+## DONE: cannot_replay_tx (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  devimint_cli_test_single (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    54.71s   316720B   231051W     9204c
+## DONE: devimint_cli_test_single (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  gateway_liquidity_test (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    11.11s   318956B    65657W    11189c
+## DONE: gateway_liquidity_test (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  lightning_reconnect_test (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    59.69s  1536772B   541745W    18678c
+## DONE: lightning_reconnect_test (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  gateway_liquidity_test (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    25.29s  1536860B   238698W    16887c
+## DONE: gateway_liquidity_test (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  gateway_config_test_lnd (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    33.02s  1537652B   247118W    16798c
+## DONE: gateway_config_test_lnd (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  latency_test_reissue (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    46.11s  1537028B   390666W    12606c
+## DONE: latency_test_reissue (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  circular_deposit (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    49.46s  1536868B   376079W    13598c
+## DONE: circular_deposit (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  circular_deposit (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    34.76s  1537308B   301258W    20367c
+## DONE: circular_deposit (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  latency_test_fm_pay (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    45.63s   321552B   429810W    27185c
+## DONE: latency_test_fm_pay (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  gateway_config_test_lnd (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    50.93s  1537804B   388543W    17474c
+## DONE: gateway_config_test_lnd (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  meta_module (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    15.62s  1537112B   107172W     9438c
+## DONE: meta_module (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  meta_module (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    13.99s   316820B   115585W    12286c
+## DONE: meta_module (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  gateway_config_test_cln (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    35.45s  1537620B   322690W    17467c
+## DONE: gateway_config_test_cln (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  wallet_recovery (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    11.10s  1537012B    65433W    10173c
+## DONE: wallet_recovery (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  gateway_config_test_lnd (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    12.38s   315992B    77563W    11140c
+## DONE: gateway_config_test_lnd (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  latency_test_ln_send (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    34.33s  1537192B   319458W    26529c
+## DONE: latency_test_ln_send (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  lightning_reconnect_test (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    65.03s  1537156B   523885W    15035c
+## DONE: lightning_reconnect_test (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  lnv2_module (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    20.96s   316844B    85447W    11283c
+## DONE: lnv2_module (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  meta_module (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## STAT:    20.05s  1536752B   117097W     8220c
+## DONE: meta_module (FM: v0.3.4-rc.1, CLI: current, GW: current)
+## RUN:  latency_test_ln_receive (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    49.01s  1537020B   408030W    11313c
+## DONE: latency_test_ln_receive (FM: v0.4.4, CLI: current, GW: current)
+## RUN:  load_test_tool_test (FM: current, CLI: v0.4.4, GW: current)
+## STAT:    52.38s  1537048B   448920W    41322c
+## DONE: load_test_tool_test (FM: current, CLI: v0.4.4, GW: current)
+## RUN:  gateway_liquidity_test (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## STAT:    29.07s  1536976B   335653W    24912c
+## DONE: gateway_liquidity_test (FM: current, CLI: v0.3.4-rc.1, GW: current)
+## RUN:  cannot_replay_tx (FM: current, CLI: current, GW: v0.4.4)
+## STAT:    29.37s   317804B   268347W    24276c
+## DONE: cannot_replay_tx (FM: current, CLI: current, GW: v0.4.4)
+## RUN:  circular_deposit (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## STAT:    31.93s   316556B   391966W    20087c
+## DONE: circular_deposit (FM: current, CLI: current, GW: v0.3.4-rc.1)
+## RUN:  reconnect_test (FM: v0.4.4, CLI: current, GW: current)
+## STAT:    27.57s  1536936B   281627W    21968c
+## DONE: reconnect_test (FM: v0.4.4, CLI: current, GW: current)
 All tests successful
