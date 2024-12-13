@@ -148,7 +148,10 @@ declare_vars! {
         FM_PORT_GW_LDK: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK";
         FM_PORT_FAUCET: u16 = 15243u16; env: "FM_PORT_FAUCET";
 
-        FM_LDK_ESPLORA_SERVER_URL: String = format!("http://127.0.0.1:{FM_PORT_ESPLORA}"); env: "FM_LDK_ESPLORA_SERVER_URL";
+        FM_LDK_BITCOIND_HOST: String = format!("127.0.0.1"); env: "FM_LDK_BITCOIND_HOST";
+        FM_LDK_BITCOIND_PORT: u16 = FM_PORT_BTC_RPC; env: "FM_LDK_BITCOIND_PORT";
+        FM_LDK_BITCOIND_USER: String = format!("bitcoin"); env: "FM_LDK_BITCOIND_USER";
+        FM_LDK_BITCOIND_PASSWORD: String = format!("bitcoin"); env: "FM_LDK_BITCOIND_PASSWORD";
 
         FM_CLN_DIR: PathBuf = mkdir(FM_TEST_DIR.join("cln")).await?; env: "FM_CLN_DIR";
         FM_LND_DIR: PathBuf = mkdir(FM_TEST_DIR.join("lnd")).await?; env: "FM_LND_DIR";

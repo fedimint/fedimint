@@ -188,7 +188,6 @@ impl DevJitFed {
             }
         });
         let gw_ldk = JitTryAnyhow::new_try({
-            let esplora = esplora.clone();
             let process_mgr = process_mgr.to_owned();
             move || async move {
                 // TODO(support:v0.4.0): Only run LDK gateway when the federation supports LNv2
@@ -199,7 +198,6 @@ impl DevJitFed {
                     // and lnv2 was not explicitly disabled
                     && !is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV)
                 {
-                    esplora.get_try().await?;
                     Ok(Arc::new(Some(
                         Gatewayd::new(&process_mgr, LightningNode::Ldk).await?,
                     )))
