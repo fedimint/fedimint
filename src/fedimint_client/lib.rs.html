@@ -4369,7 +4369,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         operation_type: <span class="kw-2">&amp;</span>str,
-        operation_meta: F,
+        operation_meta_gen: F,
         tx_builder: TransactionBuilder,
     ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt;
     <span class="kw">where
@@ -4384,7 +4384,7 @@
                 |dbtx, <span class="kw">_</span>| {
                     <span class="kw">let </span>operation_type = operation_type.clone();
                     <span class="kw">let </span>tx_builder = tx_builder.clone();
-                    <span class="kw">let </span>operation_meta = operation_meta.clone();
+                    <span class="kw">let </span>operation_meta_gen = operation_meta_gen.clone();
                     Box::pin(<span class="kw">async move </span>{
                         <span class="kw">if </span>Client::operation_exists_dbtx(dbtx, operation_id).<span class="kw">await </span>{
                             <span class="macro">bail!</span>(<span class="string">"There already exists an operation with id {operation_id:?}"</span>)
@@ -4399,7 +4399,7 @@
                                 dbtx,
                                 operation_id,
                                 <span class="kw-2">&amp;</span>operation_type,
-                                operation_meta(txid, change.clone()),
+                                operation_meta_gen(txid, change.clone()),
                             )
                             .<span class="kw">await</span>;
 
