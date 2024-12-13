@@ -192,15 +192,7 @@
 <a href="#191" id="191">191</a>
 <a href="#192" id="192">192</a>
 <a href="#193" id="193">193</a>
-<a href="#194" id="194">194</a>
-<a href="#195" id="195">195</a>
-<a href="#196" id="196">196</a>
-<a href="#197" id="197">197</a>
-<a href="#198" id="198">198</a>
-<a href="#199" id="199">199</a>
-<a href="#200" id="200">200</a>
-<a href="#201" id="201">201</a>
-<a href="#202" id="202">202</a></pre></div><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>jsonrpsee;
+<a href="#194" id="194">194</a></pre></div><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>jsonrpsee;
 
 <span class="kw">use </span>std::sync::LazyLock;
 
@@ -377,14 +369,6 @@
     <span class="macro">register_int_counter_vec_with_registry!</span>(
         <span class="macro">opts!</span>(<span class="string">"peer_messages_total"</span>, <span class="string">"Messages with the peer"</span>,),
         <span class="kw-2">&amp;</span>[<span class="string">"self_id"</span>, <span class="string">"peer_id"</span>, <span class="string">"direction"</span>],
-        REGISTRY
-    )
-    .unwrap()
-});
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>PEER_BANS_COUNT: LazyLock&lt;IntCounterVec&gt; = LazyLock::new(|| {
-    <span class="macro">register_int_counter_vec_with_registry!</span>(
-        <span class="macro">opts!</span>(<span class="string">"peer_bans_total"</span>, <span class="string">"Peer bans"</span>,),
-        <span class="kw-2">&amp;</span>[<span class="string">"self_id"</span>, <span class="string">"peer_id"</span>],
         REGISTRY
     )
     .unwrap()

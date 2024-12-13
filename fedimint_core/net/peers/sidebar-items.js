@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["fake"],"struct":["MuxPeerConnections","PeerConnections"],"trait":["IMuxPeerConnections","IPeerConnections"]};
+window.SIDEBAR_ITEMS = {"enum":["Recipient"],"mod":["fake"],"struct":["MuxPeerConnections","PeerConnections"],"trait":["IMuxPeerConnections","IPeerConnections"]};

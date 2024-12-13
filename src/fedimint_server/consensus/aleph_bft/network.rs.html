@@ -68,15 +68,14 @@
 <a href="#67" id="67">67</a>
 <a href="#68" id="68">68</a>
 <a href="#69" id="69">69</a>
-<a href="#70" id="70">70</a>
-<a href="#71" id="71">71</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
+<a href="#70" id="70">70</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
-<span class="kw">use </span>fedimint_core::net::peers::IPeerConnections;
+<span class="kw">use </span>fedimint_core::net::peers::{IPeerConnections, Recipient};
 <span class="kw">use </span>parity_scale_codec::{Decode, Encode, IoReader};
 
 <span class="kw">use </span><span class="kw">super</span>::data_provider::UnitData;
 <span class="kw">use </span><span class="kw">super</span>::keychain::Keychain;
-<span class="kw">use super</span>::{Message, Recipient};
+<span class="kw">use </span><span class="kw">super</span>::Message;
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::ReconnectPeerConnections;
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq)]
@@ -122,12 +121,14 @@
         // parity_scale_codec::Encode to serialize it such that Message can
         // implement Encodable
         </span><span class="self">self</span>.connections
-            .send_sync(<span class="kw-2">&amp;</span>Message(network_data.encode()), recipient);
+            .try_send(recipient, Message(network_data.encode()));
     }
 
     <span class="kw">async fn </span>next_event(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;NetworkData&gt; {
-        <span class="kw">while let </span><span class="prelude-val">Ok</span>(message) = <span class="self">self</span>.connections.receive().<span class="kw">await </span>{
-            <span class="kw">if let </span><span class="prelude-val">Ok</span>(network_data) = NetworkData::decode(<span class="kw-2">&amp;mut </span>IoReader(message.<span class="number">1 </span>.<span class="number">0</span>.as_slice())) {
+        <span class="kw">loop </span>{
+            <span class="kw">if let </span><span class="prelude-val">Ok</span>(network_data) = NetworkData::decode(<span class="kw-2">&amp;mut </span>IoReader(
+                <span class="self">self</span>.connections.receive().<span class="kw">await</span><span class="question-mark">?</span>.<span class="number">1 </span>.<span class="number">0</span>.as_slice(),
+            )) {
                 <span class="comment">// in order to bound the RAM consumption of a session we have to bound an
                 // individual units size, hence the size of its attached unitdata in memory
                 </span><span class="kw">if </span>network_data.included_data().iter().all(UnitData::is_valid) {
@@ -135,9 +136,6 @@
                 }
             }
         }
-        <span class="comment">// this prevents the aleph session from shutting down when the
-        // network data sender is dropped by the message relay task
-        </span>std::future::pending().<span class="kw">await
-    </span>}
+    }
 }
 </code></pre></div></section></main></body></html>

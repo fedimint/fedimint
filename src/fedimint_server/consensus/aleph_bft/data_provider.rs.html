@@ -150,7 +150,7 @@
     </span><span class="kw">pub fn </span>is_valid(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="kw">match </span><span class="self">self </span>{
             UnitData::Signature(..) =&gt; <span class="bool-val">true</span>,
-            UnitData::Batch(bytes, ..) =&gt; bytes.len() &lt;= ALEPH_BFT_UNIT_BYTE_LIMIT,
+            UnitData::Batch(bytes) =&gt; bytes.len() &lt;= ALEPH_BFT_UNIT_BYTE_LIMIT,
         }
     }
 }

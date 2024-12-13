@@ -1388,9 +1388,7 @@
 <a href="#1387" id="1387">1387</a>
 <a href="#1388" id="1388">1388</a>
 <a href="#1389" id="1389">1389</a>
-<a href="#1390" id="1390">1390</a>
-<a href="#1391" id="1391">1391</a>
-<a href="#1392" id="1392">1392</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#1390" id="1390">1390</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -1435,7 +1433,6 @@
 <span class="kw">use </span><span class="kw">crate</span>::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 <span class="kw">use </span><span class="kw">crate</span>::envs::FM_PEER_ID_SORT_BY_URL_ENV;
 <span class="kw">use </span><span class="kw">crate</span>::net::api::{check_auth, ApiResult, HasApiContext};
-<span class="kw">use </span><span class="kw">crate</span>::net::peers::DelayCalculator;
 
 <span class="doccomment">/// Serves the config gen API endpoints
 </span><span class="attr">#[derive(Clone)]
@@ -1688,7 +1685,6 @@
                 p2p_bind_addr,
                 <span class="kw-2">&amp;</span>params,
                 registry,
-                DelayCalculator::PROD_DEFAULT,
                 <span class="kw-2">&amp;</span>task_group,
                 self_clone.code_version_str.clone(),
             )

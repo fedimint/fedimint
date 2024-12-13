@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["PING_INTERVAL"],"enum":["PeerConnectionState","PeerMessage"],"struct":["CommonPeerConnectionState","ConnectedPeerConnectionState","DelayCalculator","DisconnectedPeerConnectionState","NetworkConfig","PeerConnection","PeerConnectionStateMachine","ReconnectPeerConnections"],"type":["PeerConnector"]};
+window.SIDEBAR_ITEMS = {"enum":["PeerConnectionState","PeerMessage"],"struct":["CommonPeerConnectionState","NetworkConfig","PeerConnection","PeerConnectionStateMachine","ReconnectPeerConnections"],"type":["PeerConnector"]};

@@ -796,9 +796,11 @@
 <a href="#795" id="795">795</a>
 <a href="#796" id="796">796</a>
 <a href="#797" id="797">797</a>
-<a href="#798" id="798">798</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
+<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{bail, format_err};
@@ -824,6 +826,7 @@
 <span class="kw">use </span>secp256k1::{PublicKey, Secp256k1, SecretKey};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>tokio::sync::RwLock;
 <span class="kw">use </span>tokio_rustls::rustls;
 <span class="kw">use </span>tracing::{error, info};
 
@@ -834,8 +837,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::NumPeersExt;
 <span class="kw">use </span><span class="kw">crate</span>::multiplexed::PeerConnectionMultiplexer;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{dns_sanitize, Connector, TlsConfig};
-<span class="kw">use </span><span class="kw">crate</span>::net::peers::{DelayCalculator, NetworkConfig};
-<span class="kw">use </span><span class="kw">crate</span>::net::peers_reliable::ReconnectPeerConnectionsReliable;
+<span class="kw">use </span><span class="kw">crate</span>::net::peers::{NetworkConfig, ReconnectPeerConnections};
 <span class="kw">use </span><span class="kw">crate</span>::TlsTcpConnector;
 
 <span class="kw">pub mod </span>api;
@@ -1230,7 +1232,6 @@
         p2p_bind_addr: SocketAddr,
         params: <span class="kw-2">&amp;</span>ConfigGenParams,
         registry: ServerModuleInitRegistry,
-        delay_calculator: DelayCalculator,
         task_group: <span class="kw-2">&amp;</span>TaskGroup,
         code_version_str: String,
     ) -&gt; DkgResult&lt;<span class="self">Self</span>&gt; {
@@ -1238,7 +1239,6 @@
         <span class="kw">let </span>server_conn = connect(
             params.p2p_network(p2p_bind_addr),
             params.tls_config(),
-            delay_calculator,
             task_group,
         )
         .<span class="kw">await</span>;
@@ -1492,16 +1492,18 @@
 <span class="kw">pub async fn </span>connect&lt;T&gt;(
     network: NetworkConfig,
     certs: TlsConfig,
-    delay_calculator: DelayCalculator,
     task_group: <span class="kw-2">&amp;</span>TaskGroup,
 ) -&gt; PeerConnections&lt;T&gt;
 <span class="kw">where
     </span>T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + <span class="lifetime">'static</span>,
 {
     <span class="kw">let </span>connector = TlsTcpConnector::new(certs, network.identity).into_dyn();
-    <span class="kw">let </span>(connections, <span class="kw">_</span>) =
-        ReconnectPeerConnectionsReliable::new(network, delay_calculator, connector, task_group)
+
+    <span class="kw">let </span>connection_status_channels = Arc::new(RwLock::new(BTreeMap::new()));
+    <span class="kw">let </span>connections =
+        ReconnectPeerConnections::new(network, connector, task_group, connection_status_channels)
             .<span class="kw">await</span>;
+
     connections.into_dyn()
 }
 

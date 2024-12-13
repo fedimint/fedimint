@@ -99,18 +99,7 @@
 <a href="#98" id="98">98</a>
 <a href="#99" id="99">99</a>
 <a href="#100" id="100">100</a>
-<a href="#101" id="101">101</a>
-<a href="#102" id="102">102</a>
-<a href="#103" id="103">103</a>
-<a href="#104" id="104">104</a>
-<a href="#105" id="105">105</a>
-<a href="#106" id="106">106</a>
-<a href="#107" id="107">107</a>
-<a href="#108" id="108">108</a>
-<a href="#109" id="109">109</a>
-<a href="#110" id="110">110</a>
-<a href="#111" id="111">111</a>
-<a href="#112" id="112">112</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::{Deref, DerefMut};
+<a href="#101" id="101">101</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::{Deref, DerefMut};
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>async_trait::async_trait;
@@ -124,10 +113,10 @@
 </span><span class="kw">pub mod </span>fake;
 
 <span class="doccomment">/// Owned [`PeerConnections`] trait object type
-</span><span class="kw">pub struct </span>PeerConnections&lt;Msg&gt;(Box&lt;<span class="kw">dyn </span>IPeerConnections&lt;Msg&gt; + Send + Unpin + <span class="lifetime">'static</span>&gt;);
+</span><span class="kw">pub struct </span>PeerConnections&lt;Msg&gt;(Box&lt;<span class="kw">dyn </span>IPeerConnections&lt;Msg&gt; + Send + <span class="lifetime">'static</span>&gt;);
 
 <span class="kw">impl</span>&lt;Msg&gt; Deref <span class="kw">for </span>PeerConnections&lt;Msg&gt; {
-    <span class="kw">type </span>Target = <span class="kw">dyn </span>IPeerConnections&lt;Msg&gt; + Send + Unpin + <span class="lifetime">'static</span>;
+    <span class="kw">type </span>Target = <span class="kw">dyn </span>IPeerConnections&lt;Msg&gt; + Send + <span class="lifetime">'static</span>;
 
     <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
         <span class="kw-2">&amp;*</span><span class="self">self</span>.<span class="number">0
@@ -141,42 +130,34 @@
 }
 
 <span class="doccomment">/// Connection manager that tries to keep connections open to all peers
-///
-/// Production implementations of this trait have to ensure that:
-/// * Connections to peers are authenticated and encrypted
-/// * Messages are received exactly once and in the order they were sent
-/// * Connections are reopened when closed
-/// * Messages are cached in case of short-lived network interruptions and
-///   resent on reconnect, this avoids the need to rejoin the consensus, which
-///   is more tricky.
-///
-/// In case of longer term interruptions the message cache has to be dropped to
-/// avoid DoS attacks. The thus disconnected peer will need to rejoin the
-/// consensus at a later time.
 </span><span class="attr">#[async_trait]
-</span><span class="kw">pub trait </span>IPeerConnections&lt;Msg&gt;
+</span><span class="kw">pub trait </span>IPeerConnections&lt;M&gt;
 <span class="kw">where
-    </span>Msg: Serialize + DeserializeOwned + Unpin + Send,
+    </span>M: Serialize + DeserializeOwned + Unpin + Send,
 {
-    <span class="doccomment">/// Send a message to a specific peer.
-    ///
-    /// The message is sent immediately and cached if the peer is reachable and
-    /// only cached otherwise.
-    </span><span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peers: <span class="kw-2">&amp;</span>[PeerId], msg: Msg) -&gt; Cancellable&lt;()&gt;;
+    <span class="doccomment">/// Send message to recipient; block if channel is full.
+    </span><span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, recipient: Recipient, msg: M);
 
-    <span class="doccomment">/// Await receipt of a message from any connected peer.
-    </span><span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; Cancellable&lt;(PeerId, Msg)&gt;;
+    <span class="doccomment">/// Try to send message to recipient; drop message if channel is full.
+    </span><span class="kw">fn </span>try_send(<span class="kw-2">&amp;</span><span class="self">self</span>, recipient: Recipient, msg: M);
 
-    <span class="doccomment">/// Removes a peer connection in case of misbehavior
-    </span><span class="kw">async fn </span>ban_peer(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId);
+    <span class="doccomment">/// Await receipt of a message; return None if we are shutting down.
+    </span><span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;(PeerId, M)&gt;;
 
     <span class="doccomment">/// Converts the struct to a `PeerConnection` trait object
-    </span><span class="kw">fn </span>into_dyn(<span class="self">self</span>) -&gt; PeerConnections&lt;Msg&gt;
+    </span><span class="kw">fn </span>into_dyn(<span class="self">self</span>) -&gt; PeerConnections&lt;M&gt;
     <span class="kw">where
-        </span><span class="self">Self</span>: Sized + Send + Unpin + <span class="lifetime">'static</span>,
+        </span><span class="self">Self</span>: Sized + Send + <span class="lifetime">'static</span>,
     {
         PeerConnections(Box::new(<span class="self">self</span>))
     }
+}
+
+<span class="doccomment">/// This enum defines the intended recipient of a p2p message.
+</span><span class="attr">#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+</span><span class="kw">pub enum </span>Recipient {
+    Everyone,
+    Peer(PeerId),
 }
 
 <span class="doccomment">/// Owned [`MuxPeerConnections`] trait object type
@@ -210,9 +191,6 @@
 
     <span class="doccomment">/// Await receipt of a message from any connected peer.
     </span><span class="kw">async fn </span>receive(<span class="kw-2">&amp;</span><span class="self">self</span>, mux_key: MuxKey) -&gt; Cancellable&lt;(PeerId, Msg)&gt;;
-
-    <span class="doccomment">/// Removes a peer connection in case of misbehavior
-    </span><span class="kw">async fn </span>ban_peer(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: PeerId);
 
     <span class="doccomment">/// Converts the struct to a `PeerConnection` trait object
     </span><span class="kw">fn </span>into_dyn(<span class="self">self</span>) -&gt; MuxPeerConnections&lt;MuxKey, Msg&gt;

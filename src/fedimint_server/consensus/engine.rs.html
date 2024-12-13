@@ -849,8 +849,7 @@
 <a href="#848" id="848">848</a>
 <a href="#849" id="849">849</a>
 <a href="#850" id="850">850</a>
-<a href="#851" id="851">851</a>
-<a href="#852" id="852">852</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#851" id="851">851</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -904,7 +903,7 @@
     CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX, CONSENSUS_SESSION_COUNT,
 };
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{Connector, TlsTcpConnector};
-<span class="kw">use </span><span class="kw">crate</span>::net::peers::{DelayCalculator, ReconnectPeerConnections};
+<span class="kw">use </span><span class="kw">crate</span>::net::peers::ReconnectPeerConnections;
 <span class="kw">use </span><span class="kw">crate</span>::LOG_CONSENSUS;
 
 <span class="comment">// The name of the directory where the database checkpoints are stored.
@@ -1023,7 +1022,6 @@
         <span class="comment">// Build P2P connections for the atomic broadcast
         </span><span class="kw">let </span>connections = ReconnectPeerConnections::new(
             <span class="self">self</span>.cfg.network_config(p2p_bind_addr),
-            DelayCalculator::PROD_DEFAULT,
             TlsTcpConnector::new(<span class="self">self</span>.cfg.tls_config(), <span class="self">self</span>.identity()).into_dyn(),
             <span class="kw-2">&amp;</span><span class="self">self</span>.task_group,
             Arc::clone(<span class="kw-2">&amp;</span><span class="self">self</span>.connection_status_channels),

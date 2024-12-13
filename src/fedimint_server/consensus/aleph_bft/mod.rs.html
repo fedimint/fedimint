@@ -27,14 +27,7 @@
 <a href="#26" id="26">26</a>
 <a href="#27" id="27">27</a>
 <a href="#28" id="28">28</a>
-<a href="#29" id="29">29</a>
-<a href="#30" id="30">30</a>
-<a href="#31" id="31">31</a>
-<a href="#32" id="32">32</a>
-<a href="#33" id="33">33</a>
-<a href="#34" id="34">34</a>
-<a href="#35" id="35">35</a>
-<a href="#36" id="36">36</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>backup;
+<a href="#29" id="29">29</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>backup;
 <span class="kw">pub mod </span>data_provider;
 <span class="kw">pub mod </span>finalization_handler;
 <span class="kw">pub mod </span>keychain;
@@ -47,19 +40,12 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="doccomment">/// The majority of these messages need to be delivered to the intended
-/// [Recipient] in order for aleph bft to make progress. However, alpeh bft does
+/// recipient for Aleph BFT to make progress. However, Aleph BFT does
 /// not assume a reliable network layer and implements all necessary retry
 /// logic. Therefore, the network layer can discard a message if its
 /// intended recipient is offline.
 </span><span class="attr">#[derive(Clone, Debug, Encodable, Decodable, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>Message(Vec&lt;u8&gt;);
-
-<span class="doccomment">/// This enum defines the intended recipient of a [Message].
-</span><span class="attr">#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-</span><span class="kw">pub enum </span>Recipient {
-    Everyone,
-    Peer(PeerId),
-}
 
 <span class="kw">pub fn </span>to_peer_id(node_index: NodeIndex) -&gt; PeerId {
     u16::try_from(usize::from(node_index))
