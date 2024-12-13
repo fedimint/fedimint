@@ -1204,6 +1204,8 @@ impl Esplora {
             "http://localhost:{}",
             process_mgr.globals.FM_PORT_ESPLORA
         ))
+        // Disable retrying in the client since we're already retrying in the poll below.
+        .max_retries(0)
         .build_async()
         .expect("esplora client build failed");
 
