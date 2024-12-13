@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 use async_trait::async_trait;
-use fedimint_core::net::peers::{IMuxPeerConnections, PeerConnections};
+use fedimint_core::net::peers::{IMuxPeerConnections, PeerConnections, Recipient};
 use fedimint_core::runtime::spawn;
 use fedimint_core::task::{Cancellable, Cancelled};
 use fedimint_core::PeerId;
@@ -26,7 +26,10 @@ pub const MAX_PEER_OUT_OF_ORDER_MESSAGES: u64 = 10000;
 
 /// A `Msg` that can target a specific destination module
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ModuleMultiplexed<MuxKey, Msg> {
+pub struct ModuleMultiplexed<MuxKey, Msg>
+where
+    Msg: Clone,
+{
     pub key: MuxKey,
     pub msg: Msg,
 }
@@ -63,21 +66,18 @@ pub struct PeerConnectionMultiplexer<MuxKey, Msg> {
     send_requests_tx: Sender<(Vec<PeerId>, MuxKey, Msg)>,
     /// Sender of receive callbacks
     receive_callbacks_tx: Sender<Callback<MuxKey, Msg>>,
-    /// Sender of peer bans
-    peer_bans_tx: Sender<PeerId>,
 }
 
 type Callback<MuxKey, Msg> = (MuxKey, oneshot::Sender<(PeerId, Msg)>);
 
 impl<MuxKey, Msg> PeerConnectionMultiplexer<MuxKey, Msg>
 where
-    Msg: Serialize + DeserializeOwned + Unpin + Send + Debug + 'static,
+    Msg: Serialize + DeserializeOwned + Unpin + Send + Debug + Clone + 'static,
     MuxKey: Serialize + DeserializeOwned + Unpin + Send + Debug + Eq + Hash + Clone + 'static,
 {
     pub fn new(connections: PeerConnections<ModuleMultiplexed<MuxKey, Msg>>) -> Self {
         let (send_requests_tx, send_requests_rx) = channel(1000);
         let (receive_callbacks_tx, receive_callbacks_rx) = channel(1000);
-        let (peer_bans_tx, peer_bans_rx) = channel(1000);
 
         spawn(
             "peer connection multiplexer",
@@ -86,14 +86,12 @@ where
                 ModuleMultiplexerOutOfOrder::default(),
                 send_requests_rx,
                 receive_callbacks_rx,
-                peer_bans_rx,
             ),
         );
 
         Self {
             send_requests_tx,
             receive_callbacks_tx,
-            peer_bans_tx,
         }
     }
 
@@ -102,7 +100,6 @@ where
         mut out_of_order: ModuleMultiplexerOutOfOrder<MuxKey, Msg>,
         mut send_requests_rx: Receiver<(Vec<PeerId>, MuxKey, Msg)>,
         mut receive_callbacks_rx: Receiver<Callback<MuxKey, Msg>>,
-        mut peer_bans_rx: Receiver<PeerId>,
     ) -> Cancellable<()> {
         loop {
             let mut key_inserted: Option<MuxKey> = None;
@@ -110,12 +107,12 @@ where
                  // Send requests are forwarded to underlying connections
                  send_request = send_requests_rx.recv() => {
                     let (peers, key, msg) = send_request.ok_or(Cancelled)?;
-                    connections.send(&peers, ModuleMultiplexed { key, msg }).await?;
-                }
-                // Ban requests are forwarded to underlying connections
-                peer_ban = peer_bans_rx.recv() => {
-                    let peer = peer_ban.ok_or(Cancelled)?;
-                    connections.ban_peer(peer).await;
+
+                    let msg = ModuleMultiplexed { key, msg };
+
+                    for peer in peers {
+                        connections.send(Recipient::Peer(peer), msg.clone()).await;
+                    }
                 }
                 // Receive callbacks are added to callback queue by key
                 receive_callback = receive_callbacks_rx.recv() => {
@@ -125,7 +122,8 @@ where
                 }
                 // Actual received messages are added message queue by key
                 receive = connections.receive() => {
-                    let (peer, ModuleMultiplexed { key, msg }) = receive?;
+                    let Some((peer, ModuleMultiplexed { key, msg })) = receive else { return Err(Cancelled) };
+
                     let peer_pending = out_of_order.peer_counts.entry(peer).or_default();
                     // We limit our messages from any given peer to avoid OOM
                     // In practice this would halt DKG
@@ -181,11 +179,6 @@ where
             .await
             .map_err(|_e| Cancelled)?;
         callback_rx.await.map_err(|_e| Cancelled)
-    }
-
-    async fn ban_peer(&self, peer: PeerId) {
-        // We don't return a `Cancellable` for bans
-        let _ = self.peer_bans_tx.send(peer).await;
     }
 }
 

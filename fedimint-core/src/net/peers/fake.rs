@@ -1,14 +1,13 @@
 /// Fake (channel-based) implementation of [`super::PeerConnections`].
-use std::time::Duration;
-
 use async_trait::async_trait;
 use fedimint_core::net::peers::{IPeerConnections, PeerConnections};
-use fedimint_core::runtime::sleep;
-use fedimint_core::task::{Cancellable, Cancelled, TaskHandle};
+use fedimint_core::task::TaskHandle;
 use fedimint_core::PeerId;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tokio::sync::mpsc::{self, Receiver, Sender};
+
+use crate::net::peers::Recipient;
 
 struct FakePeerConnections<Msg> {
     tx: Sender<Msg>,
@@ -18,35 +17,35 @@ struct FakePeerConnections<Msg> {
 }
 
 #[async_trait]
-impl<Msg> IPeerConnections<Msg> for FakePeerConnections<Msg>
+impl<M> IPeerConnections<M> for FakePeerConnections<M>
 where
-    Msg: Serialize + DeserializeOwned + Unpin + Send,
+    M: Serialize + DeserializeOwned + Unpin + Send,
 {
-    async fn send(&mut self, peers: &[PeerId], msg: Msg) -> Cancellable<()> {
-        assert_eq!(peers, &[self.peer_id]);
+    async fn send(&mut self, recipient: Recipient, msg: M) {
+        assert_eq!(recipient, Recipient::Peer(self.peer_id));
 
         // If the peer is gone, just pretend we are going to resend
         // the msg eventually, even if it will never happen.
-        let _ = self.tx.send(msg).await;
-        Ok(())
+        self.tx.send(msg).await.ok();
     }
 
-    async fn receive(&mut self) -> Cancellable<(PeerId, Msg)> {
-        // Just like a real implementation, do not return
-        // if the peer is gone.
-        while !self.task_handle.is_shutting_down() {
-            if let Some(msg) = self.rx.recv().await {
-                return Ok((self.peer_id, msg));
+    fn try_send(&self, recipient: Recipient, msg: M) {
+        assert_eq!(recipient, Recipient::Peer(self.peer_id));
+
+        // If the peer is gone, just pretend we are going to resend
+        // the msg eventually, even if it will never happen.
+        self.tx.try_send(msg).ok();
+    }
+
+    async fn receive(&mut self) -> Option<(PeerId, M)> {
+        tokio::select! {
+            message =  self.rx.recv() => {
+                message.map(|msg| (self.peer_id, msg))
             }
-
-            sleep(Duration::from_secs(10)).await;
+            () = self.task_handle.make_shutdown_rx() => {
+                None
+            },
         }
-        Err(Cancelled)
-    }
-
-    /// Removes a peer connection in case of misbehavior
-    async fn ban_peer(&mut self, _peer: PeerId) {
-        unimplemented!();
     }
 }
 

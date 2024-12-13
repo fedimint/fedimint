@@ -1,11 +1,11 @@
 use bitcoin::hashes::{sha256, Hash};
 use fedimint_core::encoding::Encodable;
-use fedimint_core::net::peers::IPeerConnections;
+use fedimint_core::net::peers::{IPeerConnections, Recipient};
 use parity_scale_codec::{Decode, Encode, IoReader};
 
 use super::data_provider::UnitData;
 use super::keychain::Keychain;
-use super::{Message, Recipient};
+use super::Message;
 use crate::net::peers::ReconnectPeerConnections;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -51,12 +51,14 @@ impl aleph_bft::Network<NetworkData> for Network {
         // parity_scale_codec::Encode to serialize it such that Message can
         // implement Encodable
         self.connections
-            .send_sync(&Message(network_data.encode()), recipient);
+            .try_send(recipient, Message(network_data.encode()));
     }
 
     async fn next_event(&mut self) -> Option<NetworkData> {
-        while let Ok(message) = self.connections.receive().await {
-            if let Ok(network_data) = NetworkData::decode(&mut IoReader(message.1 .0.as_slice())) {
+        loop {
+            if let Ok(network_data) = NetworkData::decode(&mut IoReader(
+                self.connections.receive().await?.1 .0.as_slice(),
+            )) {
                 // in order to bound the RAM consumption of a session we have to bound an
                 // individual units size, hence the size of its attached unitdata in memory
                 if network_data.included_data().iter().all(UnitData::is_valid) {
@@ -64,8 +66,5 @@ impl aleph_bft::Network<NetworkData> for Network {
                 }
             }
         }
-        // this prevents the aleph session from shutting down when the
-        // network data sender is dropped by the message relay task
-        std::future::pending().await
     }
 }

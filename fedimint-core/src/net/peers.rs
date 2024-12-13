@@ -12,10 +12,10 @@ use crate::task::Cancellable;
 pub mod fake;
 
 /// Owned [`PeerConnections`] trait object type
-pub struct PeerConnections<Msg>(Box<dyn IPeerConnections<Msg> + Send + Unpin + 'static>);
+pub struct PeerConnections<Msg>(Box<dyn IPeerConnections<Msg> + Send + 'static>);
 
 impl<Msg> Deref for PeerConnections<Msg> {
-    type Target = dyn IPeerConnections<Msg> + Send + Unpin + 'static;
+    type Target = dyn IPeerConnections<Msg> + Send + 'static;
 
     fn deref(&self) -> &Self::Target {
         &*self.0
@@ -29,42 +29,34 @@ impl<Msg> DerefMut for PeerConnections<Msg> {
 }
 
 /// Connection manager that tries to keep connections open to all peers
-///
-/// Production implementations of this trait have to ensure that:
-/// * Connections to peers are authenticated and encrypted
-/// * Messages are received exactly once and in the order they were sent
-/// * Connections are reopened when closed
-/// * Messages are cached in case of short-lived network interruptions and
-///   resent on reconnect, this avoids the need to rejoin the consensus, which
-///   is more tricky.
-///
-/// In case of longer term interruptions the message cache has to be dropped to
-/// avoid DoS attacks. The thus disconnected peer will need to rejoin the
-/// consensus at a later time.
 #[async_trait]
-pub trait IPeerConnections<Msg>
+pub trait IPeerConnections<M>
 where
-    Msg: Serialize + DeserializeOwned + Unpin + Send,
+    M: Serialize + DeserializeOwned + Unpin + Send,
 {
-    /// Send a message to a specific peer.
-    ///
-    /// The message is sent immediately and cached if the peer is reachable and
-    /// only cached otherwise.
-    async fn send(&mut self, peers: &[PeerId], msg: Msg) -> Cancellable<()>;
+    /// Send message to recipient; block if channel is full.
+    async fn send(&mut self, recipient: Recipient, msg: M);
 
-    /// Await receipt of a message from any connected peer.
-    async fn receive(&mut self) -> Cancellable<(PeerId, Msg)>;
+    /// Try to send message to recipient; drop message if channel is full.
+    fn try_send(&self, recipient: Recipient, msg: M);
 
-    /// Removes a peer connection in case of misbehavior
-    async fn ban_peer(&mut self, peer: PeerId);
+    /// Await receipt of a message; return None if we are shutting down.
+    async fn receive(&mut self) -> Option<(PeerId, M)>;
 
     /// Converts the struct to a `PeerConnection` trait object
-    fn into_dyn(self) -> PeerConnections<Msg>
+    fn into_dyn(self) -> PeerConnections<M>
     where
-        Self: Sized + Send + Unpin + 'static,
+        Self: Sized + Send + 'static,
     {
         PeerConnections(Box::new(self))
     }
+}
+
+/// This enum defines the intended recipient of a p2p message.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Recipient {
+    Everyone,
+    Peer(PeerId),
 }
 
 /// Owned [`MuxPeerConnections`] trait object type
@@ -98,9 +90,6 @@ where
 
     /// Await receipt of a message from any connected peer.
     async fn receive(&self, mux_key: MuxKey) -> Cancellable<(PeerId, Msg)>;
-
-    /// Removes a peer connection in case of misbehavior
-    async fn ban_peer(&self, peer: PeerId);
 
     /// Converts the struct to a `PeerConnection` trait object
     fn into_dyn(self) -> MuxPeerConnections<MuxKey, Msg>

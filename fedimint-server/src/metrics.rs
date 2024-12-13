@@ -179,14 +179,6 @@ pub(crate) static PEER_MESSAGES_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|
     )
     .unwrap()
 });
-pub(crate) static PEER_BANS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec_with_registry!(
-        opts!("peer_bans_total", "Peer bans",),
-        &["self_id", "peer_id"],
-        REGISTRY
-    )
-    .unwrap()
-});
 
 /// Initialize gauges or other metrics that need eager initialization on start,
 /// e.g. because they are triggered infrequently.
