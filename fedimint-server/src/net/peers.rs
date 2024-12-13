@@ -14,7 +14,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use fedimint_api_client::api::PeerConnectionStatus;
 use fedimint_core::net::peers::{IPeerConnections, Recipient};
-use fedimint_core::task::{Cancellable, Cancelled, TaskGroup, TaskHandle};
+use fedimint_core::task::{Cancellable, Cancelled, TaskGroup};
 use fedimint_core::util::backoff_util::{api_networking_backoff, FibonacciBackoff};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
@@ -143,29 +143,24 @@ where
             .await
             .expect("Could not bind to port");
 
-        task_group.spawn("handle-incoming-p2p-connections", move |handle| async move {
+        task_group.spawn_cancellable("handle-incoming-p2p-connections", async move {
             loop {
-                tokio::select! {
-                    connection = listener.next() => {
-                        match connection.expect("Listener closed") {
-                            Ok((peer, connection)) => {
-                                if connection_senders
-                                    .get_mut(&peer)
-                                    .expect("Authenticating connectors dont return unknown peers")
-                                    .send(connection)
-                                    .await
-                                    .is_err()
-                                {
-                                    break;
-                                }
-                            },
-                            Err(e) => {
-                                warn!(target: LOG_NET_PEER, "Error while opening incoming connection: {}", e);
-                            }
+                match listener.next().await.expect("Listener closed") {
+                    Ok((peer, connection)) => {
+                        if connection_senders
+                            .get_mut(&peer)
+                            .expect("Authenticating connectors dont return unknown peers")
+                            .send(connection)
+                            .await
+                            .is_err()
+                        {
+                            break;
                         }
                     },
-                    () = &mut handle.make_shutdown_rx() => { break },
-                };
+                    Err(e) => {
+                        warn!(target: LOG_NET_PEER, "Error while opening incoming connection: {}", e);
+                    }
+                }
             }
 
             info!(target: LOG_NET_PEER, "Shutting down task listening for p2p connections");
@@ -429,22 +424,18 @@ where
         let (outgoing_sender, outgoing_receiver) = async_channel::bounded(1024);
         let (incoming_sender, incoming_receiver) = async_channel::bounded(1024);
 
-        task_group.spawn(
+        task_group.spawn_cancellable(
             format!("io-thread-peer-{peer_id}"),
-            move |handle| async move {
-                Self::run_io_thread(
-                    incoming_sender,
-                    outgoing_receiver,
-                    our_id,
-                    peer_id,
-                    peer_address,
-                    connect,
-                    incoming_connections,
-                    status_channels,
-                    &handle,
-                )
-                .await;
-            },
+            Self::run_io_thread(
+                incoming_sender,
+                outgoing_receiver,
+                our_id,
+                peer_id,
+                peer_address,
+                connect,
+                incoming_connections,
+                status_channels,
+            ),
         );
 
         PeerConnection {
@@ -482,7 +473,6 @@ where
         connect: SharedAnyConnector<PeerMessage<M>>,
         incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
         status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
-        task_handle: &TaskHandle,
     ) {
         info!(target: LOG_NET_PEER, "Starting peer connection state machine {}", peer_id);
 
@@ -502,19 +492,8 @@ where
             state: PeerConnectionState::Disconnected(api_networking_backoff()),
         };
 
-        loop {
-            tokio::select! {
-                sm = state_machine.state_transition() => {
-                    if let Some(sm) = sm {
-                        state_machine = sm;
-                    } else {
-                        break;
-                    }
-                }
-                () = task_handle.make_shutdown_rx() => {
-                    break;
-                },
-            }
+        while let Some(sm) = state_machine.state_transition().await {
+            state_machine = sm;
         }
 
         info!(target: LOG_NET_PEER, "Shutting down peer connection state machine {}", peer_id);
