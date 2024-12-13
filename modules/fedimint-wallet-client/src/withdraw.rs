@@ -1,19 +1,18 @@
-use std::time::Duration;
-
 use bitcoin::Txid;
+use fedimint_api_client::api::{deserialize_outcome, FederationApiExt};
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::task::sleep;
+use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
+use fedimint_core::module::ApiRequestErased;
 use fedimint_core::OutPoint;
 use fedimint_wallet_common::WalletOutputOutcome;
-use tracing::debug;
+use futures::future::pending;
+use tracing::warn;
 
 use crate::events::WithdrawRequest;
 use crate::WalletClientContext;
-
-const RETRY_DELAY: Duration = Duration::from_secs(1);
 
 // TODO: track tx confirmations
 #[aquamarine::aquamarine]
@@ -41,7 +40,6 @@ impl State for WithdrawStateMachine {
                     await_withdraw_processed(
                         global_context.clone(),
                         context.clone(),
-                        self.operation_id,
                         created.clone(),
                     ),
                     move |dbtx, res, old_state| {
@@ -68,44 +66,33 @@ impl State for WithdrawStateMachine {
 async fn await_withdraw_processed(
     global_context: DynGlobalClientContext,
     context: WalletClientContext,
-    operation_id: OperationId,
     created: CreatedWithdrawState,
 ) -> Result<Txid, String> {
     global_context
         .await_tx_accepted(created.fm_outpoint.txid)
         .await?;
 
-    loop {
-        match global_context
-            .api()
-            .await_output_outcome::<WalletOutputOutcome>(
-                created.fm_outpoint,
-                Duration::MAX,
-                &context.wallet_decoder,
-            )
-            .await
-        {
-            Ok(outcome) => {
-                return outcome
-                    .ensure_v0_ref()
-                    .map(|outcome| outcome.0)
-                    .map_err(|e| e.to_string())
-            }
-            Err(e) => {
-                if e.is_rejected() {
-                    return Err(e.to_string());
-                }
+    let outcome = global_context
+        .api()
+        .request_current_consensus_retry(
+            AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
+            ApiRequestErased::new(created.fm_outpoint),
+        )
+        .await;
 
-                e.report_if_important();
-                debug!(
-                    error = %e,
-                    operation_id = %operation_id.fmt_short(),
-                    delay_secs =  RETRY_DELAY.as_secs_f64(),
-                    "Waiting before retry",
-                );
+    match deserialize_outcome::<WalletOutputOutcome>(&outcome, &context.wallet_decoder)
+        .map_err(|e| e.to_string())
+        .and_then(|outcome| {
+            outcome
+                .ensure_v0_ref()
+                .map(|outcome| outcome.0)
+                .map_err(|e| e.to_string())
+        }) {
+        Ok(txid) => Ok(txid),
+        Err(e) => {
+            warn!("Failed to process wallet output outcome: {e}");
 
-                sleep(RETRY_DELAY).await;
-            }
+            pending().await
         }
     }
 }
