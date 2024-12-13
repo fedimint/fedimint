@@ -231,25 +231,18 @@ where
         }
     }
 
-    async fn receive(&mut self) -> Cancellable<(PeerId, M)> {
-        // if all peers banned (or just solo-federation), just hang here as there's
-        // never going to be any message. This avoids panic on `select_all` with
-        // no futures.
-        if self.connections.is_empty() {
-            std::future::pending::<()>().await;
-        }
-
-        let futures_non_banned = self.connections.iter_mut().map(|(&peer, connection)| {
-            let receive_future = async move {
-                let msg = connection.receive().await;
-                (peer, msg)
-            };
-            Box::pin(receive_future)
-        });
-
-        let first_response = select_all(futures_non_banned).await;
-
-        first_response.0 .1.map(|v| (first_response.0 .0, v))
+    async fn receive(&mut self) -> Option<(PeerId, M)> {
+        select_all(self.connections.iter_mut().map(|(&peer, connection)| {
+            Box::pin(async move {
+                connection
+                    .receive()
+                    .await
+                    .ok()
+                    .map(|message| (peer, message))
+            })
+        }))
+        .await
+        .0
     }
 }
 
@@ -279,14 +272,14 @@ where
     }
 
     async fn state_transition(mut self) -> Option<Self> {
-        let state = match self.state {
+        match self.state {
             PeerConnectionState::Disconnected(disconnected) => {
-                let new_state = self
+                let state = self
                     .common
                     .state_transition_disconnected(disconnected)
                     .await?;
 
-                if let PeerConnectionState::Connected(..) = new_state {
+                if let PeerConnectionState::Connected(..) = state {
                     self.common
                         .status_channels
                         .write()
@@ -294,12 +287,15 @@ where
                         .insert(self.common.peer_id, PeerConnectionStatus::Connected);
                 }
 
-                new_state
+                Some(PeerConnectionStateMachine {
+                    common: self.common,
+                    state,
+                })
             }
             PeerConnectionState::Connected(connected) => {
-                let new_state = self.common.state_transition_connected(connected).await?;
+                let state = self.common.state_transition_connected(connected).await?;
 
-                if let PeerConnectionState::Disconnected(..) = new_state {
+                if let PeerConnectionState::Disconnected(..) = state {
                     self.common
                         .status_channels
                         .write()
@@ -307,14 +303,12 @@ where
                         .insert(self.common.peer_id, PeerConnectionStatus::Disconnected);
                 };
 
-                new_state
+                Some(PeerConnectionStateMachine {
+                    common: self.common,
+                    state,
+                })
             }
-        };
-
-        Some(PeerConnectionStateMachine {
-            common: self.common,
-            state,
-        })
+        }
     }
 }
 

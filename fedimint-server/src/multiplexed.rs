@@ -122,7 +122,8 @@ where
                 }
                 // Actual received messages are added message queue by key
                 receive = connections.receive() => {
-                    let (peer, ModuleMultiplexed { key, msg }) = receive?;
+                    let Some((peer, ModuleMultiplexed { key, msg })) = receive else { return Err(Cancelled) };
+
                     let peer_pending = out_of_order.peer_counts.entry(peer).or_default();
                     // We limit our messages from any given peer to avoid OOM
                     // In practice this would halt DKG

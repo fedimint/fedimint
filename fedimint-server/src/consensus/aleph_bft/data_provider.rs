@@ -25,7 +25,7 @@ impl UnitData {
     pub fn is_valid(&self) -> bool {
         match self {
             UnitData::Signature(..) => true,
-            UnitData::Batch(bytes, ..) => bytes.len() <= ALEPH_BFT_UNIT_BYTE_LIMIT,
+            UnitData::Batch(bytes) => bytes.len() <= ALEPH_BFT_UNIT_BYTE_LIMIT,
         }
     }
 }

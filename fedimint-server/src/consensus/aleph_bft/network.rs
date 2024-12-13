@@ -55,8 +55,10 @@ impl aleph_bft::Network<NetworkData> for Network {
     }
 
     async fn next_event(&mut self) -> Option<NetworkData> {
-        while let Ok(message) = self.connections.receive().await {
-            if let Ok(network_data) = NetworkData::decode(&mut IoReader(message.1 .0.as_slice())) {
+        loop {
+            if let Ok(network_data) = NetworkData::decode(&mut IoReader(
+                self.connections.receive().await?.1 .0.as_slice(),
+            )) {
                 // in order to bound the RAM consumption of a session we have to bound an
                 // individual units size, hence the size of its attached unitdata in memory
                 if network_data.included_data().iter().all(UnitData::is_valid) {
@@ -64,8 +66,5 @@ impl aleph_bft::Network<NetworkData> for Network {
                 }
             }
         }
-        // this prevents the aleph session from shutting down when the
-        // network data sender is dropped by the message relay task
-        std::future::pending().await
     }
 }

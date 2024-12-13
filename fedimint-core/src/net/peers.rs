@@ -30,19 +30,21 @@ impl<Msg> DerefMut for PeerConnections<Msg> {
 
 /// Connection manager that tries to keep connections open to all peers
 #[async_trait]
-pub trait IPeerConnections<Msg>
+pub trait IPeerConnections<M>
 where
-    Msg: Serialize + DeserializeOwned + Unpin + Send,
+    M: Serialize + DeserializeOwned + Unpin + Send,
 {
-    async fn send(&mut self, recipient: Recipient, msg: Msg);
+    /// Send message to recipient; block if channel is full.
+    async fn send(&mut self, recipient: Recipient, msg: M);
 
-    fn try_send(&self, recipient: Recipient, msg: Msg);
+    /// Try to send message to recipient; drop message if channel is full.
+    fn try_send(&self, recipient: Recipient, msg: M);
 
-    /// Await receipt of a message from any connected peer.
-    async fn receive(&mut self) -> Cancellable<(PeerId, Msg)>;
+    /// Await receipt of a message; return None if we are shutting down.
+    async fn receive(&mut self) -> Option<(PeerId, M)>;
 
     /// Converts the struct to a `PeerConnection` trait object
-    fn into_dyn(self) -> PeerConnections<Msg>
+    fn into_dyn(self) -> PeerConnections<M>
     where
         Self: Sized + Send + 'static,
     {
