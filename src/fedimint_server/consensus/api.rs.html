@@ -721,7 +721,9 @@
 <a href="#720" id="720">720</a>
 <a href="#721" id="721">721</a>
 <a href="#722" id="722">722</a>
-<a href="#723" id="723">723</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
+<a href="#723" id="723">723</a>
+<a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -773,7 +775,7 @@
 <span class="kw">use </span>fedimint_logging::LOG_NET_API;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>tokio::sync::{watch, RwLock};
-<span class="kw">use </span>tracing::{debug, info};
+<span class="kw">use </span>tracing::{debug, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::config::io::{
     CONSENSUS_CONFIG, ENCRYPTED_EXT, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG, SALT_FILE,
@@ -851,12 +853,18 @@
             <span class="kw-2">&amp;</span>transaction,
             <span class="self">self</span>.cfg.consensus.version,
         )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
+        .<span class="kw">await
+        </span>.inspect_err(|e| {
+            <span class="macro">debug!</span>(target: LOG_NET_API, %txid, %e, <span class="string">"Transaction rejected"</span>);
+        })<span class="question-mark">?</span>;
 
-        <span class="self">self</span>.submission_sender
-            .send(ConsensusItem::Transaction(transaction))
+        <span class="kw">let _ </span>= <span class="self">self
+            </span>.submission_sender
+            .send(ConsensusItem::Transaction(transaction.clone()))
             .<span class="kw">await
-            </span>.ok();
+            </span>.inspect_err(|e| {
+                <span class="macro">warn!</span>(target: LOG_NET_API, %txid, %e, <span class="string">"Unable to submit the tx into consensus"</span>);
+            });
 
         <span class="prelude-val">Ok</span>(txid)
     }
@@ -1266,11 +1274,7 @@
             AWAIT_TRANSACTION_ENDPOINT,
             ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, tx_hash: TransactionId| -&gt; TransactionId {
-                <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">"Received request"</span>);
-
                 fedimint.await_transaction(tx_hash).<span class="kw">await</span>;
-
-                <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">"Sending outcome"</span>);
 
                 <span class="prelude-val">Ok</span>(tx_hash)
             }
