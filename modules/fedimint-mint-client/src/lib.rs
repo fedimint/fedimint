@@ -571,7 +571,11 @@ impl ModuleInit for MintClientInit {
                         mint_client_items.insert("RecoveryFinalized".to_string(), Box::new(val));
                     }
                 }
-                DbKeyPrefix::RecoveryState | DbKeyPrefix::ReusedNoteIndices => {}
+                DbKeyPrefix::RecoveryState
+                | DbKeyPrefix::ReusedNoteIndices
+                | DbKeyPrefix::ExternalReservedStart
+                | DbKeyPrefix::CoreInternalReservedStart
+                | DbKeyPrefix::CoreInternalReservedEnd => {}
             }
         }
 

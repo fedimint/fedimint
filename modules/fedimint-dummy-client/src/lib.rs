@@ -375,6 +375,9 @@ impl ModuleInit for DummyClientInit {
                         items.insert("Dummy Name".to_string(), Box::new(name));
                     }
                 }
+                DbKeyPrefix::ExternalReservedStart
+                | DbKeyPrefix::CoreInternalReservedStart
+                | DbKeyPrefix::CoreInternalReservedEnd => {}
             }
         }
 

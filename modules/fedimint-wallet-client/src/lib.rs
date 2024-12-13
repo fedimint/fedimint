@@ -203,7 +203,10 @@ impl ModuleInit for WalletClientInit {
                         wallet_client_items.insert("RecoveryFinalized".to_string(), Box::new(val));
                     }
                 }
-                DbKeyPrefix::RecoveryState => {}
+                DbKeyPrefix::RecoveryState
+                | DbKeyPrefix::ExternalReservedStart
+                | DbKeyPrefix::CoreInternalReservedStart
+                | DbKeyPrefix::CoreInternalReservedEnd => {}
             }
         }
 
