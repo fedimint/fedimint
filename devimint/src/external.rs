@@ -84,11 +84,15 @@ impl Bitcoind {
             Ok(Arc::new(client))
         });
 
-        Ok(Self {
+        let bitcoind = Self {
             _process: process,
             client: Arc::new(client),
             wallet_client: Arc::new(wallet_client),
-        })
+        };
+
+        bitcoind.poll_ready().await?;
+
+        Ok(bitcoind)
     }
 
     fn new_bitcoin_rpc(
@@ -143,7 +147,7 @@ impl Bitcoind {
             trace!(target: LOG_DEVIMINT, blocks_num=blocks, %address, "Mining blocks to address complete");
         }
 
-        // wait bitciond is ready
+        // wait bitcoind is ready
         poll("bitcoind", || async {
             let info = block_in_place(|| client.get_blockchain_info())
                 .context("bitcoind getblockchaininfo")
@@ -163,7 +167,7 @@ impl Bitcoind {
     }
 
     /// Poll until bitcoind rpc responds for basic commands
-    pub async fn poll_ready(&self) -> anyhow::Result<()> {
+    async fn poll_ready(&self) -> anyhow::Result<()> {
         poll("bitcoind rpc ready", || async {
             self.get_block_count()
                 .await
@@ -419,9 +423,6 @@ impl Lightningd {
             bitcoin_rpcport = process_mgr.globals.FM_PORT_BTC_RPC,
         );
         write_overwrite_async(process_mgr.globals.FM_CLN_DIR.join("config"), conf).await?;
-        // workaround: will crash on start if it gets a bad response from
-        // bitcoind
-        bitcoind.poll_ready().await?;
         let process = Lightningd::start(process_mgr, cln_dir).await?;
 
         let socket_cln = cln_dir.join("regtest/lightning-rpc");
@@ -573,9 +574,6 @@ pub struct Lnd {
 
 impl Lnd {
     pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
-        // workaround: will crash on start if it gets a bad response from
-        // bitcoind
-        bitcoind.poll_ready().await?;
         let (process, client) = Lnd::start(process_mgr).await?;
         let this = Self {
             _bitcoind: bitcoind,
@@ -1116,9 +1114,6 @@ pub struct Electrs {
 
 impl Electrs {
     pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
-        // workaround: will crash on start if it gets a bad response from
-        // bitcoind
-        bitcoind.poll_ready().await?;
         debug!(target: LOG_DEVIMINT, "Starting electrs");
         let electrs_dir = process_mgr
             .globals
@@ -1165,9 +1160,6 @@ pub struct Esplora {
 
 impl Esplora {
     pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
-        // workaround: will crash(?) on start if it gets a bad response from
-        // bitcoind
-        bitcoind.poll_ready().await?;
         debug!("Starting esplora");
         let daemon_dir = process_mgr
             .globals
