@@ -497,6 +497,18 @@ jobs:
 
     runs-on: [self-hosted, linux]
     timeout-minutes: 60
+
+    env:
+      PRERELEASE_MESSAGE: |
+        ⚠️ **Pre-release Notice**
+
+        - This is a release candidate version
+        - Features may be unstable
+        - You may not be able to upgrade to the final release
+        - Not recommended for mainnet use
+
+        Please report any issues you encounter.
+
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v30
@@ -563,6 +575,7 @@ jobs:
         with:
           files: "bins/**"
           prerelease: ${{ contains(github.ref, 'rc') }}
+          body: ${{ contains(github.ref, 'rc') && env.PRERELEASE_MESSAGE || '' }}
 
       - name: Build DEB package
         run: |
@@ -594,6 +607,7 @@ jobs:
         with:
           files: "debs/**.deb"
           prerelease: ${{ contains(github.ref, 'rc') }}
+          body: ${{ contains(github.ref, 'rc') && env.PRERELEASE_MESSAGE || '' }}
 
       - name: Upload RPM packages
         uses: actions/upload-artifact@v4
@@ -607,6 +621,7 @@ jobs:
         with:
           files: "rpms/**.rpm"
           prerelease: ${{ contains(github.ref, 'rc') }}
+          body: ${{ contains(github.ref, 'rc') && env.PRERELEASE_MESSAGE || '' }}
 
   status:
     name: Status
