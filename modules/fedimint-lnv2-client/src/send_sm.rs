@@ -1,5 +1,4 @@
-use std::time::Duration;
-
+use anyhow::ensure;
 use bitcoin::hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
@@ -7,19 +6,18 @@ use fedimint_client::DynGlobalClientContext;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::task::sleep;
+use fedimint_core::util::backoff_util::api_networking_backoff;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{secp256k1, OutPoint, TransactionId};
+use fedimint_core::{secp256k1, util, OutPoint, TransactionId};
 use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
+use futures::future::pending;
 use secp256k1::schnorr::Signature;
 use secp256k1::Keypair;
 use tracing::error;
 
 use crate::api::LightningFederationApi;
 use crate::{LightningClientContext, LightningInvoice};
-
-const RETRY_DELAY: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct SendStateMachine {
@@ -160,8 +158,8 @@ impl SendStateMachine {
         refund_keypair: Keypair,
         context: LightningClientContext,
     ) -> Result<[u8; 32], Signature> {
-        loop {
-            match context
+        util::retry("gateway-send-payment", api_networking_backoff(), || async {
+            let payment_result = context
                 .gateway_conn
                 .send_payment(
                     gateway_api.clone(),
@@ -172,36 +170,17 @@ impl SendStateMachine {
                         *invoice.consensus_hash::<sha256::Hash>().as_ref(),
                     )),
                 )
-                .await
-            {
-                Ok(send_result) => {
-                    if contract.verify_gateway_response(&send_result) {
-                        return send_result;
-                    }
+                .await?;
 
-                    error!(
-                        ?send_result,
-                        ?contract,
-                        ?invoice,
-                        ?federation_id,
-                        ?gateway_api,
-                        "Invalid gateway response"
-                    );
-                }
-                Err(error) => {
-                    error!(
-                        ?error,
-                        ?contract,
-                        ?invoice,
-                        ?federation_id,
-                        ?gateway_api,
-                        "Error while trying to send payment via gateway"
-                    );
-                }
-            }
+            ensure!(
+                contract.verify_gateway_response(&payment_result),
+                "Invalid gateway response: {payment_result:?}"
+            );
 
-            sleep(RETRY_DELAY).await;
-        }
+            Ok(payment_result)
+        })
+        .await
+        .expect("Number of retries has no limit")
     }
 
     async fn transition_gateway_send_payment(
@@ -241,25 +220,18 @@ impl SendStateMachine {
         global_context: DynGlobalClientContext,
         contract: OutgoingContract,
     ) -> Option<[u8; 32]> {
-        loop {
-            let preimage = global_context
-                .module_api()
-                .await_preimage(&contract.contract_id(), contract.expiration)
-                .await;
+        let preimage = global_context
+            .module_api()
+            .await_preimage(&contract.contract_id(), contract.expiration)
+            .await?;
 
-            match preimage {
-                Some(preimage) => {
-                    if contract.verify_preimage(&preimage) {
-                        return Some(preimage);
-                    }
-
-                    error!("Federation returned invalid preimage {:?}", preimage);
-                }
-                None => return None,
-            }
-
-            sleep(RETRY_DELAY).await;
+        if contract.verify_preimage(&preimage) {
+            return Some(preimage);
         }
+
+        error!("Federation returned invalid preimage {:?}", preimage);
+
+        pending().await
     }
 
     async fn transition_preimage(
