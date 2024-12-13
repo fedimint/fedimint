@@ -1,7 +1,6 @@
 use core::fmt;
 use std::collections::BTreeMap;
 use std::future::pending;
-use std::time::Duration;
 
 use anyhow::{anyhow, bail};
 use fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
@@ -14,19 +13,16 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::secp256k1::Keypair;
-use fedimint_core::task::sleep;
 use fedimint_core::{NumPeersExt, OutPoint, PeerId, TransactionId};
 use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_lnv2_common::{
     LightningInput, LightningInputV0, LightningOutputOutcome, LightningOutputOutcomeV0,
 };
 use tpe::{aggregate_decryption_shares, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare};
-use tracing::{error, trace};
+use tracing::error;
 
 use super::events::{IncomingPaymentFailed, IncomingPaymentSucceeded};
 use crate::gateway_module_v2::GatewayClientContextV2;
-
-const RETRY_DELAY: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct ReceiveStateMachine {
@@ -197,50 +193,38 @@ impl ReceiveStateMachine {
         out_point: OutPoint,
         decryption_contract: IncomingContract,
     ) -> BTreeMap<PeerId, DecryptionKeyShare> {
-        let verify_decryption_share = move |peer, outcome: SerdeOutputOutcome| {
-            let outcome = deserialize_outcome::<LightningOutputOutcome>(&outcome, &module_decoder)?;
+        global_context
+            .api()
+            .request_with_strategy_retry(
+                FilterMapThreshold::new(
+                    move |peer, outcome: SerdeOutputOutcome| {
+                        let outcome = deserialize_outcome::<LightningOutputOutcome>(
+                            &outcome,
+                            &module_decoder,
+                        )?;
 
-            match outcome.ensure_v0_ref()? {
-                LightningOutputOutcomeV0::Incoming(share) => {
-                    if !decryption_contract.verify_decryption_share(
-                        tpe_pks.get(&peer).ok_or(anyhow!("Unknown peer pk"))?,
-                        share,
-                    ) {
-                        bail!("Invalid decryption share");
-                    }
+                        match outcome.ensure_v0_ref()? {
+                            LightningOutputOutcomeV0::Incoming(share) => {
+                                if !decryption_contract.verify_decryption_share(
+                                    tpe_pks.get(&peer).ok_or(anyhow!("Unknown peer pk"))?,
+                                    share,
+                                ) {
+                                    bail!("Invalid decryption share");
+                                }
 
-                    Ok(*share)
-                }
-                LightningOutputOutcomeV0::Outgoing => {
-                    bail!("Unexpected outcome variant");
-                }
-            }
-        };
-
-        loop {
-            match global_context
-                .api()
-                .request_with_strategy(
-                    FilterMapThreshold::new(
-                        verify_decryption_share.clone(),
-                        global_context.api().all_peers().to_num_peers(),
-                    ),
-                    AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
-                    ApiRequestErased::new(out_point),
-                )
-                .await
-            {
-                Ok(outcome) => return outcome,
-                Err(error) => {
-                    trace!(
-                        "Awaiting outcome to become ready failed, retrying in {}s: {error}",
-                        RETRY_DELAY.as_secs()
-                    );
-
-                    sleep(RETRY_DELAY).await;
-                }
-            };
-        }
+                                Ok(*share)
+                            }
+                            LightningOutputOutcomeV0::Outgoing => {
+                                bail!("Unexpected outcome variant");
+                            }
+                        }
+                    },
+                    global_context.api().all_peers().to_num_peers(),
+                ),
+                AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
+                ApiRequestErased::new(out_point),
+            )
+            .await
     }
 
     async fn transition_outcome_ready(
