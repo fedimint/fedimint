@@ -47,6 +47,7 @@ pub struct Fixtures {
     bitcoin_rpc: BitcoinRpcConfig,
     bitcoin: Arc<dyn BitcoinTest>,
     dyn_bitcoin_rpc: DynBitcoindRpc,
+    primary_module_kind: ModuleKind,
     id: ModuleInstanceId,
 }
 
@@ -101,6 +102,7 @@ impl Fixtures {
             bitcoin_rpc: config,
             bitcoin,
             dyn_bitcoin_rpc,
+            primary_module_kind: IClientModuleInit::module_kind(&client),
             id: 0,
         }
         .with_module(client, server, params)
@@ -152,6 +154,7 @@ impl Fixtures {
             self.params.clone(),
             ServerModuleInitRegistry::from(self.servers.clone()),
             ClientModuleInitRegistry::from(self.clients.clone()),
+            self.primary_module_kind.clone(),
         )
     }
 
@@ -178,7 +181,7 @@ impl Fixtures {
 
         // Create federation client builder for the gateway
         let client_builder: GatewayClientBuilder =
-            GatewayClientBuilder::new(path.clone(), registry, 0);
+            GatewayClientBuilder::new(path.clone(), registry, ModuleKind::from_static_str("dummy"));
 
         let lightning_builder: Arc<dyn LightningBuilder + Send + Sync> =
             Arc::new(FakeLightningBuilder);
