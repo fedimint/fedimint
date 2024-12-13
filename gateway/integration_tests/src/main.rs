@@ -654,7 +654,7 @@ async fn leave_federation(gw: &Gatewayd, fed_id: String, expected_scid: u64) -> 
     let federation_id: FederationId = serde_json::from_value(leave_fed["federation_id"].clone())?;
     assert_eq!(federation_id.to_string(), fed_id);
 
-    // TODO(support:v0.3): `federation_index` was introduced in v0.5.0
+    // TODO(support:v0.4): `federation_index` was introduced in v0.5.0
     // see: https://github.com/fedimint/fedimint/pull/5971
     let scid = if gatewayd_version < *VERSION_0_5_0_ALPHA {
         let channel_id: Option<u64> = serde_json::from_value(leave_fed["channel_id"].clone())?;
