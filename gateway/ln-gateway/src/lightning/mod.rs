@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use bitcoin::Network;
-use clap::Subcommand;
+use clap::{arg, Subcommand};
 use fedimint_bip39::Mnemonic;
 use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -20,6 +20,7 @@ use fedimint_core::{secp256k1, Amount};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::PrunedInvoice;
 use futures::stream::BoxStream;
+use ldk::GatewayLdkChainSourceConfig;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -27,7 +28,8 @@ use tracing::{debug, info, warn};
 
 use self::lnd::GatewayLndClient;
 use crate::envs::{
-    FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV, FM_LDK_ESPLORA_SERVER_URL, FM_LDK_NETWORK,
+    FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV, FM_LDK_BITCOIND_HOST, FM_LDK_BITCOIND_PASSWORD,
+    FM_LDK_BITCOIND_PORT, FM_LDK_BITCOIND_USER, FM_LDK_ESPLORA_SERVER_URL, FM_LDK_NETWORK,
     FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
 use crate::rpc::{CloseChannelsWithPeerPayload, SendOnchainPayload};
@@ -319,7 +321,23 @@ pub enum LightningMode {
     Ldk {
         /// LDK esplora server URL
         #[arg(long = "ldk-esplora-server-url", env = FM_LDK_ESPLORA_SERVER_URL)]
-        esplora_server_url: String,
+        esplora_server_url: Option<String>,
+
+        /// LDK bitcoind host
+        #[arg(long = "ldk-bitcoind-host", env = FM_LDK_BITCOIND_HOST)]
+        bitcoind_host: Option<String>,
+
+        /// LDK bitcoind port
+        #[arg(long = "ldk-bitcoind-port", env = FM_LDK_BITCOIND_PORT)]
+        bitcoind_port: Option<u16>,
+
+        /// LDK bitcoind user
+        #[arg(long = "ldk-bitcoind-user", env = FM_LDK_BITCOIND_USER)]
+        bitcoind_user: Option<String>,
+
+        /// LDK bitcoind password
+        #[arg(long = "ldk-bitcoind-password", env = FM_LDK_BITCOIND_PASSWORD)]
+        bitcoind_password: Option<String>,
 
         /// LDK network (defaults to regtest if not provided)
         #[arg(long = "ldk-network", env = FM_LDK_NETWORK, default_value = "regtest")]
@@ -365,19 +383,62 @@ impl LightningBuilder for GatewayLightningBuilder {
             )),
             LightningMode::Ldk {
                 esplora_server_url,
+                bitcoind_host,
+                bitcoind_port,
+                bitcoind_user,
+                bitcoind_password,
                 network,
                 lightning_port,
-            } => Box::new(
-                ldk::GatewayLdkClient::new(
-                    &self.ldk_data_dir,
-                    &esplora_server_url,
-                    network,
-                    lightning_port,
-                    self.mnemonic.clone(),
-                    runtime,
+            } => {
+                let chain_source_config = {
+                    match (
+                        esplora_server_url,
+                        bitcoind_host,
+                        bitcoind_port,
+                        bitcoind_user,
+                        bitcoind_password,
+                    ) {
+                        (None, None, None, None, None) => {
+                            panic!("Either esplora or bitcoind chain info source must be provided")
+                        }
+                        (Some(esplora_server_url), None, None, None, None) => {
+                            GatewayLdkChainSourceConfig::Esplora {
+                                server_url: esplora_server_url,
+                            }
+                        }
+                        (Some(_), _, _, _, _) => {
+                            panic!("Either esplora or bitcoind chain info source must be provided, but received args for both")
+                        }
+                        (
+                            None,
+                            Some(bitcoind_host),
+                            Some(bitcoind_port),
+                            Some(bitcoind_user),
+                            Some(bitcoind_password),
+                        ) => GatewayLdkChainSourceConfig::Bitcoind {
+                            rpc_host: bitcoind_host,
+                            rpc_port: bitcoind_port,
+                            rpc_user: bitcoind_user,
+                            rpc_password: bitcoind_password,
+                        },
+                        (None, _, _, _, _) => {
+                            panic!("Missing some bitcoind chain info source args")
+                        }
+                    }
+                };
+
+                Box::new(
+                    ldk::GatewayLdkClient::new(
+                        &self.ldk_data_dir,
+                        chain_source_config,
+                        network,
+                        lightning_port,
+                        self.mnemonic.clone(),
+                        runtime,
+                    )
+                    .expect("Failed to create LDK client"),
                 )
-                .unwrap(),
-            ),
+            }
         }
     }
 

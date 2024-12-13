@@ -7,8 +7,10 @@ use async_trait::async_trait;
 use bitcoin::hashes::Hash;
 use bitcoin::{Network, OutPoint};
 use fedimint_bip39::Mnemonic;
-use fedimint_core::envs::is_env_var_set;
+use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+use fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig};
 use fedimint_core::task::{block_in_place, TaskGroup, TaskHandle};
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::contracts::Preimage;
 use ldk_node::lightning::ln::msgs::SocketAddress;
@@ -34,12 +36,47 @@ use crate::lightning::{
 };
 use crate::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, SendOnchainPayload};
 
+pub enum GatewayLdkChainSourceConfig {
+    Bitcoind {
+        rpc_host: String,
+        rpc_port: u16,
+        rpc_user: String,
+        rpc_password: String,
+    },
+    Esplora {
+        server_url: String,
+    },
+}
+
+impl GatewayLdkChainSourceConfig {
+    fn bitcoin_rpc_config(&self) -> BitcoinRpcConfig {
+        match self {
+            Self::Bitcoind {
+                rpc_host,
+                rpc_port,
+                rpc_user,
+                rpc_password,
+            } => BitcoinRpcConfig {
+                kind: "bitcoind".to_string(),
+                url: SafeUrl::parse(&format!(
+                    "http://{rpc_user}:{rpc_password}@{rpc_host}:{rpc_port}"
+                ))
+                .unwrap(),
+            },
+            Self::Esplora { server_url } => BitcoinRpcConfig {
+                kind: "esplora".to_string(),
+                url: SafeUrl::parse(&server_url.clone()).unwrap(),
+            },
+        }
+    }
+}
+
 pub struct GatewayLdkClient {
     /// The underlying lightning node.
     node: Arc<ldk_node::Node>,
 
     /// The client for querying data about the blockchain.
-    esplora_client: esplora_client::AsyncClient,
+    bitcoind_rpc: DynBitcoindRpc,
 
     task_group: TaskGroup,
 
@@ -66,7 +103,7 @@ impl GatewayLdkClient {
     /// There's no need to manually stop the node.
     pub fn new(
         data_dir: &Path,
-        esplora_server_url: &str,
+        chain_source_config: GatewayLdkChainSourceConfig,
         network: Network,
         lightning_port: u16,
         mnemonic: Mnemonic,
@@ -94,9 +131,29 @@ impl GatewayLdkClient {
             node_alias,
             ..Default::default()
         });
-        node_builder
-            .set_entropy_bip39_mnemonic(mnemonic, None)
-            .set_chain_source_esplora(esplora_server_url.to_string(), None);
+
+        node_builder.set_entropy_bip39_mnemonic(mnemonic, None);
+
+        let bitcoind_rpc = create_bitcoind(&chain_source_config.bitcoin_rpc_config())?;
+
+        match chain_source_config {
+            GatewayLdkChainSourceConfig::Bitcoind {
+                rpc_host,
+                rpc_port,
+                rpc_user,
+                rpc_password,
+            } => {
+                node_builder.set_chain_source_bitcoind_rpc(
+                    rpc_host,
+                    rpc_port,
+                    rpc_user,
+                    rpc_password,
+                );
+            }
+            GatewayLdkChainSourceConfig::Esplora { server_url } => {
+                node_builder.set_chain_source_esplora(server_url.to_string(), None);
+            }
+        };
         let Some(data_dir_str) = data_dir.to_str() else {
             return Err(anyhow::anyhow!("Invalid data dir path"));
         };
@@ -120,7 +177,7 @@ impl GatewayLdkClient {
 
         Ok(GatewayLdkClient {
             node,
-            esplora_client: esplora_client::Builder::new(esplora_server_url).build_async()?,
+            bitcoind_rpc,
             task_group,
             htlc_stream_receiver_or: Some(htlc_stream_receiver),
             outbound_lightning_payment_lock_pool: lockable::LockPool::new(),
@@ -174,20 +231,20 @@ impl GatewayLdkClient {
     /// Converts a transaction outpoint to a short channel ID by querying the
     /// blockchain.
     async fn outpoint_to_scid(&self, funding_txo: OutPoint) -> anyhow::Result<u64> {
+        let block_hash = self
+            .bitcoind_rpc
+            .get_txout_proof(funding_txo.txid)
+            .await?
+            .block_header
+            .block_hash();
+
         let block_height = self
-            .esplora_client
-            .get_merkle_proof(&funding_txo.txid)
+            .bitcoind_rpc
+            .get_tx_block_height(&funding_txo.txid)
             .await?
-            .ok_or(anyhow::anyhow!("Failed to get merkle proof"))?
-            .block_height;
+            .ok_or(anyhow::anyhow!("Failed to get block height"))?;
 
-        let block_hash = self.esplora_client.get_block_hash(block_height).await?;
-
-        let block = self
-            .esplora_client
-            .get_block_by_hash(&block_hash)
-            .await?
-            .ok_or(anyhow::anyhow!("Failed to get block"))?;
+        let block = self.bitcoind_rpc.get_block(&block_hash).await?;
 
         let tx_index = block
             .txdata
@@ -199,12 +256,8 @@ impl GatewayLdkClient {
 
         let output_index = funding_txo.vout;
 
-        scid_from_parts(
-            u64::from(block_height),
-            u64::from(tx_index),
-            u64::from(output_index),
-        )
-        .map_err(|e| anyhow::anyhow!("Failed to convert to short channel ID: {e:?}"))
+        scid_from_parts(block_height, u64::from(tx_index), u64::from(output_index))
+            .map_err(|e| anyhow::anyhow!("Failed to convert to short channel ID: {e:?}"))
     }
 }
 
@@ -233,29 +286,19 @@ impl ILnRpcClient for GatewayLdkClient {
         }
         let node_status = self.node.status();
 
-        let Some(esplora_chain_tip_block_summary) = self
-            .esplora_client
-            .get_blocks(None)
-            .await
-            .map_err(|e| LightningRpcError::FailedToGetNodeInfo {
-                failure_reason: format!("Failed get chain tip block summary: {e:?}"),
-            })?
-            .into_iter()
-            .next()
-        else {
-            return Err(LightningRpcError::FailedToGetNodeInfo {
-                failure_reason:
-                    "Failed to get chain tip block summary (empty block list was returned)"
-                        .to_string(),
-            });
-        };
-
-        let esplora_chain_tip_block_height = esplora_chain_tip_block_summary.time.height;
-        let ldk_block_height: u32 = node_status.current_best_block.height;
-        let synced_to_chain = esplora_chain_tip_block_height == ldk_block_height;
+        let chain_tip_block_height =
+            u32::try_from(self.bitcoind_rpc.get_block_count().await.map_err(|e| {
+                LightningRpcError::FailedToGetNodeInfo {
+                    failure_reason: format!("Failed to get block count from chain source: {e}"),
+                }
+            })?)
+            .expect("Failed to convert block count to u32")
+                - 1;
+        let ldk_block_height = node_status.current_best_block.height;
+        let synced_to_chain = chain_tip_block_height == ldk_block_height;
 
         assert!(
-            esplora_chain_tip_block_height >= ldk_block_height,
+            chain_tip_block_height >= ldk_block_height,
             "LDK Block Height is in the future"
         );
 
