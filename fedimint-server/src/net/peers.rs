@@ -260,61 +260,60 @@ where
     async fn run(mut self, task_handle: &TaskHandle) {
         let peer = self.common.peer_id;
 
-        // Note: `state_transition` internally uses channel operations (`send` and
-        // `recv`) which will disconnect when other tasks are shutting down
-        // returning here, so we probably don't need any `timeout` here.
-        while !task_handle.is_shutting_down() {
-            if let Some(new_self) = self.state_transition(task_handle).await {
-                self = new_self;
-            } else {
-                break;
+        loop {
+            tokio::select! {
+                state = self.state_transition() => {
+                    if let Some(state) = state {
+                        self = state;
+                    } else {
+                        break;
+                    }
+                }
+                () = task_handle.make_shutdown_rx() => {
+                    break;
+                },
             }
         }
-        info!(
-            target: LOG_NET_PEER,
-            ?peer,
-            "Shutting down peer connection state machine"
-        );
+
+        info!(target: LOG_NET_PEER, ?peer, "Shutting down peer connection state machine");
     }
 
-    async fn state_transition(self, task_handle: &TaskHandle) -> Option<Self> {
-        let PeerConnectionStateMachine { mut common, state } = self;
-
-        match state {
+    async fn state_transition(mut self) -> Option<Self> {
+        let state = match self.state {
             PeerConnectionState::Disconnected(disconnected) => {
-                let new_state = common
-                    .state_transition_disconnected(disconnected, task_handle)
-                    .await;
+                let new_state = self
+                    .common
+                    .state_transition_disconnected(disconnected)
+                    .await?;
 
-                if let Some(PeerConnectionState::Connected(..)) = new_state {
-                    common
+                if let PeerConnectionState::Connected(..) = new_state {
+                    self.common
                         .status_channels
                         .write()
                         .await
-                        .insert(common.peer_id, PeerConnectionStatus::Connected);
+                        .insert(self.common.peer_id, PeerConnectionStatus::Connected);
                 }
 
                 new_state
             }
             PeerConnectionState::Connected(connected) => {
-                let new_state = common
-                    .state_transition_connected(connected, task_handle)
-                    .await;
+                let new_state = self.common.state_transition_connected(connected).await?;
 
-                if let Some(PeerConnectionState::Disconnected(..)) = new_state {
-                    common
+                if let PeerConnectionState::Disconnected(..) = new_state {
+                    self.common
                         .status_channels
                         .write()
                         .await
-                        .insert(common.peer_id, PeerConnectionStatus::Disconnected);
+                        .insert(self.common.peer_id, PeerConnectionStatus::Disconnected);
                 };
 
                 new_state
             }
-        }
-        .map(|new_state| PeerConnectionStateMachine {
-            common,
-            state: new_state,
+        };
+
+        Some(PeerConnectionStateMachine {
+            common: self.common,
+            state,
         })
     }
 }
@@ -326,27 +325,13 @@ where
     async fn state_transition_connected(
         &mut self,
         mut connection: AnyFramedTransport<PeerMessage<M>>,
-        task_handle: &TaskHandle,
     ) -> Option<PeerConnectionState<M>> {
         Some(tokio::select! {
             maybe_msg = self.outgoing.recv() => {
-                if let Ok(msg) = maybe_msg {
-                    self.send_message_connected(connection, PeerMessage::Message(msg)).await
-                } else {
-                    debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
-                    return None;
-                }
+                self.send_message_connected(connection, PeerMessage::Message(maybe_msg.ok()?)).await
             },
-            new_connection_res = self.incoming_connections.recv() => {
-                if let Some(new_connection) = new_connection_res {
-                    debug!(target: LOG_NET_PEER, "Replacing existing connection");
-                    self.connect(new_connection).await
-                } else {
-                    debug!(
-                    target: LOG_NET_PEER,
-                        "Exiting peer connection IO task - parent disconnected");
-                    return None;
-                }
+            maybe_connection = self.incoming_connections.recv() => {
+                self.connect(maybe_connection?).await
             },
             Some(message_res) = connection.next() => {
                 match message_res {
@@ -366,9 +351,6 @@ where
             () = sleep(Duration::from_secs(10)) => {
                 self.send_message_connected(connection, PeerMessage::Ping)
                     .await
-            },
-            () = task_handle.make_shutdown_rx() => {
-                return None;
             },
         })
     }
@@ -423,17 +405,12 @@ where
     async fn state_transition_disconnected(
         &mut self,
         mut backoff: FibonacciBackoff,
-        task_handle: &TaskHandle,
     ) -> Option<PeerConnectionState<M>> {
         Some(tokio::select! {
-            new_connection_res = self.incoming_connections.recv() => {
-                if let Some(new_connection) = new_connection_res {
-                    PEER_CONNECT_COUNT.with_label_values(&[&self.our_id_str, &self.peer_id_str, "incoming"]).inc();
-                    self.connect(new_connection).await
-                } else {
-                    debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
-                    return None;
-                }
+            maybe_connection = self.incoming_connections.recv() => {
+                PEER_CONNECT_COUNT.with_label_values(&[&self.our_id_str, &self.peer_id_str, "incoming"]).inc();
+
+                self.connect(maybe_connection?).await
             },
             () = sleep(backoff.next().expect("Unlimited retries")), if self.our_id < self.peer_id => {
                 // to prevent "reconnection ping-pongs", only the side with lower PeerId is responsible for reconnecting
@@ -447,9 +424,6 @@ where
                     }
                     Err(..) => PeerConnectionState::Disconnected(backoff),
                 }
-            },
-            () = task_handle.make_shutdown_rx() => {
-                return None;
             },
         })
     }
