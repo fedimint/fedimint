@@ -1324,7 +1324,7 @@
     <span class="kw">let </span>federation_id: FederationId = serde_json::from_value(leave_fed[<span class="string">"federation_id"</span>].clone())<span class="question-mark">?</span>;
     <span class="macro">assert_eq!</span>(federation_id.to_string(), fed_id);
 
-    <span class="comment">// TODO(support:v0.3): `federation_index` was introduced in v0.5.0
+    <span class="comment">// TODO(support:v0.4): `federation_index` was introduced in v0.5.0
     // see: https://github.com/fedimint/fedimint/pull/5971
     </span><span class="kw">let </span>scid = <span class="kw">if </span>gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_5_0_ALPHA {
         <span class="kw">let </span>channel_id: <span class="prelude-ty">Option</span>&lt;u64&gt; = serde_json::from_value(leave_fed[<span class="string">"channel_id"</span>].clone())<span class="question-mark">?</span>;
