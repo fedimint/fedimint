@@ -38,7 +38,7 @@ use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::NumPeersExt;
 use crate::multiplexed::PeerConnectionMultiplexer;
 use crate::net::connect::{dns_sanitize, Connector, TlsConfig};
-use crate::net::peers::{DelayCalculator, NetworkConfig, ReconnectPeerConnections};
+use crate::net::peers::{NetworkConfig, ReconnectPeerConnections};
 use crate::TlsTcpConnector;
 
 pub mod api;
@@ -433,7 +433,6 @@ impl ServerConfig {
         p2p_bind_addr: SocketAddr,
         params: &ConfigGenParams,
         registry: ServerModuleInitRegistry,
-        delay_calculator: DelayCalculator,
         task_group: &TaskGroup,
         code_version_str: String,
     ) -> DkgResult<Self> {
@@ -441,7 +440,6 @@ impl ServerConfig {
         let server_conn = connect(
             params.p2p_network(p2p_bind_addr),
             params.tls_config(),
-            delay_calculator,
             task_group,
         )
         .await;
@@ -695,7 +693,6 @@ pub fn max_connections() -> u32 {
 pub async fn connect<T>(
     network: NetworkConfig,
     certs: TlsConfig,
-    delay_calculator: DelayCalculator,
     task_group: &TaskGroup,
 ) -> PeerConnections<T>
 where
@@ -704,14 +701,9 @@ where
     let connector = TlsTcpConnector::new(certs, network.identity).into_dyn();
 
     let connection_status_channels = Arc::new(RwLock::new(BTreeMap::new()));
-    let connections = ReconnectPeerConnections::new(
-        network,
-        delay_calculator,
-        connector,
-        task_group,
-        connection_status_channels,
-    )
-    .await;
+    let connections =
+        ReconnectPeerConnections::new(network, connector, task_group, connection_status_channels)
+            .await;
 
     connections.into_dyn()
 }

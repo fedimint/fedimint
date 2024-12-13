@@ -52,7 +52,7 @@ use crate::metrics::{
     CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX, CONSENSUS_SESSION_COUNT,
 };
 use crate::net::connect::{Connector, TlsTcpConnector};
-use crate::net::peers::{DelayCalculator, ReconnectPeerConnections};
+use crate::net::peers::ReconnectPeerConnections;
 use crate::LOG_CONSENSUS;
 
 // The name of the directory where the database checkpoints are stored.
@@ -171,7 +171,6 @@ impl ConsensusEngine {
         // Build P2P connections for the atomic broadcast
         let connections = ReconnectPeerConnections::new(
             self.cfg.network_config(p2p_bind_addr),
-            DelayCalculator::PROD_DEFAULT,
             TlsTcpConnector::new(self.cfg.tls_config(), self.identity()).into_dyn(),
             &self.task_group,
             Arc::clone(&self.connection_status_channels),
