@@ -11,7 +11,6 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Context;
 use async_trait::async_trait;
 use fedimint_api_client::api::PeerConnectionStatus;
 use fedimint_core::net::peers::{IPeerConnections, Recipient};
@@ -24,7 +23,7 @@ use futures::future::select_all;
 use futures::{SinkExt, StreamExt};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::mpsc::Receiver;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 use tracing::{debug, info, instrument, warn};
@@ -108,11 +107,11 @@ where
     #[instrument(skip_all)]
     pub(crate) async fn new(
         cfg: NetworkConfig,
-        connect: PeerConnector<T>,
+        connector: PeerConnector<T>,
         task_group: &TaskGroup,
         status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
     ) -> Self {
-        let shared_connector: SharedAnyConnector<PeerMessage<T>> = connect.into();
+        let connector: SharedAnyConnector<PeerMessage<T>> = connector.into();
         let mut connection_senders = HashMap::new();
         let mut connections = HashMap::new();
 
@@ -124,7 +123,7 @@ where
                 cfg.identity,
                 *peer,
                 peer_address.clone(),
-                shared_connector.clone(),
+                connector.clone(),
                 connection_receiver,
                 status_channels.clone(),
                 task_group,
@@ -139,56 +138,40 @@ where
                 .insert(*peer, PeerConnectionStatus::Disconnected);
         }
 
-        task_group.spawn("listen task", move |handle| {
-            Self::run_listen_task(cfg, shared_connector, connection_senders, handle)
+        let mut listener = connector
+            .listen(cfg.p2p_bind_addr)
+            .await
+            .expect("Could not bind to port");
+
+        task_group.spawn("handle-incoming-p2p-connections", move |handle| async move {
+            loop {
+                tokio::select! {
+                    connection = listener.next() => {
+                        match connection.expect("Listener closed") {
+                            Ok((peer, connection)) => {
+                                if connection_senders
+                                    .get_mut(&peer)
+                                    .expect("Authenticating connectors dont return unknown peers")
+                                    .send(connection)
+                                    .await
+                                    .is_err()
+                                {
+                                    break;
+                                }
+                            },
+                            Err(e) => {
+                                warn!(target: LOG_NET_PEER, "Error while opening incoming connection: {}", e);
+                            }
+                        }
+                    },
+                    () = &mut handle.make_shutdown_rx() => { break },
+                };
+            }
+
+            info!(target: LOG_NET_PEER, "Shutting down task listening for p2p connections");
         });
 
         ReconnectPeerConnections { connections }
-    }
-
-    async fn run_listen_task(
-        cfg: NetworkConfig,
-        connect: SharedAnyConnector<PeerMessage<T>>,
-        mut connection_senders: HashMap<PeerId, Sender<AnyFramedTransport<PeerMessage<T>>>>,
-        task_handle: TaskHandle,
-    ) {
-        let mut listener = connect
-            .listen(cfg.p2p_bind_addr)
-            .await
-            .with_context(|| anyhow::anyhow!("Failed to listen on {}", cfg.p2p_bind_addr))
-            .expect("Could not bind port");
-
-        let mut shutdown_rx = task_handle.make_shutdown_rx();
-
-        while !task_handle.is_shutting_down() {
-            let new_connection = tokio::select! {
-                maybe_msg = listener.next() => { maybe_msg },
-                () = &mut shutdown_rx => { break; },
-            };
-
-            let (peer, connection) = match new_connection.expect("Listener closed") {
-                Ok(connection) => connection,
-                Err(e) => {
-                    warn!(target: LOG_NET_PEER, mint = ?cfg.identity, err = %e, "Error while opening incoming connection");
-                    continue;
-                }
-            };
-
-            let err = connection_senders
-                .get_mut(&peer)
-                .expect("Authenticating connectors should not return unknown peers")
-                .send(connection)
-                .await
-                .is_err();
-
-            if err {
-                warn!(
-                    target: LOG_NET_PEER,
-                    ?peer,
-                    "Could not send incoming connection to peer io task (possibly banned)"
-                );
-            }
-        }
     }
 }
 
@@ -250,27 +233,6 @@ impl<M> PeerConnectionStateMachine<M>
 where
     M: Debug + Clone,
 {
-    async fn run(mut self, task_handle: &TaskHandle) {
-        let peer = self.common.peer_id;
-
-        loop {
-            tokio::select! {
-                state = self.state_transition() => {
-                    if let Some(state) = state {
-                        self = state;
-                    } else {
-                        break;
-                    }
-                }
-                () = task_handle.make_shutdown_rx() => {
-                    break;
-                },
-            }
-        }
-
-        info!(target: LOG_NET_PEER, ?peer, "Shutting down peer connection state machine");
-    }
-
     async fn state_transition(mut self) -> Option<Self> {
         match self.state {
             PeerConnectionState::Disconnected(disconnected) => {
@@ -332,14 +294,15 @@ where
                     Ok(peer_message) => {
                         if let PeerMessage::Message(msg) = peer_message {
                             PEER_MESSAGES_COUNT.with_label_values(&[&self.our_id_str, &self.peer_id_str, "incoming"]).inc();
+
                             if self.incoming.send(msg).await.is_err(){
-                                debug!(target: LOG_NET_PEER, "Could not relay incoming message since the channel is full");
+                                return None;
                             }
                         }
 
                         PeerConnectionState::Connected(connection)
                     },
-                    Err(e) => self.disconnect(&e),
+                    Err(e) => self.disconnect(e),
                 }
             },
             () = sleep(Duration::from_secs(10)) => {
@@ -353,22 +316,16 @@ where
         &mut self,
         mut connection: AnyFramedTransport<PeerMessage<M>>,
     ) -> PeerConnectionState<M> {
-        debug!(target: LOG_NET_PEER, our_id = ?self.our_id, "Initializing new connection");
+        info!(target: LOG_NET_PEER, "Connected to peer {}", self.peer_id);
 
         match connection.send(PeerMessage::Ping).await {
             Ok(()) => PeerConnectionState::Connected(connection),
-            Err(e) => self.disconnect(&e),
+            Err(e) => self.disconnect(e),
         }
     }
 
-    fn disconnect(&self, err: &anyhow::Error) -> PeerConnectionState<M> {
-        debug!(
-            target: LOG_NET_PEER,
-            our_id = ?self.our_id,
-            peer = ?self.peer_id,
-            %err,
-            "Peer disconnected"
-        );
+    fn disconnect(&self, error: anyhow::Error) -> PeerConnectionState<M> {
+        info!(target: LOG_NET_PEER, "Disconnected from peer {}: {}", self.peer_id, error);
 
         PEER_DISCONNECT_COUNT
             .with_label_values(&[&self.our_id_str, &self.peer_id_str])
@@ -387,12 +344,12 @@ where
             .inc();
 
         if let Err(e) = connection.send(peer_message).await {
-            return self.disconnect(&e);
+            return self.disconnect(e);
         }
 
         match connection.flush().await {
             Ok(()) => PeerConnectionState::Connected(connection),
-            Err(e) => self.disconnect(&e),
+            Err(e) => self.disconnect(e),
         }
     }
 
@@ -527,7 +484,9 @@ where
         status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
         task_handle: &TaskHandle,
     ) {
-        let state_machine = PeerConnectionStateMachine {
+        info!(target: LOG_NET_PEER, "Starting peer connection state machine {}", peer_id);
+
+        let mut state_machine = PeerConnectionStateMachine {
             common: CommonPeerConnectionState {
                 incoming,
                 outgoing,
@@ -543,7 +502,22 @@ where
             state: PeerConnectionState::Disconnected(api_networking_backoff()),
         };
 
-        state_machine.run(task_handle).await;
+        loop {
+            tokio::select! {
+                sm = state_machine.state_transition() => {
+                    if let Some(sm) = sm {
+                        state_machine = sm;
+                    } else {
+                        break;
+                    }
+                }
+                () = task_handle.make_shutdown_rx() => {
+                    break;
+                },
+            }
+        }
+
+        info!(target: LOG_NET_PEER, "Shutting down peer connection state machine {}", peer_id);
     }
 }
 
