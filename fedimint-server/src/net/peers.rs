@@ -15,7 +15,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 use fedimint_api_client::api::PeerConnectionStatus;
 use fedimint_core::net::peers::{IPeerConnections, Recipient};
-use fedimint_core::task::{sleep_until, Cancellable, Cancelled, TaskGroup, TaskHandle};
+use fedimint_core::task::{Cancellable, Cancelled, TaskGroup, TaskHandle};
 use fedimint_core::util::backoff_util::{api_networking_backoff, FibonacciBackoff};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
@@ -26,17 +26,12 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::RwLock;
-use tokio::time::Instant;
-use tracing::{debug, info, instrument, trace, warn};
+use tokio::time::sleep;
+use tracing::{debug, info, instrument, warn};
 
 use crate::metrics::{PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT};
 use crate::net::connect::{AnyConnector, SharedAnyConnector};
 use crate::net::framed::AnyFramedTransport;
-
-/// Every how many seconds to send an empty message to our peer if we sent no
-/// messages during that time. This helps with reducing the amount of messages
-/// that need to be re-sent in case of very one-sided communication.
-const PING_INTERVAL: Duration = Duration::from_secs(10);
 
 /// Owned [`Connector`](crate::net::connect::Connector) trait object used by
 /// [`ReconnectPeerConnections`]
@@ -97,19 +92,9 @@ struct CommonPeerConnectionState<M> {
     incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
     status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
 }
-
-struct DisconnectedPeerConnectionState {
-    backoff: FibonacciBackoff,
-}
-
-struct ConnectedPeerConnectionState<M> {
-    connection: AnyFramedTransport<PeerMessage<M>>,
-    next_ping: Instant,
-}
-
 enum PeerConnectionState<M> {
-    Disconnected(DisconnectedPeerConnectionState),
-    Connected(ConnectedPeerConnectionState<M>),
+    Disconnected(FibonacciBackoff),
+    Connected(AnyFramedTransport<PeerMessage<M>>),
 }
 
 impl<T: 'static> ReconnectPeerConnections<T>
@@ -340,13 +325,13 @@ where
 {
     async fn state_transition_connected(
         &mut self,
-        mut connected: ConnectedPeerConnectionState<M>,
+        mut connection: AnyFramedTransport<PeerMessage<M>>,
         task_handle: &TaskHandle,
     ) -> Option<PeerConnectionState<M>> {
         Some(tokio::select! {
             maybe_msg = self.outgoing.recv() => {
                 if let Ok(msg) = maybe_msg {
-                    self.send_message_connected(connected, PeerMessage::Message(msg)).await
+                    self.send_message_connected(connection, PeerMessage::Message(msg)).await
                 } else {
                     debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
                     return None;
@@ -363,7 +348,7 @@ where
                     return None;
                 }
             },
-            Some(message_res) = connected.connection.next() => {
+            Some(message_res) = connection.next() => {
                 match message_res {
                     Ok(peer_message) => {
                         if let PeerMessage::Message(msg) = peer_message {
@@ -373,14 +358,13 @@ where
                             }
                         }
 
-                        PeerConnectionState::Connected(connected)
+                        PeerConnectionState::Connected(connection)
                     },
-                    Err(e) => self.disconnect_err(&e),
+                    Err(e) => self.disconnect(&e),
                 }
             },
-            () = sleep_until(connected.next_ping) => {
-                trace!(target: LOG_NET_PEER, our_id = ?self.our_id, peer = ?self.peer_id, "Sending ping");
-                self.send_message_connected(connected, PeerMessage::Ping)
+            () = sleep(Duration::from_secs(10)) => {
+                self.send_message_connected(connection, PeerMessage::Ping)
                     .await
             },
             () = task_handle.make_shutdown_rx() => {
@@ -391,30 +375,17 @@ where
 
     async fn connect(
         &mut self,
-        mut new_connection: AnyFramedTransport<PeerMessage<M>>,
+        mut connection: AnyFramedTransport<PeerMessage<M>>,
     ) -> PeerConnectionState<M> {
         debug!(target: LOG_NET_PEER, our_id = ?self.our_id, "Initializing new connection");
 
-        match new_connection.send(PeerMessage::Ping).await {
-            Ok(()) => PeerConnectionState::Connected(ConnectedPeerConnectionState {
-                connection: new_connection,
-                next_ping: Instant::now(),
-            }),
-            Err(e) => self.disconnect_err(&e),
+        match connection.send(PeerMessage::Ping).await {
+            Ok(()) => PeerConnectionState::Connected(connection),
+            Err(e) => self.disconnect(&e),
         }
     }
 
-    fn disconnect(&self) -> PeerConnectionState<M> {
-        PEER_DISCONNECT_COUNT
-            .with_label_values(&[&self.our_id_str, &self.peer_id_str])
-            .inc();
-
-        PeerConnectionState::Disconnected(DisconnectedPeerConnectionState {
-            backoff: api_networking_backoff(),
-        })
-    }
-
-    fn disconnect_err(&self, err: &anyhow::Error) -> PeerConnectionState<M> {
+    fn disconnect(&self, err: &anyhow::Error) -> PeerConnectionState<M> {
         debug!(
             target: LOG_NET_PEER,
             our_id = ?self.our_id,
@@ -423,33 +394,35 @@ where
             "Peer disconnected"
         );
 
-        self.disconnect()
+        PEER_DISCONNECT_COUNT
+            .with_label_values(&[&self.our_id_str, &self.peer_id_str])
+            .inc();
+
+        PeerConnectionState::Disconnected(api_networking_backoff())
     }
 
     async fn send_message_connected(
         &mut self,
-        mut connected: ConnectedPeerConnectionState<M>,
+        mut connection: AnyFramedTransport<PeerMessage<M>>,
         peer_message: PeerMessage<M>,
     ) -> PeerConnectionState<M> {
         PEER_MESSAGES_COUNT
             .with_label_values(&[&self.our_id_str, &self.peer_id_str, "outgoing"])
             .inc();
 
-        if let Err(e) = connected.connection.send(peer_message).await {
-            return self.disconnect_err(&e);
+        if let Err(e) = connection.send(peer_message).await {
+            return self.disconnect(&e);
         }
 
-        connected.next_ping = Instant::now() + PING_INTERVAL;
-
-        match connected.connection.flush().await {
-            Ok(()) => PeerConnectionState::Connected(connected),
-            Err(e) => self.disconnect_err(&e),
+        match connection.flush().await {
+            Ok(()) => PeerConnectionState::Connected(connection),
+            Err(e) => self.disconnect(&e),
         }
     }
 
     async fn state_transition_disconnected(
         &mut self,
-        mut disconnected: DisconnectedPeerConnectionState,
+        mut backoff: FibonacciBackoff,
         task_handle: &TaskHandle,
     ) -> Option<PeerConnectionState<M>> {
         Some(tokio::select! {
@@ -462,7 +435,7 @@ where
                     return None;
                 }
             },
-            () = tokio::time::sleep(disconnected.backoff.next().unwrap()), if self.our_id < self.peer_id => {
+            () = sleep(backoff.next().expect("Unlimited retries")), if self.our_id < self.peer_id => {
                 // to prevent "reconnection ping-pongs", only the side with lower PeerId is responsible for reconnecting
                 match self.try_reconnect().await {
                     Ok(connection) => {
@@ -472,7 +445,7 @@ where
 
                         self.connect(connection).await
                     }
-                    Err(..) => PeerConnectionState::Disconnected(disconnected),
+                    Err(..) => PeerConnectionState::Disconnected(backoff),
                 }
             },
             () = task_handle.make_shutdown_rx() => {
@@ -599,9 +572,7 @@ where
                 incoming_connections,
                 status_channels,
             },
-            state: PeerConnectionState::Disconnected(DisconnectedPeerConnectionState {
-                backoff: api_networking_backoff(),
-            }),
+            state: PeerConnectionState::Disconnected(api_networking_backoff()),
         };
 
         state_machine.run(task_handle).await;
