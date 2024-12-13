@@ -120,12 +120,12 @@ pub trait FederationApiExt: IRawFederationApi {
         &self,
         method: String,
         params: ApiRequestErased,
-        peer_id: PeerId,
+        peer: PeerId,
     ) -> PeerResult<Ret>
     where
         Ret: DeserializeOwned,
     {
-        self.request_raw(peer_id, &method, &[params.to_json()])
+        self.request_raw(peer, &method, &[params.to_json()])
             .await
             .map_err(PeerError::Rpc)
             .and_then(|v| {

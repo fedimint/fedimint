@@ -511,18 +511,10 @@ async fn await_contract_cancelled(contract_id: ContractId, global_context: DynGl
 /// Waits until a specific block height at which the contract will be able to be
 /// reclaimed.
 async fn await_contract_timeout(global_context: DynGlobalClientContext, timelock: u32) {
-    loop {
-        match global_context
-            .module_api()
-            .wait_block_height(u64::from(timelock))
-            .await
-        {
-            Ok(()) => return,
-            Err(error) => error!("Error waiting for block height: {timelock} {error:?}"),
-        }
-
-        sleep(RETRY_DELAY).await;
-    }
+    global_context
+        .module_api()
+        .wait_block_height(u64::from(timelock))
+        .await;
 }
 
 /// Claims a refund for an expired or cancelled outgoing contract

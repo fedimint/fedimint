@@ -38,7 +38,7 @@ pub trait LnFederationApi {
 
     async fn wait_contract(&self, contract: ContractId) -> FederationResult<ContractAccount>;
 
-    async fn wait_block_height(&self, block_height: u64) -> FederationResult<()>;
+    async fn wait_block_height(&self, block_height: u64);
 
     async fn wait_outgoing_contract_cancelled(
         &self,
@@ -125,12 +125,12 @@ where
         .await
     }
 
-    async fn wait_block_height(&self, block_height: u64) -> FederationResult<()> {
-        self.request_current_consensus(
+    async fn wait_block_height(&self, block_height: u64) {
+        self.request_current_consensus_retry::<()>(
             AWAIT_BLOCK_HEIGHT_ENDPOINT.to_string(),
             ApiRequestErased::new(block_height),
         )
-        .await
+        .await;
     }
 
     async fn wait_outgoing_contract_cancelled(
