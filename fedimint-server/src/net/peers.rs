@@ -14,7 +14,7 @@ use anyhow::ensure;
 use async_trait::async_trait;
 use fedimint_api_client::api::P2PConnectionStatus;
 use fedimint_core::net::peers::{IPeerConnections, Recipient};
-use fedimint_core::task::{Cancellable, Cancelled, TaskGroup};
+use fedimint_core::task::TaskGroup;
 use fedimint_core::util::backoff_util::{api_networking_backoff, FibonacciBackoff};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
@@ -80,8 +80,8 @@ struct PeerConnectionStateMachine<M> {
 }
 
 struct CommonPeerConnectionState<M> {
-    incoming: async_channel::Sender<M>,
-    outgoing: async_channel::Receiver<M>,
+    incoming_sender: async_channel::Sender<M>,
+    outgoing_receiver: async_channel::Receiver<M>,
     our_id: PeerId,
     our_id_str: String,
     peer_id: PeerId,
@@ -128,7 +128,7 @@ where
                 status_channels.as_mut().map(|channels| {
                     channels
                         .remove(peer)
-                        .expect("No status channel for peer {peer}")
+                        .expect("No p2p status sender for peer {peer}")
                 }),
                 task_group,
             );
@@ -143,6 +143,8 @@ where
             .expect("Could not bind to port");
 
         task_group.spawn_cancellable("handle-incoming-p2p-connections", async move {
+            info!(target: LOG_NET_PEER, "Shutting down task listening for p2p connections");
+
             loop {
                 match listener.next().await.expect("Listener closed") {
                     Ok((peer, connection)) => {
@@ -210,13 +212,7 @@ where
 
     async fn receive(&mut self) -> Option<(PeerId, M)> {
         select_all(self.connections.iter_mut().map(|(&peer, connection)| {
-            Box::pin(async move {
-                connection
-                    .receive()
-                    .await
-                    .ok()
-                    .map(|message| (peer, message))
-            })
+            Box::pin(async move { connection.receive().await.map(|message| (peer, message)) })
         }))
         .await
         .0
@@ -269,7 +265,7 @@ where
         mut connection: AnyFramedTransport<PeerMessage<M>>,
     ) -> Option<PeerConnectionState<M>> {
         Some(tokio::select! {
-            maybe_msg = self.outgoing.recv() => {
+            maybe_msg = self.outgoing_receiver.recv() => {
                 self.send_message_connected(connection, PeerMessage::Message(maybe_msg.ok()?)).await
             },
             maybe_connection = self.incoming_connections.recv() => {
@@ -281,7 +277,7 @@ where
                         if let PeerMessage::Message(msg) = peer_message {
                             PEER_MESSAGES_COUNT.with_label_values(&[&self.our_id_str, &self.peer_id_str, "incoming"]).inc();
 
-                            if self.incoming.send(msg).await.is_err(){
+                            if self.incoming_sender.send(msg).await.is_err(){
                                 return None;
                             }
                         }
@@ -399,19 +395,31 @@ where
         let (outgoing_sender, outgoing_receiver) = async_channel::bounded(1024);
         let (incoming_sender, incoming_receiver) = async_channel::bounded(1024);
 
-        task_group.spawn_cancellable(
-            format!("io-thread-peer-{peer_id}"),
-            Self::run_io_task(
-                incoming_sender,
-                outgoing_receiver,
-                our_id,
-                peer_id,
-                peer_address,
-                connect,
-                incoming_connections,
-                status_channel,
-            ),
-        );
+        task_group.spawn_cancellable(format!("io-thread-peer-{peer_id}"), async move {
+            info!(target: LOG_NET_PEER, "Starting peer connection state machine {}", peer_id);
+
+            let mut state_machine = PeerConnectionStateMachine {
+                common: CommonPeerConnectionState {
+                    incoming_sender,
+                    outgoing_receiver,
+                    our_id_str: our_id.to_string(),
+                    our_id,
+                    peer_id_str: peer_id.to_string(),
+                    peer_id,
+                    peer_address,
+                    connect,
+                    incoming_connections,
+                    status_channel,
+                },
+                state: PeerConnectionState::Disconnected(api_networking_backoff()),
+            };
+
+            while let Some(sm) = state_machine.state_transition().await {
+                state_machine = sm;
+            }
+
+            info!(target: LOG_NET_PEER, "Shutting down peer connection state machine {}", peer_id);
+        });
 
         PeerConnection {
             outgoing: outgoing_sender,
@@ -427,43 +435,7 @@ where
         self.outgoing.try_send(msg).ok();
     }
 
-    async fn receive(&mut self) -> Cancellable<M> {
-        self.incoming.recv().await.map_err(|_| Cancelled)
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    async fn run_io_task(
-        incoming: async_channel::Sender<M>,
-        outgoing: async_channel::Receiver<M>,
-        our_id: PeerId,
-        peer_id: PeerId,
-        peer_address: SafeUrl,
-        connect: SharedAnyConnector<PeerMessage<M>>,
-        incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
-        status_channel: Option<watch::Sender<P2PConnectionStatus>>,
-    ) {
-        info!(target: LOG_NET_PEER, "Starting peer connection state machine {}", peer_id);
-
-        let mut state_machine = PeerConnectionStateMachine {
-            common: CommonPeerConnectionState {
-                incoming,
-                outgoing,
-                our_id_str: our_id.to_string(),
-                our_id,
-                peer_id_str: peer_id.to_string(),
-                peer_id,
-                peer_address,
-                connect,
-                incoming_connections,
-                status_channel,
-            },
-            state: PeerConnectionState::Disconnected(api_networking_backoff()),
-        };
-
-        while let Some(sm) = state_machine.state_transition().await {
-            state_machine = sm;
-        }
-
-        info!(target: LOG_NET_PEER, "Shutting down peer connection state machine {}", peer_id);
+    async fn receive(&mut self) -> Option<M> {
+        self.incoming.recv().await.ok()
     }
 }
