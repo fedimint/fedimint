@@ -96,7 +96,7 @@ where
     }
 
     async fn run(
-        mut connections: PeerConnections<ModuleMultiplexed<MuxKey, Msg>>,
+        connections: PeerConnections<ModuleMultiplexed<MuxKey, Msg>>,
         mut out_of_order: ModuleMultiplexerOutOfOrder<MuxKey, Msg>,
         mut send_requests_rx: Receiver<(Vec<PeerId>, MuxKey, Msg)>,
         mut receive_callbacks_rx: Receiver<Callback<MuxKey, Msg>>,
@@ -216,7 +216,7 @@ pub mod test {
             let peer1 = PeerId::from(0);
             let peer2 = PeerId::from(1);
 
-            let (conn1, conn2) = make_fake_peer_connection(peer1, peer2, 1000, task_handle.clone());
+            let (conn1, conn2) = make_fake_peer_connection(peer1, peer2, 1000);
             let (conn1, conn2) = (
                 PeerConnectionMultiplexer::new(conn1).into_dyn(),
                 PeerConnectionMultiplexer::new(conn2).into_dyn(),

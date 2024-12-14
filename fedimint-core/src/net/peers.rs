@@ -35,13 +35,13 @@ where
     M: Serialize + DeserializeOwned + Unpin + Send,
 {
     /// Send message to recipient; block if channel is full.
-    async fn send(&mut self, recipient: Recipient, msg: M);
+    async fn send(&self, recipient: Recipient, msg: M);
 
     /// Try to send message to recipient; drop message if channel is full.
     fn try_send(&self, recipient: Recipient, msg: M);
 
     /// Await receipt of a message; return None if we are shutting down.
-    async fn receive(&mut self) -> Option<(PeerId, M)>;
+    async fn receive(&self) -> Option<(PeerId, M)>;
 
     /// Converts the struct to a `PeerConnection` trait object
     fn into_dyn(self) -> PeerConnections<M>

@@ -176,7 +176,7 @@ impl<M> IPeerConnections<M> for ReconnectPeerConnections<M>
 where
     M: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + 'static,
 {
-    async fn send(&mut self, recipient: Recipient, msg: M) {
+    async fn send(&self, recipient: Recipient, msg: M) {
         match recipient {
             Recipient::Everyone => {
                 for connection in self.connections.values() {
@@ -210,8 +210,8 @@ where
         }
     }
 
-    async fn receive(&mut self) -> Option<(PeerId, M)> {
-        select_all(self.connections.iter_mut().map(|(&peer, connection)| {
+    async fn receive(&self) -> Option<(PeerId, M)> {
+        select_all(self.connections.iter().map(|(&peer, connection)| {
             Box::pin(async move { connection.receive().await.map(|message| (peer, message)) })
         }))
         .await
@@ -435,7 +435,7 @@ where
         self.outgoing.try_send(msg).ok();
     }
 
-    async fn receive(&mut self) -> Option<M> {
+    async fn receive(&self) -> Option<M> {
         self.incoming.recv().await.ok()
     }
 }

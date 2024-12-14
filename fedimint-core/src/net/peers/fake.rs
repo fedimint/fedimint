@@ -1,19 +1,17 @@
+use async_channel::bounded;
 /// Fake (channel-based) implementation of [`super::PeerConnections`].
 use async_trait::async_trait;
 use fedimint_core::net::peers::{IPeerConnections, PeerConnections};
-use fedimint_core::task::TaskHandle;
 use fedimint_core::PeerId;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use tokio::sync::mpsc::{self, Receiver, Sender};
 
 use crate::net::peers::Recipient;
 
 struct FakePeerConnections<Msg> {
-    tx: Sender<Msg>,
-    rx: Receiver<Msg>,
-    peer_id: PeerId,
-    task_handle: TaskHandle,
+    tx: async_channel::Sender<Msg>,
+    rx: async_channel::Receiver<Msg>,
+    peer: PeerId,
 }
 
 #[async_trait]
@@ -21,8 +19,8 @@ impl<M> IPeerConnections<M> for FakePeerConnections<M>
 where
     M: Serialize + DeserializeOwned + Unpin + Send,
 {
-    async fn send(&mut self, recipient: Recipient, msg: M) {
-        assert_eq!(recipient, Recipient::Peer(self.peer_id));
+    async fn send(&self, recipient: Recipient, msg: M) {
+        assert_eq!(recipient, Recipient::Peer(self.peer));
 
         // If the peer is gone, just pretend we are going to resend
         // the msg eventually, even if it will never happen.
@@ -30,22 +28,15 @@ where
     }
 
     fn try_send(&self, recipient: Recipient, msg: M) {
-        assert_eq!(recipient, Recipient::Peer(self.peer_id));
+        assert_eq!(recipient, Recipient::Peer(self.peer));
 
         // If the peer is gone, just pretend we are going to resend
         // the msg eventually, even if it will never happen.
         self.tx.try_send(msg).ok();
     }
 
-    async fn receive(&mut self) -> Option<(PeerId, M)> {
-        tokio::select! {
-            message =  self.rx.recv() => {
-                message.map(|msg| (self.peer_id, msg))
-            }
-            () = self.task_handle.make_shutdown_rx() => {
-                None
-            },
-        }
+    async fn receive(&self) -> Option<(PeerId, M)> {
+        self.rx.recv().await.map(|msg| (self.peer, msg)).ok()
     }
 }
 
@@ -54,31 +45,27 @@ where
 /// `buf_size` controls the size of the `tokio::mpsc::channel` used
 /// under the hood (both ways).
 pub fn make_fake_peer_connection<Msg>(
-    peer1: PeerId,
-    peer2: PeerId,
+    peer_1: PeerId,
+    peer_2: PeerId,
     buf_size: usize,
-    task_handle: TaskHandle,
 ) -> (PeerConnections<Msg>, PeerConnections<Msg>)
 where
     Msg: Serialize + DeserializeOwned + Unpin + Send + 'static,
 {
-    let (tx1, rx1) = mpsc::channel(buf_size);
-    let (tx2, rx2) = mpsc::channel(buf_size);
+    let (tx1, rx1) = bounded(buf_size);
+    let (tx2, rx2) = bounded(buf_size);
 
-    (
-        FakePeerConnections {
-            tx: tx1,
-            rx: rx2,
-            peer_id: peer2,
-            task_handle: task_handle.clone(),
-        }
-        .into_dyn(),
-        FakePeerConnections {
-            tx: tx2,
-            rx: rx1,
-            peer_id: peer1,
-            task_handle,
-        }
-        .into_dyn(),
-    )
+    let c_1 = FakePeerConnections {
+        tx: tx1,
+        rx: rx2,
+        peer: peer_2,
+    };
+
+    let c_2 = FakePeerConnections {
+        tx: tx2,
+        rx: rx1,
+        peer: peer_1,
+    };
+
+    (c_1.into_dyn(), c_2.into_dyn())
 }
