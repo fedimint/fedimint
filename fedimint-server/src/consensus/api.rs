@@ -2,14 +2,13 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use bitcoin::hashes::sha256;
 use fedimint_aead::{encrypt, get_encryption_key, random_salt};
 use fedimint_api_client::api::{
-    FederationStatus, GuardianConfigBackup, PeerConnectionStatus, PeerStatus, StatusResponse,
+    FederationStatus, GuardianConfigBackup, P2PConnectionStatus, PeerStatus, StatusResponse,
 };
 use fedimint_core::admin_client::ServerStatus;
 use fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
@@ -49,7 +48,7 @@ use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{secp256k1, OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
 use futures::StreamExt;
-use tokio::sync::{watch, RwLock};
+use tokio::sync::watch::{Receiver, Sender};
 use tracing::{debug, info, warn};
 
 use crate::config::io::{
@@ -78,10 +77,9 @@ pub struct ConsensusApi {
     pub force_api_secret: Option<String>,
     /// For sending API events to consensus such as transactions
     pub submission_sender: async_channel::Sender<ConsensusItem>,
-    pub shutdown_receiver: watch::Receiver<Option<u64>>,
-    pub shutdown_sender: watch::Sender<Option<u64>>,
-    pub connection_status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
-    pub last_ci_by_peer: Arc<RwLock<BTreeMap<PeerId, u64>>>,
+    pub shutdown_receiver: Receiver<Option<u64>>,
+    pub shutdown_sender: Sender<Option<u64>>,
+    pub status_receivers: BTreeMap<PeerId, (Receiver<P2PConnectionStatus>, Receiver<Option<u64>>)>,
     pub supported_api_versions: SupportedApiVersionsSummary,
     pub code_version_str: String,
 }
@@ -211,24 +209,20 @@ impl ConsensusApi {
     }
 
     pub async fn get_federation_status(&self) -> ApiResult<FederationStatus> {
-        let peers_connection_status = self.connection_status_channels.read().await.clone();
-        let last_ci_by_peer = self.last_ci_by_peer.read().await.clone();
         let session_count = self.session_count().await;
         let scheduled_shutdown = self.shutdown_receiver.borrow().to_owned();
 
-        let status_by_peer = peers_connection_status
-            .into_iter()
-            .map(|(peer, connection_status)| {
-                let last_contribution = last_ci_by_peer.get(&peer).copied();
-                let flagged = last_contribution.unwrap_or(0) + 1 < session_count;
-
+        let status_by_peer = self
+            .status_receivers
+            .iter()
+            .map(|(peer, (p2p_receiver, ci_receiver))| {
                 let consensus_status = PeerStatus {
-                    last_contribution,
-                    connection_status,
-                    flagged,
+                    connection_status: *p2p_receiver.borrow(),
+                    last_contribution: *ci_receiver.borrow(),
+                    flagged: ci_receiver.borrow().unwrap_or(0) + 1 < session_count,
                 };
 
-                (peer, consensus_status)
+                (*peer, consensus_status)
             })
             .collect::<HashMap<PeerId, PeerStatus>>();
 
@@ -239,12 +233,12 @@ impl ConsensusApi {
 
         let peers_online = status_by_peer
             .values()
-            .filter(|status| status.connection_status == PeerConnectionStatus::Connected)
+            .filter(|status| status.connection_status == P2PConnectionStatus::Connected)
             .count() as u64;
 
         let peers_offline = status_by_peer
             .values()
-            .filter(|status| status.connection_status == PeerConnectionStatus::Disconnected)
+            .filter(|status| status.connection_status == P2PConnectionStatus::Disconnected)
             .count() as u64;
 
         Ok(FederationStatus {

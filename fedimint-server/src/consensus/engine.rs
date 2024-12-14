@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use aleph_bft::Keychain as KeychainTrait;
 use anyhow::{anyhow, bail};
 use async_channel::Receiver;
-use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, PeerConnectionStatus};
+use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, P2PConnectionStatus};
 use fedimint_api_client::query::FilterMap;
 use fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
@@ -19,6 +19,7 @@ use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ServerModuleRegistry};
 use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
+use fedimint_core::net::peers::{DynP2PConnections, IP2PConnections};
 use fedimint_core::runtime::spawn;
 use fedimint_core::session_outcome::{
     AcceptedItem, SchnorrSignature, SessionOutcome, SignedSessionOutcome,
@@ -29,7 +30,7 @@ use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{timing, NumPeers, NumPeersExt, PeerId};
 use futures::StreamExt;
 use rand::Rng;
-use tokio::sync::{watch, RwLock};
+use tokio::sync::watch;
 use tracing::{debug, info, instrument, warn, Level};
 
 use crate::config::ServerConfig;
@@ -53,7 +54,7 @@ use crate::metrics::{
     CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX, CONSENSUS_SESSION_COUNT,
 };
 use crate::net::connect::{Connector, TlsTcpConnector};
-use crate::net::peers::ReconnectPeerConnections;
+use crate::net::peers::ReconnectP2PConnections;
 use crate::LOG_CONSENSUS;
 
 // The name of the directory where the database checkpoints are stored.
@@ -67,12 +68,12 @@ pub struct ConsensusEngine {
     pub cfg: ServerConfig,
     pub submission_receiver: Receiver<ConsensusItem>,
     pub shutdown_receiver: watch::Receiver<Option<u64>>,
-    pub last_ci_by_peer: Arc<RwLock<BTreeMap<PeerId, u64>>>,
+    pub p2p_status_senders: BTreeMap<PeerId, watch::Sender<P2PConnectionStatus>>,
+    pub ci_status_senders: BTreeMap<PeerId, watch::Sender<Option<u64>>>,
     /// Just a string version of `cfg.local.identity` for performance
     pub self_id_str: String,
     /// Just a string version of peer ids for performance
     pub peer_id_str: Vec<String>,
-    pub connection_status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
     pub task_group: TaskGroup,
     pub data_dir: PathBuf,
     pub checkpoint_retention: u64,
@@ -170,13 +171,14 @@ impl ConsensusEngine {
         self.confirm_server_config_consensus_hash().await?;
 
         // Build P2P connections for the atomic broadcast
-        let connections = ReconnectPeerConnections::new(
+        let connections = ReconnectP2PConnections::new(
             self.cfg.network_config(p2p_bind_addr),
             TlsTcpConnector::new(self.cfg.tls_config(), self.identity()).into_dyn(),
             &self.task_group,
-            Arc::clone(&self.connection_status_channels),
+            Some(self.p2p_status_senders.clone()),
         )
-        .await;
+        .await
+        .into_dyn();
 
         self.initialize_checkpoint_directory(self.get_finished_session_count().await)?;
 
@@ -232,7 +234,7 @@ impl ConsensusEngine {
 
     pub async fn run_session(
         &self,
-        connections: ReconnectPeerConnections<Message>,
+        connections: DynP2PConnections<Message>,
         session_index: u64,
     ) -> anyhow::Result<()> {
         // In order to bound a sessions RAM consumption we need to bound its number of
@@ -646,10 +648,12 @@ impl ConsensusEngine {
             "Processing consensus item"
         );
 
-        self.last_ci_by_peer
-            .write()
-            .await
-            .insert(peer, session_index);
+        self.ci_status_senders
+            .get(&peer)
+            .expect("No ci status sender for peer {peer}")
+            .send(Some(session_index))
+            .inspect_err(|e| warn!(target: LOG_CONSENSUS, "Failed to update ci status {e}"))
+            .ok();
 
         CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX
             .with_label_values(&[&self.self_id_str, peer_id_str])
