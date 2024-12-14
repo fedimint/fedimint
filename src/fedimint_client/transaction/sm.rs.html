@@ -185,7 +185,28 @@
 <a href="#184" id="184">184</a>
 <a href="#185" id="185">185</a>
 <a href="#186" id="186">186</a>
-<a href="#187" id="187">187</a></pre></div><pre class="rust"><code><span class="doccomment">//! State machine for submitting transactions
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a></pre></div><pre class="rust"><code><span class="doccomment">//! State machine for submitting transactions
 
 </span><span class="kw">use </span>std::time::Duration;
 
@@ -195,6 +216,7 @@
 <span class="kw">use </span>fedimint_core::util::backoff_util::custom_backoff;
 <span class="kw">use </span>fedimint_core::util::retry;
 <span class="kw">use </span>fedimint_core::TransactionId;
+<span class="kw">use </span>tokio::sync::watch;
 
 <span class="kw">use </span><span class="kw">crate</span>::sm::{Context, DynContext, State, StateTransition};
 <span class="kw">use crate</span>::{DynGlobalClientContext, DynState, TxAcceptedEvent, TxRejectedEvent};
@@ -264,6 +286,14 @@
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">let </span>operation_id = <span class="self">self</span>.operation_id;
+        <span class="comment">// There is no point awaiting tx until it was submitted, so
+        // `trigger_created_rejected` which does the submitting will use this
+        // channel to let the `trigger_created_accepted` which does the awaiting
+        // know when it did the submission.
+        //
+        // Submitting tx does not guarantee that it will get into consensus, so the
+        // submitting need to continue.
+        </span><span class="kw">let </span>(tx_submitted_sender, tx_submitted_receiver) = watch::channel(<span class="bool-val">false</span>);
         <span class="kw">match </span><span class="self">self</span>.state.clone() {
             TxSubmissionStates::Created(transaction) =&gt; {
                 <span class="kw">let </span>txid = transaction.tx_hash();
@@ -272,6 +302,7 @@
                         TxSubmissionStates::trigger_created_rejected(
                             transaction.clone(),
                             global_context.clone(),
+                            tx_submitted_sender,
                         ),
                         {
                             <span class="kw">let </span>global_context = global_context.clone();
@@ -297,7 +328,11 @@
                         },
                     ),
                     StateTransition::new(
-                        TxSubmissionStates::trigger_created_accepted(txid, global_context.clone()),
+                        TxSubmissionStates::trigger_created_accepted(
+                            txid,
+                            global_context.clone(),
+                            tx_submitted_receiver,
+                        ),
                         {
                             <span class="kw">let </span>global_context = global_context.clone();
                             <span class="kw">move </span>|sm_dbtx, (), <span class="kw">_</span>| {
@@ -333,6 +368,7 @@
     <span class="kw">async fn </span>trigger_created_rejected(
         transaction: Transaction,
         context: DynGlobalClientContext,
+        tx_submitted: watch::Sender&lt;bool&gt;,
     ) -&gt; String {
         retry(
             <span class="string">"tx-submit-sm"</span>,
@@ -346,6 +382,7 @@
                 </span>{
                     <span class="prelude-val">Ok</span>(transaction_error.to_string())
                 } <span class="kw">else </span>{
+                    <span class="kw">let _ </span>= tx_submitted.send(<span class="bool-val">true</span>);
                     <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Transaction is still valid"</span>))
                 }
             },
@@ -354,7 +391,12 @@
         </span>.expect(<span class="string">"Number of retries is has no limit"</span>)
     }
 
-    <span class="kw">async fn </span>trigger_created_accepted(txid: TransactionId, context: DynGlobalClientContext) {
+    <span class="kw">async fn </span>trigger_created_accepted(
+        txid: TransactionId,
+        context: DynGlobalClientContext,
+        <span class="kw-2">mut </span>tx_submitted: watch::Receiver&lt;bool&gt;,
+    ) {
+        <span class="kw">let _ </span>= tx_submitted.wait_for(|submitted| <span class="kw-2">*</span>submitted).<span class="kw">await</span>;
         context.api().await_transaction(txid).<span class="kw">await</span>;
     }
 }
