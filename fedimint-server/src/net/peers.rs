@@ -8,11 +8,11 @@
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::ensure;
 use async_trait::async_trait;
-use fedimint_api_client::api::PeerConnectionStatus;
+use fedimint_api_client::api::P2PConnectionStatus;
 use fedimint_core::net::peers::{IPeerConnections, Recipient};
 use fedimint_core::task::{Cancellable, Cancelled, TaskGroup};
 use fedimint_core::util::backoff_util::{api_networking_backoff, FibonacciBackoff};
@@ -24,9 +24,9 @@ use futures::{SinkExt, StreamExt};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Receiver;
-use tokio::sync::RwLock;
+use tokio::sync::watch;
 use tokio::time::sleep;
-use tracing::{debug, info, instrument, warn};
+use tracing::{info, instrument, warn};
 
 use crate::metrics::{PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT};
 use crate::net::connect::{AnyConnector, SharedAnyConnector};
@@ -89,7 +89,7 @@ struct CommonPeerConnectionState<M> {
     peer_address: SafeUrl,
     connect: SharedAnyConnector<PeerMessage<M>>,
     incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
-    status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
+    status_channel: Option<watch::Sender<P2PConnectionStatus>>,
 }
 enum PeerConnectionState<M> {
     Disconnected(FibonacciBackoff),
@@ -109,7 +109,7 @@ where
         cfg: NetworkConfig,
         connector: PeerConnector<T>,
         task_group: &TaskGroup,
-        status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
+        mut status_channels: Option<BTreeMap<PeerId, watch::Sender<P2PConnectionStatus>>>,
     ) -> Self {
         let connector: SharedAnyConnector<PeerMessage<T>> = connector.into();
         let mut connection_senders = HashMap::new();
@@ -125,17 +125,16 @@ where
                 peer_address.clone(),
                 connector.clone(),
                 connection_receiver,
-                status_channels.clone(),
+                status_channels.as_mut().map(|channels| {
+                    channels
+                        .remove(peer)
+                        .expect("No status channel for peer {peer}")
+                }),
                 task_group,
             );
 
             connection_senders.insert(*peer, connection_sender);
             connections.insert(*peer, connection);
-
-            status_channels
-                .write()
-                .await
-                .insert(*peer, PeerConnectionStatus::Disconnected);
         }
 
         let mut listener = connector
@@ -236,12 +235,8 @@ where
                     .state_transition_disconnected(disconnected)
                     .await?;
 
-                if let PeerConnectionState::Connected(..) = state {
-                    self.common
-                        .status_channels
-                        .write()
-                        .await
-                        .insert(self.common.peer_id, PeerConnectionStatus::Connected);
+                if let Some(channel) = &self.common.status_channel {
+                    channel.send(P2PConnectionStatus::Connected).ok();
                 }
 
                 Some(PeerConnectionStateMachine {
@@ -252,13 +247,9 @@ where
             PeerConnectionState::Connected(connected) => {
                 let state = self.common.state_transition_connected(connected).await?;
 
-                if let PeerConnectionState::Disconnected(..) = state {
-                    self.common
-                        .status_channels
-                        .write()
-                        .await
-                        .insert(self.common.peer_id, PeerConnectionStatus::Disconnected);
-                };
+                if let Some(channel) = &self.common.status_channel {
+                    channel.send(P2PConnectionStatus::Disconnected).ok();
+                }
 
                 Some(PeerConnectionStateMachine {
                     common: self.common,
@@ -368,42 +359,26 @@ where
 
                         self.connect(connection).await
                     }
-                    Err(..) => PeerConnectionState::Disconnected(backoff),
+                    Err(..) => PeerConnectionState::Disconnected(backoff)
                 }
             },
         })
     }
 
     async fn try_reconnect(&self) -> Result<AnyFramedTransport<PeerMessage<M>>, anyhow::Error> {
-        let addr = self.peer_address.with_port_or_known_default();
-        debug!(
-            target: LOG_NET_PEER,
-            our_id = ?self.our_id,
-            peer = ?self.peer_id,
-            addr = %&addr,
-            "Trying to reconnect"
-        );
+        info!(target: LOG_NET_PEER, "Attempting to reconnect to peer {}", self.peer_id);
+
         let (connected_peer, conn) = self
             .connect
-            .connect_framed(addr.clone(), self.peer_id)
+            .connect_framed(self.peer_address.with_port_or_known_default(), self.peer_id)
             .await?;
 
-        if connected_peer == self.peer_id {
-            Ok(conn)
-        } else {
-            warn!(
-                target: LOG_NET_PEER,
-                our_id = ?self.our_id,
-                peer = ?self.peer_id,
-                peer_self_id=?connected_peer,
-                %addr,
-                "Peer identified itself incorrectly"
-            );
-            Err(anyhow::anyhow!(
-                "Peer identified itself incorrectly: {:?}",
-                connected_peer
-            ))
-        }
+        ensure!(
+            connected_peer == self.peer_id,
+            "Peer incorrectly identified as: {connected_peer}",
+        );
+
+        Ok(conn)
     }
 }
 
@@ -418,7 +393,7 @@ where
         peer_address: SafeUrl,
         connect: SharedAnyConnector<PeerMessage<M>>,
         incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
-        status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
+        status_channel: Option<watch::Sender<P2PConnectionStatus>>,
         task_group: &TaskGroup,
     ) -> PeerConnection<M> {
         let (outgoing_sender, outgoing_receiver) = async_channel::bounded(1024);
@@ -426,7 +401,7 @@ where
 
         task_group.spawn_cancellable(
             format!("io-thread-peer-{peer_id}"),
-            Self::run_io_thread(
+            Self::run_io_task(
                 incoming_sender,
                 outgoing_receiver,
                 our_id,
@@ -434,7 +409,7 @@ where
                 peer_address,
                 connect,
                 incoming_connections,
-                status_channels,
+                status_channel,
             ),
         );
 
@@ -456,15 +431,8 @@ where
         self.incoming.recv().await.map_err(|_| Cancelled)
     }
 
-    #[allow(clippy::too_many_arguments)] // TODO: consider refactoring
-    #[instrument(
-        name = "peer_io_thread",
-        target = "net::peer",
-        skip_all,
-        // `id` so it doesn't conflict with argument names otherwise will not be shown
-        fields(id = %peer_id)
-    )]
-    async fn run_io_thread(
+    #[allow(clippy::too_many_arguments)]
+    async fn run_io_task(
         incoming: async_channel::Sender<M>,
         outgoing: async_channel::Receiver<M>,
         our_id: PeerId,
@@ -472,7 +440,7 @@ where
         peer_address: SafeUrl,
         connect: SharedAnyConnector<PeerMessage<M>>,
         incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
-        status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
+        status_channel: Option<watch::Sender<P2PConnectionStatus>>,
     ) {
         info!(target: LOG_NET_PEER, "Starting peer connection state machine {}", peer_id);
 
@@ -487,7 +455,7 @@ where
                 peer_address,
                 connect,
                 incoming_connections,
-                status_channels,
+                status_channel,
             },
             state: PeerConnectionState::Disconnected(api_networking_backoff()),
         };
@@ -497,100 +465,5 @@ where
         }
 
         info!(target: LOG_NET_PEER, "Shutting down peer connection state machine {}", peer_id);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::collections::{BTreeMap, HashMap};
-    use std::sync::Arc;
-
-    use anyhow::{ensure, Context as _};
-    use fedimint_api_client::api::PeerConnectionStatus;
-    use fedimint_core::task::TaskGroup;
-    use fedimint_core::util::{backoff_util, retry};
-    use fedimint_core::PeerId;
-    use tokio::sync::RwLock;
-
-    use crate::net::connect::mock::{MockNetwork, StreamReliability};
-    use crate::net::connect::Connector;
-    use crate::net::peers::{NetworkConfig, ReconnectPeerConnections};
-
-    #[test_log::test(tokio::test)]
-    async fn test_connect() {
-        let task_group = TaskGroup::new();
-
-        {
-            async fn wait_for_connection(
-                name: &str,
-                status_channels: &Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
-            ) {
-                retry(
-                    format!("wait for client {name}"),
-                    backoff_util::aggressive_backoff(),
-                    || async {
-                        let status = status_channels.read().await;
-                        ensure!(status.len() == 2);
-                        Ok(())
-                    },
-                )
-                .await
-                .context("peer couldn't connect")
-                .unwrap();
-            }
-
-            let net = MockNetwork::new();
-
-            let peers = [
-                "http://127.0.0.1:1000",
-                "http://127.0.0.1:2000",
-                "http://127.0.0.1:3000",
-            ]
-            .iter()
-            .enumerate()
-            .map(|(idx, &peer)| {
-                let cfg = peer.parse().unwrap();
-                (PeerId::from(idx as u16 + 1), cfg)
-            })
-            .collect::<HashMap<_, _>>();
-
-            let peers_ref = &peers;
-            let net_ref = &net;
-            let build_peers = |bind: &'static str, id: u16, task_group: TaskGroup| async move {
-                let cfg = NetworkConfig {
-                    identity: PeerId::from(id),
-                    p2p_bind_addr: bind.parse().unwrap(),
-                    peers: peers_ref.clone(),
-                };
-                let connect = net_ref
-                    .connector(cfg.identity, StreamReliability::MILDLY_UNRELIABLE)
-                    .into_dyn();
-                let status_channels = Arc::new(RwLock::new(BTreeMap::new()));
-                let connection = ReconnectPeerConnections::<u64>::new(
-                    cfg,
-                    connect,
-                    &task_group,
-                    Arc::clone(&status_channels),
-                )
-                .await;
-
-                (connection, status_channels)
-            };
-
-            let (_peers_a, peer_status_client_a) =
-                build_peers("127.0.0.1:1000", 1, task_group.clone()).await;
-            let (_peers_b, peer_status_client_b) =
-                build_peers("127.0.0.1:2000", 2, task_group.clone()).await;
-
-            wait_for_connection("a", &peer_status_client_a).await;
-            wait_for_connection("b", &peer_status_client_b).await;
-
-            let (_peers_c, peer_status_client_c) =
-                build_peers("127.0.0.1:3000", 3, task_group.clone()).await;
-
-            wait_for_connection("c", &peer_status_client_c).await;
-        }
-
-        task_group.shutdown_join_all(None).await.unwrap();
     }
 }

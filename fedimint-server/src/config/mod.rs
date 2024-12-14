@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::env;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{bail, format_err};
@@ -27,7 +26,6 @@ use rand::rngs::OsRng;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
 use tokio_rustls::rustls;
 use tracing::{error, info};
 
@@ -700,10 +698,7 @@ where
 {
     let connector = TlsTcpConnector::new(certs, network.identity).into_dyn();
 
-    let connection_status_channels = Arc::new(RwLock::new(BTreeMap::new()));
-    let connections =
-        ReconnectPeerConnections::new(network, connector, task_group, connection_status_channels)
-            .await;
+    let connections = ReconnectPeerConnections::new(network, connector, task_group, None).await;
 
     connections.into_dyn()
 }

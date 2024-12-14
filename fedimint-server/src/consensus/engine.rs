@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use aleph_bft::Keychain as KeychainTrait;
 use anyhow::{anyhow, bail};
 use async_channel::Receiver;
-use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, PeerConnectionStatus};
+use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, P2PConnectionStatus};
 use fedimint_api_client::query::FilterMap;
 use fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
@@ -28,7 +28,7 @@ use fedimint_core::timing::TimeReporter;
 use fedimint_core::{timing, NumPeers, NumPeersExt, PeerId};
 use futures::StreamExt;
 use rand::Rng;
-use tokio::sync::{watch, RwLock};
+use tokio::sync::watch;
 use tracing::{debug, info, instrument, warn, Level};
 
 use crate::config::ServerConfig;
@@ -66,12 +66,12 @@ pub struct ConsensusEngine {
     pub cfg: ServerConfig,
     pub submission_receiver: Receiver<ConsensusItem>,
     pub shutdown_receiver: watch::Receiver<Option<u64>>,
-    pub last_ci_by_peer: Arc<RwLock<BTreeMap<PeerId, u64>>>,
+    pub p2p_status_senders: BTreeMap<PeerId, watch::Sender<P2PConnectionStatus>>,
+    pub ci_status_senders: BTreeMap<PeerId, watch::Sender<Option<u64>>>,
     /// Just a string version of `cfg.local.identity` for performance
     pub self_id_str: String,
     /// Just a string version of peer ids for performance
     pub peer_id_str: Vec<String>,
-    pub connection_status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
     pub task_group: TaskGroup,
     pub data_dir: PathBuf,
     pub checkpoint_retention: u64,
@@ -173,7 +173,7 @@ impl ConsensusEngine {
             self.cfg.network_config(p2p_bind_addr),
             TlsTcpConnector::new(self.cfg.tls_config(), self.identity()).into_dyn(),
             &self.task_group,
-            Arc::clone(&self.connection_status_channels),
+            None,
         )
         .await;
 
@@ -639,10 +639,11 @@ impl ConsensusEngine {
 
         debug!(%peer, item = ?DebugConsensusItem(&item), "Processing consensus item");
 
-        self.last_ci_by_peer
-            .write()
-            .await
-            .insert(peer, session_index);
+        self.ci_status_senders
+            .get(&peer)
+            .expect("No ci status sender for peer {peer}")
+            .send(Some(session_index))
+            .ok();
 
         CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX
             .with_label_values(&[&self.self_id_str, peer_id_str])
