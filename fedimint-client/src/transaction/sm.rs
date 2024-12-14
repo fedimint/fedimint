@@ -8,6 +8,7 @@ use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::backoff_util::custom_backoff;
 use fedimint_core::util::retry;
 use fedimint_core::TransactionId;
+use tokio::sync::watch;
 
 use crate::sm::{Context, DynContext, State, StateTransition};
 use crate::{DynGlobalClientContext, DynState, TxAcceptedEvent, TxRejectedEvent};
@@ -77,6 +78,14 @@ impl State for TxSubmissionStatesSM {
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         let operation_id = self.operation_id;
+        // There is no point awaiting tx until it was submitted, so
+        // `trigger_created_rejected` which does the submitting will use this
+        // channel to let the `trigger_created_accepted` which does the awaiting
+        // know when it did the submission.
+        //
+        // Submitting tx does not guarantee that it will get into consensus, so the
+        // submitting need to continue.
+        let (tx_submitted_sender, tx_submitted_receiver) = watch::channel(false);
         match self.state.clone() {
             TxSubmissionStates::Created(transaction) => {
                 let txid = transaction.tx_hash();
@@ -85,6 +94,7 @@ impl State for TxSubmissionStatesSM {
                         TxSubmissionStates::trigger_created_rejected(
                             transaction.clone(),
                             global_context.clone(),
+                            tx_submitted_sender,
                         ),
                         {
                             let global_context = global_context.clone();
@@ -110,7 +120,11 @@ impl State for TxSubmissionStatesSM {
                         },
                     ),
                     StateTransition::new(
-                        TxSubmissionStates::trigger_created_accepted(txid, global_context.clone()),
+                        TxSubmissionStates::trigger_created_accepted(
+                            txid,
+                            global_context.clone(),
+                            tx_submitted_receiver,
+                        ),
                         {
                             let global_context = global_context.clone();
                             move |sm_dbtx, (), _| {
@@ -146,6 +160,7 @@ impl TxSubmissionStates {
     async fn trigger_created_rejected(
         transaction: Transaction,
         context: DynGlobalClientContext,
+        tx_submitted: watch::Sender<bool>,
     ) -> String {
         retry(
             "tx-submit-sm",
@@ -159,6 +174,7 @@ impl TxSubmissionStates {
                 {
                     Ok(transaction_error.to_string())
                 } else {
+                    let _ = tx_submitted.send(true);
                     Err(anyhow::anyhow!("Transaction is still valid"))
                 }
             },
@@ -167,7 +183,12 @@ impl TxSubmissionStates {
         .expect("Number of retries is has no limit")
     }
 
-    async fn trigger_created_accepted(txid: TransactionId, context: DynGlobalClientContext) {
+    async fn trigger_created_accepted(
+        txid: TransactionId,
+        context: DynGlobalClientContext,
+        mut tx_submitted: watch::Receiver<bool>,
+    ) {
+        let _ = tx_submitted.wait_for(|submitted| *submitted).await;
         context.api().await_transaction(txid).await;
     }
 }
