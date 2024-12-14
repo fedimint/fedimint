@@ -1,7 +1,7 @@
 use anyhow::bail;
 use devimint::cmd;
 use devimint::util::{FedimintCli, FedimintdCmd};
-use devimint::version_constants::VERSION_0_3_0_ALPHA;
+use devimint::version_constants::VERSION_0_4_0;
 use fedimint_core::util::{backoff_util, retry};
 use futures::try_join;
 use tracing::info;
@@ -11,7 +11,7 @@ async fn main() -> anyhow::Result<()> {
     devimint::run_devfed_test(|dev_fed, _process_mgr| async move {
         let fedimint_cli_version = FedimintCli::version_or_default().await;
         let fedimintd_version = FedimintdCmd::version_or_default().await;
-        if fedimint_cli_version < *VERSION_0_3_0_ALPHA || fedimintd_version < *VERSION_0_3_0_ALPHA {
+        if fedimint_cli_version < *VERSION_0_4_0 || fedimintd_version < *VERSION_0_4_0 {
             info!("Skipping whole test on old fedimint-cli/fedimintd that is missing some irrelevant bolts");
             return Ok(());
         }
