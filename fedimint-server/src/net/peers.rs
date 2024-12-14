@@ -198,6 +198,10 @@ impl<M: Clone + Send + 'static> IPeerConnections<M> for ReconnectPeerConnections
         .await
         .0
     }
+
+    fn clone_box(&self) -> Box<dyn IPeerConnections<M> + Send + 'static> {
+        Box::new(self.clone())
+    }
 }
 
 impl<M> PeerConnectionStateMachine<M> {

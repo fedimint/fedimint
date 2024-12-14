@@ -14,6 +14,12 @@ pub mod fake;
 /// Owned [`PeerConnections`] trait object type
 pub struct PeerConnections<M>(Box<dyn IPeerConnections<M> + Send + 'static>);
 
+impl<M> Clone for PeerConnections<M> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone_box())
+    }
+}
+
 impl<M> Deref for PeerConnections<M> {
     type Target = dyn IPeerConnections<M> + Send + 'static;
 
@@ -39,6 +45,8 @@ pub trait IPeerConnections<M> {
 
     /// Await receipt of a message; return None if we are shutting down.
     async fn receive(&self) -> Option<(PeerId, M)>;
+
+    fn clone_box(&self) -> Box<dyn IPeerConnections<M> + Send + 'static>;
 
     /// Convert the struct to trait object.
     fn into_dyn(self) -> PeerConnections<M>

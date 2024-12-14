@@ -3,22 +3,18 @@ use async_channel::bounded;
 use async_trait::async_trait;
 use fedimint_core::net::peers::{IPeerConnections, PeerConnections};
 use fedimint_core::PeerId;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 
 use crate::net::peers::Recipient;
 
-struct FakePeerConnections<Msg> {
-    tx: async_channel::Sender<Msg>,
-    rx: async_channel::Receiver<Msg>,
+#[derive(Clone)]
+struct FakePeerConnections<M> {
+    tx: async_channel::Sender<M>,
+    rx: async_channel::Receiver<M>,
     peer: PeerId,
 }
 
 #[async_trait]
-impl<M> IPeerConnections<M> for FakePeerConnections<M>
-where
-    M: Serialize + DeserializeOwned + Unpin + Send,
-{
+impl<M: Clone + Send + 'static> IPeerConnections<M> for FakePeerConnections<M> {
     async fn send(&self, recipient: Recipient, msg: M) {
         assert_eq!(recipient, Recipient::Peer(self.peer));
 
@@ -38,20 +34,21 @@ where
     async fn receive(&self) -> Option<(PeerId, M)> {
         self.rx.recv().await.map(|msg| (self.peer, msg)).ok()
     }
+
+    fn clone_box(&self) -> Box<dyn IPeerConnections<M> + Send + 'static> {
+        Box::new(self.clone())
+    }
 }
 
 /// Create a fake link between `peer1` and `peer2` for test purposes
 ///
 /// `buf_size` controls the size of the `tokio::mpsc::channel` used
 /// under the hood (both ways).
-pub fn make_fake_peer_connection<Msg>(
+pub fn make_fake_peer_connection<M: Clone + Send + 'static>(
     peer_1: PeerId,
     peer_2: PeerId,
     buf_size: usize,
-) -> (PeerConnections<Msg>, PeerConnections<Msg>)
-where
-    Msg: Serialize + DeserializeOwned + Unpin + Send + 'static,
-{
+) -> (PeerConnections<M>, PeerConnections<M>) {
     let (tx1, rx1) = bounded(buf_size);
     let (tx2, rx2) = bounded(buf_size);
 
