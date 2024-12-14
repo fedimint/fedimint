@@ -21,7 +21,6 @@ use fedimint_core::PeerId;
 use fedimint_logging::LOG_NET_PEER;
 use futures::future::select_all;
 use futures::{SinkExt, StreamExt};
-use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::watch;
@@ -32,26 +31,15 @@ use crate::metrics::{PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_CO
 use crate::net::connect::{AnyConnector, SharedAnyConnector};
 use crate::net::framed::AnyFramedTransport;
 
-/// Owned [`Connector`](crate::net::connect::Connector) trait object used by
-/// [`ReconnectPeerConnections`]
-pub type PeerConnector<M> = AnyConnector<PeerMessage<M>>;
-
-/// Connection manager that automatically reconnects to peers
-///
-/// `ReconnectPeerConnections` is based on a
-/// [`Connector`](crate::net::connect::Connector) object which is used to open
-/// [`FramedTransport`](crate::net::framed::FramedTransport) connections. For
-/// production deployments the `Connector` has to ensure that connections are
-/// authenticated and encrypted.
 #[derive(Clone)]
-pub struct ReconnectPeerConnections<T> {
-    connections: HashMap<PeerId, PeerConnection<T>>,
+pub struct ReconnectPeerConnections<M> {
+    connections: HashMap<PeerId, PeerConnection<M>>,
 }
 
 #[derive(Clone)]
-struct PeerConnection<T> {
-    outgoing: async_channel::Sender<T>,
-    incoming: async_channel::Receiver<T>,
+struct PeerConnection<M> {
+    outgoing: async_channel::Sender<M>,
+    incoming: async_channel::Receiver<M>,
 }
 
 /// Specifies the network configuration for federation-internal communication
@@ -96,10 +84,7 @@ enum PeerConnectionState<M> {
     Connected(AnyFramedTransport<PeerMessage<M>>),
 }
 
-impl<T: 'static> ReconnectPeerConnections<T>
-where
-    T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync,
-{
+impl<M: Send + 'static> ReconnectPeerConnections<M> {
     /// Creates a new `ReconnectPeerConnections` connection manager from a
     /// network config and a [`Connector`](crate::net::connect::Connector).
     /// See [`ReconnectPeerConnections`] for requirements on the
@@ -107,17 +92,16 @@ where
     #[instrument(skip_all)]
     pub(crate) async fn new(
         cfg: NetworkConfig,
-        connector: PeerConnector<T>,
+        connector: AnyConnector<PeerMessage<M>>,
         task_group: &TaskGroup,
         mut status_channels: Option<BTreeMap<PeerId, watch::Sender<P2PConnectionStatus>>>,
     ) -> Self {
-        let connector: SharedAnyConnector<PeerMessage<T>> = connector.into();
+        let connector: SharedAnyConnector<PeerMessage<M>> = connector.into();
         let mut connection_senders = HashMap::new();
         let mut connections = HashMap::new();
 
         for (peer, peer_address) in cfg.peers.iter().filter(|(&peer, _)| peer != cfg.identity) {
-            let (connection_sender, connection_receiver) =
-                tokio::sync::mpsc::channel::<AnyFramedTransport<PeerMessage<T>>>(4);
+            let (connection_sender, connection_receiver) = tokio::sync::mpsc::channel(16);
 
             let connection = PeerConnection::new(
                 cfg.identity,
@@ -172,10 +156,7 @@ where
 }
 
 #[async_trait]
-impl<M> IPeerConnections<M> for ReconnectPeerConnections<M>
-where
-    M: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + 'static,
-{
+impl<M: Clone + Send + 'static> IPeerConnections<M> for ReconnectPeerConnections<M> {
     async fn send(&self, recipient: Recipient, msg: M) {
         match recipient {
             Recipient::Everyone => {
@@ -219,10 +200,7 @@ where
     }
 }
 
-impl<M> PeerConnectionStateMachine<M>
-where
-    M: Debug + Clone,
-{
+impl<M> PeerConnectionStateMachine<M> {
     async fn state_transition(mut self) -> Option<Self> {
         match self.state {
             PeerConnectionState::Disconnected(disconnected) => {
@@ -256,10 +234,7 @@ where
     }
 }
 
-impl<M> CommonPeerConnectionState<M>
-where
-    M: Debug + Clone,
-{
+impl<M> CommonPeerConnectionState<M> {
     async fn state_transition_connected(
         &mut self,
         mut connection: AnyFramedTransport<PeerMessage<M>>,
@@ -378,10 +353,7 @@ where
     }
 }
 
-impl<M> PeerConnection<M>
-where
-    M: Debug + Clone + Send + Sync + 'static,
-{
+impl<M: Send + 'static> PeerConnection<M> {
     #[allow(clippy::too_many_arguments)]
     fn new(
         our_id: PeerId,

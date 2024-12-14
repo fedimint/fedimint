@@ -12,17 +12,17 @@ use crate::task::Cancellable;
 pub mod fake;
 
 /// Owned [`PeerConnections`] trait object type
-pub struct PeerConnections<Msg>(Box<dyn IPeerConnections<Msg> + Send + 'static>);
+pub struct PeerConnections<M>(Box<dyn IPeerConnections<M> + Send + 'static>);
 
-impl<Msg> Deref for PeerConnections<Msg> {
-    type Target = dyn IPeerConnections<Msg> + Send + 'static;
+impl<M> Deref for PeerConnections<M> {
+    type Target = dyn IPeerConnections<M> + Send + 'static;
 
     fn deref(&self) -> &Self::Target {
         &*self.0
     }
 }
 
-impl<Msg> DerefMut for PeerConnections<Msg> {
+impl<M> DerefMut for PeerConnections<M> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut *self.0
     }
@@ -30,10 +30,7 @@ impl<Msg> DerefMut for PeerConnections<Msg> {
 
 /// Connection manager that tries to keep connections open to all peers
 #[async_trait]
-pub trait IPeerConnections<M>
-where
-    M: Serialize + DeserializeOwned + Unpin + Send,
-{
+pub trait IPeerConnections<M> {
     /// Send message to recipient; block if channel is full.
     async fn send(&self, recipient: Recipient, msg: M);
 
@@ -43,7 +40,7 @@ where
     /// Await receipt of a message; return None if we are shutting down.
     async fn receive(&self) -> Option<(PeerId, M)>;
 
-    /// Converts the struct to a `PeerConnection` trait object
+    /// Convert the struct to trait object.
     fn into_dyn(self) -> PeerConnections<M>
     where
         Self: Sized + Send + 'static,
