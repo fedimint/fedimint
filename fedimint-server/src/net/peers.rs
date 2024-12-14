@@ -1,8 +1,8 @@
 //! Implements a connection manager for communication with other federation
 //! members
 //!
-//! The main interface is [`fedimint_core::net::peers::IPeerConnections`] and
-//! its main implementation is [`ReconnectPeerConnections`], see these for
+//! The main interface is [`fedimint_core::net::peers::IP2PConnections`] and
+//! its main implementation is [`WebsocketP2PConnections`], see these for
 //! details.
 
 use std::collections::{BTreeMap, HashMap};
@@ -11,9 +11,10 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use anyhow::ensure;
+use async_channel::{bounded, Receiver, Sender};
 use async_trait::async_trait;
 use fedimint_api_client::api::P2PConnectionStatus;
-use fedimint_core::net::peers::{IPeerConnections, Recipient};
+use fedimint_core::net::peers::{IP2PConnections, Recipient};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::backoff_util::{api_networking_backoff, FibonacciBackoff};
 use fedimint_core::util::SafeUrl;
@@ -22,7 +23,6 @@ use fedimint_logging::LOG_NET_PEER;
 use futures::future::select_all;
 use futures::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::Receiver;
 use tokio::sync::watch;
 use tokio::time::sleep;
 use tracing::{info, instrument, warn};
@@ -32,14 +32,14 @@ use crate::net::connect::{AnyConnector, SharedAnyConnector};
 use crate::net::framed::AnyFramedTransport;
 
 #[derive(Clone)]
-pub struct ReconnectPeerConnections<M> {
-    connections: HashMap<PeerId, PeerConnection<M>>,
+pub struct WebsocketP2PConnections<M> {
+    connections: HashMap<PeerId, P2PConnection<M>>,
 }
 
 #[derive(Clone)]
-struct PeerConnection<M> {
-    outgoing: async_channel::Sender<M>,
-    incoming: async_channel::Receiver<M>,
+struct P2PConnection<M> {
+    outgoing: Sender<M>,
+    incoming: Receiver<M>,
 }
 
 /// Specifies the network configuration for federation-internal communication
@@ -54,20 +54,20 @@ pub struct NetworkConfig {
     pub peers: HashMap<PeerId, SafeUrl>,
 }
 
-/// Internal message type for [`ReconnectPeerConnections`], just public because
+/// Internal message type for [`WebsocketP2PConnections`], just public because
 /// it appears in the public interface.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum PeerMessage<M> {
+pub enum P2PMessage<M> {
     Message(M),
     Ping,
 }
 
-struct PeerConnectionStateMachine<M> {
-    common: CommonPeerConnectionState<M>,
-    state: PeerConnectionState<M>,
+struct P2PConnectionStateMachine<M> {
+    state: P2PConnectionSMState<M>,
+    common: P2PConnectionSMCommon<M>,
 }
 
-struct CommonPeerConnectionState<M> {
+struct P2PConnectionSMCommon<M> {
     incoming_sender: async_channel::Sender<M>,
     outgoing_receiver: async_channel::Receiver<M>,
     our_id: PeerId,
@@ -75,35 +75,31 @@ struct CommonPeerConnectionState<M> {
     peer_id: PeerId,
     peer_id_str: String,
     peer_address: SafeUrl,
-    connect: SharedAnyConnector<PeerMessage<M>>,
-    incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
+    connector: SharedAnyConnector<P2PMessage<M>>,
+    incoming_connections: Receiver<AnyFramedTransport<P2PMessage<M>>>,
     status_channel: Option<watch::Sender<P2PConnectionStatus>>,
 }
-enum PeerConnectionState<M> {
+enum P2PConnectionSMState<M> {
     Disconnected(FibonacciBackoff),
-    Connected(AnyFramedTransport<PeerMessage<M>>),
+    Connected(AnyFramedTransport<P2PMessage<M>>),
 }
 
-impl<M: Send + 'static> ReconnectPeerConnections<M> {
-    /// Creates a new `ReconnectPeerConnections` connection manager from a
-    /// network config and a [`Connector`](crate::net::connect::Connector).
-    /// See [`ReconnectPeerConnections`] for requirements on the
-    /// `Connector`.
+impl<M: Send + 'static> WebsocketP2PConnections<M> {
     #[instrument(skip_all)]
     pub(crate) async fn new(
         cfg: NetworkConfig,
-        connector: AnyConnector<PeerMessage<M>>,
+        connector: AnyConnector<P2PMessage<M>>,
         task_group: &TaskGroup,
         mut status_channels: Option<BTreeMap<PeerId, watch::Sender<P2PConnectionStatus>>>,
     ) -> Self {
-        let connector: SharedAnyConnector<PeerMessage<M>> = connector.into();
+        let connector: SharedAnyConnector<P2PMessage<M>> = connector.into();
         let mut connection_senders = HashMap::new();
         let mut connections = HashMap::new();
 
         for (peer, peer_address) in cfg.peers.iter().filter(|(&peer, _)| peer != cfg.identity) {
-            let (connection_sender, connection_receiver) = tokio::sync::mpsc::channel(16);
+            let (connection_sender, connection_receiver) = bounded(16);
 
-            let connection = PeerConnection::new(
+            let connection = P2PConnection::new(
                 cfg.identity,
                 *peer,
                 peer_address.clone(),
@@ -151,12 +147,12 @@ impl<M: Send + 'static> ReconnectPeerConnections<M> {
             info!(target: LOG_NET_PEER, "Shutting down task listening for p2p connections");
         });
 
-        ReconnectPeerConnections { connections }
+        WebsocketP2PConnections { connections }
     }
 }
 
 #[async_trait]
-impl<M: Clone + Send + 'static> IPeerConnections<M> for ReconnectPeerConnections<M> {
+impl<M: Clone + Send + 'static> IP2PConnections<M> for WebsocketP2PConnections<M> {
     async fn send(&self, recipient: Recipient, msg: M) {
         match recipient {
             Recipient::Everyone => {
@@ -199,61 +195,52 @@ impl<M: Clone + Send + 'static> IPeerConnections<M> for ReconnectPeerConnections
         .0
     }
 
-    fn clone_box(&self) -> Box<dyn IPeerConnections<M> + Send + 'static> {
+    fn clone_box(&self) -> Box<dyn IP2PConnections<M> + Send + 'static> {
         Box::new(self.clone())
     }
 }
 
-impl<M> PeerConnectionStateMachine<M> {
+impl<M> P2PConnectionStateMachine<M> {
     async fn state_transition(mut self) -> Option<Self> {
         match self.state {
-            PeerConnectionState::Disconnected(disconnected) => {
-                let state = self
-                    .common
-                    .state_transition_disconnected(disconnected)
-                    .await?;
-
+            P2PConnectionSMState::Disconnected(disconnected) => {
                 if let Some(channel) = &self.common.status_channel {
                     channel.send(P2PConnectionStatus::Connected).ok();
                 }
 
-                Some(PeerConnectionStateMachine {
-                    common: self.common,
-                    state,
-                })
+                self.common.transition_disconnected(disconnected).await
             }
-            PeerConnectionState::Connected(connected) => {
-                let state = self.common.state_transition_connected(connected).await?;
-
+            P2PConnectionSMState::Connected(connected) => {
                 if let Some(channel) = &self.common.status_channel {
                     channel.send(P2PConnectionStatus::Disconnected).ok();
                 }
 
-                Some(PeerConnectionStateMachine {
-                    common: self.common,
-                    state,
-                })
+                self.common.transition_connected(connected).await
             }
         }
+        .map(|state| P2PConnectionStateMachine {
+            common: self.common,
+            state,
+        })
     }
 }
 
-impl<M> CommonPeerConnectionState<M> {
-    async fn state_transition_connected(
+impl<M> P2PConnectionSMCommon<M> {
+    async fn transition_connected(
         &mut self,
-        mut connection: AnyFramedTransport<PeerMessage<M>>,
-    ) -> Option<PeerConnectionState<M>> {
+        mut connection: AnyFramedTransport<P2PMessage<M>>,
+    ) -> Option<P2PConnectionSMState<M>> {
         Some(tokio::select! {
-            maybe_msg = self.outgoing_receiver.recv() => {
-                self.send_message_connected(connection, PeerMessage::Message(maybe_msg.ok()?)).await
+            msg = self.outgoing_receiver.recv() => {
+                self.send_message(connection, P2PMessage::Message(msg.ok()?)).await
             },
-            maybe_connection = self.incoming_connections.recv() => {
-                self.connect(maybe_connection?).await
+            connection = self.incoming_connections.recv() => {
+                self.connect(connection.ok()?).await
             },
-            Some(message_res) = connection.next() => {
-                match message_res {
+            Some(msg) = connection.next() => {
+                match msg {
                     Ok(peer_message) => {
-                        if let PeerMessage::Message(msg) = peer_message {
+                        if let P2PMessage::Message(msg) = peer_message {
                             PEER_MESSAGES_COUNT.with_label_values(&[&self.our_id_str, &self.peer_id_str, "incoming"]).inc();
 
                             if self.incoming_sender.send(msg).await.is_err(){
@@ -261,13 +248,13 @@ impl<M> CommonPeerConnectionState<M> {
                             }
                         }
 
-                        PeerConnectionState::Connected(connection)
+                        P2PConnectionSMState::Connected(connection)
                     },
                     Err(e) => self.disconnect(e),
                 }
             },
             () = sleep(Duration::from_secs(10)) => {
-                self.send_message_connected(connection, PeerMessage::Ping)
+                self.send_message(connection, P2PMessage::Ping)
                     .await
             },
         })
@@ -275,31 +262,31 @@ impl<M> CommonPeerConnectionState<M> {
 
     async fn connect(
         &mut self,
-        mut connection: AnyFramedTransport<PeerMessage<M>>,
-    ) -> PeerConnectionState<M> {
+        mut connection: AnyFramedTransport<P2PMessage<M>>,
+    ) -> P2PConnectionSMState<M> {
         info!(target: LOG_NET_PEER, "Connected to peer {}", self.peer_id);
 
-        match connection.send(PeerMessage::Ping).await {
-            Ok(()) => PeerConnectionState::Connected(connection),
+        match connection.send(P2PMessage::Ping).await {
+            Ok(()) => P2PConnectionSMState::Connected(connection),
             Err(e) => self.disconnect(e),
         }
     }
 
-    fn disconnect(&self, error: anyhow::Error) -> PeerConnectionState<M> {
+    fn disconnect(&self, error: anyhow::Error) -> P2PConnectionSMState<M> {
         info!(target: LOG_NET_PEER, "Disconnected from peer {}: {}", self.peer_id, error);
 
         PEER_DISCONNECT_COUNT
             .with_label_values(&[&self.our_id_str, &self.peer_id_str])
             .inc();
 
-        PeerConnectionState::Disconnected(api_networking_backoff())
+        P2PConnectionSMState::Disconnected(api_networking_backoff())
     }
 
-    async fn send_message_connected(
+    async fn send_message(
         &mut self,
-        mut connection: AnyFramedTransport<PeerMessage<M>>,
-        peer_message: PeerMessage<M>,
-    ) -> PeerConnectionState<M> {
+        mut connection: AnyFramedTransport<P2PMessage<M>>,
+        peer_message: P2PMessage<M>,
+    ) -> P2PConnectionSMState<M> {
         PEER_MESSAGES_COUNT
             .with_label_values(&[&self.our_id_str, &self.peer_id_str, "outgoing"])
             .inc();
@@ -309,20 +296,20 @@ impl<M> CommonPeerConnectionState<M> {
         }
 
         match connection.flush().await {
-            Ok(()) => PeerConnectionState::Connected(connection),
+            Ok(()) => P2PConnectionSMState::Connected(connection),
             Err(e) => self.disconnect(e),
         }
     }
 
-    async fn state_transition_disconnected(
+    async fn transition_disconnected(
         &mut self,
         mut backoff: FibonacciBackoff,
-    ) -> Option<PeerConnectionState<M>> {
+    ) -> Option<P2PConnectionSMState<M>> {
         Some(tokio::select! {
-            maybe_connection = self.incoming_connections.recv() => {
+            connection = self.incoming_connections.recv() => {
                 PEER_CONNECT_COUNT.with_label_values(&[&self.our_id_str, &self.peer_id_str, "incoming"]).inc();
 
-                self.connect(maybe_connection?).await
+                self.connect(connection.ok()?).await
             },
             () = sleep(backoff.next().expect("Unlimited retries")), if self.our_id < self.peer_id => {
                 // to prevent "reconnection ping-pongs", only the side with lower PeerId is responsible for reconnecting
@@ -334,17 +321,17 @@ impl<M> CommonPeerConnectionState<M> {
 
                         self.connect(connection).await
                     }
-                    Err(..) => PeerConnectionState::Disconnected(backoff)
+                    Err(..) => P2PConnectionSMState::Disconnected(backoff)
                 }
             },
         })
     }
 
-    async fn try_reconnect(&self) -> Result<AnyFramedTransport<PeerMessage<M>>, anyhow::Error> {
+    async fn try_reconnect(&self) -> Result<AnyFramedTransport<P2PMessage<M>>, anyhow::Error> {
         info!(target: LOG_NET_PEER, "Attempting to reconnect to peer {}", self.peer_id);
 
-        let (connected_peer, conn) = self
-            .connect
+        let (connected_peer, connection) = self
+            .connector
             .connect_framed(self.peer_address.with_port_or_known_default(), self.peer_id)
             .await?;
 
@@ -353,29 +340,29 @@ impl<M> CommonPeerConnectionState<M> {
             "Peer incorrectly identified as: {connected_peer}",
         );
 
-        Ok(conn)
+        Ok(connection)
     }
 }
 
-impl<M: Send + 'static> PeerConnection<M> {
+impl<M: Send + 'static> P2PConnection<M> {
     #[allow(clippy::too_many_arguments)]
     fn new(
         our_id: PeerId,
         peer_id: PeerId,
         peer_address: SafeUrl,
-        connect: SharedAnyConnector<PeerMessage<M>>,
-        incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
+        connector: SharedAnyConnector<P2PMessage<M>>,
+        incoming_connections: Receiver<AnyFramedTransport<P2PMessage<M>>>,
         status_channel: Option<watch::Sender<P2PConnectionStatus>>,
         task_group: &TaskGroup,
-    ) -> PeerConnection<M> {
-        let (outgoing_sender, outgoing_receiver) = async_channel::bounded(1024);
-        let (incoming_sender, incoming_receiver) = async_channel::bounded(1024);
+    ) -> P2PConnection<M> {
+        let (outgoing_sender, outgoing_receiver) = bounded(1024);
+        let (incoming_sender, incoming_receiver) = bounded(1024);
 
         task_group.spawn_cancellable(format!("io-thread-peer-{peer_id}"), async move {
             info!(target: LOG_NET_PEER, "Starting peer connection state machine {}", peer_id);
 
-            let mut state_machine = PeerConnectionStateMachine {
-                common: CommonPeerConnectionState {
+            let mut state_machine = P2PConnectionStateMachine {
+                common: P2PConnectionSMCommon {
                     incoming_sender,
                     outgoing_receiver,
                     our_id_str: our_id.to_string(),
@@ -383,11 +370,11 @@ impl<M: Send + 'static> PeerConnection<M> {
                     peer_id_str: peer_id.to_string(),
                     peer_id,
                     peer_address,
-                    connect,
+                    connector,
                     incoming_connections,
                     status_channel,
                 },
-                state: PeerConnectionState::Disconnected(api_networking_backoff()),
+                state: P2PConnectionSMState::Disconnected(api_networking_backoff()),
             };
 
             while let Some(sm) = state_machine.state_transition().await {
@@ -397,7 +384,7 @@ impl<M: Send + 'static> PeerConnection<M> {
             info!(target: LOG_NET_PEER, "Shutting down peer connection state machine {}", peer_id);
         });
 
-        PeerConnection {
+        P2PConnection {
             outgoing: outgoing_sender,
             incoming: incoming_receiver,
         }

@@ -17,7 +17,7 @@ use fedimint_core::module::{
     ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleInit, MultiApiVersion, PeerHandle,
     SupportedApiVersionsSummary, SupportedCoreApiVersions, CORE_CONSENSUS_VERSION,
 };
-use fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
+use fedimint_core::net::peers::{IMuxPeerConnections, IP2PConnections, DynP2PConnections};
 use fedimint_core::task::{timeout, Cancelled, Elapsed, TaskGroup};
 use fedimint_core::{secp256k1, timing, PeerId};
 use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
@@ -36,7 +36,7 @@ use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::NumPeersExt;
 use crate::multiplexed::PeerConnectionMultiplexer;
 use crate::net::connect::{dns_sanitize, Connector, TlsConfig};
-use crate::net::peers::{NetworkConfig, ReconnectPeerConnections};
+use crate::net::peers::{NetworkConfig, WebsocketP2PConnections};
 use crate::TlsTcpConnector;
 
 pub mod api;
@@ -692,13 +692,13 @@ pub async fn connect<T>(
     network: NetworkConfig,
     certs: TlsConfig,
     task_group: &TaskGroup,
-) -> PeerConnections<T>
+) -> DynP2PConnections<T>
 where
     T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + 'static,
 {
     let connector = TlsTcpConnector::new(certs, network.identity).into_dyn();
 
-    let connections = ReconnectPeerConnections::new(network, connector, task_group, None).await;
+    let connections = WebsocketP2PConnections::new(network, connector, task_group, None).await;
 
     connections.into_dyn()
 }

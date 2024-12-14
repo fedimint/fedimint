@@ -1,7 +1,7 @@
 use async_channel::bounded;
-/// Fake (channel-based) implementation of [`super::PeerConnections`].
+/// Fake (channel-based) implementation of [`super::DynP2PConnections`].
 use async_trait::async_trait;
-use fedimint_core::net::peers::{IPeerConnections, PeerConnections};
+use fedimint_core::net::peers::{DynP2PConnections, IP2PConnections};
 use fedimint_core::PeerId;
 
 use crate::net::peers::Recipient;
@@ -14,7 +14,7 @@ struct FakePeerConnections<M> {
 }
 
 #[async_trait]
-impl<M: Clone + Send + 'static> IPeerConnections<M> for FakePeerConnections<M> {
+impl<M: Clone + Send + 'static> IP2PConnections<M> for FakePeerConnections<M> {
     async fn send(&self, recipient: Recipient, msg: M) {
         assert_eq!(recipient, Recipient::Peer(self.peer));
 
@@ -35,7 +35,7 @@ impl<M: Clone + Send + 'static> IPeerConnections<M> for FakePeerConnections<M> {
         self.rx.recv().await.map(|msg| (self.peer, msg)).ok()
     }
 
-    fn clone_box(&self) -> Box<dyn IPeerConnections<M> + Send + 'static> {
+    fn clone_box(&self) -> Box<dyn IP2PConnections<M> + Send + 'static> {
         Box::new(self.clone())
     }
 }
@@ -48,7 +48,7 @@ pub fn make_fake_peer_connection<M: Clone + Send + 'static>(
     peer_1: PeerId,
     peer_2: PeerId,
     buf_size: usize,
-) -> (PeerConnections<M>, PeerConnections<M>) {
+) -> (DynP2PConnections<M>, DynP2PConnections<M>) {
     let (tx1, rx1) = bounded(buf_size);
     let (tx2, rx2) = bounded(buf_size);
 

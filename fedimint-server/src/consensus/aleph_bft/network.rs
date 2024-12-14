@@ -1,6 +1,6 @@
 use bitcoin::hashes::{sha256, Hash};
 use fedimint_core::encoding::Encodable;
-use fedimint_core::net::peers::{PeerConnections, Recipient};
+use fedimint_core::net::peers::{DynP2PConnections, Recipient};
 use parity_scale_codec::{Decode, Encode, IoReader};
 
 use super::data_provider::UnitData;
@@ -26,11 +26,11 @@ pub type NetworkData = aleph_bft::NetworkData<
 >;
 
 pub struct Network {
-    connections: PeerConnections<Message>,
+    connections: DynP2PConnections<Message>,
 }
 
 impl Network {
-    pub fn new(connections: PeerConnections<Message>) -> Self {
+    pub fn new(connections: DynP2PConnections<Message>) -> Self {
         Self { connections }
     }
 }

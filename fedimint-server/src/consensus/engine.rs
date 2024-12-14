@@ -19,7 +19,7 @@ use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ServerModuleRegistry};
 use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
-use fedimint_core::net::peers::{IPeerConnections, PeerConnections};
+use fedimint_core::net::peers::{DynP2PConnections, IP2PConnections};
 use fedimint_core::runtime::spawn;
 use fedimint_core::session_outcome::{
     AcceptedItem, SchnorrSignature, SessionOutcome, SignedSessionOutcome,
@@ -53,7 +53,7 @@ use crate::metrics::{
     CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX, CONSENSUS_SESSION_COUNT,
 };
 use crate::net::connect::{Connector, TlsTcpConnector};
-use crate::net::peers::ReconnectPeerConnections;
+use crate::net::peers::WebsocketP2PConnections;
 use crate::LOG_CONSENSUS;
 
 // The name of the directory where the database checkpoints are stored.
@@ -170,7 +170,7 @@ impl ConsensusEngine {
         self.confirm_server_config_consensus_hash().await?;
 
         // Build P2P connections for the atomic broadcast
-        let connections = ReconnectPeerConnections::new(
+        let connections = WebsocketP2PConnections::new(
             self.cfg.network_config(p2p_bind_addr),
             TlsTcpConnector::new(self.cfg.tls_config(), self.identity()).into_dyn(),
             &self.task_group,
@@ -233,7 +233,7 @@ impl ConsensusEngine {
 
     pub async fn run_session(
         &self,
-        connections: PeerConnections<Message>,
+        connections: DynP2PConnections<Message>,
         session_index: u64,
     ) -> anyhow::Result<()> {
         // In order to bound a sessions RAM consumption we need to bound its number of
