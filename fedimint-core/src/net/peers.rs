@@ -11,7 +11,6 @@ use crate::task::Cancellable;
 #[cfg(not(target_family = "wasm"))]
 pub mod fake;
 
-/// Owned [`PeerConnections`] trait object type
 pub struct PeerConnections<M>(Box<dyn IPeerConnections<M> + Send + 'static>);
 
 impl<M> Clone for PeerConnections<M> {

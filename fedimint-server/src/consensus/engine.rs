@@ -19,6 +19,7 @@ use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ServerModuleRegistry};
 use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
+use fedimint_core::net::peers::{IPeerConnections, PeerConnections};
 use fedimint_core::runtime::spawn;
 use fedimint_core::session_outcome::{
     AcceptedItem, SchnorrSignature, SessionOutcome, SignedSessionOutcome,
@@ -175,7 +176,8 @@ impl ConsensusEngine {
             &self.task_group,
             None,
         )
-        .await;
+        .await
+        .into_dyn();
 
         self.initialize_checkpoint_directory(self.get_finished_session_count().await)?;
 
@@ -231,7 +233,7 @@ impl ConsensusEngine {
 
     pub async fn run_session(
         &self,
-        connections: ReconnectPeerConnections<Message>,
+        connections: PeerConnections<Message>,
         session_index: u64,
     ) -> anyhow::Result<()> {
         // In order to bound a sessions RAM consumption we need to bound its number of
