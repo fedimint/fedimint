@@ -77,7 +77,7 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
         .finalize_and_submit_transaction(
             operation_id,
             "Claiming Invalid Ecash Note",
-            |_, _| (),
+            |_| (),
             TransactionBuilder::new().with_inputs(
                 client
                     .get_first_module::<MintClientModule>()?
@@ -87,7 +87,7 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
         )
         .await
         .expect("Failed to finalize transaction")
-        .0;
+        .txid();
 
     assert!(client
         .transaction_updates(operation_id)
@@ -171,12 +171,12 @@ async fn blind_nonce_index() -> anyhow::Result<()> {
 
     let tx = TransactionBuilder::new().with_outputs(client_mint.client_ctx.make_dyn(issuance_req));
 
-    let (txid, _) = client_mint
+    let change_range = client_mint
         .client_ctx
-        .finalize_and_submit_transaction(operation_id, "mint", |_, _| (), tx)
+        .finalize_and_submit_transaction(operation_id, "mint", |_| (), tx)
         .await?;
 
-    client.api().await_transaction(txid).await;
+    client.api().await_transaction(change_range.txid()).await;
 
     assert!(
         client_mint.api.check_blind_nonce_used(blind_nonce).await?,

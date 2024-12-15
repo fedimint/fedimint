@@ -15,7 +15,7 @@ use db::{migrate_to_v1, DbKeyPrefix, DummyClientFundsKeyV1, DummyClientNameKey};
 use fedimint_client::db::{migrate_state, ClientMigrationFn};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
-use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
+use fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
 use fedimint_client::sm::{Context, ModuleNotifier};
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
@@ -255,19 +255,28 @@ impl DummyClientModule {
             self.client_ctx
                 .make_client_inputs(ClientInputBundle::new_no_sm(vec![input])),
         );
-        let outpoint = |txid, _| OutPoint { txid, out_idx: 0 };
-        let (_, change) = self
+        let meta_gen = |change_range: OutPointRange| OutPoint {
+            txid: change_range.txid(),
+            out_idx: 0,
+        };
+        let change_range = self
             .client_ctx
-            .finalize_and_submit_transaction(op_id, KIND.as_str(), outpoint, tx)
+            .finalize_and_submit_transaction(op_id, KIND.as_str(), meta_gen, tx)
             .await?;
 
         // Wait for the output of the primary module
         self.client_ctx
-            .await_primary_module_outputs(op_id, change.clone())
+            .await_primary_module_outputs(op_id, change_range.into_iter().collect())
             .await
             .context("Waiting for the output of print_using_account")?;
 
-        Ok((op_id, change[0]))
+        Ok((
+            op_id,
+            change_range
+                .into_iter()
+                .next()
+                .expect("At least one output"),
+        ))
     }
 
     /// Request the federation prints money for us
@@ -300,20 +309,26 @@ impl DummyClientModule {
                 .make_client_outputs(ClientOutputBundle::new_no_sm(vec![output])),
         );
 
-        let outpoint = |txid, _| OutPoint { txid, out_idx: 0 };
-        let (txid, _) = self
+        let meta_gen = |change_range: OutPointRange| OutPoint {
+            txid: change_range.txid(),
+            out_idx: 0,
+        };
+        let change_range = self
             .client_ctx
-            .finalize_and_submit_transaction(op_id, DummyCommonInit::KIND.as_str(), outpoint, tx)
+            .finalize_and_submit_transaction(op_id, DummyCommonInit::KIND.as_str(), meta_gen, tx)
             .await?;
 
         let tx_subscription = self.client_ctx.transaction_updates(op_id).await;
 
         tx_subscription
-            .await_tx_accepted(txid)
+            .await_tx_accepted(change_range.txid())
             .await
             .map_err(|e| anyhow!(e))?;
 
-        Ok(OutPoint { txid, out_idx: 0 })
+        Ok(OutPoint {
+            txid: change_range.txid(),
+            out_idx: 0,
+        })
     }
 
     /// Wait to receive money at an outpoint

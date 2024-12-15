@@ -374,15 +374,16 @@ pub async fn remint_denomination(
         tx = tx.with_outputs(outputs);
     }
     drop(module_transaction);
-    let operation_meta_gen = |_txid, _outpoint| ();
-    let (txid, _) = client
+    let operation_meta_gen = |_| ();
+    let txid = client
         .finalize_and_submit_transaction(
             operation_id,
             MintCommonInit::KIND.as_str(),
             operation_meta_gen,
             tx,
         )
-        .await?;
+        .await?
+        .txid();
     let tx_subscription = client.transaction_updates(operation_id).await;
     tx_subscription
         .await_tx_accepted(txid)

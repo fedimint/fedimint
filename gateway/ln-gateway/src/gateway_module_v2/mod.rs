@@ -452,7 +452,7 @@ impl GatewayClientModuleV2 {
             .finalize_and_submit_transaction(
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
-                |_, _| GatewayOperationMetaV2,
+                |_| GatewayOperationMetaV2,
                 transaction,
             )
             .await?;
@@ -523,7 +523,7 @@ impl GatewayClientModuleV2 {
             .finalize_and_submit_transaction(
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
-                |_, _| GatewayOperationMetaV2,
+                |_| GatewayOperationMetaV2,
                 transaction,
             )
             .await?;

@@ -222,17 +222,16 @@ impl SendStateMachine {
                     keys: vec![old_state.common.refund_keypair],
                 };
 
-                let outpoints = global_context
+                let change_range = global_context
                     .claim_inputs(
                         dbtx,
                         // The input of the refund tx is managed by this state machine
                         ClientInputBundle::new_no_sm(vec![client_input]),
                     )
                     .await
-                    .expect("Cannot claim input, additional funding needed")
-                    .1;
+                    .expect("Cannot claim input, additional funding needed");
 
-                old_state.update(SendSMState::Refunding(outpoints))
+                old_state.update(SendSMState::Refunding(change_range.into_iter().collect()))
             }
         }
     }
@@ -281,12 +280,11 @@ impl SendStateMachine {
             keys: vec![old_state.common.refund_keypair],
         };
 
-        let outpoints = global_context
+        let change_range = global_context
             .claim_inputs(dbtx, ClientInputBundle::new_no_sm(vec![client_input]))
             .await
-            .expect("Cannot claim input, additional funding needed")
-            .1;
+            .expect("Cannot claim input, additional funding needed");
 
-        old_state.update(SendSMState::Refunding(outpoints))
+        old_state.update(SendSMState::Refunding(change_range.into_iter().collect()))
     }
 }

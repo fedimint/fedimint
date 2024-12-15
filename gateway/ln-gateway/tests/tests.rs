@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use assert_matches::assert_matches;
 use bitcoin::hashes::{sha256, Hash};
+use fedimint_client::module::OutPointRange;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
@@ -18,7 +19,7 @@ use fedimint_core::encoding::Encodable;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::time::now;
 use fedimint_core::util::{backoff_util, retry, NextOrPending};
-use fedimint_core::{msats, sats, secp256k1, Amount, OutPoint, TransactionId};
+use fedimint_core::{msats, sats, secp256k1, Amount, OutPoint};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
@@ -400,16 +401,17 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
             let tx = TransactionBuilder::new().with_inputs(
                 ClientInputBundle::new_no_sm(vec![client_input]).into_dyn(gateway_module.id),
             );
-            let operation_meta_gen = |_: TransactionId, _: Vec<OutPoint>| GatewayMeta::Pay {};
+            let operation_meta_gen = |_: OutPointRange| GatewayMeta::Pay {};
             let operation_id = OperationId(*invoice.payment_hash().as_ref());
-            let (txid, _) = gateway_client
+            let txid = gateway_client
                 .finalize_and_submit_transaction(
                     operation_id,
                     fedimint_ln_common::KIND.as_str(),
                     operation_meta_gen,
                     tx,
                 )
-                .await?;
+                .await?
+                .txid();
 
             // Assert that we did not get paid for claiming a contract with a bogus preimage
             assert!(dummy_module
@@ -671,9 +673,12 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
                 ClientOutputBundle::new_no_sm(vec![client_output])
                     .into_dyn(user_lightning_module.id),
             );
-            let operation_meta_gen = |txid, _| LightningOperationMeta {
+            let operation_meta_gen = |change_range: OutPointRange| LightningOperationMeta {
                 variant: LightningOperationMetaVariant::Receive {
-                    out_point: OutPoint { txid, out_idx: 0 },
+                    out_point: OutPoint {
+                        txid: change_range.txid(),
+                        out_idx: 0,
+                    },
                     invoice: invoice.clone(),
                     gateway_id: None,
                 },
@@ -682,14 +687,15 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
             };
 
             let operation_id = OperationId(*invoice.payment_hash().as_ref());
-            let (txid, _) = user_client
+            let txid = user_client
                 .finalize_and_submit_transaction(
                     operation_id,
                     fedimint_ln_common::KIND.as_str(),
                     operation_meta_gen,
                     tx,
                 )
-                .await?;
+                .await?
+                .txid();
             user_client
                 .transaction_updates(operation_id)
                 .await
