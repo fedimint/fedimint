@@ -18,6 +18,7 @@ use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{ContractId, FundedContract, IdentifiableContract, Preimage};
 use fedimint_ln_common::{LightningInput, LightningOutput};
 use futures::future;
+use lightning_invoice::RoutingFees;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio_stream::StreamExt;
@@ -28,7 +29,7 @@ use crate::db::GatewayDbtxNcExt;
 use crate::lightning::{LightningRpcError, PayInvoiceResponse};
 use crate::state_machine::events::{OutgoingPaymentFailed, OutgoingPaymentSucceeded};
 use crate::state_machine::GatewayClientModule;
-use crate::{GatewayState, RoutingFees};
+use crate::GatewayState;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that executes the Lightning payment on behalf of
@@ -369,7 +370,6 @@ impl GatewayPayInvoice {
                     contract_id,
                     contract: Some(outgoing_contract_account.clone()),
                 })?;
-            let routing_fees = config.fees;
 
             let payment_parameters = Self::validate_outgoing_account(
                 &outgoing_contract_account,
@@ -377,7 +377,7 @@ impl GatewayPayInvoice {
                 context.timelock_delta,
                 consensus_block_count.unwrap(),
                 &payment_data,
-                routing_fees,
+                config.lightning_fee.into(),
             )
             .map_err(|e| {
                 warn!("Invalid outgoing contract: {e:?}");

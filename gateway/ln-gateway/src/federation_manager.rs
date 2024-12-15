@@ -48,10 +48,6 @@ impl FederationManager {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.clients.is_empty()
-    }
-
     pub fn add_client(&mut self, index: u64, client: Spanned<fedimint_client::ClientHandleArc>) {
         let federation_id = client.borrow().with_sync(|c| c.federation_id());
         self.clients.insert(federation_id, client);
@@ -209,7 +205,7 @@ impl FederationManager {
         self.clients.get(federation_id)
     }
 
-    async fn federation_info(
+    pub async fn federation_info(
         &self,
         federation_id: FederationId,
         dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
@@ -227,17 +223,17 @@ impl FederationManager {
             .with(|client| async move {
                 let balance_msat = client.get_balance().await;
 
-                let routing_fees = dbtx
-                    .load_federation_config(federation_id)
-                    .await
-                    .map(|config| config.fees.into());
+                let fed_config = dbtx.load_federation_config(federation_id).await.ok_or(FederationNotConnected {
+                    federation_id_prefix: federation_id.to_prefix(),
+                })?;
 
                 Ok(FederationInfo {
                     federation_id,
                     federation_name: self.federation_name(client).await,
                     balance_msat,
                     federation_index,
-                    routing_fees,
+                    lightning_fee: fed_config.lightning_fee,
+                    transaction_fee: fed_config.transaction_fee,
                 })
             })
             .await
@@ -259,18 +255,17 @@ impl FederationManager {
 
             let balance_msat = client.borrow().with(|client| client.get_balance()).await;
 
-            let routing_fees = dbtx
-                .load_federation_config(*federation_id)
-                .await
-                .map(|config| config.fees.into());
-
-            federation_infos.push(FederationInfo {
-                federation_id: *federation_id,
-                federation_name: self.federation_name(client.value()).await,
-                balance_msat,
-                federation_index,
-                routing_fees,
-            });
+            let fed_config = dbtx.load_federation_config(*federation_id).await;
+            if let Some(fed_config) = fed_config {
+                federation_infos.push(FederationInfo {
+                    federation_id: *federation_id,
+                    federation_name: self.federation_name(client.value()).await,
+                    balance_msat,
+                    federation_index,
+                    lightning_fee: fed_config.lightning_fee,
+                    transaction_fee: fed_config.transaction_fee,
+                });
+            }
         }
         federation_infos
     }

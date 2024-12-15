@@ -40,7 +40,7 @@ use clap::Parser;
 use client::GatewayClientBuilder;
 use config::GatewayOpts;
 pub use config::GatewayParameters;
-use db::{GatewayConfiguration, GatewayDbtxNcExt};
+use db::GatewayDbtxNcExt;
 use error::FederationNotConnected;
 use events::ALL_GATEWAY_EVENTS;
 use federation_manager::FederationManager;
@@ -55,7 +55,6 @@ use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::db::{apply_migrations_server, Database, DatabaseTransaction};
-use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::secp256k1::schnorr::Signature;
@@ -67,7 +66,7 @@ use fedimint_core::{
     fedimint_build_code_version_env, get_network_for_address, Amount, BitcoinAmountOrAll,
 };
 use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId};
-use fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
+use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::LightningCommonInit;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
@@ -88,13 +87,13 @@ use lightning::{
     InterceptPaymentResponse, InvoiceDescription, LightningBuilder, LightningRpcError,
     PaymentAction,
 };
-use lightning_invoice::{Bolt11Invoice, RoutingFees};
+use lightning_invoice::Bolt11Invoice;
 use rand::thread_rng;
 use rpc::{
     CloseChannelsWithPeerPayload, CreateInvoiceForOperatorPayload, FederationInfo,
     GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelPayload,
     PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentLogResponse, ReceiveEcashPayload,
-    ReceiveEcashResponse, SendOnchainPayload, SetConfigurationPayload, SpendEcashPayload,
+    ReceiveEcashResponse, SendOnchainPayload, SetFeesPayload, SpendEcashPayload,
     SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
 };
 use state_machine::{GatewayClientModule, GatewayExtPayStates};
@@ -123,16 +122,6 @@ const DEFAULT_NUM_ROUTE_HINTS: u32 = 1;
 
 /// Default Bitcoin network for testing purposes.
 pub const DEFAULT_NETWORK: Network = Network::Regtest;
-
-/// The default routing fees that the gateway charges for incoming and outgoing
-/// payments. Identical to the Lightning Network.
-pub const DEFAULT_FEES: RoutingFees = RoutingFees {
-    // Base routing fee. Default is 0 msat
-    base_msat: 0,
-    // Liquidity-based routing fee in millionths of a routed amount.
-    // In other words, 10000 is 1%. The default is 10000 (1%).
-    proportional_millionths: 10000,
-};
 
 /// LNv2 CLTV Delta in blocks
 const EXPIRATION_DELTA_MINIMUM_V2: u64 = 144;
@@ -189,7 +178,6 @@ impl Display for GatewayState {
 
 /// The action to take after handling a payment stream.
 enum ReceivePaymentStreamAction {
-    ImmediatelyRetry,
     RetryAfterDelay,
     NoRetry,
 }
@@ -202,9 +190,6 @@ pub struct Gateway {
     /// Builder struct that allows the gateway to build a `ILnRpcClient`, which
     /// represents a connection to a lightning node.
     lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
-
-    /// The gateway's current configuration
-    gateway_config: Arc<RwLock<GatewayConfiguration>>,
 
     /// The current state of the Gateway.
     state: Arc<RwLock<GatewayState>>,
@@ -235,13 +220,18 @@ pub struct Gateway {
     /// The bcrypt password hash used to authenticate the gateway.
     /// This is an `Arc` because `bcrypt::HashParts` does not implement `Clone`.
     bcrypt_password_hash: Arc<bcrypt::HashParts>,
+
+    /// The number of route hints to include in LNv1 invoices.
+    num_route_hints: u32,
+
+    /// The Bitcoin network that the Lightning network is configured to.
+    network: Network,
 }
 
 impl std::fmt::Debug for Gateway {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Gateway")
             .field("federation_manager", &self.federation_manager)
-            .field("gateway_config", &self.gateway_config)
             .field("state", &self.state)
             .field("client_builder", &self.client_builder)
             .field("gateway_db", &self.gateway_db)
@@ -262,8 +252,7 @@ impl Gateway {
         listen: SocketAddr,
         api_addr: SafeUrl,
         bcrypt_password_hash: bcrypt::HashParts,
-        network: Option<Network>,
-        fees: RoutingFees,
+        network: Network,
         num_route_hints: u32,
         gateway_db: Database,
         gateway_state: GatewayState,
@@ -278,9 +267,8 @@ impl Gateway {
                 listen,
                 versioned_api,
                 bcrypt_password_hash,
-                num_route_hints,
-                fees: Some(GatewayFee(fees)),
                 network,
+                num_route_hints,
                 lightning_module_mode,
             },
             gateway_db,
@@ -359,10 +347,8 @@ impl Gateway {
         )
         .await?;
 
-        // Reads the `GatewayConfig` from the database if it exists or is provided from
-        // the command line.
-        let gateway_config =
-            Self::get_gateway_configuration(gateway_db.clone(), &gateway_parameters).await;
+        let num_route_hints = gateway_parameters.num_route_hints;
+        let network = gateway_parameters.network;
 
         let task_group = TaskGroup::new();
         task_group.install_kill_handler();
@@ -370,7 +356,6 @@ impl Gateway {
         Ok(Self {
             federation_manager: Arc::new(RwLock::new(FederationManager::new())),
             lightning_builder,
-            gateway_config: Arc::new(RwLock::new(gateway_config)),
             state: Arc::new(RwLock::new(gateway_state)),
             client_builder,
             gateway_id: Self::load_or_create_gateway_id(&gateway_db).await,
@@ -380,6 +365,8 @@ impl Gateway {
             lightning_module_mode: gateway_parameters.lightning_module_mode,
             task_group,
             bcrypt_password_hash: Arc::new(gateway_parameters.bcrypt_password_hash),
+            num_route_hints,
+            network,
         })
     }
 
@@ -397,10 +384,6 @@ impl Gateway {
 
     pub fn versioned_api(&self) -> &SafeUrl {
         &self.versioned_api
-    }
-
-    pub async fn clone_gateway_config(&self) -> GatewayConfiguration {
-        self.gateway_config.read().await.clone()
     }
 
     async fn get_state(&self) -> GatewayState {
@@ -477,7 +460,6 @@ impl Gateway {
                     }
 
                     match route_payments_response {
-                        ReceivePaymentStreamAction::ImmediatelyRetry => {},
                         ReceivePaymentStreamAction::RetryAfterDelay => {
                             warn!("Disconnected from lightning node. Waiting {PAYMENT_STREAM_RETRY_SECONDS} seconds and trying again");
                             sleep(Duration::from_secs(PAYMENT_STREAM_RETRY_SECONDS)).await;
@@ -518,27 +500,7 @@ impl Gateway {
                 }
             };
 
-        let gateway_config = self.clone_gateway_config().await;
-
-        if gateway_config.network.0 != lightning_network {
-            warn!(
-                "Lightning node does not match previously configured gateway network : ({:?})",
-                gateway_config.network
-            );
-            info!(
-                "Changing gateway network to match lightning node network : ({:?})",
-                lightning_network
-            );
-            self.handle_set_configuration_msg(SetConfigurationPayload {
-                network: Some(lightning_network),
-                num_route_hints: None,
-                routing_fees: None,
-                per_federation_routing_fees: None,
-            })
-            .await
-            .expect("Failed to set gateway configuration");
-            return ReceivePaymentStreamAction::ImmediatelyRetry;
-        }
+        assert!(self.network == lightning_network, "Lightning node network does not match Gateway's network. LN: {lightning_network} Gateway: {}", self.network);
 
         if synced_to_chain {
             info!("Gateway is already synced to chain");
@@ -781,17 +743,13 @@ impl Gateway {
                 lightning_alias: None,
                 gateway_id: self.gateway_id,
                 gateway_state: self.state.read().await.to_string(),
-                network: None,
+                network: self.network,
                 block_height: None,
                 synced_to_chain: false,
                 api: self.versioned_api.clone(),
                 lightning_mode: None,
             });
         };
-
-        // `GatewayConfiguration` should always exist in the database when we are in the
-        // `Running` state.
-        let gateway_config = self.clone_gateway_config().await;
 
         let dbtx = self.gateway_db.begin_transaction_nc().await;
         let federations = self
@@ -821,7 +779,7 @@ impl Gateway {
             lightning_alias: Some(lightning_context.lightning_alias.clone()),
             gateway_id: self.gateway_id,
             gateway_state: self.state.read().await.to_string(),
-            network: Some(gateway_config.network.0),
+            network: self.network,
             block_height: Some(node_info.3),
             synced_to_chain: node_info.4,
             api: self.versioned_api.clone(),
@@ -890,7 +848,7 @@ impl Gateway {
         } = payload;
 
         let address_network = get_network_for_address(&address);
-        let gateway_network = self.gateway_config.read().await.network.0;
+        let gateway_network = self.network;
         let Ok(address) = address.require_network(gateway_network) else {
             return Err(AdminGatewayError::WithdrawError {
                 failure_reason: format!("Gateway is running on network {gateway_network}, but provided withdraw address is for network {address_network}")
@@ -1120,10 +1078,6 @@ impl Gateway {
             )));
         }
 
-        // `GatewayConfiguration` should always exist in the database when we are in the
-        // `Running` state.
-        let gateway_config = self.clone_gateway_config().await;
-
         // The gateway deterministically assigns a unique identifier (u64) to each
         // federation connected.
         let federation_index = federation_manager.pop_next_index()?;
@@ -1132,7 +1086,8 @@ impl Gateway {
             invite_code,
             federation_index,
             timelock_delta: 10,
-            fees: gateway_config.routing_fees,
+            lightning_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
+            transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
             connector,
         };
 
@@ -1160,25 +1115,26 @@ impl Gateway {
             federation_name: federation_manager.federation_name(&client).await,
             balance_msat: client.get_balance().await,
             federation_index,
-            routing_fees: Some(gateway_config.routing_fees.into()),
+            lightning_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
+            transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
         };
 
         if self.is_running_lnv1() {
-            Self::check_lnv1_federation_network(&client, gateway_config.network.0).await?;
+            Self::check_lnv1_federation_network(&client, self.network).await?;
             client
                 .get_first_module::<GatewayClientModule>()?
                 .try_register_with_federation(
                     // Route hints will be updated in the background
                     Vec::new(),
                     GW_ANNOUNCEMENT_TTL,
-                    federation_config.fees,
+                    federation_config.lightning_fee.into(),
                     lightning_context,
                 )
                 .await;
         }
 
         if self.is_running_lnv2() {
-            Self::check_lnv2_federation_network(&client, gateway_config.network.0).await?;
+            Self::check_lnv2_federation_network(&client, self.network).await?;
         }
 
         // no need to enter span earlier, because connect-fed has a span
@@ -1269,100 +1225,78 @@ impl Gateway {
         Ok(mnemonic_response)
     }
 
-    /// Handle a request to change a connected federation's configuration or
-    /// gateway metadata. If `num_route_hints` is changed, the Gateway
-    /// will re-register with all connected federations. If
-    /// `per_federation_routing_fees` is changed, the Gateway will only
-    /// re-register with the specified federation.
-    pub async fn handle_set_configuration_msg(
+    /// Handles a request to change the lightning or transaction fees for all
+    /// federations or a federation specified by the `FederationId`.
+    pub async fn handle_set_fees_msg(
         &self,
-        SetConfigurationPayload {
-            network,
-            num_route_hints,
-            routing_fees,
-            per_federation_routing_fees,
-        }: SetConfigurationPayload,
+        SetFeesPayload {
+            federation_id,
+            lightning_base,
+            lightning_parts_per_million,
+            transaction_base,
+            transaction_parts_per_million,
+        }: SetFeesPayload,
     ) -> AdminResult<()> {
-        if let Some(network) = network {
-            if let GatewayState::Running { lightning_context } = self.get_state().await {
-                if network != lightning_context.lightning_network {
-                    return Err(AdminGatewayError::GatewayConfigurationError(
-                        "Cannot change network while connected to a lightning node".to_string(),
-                    ));
-                }
-            }
-        }
-
         let mut dbtx = self.gateway_db.begin_transaction().await;
-
-        let mut prev_config = self.clone_gateway_config().await;
-        let new_gateway_config = {
-            if let Some(network) = network {
-                if !self.federation_manager.read().await.is_empty() {
-                    return Err(AdminGatewayError::GatewayConfigurationError(
-                        "Cannot change network while connected to a federation".to_string(),
-                    ));
-                }
-                prev_config.network.0 = network;
-            }
-
-            if let Some(num_route_hints) = num_route_hints {
-                prev_config.num_route_hints = num_route_hints;
-            }
-
-            // Using this routing fee config as a default for all federation that has none
-            // routing fees specified.
-            if let Some(fees) = routing_fees {
-                let routing_fees = GatewayFee(fees.into()).0;
-                prev_config.routing_fees = routing_fees;
-            }
-
-            prev_config
-        };
-        dbtx.set_gateway_config(&new_gateway_config).await;
-
-        let mut register_federations: Vec<(FederationId, FederationConfig)> = Vec::new();
-        if let Some(per_federation_routing_fees) = per_federation_routing_fees {
-            for (federation_id, routing_fees) in &per_federation_routing_fees {
-                if let Some(mut federation_config) =
-                    dbtx.load_federation_config(*federation_id).await
-                {
-                    federation_config.fees = routing_fees.clone().into();
-                    dbtx.save_federation_config(&federation_config).await;
-                    register_federations.push((*federation_id, federation_config));
-                } else {
-                    warn!("Given federation {federation_id} not found for updating routing fees");
-                }
-            }
-        }
-
-        // If 'num_route_hints' is provided, all federations must be re-registered.
-        // Otherwise, only those affected by the new fees need to be re-registered.
-        let register_task_group = TaskGroup::new();
-        if num_route_hints.is_some() {
-            let all_federations_configs: Vec<_> =
-                dbtx.load_federation_configs().await.into_iter().collect();
-            self.register_federations(
-                &new_gateway_config,
-                &all_federations_configs,
-                &register_task_group,
-            )
-            .await;
+        let mut fed_configs = if let Some(fed_id) = federation_id {
+            dbtx.load_federation_configs()
+                .await
+                .into_iter()
+                .filter(|(id, _)| *id == fed_id)
+                .collect::<BTreeMap<_, _>>()
         } else {
-            self.register_federations(
-                &new_gateway_config,
-                &register_federations,
-                &register_task_group,
-            )
-            .await;
+            dbtx.load_federation_configs().await
+        };
+
+        for config in &mut fed_configs.values_mut() {
+            let mut lightning_fee = config.lightning_fee;
+            if let Some(lightning_base) = lightning_base {
+                lightning_fee.base = lightning_base;
+            }
+
+            if let Some(lightning_ppm) = lightning_parts_per_million {
+                lightning_fee.parts_per_million = lightning_ppm;
+            }
+
+            let mut transaction_fee = config.transaction_fee;
+            if let Some(transaction_base) = transaction_base {
+                transaction_fee.base = transaction_base;
+            }
+
+            if let Some(transaction_ppm) = transaction_parts_per_million {
+                transaction_fee.parts_per_million = transaction_ppm;
+            }
+
+            // Check if the lightning fee + transaction fee is higher than the send limit
+            let send_fees = lightning_fee + transaction_fee;
+            if !self.is_running_lnv1() && send_fees.gt(&PaymentFee::SEND_FEE_LIMIT) {
+                return Err(AdminGatewayError::GatewayConfigurationError(format!(
+                    "Total Send fees exceeded {}",
+                    PaymentFee::SEND_FEE_LIMIT
+                )));
+            }
+
+            // Check if the transaction fee is higher than the receive limit
+            if !self.is_running_lnv1() && transaction_fee.gt(&PaymentFee::RECEIVE_FEE_LIMIT) {
+                return Err(AdminGatewayError::GatewayConfigurationError(format!(
+                    "Transaction fees exceeded RECEIVE LIMIT {}",
+                    PaymentFee::RECEIVE_FEE_LIMIT
+                )));
+            }
+
+            config.lightning_fee = lightning_fee;
+            config.transaction_fee = transaction_fee;
+            dbtx.save_federation_config(config).await;
         }
 
         dbtx.commit_tx().await;
 
-        let mut curr_gateway_config = self.gateway_config.write().await;
-        *curr_gateway_config = new_gateway_config.clone();
+        if self.is_running_lnv1() {
+            let register_task_group = TaskGroup::new();
 
-        info!("Set GatewayConfiguration successfully.");
+            self.register_federations(&fed_configs, &register_task_group)
+                .await;
+        }
 
         Ok(())
     }
@@ -1378,9 +1312,7 @@ impl Gateway {
             })
         })?;
 
-        let network = self.gateway_config.read().await.network.0;
-
-        address.require_network(network).map_err(|e| {
+        address.require_network(self.network).map_err(|e| {
             AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
                 failure_reason: e.to_string(),
             })
@@ -1647,14 +1579,13 @@ impl Gateway {
     /// Registers the gateway with each specified federation.
     async fn register_federations(
         &self,
-        gateway_config: &GatewayConfiguration,
-        federations: &[(FederationId, FederationConfig)],
+        federations: &BTreeMap<FederationId, FederationConfig>,
         register_task_group: &TaskGroup,
     ) {
         if let Ok(lightning_context) = self.get_lightning_context().await {
             let route_hints = lightning_context
                 .lnrpc
-                .parsed_route_hints(gateway_config.num_route_hints)
+                .parsed_route_hints(self.num_route_hints)
                 .await;
             if route_hints.is_empty() {
                 warn!("Gateway did not retrieve any route hints, may reduce receive success rate.");
@@ -1677,7 +1608,7 @@ impl Gateway {
                                 .try_register_with_federation(
                                     route_hints,
                                     GW_ANNOUNCEMENT_TTL,
-                                    federation_config.fees,
+                                    federation_config.lightning_fee.into(),
                                     lightning_context,
                                 )
                                 .await;
@@ -1688,40 +1619,6 @@ impl Gateway {
                     }
                 }
             }
-        }
-    }
-
-    /// This function will return a `GatewayConfiguration` one of two
-    /// ways. To avoid conflicting configs, the below order is the
-    /// order in which the gateway will respect configurations:
-    /// - `GatewayConfiguration` is read from the database.
-    /// - All cli or environment variables are set such that we can create a
-    ///   `GatewayConfiguration`
-    async fn get_gateway_configuration(
-        gateway_db: Database,
-        gateway_parameters: &GatewayParameters,
-    ) -> GatewayConfiguration {
-        let mut dbtx = gateway_db.begin_transaction_nc().await;
-
-        // Always use the gateway configuration from the database if it exists.
-        if let Some(gateway_config) = dbtx.load_gateway_config().await {
-            return gateway_config;
-        }
-
-        // If the DB does not have the gateway configuration, we can construct one from
-        // the provided password (required) and the defaults.
-        // Use gateway parameters provided by the environment or CLI
-        let num_route_hints = gateway_parameters.num_route_hints;
-        let routing_fees = gateway_parameters
-            .fees
-            .clone()
-            .unwrap_or(GatewayFee(DEFAULT_FEES));
-        let network =
-            NetworkLegacyEncodingWrapper(gateway_parameters.network.unwrap_or(DEFAULT_NETWORK));
-        GatewayConfiguration {
-            network,
-            num_route_hints,
-            routing_fees: routing_fees.0,
         }
     }
 
@@ -1823,12 +1720,11 @@ impl Gateway {
             let register_task_group = self.task_group.make_subgroup();
             self.task_group.spawn_cancellable("register clients", async move {
                 loop {
-                    let gateway_config = gateway.clone_gateway_config().await;
                     let gateway_state = gateway.get_state().await;
                     if let GatewayState::Running { .. } = &gateway_state {
                         let mut dbtx = gateway.gateway_db.begin_transaction_nc().await;
-                        let all_federations_configs: Vec<_> = dbtx.load_federation_configs().await.into_iter().collect();
-                        gateway.register_federations(&gateway_config, &all_federations_configs, &register_task_group).await;
+                        let all_federations_configs = dbtx.load_federation_configs().await.into_iter().collect();
+                        gateway.register_federations(&all_federations_configs, &register_task_group).await;
                     } else {
                         // We need to retry more often if the gateway is not in the Running state
                         const NOT_RUNNING_RETRY: Duration = Duration::from_secs(10);
@@ -1962,25 +1858,32 @@ impl Gateway {
     ) -> Result<Option<RoutingInfo>> {
         let context = self.get_lightning_context().await?;
 
+        let mut dbtx = self.gateway_db.begin_transaction_nc().await;
+        let fed_config = dbtx.load_federation_config(*federation_id).await.ok_or(
+            PublicGatewayError::FederationNotConnected(FederationNotConnected {
+                federation_id_prefix: federation_id.to_prefix(),
+            }),
+        )?;
+
+        let lightning_fee = fed_config.lightning_fee;
+        let transaction_fee = fed_config.transaction_fee;
+
         Ok(self
             .public_key_v2(federation_id)
             .await
             .map(|module_public_key| RoutingInfo {
                 lightning_public_key: context.lightning_public_key,
                 module_public_key,
-                send_fee_default: PaymentFee::SEND_FEE_LIMIT,
+                send_fee_default: lightning_fee + transaction_fee,
                 // The base fee ensures that the gateway does not loose sats sending the payment due
                 // to fees paid on the transaction claiming the outgoing contract or
                 // subsequent transactions spending the newly issued ecash
-                send_fee_minimum: PaymentFee {
-                    base: Amount::from_sats(50),
-                    parts_per_million: 5_000,
-                },
+                send_fee_minimum: transaction_fee,
                 expiration_delta_default: 1440,
                 expiration_delta_minimum: EXPIRATION_DELTA_MINIMUM_V2,
                 // The base fee ensures that the gateway does not loose sats receiving the payment
                 // due to fees paid on the transaction funding the incoming contract
-                receive_fee: PaymentFee::RECEIVE_FEE_LIMIT,
+                receive_fee: transaction_fee,
             }))
     }
 

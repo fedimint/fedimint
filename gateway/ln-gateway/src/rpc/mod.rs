@@ -2,7 +2,6 @@ pub mod rpc_client;
 pub mod rpc_server;
 
 use std::collections::BTreeMap;
-use std::str::FromStr;
 
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Network};
@@ -10,10 +9,10 @@ use fedimint_core::config::{FederationId, JsonClientConfig};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 use fedimint_eventlog::{EventKind, EventLogId};
-use fedimint_ln_common::config::parse_routing_fees;
+use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_mint_client::OOBNotes;
 use fedimint_wallet_client::PegOutFees;
-use lightning_invoice::{Bolt11Invoice, RoutingFees};
+use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 
 use crate::lightning::LightningMode;
@@ -38,7 +37,7 @@ pub const CLOSE_CHANNELS_WITH_PEER_ENDPOINT: &str = "/close_channels_with_peer";
 pub const PAY_INVOICE_FOR_OPERATOR_ENDPOINT: &str = "/pay_invoice_for_operator";
 pub const PAYMENT_LOG_ENDPOINT: &str = "/payment_log";
 pub const RECEIVE_ECASH_ENDPOINT: &str = "/receive_ecash";
-pub const SET_CONFIGURATION_ENDPOINT: &str = "/set_configuration";
+pub const SET_FEES_ENDPOINT: &str = "/set_fees";
 pub const STOP_ENDPOINT: &str = "/stop";
 pub const SEND_ONCHAIN_ENDPOINT: &str = "/send_onchain";
 pub const SPEND_ECASH_ENDPOINT: &str = "/spend_ecash";
@@ -104,7 +103,8 @@ pub struct FederationInfo {
     pub federation_name: Option<String>,
     pub balance_msat: Amount,
     pub federation_index: u64,
-    pub routing_fees: Option<FederationRoutingFees>,
+    pub lightning_fee: PaymentFee,
+    pub transaction_fee: PaymentFee,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -119,7 +119,7 @@ pub struct GatewayInfo {
     pub lightning_alias: Option<String>,
     pub gateway_id: secp256k1::PublicKey,
     pub gateway_state: String,
-    pub network: Option<Network>,
+    pub network: Network,
     // TODO: This is here to allow for backwards compatibility with old versions of this struct. We
     // should be able to remove it once 0.4.0 is released.
     #[serde(default)]
@@ -137,48 +137,13 @@ pub struct GatewayFedConfig {
     pub federations: BTreeMap<FederationId, JsonClientConfig>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-pub struct FederationRoutingFees {
-    pub base_msat: u32,
-    pub proportional_millionths: u32,
-}
-
-impl From<FederationRoutingFees> for RoutingFees {
-    fn from(value: FederationRoutingFees) -> Self {
-        RoutingFees {
-            base_msat: value.base_msat,
-            proportional_millionths: value.proportional_millionths,
-        }
-    }
-}
-
-impl From<RoutingFees> for FederationRoutingFees {
-    fn from(value: RoutingFees) -> Self {
-        FederationRoutingFees {
-            base_msat: value.base_msat,
-            proportional_millionths: value.proportional_millionths,
-        }
-    }
-}
-
-impl FromStr for FederationRoutingFees {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let routing_fees = parse_routing_fees(s)?;
-        Ok(FederationRoutingFees {
-            base_msat: routing_fees.base_msat,
-            proportional_millionths: routing_fees.proportional_millionths,
-        })
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct SetConfigurationPayload {
-    pub num_route_hints: Option<u32>,
-    pub routing_fees: Option<FederationRoutingFees>,
-    pub network: Option<Network>,
-    pub per_federation_routing_fees: Option<Vec<(FederationId, FederationRoutingFees)>>,
+pub struct SetFeesPayload {
+    pub federation_id: Option<FederationId>,
+    pub lightning_base: Option<Amount>,
+    pub lightning_parts_per_million: Option<u64>,
+    pub transaction_base: Option<Amount>,
+    pub transaction_parts_per_million: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

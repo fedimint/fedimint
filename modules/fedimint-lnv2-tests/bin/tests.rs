@@ -2,7 +2,7 @@ use anyhow::ensure;
 use devimint::devfed::DevJitFed;
 use devimint::federation::Client;
 use devimint::version_constants::VERSION_0_5_0_ALPHA;
-use devimint::{cmd, util};
+use devimint::{cmd, util, Gatewayd};
 use fedimint_core::core::OperationId;
 use fedimint_core::envs::{is_env_var_set, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV};
 use fedimint_core::util::{backoff_util, retry};
@@ -292,6 +292,41 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         ),
         lnd.settle_hold_invoice(hold_preimage, hold_payment_hash),
     )?;
+
+    info!("Testing LNv2 lightning fees");
+    let fed_id = federation.calculate_federation_id();
+    gw_lnd
+        .set_federation_routing_fee(fed_id.clone(), 0, 0)
+        .await?;
+    gw_lnd
+        .set_federation_transaction_fee(fed_id.clone(), 0, 0)
+        .await?;
+    // Gateway pays: 1_000 msat LNv2 federation base fee, 1_000 msat LNv2 federation
+    // relative fee. Gateway receives: 1_000_000 payment.
+    test_fees(fed_id, &client, gw_lnd, gw_ldk, 1_000_000 - 1_000 - 1_000).await?;
+
+    Ok(())
+}
+
+async fn test_fees(
+    fed_id: String,
+    client: &Client,
+    gw_lnd: &Gatewayd,
+    gw_ldk: &Gatewayd,
+    expected_addition: u64,
+) -> anyhow::Result<()> {
+    let gw_lnd_ecash_prev = gw_lnd.ecash_balance(fed_id.clone()).await?;
+    let (invoice, receive_op) = receive(client, &gw_ldk.addr, 1_000_000).await?;
+    test_send(
+        client,
+        &gw_lnd.addr,
+        &invoice.to_string(),
+        FinalSendOperationState::Success,
+    )
+    .await?;
+    await_receive_claimed(client, receive_op).await?;
+    let gw_lnd_ecash_after = gw_lnd.ecash_balance(fed_id.clone()).await?;
+    assert_eq!(gw_lnd_ecash_prev + expected_addition, gw_lnd_ecash_after);
 
     Ok(())
 }

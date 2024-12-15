@@ -25,14 +25,14 @@ use super::{
     BackupPayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
     CreateInvoiceForOperatorPayload, DepositAddressPayload, InfoPayload, LeaveFedPayload,
     OpenChannelPayload, PayInvoiceForOperatorPayload, PaymentLogPayload, ReceiveEcashPayload,
-    SendOnchainPayload, SetConfigurationPayload, SpendEcashPayload, WithdrawPayload,
-    ADDRESS_ENDPOINT, BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
+    SendOnchainPayload, SetFeesPayload, SpendEcashPayload, WithdrawPayload, ADDRESS_ENDPOINT,
+    BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
     CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, GATEWAY_INFO_ENDPOINT,
     GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
     LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT,
     PAYMENT_LOG_ENDPOINT, PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT,
-    SEND_ONCHAIN_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
-    V1_API_ENDPOINT, WITHDRAW_ENDPOINT,
+    SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, V1_API_ENDPOINT,
+    WITHDRAW_ENDPOINT,
 };
 use crate::error::{AdminGatewayError, PublicGatewayError};
 use crate::rpc::ConfigPayload;
@@ -166,7 +166,7 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
         .route(MNEMONIC_ENDPOINT, get(mnemonic))
         .route(STOP_ENDPOINT, get(stop))
         .route(PAYMENT_LOG_ENDPOINT, post(payment_log))
-        .route(SET_CONFIGURATION_ENDPOINT, post(set_configuration))
+        .route(SET_FEES_ENDPOINT, post(set_fees))
         .route(CONFIGURATION_ENDPOINT, post(configuration))
         // FIXME: deprecated >= 0.3.0
         .route(GATEWAY_INFO_POST_ENDPOINT, post(handle_post_info))
@@ -294,11 +294,11 @@ async fn backup(
 }
 
 #[instrument(skip_all, err, fields(?payload))]
-async fn set_configuration(
+async fn set_fees(
     Extension(gateway): Extension<Arc<Gateway>>,
-    Json(payload): Json<SetConfigurationPayload>,
+    Json(payload): Json<SetFeesPayload>,
 ) -> Result<impl IntoResponse, AdminGatewayError> {
-    gateway.handle_set_configuration_msg(payload).await?;
+    gateway.handle_set_fees_msg(payload).await?;
     Ok(Json(json!(())))
 }
 

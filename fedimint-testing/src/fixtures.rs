@@ -21,7 +21,6 @@ use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::TracingSetup;
 use fedimint_testing_core::test_dir;
-use lightning_invoice::RoutingFees;
 use ln_gateway::client::GatewayClientBuilder;
 use ln_gateway::config::LightningModuleMode;
 use ln_gateway::lightning::{ILnRpcClient, LightningBuilder, LightningContext};
@@ -214,11 +213,7 @@ impl Fixtures {
                 &bcrypt::hash(DEFAULT_GATEWAY_PASSWORD, bcrypt::DEFAULT_COST).unwrap(),
             )
             .unwrap(),
-            Some(bitcoin::Network::Regtest),
-            RoutingFees {
-                base_msat: 0,
-                proportional_millionths: 0,
-            },
+            bitcoin::Network::Regtest,
             0,
             gateway_db,
             // Manually set the gateway's state to `Running`. In tests, we do don't run the

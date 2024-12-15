@@ -2,7 +2,6 @@
 //!
 //! This crate contains integration tests for the gateway API
 //! and business logic.
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -38,6 +37,7 @@ use fedimint_ln_common::contracts::{EncryptedPreimage, FundedContract, Preimage,
 use fedimint_ln_common::{LightningGateway, LightningInput, LightningOutput, PrunedInvoice};
 use fedimint_ln_server::LightningInit;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
+use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_logging::LOG_TEST;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::db::BYTE_33;
@@ -48,14 +48,14 @@ use fedimint_unknown_common::config::UnknownGenParams;
 use fedimint_unknown_server::UnknownInit;
 use futures::Future;
 use itertools::Itertools;
-use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
+use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description, RoutingFees};
 use ln_gateway::config::LightningModuleMode;
 use ln_gateway::gateway_module_v2::events::{
     CompleteLightningPaymentSucceeded, IncomingPaymentStarted, IncomingPaymentSucceeded,
     OutgoingPaymentStarted, OutgoingPaymentSucceeded,
 };
 use ln_gateway::gateway_module_v2::{FinalReceiveState, GatewayClientModuleV2};
-use ln_gateway::rpc::{FederationRoutingFees, PaymentLogPayload, SetConfigurationPayload};
+use ln_gateway::rpc::{PaymentLogPayload, SetFeesPayload};
 use ln_gateway::state_machine::pay::{
     OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
 };
@@ -72,6 +72,7 @@ async fn user_pay_invoice(
     invoice: Bolt11Invoice,
     gateway_id: &PublicKey,
 ) -> anyhow::Result<OutgoingLightningPayment> {
+    ln_module.update_gateway_cache().await?;
     let gateway = ln_module.select_gateway(gateway_id).await;
     ln_module.pay_bolt11_invoice(gateway, invoice, ()).await
 }
@@ -226,6 +227,16 @@ async fn gateway_pay_valid_invoice(
 async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
+            gateway
+                .handle_set_fees_msg(SetFeesPayload {
+                    federation_id: Some(fed.id()),
+                    lightning_base: Some(Amount::ZERO),
+                    lightning_parts_per_million: Some(0),
+                    transaction_base: None,
+                    transaction_parts_per_million: None,
+                })
+                .await?;
+
             let gateway_client = gateway.select_client(fed.id()).await?.into_value();
             // Print money for user_client
             let dummy_module = user_client.get_first_module::<DummyClientModule>()?;
@@ -263,24 +274,16 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
             dummy_module.receive_money(outpoint).await?;
             assert_eq!(user_client.get_balance().await, sats(1000));
 
-            // Change the fees of the gateway
-            let fee = "10,10000".to_string();
-            let federation_fee = FederationRoutingFees::from_str(&fee)?;
-            let set_configuration_payload = SetConfigurationPayload {
-                num_route_hints: None,
-                routing_fees: None,
-                network: None,
-                per_federation_routing_fees: Some(vec![(fed.id(), federation_fee)]),
-            };
-            gateway
-                .handle_set_configuration_msg(set_configuration_payload)
-                .await?;
-
-            info!("### Changed gateway routing fees");
-
             let user_lightning_module = user_client.get_first_module::<LightningClientModule>()?;
             let gateway_id = gateway.gateway_id();
-            let ln_gateway = user_lightning_module.select_gateway(&gateway_id).await;
+            let mut ln_gateway = user_lightning_module
+                .select_gateway(&gateway_id)
+                .await
+                .expect("Gateway should be available");
+            ln_gateway.fees = RoutingFees {
+                base_msat: 0,
+                proportional_millionths: 0,
+            };
             let gateway_client = gateway.select_client(fed.id()).await?.into_value();
 
             let invoice_amount = sats(250);
@@ -294,7 +297,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
                 contract_id,
                 fee: _,
             } = user_lightning_module
-                .pay_bolt11_invoice(ln_gateway.clone(), invoice.clone(), ())
+                .pay_bolt11_invoice(Some(ln_gateway.clone()), invoice.clone(), ())
                 .await
                 .expect("No Lightning Payment was started");
             match payment_type {
@@ -311,7 +314,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
                     let payload = PayInvoicePayload {
                         federation_id: user_client.federation_id(),
                         contract_id,
-                        payment_data: get_payment_data(ln_gateway, invoice),
+                        payment_data: get_payment_data(Some(ln_gateway), invoice),
                         preimage_auth: Hash::hash(&[0; 32]),
                     };
 
@@ -829,15 +832,14 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
         fed2.connect_gateway(&gateway).await;
 
         // setting specific routing fees for fed1
-        let fed_routing_fees = FederationRoutingFees::from_str("10,10000")?;
-        let set_configuration_payload = SetConfigurationPayload {
-            num_route_hints: None,
-            routing_fees: None,
-            network: None,
-            per_federation_routing_fees: Some(vec![(id1, fed_routing_fees.clone())]),
-        };
         gateway
-            .handle_set_configuration_msg(set_configuration_payload)
+            .handle_set_fees_msg(SetFeesPayload {
+                federation_id: Some(id1),
+                lightning_base: Some(Amount::from_msats(10)),
+                lightning_parts_per_million: Some(10000),
+                transaction_base: None,
+                transaction_parts_per_million: None,
+            })
             .await?;
 
         send_msats_to_gateway(&gateway, id1, 10_000).await;
@@ -912,7 +914,13 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
             pre_balances[1] - invoice_amt.msats
         );
 
-        let fee = routing_fees_in_msats(&fed_routing_fees, &invoice_amt);
+        let fee = routing_fees_in_msats(
+            &PaymentFee {
+                base: Amount::from_msats(10),
+                parts_per_million: 10000,
+            },
+            &invoice_amt,
+        );
 
         // Balance in gateway of receiving federation is increased `invoice_amt` + `fee`
         assert_eq!(
@@ -925,9 +933,8 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
     .await
 }
 
-fn routing_fees_in_msats(routing_fees: &FederationRoutingFees, amount: &Amount) -> u64 {
-    ((amount.msats * routing_fees.proportional_millionths as u64) / 1_000_000)
-        + routing_fees.base_msat as u64
+fn routing_fees_in_msats(routing_fees: &PaymentFee, amount: &Amount) -> u64 {
+    ((amount.msats * routing_fees.parts_per_million) / 1_000_000) + routing_fees.base.msats
 }
 
 /// Retrieves the balance of each federation the gateway is connected to.
