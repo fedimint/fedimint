@@ -608,7 +608,10 @@
 <a href="#607" id="607">607</a>
 <a href="#608" id="608">608</a>
 <a href="#609" id="609">609</a>
-<a href="#610" id="610">610</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::format_err;
@@ -813,11 +816,14 @@
 <span class="kw">impl </span>Encodable <span class="kw">for </span>bitcoin::Address&lt;NetworkUnchecked&gt; {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-        len += NetworkLegacyEncodingWrapper(get_network_for_address(<span class="self">self</span>.as_unchecked()))
-            .consensus_encode(writer)<span class="question-mark">?</span>;
+        len +=
+            NetworkLegacyEncodingWrapper(get_network_for_address(<span class="self">self</span>)).consensus_encode(writer)<span class="question-mark">?</span>;
         len += <span class="self">self
             </span>.clone()
-            .assume_checked()
+            <span class="comment">// We need an `Address&lt;NetworkChecked&gt;` in order to get the script pubkey.
+            // Calling `assume_checked` is generally a bad idea, but it's safe here where we're
+            // encoding the address because addresses are always decoded as unchecked.
+            </span>.assume_checked()
             .script_pubkey()
             .consensus_encode(writer)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(len)
@@ -835,7 +841,7 @@
         <span class="kw">let </span>address = bitcoin::Address::from_script(<span class="kw-2">&amp;</span>script_pk, network)
             .map_err(|e| DecodeError::new_custom(e.into()))<span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(address.as_unchecked().clone())
+        <span class="prelude-val">Ok</span>(address.into_unchecked())
     }
 }
 

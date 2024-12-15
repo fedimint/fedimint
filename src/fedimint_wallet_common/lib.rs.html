@@ -941,12 +941,12 @@
 
 <span class="kw">impl </span>WalletOutput {
     <span class="kw">pub fn </span>new_v0_peg_out(
-        recipient: Address&lt;NetworkUnchecked&gt;,
+        recipient: Address,
         amount: bitcoin::Amount,
         fees: PegOutFees,
     ) -&gt; WalletOutput {
         WalletOutput::V0(WalletOutputV0::PegOut(PegOut {
-            recipient,
+            recipient: recipient.into_unchecked(),
             amount,
             fees,
         }))

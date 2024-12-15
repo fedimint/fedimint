@@ -1364,19 +1364,7 @@
 <a href="#1363" id="1363">1363</a>
 <a href="#1364" id="1364">1364</a>
 <a href="#1365" id="1365">1365</a>
-<a href="#1366" id="1366">1366</a>
-<a href="#1367" id="1367">1367</a>
-<a href="#1368" id="1368">1368</a>
-<a href="#1369" id="1369">1369</a>
-<a href="#1370" id="1370">1370</a>
-<a href="#1371" id="1371">1371</a>
-<a href="#1372" id="1372">1372</a>
-<a href="#1373" id="1373">1373</a>
-<a href="#1374" id="1374">1374</a>
-<a href="#1375" id="1375">1375</a>
-<a href="#1376" id="1376">1376</a>
-<a href="#1377" id="1377">1377</a>
-<a href="#1378" id="1378">1378</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1366" id="1366">1366</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1403,7 +1391,7 @@
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::SystemTime;
 
-<span class="kw">use </span>anyhow::{anyhow, bail, ensure, Context <span class="kw">as </span>AnyhowContext};
+<span class="kw">use </span>anyhow::{anyhow, bail, Context <span class="kw">as </span>AnyhowContext};
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>backup::WalletModuleBackup;
 <span class="kw">use </span>bitcoin::address::NetworkUnchecked;
@@ -1927,13 +1915,11 @@
     /// The caller should be prepared to retry with a new fee estimate.
     </span><span class="kw">pub async fn </span>get_withdraw_fees(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        address: bitcoin::Address&lt;NetworkUnchecked&gt;,
+        address: <span class="kw-2">&amp;</span>bitcoin::Address,
         amount: bitcoin::Amount,
     ) -&gt; anyhow::Result&lt;PegOutFees&gt; {
-        check_address(<span class="kw-2">&amp;</span>address, <span class="self">self</span>.cfg().network.<span class="number">0</span>)<span class="question-mark">?</span>;
-
         <span class="self">self</span>.module_api
-            .fetch_peg_out_fees(<span class="kw-2">&amp;</span>address.assume_checked(), amount)
+            .fetch_peg_out_fees(address, amount)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.context(<span class="string">"Federation didn't return peg-out fees"</span>)
     }
@@ -1946,13 +1932,11 @@
     <span class="kw">pub fn </span>create_withdraw_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-        address: <span class="kw-2">&amp;</span>bitcoin::Address&lt;NetworkUnchecked&gt;,
+        address: bitcoin::Address,
         amount: bitcoin::Amount,
         fees: PegOutFees,
     ) -&gt; anyhow::Result&lt;ClientOutputBundle&lt;WalletOutput, WalletClientStates&gt;&gt; {
-        check_address(address, <span class="self">self</span>.cfg().network.<span class="number">0</span>)<span class="question-mark">?</span>;
-
-        <span class="kw">let </span>output = WalletOutput::new_v0_peg_out(address.clone(), amount, fees);
+        <span class="kw">let </span>output = WalletOutput::new_v0_peg_out(address, amount, fees);
 
         <span class="kw">let </span>amount = output.maybe_v0_ref().expect(<span class="string">"v0 output"</span>).amount().into();
 
@@ -2055,8 +2039,7 @@
                             WalletCommonInit::KIND.as_str(),
                             WalletOperationMeta {
                                 variant: WalletOperationMetaVariant::Deposit {
-                                    <span class="comment">// TODO(bitcoin 0.32): use as_unchecked
-                                    </span>address: address.to_string().parse().expect(<span class="string">"can be parsed"</span>),
+                                    address: address.clone().into_unchecked(),
                                     tweak_idx: <span class="prelude-val">Some</span>(tweak_idx),
                                     expires_at: <span class="prelude-val">None</span>,
                                 },
@@ -2122,6 +2105,8 @@
             <span class="macro">bail!</span>(<span class="string">"Operation is not a deposit operation"</span>);
         };
 
+        <span class="kw">let </span>address = address.require_network(<span class="self">self</span>.cfg().network.<span class="number">0</span>)<span class="question-mark">?</span>;
+
         <span class="comment">// The old deposit operations don't have tweak_idx set
         </span><span class="kw">let </span><span class="prelude-val">Some</span>(tweak_idx) = tweak_idx <span class="kw">else </span>{
             <span class="comment">// In case we are dealing with an old deposit that still uses state machines we
@@ -2149,7 +2134,7 @@
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_ctx.outcome_or_updates(<span class="kw-2">&amp;</span>operation, operation_id, || {
             <span class="kw">let </span>stream_rpc = <span class="self">self</span>.rpc.clone();
             <span class="kw">let </span>stream_client_ctx = <span class="self">self</span>.client_ctx.clone();
-            <span class="kw">let </span>stream_script_pub_key = address.assume_checked().script_pubkey();
+            <span class="kw">let </span>stream_script_pub_key = address.script_pubkey();
 
             <span class="macro">stream!</span> {
                 <span class="kw">yield </span>DepositStateV2::WaitingForTransaction;
@@ -2387,7 +2372,7 @@
     /// acknowledged by the user since it can be unexpectedly high.
     </span><span class="kw">pub async fn </span>withdraw&lt;M: Serialize + MaybeSend + MaybeSync&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        address: bitcoin::Address&lt;NetworkUnchecked&gt;,
+        address: <span class="kw-2">&amp;</span>bitcoin::Address,
         amount: bitcoin::Amount,
         fee: PegOutFees,
         extra_meta: M,
@@ -2396,7 +2381,7 @@
             <span class="kw">let </span>operation_id = OperationId(thread_rng().gen());
 
             <span class="kw">let </span>withdraw_output =
-                <span class="self">self</span>.create_withdraw_output(operation_id, <span class="kw-2">&amp;</span>address, amount, fee)<span class="question-mark">?</span>;
+                <span class="self">self</span>.create_withdraw_output(operation_id, address.clone(), amount, fee)<span class="question-mark">?</span>;
             <span class="kw">let </span>tx_builder = TransactionBuilder::new()
                 .with_outputs(<span class="self">self</span>.client_ctx.make_client_outputs(withdraw_output));
 
@@ -2408,7 +2393,7 @@
                     WalletCommonInit::KIND.as_str(),
                     |change_range: OutPointRange| WalletOperationMeta {
                         variant: WalletOperationMetaVariant::Withdraw {
-                            address: address.clone(),
+                            address: address.clone().into_unchecked(),
                             amount,
                             fee,
                             change: change_range.into_iter().collect(),
@@ -2524,15 +2509,6 @@
                 }
             }))
     }
-}
-
-<span class="kw">fn </span>check_address(address: <span class="kw-2">&amp;</span>Address&lt;NetworkUnchecked&gt;, network: Network) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="macro">ensure!</span>(
-        address.is_valid_for_network(network),
-        <span class="string">"Address isn't compatible with the federation's network: {network:?}"
-    </span>);
-
-    <span class="prelude-val">Ok</span>(())
 }
 
 <span class="doccomment">/// Returns the child index to derive the next peg-in tweak key from.

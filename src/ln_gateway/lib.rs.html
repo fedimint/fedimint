@@ -2168,7 +2168,16 @@
 <a href="#2167" id="2167">2167</a>
 <a href="#2168" id="2168">2168</a>
 <a href="#2169" id="2169">2169</a>
-<a href="#2170" id="2170">2170</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2170" id="2170">2170</a>
+<a href="#2171" id="2171">2171</a>
+<a href="#2172" id="2172">2172</a>
+<a href="#2173" id="2173">2173</a>
+<a href="#2174" id="2174">2174</a>
+<a href="#2175" id="2175">2175</a>
+<a href="#2176" id="2176">2176</a>
+<a href="#2177" id="2177">2177</a>
+<a href="#2178" id="2178">2178</a>
+<a href="#2179" id="2179">2179</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2233,7 +2242,9 @@
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup, TaskHandle, TaskShutdownToken};
 <span class="kw">use </span>fedimint_core::time::duration_since_epoch;
 <span class="kw">use </span>fedimint_core::util::{SafeUrl, Spanned};
-<span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll};
+<span class="kw">use </span>fedimint_core::{
+    fedimint_build_code_version_env, get_network_for_address, Amount, BitcoinAmountOrAll,
+};
 <span class="kw">use </span>fedimint_eventlog::{DBTransactionEventLogExt, EventLogId};
 <span class="kw">use </span>fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
@@ -3056,6 +3067,15 @@
             address,
             federation_id,
         } = payload;
+
+        <span class="kw">let </span>address_network = get_network_for_address(<span class="kw-2">&amp;</span>address);
+        <span class="kw">let </span>gateway_network = <span class="self">self</span>.gateway_config.read().<span class="kw">await</span>.network.<span class="number">0</span>;
+        <span class="kw">let </span><span class="prelude-val">Ok</span>(address) = address.require_network(gateway_network) <span class="kw">else </span>{
+            <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::WithdrawError {
+                failure_reason: <span class="macro">format!</span>(<span class="string">"Gateway is running on network {gateway_network}, but provided withdraw address is for network {address_network}"</span>)
+            });
+        };
+
         <span class="kw">let </span>client = <span class="self">self</span>.select_client(federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>wallet_module = client.value().get_first_module::&lt;WalletClientModule&gt;()<span class="question-mark">?</span>;
 
@@ -3066,9 +3086,7 @@
             </span>BitcoinAmountOrAll::All =&gt; {
                 <span class="kw">let </span>balance =
                     bitcoin::Amount::from_sat(client.value().get_balance().<span class="kw">await</span>.msats / <span class="number">1000</span>);
-                <span class="kw">let </span>fees = wallet_module
-                    .get_withdraw_fees(address.clone(), balance)
-                    .<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>fees = wallet_module.get_withdraw_fees(<span class="kw-2">&amp;</span>address, balance).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">let </span>withdraw_amount = balance.checked_sub(fees.amount());
                 <span class="kw">if </span>withdraw_amount.is_none() {
                     <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::WithdrawError {
@@ -3081,15 +3099,11 @@
             }
             BitcoinAmountOrAll::Amount(amount) =&gt; (
                 amount,
-                wallet_module
-                    .get_withdraw_fees(address.clone(), amount)
-                    .<span class="kw">await</span><span class="question-mark">?</span>,
+                wallet_module.get_withdraw_fees(<span class="kw-2">&amp;</span>address, amount).<span class="kw">await</span><span class="question-mark">?</span>,
             ),
         };
 
-        <span class="kw">let </span>operation_id = wallet_module
-            .withdraw(address.clone(), amount, fees, ())
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>operation_id = wallet_module.withdraw(<span class="kw-2">&amp;</span>address, amount, fees, ()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>updates = wallet_module
             .subscribe_withdraw_updates(operation_id)
             .<span class="kw">await</span><span class="question-mark">?
@@ -3098,10 +3112,7 @@
         <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
             <span class="kw">match </span>update {
                 WithdrawState::Succeeded(txid) =&gt; {
-                    <span class="macro">info!</span>(
-                        <span class="string">"Sent {amount} funds to address {}"</span>,
-                        address.assume_checked()
-                    );
+                    <span class="macro">info!</span>(<span class="string">"Sent {amount} funds to address {}"</span>, address);
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(WithdrawResponse { txid, fees });
                 }
                 WithdrawState::Failed(e) =&gt; {
@@ -3539,13 +3550,20 @@
     </span><span class="kw">pub async fn </span>handle_get_ln_onchain_address_msg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AdminResult&lt;Address&gt; {
         <span class="kw">let </span>context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>response = context.lnrpc.get_ln_onchain_address().<span class="kw">await</span><span class="question-mark">?</span>;
-        Address::from_str(<span class="kw-2">&amp;</span>response.address)
-            .map(Address::assume_checked)
-            .map_err(|e| {
-                AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
-                    failure_reason: e.to_string(),
-                })
+
+        <span class="kw">let </span>address = Address::from_str(<span class="kw-2">&amp;</span>response.address).map_err(|e| {
+            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
+                failure_reason: e.to_string(),
             })
+        })<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>network = <span class="self">self</span>.gateway_config.read().<span class="kw">await</span>.network.<span class="number">0</span>;
+
+        address.require_network(network).map_err(|e| {
+            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
+                failure_reason: e.to_string(),
+            })
+        })
     }
 
     <span class="doccomment">/// Instructs the Gateway's Lightning node to open a channel to a peer

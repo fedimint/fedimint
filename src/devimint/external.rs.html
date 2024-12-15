@@ -1258,7 +1258,15 @@
 <a href="#1257" id="1257">1257</a>
 <a href="#1258" id="1258">1258</a>
 <a href="#1259" id="1259">1259</a>
-<a href="#1260" id="1260">1260</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
+<a href="#1260" id="1260">1260</a>
+<a href="#1261" id="1261">1261</a>
+<a href="#1262" id="1262">1262</a>
+<a href="#1263" id="1263">1263</a>
+<a href="#1264" id="1264">1264</a>
+<a href="#1265" id="1265">1265</a>
+<a href="#1266" id="1266">1266</a>
+<a href="#1267" id="1267">1267</a>
+<a href="#1268" id="1268">1268</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -1391,7 +1399,9 @@
         <span class="kw">if </span>!skip_setup {
             <span class="comment">// mine blocks
             </span><span class="kw">let </span>blocks = <span class="number">101</span>;
-            <span class="kw">let </span>address = block_in_place(|| client.get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>))<span class="question-mark">?</span>.assume_checked();
+            <span class="kw">let </span>address = block_in_place(|| client.get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>))<span class="question-mark">?
+                </span>.require_network(bitcoin::Network::Regtest)
+                .expect(<span class="string">"Devimint always runs in regtest"</span>);
             <span class="macro">debug!</span>(target: LOG_DEVIMINT, blocks_num=blocks, %address, <span class="string">"Mining blocks to address"</span>);
             block_in_place(|| {
                 client
@@ -1485,7 +1495,12 @@
         <span class="kw">let </span>tx = <span class="self">self
             </span>.wallet_client()
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.send_to_address(bitcoin::Address::from_str(<span class="kw-2">&amp;</span>addr)<span class="question-mark">?</span>.assume_checked(), amount)
+            </span>.send_to_address(
+                bitcoin::Address::from_str(<span class="kw-2">&amp;</span>addr)<span class="question-mark">?
+                    </span>.require_network(bitcoin::Network::Regtest)
+                    .expect(<span class="string">"Devimint always runs in regtest"</span>),
+                amount,
+            )
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(tx)
     }
@@ -1587,7 +1602,8 @@
         <span class="kw">let </span>client = <span class="self">self</span>.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>.clone();
         <span class="kw">let </span>addr = spawn_blocking(<span class="kw">move </span>|| client.client.get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>))
             .<span class="kw">await</span><span class="question-mark">??
-            </span>.assume_checked();
+            </span>.require_network(bitcoin::Network::Regtest)
+            .expect(<span class="string">"Devimint always runs in regtest"</span>);
         <span class="prelude-val">Ok</span>(addr)
     }
 

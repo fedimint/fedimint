@@ -2289,7 +2289,13 @@
 <a href="#2288" id="2288">2288</a>
 <a href="#2289" id="2289">2289</a>
 <a href="#2290" id="2290">2290</a>
-<a href="#2291" id="2291">2291</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2291" id="2291">2291</a>
+<a href="#2292" id="2292">2292</a>
+<a href="#2293" id="2293">2293</a>
+<a href="#2294" id="2294">2294</a>
+<a href="#2295" id="2295">2295</a>
+<a href="#2296" id="2296">2296</a>
+<a href="#2297" id="2297">2297</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -3159,7 +3165,10 @@
 
                     <span class="kw">let </span>tx = module.offline_wallet().create_tx(
                         bitcoin::Amount::from_sat(sats),
-                        address.assume_checked().script_pubkey(),
+                        <span class="comment">// Note: While calling `assume_checked()` is generally unwise, it's fine
+                        // here since we're only returning a fee estimate, and we would still
+                        // reject a transaction with the wrong network upon attempted peg-out.
+                        </span>address.assume_checked().script_pubkey(),
                         <span class="macro">vec!</span>[],
                         module.available_utxos(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc()).<span class="kw">await</span>,
                         feerate,
@@ -3701,7 +3710,10 @@
         <span class="kw">match </span>output {
             WalletOutputV0::PegOut(peg_out) =&gt; <span class="self">self</span>.offline_wallet().create_tx(
                 peg_out.amount,
-                peg_out.recipient.clone().assume_checked().script_pubkey(),
+                <span class="comment">// Note: While calling `assume_checked()` is generally unwise, checking the
+                // network here could be a consensus-breaking change. Ignoring the network
+                // is fine here since we validate it in `process_output()`.
+                </span>peg_out.recipient.clone().assume_checked().script_pubkey(),
                 <span class="macro">vec!</span>[],
                 <span class="self">self</span>.available_utxos(dbtx).<span class="kw">await</span>,
                 peg_out.fees.fee_rate,
