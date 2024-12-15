@@ -11,25 +11,11 @@ use crate::task::Cancellable;
 #[cfg(not(target_family = "wasm"))]
 pub mod fake;
 
-pub struct DynP2PConnections<M>(Box<dyn IP2PConnections<M> + Send>);
-
-impl<M> Clone for DynP2PConnections<M> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone_box())
-    }
-}
-
-impl<M> Deref for DynP2PConnections<M> {
-    type Target = dyn IP2PConnections<M> + Send;
-
-    fn deref(&self) -> &Self::Target {
-        &*self.0
-    }
-}
+pub type DynP2PConnections<M> = Arc<dyn IP2PConnections<M>>;
 
 /// Connection manager that tries to keep connections open to all peers
 #[async_trait]
-pub trait IP2PConnections<M> {
+pub trait IP2PConnections<M>: Send + Sync + 'static {
     /// Send message to recipient; block if channel is full.
     async fn send(&self, recipient: Recipient, msg: M);
 
@@ -39,14 +25,12 @@ pub trait IP2PConnections<M> {
     /// Await receipt of a message; return None if we are shutting down.
     async fn receive(&self) -> Option<(PeerId, M)>;
 
-    fn clone_box(&self) -> Box<dyn IP2PConnections<M> + Send>;
-
     /// Convert the struct to trait object.
     fn into_dyn(self) -> DynP2PConnections<M>
     where
-        Self: Sized + Send + 'static,
+        Self: Sized,
     {
-        DynP2PConnections(Box::new(self))
+        Arc::new(self)
     }
 }
 

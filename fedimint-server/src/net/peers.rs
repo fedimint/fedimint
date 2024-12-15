@@ -194,10 +194,6 @@ impl<M: Clone + Send + 'static> IP2PConnections<M> for WebsocketP2PConnections<M
         .await
         .0
     }
-
-    fn clone_box(&self) -> Box<dyn IP2PConnections<M> + Send + 'static> {
-        Box::new(self.clone())
-    }
 }
 
 impl<M> P2PConnectionStateMachine<M> {

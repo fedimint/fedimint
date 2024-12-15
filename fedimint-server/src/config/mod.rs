@@ -17,7 +17,7 @@ use fedimint_core::module::{
     ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleInit, MultiApiVersion, PeerHandle,
     SupportedApiVersionsSummary, SupportedCoreApiVersions, CORE_CONSENSUS_VERSION,
 };
-use fedimint_core::net::peers::{IMuxPeerConnections, IP2PConnections, DynP2PConnections};
+use fedimint_core::net::peers::{DynP2PConnections, IMuxPeerConnections, IP2PConnections};
 use fedimint_core::task::{timeout, Cancelled, Elapsed, TaskGroup};
 use fedimint_core::{secp256k1, timing, PeerId};
 use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};

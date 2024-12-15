@@ -34,10 +34,6 @@ impl<M: Clone + Send + 'static> IP2PConnections<M> for FakePeerConnections<M> {
     async fn receive(&self) -> Option<(PeerId, M)> {
         self.rx.recv().await.map(|msg| (self.peer, msg)).ok()
     }
-
-    fn clone_box(&self) -> Box<dyn IP2PConnections<M> + Send + 'static> {
-        Box::new(self.clone())
-    }
 }
 
 /// Create a fake link between `peer1` and `peer2` for test purposes

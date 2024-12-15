@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 use async_trait::async_trait;
-use fedimint_core::net::peers::{IMuxPeerConnections, DynP2PConnections, Recipient};
+use fedimint_core::net::peers::{DynP2PConnections, IMuxPeerConnections, Recipient};
 use fedimint_core::runtime::spawn;
 use fedimint_core::task::{Cancellable, Cancelled};
 use fedimint_core::PeerId;
