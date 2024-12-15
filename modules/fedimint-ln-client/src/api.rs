@@ -1,14 +1,16 @@
 use std::collections::{BTreeMap, HashMap};
+use std::convert::identity;
 use std::time::Duration;
 
 use bitcoin::hashes::sha256::{self, Hash as Sha256Hash};
 use fedimint_api_client::api::{
-    FederationApiExt, FederationError, FederationResult, IModuleFederationApi,
+    FederationApiExt, FederationError, FederationResult, IModuleFederationApi, JsonRpcClientError,
+    PeerError,
 };
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::secp256k1::PublicKey;
-use fedimint_core::task::{MaybeSend, MaybeSync};
+use fedimint_core::task::{timeout, MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId};
 use fedimint_ln_common::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
@@ -215,14 +217,18 @@ where
         let mut responses = BTreeMap::new();
 
         for peer in self.all_peers() {
-            if let Ok(response) = self
-                // Only wait a second since removing a gateway is "best effort"
-                .request_single_peer::<Option<sha256::Hash>>(
+            // Only wait a second since removing a gateway is "best effort"
+            if let Ok(response) = timeout(
+                Duration::from_secs(1),
+                self.request_single_peer::<Option<sha256::Hash>>(
                     REMOVE_GATEWAY_CHALLENGE_ENDPOINT.to_string(),
                     ApiRequestErased::new(gateway_id),
                     *peer,
-                )
-                .await
+                ),
+            )
+            .await
+            .map_err(|_| PeerError::Rpc(JsonRpcClientError::RequestTimeout))
+            .and_then(identity)
             {
                 responses.insert(*peer, response);
             }
@@ -235,13 +241,18 @@ where
         let gateway_id = remove_gateway_request.gateway_id;
 
         for peer in self.all_peers() {
-            if let Ok(response) = self
-                .request_single_peer::<bool>(
+            // Only wait a second since removing a gateway is "best effort"
+            if let Ok(response) = timeout(
+                Duration::from_secs(1),
+                self.request_single_peer::<bool>(
                     REMOVE_GATEWAY_ENDPOINT.to_string(),
                     ApiRequestErased::new(remove_gateway_request.clone()),
                     *peer,
-                )
-                .await
+                ),
+            )
+            .await
+            .map_err(|_| PeerError::Rpc(JsonRpcClientError::RequestTimeout))
+            .and_then(identity)
             {
                 if response {
                     info!("Successfully removed {gateway_id} gateway from peer: {peer}",);
