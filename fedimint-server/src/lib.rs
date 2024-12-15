@@ -21,8 +21,10 @@ use std::path::{Path, PathBuf};
 use config::io::{read_server_config, PLAINTEXT_PASSWORD};
 use config::ServerConfig;
 use fedimint_aead::random_salt;
+use fedimint_bitcoind::create_bitcoind;
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::db::Database;
+use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::write_new;
@@ -52,6 +54,7 @@ pub mod config;
 /// Implementation of multiplexed peer connections
 pub mod multiplexed;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     data_dir: PathBuf,
     force_api_secrets: ApiSecrets,
@@ -60,6 +63,7 @@ pub async fn run(
     code_version_str: String,
     module_init_registry: &ServerModuleInitRegistry,
     task_group: TaskGroup,
+    bitcoin_rpc: BitcoinRpcConfig,
 ) -> anyhow::Result<()> {
     let cfg = match get_config(&data_dir)? {
         Some(cfg) => cfg,
@@ -99,6 +103,7 @@ pub async fn run(
         force_api_secrets,
         data_dir,
         code_version_str,
+        create_bitcoind(&bitcoin_rpc)?,
     )
     .await?;
 
