@@ -63,7 +63,9 @@ use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::{sleep, TaskGroup, TaskHandle, TaskShutdownToken};
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::{SafeUrl, Spanned};
-use fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll};
+use fedimint_core::{
+    fedimint_build_code_version_env, get_network_for_address, Amount, BitcoinAmountOrAll,
+};
 use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId};
 use fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 use fedimint_ln_common::contracts::Preimage;
@@ -886,6 +888,15 @@ impl Gateway {
             address,
             federation_id,
         } = payload;
+
+        let address_network = get_network_for_address(&address);
+        let gateway_network = self.gateway_config.read().await.network.0;
+        let Ok(address) = address.require_network(gateway_network) else {
+            return Err(AdminGatewayError::WithdrawError {
+                failure_reason: format!("Gateway is running on network {gateway_network}, but provided withdraw address is for network {address_network}")
+            });
+        };
+
         let client = self.select_client(federation_id).await?;
         let wallet_module = client.value().get_first_module::<WalletClientModule>()?;
 
@@ -896,9 +907,7 @@ impl Gateway {
             BitcoinAmountOrAll::All => {
                 let balance =
                     bitcoin::Amount::from_sat(client.value().get_balance().await.msats / 1000);
-                let fees = wallet_module
-                    .get_withdraw_fees(address.clone(), balance)
-                    .await?;
+                let fees = wallet_module.get_withdraw_fees(&address, balance).await?;
                 let withdraw_amount = balance.checked_sub(fees.amount());
                 if withdraw_amount.is_none() {
                     return Err(AdminGatewayError::WithdrawError {
@@ -911,15 +920,11 @@ impl Gateway {
             }
             BitcoinAmountOrAll::Amount(amount) => (
                 amount,
-                wallet_module
-                    .get_withdraw_fees(address.clone(), amount)
-                    .await?,
+                wallet_module.get_withdraw_fees(&address, amount).await?,
             ),
         };
 
-        let operation_id = wallet_module
-            .withdraw(address.clone(), amount, fees, ())
-            .await?;
+        let operation_id = wallet_module.withdraw(&address, amount, fees, ()).await?;
         let mut updates = wallet_module
             .subscribe_withdraw_updates(operation_id)
             .await?
@@ -928,10 +933,7 @@ impl Gateway {
         while let Some(update) = updates.next().await {
             match update {
                 WithdrawState::Succeeded(txid) => {
-                    info!(
-                        "Sent {amount} funds to address {}",
-                        address.assume_checked()
-                    );
+                    info!("Sent {amount} funds to address {}", address);
                     return Ok(WithdrawResponse { txid, fees });
                 }
                 WithdrawState::Failed(e) => {
@@ -1369,13 +1371,20 @@ impl Gateway {
     pub async fn handle_get_ln_onchain_address_msg(&self) -> AdminResult<Address> {
         let context = self.get_lightning_context().await?;
         let response = context.lnrpc.get_ln_onchain_address().await?;
-        Address::from_str(&response.address)
-            .map(Address::assume_checked)
-            .map_err(|e| {
-                AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
-                    failure_reason: e.to_string(),
-                })
+
+        let address = Address::from_str(&response.address).map_err(|e| {
+            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
+                failure_reason: e.to_string(),
             })
+        })?;
+
+        let network = self.gateway_config.read().await.network.0;
+
+        address.require_network(network).map_err(|e| {
+            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
+                failure_reason: e.to_string(),
+            })
+        })
     }
 
     /// Instructs the Gateway's Lightning node to open a channel to a peer

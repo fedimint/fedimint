@@ -868,6 +868,9 @@ impl ServerModule for Wallet {
 
                     let tx = module.offline_wallet().create_tx(
                         bitcoin::Amount::from_sat(sats),
+                        // Note: While calling `assume_checked()` is generally unwise, it's fine
+                        // here since we're only returning a fee estimate, and we would still
+                        // reject a transaction with the wrong network upon attempted peg-out.
                         address.assume_checked().script_pubkey(),
                         vec![],
                         module.available_utxos(&mut context.dbtx().into_nc()).await,
@@ -1410,6 +1413,9 @@ impl Wallet {
         match output {
             WalletOutputV0::PegOut(peg_out) => self.offline_wallet().create_tx(
                 peg_out.amount,
+                // Note: While calling `assume_checked()` is generally unwise, checking the
+                // network here could be a consensus-breaking change. Ignoring the network
+                // is fine here since we validate it in `process_output()`.
                 peg_out.recipient.clone().assume_checked().script_pubkey(),
                 vec![],
                 self.available_utxos(dbtx).await,

@@ -386,12 +386,12 @@ extensible_associated_module_type!(
 
 impl WalletOutput {
     pub fn new_v0_peg_out(
-        recipient: Address<NetworkUnchecked>,
+        recipient: Address,
         amount: bitcoin::Amount,
         fees: PegOutFees,
     ) -> WalletOutput {
         WalletOutput::V0(WalletOutputV0::PegOut(PegOut {
-            recipient,
+            recipient: recipient.into_unchecked(),
             amount,
             fees,
         }))
