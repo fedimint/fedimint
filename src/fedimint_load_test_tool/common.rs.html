@@ -400,7 +400,8 @@
 <a href="#399" id="399">399</a>
 <a href="#400" id="400">400</a>
 <a href="#401" id="401">401</a>
-<a href="#402" id="402">402</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -776,15 +777,16 @@
         tx = tx.with_outputs(outputs);
     }
     drop(module_transaction);
-    <span class="kw">let </span>operation_meta_gen = |_txid, _outpoint| ();
-    <span class="kw">let </span>(txid, <span class="kw">_</span>) = client
+    <span class="kw">let </span>operation_meta_gen = |<span class="kw">_</span>| ();
+    <span class="kw">let </span>txid = client
         .finalize_and_submit_transaction(
             operation_id,
             MintCommonInit::KIND.as_str(),
             operation_meta_gen,
             tx,
         )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.txid();
     <span class="kw">let </span>tx_subscription = client.transaction_updates(operation_id).<span class="kw">await</span>;
     tx_subscription
         .await_tx_accepted(txid)

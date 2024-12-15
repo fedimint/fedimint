@@ -282,7 +282,8 @@
 <a href="#281" id="281">281</a>
 <a href="#282" id="282">282</a>
 <a href="#283" id="283">283</a>
-<a href="#284" id="284">284</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
@@ -542,7 +543,8 @@
                     .claim_inputs(dbtx, ClientInputBundle::new_no_sm(<span class="macro">vec!</span>[client_input]))
                     .<span class="kw">await
                     </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>)
-                    .<span class="number">1</span>;
+                    .into_iter()
+                    .collect();
 
                 old_state.update(SendSMState::Claiming(Claiming {
                     preimage: payment_response.preimage,

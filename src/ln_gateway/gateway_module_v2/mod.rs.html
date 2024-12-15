@@ -1055,7 +1055,7 @@
             .finalize_and_submit_transaction(
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
-                |<span class="kw">_</span>, <span class="kw">_</span>| GatewayOperationMetaV2,
+                |<span class="kw">_</span>| GatewayOperationMetaV2,
                 transaction,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1126,7 +1126,7 @@
             .finalize_and_submit_transaction(
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
-                |<span class="kw">_</span>, <span class="kw">_</span>| GatewayOperationMetaV2,
+                |<span class="kw">_</span>| GatewayOperationMetaV2,
                 transaction,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;

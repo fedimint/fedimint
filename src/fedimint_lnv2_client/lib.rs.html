@@ -1675,10 +1675,10 @@
             .finalize_and_submit_transaction(
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
-                |funding_txid, funding_change_outpoints| {
+                |change_range| {
                     LightningOperationMeta::Send(SendOperationMeta {
-                        funding_txid,
-                        funding_change_outpoints,
+                        funding_txid: change_range.txid(),
+                        funding_change_outpoints: change_range.into_iter().collect(),
                         gateway: gateway_api.clone(),
                         contract: contract.clone(),
                         invoice: LightningInvoice::Bolt11(invoice.clone()),

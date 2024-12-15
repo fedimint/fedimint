@@ -3161,12 +3161,7 @@
 <a href="#3160" id="3160">3160</a>
 <a href="#3161" id="3161">3161</a>
 <a href="#3162" id="3162">3162</a>
-<a href="#3163" id="3163">3163</a>
-<a href="#3164" id="3164">3164</a>
-<a href="#3165" id="3165">3165</a>
-<a href="#3166" id="3166">3166</a>
-<a href="#3167" id="3167">3167</a>
-<a href="#3168" id="3168">3168</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#3163" id="3163">3163</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
@@ -3310,7 +3305,7 @@
 <span class="kw">use </span>futures::{Future, Stream, StreamExt};
 <span class="kw">use </span>meta::{LegacyMetaSource, MetaService};
 <span class="kw">use </span>module::recovery::RecoveryProgress;
-<span class="kw">use </span>module::{DynClientModule, FinalClient};
+<span class="kw">use </span>module::{DynClientModule, FinalClient, IdxRange, OutPointRange};
 <span class="kw">use </span>rand::thread_rng;
 <span class="kw">use </span>secp256k1::{PublicKey, Secp256k1};
 <span class="kw">use </span>secret::{DeriveableSecretClientExt, PlainRootSecretStrategy, RootSecretStrategy <span class="kw">as _</span>};
@@ -3481,7 +3476,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         inputs: InstancelessDynClientInputBundle,
-    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt;;
+    ) -&gt; anyhow::Result&lt;OutPointRange&gt;;
 
     <span class="doccomment">/// This function is mostly meant for internal use, you are probably looking
     /// for [`DynGlobalClientContext::fund_output`].
@@ -3491,7 +3486,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         outputs: InstancelessDynClientOutputBundle,
-    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt;;
+    ) -&gt; anyhow::Result&lt;OutPointRange&gt;;
 
     <span class="doccomment">/// Adds a state machine to the executor.
     </span><span class="kw">async fn </span>add_state_machine_dyn(
@@ -3534,7 +3529,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         _input: InstancelessDynClientInputBundle,
-    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
+    ) -&gt; anyhow::Result&lt;OutPointRange&gt; {
         <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
     }
 
@@ -3542,7 +3537,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         _outputs: InstancelessDynClientOutputBundle,
-    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
+    ) -&gt; anyhow::Result&lt;OutPointRange&gt; {
         <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
     }
 
@@ -3602,7 +3597,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         inputs: ClientInputBundle&lt;I, S&gt;,
-    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt;
+    ) -&gt; anyhow::Result&lt;OutPointRange&gt;
     <span class="kw">where
         </span>I: IInput + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
         S: IState + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
@@ -3623,7 +3618,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         outputs: ClientOutputBundle&lt;O, S&gt;,
-    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt;
+    ) -&gt; anyhow::Result&lt;OutPointRange&gt;
     <span class="kw">where
         </span>O: IOutput + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
         S: IState + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
@@ -3727,7 +3722,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         inputs: InstancelessDynClientInputBundle,
-    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
+    ) -&gt; anyhow::Result&lt;OutPointRange&gt; {
         <span class="kw">let </span>tx_builder =
             TransactionBuilder::new().with_inputs(inputs.into_dyn(<span class="self">self</span>.module_instance_id));
 
@@ -3744,7 +3739,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         outputs: InstancelessDynClientOutputBundle,
-    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
+    ) -&gt; anyhow::Result&lt;OutPointRange&gt; {
         <span class="kw">let </span>tx_builder =
             TransactionBuilder::new().with_outputs(outputs.into_dyn(<span class="self">self</span>.module_instance_id));
 
@@ -4371,9 +4366,9 @@
         operation_type: <span class="kw-2">&amp;</span>str,
         operation_meta_gen: F,
         tx_builder: TransactionBuilder,
-    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt;
+    ) -&gt; anyhow::Result&lt;OutPointRange&gt;
     <span class="kw">where
-        </span>F: Fn(TransactionId, Vec&lt;OutPoint&gt;) -&gt; M + Clone + MaybeSend + MaybeSync,
+        </span>F: Fn(OutPointRange) -&gt; M + Clone + MaybeSend + MaybeSync,
         M: serde::Serialize + MaybeSend,
     {
         <span class="kw">let </span>operation_type = operation_type.to_owned();
@@ -4390,7 +4385,7 @@
                             <span class="macro">bail!</span>(<span class="string">"There already exists an operation with id {operation_id:?}"</span>)
                         }
 
-                        <span class="kw">let </span>(txid, change) = <span class="self">self
+                        <span class="kw">let </span>out_point_range = <span class="self">self
                             </span>.finalize_and_submit_transaction_inner(dbtx, operation_id, tx_builder)
                             .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -4399,11 +4394,11 @@
                                 dbtx,
                                 operation_id,
                                 <span class="kw-2">&amp;</span>operation_type,
-                                operation_meta_gen(txid, change.clone()),
+                                operation_meta_gen(out_point_range),
                             )
                             .<span class="kw">await</span>;
 
-                        <span class="prelude-val">Ok</span>((txid, change))
+                        <span class="prelude-val">Ok</span>(out_point_range)
                     })
                 },
                 <span class="prelude-val">Some</span>(<span class="number">100</span>), <span class="comment">// TODO: handle what happens after 100 retries
@@ -4427,7 +4422,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
-    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
+    ) -&gt; anyhow::Result&lt;OutPointRange&gt; {
         <span class="kw">let </span>(transaction, <span class="kw-2">mut </span>states, change_range) = <span class="self">self
             </span>.finalize_transaction(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(), operation_id, tx_builder)
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -4460,11 +4455,6 @@
 
         <span class="macro">debug!</span>(target: LOG_CLIENT_NET_API, %txid, <span class="question-mark">?</span>transaction,  <span class="string">"Finalized and submitting transaction"</span>);
 
-        <span class="kw">let </span>change_outpoints = change_range
-            .into_iter()
-            .map(|out_idx| OutPoint { txid, out_idx })
-            .collect();
-
         <span class="kw">let </span>tx_submission_sm = DynState::from_typed(
             TRANSACTION_SUBMISSION_MODULE_INSTANCE,
             TxSubmissionStatesSM {
@@ -4479,7 +4469,7 @@
         <span class="self">self</span>.log_event_dbtx(dbtx, <span class="prelude-val">None</span>, TxCreatedEvent { txid, operation_id })
             .<span class="kw">await</span>;
 
-        <span class="prelude-val">Ok</span>((txid, change_outpoints))
+        <span class="prelude-val">Ok</span>(OutPointRange::new(txid, IdxRange::from(change_range)))
     }
 
     <span class="kw">async fn </span>transaction_update_stream(

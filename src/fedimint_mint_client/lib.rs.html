@@ -2785,14 +2785,7 @@
 <a href="#2784" id="2784">2784</a>
 <a href="#2785" id="2785">2785</a>
 <a href="#2786" id="2786">2786</a>
-<a href="#2787" id="2787">2787</a>
-<a href="#2788" id="2788">2788</a>
-<a href="#2789" id="2789">2789</a>
-<a href="#2790" id="2790">2790</a>
-<a href="#2791" id="2791">2791</a>
-<a href="#2792" id="2792">2792</a>
-<a href="#2793" id="2793">2793</a>
-<a href="#2794" id="2794">2794</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2787" id="2787">2787</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -4282,24 +4275,17 @@
 
         <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta)
             .expect(<span class="string">"MintClientModule::reissue_external_notes extra_meta is serializable"</span>);
-        <span class="kw">let </span>operation_meta_gen = |txid, out_points: Vec&lt;OutPoint&gt;| {
-            <span class="macro">assert!</span>(
-                out_points.iter().all(|out_point| out_point.txid == txid),
-                <span class="string">"Change outpoints didn't all have consistent transaction id."
-            </span>);
-
-            MintOperationMeta {
-                variant: MintOperationMetaVariant::Reissuance {
-                    legacy_out_point: <span class="prelude-val">None</span>,
-                    txid: <span class="prelude-val">Some</span>(txid),
-                    out_point_indices: out_points
-                        .iter()
-                        .map(|out_point| out_point.out_idx)
-                        .collect(),
-                },
-                amount,
-                extra_meta: extra_meta.clone(),
-            }
+        <span class="kw">let </span>operation_meta_gen = |change_range: OutPointRange| MintOperationMeta {
+            variant: MintOperationMetaVariant::Reissuance {
+                legacy_out_point: <span class="prelude-val">None</span>,
+                txid: <span class="prelude-val">Some</span>(change_range.txid()),
+                out_point_indices: change_range
+                    .into_iter()
+                    .map(|out_point| out_point.out_idx)
+                    .collect(),
+            },
+            amount,
+            extra_meta: extra_meta.clone(),
         };
 
         <span class="self">self</span>.client_ctx

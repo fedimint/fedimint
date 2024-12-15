@@ -1217,7 +1217,7 @@
         keys: <span class="macro">vec!</span>[refund_key],
     };
 
-    <span class="kw">let </span>(txid, out_points) = global_context
+    <span class="kw">let </span>change_range = global_context
         .claim_inputs(
             dbtx,
             <span class="comment">// The input of the refund tx is managed by this state machine, so no new state
@@ -1230,8 +1230,8 @@
     LightningPayStateMachine {
         common: old_state.common,
         state: LightningPayStates::Refund(LightningPayRefund {
-            txid,
-            out_points,
+            txid: change_range.txid(),
+            out_points: change_range.into_iter().collect(),
             error_reason,
         }),
     }

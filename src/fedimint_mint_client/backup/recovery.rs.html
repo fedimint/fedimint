@@ -566,7 +566,8 @@
 <a href="#565" id="565">565</a>
 <a href="#566" id="566">566</a>
 <a href="#567" id="567">567</a>
-<a href="#568" id="568">568</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::max;
+<a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::max;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt;
 
@@ -792,7 +793,8 @@
                                     out_point_range: OutPointRange::new_single(
                                         out_point.txid,
                                         out_point.out_idx,
-                                    ),
+                                    )
+                                    .expect(<span class="string">"Can't overflow"</span>),
                                 },
                                 state: <span class="kw">crate</span>::output::MintOutputStates::Created(
                                     MintOutputStatesCreated {

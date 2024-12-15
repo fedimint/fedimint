@@ -477,7 +477,10 @@
 <a href="#476" id="476">476</a>
 <a href="#477" id="477">477</a>
 <a href="#478" id="478">478</a>
-<a href="#479" id="479">479</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::module::OutPointRange;
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::module::OutPointRange;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
@@ -661,7 +664,7 @@
             amount,
         };
 
-        <span class="kw">let </span>(refund_txid, <span class="kw">_</span>) = global_context
+        <span class="kw">let </span>change_range = global_context
             .claim_inputs(
                 dbtx,
                 <span class="comment">// The input of the refund tx is managed by this state machine, so no new state
@@ -673,7 +676,9 @@
 
         MintInputStateMachine {
             common: old_state.common,
-            state: MintInputStates::Refund(MintInputStateRefund { refund_txid }),
+            state: MintInputStates::Refund(MintInputStateRefund {
+                refund_txid: change_range.txid(),
+            }),
         }
     }
 }
@@ -755,7 +760,7 @@
             });
         }
 
-        <span class="kw">let </span>(refund_txid, <span class="kw">_</span>) = global_context
+        <span class="kw">let </span>change_range = global_context
             .claim_inputs(
                 dbtx,
                 <span class="comment">// We are inside an input state machine, so no need to spawn new ones
@@ -764,6 +769,7 @@
             .<span class="kw">await
             </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>);
 
+        <span class="kw">let </span>refund_txid = change_range.txid();
         MintInputStateMachine {
             common: old_state.common,
             state: <span class="kw">if </span>spendable_notes.len() == <span class="number">1 </span>{
@@ -859,7 +865,7 @@
                 keys: <span class="macro">vec!</span>[spendable_note.spend_key],
                 amount,
             };
-            <span class="kw">let </span>(refund_txid, <span class="kw">_</span>) = global_context
+            <span class="kw">let </span>change_range = global_context
                 .claim_inputs(
                     dbtx,
                     <span class="comment">// The input of the refund tx is managed by this state machine, so no new state
@@ -869,7 +875,7 @@
                 .<span class="kw">await
                 </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>);
 
-            refund_txids.push(refund_txid);
+            refund_txids.push(change_range.txid());
         }
 
         <span class="macro">assert!</span>(!refund_txids.is_empty());

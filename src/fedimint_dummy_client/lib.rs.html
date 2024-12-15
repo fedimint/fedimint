@@ -421,7 +421,22 @@
 <a href="#420" id="420">420</a>
 <a href="#421" id="421">421</a>
 <a href="#422" id="422">422</a>
-<a href="#423" id="423">423</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -438,7 +453,7 @@
 <span class="kw">use </span>fedimint_client::db::{migrate_state, ClientMigrationFn};
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
-<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
+<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
 <span class="kw">use </span>fedimint_client::sm::{Context, ModuleNotifier};
 <span class="kw">use </span>fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
@@ -678,19 +693,28 @@
             <span class="self">self</span>.client_ctx
                 .make_client_inputs(ClientInputBundle::new_no_sm(<span class="macro">vec!</span>[input])),
         );
-        <span class="kw">let </span>outpoint = |txid, <span class="kw">_</span>| OutPoint { txid, out_idx: <span class="number">0 </span>};
-        <span class="kw">let </span>(<span class="kw">_</span>, change) = <span class="self">self
+        <span class="kw">let </span>meta_gen = |change_range: OutPointRange| OutPoint {
+            txid: change_range.txid(),
+            out_idx: <span class="number">0</span>,
+        };
+        <span class="kw">let </span>change_range = <span class="self">self
             </span>.client_ctx
-            .finalize_and_submit_transaction(op_id, KIND.as_str(), outpoint, tx)
+            .finalize_and_submit_transaction(op_id, KIND.as_str(), meta_gen, tx)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// Wait for the output of the primary module
         </span><span class="self">self</span>.client_ctx
-            .await_primary_module_outputs(op_id, change.clone())
+            .await_primary_module_outputs(op_id, change_range.into_iter().collect())
             .<span class="kw">await
             </span>.context(<span class="string">"Waiting for the output of print_using_account"</span>)<span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>((op_id, change[<span class="number">0</span>]))
+        <span class="prelude-val">Ok</span>((
+            op_id,
+            change_range
+                .into_iter()
+                .next()
+                .expect(<span class="string">"At least one output"</span>),
+        ))
     }
 
     <span class="doccomment">/// Request the federation prints money for us
@@ -723,20 +747,26 @@
                 .make_client_outputs(ClientOutputBundle::new_no_sm(<span class="macro">vec!</span>[output])),
         );
 
-        <span class="kw">let </span>outpoint = |txid, <span class="kw">_</span>| OutPoint { txid, out_idx: <span class="number">0 </span>};
-        <span class="kw">let </span>(txid, <span class="kw">_</span>) = <span class="self">self
+        <span class="kw">let </span>meta_gen = |change_range: OutPointRange| OutPoint {
+            txid: change_range.txid(),
+            out_idx: <span class="number">0</span>,
+        };
+        <span class="kw">let </span>change_range = <span class="self">self
             </span>.client_ctx
-            .finalize_and_submit_transaction(op_id, DummyCommonInit::KIND.as_str(), outpoint, tx)
+            .finalize_and_submit_transaction(op_id, DummyCommonInit::KIND.as_str(), meta_gen, tx)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>tx_subscription = <span class="self">self</span>.client_ctx.transaction_updates(op_id).<span class="kw">await</span>;
 
         tx_subscription
-            .await_tx_accepted(txid)
+            .await_tx_accepted(change_range.txid())
             .<span class="kw">await
             </span>.map_err(|e| <span class="macro">anyhow!</span>(e))<span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(OutPoint { txid, out_idx: <span class="number">0 </span>})
+        <span class="prelude-val">Ok</span>(OutPoint {
+            txid: change_range.txid(),
+            out_idx: <span class="number">0</span>,
+        })
     }
 
     <span class="doccomment">/// Wait to receive money at an outpoint

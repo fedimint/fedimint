@@ -1071,9 +1071,13 @@
 <a href="#1070" id="1070">1070</a>
 <a href="#1071" id="1071">1071</a>
 <a href="#1072" id="1072">1072</a>
-<a href="#1073" id="1073">1073</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
+<a href="#1073" id="1073">1073</a>
+<a href="#1074" id="1074">1074</a>
+<a href="#1075" id="1075">1075</a>
+<a href="#1076" id="1076">1076</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::ops::Range;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::{ffi, marker, ops};
 
@@ -1313,11 +1317,11 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         operation_type: <span class="kw-2">&amp;</span>str,
-        operation_meta: F,
+        operation_meta_gen: F,
         tx_builder: TransactionBuilder,
-    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt;
+    ) -&gt; anyhow::Result&lt;OutPointRange&gt;
     <span class="kw">where
-        </span>F: Fn(TransactionId, Vec&lt;OutPoint&gt;) -&gt; Meta + Clone + MaybeSend + MaybeSync,
+        </span>F: Fn(OutPointRange) -&gt; Meta + Clone + MaybeSend + MaybeSync,
         Meta: serde::Serialize + MaybeSend,
     {
         <span class="self">self</span>.client
@@ -1325,7 +1329,7 @@
             .finalize_and_submit_transaction(
                 operation_id,
                 operation_type,
-                operation_meta,
+                operation_meta_gen,
                 tx_builder,
             )
             .<span class="kw">await
@@ -1340,7 +1344,8 @@
     </span><span class="kw">pub async fn </span>await_primary_module_outputs(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-        outputs: Vec&lt;OutPoint&gt;,
+        <span class="comment">// TODO: make `impl Iterator&lt;Item = ...&gt;`
+        </span>outputs: Vec&lt;OutPoint&gt;,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="self">self</span>.client
             .get()
@@ -1545,7 +1550,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         inputs: ClientInputBundle&lt;I, S&gt;,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt;
+    ) -&gt; anyhow::Result&lt;OutPointRange&gt;
     <span class="kw">where
         </span>I: IInput + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
         S: sm::IState + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
@@ -1559,7 +1564,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         inputs: InstancelessDynClientInputBundle,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
+    ) -&gt; anyhow::Result&lt;OutPointRange&gt; {
         <span class="kw">let </span>tx_builder =
             TransactionBuilder::new().with_inputs(inputs.into_dyn(<span class="self">self</span>.module_instance_id));
 
@@ -2037,15 +2042,12 @@
 </span><span class="attr">#[derive(Copy, Clone, Encodable, Decodable, PartialEq, Eq, Hash, Debug)]
 </span><span class="kw">pub struct </span>IdxRange {
     start: u64,
-    end_inclusive: u64,
+    end: u64,
 }
 
 <span class="kw">impl </span>IdxRange {
-    <span class="kw">pub fn </span>new_single(start: u64) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            start,
-            end_inclusive: start,
-        }
+    <span class="kw">pub fn </span>new_single(start: u64) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
+        start.checked_add(<span class="number">1</span>).map(|end| <span class="self">Self </span>{ start, end })
     }
 
     <span class="kw">pub fn </span>start(<span class="self">self</span>) -&gt; u64 {
@@ -2055,30 +2057,37 @@
     <span class="kw">pub fn </span>count(<span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.into_iter().count()
     }
+
+    <span class="kw">pub fn </span>from_inclusive(range: ops::RangeInclusive&lt;u64&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
+        range.end().checked_add(<span class="number">1</span>).map(|end| <span class="self">Self </span>{
+            start: <span class="kw-2">*</span>range.start(),
+            end,
+        })
+    }
+}
+
+<span class="kw">impl </span>From&lt;Range&lt;u64&gt;&gt; <span class="kw">for </span>IdxRange {
+    <span class="kw">fn </span>from(Range { start, end }: Range&lt;u64&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ start, end }
+    }
 }
 
 <span class="kw">impl </span>IntoIterator <span class="kw">for </span>IdxRange {
     <span class="kw">type </span>Item = u64;
 
-    <span class="kw">type </span>IntoIter = ops::RangeInclusive&lt;u64&gt;;
+    <span class="kw">type </span>IntoIter = ops::Range&lt;u64&gt;;
 
     <span class="kw">fn </span>into_iter(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoIter {
-        ops::RangeInclusive::new(<span class="self">self</span>.start, <span class="self">self</span>.end_inclusive)
-    }
-}
-
-<span class="kw">impl </span>From&lt;ops::RangeInclusive&lt;u64&gt;&gt; <span class="kw">for </span>IdxRange {
-    <span class="kw">fn </span>from(value: ops::RangeInclusive&lt;u64&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            start: <span class="kw-2">*</span>value.start(),
-            end_inclusive: <span class="kw-2">*</span>value.end(),
+        ops::Range {
+            start: <span class="self">self</span>.start,
+            end: <span class="self">self</span>.end,
         }
     }
 }
 
 <span class="attr">#[derive(Copy, Clone, Encodable, Decodable, PartialEq, Eq, Hash, Debug)]
 </span><span class="kw">pub struct </span>OutPointRange {
-    txid: TransactionId,
+    <span class="kw">pub </span>txid: TransactionId,
     idx_range: IdxRange,
 }
 
@@ -2087,11 +2096,8 @@
         <span class="self">Self </span>{ txid, idx_range }
     }
 
-    <span class="kw">pub fn </span>new_single(txid: TransactionId, idx: u64) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            txid,
-            idx_range: IdxRange::new_single(idx),
-        }
+    <span class="kw">pub fn </span>new_single(txid: TransactionId, idx: u64) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
+        IdxRange::new_single(idx).map(|idx_range| <span class="self">Self </span>{ txid, idx_range })
     }
 
     <span class="kw">pub fn </span>start_idx(<span class="self">self</span>) -&gt; u64 {
@@ -2123,7 +2129,7 @@
 <span class="kw">pub struct </span>OutPointRangeIter {
     txid: TransactionId,
 
-    inner: ops::RangeInclusive&lt;u64&gt;,
+    inner: ops::Range&lt;u64&gt;,
 }
 
 <span class="kw">impl </span>OutPointRange {
