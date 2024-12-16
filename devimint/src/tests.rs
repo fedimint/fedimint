@@ -675,6 +675,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     gw_lnd
         .set_federation_routing_fee(fed_id.clone(), 0, 0)
         .await?;
+    cmd!(client, "list-gateways").run().await?;
 
     let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
 

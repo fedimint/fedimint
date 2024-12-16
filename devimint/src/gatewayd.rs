@@ -551,7 +551,10 @@ impl Gatewayd {
     ) -> Result<()> {
         let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
         if gatewayd_version < *VERSION_0_4_0_ALPHA {
-            return Ok(());
+            let fees = format!("{base},{ppm}");
+            cmd!(self, "set-configuration", "--routing-fees", fees)
+                .run()
+                .await?;
         } else if gatewayd_version >= *VERSION_0_4_0_ALPHA
             && gatewayd_version < *VERSION_0_6_0_ALPHA
         {
