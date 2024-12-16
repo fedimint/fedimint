@@ -14,7 +14,7 @@ use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
 use futures::future::pending;
 use secp256k1::schnorr::Signature;
 use secp256k1::Keypair;
-use tracing::error;
+use tracing::{error, instrument};
 
 use crate::api::LightningFederationApi;
 use crate::{LightningClientContext, LightningInvoice};
@@ -109,7 +109,7 @@ impl State for SendStateMachine {
                         },
                     ),
                     StateTransition::new(
-                        Self::await_preimage(gc_preimage.clone(), self.common.contract.clone()),
+                        Self::await_preimage(self.common.contract.clone(), gc_preimage.clone()),
                         move |dbtx, preimage, old_state| {
                             Box::pin(Self::transition_preimage(
                                 dbtx,
@@ -150,6 +150,7 @@ impl SendStateMachine {
         })
     }
 
+    #[instrument(skip(refund_keypair, context))]
     async fn gateway_send_payment(
         gateway_api: SafeUrl,
         federation_id: FederationId,
@@ -216,9 +217,10 @@ impl SendStateMachine {
         }
     }
 
+    #[instrument(skip(global_context))]
     async fn await_preimage(
-        global_context: DynGlobalClientContext,
         contract: OutgoingContract,
+        global_context: DynGlobalClientContext,
     ) -> Option<[u8; 32]> {
         let preimage = global_context
             .module_api()
