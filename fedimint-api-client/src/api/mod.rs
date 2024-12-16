@@ -3,7 +3,6 @@ use std::fmt::Debug;
 use std::pin::Pin;
 use std::result;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::anyhow;
 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
@@ -20,7 +19,6 @@ use fedimint_core::backup::ClientBackupSnapshot;
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -32,8 +30,7 @@ use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::backoff_util::api_networking_backoff;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, util, NumPeersExt, OutPoint, PeerId,
-    TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, util, NumPeersExt, PeerId, TransactionId,
 };
 use fedimint_logging::LOG_CLIENT_NET_API;
 use futures::future::pending;
@@ -463,31 +460,6 @@ impl DynGlobalApi {
             &invite_code.api_secret(),
         ))
         .into()
-    }
-
-    pub async fn await_output_outcome<R>(
-        &self,
-        outpoint: OutPoint,
-        timeout: Duration,
-        module_decoder: &Decoder,
-    ) -> OutputOutcomeResult<R>
-    where
-        R: OutputOutcome,
-    {
-        fedimint_core::runtime::timeout(timeout, async {
-            let outcome: SerdeOutputOutcome = self
-                .inner
-                .request_current_consensus(
-                    AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
-                    ApiRequestErased::new(outpoint),
-                )
-                .await
-                .map_err(OutputOutcomeError::Federation)?;
-
-            deserialize_outcome(&outcome, module_decoder)
-        })
-        .await
-        .map_err(|_| OutputOutcomeError::Timeout(timeout))?
     }
 }
 

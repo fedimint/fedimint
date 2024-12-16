@@ -7,11 +7,11 @@
 use core::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::{anyhow, format_err, Context as _};
 use common::broken_fed_key_pair;
 use db::{migrate_to_v1, DbKeyPrefix, DummyClientFundsKeyV1, DummyClientNameKey};
+use fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
 use fedimint_client::db::{migrate_state, ClientMigrationFn};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
@@ -25,8 +25,9 @@ use fedimint_core::core::{Decoder, ModuleKind, OperationId};
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
+use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
+    ApiRequestErased, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::secp256k1::{Keypair, PublicKey, Secp256k1};
 use fedimint_core::util::{BoxStream, NextOrPending};
@@ -319,19 +320,25 @@ impl DummyClientModule {
     /// Wait to receive money at an outpoint
     pub async fn receive_money(&self, outpoint: OutPoint) -> anyhow::Result<()> {
         let mut dbtx = self.db.begin_transaction().await;
-        let DummyOutputOutcome(new_balance, account) = self
+
+        let outcome = self
             .client_ctx
             .global_api()
-            .await_output_outcome(outpoint, Duration::from_secs(10), &self.decoder())
+            .request_current_consensus::<SerdeOutputOutcome>(
+                AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
+                ApiRequestErased::new(outpoint),
+            )
             .await?;
 
-        if account != self.key.public_key() {
+        let outcome = deserialize_outcome::<DummyOutputOutcome>(&outcome, &self.decoder())?;
+
+        if outcome.1 != self.key.public_key() {
             return Err(format_err!("Wrong account id"));
         }
 
-        dbtx.insert_entry(&DummyClientFundsKeyV1, &new_balance)
-            .await;
+        dbtx.insert_entry(&DummyClientFundsKeyV1, &outcome.0).await;
         dbtx.commit_tx().await;
+
         Ok(())
     }
 
