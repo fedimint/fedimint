@@ -295,6 +295,7 @@ impl ModuleInit for LightningClientInit {
         });
 
         for table in filtered_prefixes {
+            #[allow(clippy::match_same_arms)]
             match table {
                 DbKeyPrefix::ActiveGateway | DbKeyPrefix::MetaOverridesDeprecated => {
                     // Deprecated
@@ -319,6 +320,9 @@ impl ModuleInit for LightningClientInit {
                         "Lightning Gateways"
                     );
                 }
+                DbKeyPrefix::ExternalReservedStart
+                | DbKeyPrefix::CoreInternalReservedStart
+                | DbKeyPrefix::CoreInternalReservedEnd => {}
             }
         }
 

@@ -355,6 +355,9 @@ mod fedimint_migration_tests {
                         // `DatabaseVersion` key
                         // was migrated successfully.
                     }
+                    fedimint_dummy_client::db::DbKeyPrefix::ExternalReservedStart
+                    | fedimint_dummy_client::db::DbKeyPrefix::CoreInternalReservedStart
+                    | fedimint_dummy_client::db::DbKeyPrefix::CoreInternalReservedEnd => {}
                 }
             }
 
