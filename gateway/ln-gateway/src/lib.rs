@@ -1085,7 +1085,6 @@ impl Gateway {
         let federation_config = FederationConfig {
             invite_code,
             federation_index,
-            timelock_delta: 10,
             lightning_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
             transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
             connector,

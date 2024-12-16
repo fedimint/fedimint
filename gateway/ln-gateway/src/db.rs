@@ -283,7 +283,6 @@ pub struct FederationConfig {
     // federation.
     #[serde(alias = "mint_channel_id")]
     pub federation_index: u64,
-    pub timelock_delta: u64,
     pub lightning_fee: PaymentFee,
     pub transaction_fee: PaymentFee,
     pub connector: Connector,
@@ -498,7 +497,6 @@ async fn migrate_to_v4(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Erro
             let new_fed_config = FederationConfig {
                 invite_code: old_federation_config.invite_code,
                 federation_index: old_federation_config.federation_index,
-                timelock_delta: old_federation_config.timelock_delta,
                 lightning_fee: old_federation_config.fees.into(),
                 transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
                 connector: Connector::default(),
