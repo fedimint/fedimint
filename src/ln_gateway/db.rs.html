@@ -616,7 +616,38 @@
 <a href="#615" id="615">615</a>
 <a href="#616" id="616">616</a>
 <a href="#617" id="617">617</a>
-<a href="#618" id="618">618</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
+<a href="#627" id="627">627</a>
+<a href="#628" id="628">628</a>
+<a href="#629" id="629">629</a>
+<a href="#630" id="630">630</a>
+<a href="#631" id="631">631</a>
+<a href="#632" id="632">632</a>
+<a href="#633" id="633">633</a>
+<a href="#634" id="634">634</a>
+<a href="#635" id="635">635</a>
+<a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
@@ -631,6 +662,7 @@
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1, Amount};
 <span class="kw">use </span>fedimint_ln_common::serde_routing_fees;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
+<span class="kw">use </span>fedimint_lnv2_common::gateway_api::PaymentFee;
 <span class="kw">use </span>futures::{FutureExt, StreamExt};
 <span class="kw">use </span>lightning_invoice::RoutingFees;
 <span class="kw">use </span>rand::rngs::OsRng;
@@ -663,10 +695,6 @@
     /// it does not exist. Remember to commit the transaction after calling this
     /// method.
     </span><span class="kw">async fn </span>load_or_create_gateway_keypair(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; Keypair;
-
-    <span class="kw">async fn </span>load_gateway_config(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;GatewayConfiguration&gt;;
-
-    <span class="kw">async fn </span>set_gateway_config(<span class="kw-2">&amp;mut </span><span class="self">self</span>, gateway_config: <span class="kw-2">&amp;</span>GatewayConfiguration);
 
     <span class="kw">async fn </span>save_new_preimage_authentication(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
@@ -757,15 +785,6 @@
         }
     }
 
-    <span class="kw">async fn </span>load_gateway_config(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;GatewayConfiguration&gt; {
-        <span class="self">self</span>.get_value(<span class="kw-2">&amp;</span>GatewayConfigurationKey).<span class="kw">await
-    </span>}
-
-    <span class="kw">async fn </span>set_gateway_config(<span class="kw-2">&amp;mut </span><span class="self">self</span>, gateway_config: <span class="kw-2">&amp;</span>GatewayConfiguration) {
-        <span class="self">self</span>.insert_entry(<span class="kw-2">&amp;</span>GatewayConfigurationKey, gateway_config)
-            .<span class="kw">await</span>;
-    }
-
     <span class="kw">async fn </span>save_new_preimage_authentication(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         payment_hash: sha256::Hash,
@@ -830,14 +849,6 @@
                         <span class="string">"Federation Config"
                     </span>);
                 }
-                DbKeyPrefix::GatewayConfiguration =&gt; {
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_config) = <span class="self">self</span>.load_gateway_config().<span class="kw">await </span>{
-                        gateway_items.insert(
-                            <span class="string">"Gateway Configuration"</span>.to_string(),
-                            Box::new(gateway_config),
-                        );
-                    }
-                }
                 DbKeyPrefix::GatewayPublicKey =&gt; {
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(public_key) = <span class="self">self</span>.load_gateway_keypair().<span class="kw">await </span>{
                         gateway_items
@@ -872,6 +883,9 @@
 </span><span class="kw">struct </span>FederationIdKeyPrefixV0;
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">struct </span>FederationIdKeyPrefixV1;
+
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">struct </span>FederationIdKeyPrefix;
 
 <span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -889,12 +903,12 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
-</span><span class="kw">struct </span>FederationIdKey {
+</span><span class="kw">struct </span>FederationIdKeyV1 {
     id: FederationId,
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>FederationConfig {
+</span><span class="kw">pub struct </span>FederationConfigV1 {
     <span class="kw">pub </span>invite_code: InviteCode,
     <span class="comment">// Unique integer identifier per-federation that is assigned when the gateways joins a
     // federation.
@@ -906,9 +920,32 @@
     <span class="kw">pub </span>connector: Connector,
 }
 
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
+</span><span class="kw">struct </span>FederationIdKey {
+    id: FederationId,
+}
+
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>FederationConfig {
+    <span class="kw">pub </span>invite_code: InviteCode,
+    <span class="comment">// Unique integer identifier per-federation that is assigned when the gateways joins a
+    // federation.
+    </span><span class="attr">#[serde(alias = <span class="string">"mint_channel_id"</span>)]
+    </span><span class="kw">pub </span>federation_index: u64,
+    <span class="kw">pub </span>lightning_fee: PaymentFee,
+    <span class="kw">pub </span>transaction_fee: PaymentFee,
+    <span class="kw">pub </span>connector: Connector,
+}
+
 <span class="macro">impl_db_record!</span>(
     key = FederationIdKeyV0,
     value = FederationConfigV0,
+    db_prefix = DbKeyPrefix::FederationConfig,
+);
+
+<span class="macro">impl_db_record!</span>(
+    key = FederationIdKeyV1,
+    value = FederationConfigV1,
     db_prefix = DbKeyPrefix::FederationConfig,
 );
 
@@ -921,6 +958,10 @@
 <span class="macro">impl_db_lookup!</span>(
     key = FederationIdKeyV0,
     query_prefix = FederationIdKeyPrefixV0
+);
+<span class="macro">impl_db_lookup!</span>(
+    key = FederationIdKeyV1,
+    query_prefix = FederationIdKeyPrefixV1
 );
 <span class="macro">impl_db_lookup!</span>(key = FederationIdKey, query_prefix = FederationIdKeyPrefix);
 
@@ -959,10 +1000,10 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>GatewayConfigurationKey;
+</span><span class="kw">pub struct </span>GatewayConfigurationKeyV2;
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>GatewayConfiguration {
+</span><span class="kw">pub struct </span>GatewayConfigurationV2 {
     <span class="kw">pub </span>num_route_hints: u32,
     <span class="attr">#[serde(with = <span class="string">"serde_routing_fees"</span>)]
     </span><span class="kw">pub </span>routing_fees: RoutingFees,
@@ -982,10 +1023,9 @@
 );
 
 <span class="macro">impl_db_record!</span>(
-    key = GatewayConfigurationKey,
-    value = GatewayConfiguration,
+    key = GatewayConfigurationKeyV2,
+    value = GatewayConfigurationV2,
     db_prefix = DbKeyPrefix::GatewayConfiguration,
-    notify_on_modify = <span class="bool-val">true</span>,
 );
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
@@ -1012,6 +1052,7 @@
     migrations.insert(DatabaseVersion(<span class="number">0</span>), |ctx| migrate_to_v1(ctx).boxed());
     migrations.insert(DatabaseVersion(<span class="number">1</span>), |ctx| migrate_to_v2(ctx).boxed());
     migrations.insert(DatabaseVersion(<span class="number">2</span>), |ctx| migrate_to_v3(ctx).boxed());
+    migrations.insert(DatabaseVersion(<span class="number">3</span>), |ctx| migrate_to_v4(ctx).boxed());
     migrations
 }
 
@@ -1056,14 +1097,14 @@
             })
             .<span class="kw">await
         </span>{
-            <span class="kw">let </span>new_federation_config = FederationConfig {
+            <span class="kw">let </span>new_federation_config = FederationConfigV1 {
                 invite_code: old_federation_config.invite_code,
                 federation_index: old_federation_config.federation_index,
                 timelock_delta: old_federation_config.timelock_delta,
                 fees: old_federation_config.fees,
                 connector: Connector::default(),
             };
-            <span class="kw">let </span>new_federation_key = FederationIdKey {
+            <span class="kw">let </span>new_federation_key = FederationIdKeyV1 {
                 id: old_federation_id,
             };
             dbtx.insert_entry(<span class="kw-2">&amp;</span>new_federation_key, <span class="kw-2">&amp;</span>new_federation_config)
@@ -1078,15 +1119,41 @@
 
     <span class="comment">// If there is no old gateway configuration, there is nothing to do.
     </span><span class="kw">if let </span><span class="prelude-val">Some</span>(old_gateway_config) = dbtx.remove_entry(<span class="kw-2">&amp;</span>GatewayConfigurationKeyV1).<span class="kw">await </span>{
-        <span class="kw">let </span>new_gateway_config = GatewayConfiguration {
+        <span class="kw">let </span>new_gateway_config = GatewayConfigurationV2 {
             num_route_hints: old_gateway_config.num_route_hints,
             routing_fees: old_gateway_config.routing_fees,
             network: old_gateway_config.network,
         };
-        dbtx.insert_entry(<span class="kw-2">&amp;</span>GatewayConfigurationKey, <span class="kw-2">&amp;</span>new_gateway_config)
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>GatewayConfigurationKeyV2, <span class="kw-2">&amp;</span>new_gateway_config)
             .<span class="kw">await</span>;
     }
 
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">async fn </span>migrate_to_v4(<span class="kw-2">mut </span>ctx: MigrationContext&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = ctx.dbtx();
+
+    dbtx.remove_entry(<span class="kw-2">&amp;</span>GatewayConfigurationKeyV2).<span class="kw">await</span>;
+
+    <span class="kw">let </span>configs = dbtx
+        .find_by_prefix(<span class="kw-2">&amp;</span>FederationIdKeyPrefixV1)
+        .<span class="kw">await
+        </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+        .<span class="kw">await</span>;
+    <span class="kw">for </span>(fed_id, _old_config) <span class="kw">in </span>configs {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(old_federation_config) = dbtx.remove_entry(<span class="kw-2">&amp;</span>fed_id).<span class="kw">await </span>{
+            <span class="kw">let </span>new_fed_config = FederationConfig {
+                invite_code: old_federation_config.invite_code,
+                federation_index: old_federation_config.federation_index,
+                lightning_fee: old_federation_config.fees.into(),
+                transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
+                connector: Connector::default(),
+            };
+            <span class="kw">let </span>new_key = FederationIdKey { id: fed_id.id };
+            dbtx.insert_new_entry(<span class="kw-2">&amp;</span>new_key, <span class="kw-2">&amp;</span>new_fed_config).<span class="kw">await</span>;
+        }
+    }
     <span class="prelude-val">Ok</span>(())
 }
 
@@ -1116,6 +1183,7 @@
     <span class="kw">use </span>fedimint_core::db::Database;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::util::SafeUrl;
+    <span class="kw">use </span>fedimint_lnv2_common::gateway_api::PaymentFee;
     <span class="kw">use </span>fedimint_logging::TracingSetup;
     <span class="kw">use </span>fedimint_testing::db::{
         snapshot_db_migrations_with_decoders, validate_migrations_global, BYTE_32,
@@ -1124,7 +1192,6 @@
     <span class="kw">use </span>tracing::info;
 
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
-    <span class="kw">use </span><span class="kw">crate</span>::DEFAULT_FEES;
 
     <span class="kw">async fn </span>create_gatewayd_db_data(db: Database) {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
@@ -1139,7 +1206,7 @@
             invite_code,
             federation_index: <span class="number">2</span>,
             timelock_delta: <span class="number">10</span>,
-            fees: DEFAULT_FEES,
+            fees: PaymentFee::TRANSACTION_FEE_DEFAULT.into(),
         };
 
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>FederationIdKeyV0 { id: federation_id }, <span class="kw-2">&amp;</span>federation_config)
@@ -1153,7 +1220,7 @@
         <span class="kw">let </span>gateway_configuration = GatewayConfigurationV0 {
             password: <span class="string">"EXAMPLE"</span>.to_string(),
             num_route_hints: <span class="number">2</span>,
-            routing_fees: DEFAULT_FEES,
+            routing_fees: PaymentFee::TRANSACTION_FEE_DEFAULT.into(),
             network: NetworkLegacyEncodingWrapper(bitcoin::Network::Regtest),
         };
 
@@ -1217,12 +1284,7 @@
                             <span class="macro">ensure!</span>(num_auths &gt; <span class="number">0</span>, <span class="string">"validate_migrations was not able to read any PreimageAuthentication"</span>);
                             <span class="macro">info!</span>(<span class="string">"Validated PreimageAuthentication"</span>);
                         }
-                        DbKeyPrefix::GatewayConfiguration =&gt; {
-                            <span class="kw">let </span>gateway_configuration = dbtx.get_value(<span class="kw-2">&amp;</span>GatewayConfigurationKey).<span class="kw">await</span>;
-                            <span class="macro">ensure!</span>(gateway_configuration.is_some(), <span class="string">"validate_migrations was not able to read GatewayConfiguration"</span>);
-                            <span class="macro">info!</span>(<span class="string">"Validated GatewayConfiguration"</span>);
-                        }
-                        DbKeyPrefix::RegisteredIncomingContract =&gt; {}
+                        <span class="kw">_ </span>=&gt; {}
                     }
                 }
                 <span class="prelude-val">Ok</span>(())

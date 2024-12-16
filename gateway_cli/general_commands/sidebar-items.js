@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["GeneralCommands"],"struct":["PerFederationRoutingFees"]};
+window.SIDEBAR_ITEMS = {"enum":["GeneralCommands"]};

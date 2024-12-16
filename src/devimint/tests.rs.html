@@ -2358,7 +2358,15 @@
 <a href="#2357" id="2357">2357</a>
 <a href="#2358" id="2358">2358</a>
 <a href="#2359" id="2359">2359</a>
-<a href="#2360" id="2360">2360</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
+<a href="#2360" id="2360">2360</a>
+<a href="#2361" id="2361">2361</a>
+<a href="#2362" id="2362">2362</a>
+<a href="#2363" id="2363">2363</a>
+<a href="#2364" id="2364">2364</a>
+<a href="#2365" id="2365">2365</a>
+<a href="#2366" id="2366">2366</a>
+<a href="#2367" id="2367">2367</a>
+<a href="#2368" id="2368">2368</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -3031,6 +3039,12 @@
     <span class="kw">let </span>fed_id = fed.calculate_federation_id();
     <span class="kw">let </span>invite = fed.invite_code()<span class="question-mark">?</span>;
 
+    <span class="comment">// LNv1 expects no gateway routing fees
+    </span>gw_lnd
+        .set_federation_routing_fee(fed_id.clone(), <span class="number">0</span>, <span class="number">0</span>)
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="macro">cmd!</span>(client, <span class="string">"list-gateways"</span>).run().<span class="kw">await</span><span class="question-mark">?</span>;
+
     <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
 
     <span class="kw">let </span>invite_code = <span class="kw">if </span>fedimint_cli_version &gt;= <span class="kw-2">*</span>VERSION_0_3_0_ALPHA {
@@ -3229,13 +3243,7 @@
     <span class="comment">// Assert balances changed by 2_000_000 msat (amount sent) + 0 msat (fee)
     </span><span class="kw">let </span>final_lnd_outgoing_client_balance = client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>final_lnd_outgoing_gateway_balance = gw_lnd.ecash_balance(fed_id.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="comment">//anyhow::ensure!(
-    //    final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance ==
-    // 2_000_000,    "Client balance changed by {} on LND outgoing payment,
-    // expected 2_000_000",    (final_lnd_incoming_client_balance -
-    // final_lnd_outgoing_client_balance)
-    //);
-    </span><span class="macro">anyhow::ensure!</span>(
+    <span class="macro">anyhow::ensure!</span>(
         final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance == <span class="number">2_000_000</span>,
         <span class="string">"LND Gateway balance changed by {} on LND outgoing payment, expected 2_000_000"</span>,
         (final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance)
@@ -3465,6 +3473,10 @@
         .pegin_client(<span class="number">10_000</span>, dev_fed.fed.internal_client().<span class="kw">await</span><span class="question-mark">?</span>)
         .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>invite_code = dev_fed.fed.invite_code()<span class="question-mark">?</span>;
+    dev_fed
+        .gw_lnd
+        .set_federation_routing_fee(dev_fed.fed.calculate_federation_id(), <span class="number">0</span>, <span class="number">0</span>)
+        .<span class="kw">await</span><span class="question-mark">?</span>;
     run_standard_load_test(<span class="kw-2">&amp;</span>load_test_temp, <span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
     run_ln_circular_load_test(<span class="kw-2">&amp;</span>load_test_temp, <span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())
@@ -4636,6 +4648,10 @@
                 <span class="kw">let </span>task_group = task_group.clone();
                 <span class="kw">async move </span>{
                     <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+                    dev_fed
+                        .gw_lnd
+                        .set_federation_routing_fee(dev_fed.fed.calculate_federation_id(), <span class="number">0</span>, <span class="number">0</span>)
+                        .<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="kw">let </span>((), faucet) = <span class="macro">try_join!</span>(
                         dev_fed.fed.pegin_gateways(<span class="number">20_000</span>, <span class="macro">vec!</span>[<span class="kw-2">&amp;</span>dev_fed.gw_lnd]),
                         <span class="kw">async </span>{

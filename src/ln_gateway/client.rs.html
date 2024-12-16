@@ -221,9 +221,7 @@
 <a href="#220" id="220">220</a>
 <a href="#221" id="221">221</a>
 <a href="#222" id="222">222</a>
-<a href="#223" id="223">223</a>
-<a href="#224" id="224">224</a>
-<a href="#225" id="225">225</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
+<a href="#223" id="223">223</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
@@ -285,7 +283,6 @@
     ) -&gt; AdminResult&lt;ClientBuilder&gt; {
         <span class="kw">let </span>FederationConfig {
             federation_index,
-            timelock_delta,
             connector,
             ..
         } = federation_config.to_owned();
@@ -294,7 +291,6 @@
 
         <span class="kw">if </span>gateway.is_running_lnv1() {
             registry.attach(GatewayClientInit {
-                timelock_delta,
                 federation_index,
                 gateway: gateway.clone(),
             });

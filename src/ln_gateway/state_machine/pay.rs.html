@@ -988,6 +988,7 @@
 <span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, FundedContract, IdentifiableContract, Preimage};
 <span class="kw">use </span>fedimint_ln_common::{LightningInput, LightningOutput};
 <span class="kw">use </span>futures::future;
+<span class="kw">use </span>lightning_invoice::RoutingFees;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio_stream::StreamExt;
@@ -998,7 +999,9 @@
 <span class="kw">use </span><span class="kw">crate</span>::lightning::{LightningRpcError, PayInvoiceResponse};
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::events::{OutgoingPaymentFailed, OutgoingPaymentSucceeded};
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayClientModule;
-<span class="kw">use crate</span>::{GatewayState, RoutingFees};
+<span class="kw">use </span><span class="kw">crate</span>::GatewayState;
+
+<span class="kw">const </span>TIMELOCK_DELTA: u64 = <span class="number">10</span>;
 
 <span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
 </span><span class="doccomment">/// State machine that executes the Lightning payment on behalf of
@@ -1339,15 +1342,13 @@
                     contract_id,
                     contract: <span class="prelude-val">Some</span>(outgoing_contract_account.clone()),
                 })<span class="question-mark">?</span>;
-            <span class="kw">let </span>routing_fees = config.fees;
 
             <span class="kw">let </span>payment_parameters = <span class="self">Self</span>::validate_outgoing_account(
                 <span class="kw-2">&amp;</span>outgoing_contract_account,
                 context.redeem_key,
-                context.timelock_delta,
                 consensus_block_count.unwrap(),
                 <span class="kw-2">&amp;</span>payment_data,
-                routing_fees,
+                config.lightning_fee.into(),
             )
             .map_err(|e| {
                 <span class="macro">warn!</span>(<span class="string">"Invalid outgoing contract: {e:?}"</span>);
@@ -1551,7 +1552,6 @@
     <span class="kw">fn </span>validate_outgoing_account(
         account: <span class="kw-2">&amp;</span>OutgoingContractAccount,
         redeem_key: bitcoin::key::Keypair,
-        timelock_delta: u64,
         consensus_block_count: u64,
         payment_data: <span class="kw-2">&amp;</span>PaymentData,
         routing_fees: RoutingFees,
@@ -1581,7 +1581,7 @@
 
         <span class="kw">let </span>max_delay = u64::from(account.contract.timelock)
             .checked_sub(consensus_block_count.saturating_sub(<span class="number">1</span>))
-            .and_then(|delta| delta.checked_sub(timelock_delta));
+            .and_then(|delta| delta.checked_sub(TIMELOCK_DELTA));
         <span class="kw">if </span>max_delay.is_none() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingContractError::TimeoutTooClose);
         }

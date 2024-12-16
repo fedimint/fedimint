@@ -122,15 +122,7 @@
 <a href="#121" id="121">121</a>
 <a href="#122" id="122">122</a>
 <a href="#123" id="123">123</a>
-<a href="#124" id="124">124</a>
-<a href="#125" id="125">125</a>
-<a href="#126" id="126">126</a>
-<a href="#127" id="127">127</a>
-<a href="#128" id="128">128</a>
-<a href="#129" id="129">129</a>
-<a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
+<a href="#124" id="124">124</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -138,7 +130,6 @@
 <span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
-<span class="kw">use </span>fedimint_ln_common::config::GatewayFee;
 
 <span class="kw">use </span><span class="kw">super</span>::envs;
 <span class="kw">use </span><span class="kw">super</span>::lightning::LightningMode;
@@ -170,12 +161,7 @@
 
     <span class="doccomment">/// Bitcoin network this gateway will be running on
     </span><span class="attr">#[arg(long = <span class="string">"network"</span>, env = envs::FM_GATEWAY_NETWORK_ENV)]
-    </span>network: <span class="prelude-ty">Option</span>&lt;Network&gt;,
-
-    <span class="doccomment">/// Configured gateway routing fees
-    /// Format: &lt;base_msat&gt;,&lt;proportional_millionths&gt;
-    </span><span class="attr">#[arg(long = <span class="string">"default-fees"</span>, env = envs::FM_DEFAULT_GATEWAY_FEES_ENV)]
-    </span>default_fees: <span class="prelude-ty">Option</span>&lt;GatewayFee&gt;,
+    </span>network: Network,
 
     <span class="doccomment">/// Number of route hints to return in invoices
     </span><span class="attr">#[arg(
@@ -209,7 +195,6 @@
             bcrypt_password_hash,
             network: <span class="self">self</span>.network,
             num_route_hints: <span class="self">self</span>.num_route_hints,
-            fees: <span class="self">self</span>.default_fees.clone(),
             lightning_module_mode: <span class="self">self</span>.lightning_module_mode,
         })
     }
@@ -226,9 +211,8 @@
     <span class="kw">pub </span>listen: SocketAddr,
     <span class="kw">pub </span>versioned_api: SafeUrl,
     <span class="kw">pub </span>bcrypt_password_hash: bcrypt::HashParts,
-    <span class="kw">pub </span>network: <span class="prelude-ty">Option</span>&lt;Network&gt;,
+    <span class="kw">pub </span>network: Network,
     <span class="kw">pub </span>num_route_hints: u32,
-    <span class="kw">pub </span>fees: <span class="prelude-ty">Option</span>&lt;GatewayFee&gt;,
     <span class="kw">pub </span>lightning_module_mode: LightningModuleMode,
 }
 

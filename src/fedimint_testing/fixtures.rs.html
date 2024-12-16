@@ -258,12 +258,7 @@
 <a href="#257" id="257">257</a>
 <a href="#258" id="258">258</a>
 <a href="#259" id="259">259</a>
-<a href="#260" id="260">260</a>
-<a href="#261" id="261">261</a>
-<a href="#262" id="262">262</a>
-<a href="#263" id="263">263</a>
-<a href="#264" id="264">264</a>
-<a href="#265" id="265">265</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
+<a href="#260" id="260">260</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -286,7 +281,6 @@
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>fedimint_testing_core::test_dir;
-<span class="kw">use </span>lightning_invoice::RoutingFees;
 <span class="kw">use </span>ln_gateway::client::GatewayClientBuilder;
 <span class="kw">use </span>ln_gateway::config::LightningModuleMode;
 <span class="kw">use </span>ln_gateway::lightning::{ILnRpcClient, LightningBuilder, LightningContext};
@@ -479,11 +473,7 @@
                 <span class="kw-2">&amp;</span>bcrypt::hash(DEFAULT_GATEWAY_PASSWORD, bcrypt::DEFAULT_COST).unwrap(),
             )
             .unwrap(),
-            <span class="prelude-val">Some</span>(bitcoin::Network::Regtest),
-            RoutingFees {
-                base_msat: <span class="number">0</span>,
-                proportional_millionths: <span class="number">0</span>,
-            },
+            bitcoin::Network::Regtest,
             <span class="number">0</span>,
             gateway_db,
             <span class="comment">// Manually set the gateway's state to `Running`. In tests, we do don't run the

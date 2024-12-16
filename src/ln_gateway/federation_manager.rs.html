@@ -318,12 +318,7 @@
 <a href="#317" id="317">317</a>
 <a href="#318" id="318">318</a>
 <a href="#319" id="319">319</a>
-<a href="#320" id="320">320</a>
-<a href="#321" id="321">321</a>
-<a href="#322" id="322">322</a>
-<a href="#323" id="323">323</a>
-<a href="#324" id="324">324</a>
-<a href="#325" id="325">325</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#320" id="320">320</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
 <span class="kw">use </span>std::sync::Arc;
 
@@ -371,10 +366,6 @@
             index_to_federation: BTreeMap::new(),
             next_index: AtomicU64::new(INITIAL_INDEX),
         }
-    }
-
-    <span class="kw">pub fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-        <span class="self">self</span>.clients.is_empty()
     }
 
     <span class="kw">pub fn </span>add_client(<span class="kw-2">&amp;mut </span><span class="self">self</span>, index: u64, client: Spanned&lt;fedimint_client::ClientHandleArc&gt;) {
@@ -534,7 +525,7 @@
         <span class="self">self</span>.clients.get(federation_id)
     }
 
-    <span class="kw">async fn </span>federation_info(
+    <span class="kw">pub async fn </span>federation_info(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         federation_id: FederationId,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>, NonCommittable&gt;,
@@ -552,17 +543,17 @@
             .with(|client| <span class="kw">async move </span>{
                 <span class="kw">let </span>balance_msat = client.get_balance().<span class="kw">await</span>;
 
-                <span class="kw">let </span>routing_fees = dbtx
-                    .load_federation_config(federation_id)
-                    .<span class="kw">await
-                    </span>.map(|config| config.fees.into());
+                <span class="kw">let </span>fed_config = dbtx.load_federation_config(federation_id).<span class="kw">await</span>.ok_or(FederationNotConnected {
+                    federation_id_prefix: federation_id.to_prefix(),
+                })<span class="question-mark">?</span>;
 
                 <span class="prelude-val">Ok</span>(FederationInfo {
                     federation_id,
                     federation_name: <span class="self">self</span>.federation_name(client).<span class="kw">await</span>,
                     balance_msat,
                     federation_index,
-                    routing_fees,
+                    lightning_fee: fed_config.lightning_fee,
+                    transaction_fee: fed_config.transaction_fee,
                 })
             })
             .<span class="kw">await
@@ -584,18 +575,17 @@
 
             <span class="kw">let </span>balance_msat = client.borrow().with(|client| client.get_balance()).<span class="kw">await</span>;
 
-            <span class="kw">let </span>routing_fees = dbtx
-                .load_federation_config(<span class="kw-2">*</span>federation_id)
-                .<span class="kw">await
-                </span>.map(|config| config.fees.into());
-
-            federation_infos.push(FederationInfo {
-                federation_id: <span class="kw-2">*</span>federation_id,
-                federation_name: <span class="self">self</span>.federation_name(client.value()).<span class="kw">await</span>,
-                balance_msat,
-                federation_index,
-                routing_fees,
-            });
+            <span class="kw">let </span>fed_config = dbtx.load_federation_config(<span class="kw-2">*</span>federation_id).<span class="kw">await</span>;
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(fed_config) = fed_config {
+                federation_infos.push(FederationInfo {
+                    federation_id: <span class="kw-2">*</span>federation_id,
+                    federation_name: <span class="self">self</span>.federation_name(client.value()).<span class="kw">await</span>,
+                    balance_msat,
+                    federation_index,
+                    lightning_fee: fed_config.lightning_fee,
+                    transaction_fee: fed_config.transaction_fee,
+                });
+            }
         }
         federation_infos
     }

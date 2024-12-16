@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["add_gateway","await_receive_claimed","main","receive","remove_gateway","test_gateway_registration","test_payments","test_send"]};
+window.SIDEBAR_ITEMS = {"fn":["add_gateway","await_receive_claimed","main","receive","remove_gateway","test_fees","test_gateway_registration","test_payments","test_send"]};

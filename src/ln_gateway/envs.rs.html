@@ -63,12 +63,7 @@
 <a href="#62" id="62">62</a>
 <a href="#63" id="63">63</a>
 <a href="#64" id="64">64</a>
-<a href="#65" id="65">65</a>
-<a href="#66" id="66">66</a>
-<a href="#67" id="67">67</a>
-<a href="#68" id="68">68</a>
-<a href="#69" id="69">69</a>
-<a href="#70" id="70">70</a></pre></div><pre class="rust"><code><span class="doccomment">/// Environment variable that specifies the directory of the gateway's database.
+<a href="#65" id="65">65</a></pre></div><pre class="rust"><code><span class="doccomment">/// Environment variable that specifies the directory of the gateway's database.
 </span><span class="kw">pub const </span>FM_GATEWAY_DATA_DIR_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_DATA_DIR"</span>;
 
 <span class="doccomment">/// Environment variable that specifies the address the gateway's HTTP server
@@ -85,11 +80,6 @@
 <span class="doccomment">/// Environment variable that specifies that Bitcoin network that the gateway
 /// should use. Must match the network of the Lightning node.
 </span><span class="kw">pub const </span>FM_GATEWAY_NETWORK_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_NETWORK"</span>;
-
-<span class="doccomment">/// Environment variable that specifies the default routing fees the gateway
-/// takes for outgoing and incoming payments. Only applied to newly joined
-/// federations.
-</span><span class="kw">pub const </span>FM_DEFAULT_GATEWAY_FEES_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_DEFAULT_GATEWAY_FEES"</span>;
 
 <span class="doccomment">/// Environment variable that instructs the gateway how many route hints to
 /// include in LNv1 invoices.
