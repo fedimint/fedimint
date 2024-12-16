@@ -121,7 +121,16 @@
 <a href="#120" id="120">120</a>
 <a href="#121" id="121">121</a>
 <a href="#122" id="122">122</a>
-<a href="#123" id="123">123</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
 
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
@@ -140,6 +149,15 @@
     <span class="comment">// Used to verify that 0x50 key can be written to, which used to conflict with
     // `DatabaseVersionKeyV0`
     </span>ClientName = <span class="number">0x50</span>,
+    <span class="doccomment">/// Prefixes between 0xb0..=0xcf shall all be considered allocated for
+    /// historical and future external use
+    </span>ExternalReservedStart = <span class="number">0xb0</span>,
+    <span class="doccomment">/// Prefixes between 0xd0..=0xff shall all be considered allocated for
+    /// historical and future internal use
+    </span>CoreInternalReservedStart = <span class="number">0xd0</span>,
+    <span class="doccomment">/// Prefixes between 0xd0..=0xff shall all be considered allocated for
+    /// historical and future internal use
+    </span>CoreInternalReservedEnd = <span class="number">0xff</span>,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {

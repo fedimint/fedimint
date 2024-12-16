@@ -165,7 +165,16 @@
 <a href="#164" id="164">164</a>
 <a href="#165" id="165">165</a>
 <a href="#166" id="166">166</a>
-<a href="#167" id="167">167</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::ops;
 <span class="kw">use </span>std::time::SystemTime;
 
@@ -185,6 +194,15 @@
     ClaimedPegIn = <span class="number">0x2e</span>,
     RecoveryFinalized = <span class="number">0x2f</span>,
     RecoveryState = <span class="number">0x30</span>,
+    <span class="doccomment">/// Prefixes between 0xb0..=0xcf shall all be considered allocated for
+    /// historical and future external use
+    </span>ExternalReservedStart = <span class="number">0xb0</span>,
+    <span class="doccomment">/// Prefixes between 0xd0..=0xff shall all be considered allocated for
+    /// historical and future internal use
+    </span>CoreInternalReservedStart = <span class="number">0xd0</span>,
+    <span class="doccomment">/// Prefixes between 0xd0..=0xff shall all be considered allocated for
+    /// historical and future internal use
+    </span>CoreInternalReservedEnd = <span class="number">0xff</span>,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {

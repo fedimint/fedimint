@@ -478,7 +478,14 @@
 <a href="#477" id="477">477</a>
 <a href="#478" id="478">478</a>
 <a href="#479" id="479">479</a>
-<a href="#480" id="480">480</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
 
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>fedimint_core::core::OperationId;
@@ -510,6 +517,13 @@
     PaymentResult = <span class="number">0x29</span>,
     MetaOverridesDeprecated = <span class="number">0x30</span>,
     LightningGateway = <span class="number">0x45</span>,
+    <span class="doccomment">/// Prefixes between 0xb0..=0xcf shall all be considered allocated for
+    /// historical and future external use
+    </span>ExternalReservedStart = <span class="number">0xb0</span>,
+    <span class="doccomment">/// Prefixes between 0xd0..=0xff shall all be considered allocated for
+    /// historical and future internal use
+    </span>CoreInternalReservedStart = <span class="number">0xd0</span>,
+    CoreInternalReservedEnd = <span class="number">0xff</span>,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
