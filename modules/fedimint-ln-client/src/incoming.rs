@@ -20,7 +20,7 @@ use fedimint_core::runtime::sleep;
 use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
 use fedimint_ln_common::contracts::{ContractId, Preimage};
-use fedimint_ln_common::{LightningInput, LightningOutputOutcome};
+use fedimint_ln_common::LightningInput;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -104,7 +104,7 @@ impl State for IncomingStateMachine {
         global_context: &DynGlobalClientContext,
     ) -> Vec<fedimint_client::sm::StateTransition<Self>> {
         match &self.state {
-            IncomingSmStates::FundingOffer(state) => state.transitions(global_context, context),
+            IncomingSmStates::FundingOffer(state) => state.transitions(global_context),
             IncomingSmStates::DecryptingPreimage(_state) => {
                 DecryptingPreimageState::transitions(&self.common, global_context, context)
             }
@@ -160,15 +160,10 @@ impl FundingOfferState {
     fn transitions(
         &self,
         global_context: &DynGlobalClientContext,
-        context: &LightningClientContext,
     ) -> Vec<StateTransition<IncomingStateMachine>> {
         let txid = self.txid;
         vec![StateTransition::new(
-            Self::await_funding_success(
-                global_context.clone(),
-                OutPoint { txid, out_idx: 0 },
-                context.clone(),
-            ),
+            Self::await_funding_success(global_context.clone(), txid),
             |_dbtx, result, old_state| {
                 Box::pin(async { Self::transition_funding_success(result, old_state) })
             },
@@ -177,41 +172,12 @@ impl FundingOfferState {
 
     async fn await_funding_success(
         global_context: DynGlobalClientContext,
-        out_point: OutPoint,
-        context: LightningClientContext,
+        txid: TransactionId,
     ) -> Result<(), IncomingSmError> {
-        debug!("Awaiting funding success for outpoint: {out_point:?}");
-        for retry in 0.. {
-            let sleep = (retry * 15).min(90);
-            match global_context
-                .api()
-                .await_output_outcome::<LightningOutputOutcome>(
-                    out_point,
-                    Duration::from_secs(90),
-                    &context.ln_decoder,
-                )
-                .await
-            {
-                Ok(_) => {
-                    debug!("Funding success for outpoint: {out_point:?}");
-                    return Ok(());
-                }
-                Err(e) if e.is_rejected() => {
-                    warn!("Funding failed for outpoint: {out_point:?}: {e:?}");
-                    return Err(IncomingSmError::FailedToFundContract {
-                        error_message: e.to_string(),
-                    });
-                }
-                Err(e) => {
-                    e.report_if_important();
-                    debug!(error = %e, "Awaiting output outcome failed, retrying in {sleep}s",);
-                }
-            }
-            // give some time for other things to run
-            fedimint_core::runtime::sleep(Duration::from_secs(sleep)).await;
-        }
-
-        unreachable!("there is too many u64s to ever get here")
+        global_context
+            .await_tx_accepted(txid)
+            .await
+            .map_err(|error_message| IncomingSmError::FailedToFundContract { error_message })
     }
 
     fn transition_funding_success(

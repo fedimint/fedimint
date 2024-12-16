@@ -1,11 +1,8 @@
 use std::collections::BTreeMap;
 use std::hash;
-use std::time::Duration;
 
 use anyhow::{anyhow, bail};
-use fedimint_api_client::api::{
-    deserialize_outcome, DynGlobalApi, FederationApiExt, SerdeOutputOutcome,
-};
+use fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_client::module::{ClientContext, OutPointRange};
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -15,7 +12,6 @@ use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::secp256k1::{Keypair, Secp256k1, Signing};
-use fedimint_core::task::sleep;
 use fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
@@ -33,8 +29,6 @@ use tracing::{debug, error};
 use crate::client_db::NoteKey;
 use crate::event::NoteCreated;
 use crate::{MintClientContext, MintClientModule, SpendableNote};
-
-const RETRY_DELAY: Duration = Duration::from_secs(1);
 
 /// Child ID used to derive the spend key from a note's [`DerivableSecret`]
 const SPEND_KEY_CHILD_ID: ChildId = ChildId(0);
@@ -206,38 +200,32 @@ impl MintOutputStatesCreated {
         module_decoder: Decoder,
         amount: Amount,
         message: BlindedMessage,
-        peer_tbs_pks: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
+        tbs_pks: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
     ) -> BTreeMap<PeerId, BlindedSignatureShare> {
-        loop {
-            let decoder = module_decoder.clone();
-            let pks = peer_tbs_pks.clone();
-
-            match global_context
-                .api()
-                .request_with_strategy(
-                    // this query collects a threshold of 2f + 1 valid blind signature shares
-                    FilterMapThreshold::new(
-                        move |peer, outcome| {
-                            verify_blind_share(peer, &outcome, amount, message, &decoder, &pks)
-                        },
-                        global_context.api().all_peers().to_num_peers(),
-                    ),
-                    AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
-                    ApiRequestErased::new(OutPoint {
-                        txid: common.txid(),
-                        out_idx: common.out_point_range.start_idx(),
-                    }),
-                )
-                .await
-            {
-                Ok(outcome) => return outcome,
-                Err(error) => {
-                    error.report_if_important();
-
-                    sleep(RETRY_DELAY).await;
-                }
-            };
-        }
+        global_context
+            .api()
+            .request_with_strategy_retry(
+                // this query collects a threshold of 2f + 1 valid blind signature shares
+                FilterMapThreshold::new(
+                    move |peer, outcome| {
+                        verify_blind_share(
+                            peer,
+                            &outcome,
+                            amount,
+                            message,
+                            &module_decoder,
+                            &tbs_pks,
+                        )
+                    },
+                    global_context.api().all_peers().to_num_peers(),
+                ),
+                AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
+                ApiRequestErased::new(OutPoint {
+                    txid: common.txid(),
+                    out_idx: common.out_point_range.start_idx(),
+                }),
+            )
+            .await
     }
 
     async fn transition_outcome_ready(
@@ -386,7 +374,7 @@ impl MintOutputStatesCreatedMulti {
         common: MintOutputCommon,
         module_decoder: Decoder,
         issuance_requests: BTreeMap<u64, (Amount, NoteIssuanceRequest)>,
-        peer_tbs_pks: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
+        tbs_pks: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
     ) -> Vec<(u64, BTreeMap<PeerId, BlindedSignatureShare>)> {
         let mut ret = vec![];
         // NOTE: We need a new api endpoint that can confirm multiple notes at once?
@@ -397,16 +385,33 @@ impl MintOutputStatesCreatedMulti {
         // Wait for the result of the first output only, to save of server side
         // resources
         if let Some((out_idx, (amount, issuance_request))) = issuance_requests_iter.next() {
-            let blinded_sig_share = retry_await_output_outcome(
-                api,
-                &module_decoder,
-                &peer_tbs_pks,
-                common.txid(),
-                out_idx,
-                amount,
-                issuance_request,
-            )
-            .await;
+            let module_decoder = module_decoder.clone();
+            let tbs_pks = tbs_pks.clone();
+
+            let blinded_sig_share = api
+                .request_with_strategy_retry(
+                    // this query collects a threshold of 2f + 1 valid blind signature
+                    // shares
+                    FilterMapThreshold::new(
+                        move |peer, outcome| {
+                            verify_blind_share(
+                                peer,
+                                &outcome,
+                                amount,
+                                issuance_request.blinded_message(),
+                                &module_decoder,
+                                &tbs_pks,
+                            )
+                        },
+                        api.all_peers().to_num_peers(),
+                    ),
+                    AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
+                    ApiRequestErased::new(OutPoint {
+                        txid: common.txid(),
+                        out_idx,
+                    }),
+                )
+                .await;
 
             ret.push((out_idx, blinded_sig_share));
         } else {
@@ -418,23 +423,35 @@ impl MintOutputStatesCreatedMulti {
         ret.extend(
             join_all(
                 issuance_requests_iter.map(|(out_idx, (amount, issuance_request))| {
-                    // let issuance_request = issuance_request;
                     let module_decoder = module_decoder.clone();
-                    let peer_tbs_pks = peer_tbs_pks.clone();
+                    let tbs_pks = tbs_pks.clone();
                     async move {
-                        (
-                            out_idx,
-                            retry_await_output_outcome(
-                                api,
-                                &module_decoder,
-                                &peer_tbs_pks,
-                                common.txid(),
-                                out_idx,
-                                amount,
-                                issuance_request,
+                        let blinded_sig_share = api
+                            .request_with_strategy_retry(
+                                // this query collects a threshold of 2f + 1 valid blind signature
+                                // shares
+                                FilterMapThreshold::new(
+                                    move |peer, outcome| {
+                                        verify_blind_share(
+                                            peer,
+                                            &outcome,
+                                            amount,
+                                            issuance_request.blinded_message(),
+                                            &module_decoder,
+                                            &tbs_pks,
+                                        )
+                                    },
+                                    api.all_peers().to_num_peers(),
+                                ),
+                                AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
+                                ApiRequestErased::new(OutPoint {
+                                    txid: common.txid(),
+                                    out_idx,
+                                }),
                             )
-                            .await,
-                        )
+                            .await;
+
+                        (out_idx, blinded_sig_share)
                     }
                 }),
             )
@@ -520,49 +537,6 @@ impl MintOutputStatesCreatedMulti {
             }),
         }
     }
-}
-
-async fn retry_await_output_outcome(
-    api: &DynGlobalApi,
-    module_decoder: &Decoder,
-    peer_tbs_pks: &BTreeMap<PeerId, Tiered<PublicKeyShare>>,
-    txid: TransactionId,
-    out_idx: u64,
-    amount: Amount,
-    issuance_request: NoteIssuanceRequest,
-) -> BTreeMap<PeerId, BlindedSignatureShare> {
-    fedimint_core::util::retry(
-        "await and fetch output sigs",
-        fedimint_core::util::backoff_util::custom_backoff(RETRY_DELAY, RETRY_DELAY * 10, None),
-        || async {
-            let decoder = module_decoder.clone();
-            let pks = peer_tbs_pks.clone();
-
-            Ok(api
-                .request_with_strategy(
-                    // this query collects a threshold of 2f + 1 valid blind signature
-                    // shares
-                    FilterMapThreshold::new(
-                        move |peer, outcome| {
-                            verify_blind_share(
-                                peer,
-                                &outcome,
-                                amount,
-                                issuance_request.blinded_message(),
-                                &decoder,
-                                &pks,
-                            )
-                        },
-                        api.all_peers().to_num_peers(),
-                    ),
-                    AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
-                    ApiRequestErased::new(OutPoint { txid, out_idx }),
-                )
-                .await?)
-        },
-    )
-    .await
-    .expect("Will retry forever")
 }
 
 /// # Panics

@@ -5,20 +5,21 @@ use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{Decoder, OperationId};
+use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::{secp256k1, Amount, OutPoint, TransactionId};
 use fedimint_ln_common::contracts::outgoing::OutgoingContractData;
-use fedimint_ln_common::contracts::{ContractId, IdentifiableContract};
+use fedimint_ln_common::contracts::{ContractId, FundedContract, IdentifiableContract};
 use fedimint_ln_common::route_hints::RouteHint;
-use fedimint_ln_common::{LightningGateway, LightningInput, LightningOutputOutcome, PrunedInvoice};
+use fedimint_ln_common::{LightningGateway, LightningInput, PrunedInvoice};
+use futures::future::pending;
 use lightning_invoice::Bolt11Invoice;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::{debug, error, warn};
+use tracing::{error, warn};
 
 pub use self::lightningpay::LightningPayStates;
 use crate::api::LnFederationApi;
@@ -106,7 +107,7 @@ impl State for LightningPayStateMachine {
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
             LightningPayStates::CreatedOutgoingLnContract(created_outgoing_ln_contract) => {
-                created_outgoing_ln_contract.transitions(context, global_context)
+                created_outgoing_ln_contract.transitions(global_context)
             }
             LightningPayStates::Funded(funded) => {
                 funded.transitions(self.common.clone(), context.clone(), global_context.clone())
@@ -141,7 +142,6 @@ pub struct LightningPayCreatedOutgoingLnContract {
 impl LightningPayCreatedOutgoingLnContract {
     fn transitions(
         &self,
-        context: &LightningClientContext,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<LightningPayStateMachine>> {
         let txid = self.funding_txid;
@@ -149,12 +149,7 @@ impl LightningPayCreatedOutgoingLnContract {
         let success_context = global_context.clone();
         let gateway = self.gateway.clone();
         vec![StateTransition::new(
-            Self::await_outgoing_contract_funded(
-                context.ln_decoder.clone(),
-                success_context,
-                txid,
-                contract_id,
-            ),
+            Self::await_outgoing_contract_funded(success_context, txid, contract_id),
             move |_dbtx, result, old_state| {
                 let gateway = gateway.clone();
                 Box::pin(async move {
@@ -165,62 +160,28 @@ impl LightningPayCreatedOutgoingLnContract {
     }
 
     async fn await_outgoing_contract_funded(
-        module_decoder: Decoder,
         global_context: DynGlobalClientContext,
         txid: TransactionId,
         contract_id: ContractId,
     ) -> Result<u32, GatewayPayError> {
-        let out_point = OutPoint { txid, out_idx: 0 };
+        global_context
+            .await_tx_accepted(txid)
+            .await
+            .map_err(|_| GatewayPayError::OutgoingContractError)?;
 
-        loop {
-            match global_context
-                .api()
-                .await_output_outcome::<LightningOutputOutcome>(
-                    out_point,
-                    Duration::from_millis(i32::MAX as u64),
-                    &module_decoder,
-                )
-                .await
-            {
-                Ok(_) => break,
-                Err(e) if e.is_rejected() => {
-                    return Err(GatewayPayError::OutgoingContractError);
-                }
-                Err(e) => {
-                    e.report_if_important();
+        match global_context
+            .module_api()
+            .await_contract(contract_id)
+            .await
+            .contract
+        {
+            FundedContract::Outgoing(contract) => Ok(contract.timelock),
+            FundedContract::Incoming(..) => {
+                error!("Federation returned wrong account type");
 
-                    debug!(
-                        error = e.to_string(),
-                        transaction_id = txid.to_string(),
-                        contract_id = contract_id.to_string(),
-                        "Retrying in {}s",
-                        RETRY_DELAY.as_secs_f64()
-                    );
-                    sleep(RETRY_DELAY).await;
-                }
+                pending().await
             }
         }
-
-        let contract = loop {
-            match global_context
-                .module_api()
-                .get_outgoing_contract(contract_id)
-                .await
-            {
-                Ok(contract) => {
-                    break contract;
-                }
-                Err(e) => {
-                    e.report_if_important();
-                    debug!(
-                        "Fetching contract failed, retrying in {}s",
-                        RETRY_DELAY.as_secs_f64()
-                    );
-                    sleep(RETRY_DELAY).await;
-                }
-            }
-        };
-        Ok(contract.contract.timelock)
     }
 
     fn transition_outgoing_contract_funded(
@@ -511,18 +472,10 @@ async fn await_contract_cancelled(contract_id: ContractId, global_context: DynGl
 /// Waits until a specific block height at which the contract will be able to be
 /// reclaimed.
 async fn await_contract_timeout(global_context: DynGlobalClientContext, timelock: u32) {
-    loop {
-        match global_context
-            .module_api()
-            .wait_block_height(u64::from(timelock))
-            .await
-        {
-            Ok(()) => return,
-            Err(error) => error!("Error waiting for block height: {timelock} {error:?}"),
-        }
-
-        sleep(RETRY_DELAY).await;
-    }
+    global_context
+        .module_api()
+        .wait_block_height(u64::from(timelock))
+        .await;
 }
 
 /// Claims a refund for an expired or cancelled outgoing contract

@@ -1,12 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::time::Duration;
 
 use fedimint_api_client::api::{
     FederationApiExt, FederationResult, IModuleFederationApi, PeerResult,
 };
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
-use fedimint_core::task::{sleep, MaybeSend, MaybeSync};
+use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId};
 use fedimint_lnv2_common::endpoint_constants::{
@@ -15,8 +14,6 @@ use fedimint_lnv2_common::endpoint_constants::{
 };
 use fedimint_lnv2_common::ContractId;
 use rand::seq::SliceRandom;
-
-const RETRY_DELAY: Duration = Duration::from_secs(1);
 
 #[apply(async_trait_maybe_send!)]
 pub trait LightningFederationApi {
@@ -49,37 +46,20 @@ where
     }
 
     async fn await_incoming_contract(&self, contract_id: &ContractId, expiration: u64) -> bool {
-        loop {
-            match self
-                .request_current_consensus::<Option<ContractId>>(
-                    AWAIT_INCOMING_CONTRACT_ENDPOINT.to_string(),
-                    ApiRequestErased::new((contract_id, expiration)),
-                )
-                .await
-            {
-                Ok(response) => return response.is_some(),
-                Err(error) => error.report_if_important(),
-            }
-
-            sleep(RETRY_DELAY).await;
-        }
+        self.request_current_consensus_retry::<Option<ContractId>>(
+            AWAIT_INCOMING_CONTRACT_ENDPOINT.to_string(),
+            ApiRequestErased::new((contract_id, expiration)),
+        )
+        .await
+        .is_some()
     }
 
     async fn await_preimage(&self, contract_id: &ContractId, expiration: u64) -> Option<[u8; 32]> {
-        loop {
-            match self
-                .request_current_consensus(
-                    AWAIT_PREIMAGE_ENDPOINT.to_string(),
-                    ApiRequestErased::new((contract_id, expiration)),
-                )
-                .await
-            {
-                Ok(expiration) => return expiration,
-                Err(error) => error.report_if_important(),
-            }
-
-            sleep(RETRY_DELAY).await;
-        }
+        self.request_current_consensus_retry(
+            AWAIT_PREIMAGE_ENDPOINT.to_string(),
+            ApiRequestErased::new((contract_id, expiration)),
+        )
+        .await
     }
 
     async fn gateways(&self) -> FederationResult<Vec<SafeUrl>> {
@@ -118,8 +98,7 @@ where
 
     async fn gateways_from_peer(&self, peer: PeerId) -> PeerResult<Vec<SafeUrl>> {
         let gateways = self
-            .request_single_peer_typed::<Vec<SafeUrl>>(
-                None,
+            .request_single_peer::<Vec<SafeUrl>>(
                 GATEWAYS_ENDPOINT.to_string(),
                 ApiRequestErased::default(),
                 peer,

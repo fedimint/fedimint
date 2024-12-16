@@ -3,7 +3,6 @@ use std::fmt::Debug;
 use std::pin::Pin;
 use std::result;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::anyhow;
 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
@@ -20,7 +19,6 @@ use fedimint_core::backup::ClientBackupSnapshot;
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -32,8 +30,7 @@ use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::backoff_util::api_networking_backoff;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, util, NumPeersExt, OutPoint, PeerId,
-    TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, util, NumPeersExt, PeerId, TransactionId,
 };
 use fedimint_logging::LOG_CLIENT_NET_API;
 use futures::future::pending;
@@ -116,40 +113,16 @@ pub trait IRawFederationApi: Debug + MaybeSend + MaybeSync {
 /// [`IRawFederationApi`].
 #[apply(async_trait_maybe_send!)]
 pub trait FederationApiExt: IRawFederationApi {
-    /// Make a request to a single peer in the federation with an optional
-    /// timeout.
-    async fn request_single_peer(
+    async fn request_single_peer<Ret>(
         &self,
-        timeout: Option<Duration>,
         method: String,
         params: ApiRequestErased,
-        peer_id: PeerId,
-    ) -> JsonRpcResult<jsonrpsee_core::JsonValue> {
-        let request = async {
-            self.request_raw(peer_id, &method, &[params.to_json()])
-                .await
-        };
-
-        if let Some(timeout) = timeout {
-            match fedimint_core::runtime::timeout(timeout, request).await {
-                Ok(result) => result,
-                Err(_timeout) => Err(JsonRpcClientError::RequestTimeout),
-            }
-        } else {
-            request.await
-        }
-    }
-    async fn request_single_peer_typed<Ret>(
-        &self,
-        timeout: Option<Duration>,
-        method: String,
-        params: ApiRequestErased,
-        peer_id: PeerId,
+        peer: PeerId,
     ) -> PeerResult<Ret>
     where
         Ret: DeserializeOwned,
     {
-        self.request_single_peer(timeout, method, params, peer_id)
+        self.request_raw(peer, &method, &[params.to_json()])
             .await
             .map_err(PeerError::Rpc)
             .and_then(|v| {
@@ -157,11 +130,8 @@ pub trait FederationApiExt: IRawFederationApi {
             })
     }
 
-    /// Like [`Self::request_single_peer`], but API more like
-    /// [`Self::request_with_strategy`].
     async fn request_single_peer_federation<FedRet>(
         &self,
-        timeout: Option<Duration>,
         method: String,
         params: ApiRequestErased,
         peer_id: PeerId,
@@ -169,25 +139,24 @@ pub trait FederationApiExt: IRawFederationApi {
     where
         FedRet: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
-        Ok(self
-            .request_single_peer(timeout, method.clone(), params.clone(), peer_id)
+        self.request_raw(peer_id, &method, &[params.to_json()])
             .await
             .map_err(PeerError::Rpc)
             .and_then(|v| {
                 serde_json::from_value(v).map_err(|e| PeerError::ResponseDeserialization(e.into()))
             })
-            .map_err(|e| error::FederationError::new_one_peer(peer_id, method, params, e))?)
+            .map_err(|e| error::FederationError::new_one_peer(peer_id, method, params, e))
     }
 
     /// Make an aggregate request to federation, using `strategy` to logically
     /// merge the responses.
     #[instrument(target = "fm::api", skip_all, fields(method=method))]
-    async fn request_with_strategy<PeerRet: serde::de::DeserializeOwned, FedRet: Debug>(
+    async fn request_with_strategy<PR: DeserializeOwned, FR: Debug>(
         &self,
-        mut strategy: impl QueryStrategy<PeerRet, FedRet> + MaybeSend,
+        mut strategy: impl QueryStrategy<PR, FR> + MaybeSend,
         method: String,
         params: ApiRequestErased,
-    ) -> FederationResult<FedRet> {
+    ) -> FederationResult<FR> {
         // NOTE: `FuturesUnorderded` is a footgun, but all we do here is polling
         // completed results from it and we don't do any `await`s when
         // processing them, it should be totally OK.
@@ -202,7 +171,7 @@ pub trait FederationApiExt: IRawFederationApi {
                 let params = &params;
                 async move {
                     let result = self
-                        .request_single_peer_typed(None, method.clone(), params.clone(), *peer)
+                        .request_single_peer(method.clone(), params.clone(), *peer)
                         .await;
 
                     (*peer, result)
@@ -228,12 +197,7 @@ pub trait FederationApiExt: IRawFederationApi {
                                 let params = &params;
                                 async move {
                                     let result = self
-                                        .request_single_peer_typed(
-                                            None,
-                                            method.clone(),
-                                            params.clone(),
-                                            peer,
-                                        )
+                                        .request_single_peer(method.clone(), params.clone(), peer)
                                         .await;
 
                                     (peer, result)
@@ -264,8 +228,7 @@ pub trait FederationApiExt: IRawFederationApi {
         }
     }
 
-    #[instrument(target = "fm::api", skip_all, fields(method=method))]
-    async fn request_with_strategy_and_retry<PR: DeserializeOwned + MaybeSend, FR: Debug>(
+    async fn request_with_strategy_retry<PR: DeserializeOwned + MaybeSend, FR: Debug>(
         &self,
         mut strategy: impl QueryStrategy<PR, FR> + MaybeSend,
         method: String,
@@ -288,15 +251,10 @@ pub trait FederationApiExt: IRawFederationApi {
                         "api-request-{method}-{peer}",
                         api_networking_backoff(),
                         || async {
-                            self.request_single_peer_typed(
-                                None,
-                                method.clone(),
-                                params.clone(),
-                                *peer,
-                            )
-                            .await
-                            .inspect_err(|e| e.report_if_important(*peer))
-                            .map_err(|e| anyhow!(e.to_string()))
+                            self.request_single_peer(method.clone(), params.clone(), *peer)
+                                .await
+                                .inspect_err(|e| e.report_if_important(*peer))
+                                .map_err(|e| anyhow!(e.to_string()))
                         },
                     )
                     .await
@@ -324,8 +282,7 @@ pub trait FederationApiExt: IRawFederationApi {
                                     "api-request-{method}-{peer}",
                                     api_networking_backoff(),
                                     || async {
-                                        self.request_single_peer_typed(
-                                            None,
+                                        self.request_single_peer(
                                             method.clone(),
                                             params.clone(),
                                             peer,
@@ -358,7 +315,7 @@ pub trait FederationApiExt: IRawFederationApi {
         params: ApiRequestErased,
     ) -> FederationResult<Ret>
     where
-        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
+        Ret: DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         self.request_with_strategy(
             ThresholdConsensus::new(self.all_peers().to_num_peers()),
@@ -374,9 +331,9 @@ pub trait FederationApiExt: IRawFederationApi {
         params: ApiRequestErased,
     ) -> Ret
     where
-        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
+        Ret: DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
-        self.request_with_strategy_and_retry(
+        self.request_with_strategy_retry(
             ThresholdConsensus::new(self.all_peers().to_num_peers()),
             method,
             params,
@@ -391,7 +348,7 @@ pub trait FederationApiExt: IRawFederationApi {
         auth: ApiAuth,
     ) -> FederationResult<Ret>
     where
-        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
+        Ret: DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         let Some(self_peer_id) = self.self_peer() else {
             return Err(FederationError::general(
@@ -400,13 +357,8 @@ pub trait FederationApiExt: IRawFederationApi {
                 anyhow::format_err!("Admin peer_id not set"),
             ));
         };
-        self.request_single_peer_federation(
-            None,
-            method.into(),
-            params.with_auth(auth),
-            self_peer_id,
-        )
-        .await
+        self.request_single_peer_federation(method.into(), params.with_auth(auth), self_peer_id)
+            .await
     }
 
     async fn request_admin_no_auth<Ret>(
@@ -415,7 +367,7 @@ pub trait FederationApiExt: IRawFederationApi {
         params: ApiRequestErased,
     ) -> FederationResult<Ret>
     where
-        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
+        Ret: DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         let Some(self_peer_id) = self.self_peer() else {
             return Err(FederationError::general(
@@ -425,7 +377,7 @@ pub trait FederationApiExt: IRawFederationApi {
             ));
         };
 
-        self.request_single_peer_federation(None, method.into(), params, self_peer_id)
+        self.request_single_peer_federation(method.into(), params, self_peer_id)
             .await
     }
 }
@@ -508,31 +460,6 @@ impl DynGlobalApi {
             &invite_code.api_secret(),
         ))
         .into()
-    }
-
-    pub async fn await_output_outcome<R>(
-        &self,
-        outpoint: OutPoint,
-        timeout: Duration,
-        module_decoder: &Decoder,
-    ) -> OutputOutcomeResult<R>
-    where
-        R: OutputOutcome,
-    {
-        fedimint_core::runtime::timeout(timeout, async {
-            let outcome: SerdeOutputOutcome = self
-                .inner
-                .request_current_consensus(
-                    AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
-                    ApiRequestErased::new(outpoint),
-                )
-                .await
-                .map_err(OutputOutcomeError::Federation)?;
-
-            deserialize_outcome(&outcome, module_decoder)
-        })
-        .await
-        .map_err(|_| OutputOutcomeError::Timeout(timeout))?
     }
 }
 

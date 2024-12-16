@@ -426,8 +426,7 @@ where
             async move {
                 (
                     peer_id,
-                    self.request_single_peer(
-                        None,
+                    self.request_single_peer::<()>(
                         SUBMIT_API_ANNOUNCEMENT_ENDPOINT.into(),
                         ApiRequestErased::new(SignedApiAnnouncementSubmission {
                             signed_api_announcement: announcement_inner,
@@ -442,8 +441,8 @@ where
         .await
         .into_iter()
         .filter_map(|(peer_id, result)| match result {
-            Ok(_) => None,
-            Err(e) => Some((peer_id, e.into())),
+            Ok(()) => None,
+            Err(e) => Some((peer_id, e)),
         })
         .collect::<BTreeMap<_, _>>();
 
@@ -463,8 +462,7 @@ where
         &self,
         guardian: PeerId,
     ) -> PeerResult<BTreeMap<PeerId, SignedApiAnnouncement>> {
-        self.request_single_peer_typed(
-            None,
+        self.request_single_peer(
             API_ANNOUNCEMENTS_ENDPOINT.to_owned(),
             ApiRequestErased::default(),
             guardian,
@@ -491,8 +489,7 @@ where
     }
 
     async fn fedimintd_version(&self, peer_id: PeerId) -> PeerResult<String> {
-        self.request_single_peer_typed(
-            None,
+        self.request_single_peer(
             FEDIMINTD_VERSION_ENDPOINT.to_owned(),
             ApiRequestErased::default(),
             peer_id,
