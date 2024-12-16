@@ -113,12 +113,14 @@ pub struct GatewayInfo {
     pub federations: Vec<FederationInfo>,
     /// Mapping from short channel id to the federation id that it belongs to.
     // TODO: Remove this alias once it no longer breaks backwards compatibility.
+    // TODO(support:v0.5): Remove the `Option` wrapper.
     #[serde(alias = "channels")]
     pub federation_fake_scids: Option<BTreeMap<u64, FederationId>>,
     pub lightning_pub_key: Option<String>,
     pub lightning_alias: Option<String>,
     pub gateway_id: secp256k1::PublicKey,
     pub gateway_state: String,
+    // TODO(support:v0.5): Remove the `Option` wrapper.
     pub network: Option<Network>,
     // TODO: This is here to allow for backwards compatibility with old versions of this struct. We
     // should be able to remove it once 0.4.0 is released.

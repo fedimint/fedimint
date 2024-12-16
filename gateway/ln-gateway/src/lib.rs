@@ -772,23 +772,6 @@ impl Gateway {
     /// Returns information about the Gateway back to the client when requested
     /// via the webserver.
     pub async fn handle_get_info(&self) -> AdminResult<GatewayInfo> {
-        let GatewayState::Running { lightning_context } = self.get_state().await else {
-            return Ok(GatewayInfo {
-                federations: vec![],
-                federation_fake_scids: None,
-                version_hash: fedimint_build_code_version_env!().to_string(),
-                lightning_pub_key: None,
-                lightning_alias: None,
-                gateway_id: self.gateway_id,
-                gateway_state: self.state.read().await.to_string(),
-                network: None,
-                block_height: None,
-                synced_to_chain: false,
-                api: self.versioned_api.clone(),
-                lightning_mode: None,
-            });
-        };
-
         // `GatewayConfiguration` should always exist in the database when we are in the
         // `Running` state.
         let gateway_config = self.clone_gateway_config().await;
@@ -810,6 +793,23 @@ impl Gateway {
                 )
             })
             .collect();
+
+        let GatewayState::Running { lightning_context } = self.get_state().await else {
+            return Ok(GatewayInfo {
+                federations,
+                federation_fake_scids: Some(channels),
+                version_hash: fedimint_build_code_version_env!().to_string(),
+                lightning_pub_key: None,
+                lightning_alias: None,
+                gateway_id: self.gateway_id,
+                gateway_state: self.state.read().await.to_string(),
+                network: Some(gateway_config.network.0),
+                block_height: None,
+                synced_to_chain: false,
+                api: self.versioned_api.clone(),
+                lightning_mode: self.lightning_builder.lightning_mode(),
+            });
+        };
 
         let node_info = lightning_context.lnrpc.parsed_node_info().await?;
 
