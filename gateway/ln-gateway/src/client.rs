@@ -60,7 +60,6 @@ impl GatewayClientBuilder {
     ) -> AdminResult<ClientBuilder> {
         let FederationConfig {
             federation_index,
-            timelock_delta,
             connector,
             ..
         } = federation_config.to_owned();
@@ -69,7 +68,6 @@ impl GatewayClientBuilder {
 
         if gateway.is_running_lnv1() {
             registry.attach(GatewayClientInit {
-                timelock_delta,
                 federation_index,
                 gateway: gateway.clone(),
             });

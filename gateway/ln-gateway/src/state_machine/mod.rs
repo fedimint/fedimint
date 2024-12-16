@@ -115,7 +115,6 @@ pub enum GatewayMeta {
 
 #[derive(Debug, Clone)]
 pub struct GatewayClientInit {
-    pub timelock_delta: u64,
     pub federation_index: u64,
     pub gateway: Arc<Gateway>,
 }
@@ -150,7 +149,6 @@ impl ClientModuleInit for GatewayClientInit {
                 .child_key(ChildId(0))
                 .to_secp_key(&fedimint_core::secp256k1::Secp256k1::new()),
             module_api: args.module_api().clone(),
-            timelock_delta: self.timelock_delta,
             federation_index: self.federation_index,
             client_ctx: args.context(),
             gateway: self.gateway.clone(),
@@ -161,7 +159,6 @@ impl ClientModuleInit for GatewayClientInit {
 #[derive(Debug, Clone)]
 pub struct GatewayClientContext {
     redeem_key: Keypair,
-    timelock_delta: u64,
     secp: Secp256k1<All>,
     pub ln_decoder: Decoder,
     notifier: ModuleNotifier<GatewayClientStateMachines>,
@@ -192,7 +189,6 @@ pub struct GatewayClientModule {
     cfg: LightningClientConfig,
     pub notifier: ModuleNotifier<GatewayClientStateMachines>,
     pub redeem_key: Keypair,
-    timelock_delta: u64,
     federation_index: u64,
     module_api: DynModuleApi,
     client_ctx: ClientContext<Self>,
@@ -209,7 +205,6 @@ impl ClientModule for GatewayClientModule {
     fn context(&self) -> Self::ModuleStateMachineContext {
         Self::ModuleStateMachineContext {
             redeem_key: self.redeem_key,
-            timelock_delta: self.timelock_delta,
             secp: Secp256k1::new(),
             ln_decoder: self.decoder(),
             notifier: self.notifier.clone(),

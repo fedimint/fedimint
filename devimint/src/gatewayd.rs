@@ -9,8 +9,9 @@ use fedimint_core::config::FederationId;
 use fedimint_core::envs::{is_env_var_set, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
-use fedimint_core::BitcoinAmountOrAll;
+use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
+use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_testing::gateway::LightningNodeType;
 use ln_gateway::envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV;
 use ln_gateway::lightning::ChannelInfo;
@@ -23,7 +24,7 @@ use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
 use crate::util::{poll, Command, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
-use crate::version_constants::VERSION_0_5_0_ALPHA;
+use crate::version_constants::{VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA, VERSION_0_6_0_ALPHA};
 
 #[derive(Clone)]
 pub struct Gatewayd {
@@ -505,6 +506,109 @@ impl Gatewayd {
             Err(ControlFlow::Continue(anyhow!("Not synced to block")))
         })
         .await?;
+        Ok(())
+    }
+
+    pub async fn get_lightning_fee(&self, fed_id: String) -> Result<PaymentFee> {
+        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+        let (fee_key, base_key, ppm_key) = if gatewayd_version >= *VERSION_0_6_0_ALPHA {
+            ("lightning_fee", "base", "parts_per_million")
+        } else {
+            ("routing_fees", "base_msat", "proportional_millionths")
+        };
+
+        let info_value = self.get_info().await?;
+        let federations = info_value["federations"]
+            .as_array()
+            .expect("federations is an array");
+
+        let fed = federations
+            .iter()
+            .find(|fed| {
+                serde_json::from_value::<String>(fed["federation_id"].clone())
+                    .expect("could not deserialize federation_id")
+                    == fed_id
+            })
+            .ok_or_else(|| anyhow!("Federation not found"))?;
+
+        let lightning_fee = fed[fee_key].clone();
+        let base: Amount = serde_json::from_value(lightning_fee[base_key].clone())
+            .map_err(|e| anyhow!("Couldnt parse base: {}", e))?;
+        let parts_per_million: u64 = serde_json::from_value(lightning_fee[ppm_key].clone())
+            .map_err(|e| anyhow!("Couldnt parse parts_per_million: {}", e))?;
+
+        Ok(PaymentFee {
+            base,
+            parts_per_million,
+        })
+    }
+
+    pub async fn set_federation_routing_fee(
+        &self,
+        fed_id: String,
+        base: u64,
+        ppm: u64,
+    ) -> Result<()> {
+        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+        if gatewayd_version < *VERSION_0_4_0_ALPHA {
+            let fees = format!("{base},{ppm}");
+            cmd!(self, "set-configuration", "--routing-fees", fees)
+                .run()
+                .await?;
+        } else if gatewayd_version >= *VERSION_0_4_0_ALPHA
+            && gatewayd_version < *VERSION_0_6_0_ALPHA
+        {
+            let new_fed_routing_fees = format!("{fed_id},{base},{ppm}");
+            cmd!(
+                self,
+                "set-configuration",
+                "--per-federation-routing-fees",
+                new_fed_routing_fees
+            )
+            .run()
+            .await?;
+        } else {
+            cmd!(
+                self,
+                "cfg",
+                "set-fees",
+                "--federation-id",
+                fed_id,
+                "--ln-base",
+                base,
+                "--ln-ppm",
+                ppm
+            )
+            .run()
+            .await?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn set_federation_transaction_fee(
+        &self,
+        fed_id: String,
+        base: u64,
+        ppm: u64,
+    ) -> Result<()> {
+        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+        if gatewayd_version >= *VERSION_0_6_0_ALPHA {
+            cmd!(
+                self,
+                "cfg",
+                "set-fees",
+                "--federation-id",
+                fed_id,
+                "--tx-base",
+                base,
+                "--tx-ppm",
+                ppm
+            )
+            .run()
+            .await?;
+        }
+
         Ok(())
     }
 }

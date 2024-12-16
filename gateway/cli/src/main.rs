@@ -1,11 +1,13 @@
 #![deny(clippy::pedantic, clippy::nursery)]
 
+mod config_commands;
 mod ecash_commands;
 mod general_commands;
 mod lightning_commands;
 mod onchain_commands;
 
 use clap::{CommandFactory, Parser, Subcommand};
+use config_commands::ConfigCommands;
 use ecash_commands::EcashCommands;
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::TracingSetup;
@@ -39,6 +41,8 @@ enum Commands {
     Ecash(EcashCommands),
     #[command(subcommand)]
     Onchain(OnchainCommands),
+    #[command(subcommand)]
+    Cfg(ConfigCommands),
     Completion {
         shell: clap_complete::Shell,
     },
@@ -57,6 +61,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::Lightning(lightning_command) => lightning_command.handle(create_client).await?,
         Commands::Ecash(ecash_command) => ecash_command.handle(create_client).await?,
         Commands::Onchain(onchain_command) => onchain_command.handle(create_client).await?,
+        Commands::Cfg(config_commands) => config_commands.handle(create_client).await?,
         Commands::Completion { shell } => {
             clap_complete::generate(
                 shell,

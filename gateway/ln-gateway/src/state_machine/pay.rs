@@ -18,6 +18,7 @@ use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{ContractId, FundedContract, IdentifiableContract, Preimage};
 use fedimint_ln_common::{LightningInput, LightningOutput};
 use futures::future;
+use lightning_invoice::RoutingFees;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio_stream::StreamExt;
@@ -28,7 +29,9 @@ use crate::db::GatewayDbtxNcExt;
 use crate::lightning::{LightningRpcError, PayInvoiceResponse};
 use crate::state_machine::events::{OutgoingPaymentFailed, OutgoingPaymentSucceeded};
 use crate::state_machine::GatewayClientModule;
-use crate::{GatewayState, RoutingFees};
+use crate::GatewayState;
+
+const TIMELOCK_DELTA: u64 = 10;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that executes the Lightning payment on behalf of
@@ -369,15 +372,13 @@ impl GatewayPayInvoice {
                     contract_id,
                     contract: Some(outgoing_contract_account.clone()),
                 })?;
-            let routing_fees = config.fees;
 
             let payment_parameters = Self::validate_outgoing_account(
                 &outgoing_contract_account,
                 context.redeem_key,
-                context.timelock_delta,
                 consensus_block_count.unwrap(),
                 &payment_data,
-                routing_fees,
+                config.lightning_fee.into(),
             )
             .map_err(|e| {
                 warn!("Invalid outgoing contract: {e:?}");
@@ -581,7 +582,6 @@ impl GatewayPayInvoice {
     fn validate_outgoing_account(
         account: &OutgoingContractAccount,
         redeem_key: bitcoin::key::Keypair,
-        timelock_delta: u64,
         consensus_block_count: u64,
         payment_data: &PaymentData,
         routing_fees: RoutingFees,
@@ -611,7 +611,7 @@ impl GatewayPayInvoice {
 
         let max_delay = u64::from(account.contract.timelock)
             .checked_sub(consensus_block_count.saturating_sub(1))
-            .and_then(|delta| delta.checked_sub(timelock_delta));
+            .and_then(|delta| delta.checked_sub(TIMELOCK_DELTA));
         if max_delay.is_none() {
             return Err(OutgoingContractError::TimeoutTooClose);
         }

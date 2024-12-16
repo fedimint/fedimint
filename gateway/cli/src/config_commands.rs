@@ -1,0 +1,86 @@
+use clap::Subcommand;
+use fedimint_core::config::FederationId;
+use fedimint_core::Amount;
+use ln_gateway::rpc::rpc_client::GatewayRpcClient;
+use ln_gateway::rpc::{ConfigPayload, SetFeesPayload};
+
+use crate::print_response;
+
+#[derive(Subcommand)]
+pub enum ConfigCommands {
+    /// Gets each connected federation's JSON client config
+    ClientConfig {
+        #[clap(long)]
+        federation_id: Option<FederationId>,
+    },
+    /// Gets the Gateway's configured configuration for each federation
+    Display {
+        #[clap(long)]
+        federation_id: Option<FederationId>,
+    },
+    /// Set the gateway's lightning or transaction fees
+    SetFees {
+        #[clap(long)]
+        federation_id: Option<FederationId>,
+
+        #[clap(long)]
+        ln_base: Option<Amount>,
+
+        #[clap(long)]
+        ln_ppm: Option<u64>,
+
+        #[clap(long)]
+        tx_base: Option<Amount>,
+
+        #[clap(long)]
+        tx_ppm: Option<u64>,
+    },
+}
+
+impl ConfigCommands {
+    pub async fn handle(
+        self,
+        create_client: impl Fn() -> GatewayRpcClient + Send + Sync,
+    ) -> anyhow::Result<()> {
+        match self {
+            Self::ClientConfig { federation_id } => {
+                let response = create_client()
+                    .get_config(ConfigPayload { federation_id })
+                    .await?;
+
+                print_response(response);
+            }
+            Self::Display { federation_id } => {
+                let info = create_client().get_info().await?;
+                let federations = if let Some(id) = federation_id {
+                    info.federations
+                        .into_iter()
+                        .filter(|f| id == f.federation_id)
+                        .collect::<Vec<_>>()
+                } else {
+                    info.federations
+                };
+                print_response(federations);
+            }
+            Self::SetFees {
+                federation_id,
+                ln_base,
+                ln_ppm,
+                tx_base,
+                tx_ppm,
+            } => {
+                create_client()
+                    .set_fees(SetFeesPayload {
+                        federation_id,
+                        lightning_base: ln_base,
+                        lightning_parts_per_million: ln_ppm,
+                        transaction_base: tx_base,
+                        transaction_parts_per_million: tx_ppm,
+                    })
+                    .await?;
+            }
+        }
+
+        Ok(())
+    }
+}

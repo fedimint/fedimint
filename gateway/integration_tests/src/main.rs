@@ -11,7 +11,9 @@ use clap::{Parser, Subcommand};
 use devimint::envs::FM_DATA_DIR_ENV;
 use devimint::federation::Federation;
 use devimint::util::ProcessManager;
-use devimint::version_constants::{VERSION_0_3_0, VERSION_0_4_0, VERSION_0_5_0_ALPHA};
+use devimint::version_constants::{
+    VERSION_0_3_0, VERSION_0_4_0, VERSION_0_5_0_ALPHA, VERSION_0_6_0_ALPHA,
+};
 use devimint::{cmd, util, Gatewayd, LightningNode};
 use fedimint_core::config::FederationId;
 use fedimint_core::envs::{is_env_var_set, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV};
@@ -20,7 +22,7 @@ use fedimint_core::util::retry;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_testing::gateway::LightningNodeType;
 use itertools::Itertools;
-use ln_gateway::rpc::{FederationRoutingFees, GatewayBalances, GatewayFedConfig, GatewayInfo};
+use ln_gateway::rpc::{GatewayBalances, GatewayFedConfig, GatewayInfo};
 use tracing::{info, warn};
 
 #[derive(Parser)]
@@ -98,13 +100,6 @@ async fn backup_restore_test() -> anyhow::Result<()> {
 
             let fed = dev_fed.fed().await?;
             fed.pegin_gateways(10_000_000, vec![gw]).await?;
-            let info = serde_json::from_value::<GatewayInfo>(gw.get_info().await?)?;
-            let federation_info = info
-                .federations
-                .first()
-                .expect("Should have on joined federation");
-            assert_eq!(10_000_000, federation_info.balance_msat.sats_round_down());
-            info!("Verified balance after peg-in");
 
             let mnemonic = gw.get_mnemonic().await?.mnemonic;
 
@@ -348,29 +343,21 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
             let gatewayd_version = util::Gatewayd::version_or_default().await;
 
             if fedimint_cli_version >= *VERSION_0_3_0 && gatewayd_version >= *VERSION_0_3_0 {
-                // Change the default routing fees
-                let new_default_routing_fees = "10,10000";
-                cmd!(
-                    gw,
-                    "set-configuration",
-                    "--routing-fees",
-                    new_default_routing_fees
-                )
-                .run()
-                .await?;
-                info!(?new_default_routing_fees, "Changed gateway routing fees");
-
                 // Change the routing fees for a specific federation
                 let fed_id = dev_fed.fed().await?.calculate_federation_id();
-                let new_fed_routing_fees = format!("{},20,20000", fed_id.clone());
-                cmd!(
-                    gw,
-                    "set-configuration",
-                    "--per-federation-routing-fees",
-                    new_fed_routing_fees
-                )
-                .run()
-                .await?;
+                gw.set_federation_routing_fee(fed_id.clone(), 20, 20000)
+                    .await?;
+
+                let lightning_fee = gw.get_lightning_fee(fed_id.clone()).await?;
+                assert_eq!(
+                    lightning_fee.base.msats, 20,
+                    "Federation base msat is not 20"
+                );
+                assert_eq!(
+                    lightning_fee.parts_per_million, 20000,
+                    "Federation proportional millionths is not 20000"
+                );
+                info!("Verified per-federation routing fees changed");
 
                 let info_value = cmd!(gw, "info").out_json().await?;
                 let federations = info_value["federations"]
@@ -381,40 +368,20 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                     1,
                     "Gateway did not have one connected federation"
                 );
-                let federation_fees_value = federations
-                    .first()
-                    .expect("Must have a connected federation")
-                    .get("routing_fees")
-                    .expect("federation must have routing fees")
-                    .to_owned();
-
-                let federation_fees =
-                    serde_json::from_value::<Option<FederationRoutingFees>>(federation_fees_value)
-                        .expect("could not parse federation routing fees")
-                        .expect("Federation routing fees should be set");
-
-                assert_eq!(
-                    federation_fees.base_msat, 20,
-                    "Federation base msat is not 20"
-                );
-                assert_eq!(
-                    federation_fees.proportional_millionths, 20000,
-                    "Federation proportional millionths is not 20000"
-                );
-                info!("Verified per-federation routing fees changed");
-
-                // Try to change the network while connected to a lightning node
-                cmd!(gw, "set-configuration", "--network", "regtest")
-                    .run()
-                    .await
-                    .expect_err("Cannot change the network while connected to a federation");
-                info!("Verified network cannot be changed.");
 
                 // TODO(support:v0.4): a bug calling `gateway-cli config` was fixed in v0.5.0
                 // see: https://github.com/fedimint/fedimint/pull/5803
-                if gatewayd_version >= *VERSION_0_5_0_ALPHA {
+                if gatewayd_version >= *VERSION_0_5_0_ALPHA
+                    && gatewayd_version < *VERSION_0_6_0_ALPHA
+                {
                     // Get the federation's config and verify it parses correctly
                     let config_val = cmd!(gw, "config", "--federation-id", fed_id)
+                        .out_json()
+                        .await?;
+                    serde_json::from_value::<GatewayFedConfig>(config_val)?;
+                } else if gatewayd_version >= *VERSION_0_6_0_ALPHA {
+                    // Get the federation's config and verify it parses correctly
+                    let config_val = cmd!(gw, "cfg", "client-config", "--federation-id", fed_id)
                         .out_json()
                         .await?;
                     serde_json::from_value::<GatewayFedConfig>(config_val)?;
@@ -434,22 +401,23 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                 info!("Successfully spawned new federation");
 
                 let new_invite_code = new_fed.invite_code()?;
-                let output = cmd!(gw, "connect-fed", new_invite_code.clone())
+                cmd!(gw, "connect-fed", new_invite_code.clone())
                     .out_json()
                     .await?;
 
-                let routing_fees_value = output["routing_fees"].clone();
+                let (default_base, default_ppm) = if gatewayd_version >= *VERSION_0_6_0_ALPHA {
+                    (50000, 5000)
+                } else {
+                    (0, 10000)
+                };
 
-                let routing_fees =
-                    serde_json::from_value::<Option<FederationRoutingFees>>(routing_fees_value)
-                        .expect("could not parse federation routing fees")
-                        .expect("Federation routing fees should be set");
+                let lightning_fee = gw.get_lightning_fee(new_fed_id.clone()).await?;
                 assert_eq!(
-                    routing_fees.base_msat, 10,
+                    lightning_fee.base.msats, default_base,
                     "Default Base msat for new federation was not correct"
                 );
                 assert_eq!(
-                    routing_fees.proportional_millionths, 10000,
+                    lightning_fee.parts_per_million, default_ppm,
                     "Default Base msat for new federation was not correct"
                 );
 
