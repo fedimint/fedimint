@@ -1,21 +1,14 @@
-use std::time::Duration;
-
 use fedimint_client::sm::{DynState, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
+use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::task::sleep;
-use fedimint_core::{Amount, OutPoint, TransactionId};
-use fedimint_dummy_common::DummyOutputOutcome;
+use fedimint_core::{Amount, TransactionId};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::debug;
 
 use crate::db::DummyClientFundsKeyV1;
 use crate::{get_funds, DummyClientContext};
-
-const RETRY_DELAY: Duration = Duration::from_secs(1);
 
 /// Tracks a transaction
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -33,7 +26,7 @@ impl State for DummyStateMachine {
 
     fn transitions(
         &self,
-        context: &Self::ModuleContext,
+        _context: &Self::ModuleContext,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         match self.clone() {
@@ -50,11 +43,7 @@ impl State for DummyStateMachine {
                 },
             )],
             DummyStateMachine::Output(amount, txid, id) => vec![StateTransition::new(
-                await_dummy_output_outcome(
-                    global_context.clone(),
-                    OutPoint { txid, out_idx: 0 },
-                    context.dummy_decoder.clone(),
-                ),
+                await_tx_accepted(global_context.clone(), txid),
                 move |dbtx, res, _state: Self| match res {
                     // output accepted, add funds
                     Ok(()) => Box::pin(async move {
@@ -95,36 +84,6 @@ async fn await_tx_accepted(
     txid: TransactionId,
 ) -> Result<(), String> {
     context.await_tx_accepted(txid).await
-}
-
-async fn await_dummy_output_outcome(
-    global_context: DynGlobalClientContext,
-    outpoint: OutPoint,
-    module_decoder: Decoder,
-) -> Result<(), DummyError> {
-    loop {
-        match global_context
-            .api()
-            .await_output_outcome::<DummyOutputOutcome>(
-                outpoint,
-                Duration::from_millis(i32::MAX as u64),
-                &module_decoder,
-            )
-            .await
-        {
-            Ok(_) => {
-                return Ok(());
-            }
-            Err(e) if e.is_rejected() => {
-                return Err(DummyError::DummyInternalError);
-            }
-            Err(e) => {
-                e.report_if_important();
-                debug!(error = %e, "Awaiting output outcome failed, retrying");
-            }
-        }
-        sleep(RETRY_DELAY).await;
-    }
 }
 
 // TODO: Boiler-plate
