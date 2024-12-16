@@ -328,13 +328,8 @@ impl GatewayPayInvoice {
         debug!("Await payment parameters for outgoing contract {contract_id:?}");
         let account = global_context
             .module_api()
-            .wait_contract(contract_id)
-            .await
-            .map_err(|_| OutgoingPaymentError {
-                contract_id,
-                contract: None,
-                error_type: OutgoingPaymentErrorType::OutgoingContractDoesNotExist { contract_id },
-            })?;
+            .await_contract(contract_id)
+            .await;
 
         if let FundedContract::Outgoing(contract) = account.contract {
             let outgoing_contract_account = OutgoingContractAccount {

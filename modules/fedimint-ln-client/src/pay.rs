@@ -11,9 +11,10 @@ use fedimint_core::task::sleep;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::{secp256k1, Amount, OutPoint, TransactionId};
 use fedimint_ln_common::contracts::outgoing::OutgoingContractData;
-use fedimint_ln_common::contracts::{ContractId, IdentifiableContract};
+use fedimint_ln_common::contracts::{ContractId, FundedContract, IdentifiableContract};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::{LightningGateway, LightningInput, LightningOutputOutcome, PrunedInvoice};
+use futures::future::pending;
 use lightning_invoice::Bolt11Invoice;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -201,26 +202,19 @@ impl LightningPayCreatedOutgoingLnContract {
             }
         }
 
-        let contract = loop {
-            match global_context
-                .module_api()
-                .get_outgoing_contract(contract_id)
-                .await
-            {
-                Ok(contract) => {
-                    break contract;
-                }
-                Err(e) => {
-                    e.report_if_important();
-                    debug!(
-                        "Fetching contract failed, retrying in {}s",
-                        RETRY_DELAY.as_secs_f64()
-                    );
-                    sleep(RETRY_DELAY).await;
-                }
+        match global_context
+            .module_api()
+            .await_contract(contract_id)
+            .await
+            .contract
+        {
+            FundedContract::Outgoing(contract) => Ok(contract.timelock),
+            FundedContract::Incoming(..) => {
+                error!("Federation returned wrong account type");
+
+                pending().await
             }
-        };
-        Ok(contract.contract.timelock)
+        }
     }
 
     fn transition_outgoing_contract_funded(
