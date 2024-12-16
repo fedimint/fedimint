@@ -619,74 +619,28 @@
 <a href="#618" id="618">618</a>
 <a href="#619" id="619">619</a>
 <a href="#620" id="620">620</a>
-<a href="#621" id="621">621</a>
-<a href="#622" id="622">622</a>
-<a href="#623" id="623">623</a>
-<a href="#624" id="624">624</a>
-<a href="#625" id="625">625</a>
-<a href="#626" id="626">626</a>
-<a href="#627" id="627">627</a>
-<a href="#628" id="628">628</a>
-<a href="#629" id="629">629</a>
-<a href="#630" id="630">630</a>
-<a href="#631" id="631">631</a>
-<a href="#632" id="632">632</a>
-<a href="#633" id="633">633</a>
-<a href="#634" id="634">634</a>
-<a href="#635" id="635">635</a>
-<a href="#636" id="636">636</a>
-<a href="#637" id="637">637</a>
-<a href="#638" id="638">638</a>
-<a href="#639" id="639">639</a>
-<a href="#640" id="640">640</a>
-<a href="#641" id="641">641</a>
-<a href="#642" id="642">642</a>
-<a href="#643" id="643">643</a>
-<a href="#644" id="644">644</a>
-<a href="#645" id="645">645</a>
-<a href="#646" id="646">646</a>
-<a href="#647" id="647">647</a>
-<a href="#648" id="648">648</a>
-<a href="#649" id="649">649</a>
-<a href="#650" id="650">650</a>
-<a href="#651" id="651">651</a>
-<a href="#652" id="652">652</a>
-<a href="#653" id="653">653</a>
-<a href="#654" id="654">654</a>
-<a href="#655" id="655">655</a>
-<a href="#656" id="656">656</a>
-<a href="#657" id="657">657</a>
-<a href="#658" id="658">658</a>
-<a href="#659" id="659">659</a>
-<a href="#660" id="660">660</a>
-<a href="#661" id="661">661</a>
-<a href="#662" id="662">662</a>
-<a href="#663" id="663">663</a>
-<a href="#664" id="664">664</a>
-<a href="#665" id="665">665</a>
-<a href="#666" id="666">666</a>
-<a href="#667" id="667">667</a>
-<a href="#668" id="668">668</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::{Duration, SystemTime};
+<a href="#621" id="621">621</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::config::FederationId;
-<span class="kw">use </span>fedimint_core::core::{Decoder, OperationId};
+<span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::time::duration_since_epoch;
 <span class="kw">use </span>fedimint_core::{secp256k1, Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_common::contracts::outgoing::OutgoingContractData;
-<span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, IdentifiableContract};
+<span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, FundedContract, IdentifiableContract};
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
-<span class="kw">use </span>fedimint_ln_common::{LightningGateway, LightningInput, LightningOutputOutcome, PrunedInvoice};
+<span class="kw">use </span>fedimint_ln_common::{LightningGateway, LightningInput, PrunedInvoice};
+<span class="kw">use </span>futures::future::pending;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>reqwest::StatusCode;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tracing::{debug, error, warn};
+<span class="kw">use </span>tracing::{error, warn};
 
 <span class="kw">pub use </span><span class="self">self</span>::lightningpay::LightningPayStates;
 <span class="kw">use </span><span class="kw">crate</span>::api::LnFederationApi;
@@ -774,7 +728,7 @@
     ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.state {
             LightningPayStates::CreatedOutgoingLnContract(created_outgoing_ln_contract) =&gt; {
-                created_outgoing_ln_contract.transitions(context, global_context)
+                created_outgoing_ln_contract.transitions(global_context)
             }
             LightningPayStates::Funded(funded) =&gt; {
                 funded.transitions(<span class="self">self</span>.common.clone(), context.clone(), global_context.clone())
@@ -809,7 +763,6 @@
 <span class="kw">impl </span>LightningPayCreatedOutgoingLnContract {
     <span class="kw">fn </span>transitions(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        context: <span class="kw-2">&amp;</span>LightningClientContext,
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;LightningPayStateMachine&gt;&gt; {
         <span class="kw">let </span>txid = <span class="self">self</span>.funding_txid;
@@ -817,12 +770,7 @@
         <span class="kw">let </span>success_context = global_context.clone();
         <span class="kw">let </span>gateway = <span class="self">self</span>.gateway.clone();
         <span class="macro">vec!</span>[StateTransition::new(
-            <span class="self">Self</span>::await_outgoing_contract_funded(
-                context.ln_decoder.clone(),
-                success_context,
-                txid,
-                contract_id,
-            ),
+            <span class="self">Self</span>::await_outgoing_contract_funded(success_context, txid, contract_id),
             <span class="kw">move </span>|_dbtx, result, old_state| {
                 <span class="kw">let </span>gateway = gateway.clone();
                 Box::pin(<span class="kw">async move </span>{
@@ -833,62 +781,28 @@
     }
 
     <span class="kw">async fn </span>await_outgoing_contract_funded(
-        module_decoder: Decoder,
         global_context: DynGlobalClientContext,
         txid: TransactionId,
         contract_id: ContractId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;u32, GatewayPayError&gt; {
-        <span class="kw">let </span>out_point = OutPoint { txid, out_idx: <span class="number">0 </span>};
+        global_context
+            .await_tx_accepted(txid)
+            .<span class="kw">await
+            </span>.map_err(|<span class="kw">_</span>| GatewayPayError::OutgoingContractError)<span class="question-mark">?</span>;
 
-        <span class="kw">loop </span>{
-            <span class="kw">match </span>global_context
-                .api()
-                .await_output_outcome::&lt;LightningOutputOutcome&gt;(
-                    out_point,
-                    Duration::from_millis(i32::MAX <span class="kw">as </span>u64),
-                    <span class="kw-2">&amp;</span>module_decoder,
-                )
-                .<span class="kw">await
-            </span>{
-                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">break</span>,
-                <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_rejected() =&gt; {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayPayError::OutgoingContractError);
-                }
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    e.report_if_important();
+        <span class="kw">match </span>global_context
+            .module_api()
+            .await_contract(contract_id)
+            .<span class="kw">await
+            </span>.contract
+        {
+            FundedContract::Outgoing(contract) =&gt; <span class="prelude-val">Ok</span>(contract.timelock),
+            FundedContract::Incoming(..) =&gt; {
+                <span class="macro">error!</span>(<span class="string">"Federation returned wrong account type"</span>);
 
-                    <span class="macro">debug!</span>(
-                        error = e.to_string(),
-                        transaction_id = txid.to_string(),
-                        contract_id = contract_id.to_string(),
-                        <span class="string">"Retrying in {}s"</span>,
-                        RETRY_DELAY.as_secs_f64()
-                    );
-                    sleep(RETRY_DELAY).<span class="kw">await</span>;
-                }
-            }
+                pending().<span class="kw">await
+            </span>}
         }
-
-        <span class="kw">let </span>contract = <span class="kw">loop </span>{
-            <span class="kw">match </span>global_context
-                .module_api()
-                .get_outgoing_contract(contract_id)
-                .<span class="kw">await
-            </span>{
-                <span class="prelude-val">Ok</span>(contract) =&gt; {
-                    <span class="kw">break </span>contract;
-                }
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    e.report_if_important();
-                    <span class="macro">debug!</span>(
-                        <span class="string">"Fetching contract failed, retrying in {}s"</span>,
-                        RETRY_DELAY.as_secs_f64()
-                    );
-                    sleep(RETRY_DELAY).<span class="kw">await</span>;
-                }
-            }
-        };
-        <span class="prelude-val">Ok</span>(contract.contract.timelock)
     }
 
     <span class="kw">fn </span>transition_outgoing_contract_funded(
@@ -1179,18 +1093,10 @@
 <span class="doccomment">/// Waits until a specific block height at which the contract will be able to be
 /// reclaimed.
 </span><span class="kw">async fn </span>await_contract_timeout(global_context: DynGlobalClientContext, timelock: u32) {
-    <span class="kw">loop </span>{
-        <span class="kw">match </span>global_context
-            .module_api()
-            .wait_block_height(u64::from(timelock))
-            .<span class="kw">await
-        </span>{
-            <span class="prelude-val">Ok</span>(()) =&gt; <span class="kw">return</span>,
-            <span class="prelude-val">Err</span>(error) =&gt; <span class="macro">error!</span>(<span class="string">"Error waiting for block height: {timelock} {error:?}"</span>),
-        }
-
-        sleep(RETRY_DELAY).<span class="kw">await</span>;
-    }
+    global_context
+        .module_api()
+        .wait_block_height(u64::from(timelock))
+        .<span class="kw">await</span>;
 }
 
 <span class="doccomment">/// Claims a refund for an expired or cancelled outgoing contract

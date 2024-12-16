@@ -262,34 +262,7 @@
 <a href="#261" id="261">261</a>
 <a href="#262" id="262">262</a>
 <a href="#263" id="263">263</a>
-<a href="#264" id="264">264</a>
-<a href="#265" id="265">265</a>
-<a href="#266" id="266">266</a>
-<a href="#267" id="267">267</a>
-<a href="#268" id="268">268</a>
-<a href="#269" id="269">269</a>
-<a href="#270" id="270">270</a>
-<a href="#271" id="271">271</a>
-<a href="#272" id="272">272</a>
-<a href="#273" id="273">273</a>
-<a href="#274" id="274">274</a>
-<a href="#275" id="275">275</a>
-<a href="#276" id="276">276</a>
-<a href="#277" id="277">277</a>
-<a href="#278" id="278">278</a>
-<a href="#279" id="279">279</a>
-<a href="#280" id="280">280</a>
-<a href="#281" id="281">281</a>
-<a href="#282" id="282">282</a>
-<a href="#283" id="283">283</a>
-<a href="#284" id="284">284</a>
-<a href="#285" id="285">285</a>
-<a href="#286" id="286">286</a>
-<a href="#287" id="287">287</a>
-<a href="#288" id="288">288</a>
-<a href="#289" id="289">289</a>
-<a href="#290" id="290">290</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
-
+<a href="#264" id="264">264</a></pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::ensure;
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
@@ -297,19 +270,18 @@
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::task::sleep;
+<span class="kw">use </span>fedimint_core::util::backoff_util::api_networking_backoff;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
-<span class="kw">use </span>fedimint_core::{secp256k1, OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_core::{secp256k1, util, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_lnv2_common::contracts::OutgoingContract;
 <span class="kw">use </span>fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
+<span class="kw">use </span>futures::future::pending;
 <span class="kw">use </span>secp256k1::schnorr::Signature;
 <span class="kw">use </span>secp256k1::Keypair;
-<span class="kw">use </span>tracing::error;
+<span class="kw">use </span>tracing::{error, instrument};
 
 <span class="kw">use </span><span class="kw">crate</span>::api::LightningFederationApi;
 <span class="kw">use crate</span>::{LightningClientContext, LightningInvoice};
-
-<span class="kw">const </span>RETRY_DELAY: Duration = Duration::from_secs(<span class="number">1</span>);
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>SendStateMachine {
@@ -401,7 +373,7 @@
                         },
                     ),
                     StateTransition::new(
-                        <span class="self">Self</span>::await_preimage(gc_preimage.clone(), <span class="self">self</span>.common.contract.clone()),
+                        <span class="self">Self</span>::await_preimage(<span class="self">self</span>.common.contract.clone(), gc_preimage.clone()),
                         <span class="kw">move </span>|dbtx, preimage, old_state| {
                             Box::pin(<span class="self">Self</span>::transition_preimage(
                                 dbtx,
@@ -442,7 +414,8 @@
         })
     }
 
-    <span class="kw">async fn </span>gateway_send_payment(
+    <span class="attr">#[instrument(skip(refund_keypair, context))]
+    </span><span class="kw">async fn </span>gateway_send_payment(
         gateway_api: SafeUrl,
         federation_id: FederationId,
         contract: OutgoingContract,
@@ -450,8 +423,8 @@
         refund_keypair: Keypair,
         context: LightningClientContext,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt; {
-        <span class="kw">loop </span>{
-            <span class="kw">match </span>context
+        util::retry(<span class="string">"gateway-send-payment"</span>, api_networking_backoff(), || <span class="kw">async </span>{
+            <span class="kw">let </span>payment_result = context
                 .gateway_conn
                 .send_payment(
                     gateway_api.clone(),
@@ -462,36 +435,17 @@
                         <span class="kw-2">*</span>invoice.consensus_hash::&lt;sha256::Hash&gt;().as_ref(),
                     )),
                 )
-                .<span class="kw">await
-            </span>{
-                <span class="prelude-val">Ok</span>(send_result) =&gt; {
-                    <span class="kw">if </span>contract.verify_gateway_response(<span class="kw-2">&amp;</span>send_result) {
-                        <span class="kw">return </span>send_result;
-                    }
+                .<span class="kw">await</span><span class="question-mark">?</span>;
 
-                    <span class="macro">error!</span>(
-                        <span class="question-mark">?</span>send_result,
-                        <span class="question-mark">?</span>contract,
-                        <span class="question-mark">?</span>invoice,
-                        <span class="question-mark">?</span>federation_id,
-                        <span class="question-mark">?</span>gateway_api,
-                        <span class="string">"Invalid gateway response"
-                    </span>);
-                }
-                <span class="prelude-val">Err</span>(error) =&gt; {
-                    <span class="macro">error!</span>(
-                        <span class="question-mark">?</span>error,
-                        <span class="question-mark">?</span>contract,
-                        <span class="question-mark">?</span>invoice,
-                        <span class="question-mark">?</span>federation_id,
-                        <span class="question-mark">?</span>gateway_api,
-                        <span class="string">"Error while trying to send payment via gateway"
-                    </span>);
-                }
-            }
+            <span class="macro">ensure!</span>(
+                contract.verify_gateway_response(<span class="kw-2">&amp;</span>payment_result),
+                <span class="string">"Invalid gateway response: {payment_result:?}"
+            </span>);
 
-            sleep(RETRY_DELAY).<span class="kw">await</span>;
-        }
+            <span class="prelude-val">Ok</span>(payment_result)
+        })
+        .<span class="kw">await
+        </span>.expect(<span class="string">"Number of retries has no limit"</span>)
     }
 
     <span class="kw">async fn </span>transition_gateway_send_payment(
@@ -526,30 +480,24 @@
         }
     }
 
-    <span class="kw">async fn </span>await_preimage(
-        global_context: DynGlobalClientContext,
+    <span class="attr">#[instrument(skip(global_context))]
+    </span><span class="kw">async fn </span>await_preimage(
         contract: OutgoingContract,
+        global_context: DynGlobalClientContext,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;[u8; <span class="number">32</span>]&gt; {
-        <span class="kw">loop </span>{
-            <span class="kw">let </span>preimage = global_context
-                .module_api()
-                .await_preimage(<span class="kw-2">&amp;</span>contract.contract_id(), contract.expiration)
-                .<span class="kw">await</span>;
+        <span class="kw">let </span>preimage = global_context
+            .module_api()
+            .await_preimage(<span class="kw-2">&amp;</span>contract.contract_id(), contract.expiration)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="kw">match </span>preimage {
-                <span class="prelude-val">Some</span>(preimage) =&gt; {
-                    <span class="kw">if </span>contract.verify_preimage(<span class="kw-2">&amp;</span>preimage) {
-                        <span class="kw">return </span><span class="prelude-val">Some</span>(preimage);
-                    }
-
-                    <span class="macro">error!</span>(<span class="string">"Federation returned invalid preimage {:?}"</span>, preimage);
-                }
-                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
-            }
-
-            sleep(RETRY_DELAY).<span class="kw">await</span>;
+        <span class="kw">if </span>contract.verify_preimage(<span class="kw-2">&amp;</span>preimage) {
+            <span class="kw">return </span><span class="prelude-val">Some</span>(preimage);
         }
-    }
+
+        <span class="macro">error!</span>(<span class="string">"Federation returned invalid preimage {:?}"</span>, preimage);
+
+        pending().<span class="kw">await
+    </span>}
 
     <span class="kw">async fn </span>transition_preimage(
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,

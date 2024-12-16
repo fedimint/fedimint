@@ -968,12 +968,7 @@
 <a href="#967" id="967">967</a>
 <a href="#968" id="968">968</a>
 <a href="#969" id="969">969</a>
-<a href="#970" id="970">970</a>
-<a href="#971" id="971">971</a>
-<a href="#972" id="972">972</a>
-<a href="#973" id="973">973</a>
-<a href="#974" id="974">974</a>
-<a href="#975" id="975">975</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
+<a href="#970" id="970">970</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -1303,13 +1298,8 @@
         <span class="macro">debug!</span>(<span class="string">"Await payment parameters for outgoing contract {contract_id:?}"</span>);
         <span class="kw">let </span>account = global_context
             .module_api()
-            .wait_contract(contract_id)
-            .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| OutgoingPaymentError {
-                contract_id,
-                contract: <span class="prelude-val">None</span>,
-                error_type: OutgoingPaymentErrorType::OutgoingContractDoesNotExist { contract_id },
-            })<span class="question-mark">?</span>;
+            .await_contract(contract_id)
+            .<span class="kw">await</span>;
 
         <span class="kw">if let </span>FundedContract::Outgoing(contract) = account.contract {
             <span class="kw">let </span>outgoing_contract_account = OutgoingContractAccount {

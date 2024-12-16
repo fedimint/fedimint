@@ -128,36 +128,14 @@
 <a href="#127" id="127">127</a>
 <a href="#128" id="128">128</a>
 <a href="#129" id="129">129</a>
-<a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
-<a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
-<a href="#147" id="147">147</a>
-<a href="#148" id="148">148</a>
-<a href="#149" id="149">149</a>
-<a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
-<span class="kw">use </span>std::time::Duration;
+<a href="#130" id="130">130</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 
 <span class="kw">use </span>fedimint_api_client::api::{
     FederationApiExt, FederationResult, IModuleFederationApi, PeerResult,
 };
 <span class="kw">use </span>fedimint_api_client::query::FilterMapThreshold;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased};
-<span class="kw">use </span>fedimint_core::task::{sleep, MaybeSend, MaybeSync};
+<span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId};
 <span class="kw">use </span>fedimint_lnv2_common::endpoint_constants::{
@@ -166,8 +144,6 @@
 };
 <span class="kw">use </span>fedimint_lnv2_common::ContractId;
 <span class="kw">use </span>rand::seq::SliceRandom;
-
-<span class="kw">const </span>RETRY_DELAY: Duration = Duration::from_secs(<span class="number">1</span>);
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>LightningFederationApi {
@@ -200,38 +176,21 @@
     </span>}
 
     <span class="kw">async fn </span>await_incoming_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract_id: <span class="kw-2">&amp;</span>ContractId, expiration: u64) -&gt; bool {
-        <span class="kw">loop </span>{
-            <span class="kw">match </span><span class="self">self
-                </span>.request_current_consensus::&lt;<span class="prelude-ty">Option</span>&lt;ContractId&gt;&gt;(
-                    AWAIT_INCOMING_CONTRACT_ENDPOINT.to_string(),
-                    ApiRequestErased::new((contract_id, expiration)),
-                )
-                .<span class="kw">await
-            </span>{
-                <span class="prelude-val">Ok</span>(response) =&gt; <span class="kw">return </span>response.is_some(),
-                <span class="prelude-val">Err</span>(error) =&gt; error.report_if_important(),
-            }
-
-            sleep(RETRY_DELAY).<span class="kw">await</span>;
-        }
+        <span class="self">self</span>.request_current_consensus_retry::&lt;<span class="prelude-ty">Option</span>&lt;ContractId&gt;&gt;(
+            AWAIT_INCOMING_CONTRACT_ENDPOINT.to_string(),
+            ApiRequestErased::new((contract_id, expiration)),
+        )
+        .<span class="kw">await
+        </span>.is_some()
     }
 
     <span class="kw">async fn </span>await_preimage(<span class="kw-2">&amp;</span><span class="self">self</span>, contract_id: <span class="kw-2">&amp;</span>ContractId, expiration: u64) -&gt; <span class="prelude-ty">Option</span>&lt;[u8; <span class="number">32</span>]&gt; {
-        <span class="kw">loop </span>{
-            <span class="kw">match </span><span class="self">self
-                </span>.request_current_consensus(
-                    AWAIT_PREIMAGE_ENDPOINT.to_string(),
-                    ApiRequestErased::new((contract_id, expiration)),
-                )
-                .<span class="kw">await
-            </span>{
-                <span class="prelude-val">Ok</span>(expiration) =&gt; <span class="kw">return </span>expiration,
-                <span class="prelude-val">Err</span>(error) =&gt; error.report_if_important(),
-            }
-
-            sleep(RETRY_DELAY).<span class="kw">await</span>;
-        }
-    }
+        <span class="self">self</span>.request_current_consensus_retry(
+            AWAIT_PREIMAGE_ENDPOINT.to_string(),
+            ApiRequestErased::new((contract_id, expiration)),
+        )
+        .<span class="kw">await
+    </span>}
 
     <span class="kw">async fn </span>gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;Vec&lt;SafeUrl&gt;&gt; {
         <span class="kw">let </span>gateways: BTreeMap&lt;PeerId, Vec&lt;SafeUrl&gt;&gt; = <span class="self">self
@@ -269,8 +228,7 @@
 
     <span class="kw">async fn </span>gateways_from_peer(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: PeerId) -&gt; PeerResult&lt;Vec&lt;SafeUrl&gt;&gt; {
         <span class="kw">let </span>gateways = <span class="self">self
-            </span>.request_single_peer_typed::&lt;Vec&lt;SafeUrl&gt;&gt;(
-                <span class="prelude-val">None</span>,
+            </span>.request_single_peer::&lt;Vec&lt;SafeUrl&gt;&gt;(
                 GATEWAYS_ENDPOINT.to_string(),
                 ApiRequestErased::default(),
                 peer,

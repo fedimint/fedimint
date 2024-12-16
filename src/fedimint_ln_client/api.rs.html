@@ -308,65 +308,21 @@
 <a href="#307" id="307">307</a>
 <a href="#308" id="308">308</a>
 <a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
-<a href="#318" id="318">318</a>
-<a href="#319" id="319">319</a>
-<a href="#320" id="320">320</a>
-<a href="#321" id="321">321</a>
-<a href="#322" id="322">322</a>
-<a href="#323" id="323">323</a>
-<a href="#324" id="324">324</a>
-<a href="#325" id="325">325</a>
-<a href="#326" id="326">326</a>
-<a href="#327" id="327">327</a>
-<a href="#328" id="328">328</a>
-<a href="#329" id="329">329</a>
-<a href="#330" id="330">330</a>
-<a href="#331" id="331">331</a>
-<a href="#332" id="332">332</a>
-<a href="#333" id="333">333</a>
-<a href="#334" id="334">334</a>
-<a href="#335" id="335">335</a>
-<a href="#336" id="336">336</a>
-<a href="#337" id="337">337</a>
-<a href="#338" id="338">338</a>
-<a href="#339" id="339">339</a>
-<a href="#340" id="340">340</a>
-<a href="#341" id="341">341</a>
-<a href="#342" id="342">342</a>
-<a href="#343" id="343">343</a>
-<a href="#344" id="344">344</a>
-<a href="#345" id="345">345</a>
-<a href="#346" id="346">346</a>
-<a href="#347" id="347">347</a>
-<a href="#348" id="348">348</a>
-<a href="#349" id="349">349</a>
-<a href="#350" id="350">350</a>
-<a href="#351" id="351">351</a>
-<a href="#352" id="352">352</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<a href="#310" id="310">310</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<span class="kw">use </span>std::convert::identity;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::hashes::sha256::{<span class="self">self</span>, Hash <span class="kw">as </span>Sha256Hash};
 <span class="kw">use </span>fedimint_api_client::api::{
-    FederationApiExt, FederationError, FederationResult, IModuleFederationApi,
+    FederationApiExt, FederationResult, IModuleFederationApi, JsonRpcClientError, PeerError,
 };
 <span class="kw">use </span>fedimint_api_client::query::FilterMapThreshold;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::secp256k1::PublicKey;
-<span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
+<span class="kw">use </span>fedimint_core::task::{timeout, MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId};
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
-<span class="kw">use </span>fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
-<span class="kw">use </span>fedimint_ln_common::contracts::{
-    ContractId, DecryptedPreimageStatus, FundedContract, Preimage,
-};
+<span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, DecryptedPreimageStatus, Preimage};
 <span class="kw">use </span>fedimint_ln_common::federation_endpoint_constants::{
     ACCOUNT_ENDPOINT, AWAIT_ACCOUNT_ENDPOINT, AWAIT_BLOCK_HEIGHT_ENDPOINT, AWAIT_OFFER_ENDPOINT,
     AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, AWAIT_PREIMAGE_DECRYPTION, BLOCK_COUNT_ENDPOINT,
@@ -388,9 +344,9 @@
         contract: ContractId,
     ) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;ContractAccount&gt;&gt;;
 
-    <span class="kw">async fn </span>wait_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; FederationResult&lt;ContractAccount&gt;;
+    <span class="kw">async fn </span>await_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; ContractAccount;
 
-    <span class="kw">async fn </span>wait_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, block_height: u64) -&gt; FederationResult&lt;()&gt;;
+    <span class="kw">async fn </span>wait_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, block_height: u64);
 
     <span class="kw">async fn </span>wait_outgoing_contract_cancelled(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -433,16 +389,6 @@
     </span><span class="kw">async fn </span>remove_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, remove_gateway_request: RemoveGatewayRequest);
 
     <span class="kw">async fn </span>offer_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; FederationResult&lt;bool&gt;;
-
-    <span class="kw">async fn </span>get_incoming_contract(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        id: ContractId,
-    ) -&gt; FederationResult&lt;IncomingContractAccount&gt;;
-
-    <span class="kw">async fn </span>get_outgoing_contract(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        id: ContractId,
-    ) -&gt; FederationResult&lt;OutgoingContractAccount&gt;;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -469,21 +415,21 @@
         .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>wait_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; FederationResult&lt;ContractAccount&gt; {
-        <span class="self">self</span>.request_current_consensus(
+    <span class="kw">async fn </span>await_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; ContractAccount {
+        <span class="self">self</span>.request_current_consensus_retry(
             AWAIT_ACCOUNT_ENDPOINT.to_string(),
             ApiRequestErased::new(contract),
         )
         .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>wait_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, block_height: u64) -&gt; FederationResult&lt;()&gt; {
-        <span class="self">self</span>.request_current_consensus(
+    <span class="kw">async fn </span>wait_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, block_height: u64) {
+        <span class="self">self</span>.request_current_consensus_retry::&lt;()&gt;(
             AWAIT_BLOCK_HEIGHT_ENDPOINT.to_string(),
             ApiRequestErased::new(block_height),
         )
-        .<span class="kw">await
-    </span>}
+        .<span class="kw">await</span>;
+    }
 
     <span class="kw">async fn </span>wait_outgoing_contract_cancelled(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -567,16 +513,19 @@
         <span class="kw">let </span><span class="kw-2">mut </span>responses = BTreeMap::new();
 
         <span class="kw">for </span>peer <span class="kw">in </span><span class="self">self</span>.all_peers() {
-            <span class="kw">if let </span><span class="prelude-val">Ok</span>(response) = <span class="self">self
-                </span><span class="comment">// Only wait a second since removing a gateway is "best effort"
-                </span>.request_single_peer_federation::&lt;<span class="prelude-ty">Option</span>&lt;sha256::Hash&gt;&gt;(
-                    <span class="prelude-val">Some</span>(Duration::from_secs(<span class="number">1</span>)),
+            <span class="comment">// Only wait a second since removing a gateway is "best effort"
+            </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(response) = timeout(
+                Duration::from_secs(<span class="number">1</span>),
+                <span class="self">self</span>.request_single_peer::&lt;<span class="prelude-ty">Option</span>&lt;sha256::Hash&gt;&gt;(
                     REMOVE_GATEWAY_CHALLENGE_ENDPOINT.to_string(),
                     ApiRequestErased::new(gateway_id),
                     <span class="kw-2">*</span>peer,
-                )
-                .<span class="kw">await
-            </span>{
+                ),
+            )
+            .<span class="kw">await
+            </span>.map_err(|<span class="kw">_</span>| PeerError::Rpc(JsonRpcClientError::RequestTimeout))
+            .and_then(identity)
+            {
                 responses.insert(<span class="kw-2">*</span>peer, response);
             }
         }
@@ -588,16 +537,19 @@
         <span class="kw">let </span>gateway_id = remove_gateway_request.gateway_id;
 
         <span class="kw">for </span>peer <span class="kw">in </span><span class="self">self</span>.all_peers() {
-            <span class="kw">if let </span><span class="prelude-val">Ok</span>(response) = <span class="self">self
-                </span>.request_single_peer_federation::&lt;bool&gt;(
-                    <span class="comment">// Only wait a second since removing a gateway is "best effort"
-                    </span><span class="prelude-val">Some</span>(Duration::from_secs(<span class="number">1</span>)),
+            <span class="comment">// Only wait a second since removing a gateway is "best effort"
+            </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(response) = timeout(
+                Duration::from_secs(<span class="number">1</span>),
+                <span class="self">self</span>.request_single_peer::&lt;bool&gt;(
                     REMOVE_GATEWAY_ENDPOINT.to_string(),
                     ApiRequestErased::new(remove_gateway_request.clone()),
                     <span class="kw-2">*</span>peer,
-                )
-                .<span class="kw">await
-            </span>{
+                ),
+            )
+            .<span class="kw">await
+            </span>.map_err(|<span class="kw">_</span>| PeerError::Rpc(JsonRpcClientError::RequestTimeout))
+            .and_then(identity)
+            {
                 <span class="kw">if </span>response {
                     <span class="macro">info!</span>(<span class="string">"Successfully removed {gateway_id} gateway from peer: {peer}"</span>,);
                 } <span class="kw">else </span>{
@@ -615,42 +567,6 @@
             )
             .<span class="kw">await</span><span class="question-mark">?
             </span>.is_some())
-    }
-
-    <span class="kw">async fn </span>get_incoming_contract(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        id: ContractId,
-    ) -&gt; FederationResult&lt;IncomingContractAccount&gt; {
-        <span class="kw">let </span>account = <span class="self">self</span>.wait_contract(id).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">match </span>account.contract {
-            FundedContract::Incoming(c) =&gt; <span class="prelude-val">Ok</span>(IncomingContractAccount {
-                amount: account.amount,
-                contract: c.contract,
-            }),
-            FundedContract::Outgoing(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(FederationError::general(
-                AWAIT_ACCOUNT_ENDPOINT,
-                id,
-                <span class="macro">anyhow::anyhow!</span>(<span class="string">"WrongAccountType"</span>),
-            )),
-        }
-    }
-
-    <span class="kw">async fn </span>get_outgoing_contract(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        id: ContractId,
-    ) -&gt; FederationResult&lt;OutgoingContractAccount&gt; {
-        <span class="kw">let </span>account = <span class="self">self</span>.wait_contract(id).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">match </span>account.contract {
-            FundedContract::Outgoing(c) =&gt; <span class="prelude-val">Ok</span>(OutgoingContractAccount {
-                amount: account.amount,
-                contract: c,
-            }),
-            FundedContract::Incoming(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(FederationError::general(
-                AWAIT_ACCOUNT_ENDPOINT,
-                id,
-                <span class="macro">anyhow::anyhow!</span>(<span class="string">"WrongAccountType"</span>),
-            )),
-        }
     }
 }
 

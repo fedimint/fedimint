@@ -497,10 +497,7 @@
 <a href="#496" id="496">496</a>
 <a href="#497" id="497">497</a>
 <a href="#498" id="498">498</a>
-<a href="#499" id="499">499</a>
-<a href="#500" id="500">500</a>
-<a href="#501" id="501">501</a>
-<a href="#502" id="502">502</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
+<a href="#499" id="499">499</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::num::NonZeroUsize;
 <span class="kw">use </span>std::result;
@@ -928,8 +925,7 @@
             <span class="kw">async move </span>{
                 (
                     peer_id,
-                    <span class="self">self</span>.request_single_peer(
-                        <span class="prelude-val">None</span>,
+                    <span class="self">self</span>.request_single_peer::&lt;()&gt;(
                         SUBMIT_API_ANNOUNCEMENT_ENDPOINT.into(),
                         ApiRequestErased::new(SignedApiAnnouncementSubmission {
                             signed_api_announcement: announcement_inner,
@@ -944,8 +940,8 @@
         .<span class="kw">await
         </span>.into_iter()
         .filter_map(|(peer_id, result)| <span class="kw">match </span>result {
-            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
-            <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Some</span>((peer_id, e.into())),
+            <span class="prelude-val">Ok</span>(()) =&gt; <span class="prelude-val">None</span>,
+            <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Some</span>((peer_id, e)),
         })
         .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
 
@@ -965,8 +961,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         guardian: PeerId,
     ) -&gt; PeerResult&lt;BTreeMap&lt;PeerId, SignedApiAnnouncement&gt;&gt; {
-        <span class="self">self</span>.request_single_peer_typed(
-            <span class="prelude-val">None</span>,
+        <span class="self">self</span>.request_single_peer(
             API_ANNOUNCEMENTS_ENDPOINT.to_owned(),
             ApiRequestErased::default(),
             guardian,
@@ -993,8 +988,7 @@
     </span>}
 
     <span class="kw">async fn </span>fedimintd_version(<span class="kw-2">&amp;</span><span class="self">self</span>, peer_id: PeerId) -&gt; PeerResult&lt;String&gt; {
-        <span class="self">self</span>.request_single_peer_typed(
-            <span class="prelude-val">None</span>,
+        <span class="self">self</span>.request_single_peer(
             FEDIMINTD_VERSION_ENDPOINT.to_owned(),
             ApiRequestErased::default(),
             peer_id,

@@ -99,12 +99,7 @@
 <a href="#98" id="98">98</a>
 <a href="#99" id="99">99</a>
 <a href="#100" id="100">100</a>
-<a href="#101" id="101">101</a>
-<a href="#102" id="102">102</a>
-<a href="#103" id="103">103</a>
-<a href="#104" id="104">104</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
-
-<span class="kw">use </span>bitcoin::{Address, Amount};
+<a href="#101" id="101">101</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::{Address, Amount};
 <span class="kw">use </span>fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased, ModuleConsensusVersion};
@@ -181,7 +176,6 @@
 
     <span class="kw">async fn </span>fetch_bitcoin_rpc_kind(<span class="kw-2">&amp;</span><span class="self">self</span>, peer_id: PeerId) -&gt; FederationResult&lt;String&gt; {
         <span class="self">self</span>.request_single_peer_federation(
-            <span class="prelude-val">Some</span>(Duration::from_secs(<span class="number">10</span>)),
             BITCOIN_KIND_ENDPOINT.to_string(),
             ApiRequestErased::default(),
             peer_id,

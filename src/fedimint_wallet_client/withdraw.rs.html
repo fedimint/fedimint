@@ -147,35 +147,21 @@
 <a href="#146" id="146">146</a>
 <a href="#147" id="147">147</a>
 <a href="#148" id="148">148</a>
-<a href="#149" id="149">149</a>
-<a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a>
-<a href="#152" id="152">152</a>
-<a href="#153" id="153">153</a>
-<a href="#154" id="154">154</a>
-<a href="#155" id="155">155</a>
-<a href="#156" id="156">156</a>
-<a href="#157" id="157">157</a>
-<a href="#158" id="158">158</a>
-<a href="#159" id="159">159</a>
-<a href="#160" id="160">160</a>
-<a href="#161" id="161">161</a>
-<a href="#162" id="162">162</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
-
-<span class="kw">use </span>bitcoin::Txid;
+<a href="#149" id="149">149</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::Txid;
+<span class="kw">use </span>fedimint_api_client::api::{deserialize_outcome, FederationApiExt};
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::task::sleep;
+<span class="kw">use </span>fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
+<span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::OutPoint;
 <span class="kw">use </span>fedimint_wallet_common::WalletOutputOutcome;
-<span class="kw">use </span>tracing::debug;
+<span class="kw">use </span>futures::future::pending;
+<span class="kw">use </span>tracing::warn;
 
 <span class="kw">use </span><span class="kw">crate</span>::events::WithdrawRequest;
 <span class="kw">use </span><span class="kw">crate</span>::WalletClientContext;
-
-<span class="kw">const </span>RETRY_DELAY: Duration = Duration::from_secs(<span class="number">1</span>);
 
 <span class="comment">// TODO: track tx confirmations
 </span><span class="attr">#[aquamarine::aquamarine]
@@ -203,7 +189,6 @@
                     await_withdraw_processed(
                         global_context.clone(),
                         context.clone(),
-                        <span class="self">self</span>.operation_id,
                         created.clone(),
                     ),
                     <span class="kw">move </span>|dbtx, res, old_state| {
@@ -230,45 +215,34 @@
 <span class="kw">async fn </span>await_withdraw_processed(
     global_context: DynGlobalClientContext,
     context: WalletClientContext,
-    operation_id: OperationId,
     created: CreatedWithdrawState,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;Txid, String&gt; {
     global_context
         .await_tx_accepted(created.fm_outpoint.txid)
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">loop </span>{
-        <span class="kw">match </span>global_context
-            .api()
-            .await_output_outcome::&lt;WalletOutputOutcome&gt;(
-                created.fm_outpoint,
-                Duration::MAX,
-                <span class="kw-2">&amp;</span>context.wallet_decoder,
-            )
-            .<span class="kw">await
-        </span>{
-            <span class="prelude-val">Ok</span>(outcome) =&gt; {
-                <span class="kw">return </span>outcome
-                    .ensure_v0_ref()
-                    .map(|outcome| outcome.<span class="number">0</span>)
-                    .map_err(|e| e.to_string())
-            }
-            <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="kw">if </span>e.is_rejected() {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(e.to_string());
-                }
+    <span class="kw">let </span>outcome = global_context
+        .api()
+        .request_current_consensus_retry(
+            AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
+            ApiRequestErased::new(created.fm_outpoint),
+        )
+        .<span class="kw">await</span>;
 
-                e.report_if_important();
-                <span class="macro">debug!</span>(
-                    error = %e,
-                    operation_id = %operation_id.fmt_short(),
-                    delay_secs =  RETRY_DELAY.as_secs_f64(),
-                    <span class="string">"Waiting before retry"</span>,
-                );
+    <span class="kw">match </span>deserialize_outcome::&lt;WalletOutputOutcome&gt;(<span class="kw-2">&amp;</span>outcome, <span class="kw-2">&amp;</span>context.wallet_decoder)
+        .map_err(|e| e.to_string())
+        .and_then(|outcome| {
+            outcome
+                .ensure_v0_ref()
+                .map(|outcome| outcome.<span class="number">0</span>)
+                .map_err(|e| e.to_string())
+        }) {
+        <span class="prelude-val">Ok</span>(txid) =&gt; <span class="prelude-val">Ok</span>(txid),
+        <span class="prelude-val">Err</span>(e) =&gt; {
+            <span class="macro">warn!</span>(<span class="string">"Failed to process wallet output outcome: {e}"</span>);
 
-                sleep(RETRY_DELAY).<span class="kw">await</span>;
-            }
-        }
+            pending().<span class="kw">await
+        </span>}
     }
 }
 

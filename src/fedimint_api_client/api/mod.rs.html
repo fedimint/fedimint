@@ -1191,85 +1191,11 @@
 <a href="#1190" id="1190">1190</a>
 <a href="#1191" id="1191">1191</a>
 <a href="#1192" id="1192">1192</a>
-<a href="#1193" id="1193">1193</a>
-<a href="#1194" id="1194">1194</a>
-<a href="#1195" id="1195">1195</a>
-<a href="#1196" id="1196">1196</a>
-<a href="#1197" id="1197">1197</a>
-<a href="#1198" id="1198">1198</a>
-<a href="#1199" id="1199">1199</a>
-<a href="#1200" id="1200">1200</a>
-<a href="#1201" id="1201">1201</a>
-<a href="#1202" id="1202">1202</a>
-<a href="#1203" id="1203">1203</a>
-<a href="#1204" id="1204">1204</a>
-<a href="#1205" id="1205">1205</a>
-<a href="#1206" id="1206">1206</a>
-<a href="#1207" id="1207">1207</a>
-<a href="#1208" id="1208">1208</a>
-<a href="#1209" id="1209">1209</a>
-<a href="#1210" id="1210">1210</a>
-<a href="#1211" id="1211">1211</a>
-<a href="#1212" id="1212">1212</a>
-<a href="#1213" id="1213">1213</a>
-<a href="#1214" id="1214">1214</a>
-<a href="#1215" id="1215">1215</a>
-<a href="#1216" id="1216">1216</a>
-<a href="#1217" id="1217">1217</a>
-<a href="#1218" id="1218">1218</a>
-<a href="#1219" id="1219">1219</a>
-<a href="#1220" id="1220">1220</a>
-<a href="#1221" id="1221">1221</a>
-<a href="#1222" id="1222">1222</a>
-<a href="#1223" id="1223">1223</a>
-<a href="#1224" id="1224">1224</a>
-<a href="#1225" id="1225">1225</a>
-<a href="#1226" id="1226">1226</a>
-<a href="#1227" id="1227">1227</a>
-<a href="#1228" id="1228">1228</a>
-<a href="#1229" id="1229">1229</a>
-<a href="#1230" id="1230">1230</a>
-<a href="#1231" id="1231">1231</a>
-<a href="#1232" id="1232">1232</a>
-<a href="#1233" id="1233">1233</a>
-<a href="#1234" id="1234">1234</a>
-<a href="#1235" id="1235">1235</a>
-<a href="#1236" id="1236">1236</a>
-<a href="#1237" id="1237">1237</a>
-<a href="#1238" id="1238">1238</a>
-<a href="#1239" id="1239">1239</a>
-<a href="#1240" id="1240">1240</a>
-<a href="#1241" id="1241">1241</a>
-<a href="#1242" id="1242">1242</a>
-<a href="#1243" id="1243">1243</a>
-<a href="#1244" id="1244">1244</a>
-<a href="#1245" id="1245">1245</a>
-<a href="#1246" id="1246">1246</a>
-<a href="#1247" id="1247">1247</a>
-<a href="#1248" id="1248">1248</a>
-<a href="#1249" id="1249">1249</a>
-<a href="#1250" id="1250">1250</a>
-<a href="#1251" id="1251">1251</a>
-<a href="#1252" id="1252">1252</a>
-<a href="#1253" id="1253">1253</a>
-<a href="#1254" id="1254">1254</a>
-<a href="#1255" id="1255">1255</a>
-<a href="#1256" id="1256">1256</a>
-<a href="#1257" id="1257">1257</a>
-<a href="#1258" id="1258">1258</a>
-<a href="#1259" id="1259">1259</a>
-<a href="#1260" id="1260">1260</a>
-<a href="#1261" id="1261">1261</a>
-<a href="#1262" id="1262">1262</a>
-<a href="#1263" id="1263">1263</a>
-<a href="#1264" id="1264">1264</a>
-<a href="#1265" id="1265">1265</a>
-<a href="#1266" id="1266">1266</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
+<a href="#1193" id="1193">1193</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::result;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::anyhow;
 <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
@@ -1286,7 +1212,6 @@
 <span class="kw">use </span>fedimint_core::core::backup::SignedBackupRequest;
 <span class="kw">use </span>fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::audit::AuditSummary;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -1298,8 +1223,7 @@
 <span class="kw">use </span>fedimint_core::util::backoff_util::api_networking_backoff;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, util, NumPeersExt, OutPoint, PeerId,
-    TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, util, NumPeersExt, PeerId, TransactionId,
 };
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_NET_API;
 <span class="kw">use </span>futures::future::pending;
@@ -1382,40 +1306,16 @@
 /// [`IRawFederationApi`].
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>FederationApiExt: IRawFederationApi {
-    <span class="doccomment">/// Make a request to a single peer in the federation with an optional
-    /// timeout.
-    </span><span class="kw">async fn </span>request_single_peer(
+    <span class="kw">async fn </span>request_single_peer&lt;Ret&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        timeout: <span class="prelude-ty">Option</span>&lt;Duration&gt;,
         method: String,
         params: ApiRequestErased,
-        peer_id: PeerId,
-    ) -&gt; JsonRpcResult&lt;jsonrpsee_core::JsonValue&gt; {
-        <span class="kw">let </span>request = <span class="kw">async </span>{
-            <span class="self">self</span>.request_raw(peer_id, <span class="kw-2">&amp;</span>method, <span class="kw-2">&amp;</span>[params.to_json()])
-                .<span class="kw">await
-        </span>};
-
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(timeout) = timeout {
-            <span class="kw">match </span>fedimint_core::runtime::timeout(timeout, request).<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(result) =&gt; result,
-                <span class="prelude-val">Err</span>(_timeout) =&gt; <span class="prelude-val">Err</span>(JsonRpcClientError::RequestTimeout),
-            }
-        } <span class="kw">else </span>{
-            request.<span class="kw">await
-        </span>}
-    }
-    <span class="kw">async fn </span>request_single_peer_typed&lt;Ret&gt;(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        timeout: <span class="prelude-ty">Option</span>&lt;Duration&gt;,
-        method: String,
-        params: ApiRequestErased,
-        peer_id: PeerId,
+        peer: PeerId,
     ) -&gt; PeerResult&lt;Ret&gt;
     <span class="kw">where
         </span>Ret: DeserializeOwned,
     {
-        <span class="self">self</span>.request_single_peer(timeout, method, params, peer_id)
+        <span class="self">self</span>.request_raw(peer, <span class="kw-2">&amp;</span>method, <span class="kw-2">&amp;</span>[params.to_json()])
             .<span class="kw">await
             </span>.map_err(PeerError::Rpc)
             .and_then(|v| {
@@ -1423,11 +1323,8 @@
             })
     }
 
-    <span class="doccomment">/// Like [`Self::request_single_peer`], but API more like
-    /// [`Self::request_with_strategy`].
-    </span><span class="kw">async fn </span>request_single_peer_federation&lt;FedRet&gt;(
+    <span class="kw">async fn </span>request_single_peer_federation&lt;FedRet&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        timeout: <span class="prelude-ty">Option</span>&lt;Duration&gt;,
         method: String,
         params: ApiRequestErased,
         peer_id: PeerId,
@@ -1435,25 +1332,24 @@
     <span class="kw">where
         </span>FedRet: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
-        <span class="prelude-val">Ok</span>(<span class="self">self
-            </span>.request_single_peer(timeout, method.clone(), params.clone(), peer_id)
+        <span class="self">self</span>.request_raw(peer_id, <span class="kw-2">&amp;</span>method, <span class="kw-2">&amp;</span>[params.to_json()])
             .<span class="kw">await
             </span>.map_err(PeerError::Rpc)
             .and_then(|v| {
                 serde_json::from_value(v).map_err(|e| PeerError::ResponseDeserialization(e.into()))
             })
-            .map_err(|e| error::FederationError::new_one_peer(peer_id, method, params, e))<span class="question-mark">?</span>)
+            .map_err(|e| error::FederationError::new_one_peer(peer_id, method, params, e))
     }
 
     <span class="doccomment">/// Make an aggregate request to federation, using `strategy` to logically
     /// merge the responses.
     </span><span class="attr">#[instrument(target = <span class="string">"fm::api"</span>, skip_all, fields(method=method))]
-    </span><span class="kw">async fn </span>request_with_strategy&lt;PeerRet: serde::de::DeserializeOwned, FedRet: Debug&gt;(
+    </span><span class="kw">async fn </span>request_with_strategy&lt;PR: DeserializeOwned, FR: Debug&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="kw-2">mut </span>strategy: <span class="kw">impl </span>QueryStrategy&lt;PeerRet, FedRet&gt; + MaybeSend,
+        <span class="kw-2">mut </span>strategy: <span class="kw">impl </span>QueryStrategy&lt;PR, FR&gt; + MaybeSend,
         method: String,
         params: ApiRequestErased,
-    ) -&gt; FederationResult&lt;FedRet&gt; {
+    ) -&gt; FederationResult&lt;FR&gt; {
         <span class="comment">// NOTE: `FuturesUnorderded` is a footgun, but all we do here is polling
         // completed results from it and we don't do any `await`s when
         // processing them, it should be totally OK.
@@ -1468,7 +1364,7 @@
                 <span class="kw">let </span>params = <span class="kw-2">&amp;</span>params;
                 <span class="kw">async move </span>{
                     <span class="kw">let </span>result = <span class="self">self
-                        </span>.request_single_peer_typed(<span class="prelude-val">None</span>, method.clone(), params.clone(), <span class="kw-2">*</span>peer)
+                        </span>.request_single_peer(method.clone(), params.clone(), <span class="kw-2">*</span>peer)
                         .<span class="kw">await</span>;
 
                     (<span class="kw-2">*</span>peer, result)
@@ -1494,12 +1390,7 @@
                                 <span class="kw">let </span>params = <span class="kw-2">&amp;</span>params;
                                 <span class="kw">async move </span>{
                                     <span class="kw">let </span>result = <span class="self">self
-                                        </span>.request_single_peer_typed(
-                                            <span class="prelude-val">None</span>,
-                                            method.clone(),
-                                            params.clone(),
-                                            peer,
-                                        )
+                                        </span>.request_single_peer(method.clone(), params.clone(), peer)
                                         .<span class="kw">await</span>;
 
                                     (peer, result)
@@ -1530,8 +1421,7 @@
         }
     }
 
-    <span class="attr">#[instrument(target = <span class="string">"fm::api"</span>, skip_all, fields(method=method))]
-    </span><span class="kw">async fn </span>request_with_strategy_and_retry&lt;PR: DeserializeOwned + MaybeSend, FR: Debug&gt;(
+    <span class="kw">async fn </span>request_with_strategy_retry&lt;PR: DeserializeOwned + MaybeSend, FR: Debug&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="kw-2">mut </span>strategy: <span class="kw">impl </span>QueryStrategy&lt;PR, FR&gt; + MaybeSend,
         method: String,
@@ -1554,15 +1444,10 @@
                         <span class="string">"api-request-{method}-{peer}"</span>,
                         api_networking_backoff(),
                         || <span class="kw">async </span>{
-                            <span class="self">self</span>.request_single_peer_typed(
-                                <span class="prelude-val">None</span>,
-                                method.clone(),
-                                params.clone(),
-                                <span class="kw-2">*</span>peer,
-                            )
-                            .<span class="kw">await
-                            </span>.inspect_err(|e| e.report_if_important(<span class="kw-2">*</span>peer))
-                            .map_err(|e| <span class="macro">anyhow!</span>(e.to_string()))
+                            <span class="self">self</span>.request_single_peer(method.clone(), params.clone(), <span class="kw-2">*</span>peer)
+                                .<span class="kw">await
+                                </span>.inspect_err(|e| e.report_if_important(<span class="kw-2">*</span>peer))
+                                .map_err(|e| <span class="macro">anyhow!</span>(e.to_string()))
                         },
                     )
                     .<span class="kw">await
@@ -1590,8 +1475,7 @@
                                     <span class="string">"api-request-{method}-{peer}"</span>,
                                     api_networking_backoff(),
                                     || <span class="kw">async </span>{
-                                        <span class="self">self</span>.request_single_peer_typed(
-                                            <span class="prelude-val">None</span>,
+                                        <span class="self">self</span>.request_single_peer(
                                             method.clone(),
                                             params.clone(),
                                             peer,
@@ -1624,7 +1508,7 @@
         params: ApiRequestErased,
     ) -&gt; FederationResult&lt;Ret&gt;
     <span class="kw">where
-        </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
+        </span>Ret: DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         <span class="self">self</span>.request_with_strategy(
             ThresholdConsensus::new(<span class="self">self</span>.all_peers().to_num_peers()),
@@ -1640,9 +1524,9 @@
         params: ApiRequestErased,
     ) -&gt; Ret
     <span class="kw">where
-        </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
+        </span>Ret: DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
-        <span class="self">self</span>.request_with_strategy_and_retry(
+        <span class="self">self</span>.request_with_strategy_retry(
             ThresholdConsensus::new(<span class="self">self</span>.all_peers().to_num_peers()),
             method,
             params,
@@ -1657,7 +1541,7 @@
         auth: ApiAuth,
     ) -&gt; FederationResult&lt;Ret&gt;
     <span class="kw">where
-        </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
+        </span>Ret: DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         <span class="kw">let </span><span class="prelude-val">Some</span>(self_peer_id) = <span class="self">self</span>.self_peer() <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(FederationError::general(
@@ -1666,13 +1550,8 @@
                 <span class="macro">anyhow::format_err!</span>(<span class="string">"Admin peer_id not set"</span>),
             ));
         };
-        <span class="self">self</span>.request_single_peer_federation(
-            <span class="prelude-val">None</span>,
-            method.into(),
-            params.with_auth(auth),
-            self_peer_id,
-        )
-        .<span class="kw">await
+        <span class="self">self</span>.request_single_peer_federation(method.into(), params.with_auth(auth), self_peer_id)
+            .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>request_admin_no_auth&lt;Ret&gt;(
@@ -1681,7 +1560,7 @@
         params: ApiRequestErased,
     ) -&gt; FederationResult&lt;Ret&gt;
     <span class="kw">where
-        </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
+        </span>Ret: DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         <span class="kw">let </span><span class="prelude-val">Some</span>(self_peer_id) = <span class="self">self</span>.self_peer() <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(FederationError::general(
@@ -1691,7 +1570,7 @@
             ));
         };
 
-        <span class="self">self</span>.request_single_peer_federation(<span class="prelude-val">None</span>, method.into(), params, self_peer_id)
+        <span class="self">self</span>.request_single_peer_federation(method.into(), params, self_peer_id)
             .<span class="kw">await
     </span>}
 }
@@ -1775,31 +1654,6 @@
         ))
         .into()
     }
-
-    <span class="kw">pub async fn </span>await_output_outcome&lt;R&gt;(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        outpoint: OutPoint,
-        timeout: Duration,
-        module_decoder: <span class="kw-2">&amp;</span>Decoder,
-    ) -&gt; OutputOutcomeResult&lt;R&gt;
-    <span class="kw">where
-        </span>R: OutputOutcome,
-    {
-        fedimint_core::runtime::timeout(timeout, <span class="kw">async </span>{
-            <span class="kw">let </span>outcome: SerdeOutputOutcome = <span class="self">self
-                </span>.inner
-                .request_current_consensus(
-                    AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
-                    ApiRequestErased::new(outpoint),
-                )
-                .<span class="kw">await
-                </span>.map_err(OutputOutcomeError::Federation)<span class="question-mark">?</span>;
-
-            deserialize_outcome(<span class="kw-2">&amp;</span>outcome, module_decoder)
-        })
-        .<span class="kw">await
-        </span>.map_err(|<span class="kw">_</span>| OutputOutcomeError::Timeout(timeout))<span class="question-mark">?
-    </span>}
 }
 
 <span class="doccomment">/// The API for the global (non-module) endpoints

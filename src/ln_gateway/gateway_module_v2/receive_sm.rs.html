@@ -320,26 +320,9 @@
 <a href="#319" id="319">319</a>
 <a href="#320" id="320">320</a>
 <a href="#321" id="321">321</a>
-<a href="#322" id="322">322</a>
-<a href="#323" id="323">323</a>
-<a href="#324" id="324">324</a>
-<a href="#325" id="325">325</a>
-<a href="#326" id="326">326</a>
-<a href="#327" id="327">327</a>
-<a href="#328" id="328">328</a>
-<a href="#329" id="329">329</a>
-<a href="#330" id="330">330</a>
-<a href="#331" id="331">331</a>
-<a href="#332" id="332">332</a>
-<a href="#333" id="333">333</a>
-<a href="#334" id="334">334</a>
-<a href="#335" id="335">335</a>
-<a href="#336" id="336">336</a>
-<a href="#337" id="337">337</a>
-<a href="#338" id="338">338</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
+<a href="#322" id="322">322</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::future::pending;
-<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
@@ -352,19 +335,16 @@
 <span class="kw">use </span>fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::secp256k1::Keypair;
-<span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::{NumPeersExt, OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_lnv2_common::contracts::IncomingContract;
 <span class="kw">use </span>fedimint_lnv2_common::{
     LightningInput, LightningInputV0, LightningOutputOutcome, LightningOutputOutcomeV0,
 };
 <span class="kw">use </span>tpe::{aggregate_decryption_shares, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare};
-<span class="kw">use </span>tracing::{error, trace};
+<span class="kw">use </span>tracing::error;
 
 <span class="kw">use </span><span class="kw">super</span>::events::{IncomingPaymentFailed, IncomingPaymentSucceeded};
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::GatewayClientContextV2;
-
-<span class="kw">const </span>RETRY_DELAY: Duration = Duration::from_secs(<span class="number">1</span>);
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>ReceiveStateMachine {
@@ -535,51 +515,39 @@
         out_point: OutPoint,
         decryption_contract: IncomingContract,
     ) -&gt; BTreeMap&lt;PeerId, DecryptionKeyShare&gt; {
-        <span class="kw">let </span>verify_decryption_share = <span class="kw">move </span>|peer, outcome: SerdeOutputOutcome| {
-            <span class="kw">let </span>outcome = deserialize_outcome::&lt;LightningOutputOutcome&gt;(<span class="kw-2">&amp;</span>outcome, <span class="kw-2">&amp;</span>module_decoder)<span class="question-mark">?</span>;
+        global_context
+            .api()
+            .request_with_strategy_retry(
+                FilterMapThreshold::new(
+                    <span class="kw">move </span>|peer, outcome: SerdeOutputOutcome| {
+                        <span class="kw">let </span>outcome = deserialize_outcome::&lt;LightningOutputOutcome&gt;(
+                            <span class="kw-2">&amp;</span>outcome,
+                            <span class="kw-2">&amp;</span>module_decoder,
+                        )<span class="question-mark">?</span>;
 
-            <span class="kw">match </span>outcome.ensure_v0_ref()<span class="question-mark">? </span>{
-                LightningOutputOutcomeV0::Incoming(share) =&gt; {
-                    <span class="kw">if </span>!decryption_contract.verify_decryption_share(
-                        tpe_pks.get(<span class="kw-2">&amp;</span>peer).ok_or(<span class="macro">anyhow!</span>(<span class="string">"Unknown peer pk"</span>))<span class="question-mark">?</span>,
-                        share,
-                    ) {
-                        <span class="macro">bail!</span>(<span class="string">"Invalid decryption share"</span>);
-                    }
+                        <span class="kw">match </span>outcome.ensure_v0_ref()<span class="question-mark">? </span>{
+                            LightningOutputOutcomeV0::Incoming(share) =&gt; {
+                                <span class="kw">if </span>!decryption_contract.verify_decryption_share(
+                                    tpe_pks.get(<span class="kw-2">&amp;</span>peer).ok_or(<span class="macro">anyhow!</span>(<span class="string">"Unknown peer pk"</span>))<span class="question-mark">?</span>,
+                                    share,
+                                ) {
+                                    <span class="macro">bail!</span>(<span class="string">"Invalid decryption share"</span>);
+                                }
 
-                    <span class="prelude-val">Ok</span>(<span class="kw-2">*</span>share)
-                }
-                LightningOutputOutcomeV0::Outgoing =&gt; {
-                    <span class="macro">bail!</span>(<span class="string">"Unexpected outcome variant"</span>);
-                }
-            }
-        };
-
-        <span class="kw">loop </span>{
-            <span class="kw">match </span>global_context
-                .api()
-                .request_with_strategy(
-                    FilterMapThreshold::new(
-                        verify_decryption_share.clone(),
-                        global_context.api().all_peers().to_num_peers(),
-                    ),
-                    AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
-                    ApiRequestErased::new(out_point),
-                )
-                .<span class="kw">await
-            </span>{
-                <span class="prelude-val">Ok</span>(outcome) =&gt; <span class="kw">return </span>outcome,
-                <span class="prelude-val">Err</span>(error) =&gt; {
-                    <span class="macro">trace!</span>(
-                        <span class="string">"Awaiting outcome to become ready failed, retrying in {}s: {error}"</span>,
-                        RETRY_DELAY.as_secs()
-                    );
-
-                    sleep(RETRY_DELAY).<span class="kw">await</span>;
-                }
-            };
-        }
-    }
+                                <span class="prelude-val">Ok</span>(<span class="kw-2">*</span>share)
+                            }
+                            LightningOutputOutcomeV0::Outgoing =&gt; {
+                                <span class="macro">bail!</span>(<span class="string">"Unexpected outcome variant"</span>);
+                            }
+                        }
+                    },
+                    global_context.api().all_peers().to_num_peers(),
+                ),
+                AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
+                ApiRequestErased::new(out_point),
+            )
+            .<span class="kw">await
+    </span>}
 
     <span class="kw">async fn </span>transition_outcome_ready(
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,

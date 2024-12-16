@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["RETRY_DELAY"],"trait":["LightningFederationApi"]};
+window.SIDEBAR_ITEMS = {"trait":["LightningFederationApi"]};

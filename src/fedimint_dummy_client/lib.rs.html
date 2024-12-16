@@ -439,7 +439,14 @@
 <a href="#438" id="438">438</a>
 <a href="#439" id="439">439</a>
 <a href="#440" id="440">440</a>
-<a href="#441" id="441">441</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -448,11 +455,11 @@
 </span><span class="kw">use </span>core::cmp::Ordering;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{anyhow, format_err, Context <span class="kw">as _</span>};
 <span class="kw">use </span>common::broken_fed_key_pair;
 <span class="kw">use </span>db::{migrate_to_v1, DbKeyPrefix, DummyClientFundsKeyV1, DummyClientNameKey};
+<span class="kw">use </span>fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
 <span class="kw">use </span>fedimint_client::db::{migrate_state, ClientMigrationFn};
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
@@ -466,8 +473,9 @@
 <span class="kw">use </span>fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
+<span class="kw">use </span>fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 <span class="kw">use </span>fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
+    ApiRequestErased, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 <span class="kw">use </span>fedimint_core::secp256k1::{Keypair, PublicKey, Secp256k1};
 <span class="kw">use </span>fedimint_core::util::{BoxStream, NextOrPending};
@@ -775,19 +783,25 @@
     <span class="doccomment">/// Wait to receive money at an outpoint
     </span><span class="kw">pub async fn </span>receive_money(<span class="kw-2">&amp;</span><span class="self">self</span>, outpoint: OutPoint) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span>DummyOutputOutcome(new_balance, account) = <span class="self">self
+
+        <span class="kw">let </span>outcome = <span class="self">self
             </span>.client_ctx
             .global_api()
-            .await_output_outcome(outpoint, Duration::from_secs(<span class="number">10</span>), <span class="kw-2">&amp;</span><span class="self">self</span>.decoder())
+            .request_current_consensus::&lt;SerdeOutputOutcome&gt;(
+                AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
+                ApiRequestErased::new(outpoint),
+            )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">if </span>account != <span class="self">self</span>.key.public_key() {
+        <span class="kw">let </span>outcome = deserialize_outcome::&lt;DummyOutputOutcome&gt;(<span class="kw-2">&amp;</span>outcome, <span class="kw-2">&amp;</span><span class="self">self</span>.decoder())<span class="question-mark">?</span>;
+
+        <span class="kw">if </span>outcome.<span class="number">1 </span>!= <span class="self">self</span>.key.public_key() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">"Wrong account id"</span>));
         }
 
-        dbtx.insert_entry(<span class="kw-2">&amp;</span>DummyClientFundsKeyV1, <span class="kw-2">&amp;</span>new_balance)
-            .<span class="kw">await</span>;
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>DummyClientFundsKeyV1, <span class="kw-2">&amp;</span>outcome.<span class="number">0</span>).<span class="kw">await</span>;
         dbtx.commit_tx().<span class="kw">await</span>;
+
         <span class="prelude-val">Ok</span>(())
     }
 
