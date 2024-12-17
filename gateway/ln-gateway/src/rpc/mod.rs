@@ -37,6 +37,7 @@ pub const OPEN_CHANNEL_ENDPOINT: &str = "/open_channel";
 pub const CLOSE_CHANNELS_WITH_PEER_ENDPOINT: &str = "/close_channels_with_peer";
 pub const PAY_INVOICE_FOR_OPERATOR_ENDPOINT: &str = "/pay_invoice_for_operator";
 pub const PAYMENT_LOG_ENDPOINT: &str = "/payment_log";
+pub const PAYMENT_SUMMARY_ENDPOINT: &str = "/payment_summary";
 pub const RECEIVE_ECASH_ENDPOINT: &str = "/receive_ecash";
 pub const SET_FEES_ENDPOINT: &str = "/set_fees";
 pub const STOP_ENDPOINT: &str = "/stop";
@@ -265,3 +266,11 @@ pub struct PaymentLogPayload {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PaymentLogResponse(pub Vec<GatewayTransactionEvent>);
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PaymentSummaryResponse {
+    pub average_outgoing_latency: u64,
+    pub total_fees: Amount,
+    pub total_outgoing_success: usize,
+    pub total_outgoing_failure: usize,
+}

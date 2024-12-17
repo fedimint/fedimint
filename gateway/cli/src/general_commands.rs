@@ -58,6 +58,8 @@ pub enum GeneralCommands {
         #[clap(long)]
         cost: Option<u32>,
     },
+    /// List a payment summary for the last day
+    PaymentSummary,
 }
 
 impl GeneralCommands {
@@ -136,6 +138,10 @@ impl GeneralCommands {
                 bcrypt::hash(password, cost.unwrap_or(bcrypt::DEFAULT_COST))
                     .expect("Unable to create bcrypt hash"),
             ),
+            Self::PaymentSummary => {
+                let payment_summary = create_client().payment_summary().await?;
+                print_response(payment_summary);
+            }
         }
 
         Ok(())

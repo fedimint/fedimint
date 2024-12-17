@@ -42,7 +42,7 @@ use config::GatewayOpts;
 pub use config::GatewayParameters;
 use db::GatewayDbtxNcExt;
 use error::FederationNotConnected;
-use events::ALL_GATEWAY_EVENTS;
+use events::{get_last_day_events, ALL_GATEWAY_EVENTS};
 use federation_manager::FederationManager;
 use fedimint_api_client::api::net::Connector;
 use fedimint_bip39::{Bip39RootSecretStrategy, Language, Mnemonic};
@@ -93,9 +93,10 @@ use rpc::{
     CloseChannelsWithPeerPayload, CreateInvoiceForOperatorPayload, DepositAddressRecheckPayload,
     FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse,
     OpenChannelPayload, PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentLogResponse,
-    ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainPayload, SetFeesPayload,
-    SpendEcashPayload, SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
+    PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainPayload,
+    SetFeesPayload, SpendEcashPayload, SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
 };
+use state_machine::events::compute_lnv1_stats;
 use state_machine::{GatewayClientModule, GatewayExtPayStates};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, info_span, warn};
@@ -1586,6 +1587,22 @@ impl Gateway {
         payment_log.truncate(pagination_size);
 
         Ok(PaymentLogResponse(payment_log))
+    }
+
+    pub async fn handle_payment_summary_msg(&self) -> PaymentSummaryResponse {
+        let federation_manager = self.federation_manager.read().await;
+        let fed_configs = federation_manager.get_all_federation_configs().await;
+        let federation_ids = fed_configs.keys().collect::<Vec<_>>();
+
+        // TODO: Generalize over all clients
+        let fed_id = federation_ids.first().expect("No connected clients");
+        let client = federation_manager
+            .client(*fed_id)
+            .expect("No client available")
+            .value();
+        let all_events = get_last_day_events(client).await;
+        let lnv1_stats = compute_lnv1_stats(all_events);
+        lnv1_stats
     }
 
     /// Registers the gateway with each specified federation.
