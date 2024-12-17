@@ -9,12 +9,12 @@ use fedimint_core::config::{FederationId, JsonClientConfig};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 use fedimint_eventlog::{EventKind, EventLogId};
-use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_mint_client::OOBNotes;
 use fedimint_wallet_client::PegOutFees;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 
+use crate::db::FederationConfig;
 use crate::lightning::LightningMode;
 use crate::SafeUrl;
 
@@ -102,9 +102,7 @@ pub struct FederationInfo {
     pub federation_id: FederationId,
     pub federation_name: Option<String>,
     pub balance_msat: Amount,
-    pub federation_index: u64,
-    pub lightning_fee: PaymentFee,
-    pub transaction_fee: PaymentFee,
+    pub config: FederationConfig,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]

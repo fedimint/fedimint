@@ -627,8 +627,10 @@ async fn leave_federation(gw: &Gatewayd, fed_id: String, expected_scid: u64) -> 
     let scid = if gatewayd_version < *VERSION_0_5_0_ALPHA {
         let channel_id: Option<u64> = serde_json::from_value(leave_fed["channel_id"].clone())?;
         channel_id.expect("must have channel id")
-    } else {
+    } else if gatewayd_version >= *VERSION_0_5_0_ALPHA && gatewayd_version < *VERSION_0_6_0_ALPHA {
         serde_json::from_value::<u64>(leave_fed["federation_index"].clone())?
+    } else {
+        serde_json::from_value::<u64>(leave_fed["config"]["federation_index"].clone())?
     };
 
     assert_eq!(scid, expected_scid);
