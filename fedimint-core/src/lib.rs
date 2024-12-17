@@ -11,6 +11,7 @@
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
+#![allow(clippy::needless_lifetimes)]
 #![allow(clippy::redundant_pub_crate)]
 #![allow(clippy::return_self_not_must_use)]
 #![allow(clippy::similar_names)]
@@ -246,7 +247,7 @@ const WITNESS_SCALE_FACTOR: u64 = bitcoin::constants::WITNESS_SCALE_FACTOR as u6
 ///
 /// [BIP-141]: https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki#transaction-size-calculations
 pub fn weight_to_vbytes(weight: u64) -> u64 {
-    (weight + WITNESS_SCALE_FACTOR - 1) / WITNESS_SCALE_FACTOR
+    weight.div_ceil(WITNESS_SCALE_FACTOR)
 }
 
 #[derive(Debug, Error)]

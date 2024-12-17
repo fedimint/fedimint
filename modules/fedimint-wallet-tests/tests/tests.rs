@@ -305,7 +305,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     let expected_tx_fee = {
         let witness_scale_factor = 4;
         let sats_per_vbyte = fees.fee_rate.sats_per_kvb / 1000;
-        let tx_vbytes = (fees.total_weight + witness_scale_factor - 1) / witness_scale_factor;
+        let tx_vbytes = fees.total_weight.div_ceil(witness_scale_factor);
         Amount::from_sats(sats_per_vbyte * tx_vbytes)
     };
     let tx_fee = bitcoin.get_mempool_tx_fee(&txid).await;

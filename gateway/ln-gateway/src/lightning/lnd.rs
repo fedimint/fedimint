@@ -1312,14 +1312,7 @@ impl ILnRpcClient for GatewayLndClient {
                         };
 
                         let outbound_liquidity_sats =
-                            if local_balance_sats >= local_channel_reserve_sats {
-                                // We must only perform this subtraction if the local balance is
-                                // greater than or equal to the channel reserve, otherwise we would
-                                // underflow and panic.
-                                local_balance_sats - local_channel_reserve_sats
-                            } else {
-                                0
-                            };
+                            local_balance_sats.saturating_sub(local_channel_reserve_sats);
 
                         let remote_balance_sats: u64 =
                             channel.remote_balance.try_into().expect("i64 -> u64");
@@ -1329,14 +1322,7 @@ impl ILnRpcClient for GatewayLndClient {
                         };
 
                         let inbound_liquidity_sats =
-                            if remote_balance_sats >= remote_channel_reserve_sats {
-                                // We must only perform this subtraction if the remote balance is
-                                // greater than or equal to the channel reserve, otherwise we would
-                                // underflow and panic.
-                                remote_balance_sats - remote_channel_reserve_sats
-                            } else {
-                                0
-                            };
+                            remote_balance_sats.saturating_sub(remote_channel_reserve_sats);
 
                         ChannelInfo {
                             remote_pubkey: PublicKey::from_str(&channel.remote_pubkey)

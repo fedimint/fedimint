@@ -1,3 +1,5 @@
+#![allow(clippy::needless_lifetimes)]
+
 //! A library for cooperative port allocation between multiple processes.
 //!
 //! Fedimint tests in many places need to allocate ranges of unused ports for

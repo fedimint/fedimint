@@ -3,6 +3,7 @@
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
+#![allow(clippy::needless_lifetimes)]
 #![allow(clippy::return_self_not_must_use)]
 
 use std::hash::Hasher;

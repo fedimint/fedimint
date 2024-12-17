@@ -1531,8 +1531,8 @@ pub struct Committable;
 /// Session type for a [`DatabaseTransaction`] that is not allowed to commit
 ///
 /// Opposite of [`Committable`].
-
 pub struct NonCommittable;
+
 /// A high level database transaction handle
 ///
 /// `Cap` is a session type
