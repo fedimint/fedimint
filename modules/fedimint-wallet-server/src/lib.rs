@@ -1621,7 +1621,10 @@ impl Wallet {
                         match res {
                             Ok(ok) => feerates[i] = Some(ok),
                             Err(err) => {
-                                warn!(target: LOG_MODULE_WALLET, %err, %name, "Error getting feerate from source");
+                                // Regtest node never returns fee rate, so no point spamming about it
+                                if !is_running_in_test_env() {
+                                    warn!(target: LOG_MODULE_WALLET, %err, %name, "Error getting feerate from source");
+                                }
                             },
                         }
                     }
@@ -1634,9 +1637,9 @@ impl Wallet {
                         let feerate_with_multiplier = Feerate { sats_per_kvb: r * FEERATE_MULTIPLIER };
                         let _ = fee_rate_tx.send(feerate_with_multiplier);
                     } else {
-                        // Regtest node never returns fee rate, so no point spamming about it
+                        // During tests (regtest) we never get any real feerate, so no point spamming about it
                         if !is_running_in_test_env() {
-                            warn!(target: LOG_MODULE_WALLET, "Bitcoin node did not return a fee rate");
+                            warn!(target: LOG_MODULE_WALLET, "Unable to calculate any fee rate");
                         }
                     }
                 };
