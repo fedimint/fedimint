@@ -15,7 +15,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::{backoff_util, retry};
+use fedimint_core::util::{backoff_util, retry, SafeUrl};
 use fedimint_core::{secp256k1, Amount};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::PrunedInvoice;
@@ -28,9 +28,8 @@ use tracing::{debug, info, warn};
 
 use self::lnd::GatewayLndClient;
 use crate::envs::{
-    FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV, FM_LDK_BITCOIND_HOST, FM_LDK_BITCOIND_PASSWORD,
-    FM_LDK_BITCOIND_PORT, FM_LDK_BITCOIND_USER, FM_LDK_ESPLORA_SERVER_URL, FM_LDK_NETWORK,
-    FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
+    FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV, FM_LDK_BITCOIND_RPC_URL, FM_LDK_ESPLORA_SERVER_URL,
+    FM_LDK_NETWORK, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
 use crate::rpc::{CloseChannelsWithPeerPayload, SendOnchainPayload};
 use crate::{OpenChannelPayload, Preimage};
@@ -323,21 +322,9 @@ pub enum LightningMode {
         #[arg(long = "ldk-esplora-server-url", env = FM_LDK_ESPLORA_SERVER_URL)]
         esplora_server_url: Option<String>,
 
-        /// LDK bitcoind host
-        #[arg(long = "ldk-bitcoind-host", env = FM_LDK_BITCOIND_HOST)]
-        bitcoind_host: Option<String>,
-
-        /// LDK bitcoind port
-        #[arg(long = "ldk-bitcoind-port", env = FM_LDK_BITCOIND_PORT)]
-        bitcoind_port: Option<u16>,
-
-        /// LDK bitcoind user
-        #[arg(long = "ldk-bitcoind-user", env = FM_LDK_BITCOIND_USER)]
-        bitcoind_user: Option<String>,
-
-        /// LDK bitcoind password
-        #[arg(long = "ldk-bitcoind-password", env = FM_LDK_BITCOIND_PASSWORD)]
-        bitcoind_password: Option<String>,
+        /// LDK bitcoind server URL
+        #[arg(long = "ldk-bitcoind-rpc-url", env = FM_LDK_BITCOIND_RPC_URL)]
+        bitcoind_rpc_url: Option<String>,
 
         /// LDK network (defaults to regtest if not provided)
         #[arg(long = "ldk-network", env = FM_LDK_NETWORK, default_value = "regtest")]
@@ -383,46 +370,36 @@ impl LightningBuilder for GatewayLightningBuilder {
             )),
             LightningMode::Ldk {
                 esplora_server_url,
-                bitcoind_host,
-                bitcoind_port,
-                bitcoind_user,
-                bitcoind_password,
+                bitcoind_rpc_url,
                 network,
                 lightning_port,
             } => {
                 let chain_source_config = {
-                    match (
-                        esplora_server_url,
-                        bitcoind_host,
-                        bitcoind_port,
-                        bitcoind_user,
-                        bitcoind_password,
-                    ) {
-                        (None, None, None, None, None) => {
-                            panic!("Either esplora or bitcoind chain info source must be provided")
-                        }
-                        (Some(esplora_server_url), None, None, None, None) => {
-                            GatewayLdkChainSourceConfig::Esplora {
-                                server_url: esplora_server_url,
+                    match (esplora_server_url, bitcoind_rpc_url) {
+                        (Some(esplora_server_url), None) => GatewayLdkChainSourceConfig::Esplora {
+                            server_url: esplora_server_url,
+                        },
+                        (None, Some(bitcoind_rpc_url)) => {
+                            let url: SafeUrl =
+                                bitcoind_rpc_url.parse().expect("Invalid bitcoind RPC URL");
+
+                            GatewayLdkChainSourceConfig::Bitcoind {
+                                rpc_host: url
+                                    .host_str()
+                                    .expect("Could not retrieve host from bitcoind RPC url")
+                                    .to_string(),
+                                rpc_port: url
+                                    .port()
+                                    .expect("Could not retrieve port from bitcoind RPC url"),
+                                rpc_user: url.username().to_string(),
+                                rpc_password: url.password().unwrap_or_default().to_string(),
                             }
                         }
-                        (Some(_), _, _, _, _) => {
-                            panic!("Either esplora or bitcoind chain info source must be provided, but received args for both")
+                        (None, None) => {
+                            panic!("Either esplora or bitcoind chain info source must be provided")
                         }
-                        (
-                            None,
-                            Some(bitcoind_host),
-                            Some(bitcoind_port),
-                            Some(bitcoind_user),
-                            Some(bitcoind_password),
-                        ) => GatewayLdkChainSourceConfig::Bitcoind {
-                            rpc_host: bitcoind_host,
-                            rpc_port: bitcoind_port,
-                            rpc_user: bitcoind_user,
-                            rpc_password: bitcoind_password,
-                        },
-                        (None, _, _, _, _) => {
-                            panic!("Missing some bitcoind chain info source args")
+                        (Some(_), Some(_)) => {
+                            panic!("Either esplora or bitcoind chain info source must be provided, but not both")
                         }
                     }
                 };
