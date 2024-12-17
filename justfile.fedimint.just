@@ -152,6 +152,16 @@ sign-release tag:
 bench-compilation:
   ./scripts/bench-compilation.sh
 
+bench-compilation-quick-incr DIR="fedimint-core":
+  @env \
+    BENCH_COMP_REUSE_TARGET_DIR=1 \
+    BENCH_COMP_SKIP_DECORATIONS=1 \
+    BENCH_COMP_SKIP_FULL=1 \
+    BENCH_COMP_SKIP_COMMAND=build \
+    BENCH_COMP_SKIP_PROFILE=release \
+    BENCH_COMP_TOUCH_DIR={{DIR}} \
+    bash ./scripts/bench-compilation.sh
+
 fuzz-target TARGET="" *ARGS="--exit_upon_crash":
   #!/usr/bin/env bash
   set -euo pipefail
