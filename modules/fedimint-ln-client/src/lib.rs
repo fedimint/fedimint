@@ -34,14 +34,14 @@ use fedimint_client::derivable_secret::ChildId;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
-use fedimint_client::oplog::UpdateStreamOrOutcome;
+use fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, ClientOutputSM,
     TransactionBuilder,
 };
-use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_client::{sm_enum_variant_translation, ClientHandleArc, DynGlobalClientContext};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
@@ -2250,4 +2250,21 @@ impl GatewayConnection for MockGatewayConnection {
         // Just return a fake preimage to indicate success
         Ok("00000000".to_string())
     }
+}
+
+pub async fn ln_operation(
+    client: &ClientHandleArc,
+    operation_id: OperationId,
+) -> anyhow::Result<OperationLogEntry> {
+    let operation = client
+        .operation_log()
+        .get_operation(operation_id)
+        .await
+        .ok_or(anyhow::anyhow!("Operation not found"))?;
+
+    if operation.operation_module_kind() != LightningCommonInit::KIND.as_str() {
+        bail!("Operation is not a lightning operation");
+    }
+
+    Ok(operation)
 }

@@ -3,7 +3,7 @@ name = "fedimint-wallet-common"
 version = { workspace = true }
 authors = ["The Fedimint Developers"]
 edition = "2021"
-description = "fedimint-wallet is a n on-chain bitcoin wallet module. It uses a key-value store and is not a standard HD wallet."
+description = "fedimint-wallet-common is a n on-chain bitcoin wallet module. It uses a key-value store and is not a standard HD wallet. (common types)"
 license = "MIT"
 readme = "../../README.md"
 repository = "https://github.com/fedimint/fedimint"

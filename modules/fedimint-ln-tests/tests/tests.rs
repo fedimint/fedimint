@@ -9,11 +9,11 @@ use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_ln_client::{
-    InternalPayState, LightningClientInit, LightningClientModule, LightningOperationMeta,
-    LnPayState, LnReceiveState, MockGatewayConnection, OutgoingLightningPayment, PayType,
+    ln_operation, InternalPayState, LightningClientInit, LightningClientModule,
+    LightningOperationMeta, LnPayState, LnReceiveState, MockGatewayConnection,
+    OutgoingLightningPayment, PayType,
 };
 use fedimint_ln_common::config::LightningGenParams;
-use fedimint_ln_common::ln_operation;
 use fedimint_ln_server::LightningInit;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
