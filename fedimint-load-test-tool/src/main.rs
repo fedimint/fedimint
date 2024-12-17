@@ -2,6 +2,7 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::missing_errors_doc)]
+#![allow(clippy::ref_option)]
 #![allow(clippy::too_many_lines)]
 
 use std::collections::{BTreeMap, HashMap};

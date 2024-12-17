@@ -6,6 +6,7 @@
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
+#![allow(clippy::needless_lifetimes)]
 #![allow(clippy::too_many_lines)]
 
 pub mod db;

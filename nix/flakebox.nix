@@ -12,7 +12,7 @@ let
 
   # `moreutils/bin/parallel` and `parallel/bin/parallel` conflict, so just use
   # the binary we need from `moreutils`
-  moreutils-ts = pkgs.writeShellScriptBin "ts" "exec ${pkgs.moreutils}/bin/ts \"$@\"";
+  moreutils-ts = pkgs.writeShellScriptBin "ts" ''exec ${pkgs.moreutils}/bin/ts "$@"'';
 
   # placeholder we use to avoid actually needing to detect hash via running `git`
   # 012345... for easy recognizability (in case something went wrong),
@@ -41,7 +41,7 @@ let
       basePath = toString src + "/";
     in
     lib.cleanSourceWith {
-      filter = (
+      filter =
         path: type:
         let
           relPath = lib.removePrefix basePath (toString path);
@@ -49,8 +49,7 @@ let
         in
         # uncomment to debug:
         # builtins.trace "${relPath}: ${lib.boolToString includePath}"
-        includePath
-      );
+        includePath;
       inherit src;
     };
 
@@ -74,12 +73,12 @@ let
     filterSrcWithRegexes (
       filterWorkspaceDepsBuildFilesRegex
       ++ [
-        ".*\.rs"
-        ".*\.html"
+        ".*.rs"
+        ".*.html"
         ".*/proto/.*"
         "db/migrations/.*"
         "devimint/src/cfg/.*"
-        "docs/.*\.md"
+        "docs/.*.md"
       ]
     ) src;
 
@@ -89,13 +88,13 @@ let
     filterSrcWithRegexes (
       filterWorkspaceDepsBuildFilesRegex
       ++ [
-        ".*\.rs"
-        ".*\.html"
+        ".*.rs"
+        ".*.html"
         ".*/proto/.*"
         "db/migrations/.*"
         "devimint/src/cfg/.*"
         "scripts/.*"
-        "docs/.*\.md"
+        "docs/.*.md"
       ]
     ) src;
 
@@ -105,9 +104,9 @@ let
   # env vars for linking rocksdb
   commonEnvsCross =
     let
-      build_arch_underscores = lib.strings.replaceStrings [ "-" ] [
-        "_"
-      ] pkgs.stdenv.buildPlatform.config;
+      build_arch_underscores =
+        lib.strings.replaceStrings [ "-" ] [ "_" ]
+          pkgs.stdenv.buildPlatform.config;
     in
     {
       # for cargo-deluxe
@@ -275,15 +274,12 @@ let
             ]
           else
             [
-
               (pkgs.writeShellScriptBin "runLowPrio" ''
                 exec "$@"
               '')
             ]
         )
-      ]
-
-    ;
+      ];
 
     # we carefully optimize our debug symbols on cargo level,
     # and in case of errors and panics, would like to see the
@@ -298,14 +294,17 @@ let
     # the build command will be the test
     doCheck = true;
   };
-
 in
 (flakeboxLib.craneMultiBuild { inherit toolchains profiles; }) (
   craneLib':
   let
     craneLib =
       (craneLib'.overrideArgs (
-        commonEnvsBuild // commonArgs // { src = filterWorkspaceBuildFiles commonSrc; }
+        commonEnvsBuild
+        // commonArgs
+        // {
+          src = filterWorkspaceBuildFiles commonSrc;
+        }
       )).overrideArgs''
         (
           craneLib: args:
@@ -366,9 +365,7 @@ in
         // (lib.optionalAttrs (pname != null) { inherit pname; })
         // {
           cargoArtifacts = deps;
-          meta = {
-            inherit mainProgram;
-          };
+          meta = { inherit mainProgram; };
           cargoBuildCommand = "runLowPrio cargo build --profile $CARGO_PROFILE";
           cargoExtraArgs = "${pkgsArgs}";
         }
@@ -522,7 +519,7 @@ in
 
         FM_DISCOVER_API_VERSION_TIMEOUT = "10";
 
-        buildPhaseCargoCommand = (
+        buildPhaseCargoCommand =
           ''
             source <(cargo llvm-cov show-env --export-prefix)
           ''
@@ -534,8 +531,7 @@ in
           + ''
             mkdir -p $out
             cargo llvm-cov report --profile $CARGO_PROFILE --lcov --output-path $out/lcov.info
-          ''
-        );
+          '';
         installPhaseCommand = "true";
         nativeBuildInputs = [ pkgs.cargo-llvm-cov ];
         doCheck = false;

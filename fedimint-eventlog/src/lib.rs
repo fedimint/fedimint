@@ -1,3 +1,5 @@
+#![allow(clippy::needless_lifetimes)]
+
 //! Client Event Log
 //!
 //! The goal here is to maintain a single, ordered, append only

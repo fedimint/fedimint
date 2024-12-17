@@ -1,6 +1,7 @@
 #![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::must_use_candidate)]
+#![allow(clippy::needless_lifetimes)]
 
 pub mod envs;
 
@@ -60,8 +61,9 @@ impl RocksDb {
     }
 }
 
+// TODO: Remove this and inline it in the places where it's used.
 fn is_power_of_two(num: usize) -> bool {
-    num.count_ones() == 1
+    num.is_power_of_two()
 }
 
 impl<'a> fmt::Debug for RocksDbReadOnlyTransaction<'a> {
