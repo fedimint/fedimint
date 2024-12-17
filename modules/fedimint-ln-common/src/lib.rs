@@ -14,8 +14,6 @@
 //! If this module is active the consensus' conflict filter must ensure that at
 //! most one operation (spend, funding) happens per contract per round
 
-extern crate core;
-
 pub mod config;
 pub mod contracts;
 pub mod federation_endpoint_constants;
@@ -25,12 +23,10 @@ use std::collections::BTreeMap;
 use std::io::{Error, ErrorKind, Read, Write};
 use std::time::{Duration, SystemTime};
 
-use anyhow::{bail, Context as AnyhowContext};
+use anyhow::Context as AnyhowContext;
 use bitcoin::hashes::{sha256, Hash};
 use config::LightningClientConfig;
-use fedimint_client::oplog::OperationLogEntry;
-use fedimint_client::ClientHandleArc;
-use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind, OperationId};
+use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
@@ -630,23 +626,6 @@ pub enum LightningOutputError {
     InvalidCancellationSignature,
     #[error("The lightning output version is not supported by this federation")]
     UnknownOutputVariant(#[from] UnknownLightningOutputVariantError),
-}
-
-pub async fn ln_operation(
-    client: &ClientHandleArc,
-    operation_id: OperationId,
-) -> anyhow::Result<OperationLogEntry> {
-    let operation = client
-        .operation_log()
-        .get_operation(operation_id)
-        .await
-        .ok_or(anyhow::anyhow!("Operation not found"))?;
-
-    if operation.operation_module_kind() != LightningCommonInit::KIND.as_str() {
-        bail!("Operation is not a lightning operation");
-    }
-
-    Ok(operation)
 }
 
 /// Data needed to pay an invoice

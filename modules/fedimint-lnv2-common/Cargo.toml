@@ -3,7 +3,7 @@ name = "fedimint-lnv2-common"
 version = { workspace = true }
 authors = ["The Fedimint Developers"]
 edition = "2021"
-description = "fedimint-ln is a lightning payment service module."
+description = "fedimint-ln-common is a lightning payment service module (common types)."
 license = "MIT"
 
 [package.metadata.cargo-udeps.ignore]
@@ -18,7 +18,6 @@ path = "src/lib.rs"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
-fedimint-api-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-ln-common = { workspace = true }
 group = { workspace = true }

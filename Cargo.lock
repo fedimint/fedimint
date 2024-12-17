@@ -2615,7 +2615,6 @@ version = "0.6.0-alpha"
 dependencies = [
  "anyhow",
  "bitcoin",
- "fedimint-client",
  "fedimint-core",
  "fedimint-threshold-crypto",
  "lightning",
@@ -2778,7 +2777,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bitcoin",
- "fedimint-api-client",
  "fedimint-core",
  "fedimint-ln-common",
  "fedimint-tpe",
