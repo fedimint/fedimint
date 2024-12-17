@@ -50,6 +50,8 @@ pub enum GeneralCommands {
         #[clap(long)]
         event_kinds: Vec<EventKind>,
     },
+    /// List a payment summary for the last day
+    PaymentSummary,
 }
 
 impl GeneralCommands {
@@ -123,6 +125,10 @@ impl GeneralCommands {
                     })
                     .await?;
                 print_response(payment_log);
+            }
+            Self::PaymentSummary => {
+                let payment_summary = create_client().payment_summary().await?;
+                print_response(payment_summary);
             }
         }
 

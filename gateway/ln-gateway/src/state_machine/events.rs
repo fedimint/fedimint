@@ -1,3 +1,5 @@
+use std::iter::zip;
+
 use fedimint_core::core::{ModuleKind, OperationId};
 use fedimint_core::Amount;
 use fedimint_eventlog::{Event, EventKind};
@@ -6,6 +8,8 @@ use fedimint_ln_common::contracts::ContractId;
 use serde::{Deserialize, Serialize};
 
 use super::pay::OutgoingPaymentError;
+use crate::events::LogEntry;
+use crate::rpc::PaymentSummaryResponse;
 
 /// LNv1 event that is emitted when an outgoing payment attempt is initiated.
 #[derive(Serialize, Deserialize)]
@@ -133,4 +137,121 @@ impl Event for CompleteLightningPaymentSucceeded {
     const MODULE: Option<ModuleKind> = Some(fedimint_ln_common::KIND);
 
     const KIND: EventKind = EventKind::from_static("complete-lightning-payment-succeeded");
+}
+
+pub fn compute_lnv1_stats(all_events: Vec<LogEntry>) -> PaymentSummaryResponse {
+    let lnv1_events = filter_lnv1_events(all_events);
+    let (success_stats, failure_stats) = join_outgoing_lnv1_events(
+        &lnv1_events.outgoing_start_events,
+        &lnv1_events.outgoing_success_events,
+        &lnv1_events.outgoing_failure_events,
+    );
+    let sum_fees = success_stats.iter().map(|(_, f)| f.msats).sum();
+    let sum_success_latency: u64 = success_stats.iter().map(|(l, _)| l).sum();
+    let average_outgoing_latency = if success_stats.len() > 0 {
+        sum_success_latency / success_stats.len() as u64
+    } else {
+        0
+    };
+    PaymentSummaryResponse {
+        average_outgoing_latency,
+        total_fees: Amount::from_msats(sum_fees),
+        total_outgoing_success: success_stats.len(),
+        total_outgoing_failure: failure_stats.len(),
+    }
+}
+
+struct Lnv1Events {
+    pub outgoing_start_events: Vec<LogEntry>,
+    pub outgoing_success_events: Vec<LogEntry>,
+    pub outgoing_failure_events: Vec<LogEntry>,
+}
+
+fn filter_lnv1_events(all_events: Vec<LogEntry>) -> Lnv1Events {
+    let outgoing_start_events = all_events
+        .clone()
+        .into_iter()
+        .filter_map(|e| {
+            if e.1 == OutgoingPaymentStarted::KIND {
+                Some(e)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let outgoing_success_events = all_events
+        .clone()
+        .into_iter()
+        .filter_map(|e| {
+            if e.1 == OutgoingPaymentSucceeded::KIND {
+                Some(e)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let outgoing_failure_events = all_events
+        .into_iter()
+        .filter_map(|e| {
+            if e.1 == OutgoingPaymentFailed::KIND {
+                Some(e)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    Lnv1Events {
+        outgoing_start_events,
+        outgoing_success_events,
+        outgoing_failure_events,
+    }
+}
+
+fn join_outgoing_lnv1_events(
+    start_events: &Vec<LogEntry>,
+    success_events: &Vec<LogEntry>,
+    failure_events: &Vec<LogEntry>,
+) -> (Vec<(u64, Amount)>, Vec<u64>) {
+    let success_stats = zip(start_events, success_events)
+        .filter_map(|(start, success)| {
+            let start_event: OutgoingPaymentStarted =
+                serde_json::from_value(start.4.clone()).expect("could not parse JSON");
+            let success_event: OutgoingPaymentSucceeded =
+                serde_json::from_value(success.4.clone()).expect("could not parse JSON");
+            if start_event.contract_id == success_event.contract_id {
+                let latency = success.3 - start.3;
+                let fee = success_event
+                    .outgoing_contract
+                    .amount
+                    .checked_sub(start_event.invoice_amount);
+                if let Some(fee) = fee {
+                    Some((latency, fee))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let failure_stats = zip(start_events, failure_events)
+        .filter_map(|(start, success)| {
+            let start_event: OutgoingPaymentStarted =
+                serde_json::from_value(start.4.clone()).expect("could not parse JSON");
+            let fail_event: OutgoingPaymentFailed =
+                serde_json::from_value(success.4.clone()).expect("could not parse JSON");
+            if start_event.contract_id == fail_event.contract_id {
+                let latency = success.3 - start.3;
+                Some(latency)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    (success_stats, failure_stats)
 }
