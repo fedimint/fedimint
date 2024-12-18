@@ -264,39 +264,15 @@ pub struct PaymentLogResponse(pub Vec<GatewayTransactionEvent>);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PaymentSummaryResponse {
-    pub average_outgoing_latency: u64,
-    pub average_incoming_latency: u64,
-    pub total_outgoing_fees: Amount,
-    pub total_incoming_fees: Amount,
-    pub total_outgoing_success: usize,
-    pub total_outgoing_failure: usize,
-    pub total_incoming_success: usize,
-    pub total_incoming_failure: usize,
+    pub outgoing: PaymentStats,
+    pub incoming: PaymentStats,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PaymentStats {
     pub average_latency_micros: u64,
     pub median_latency_micros: u64,
-}
-
-impl PaymentSummaryResponse {
-    pub fn aggregate(&mut self, other: PaymentSummaryResponse) {
-        self.average_outgoing_latency =
-            (self.average_outgoing_latency + other.average_outgoing_latency) / 2;
-        self.average_incoming_latency =
-            (self.average_incoming_latency + other.average_incoming_latency) / 2;
-        self.total_outgoing_fees = self
-            .total_outgoing_fees
-            .checked_add(other.total_outgoing_fees)
-            .expect("Exceeded Amount");
-        self.total_incoming_fees = self
-            .total_incoming_fees
-            .checked_add(other.total_incoming_fees)
-            .expect("Exceeded Amount");
-        self.total_outgoing_success = self.total_outgoing_success + other.total_outgoing_success;
-        self.total_outgoing_failure = self.total_outgoing_failure + other.total_outgoing_failure;
-        self.total_incoming_success = self.total_incoming_success + other.total_incoming_success;
-        self.total_incoming_failure = self.total_incoming_failure + other.total_incoming_failure;
-    }
+    pub total_fees: Amount,
+    pub total_success: usize,
+    pub total_failure: usize,
 }

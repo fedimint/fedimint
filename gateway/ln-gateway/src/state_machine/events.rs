@@ -8,8 +8,7 @@ use fedimint_ln_common::contracts::ContractId;
 use serde::{Deserialize, Serialize};
 
 use super::pay::OutgoingPaymentError;
-use crate::events::{FilteredPaymentEvents, LogEntry};
-use crate::rpc::PaymentSummaryResponse;
+use crate::events::{FilteredPaymentEvents, LogEntry, StructuredPaymentEvents};
 
 /// LNv1 event that is emitted when an outgoing payment attempt is initiated.
 #[derive(Serialize, Deserialize)]
@@ -139,44 +138,25 @@ impl Event for CompleteLightningPaymentSucceeded {
     const KIND: EventKind = EventKind::from_static("complete-lightning-payment-succeeded");
 }
 
-pub fn compute_lnv1_stats(all_events: Vec<LogEntry>) -> PaymentSummaryResponse {
+pub fn compute_lnv1_stats(all_events: Vec<LogEntry>) -> StructuredPaymentEvents {
     let lnv1_events = filter_lnv1_events(all_events);
     let (outgoing_success_stats, outgoing_failure_stats) = join_outgoing_lnv1_events(
         &lnv1_events.outgoing_start_events,
         &lnv1_events.outgoing_success_events,
         &lnv1_events.outgoing_failure_events,
     );
-    let sum_outgoing_fees = outgoing_success_stats.iter().map(|(_, f)| f.msats).sum();
-    let sum_outgoing_success_latency: u64 = outgoing_success_stats.iter().map(|(l, _)| l).sum();
-    let average_outgoing_latency = if outgoing_success_stats.len() > 0 {
-        sum_outgoing_success_latency / outgoing_success_stats.len() as u64
-    } else {
-        0
-    };
-
     let (incoming_success_stats, incoming_failure_stats) = join_incoming_lnv1_events(
         &lnv1_events.incoming_start_events,
         &lnv1_events.incoming_success_events,
         &lnv1_events.incoming_failure_events,
     );
-    let sum_incoming_fees = incoming_success_stats.iter().map(|(_, f)| f.msats).sum();
-    let sum_incoming_success_latency: u64 = incoming_success_stats.iter().map(|(l, _)| l).sum();
-    let average_incoming_latency = if incoming_success_stats.len() > 0 {
-        sum_incoming_success_latency / incoming_success_stats.len() as u64
-    } else {
-        0
-    };
 
-    PaymentSummaryResponse {
-        average_outgoing_latency,
-        average_incoming_latency,
-        total_outgoing_fees: Amount::from_msats(sum_outgoing_fees),
-        total_incoming_fees: Amount::from_msats(sum_incoming_fees),
-        total_outgoing_success: outgoing_success_stats.len(),
-        total_outgoing_failure: outgoing_failure_stats.len(),
-        total_incoming_success: incoming_success_stats.len(),
-        total_incoming_failure: incoming_failure_stats.len(),
-    }
+    StructuredPaymentEvents::new(
+        outgoing_success_stats,
+        incoming_success_stats,
+        outgoing_failure_stats,
+        incoming_failure_stats,
+    )
 }
 
 // TODO: Can we improve this by not cloning every time?
