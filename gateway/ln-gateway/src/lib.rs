@@ -42,7 +42,7 @@ use config::GatewayOpts;
 pub use config::GatewayParameters;
 use db::GatewayDbtxNcExt;
 use error::FederationNotConnected;
-use events::{get_last_day_events, ALL_GATEWAY_EVENTS};
+use events::{get_last_day_events, StructuredPaymentEvents, ALL_GATEWAY_EVENTS};
 use federation_manager::FederationManager;
 use fedimint_api_client::api::net::Connector;
 use fedimint_bip39::{Bip39RootSecretStrategy, Language, Mnemonic};
@@ -1582,22 +1582,25 @@ impl Gateway {
         let fed_configs = federation_manager.get_all_federation_configs().await;
         let federation_ids = fed_configs.keys().collect::<Vec<_>>();
 
-        // TODO: Generalize over all clients
-        let fed_id = federation_ids.first().expect("No connected clients");
-        let client = federation_manager
-            .client(*fed_id)
-            .expect("No client available")
-            .value();
-        let all_events = get_last_day_events(client).await;
-        if self.is_running_lnv1() && self.is_running_lnv2() {
-            let mut total_stats = compute_lnv1_stats(all_events.clone());
-            total_stats.combine(&mut compute_lnv2_stats(all_events));
-            total_stats.payment_summary_response()
-        } else if self.is_running_lnv1() {
-            compute_lnv1_stats(all_events).payment_summary_response()
-        } else {
-            compute_lnv2_stats(all_events).payment_summary_response()
+        let mut payment_stats = StructuredPaymentEvents::default();
+        for fed_id in federation_ids {
+            let client = federation_manager
+                .client(fed_id)
+                .expect("No client available")
+                .value();
+            let all_events = get_last_day_events(client).await;
+
+            if self.is_running_lnv1() && self.is_running_lnv2() {
+                payment_stats.combine(&mut compute_lnv1_stats(all_events.clone()));
+                payment_stats.combine(&mut compute_lnv2_stats(all_events.clone()));
+            } else if self.is_running_lnv1() {
+                payment_stats.combine(&mut compute_lnv1_stats(all_events.clone()));
+            } else {
+                payment_stats.combine(&mut compute_lnv2_stats(all_events.clone()));
+            }
         }
+
+        payment_stats.payment_summary_response()
     }
 
     /// Registers the gateway with each specified federation.
