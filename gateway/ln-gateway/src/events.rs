@@ -106,6 +106,19 @@ pub struct StructuredPaymentEvents {
     incoming_latencies_failure: Vec<u64>,
 }
 
+impl Default for StructuredPaymentEvents {
+    fn default() -> Self {
+        StructuredPaymentEvents {
+            outgoing_latencies: Vec::new(),
+            incoming_latencies: Vec::new(),
+            outgoing_fees: Vec::new(),
+            incoming_fees: Vec::new(),
+            outgoing_latencies_failure: Vec::new(),
+            incoming_latencies_failure: Vec::new(),
+        }
+    }
+}
+
 impl StructuredPaymentEvents {
     pub fn new(
         outgoing_success_stats: Vec<(u64, Amount)>,
