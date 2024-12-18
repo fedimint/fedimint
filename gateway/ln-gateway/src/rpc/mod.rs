@@ -270,7 +270,11 @@ pub struct PaymentLogResponse(pub Vec<GatewayTransactionEvent>);
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PaymentSummaryResponse {
     pub average_outgoing_latency: u64,
-    pub total_fees: Amount,
+    pub average_incoming_latency: u64,
+    pub total_outgoing_fees: Amount,
+    pub total_incoming_fees: Amount,
     pub total_outgoing_success: usize,
     pub total_outgoing_failure: usize,
+    pub total_incoming_success: usize,
+    pub total_incoming_failure: usize,
 }
