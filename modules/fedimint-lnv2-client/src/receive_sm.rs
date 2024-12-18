@@ -1,10 +1,10 @@
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
-use fedimint_client::DynGlobalClientContext;
+use fedimint_client::{DynGlobalClientContext, InFlightAmounts};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::Keypair;
-use fedimint_core::OutPoint;
+use fedimint_core::{Amount, OutPoint};
 use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0};
 use tpe::AggregateDecryptionKey;
@@ -85,6 +85,13 @@ impl State for ReceiveStateMachine {
 
     fn operation_id(&self) -> OperationId {
         self.common.operation_id
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        InFlightAmounts {
+            incoming: self.common.contract.commitment.amount,
+            outgoing: Amount::ZERO,
+        }
     }
 }
 

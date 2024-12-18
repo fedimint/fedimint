@@ -7,6 +7,7 @@ use fedimint_core::util::broadcaststream::BroadcastStream;
 use fedimint_core::util::BoxStream;
 use fedimint_logging::LOG_CLIENT;
 use futures::StreamExt;
+use tokio::sync::broadcast;
 use tracing::{debug, error, trace};
 
 use crate::sm::executor::{
@@ -70,6 +71,17 @@ impl Notifier {
         NotifierSender {
             sender: self.broadcast.clone(),
         }
+    }
+
+    /// Subscribe to all state transitions
+    ///
+    /// We don't return a stream here since the broadcast receiver may return an
+    /// error if we failed to read from it for too long. In that case, the
+    /// stream would be closed and we would have to recreate it, but some
+    /// applications don't care and just want to be notified that *something*
+    /// happened.
+    pub fn subscribe_all(&self) -> broadcast::Receiver<DynState> {
+        self.broadcast.subscribe()
     }
 }
 

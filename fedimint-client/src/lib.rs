@@ -83,7 +83,7 @@
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::future::pending;
-use std::ops::{self, Range};
+use std::ops::{self, AddAssign, Range, SubAssign};
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
@@ -3121,6 +3121,54 @@ impl ClientBuilder {
     /// Register to receiver all new transient (unpersisted) events
     pub fn get_event_log_transient_receiver(&self) -> broadcast::Receiver<EventLogEntry> {
         self.log_event_added_transient_tx.subscribe()
+    }
+}
+
+/// Represents money we may be receiving, but haven't yet
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
+pub struct InFlightAmounts {
+    /// Receives that are not yet reflected in our main balance
+    pub incoming: Amount,
+    /// Sends that may be refunded
+    pub outgoing: Amount,
+}
+
+impl Default for InFlightAmounts {
+    fn default() -> Self {
+        InFlightAmounts {
+            incoming: Amount::ZERO,
+            outgoing: Amount::ZERO,
+        }
+    }
+}
+
+impl InFlightAmounts {
+    pub fn incoming(incoming: Amount) -> Self {
+        InFlightAmounts {
+            incoming,
+            outgoing: Amount::ZERO,
+        }
+    }
+
+    pub fn outgoing(outgoing: Amount) -> Self {
+        InFlightAmounts {
+            incoming: Amount::ZERO,
+            outgoing,
+        }
+    }
+}
+
+impl AddAssign for InFlightAmounts {
+    fn add_assign(&mut self, rhs: Self) {
+        self.incoming += rhs.incoming;
+        self.outgoing += rhs.outgoing;
+    }
+}
+
+impl SubAssign for InFlightAmounts {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.incoming -= rhs.incoming;
+        self.outgoing -= rhs.outgoing;
     }
 }
 
