@@ -1602,16 +1602,15 @@ impl Gateway {
             .expect("No client available")
             .value();
         let all_events = get_last_day_events(client).await;
-        let response = if self.is_running_lnv1() && self.is_running_lnv2() {
+        if self.is_running_lnv1() && self.is_running_lnv2() {
             let mut total_stats = compute_lnv1_stats(all_events.clone());
-            total_stats.aggregate(compute_lnv2_stats(all_events));
-            total_stats
+            total_stats.combine(&mut compute_lnv2_stats(all_events));
+            total_stats.payment_summary_response()
         } else if self.is_running_lnv1() {
-            compute_lnv1_stats(all_events)
+            compute_lnv1_stats(all_events).payment_summary_response()
         } else {
-            compute_lnv2_stats(all_events)
-        };
-        response
+            compute_lnv2_stats(all_events).payment_summary_response()
+        }
     }
 
     /// Registers the gateway with each specified federation.
