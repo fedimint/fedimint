@@ -2556,6 +2556,7 @@ name = "fedimint-gateway-cli"
 version = "0.6.0-alpha"
 dependencies = [
  "anyhow",
+ "bcrypt",
  "bitcoin",
  "clap",
  "clap_complete",
