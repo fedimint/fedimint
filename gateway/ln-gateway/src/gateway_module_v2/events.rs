@@ -142,6 +142,7 @@ impl Event for CompleteLightningPaymentSucceeded {
 
 pub fn compute_lnv2_stats(all_events: Vec<LogEntry>) -> PaymentSummaryResponse {
     let lnv2_events = filter_lnv2_events(all_events);
+    tracing::info!(?lnv2_events, "LNV2 EVENTS");
     let (outgoing_success_stats, outgoing_failure_stats) = join_outgoing_lnv2_events(
         &lnv2_events.outgoing_start_events,
         &lnv2_events.outgoing_success_events,
@@ -160,6 +161,11 @@ pub fn compute_lnv2_stats(all_events: Vec<LogEntry>) -> PaymentSummaryResponse {
         &lnv2_events.incoming_success_events,
         &lnv2_events.incoming_failure_events,
     );
+    tracing::info!(
+        ?incoming_success_stats,
+        ?incoming_failure_stats,
+        "AFTER JOIN"
+    );
     let sum_incoming_fees = incoming_success_stats.iter().map(|(_, f)| f.msats).sum();
     let sum_incoming_success_latency: u64 = incoming_success_stats.iter().map(|(l, _)| l).sum();
     let average_incoming_latency = if incoming_success_stats.len() > 0 {
@@ -168,7 +174,7 @@ pub fn compute_lnv2_stats(all_events: Vec<LogEntry>) -> PaymentSummaryResponse {
         0
     };
 
-    PaymentSummaryResponse {
+    let ret = PaymentSummaryResponse {
         average_outgoing_latency,
         average_incoming_latency,
         total_outgoing_fees: Amount::from_msats(sum_outgoing_fees),
@@ -177,7 +183,11 @@ pub fn compute_lnv2_stats(all_events: Vec<LogEntry>) -> PaymentSummaryResponse {
         total_outgoing_failure: outgoing_failure_stats.len(),
         total_incoming_success: incoming_success_stats.len(),
         total_incoming_failure: incoming_failure_stats.len(),
-    }
+    };
+
+    tracing::info!(?ret, "After computing stats");
+
+    ret
 }
 
 // TODO: Can we improve this by not cloning every time?
@@ -348,9 +358,8 @@ fn join_incoming_lnv2_events(
             {
                 let latency = success.3 - start.3;
                 let fee = start_event
-                    .incoming_contract_commitment
-                    .amount
-                    .checked_sub(start_event.invoice_amount);
+                    .invoice_amount
+                    .checked_sub(start_event.incoming_contract_commitment.amount);
                 if let Some(fee) = fee {
                     Some((latency, fee))
                 } else {

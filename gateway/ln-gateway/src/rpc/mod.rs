@@ -279,6 +279,12 @@ pub struct PaymentSummaryResponse {
     pub total_incoming_failure: usize,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PaymentStats {
+    pub average_latency_micros: u64,
+    pub median_latency_micros: u64,
+}
+
 impl PaymentSummaryResponse {
     pub fn aggregate(&mut self, other: PaymentSummaryResponse) {
         self.average_outgoing_latency =

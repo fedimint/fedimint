@@ -84,6 +84,7 @@ fn get_earliest_index(batch: &Vec<LogEntry>) -> usize {
     index
 }
 
+#[derive(Debug)]
 pub struct FilteredPaymentEvents {
     pub outgoing_start_events: Vec<LogEntry>,
     pub outgoing_success_events: Vec<LogEntry>,
