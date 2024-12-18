@@ -626,7 +626,35 @@
 <a href="#625" id="625">625</a>
 <a href="#626" id="626">626</a>
 <a href="#627" id="627">627</a>
-<a href="#628" id="628">628</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
+<a href="#628" id="628">628</a>
+<a href="#629" id="629">629</a>
+<a href="#630" id="630">630</a>
+<a href="#631" id="631">631</a>
+<a href="#632" id="632">632</a>
+<a href="#633" id="633">633</a>
+<a href="#634" id="634">634</a>
+<a href="#635" id="635">635</a>
+<a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -635,8 +663,10 @@
 <span class="kw">use </span>bitcoin::hashes::Hash;
 <span class="kw">use </span>bitcoin::{Network, OutPoint};
 <span class="kw">use </span>fedimint_bip39::Mnemonic;
-<span class="kw">use </span>fedimint_core::envs::is_env_var_set;
+<span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+<span class="kw">use </span>fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig};
 <span class="kw">use </span>fedimint_core::task::{block_in_place, TaskGroup, TaskHandle};
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll};
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
 <span class="kw">use </span>ldk_node::lightning::ln::msgs::SocketAddress;
@@ -662,12 +692,32 @@
 };
 <span class="kw">use </span><span class="kw">crate</span>::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, SendOnchainPayload};
 
+<span class="kw">pub enum </span>GatewayLdkChainSourceConfig {
+    Bitcoind { server_url: SafeUrl },
+    Esplora { server_url: SafeUrl },
+}
+
+<span class="kw">impl </span>GatewayLdkChainSourceConfig {
+    <span class="kw">fn </span>bitcoin_rpc_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcConfig {
+        <span class="kw">match </span><span class="self">self </span>{
+            <span class="self">Self</span>::Bitcoind { server_url } =&gt; BitcoinRpcConfig {
+                kind: <span class="string">"bitcoind"</span>.to_string(),
+                url: server_url.clone(),
+            },
+            <span class="self">Self</span>::Esplora { server_url } =&gt; BitcoinRpcConfig {
+                kind: <span class="string">"esplora"</span>.to_string(),
+                url: server_url.clone(),
+            },
+        }
+    }
+}
+
 <span class="kw">pub struct </span>GatewayLdkClient {
     <span class="doccomment">/// The underlying lightning node.
     </span>node: Arc&lt;ldk_node::Node&gt;,
 
     <span class="doccomment">/// The client for querying data about the blockchain.
-    </span>esplora_client: esplora_client::AsyncClient,
+    </span>bitcoind_rpc: DynBitcoindRpc,
 
     task_group: TaskGroup,
 
@@ -694,7 +744,7 @@
     /// There's no need to manually stop the node.
     </span><span class="kw">pub fn </span>new(
         data_dir: <span class="kw-2">&amp;</span>Path,
-        esplora_server_url: <span class="kw-2">&amp;</span>str,
+        chain_source_config: GatewayLdkChainSourceConfig,
         network: Network,
         lightning_port: u16,
         mnemonic: Mnemonic,
@@ -722,9 +772,29 @@
             node_alias,
             ..Default::default()
         });
-        node_builder
-            .set_entropy_bip39_mnemonic(mnemonic, <span class="prelude-val">None</span>)
-            .set_chain_source_esplora(esplora_server_url.to_string(), <span class="prelude-val">None</span>);
+
+        node_builder.set_entropy_bip39_mnemonic(mnemonic, <span class="prelude-val">None</span>);
+
+        <span class="kw">let </span>bitcoind_rpc = create_bitcoind(<span class="kw-2">&amp;</span>chain_source_config.bitcoin_rpc_config())<span class="question-mark">?</span>;
+
+        <span class="kw">match </span>chain_source_config {
+            GatewayLdkChainSourceConfig::Bitcoind { server_url } =&gt; {
+                node_builder.set_chain_source_bitcoind_rpc(
+                    server_url
+                        .host_str()
+                        .expect(<span class="string">"Could not retrieve host from bitcoind RPC url"</span>)
+                        .to_string(),
+                    server_url
+                        .port()
+                        .expect(<span class="string">"Could not retrieve port from bitcoind RPC url"</span>),
+                    server_url.username().to_string(),
+                    server_url.password().unwrap_or_default().to_string(),
+                );
+            }
+            GatewayLdkChainSourceConfig::Esplora { server_url } =&gt; {
+                node_builder.set_chain_source_esplora(server_url.to_string(), <span class="prelude-val">None</span>);
+            }
+        };
         <span class="kw">let </span><span class="prelude-val">Some</span>(data_dir_str) = data_dir.to_str() <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Invalid data dir path"</span>));
         };
@@ -748,7 +818,7 @@
 
         <span class="prelude-val">Ok</span>(GatewayLdkClient {
             node,
-            esplora_client: esplora_client::Builder::new(esplora_server_url).build_async()<span class="question-mark">?</span>,
+            bitcoind_rpc,
             task_group,
             htlc_stream_receiver_or: <span class="prelude-val">Some</span>(htlc_stream_receiver),
             outbound_lightning_payment_lock_pool: lockable::LockPool::new(),
@@ -802,20 +872,20 @@
     <span class="doccomment">/// Converts a transaction outpoint to a short channel ID by querying the
     /// blockchain.
     </span><span class="kw">async fn </span>outpoint_to_scid(<span class="kw-2">&amp;</span><span class="self">self</span>, funding_txo: OutPoint) -&gt; anyhow::Result&lt;u64&gt; {
+        <span class="kw">let </span>block_hash = <span class="self">self
+            </span>.bitcoind_rpc
+            .get_txout_proof(funding_txo.txid)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.block_header
+            .block_hash();
+
         <span class="kw">let </span>block_height = <span class="self">self
-            </span>.esplora_client
-            .get_merkle_proof(<span class="kw-2">&amp;</span>funding_txo.txid)
+            </span>.bitcoind_rpc
+            .get_tx_block_height(<span class="kw-2">&amp;</span>funding_txo.txid)
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Failed to get merkle proof"</span>))<span class="question-mark">?
-            </span>.block_height;
+            </span>.ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Failed to get block height"</span>))<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>block_hash = <span class="self">self</span>.esplora_client.get_block_hash(block_height).<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">let </span>block = <span class="self">self
-            </span>.esplora_client
-            .get_block_by_hash(<span class="kw-2">&amp;</span>block_hash)
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Failed to get block"</span>))<span class="question-mark">?</span>;
+        <span class="kw">let </span>block = <span class="self">self</span>.bitcoind_rpc.get_block(<span class="kw-2">&amp;</span>block_hash).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>tx_index = block
             .txdata
@@ -827,12 +897,8 @@
 
         <span class="kw">let </span>output_index = funding_txo.vout;
 
-        scid_from_parts(
-            u64::from(block_height),
-            u64::from(tx_index),
-            u64::from(output_index),
-        )
-        .map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">"Failed to convert to short channel ID: {e:?}"</span>))
+        scid_from_parts(block_height, u64::from(tx_index), u64::from(output_index))
+            .map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">"Failed to convert to short channel ID: {e:?}"</span>))
     }
 }
 
@@ -861,29 +927,19 @@
         }
         <span class="kw">let </span>node_status = <span class="self">self</span>.node.status();
 
-        <span class="kw">let </span><span class="prelude-val">Some</span>(esplora_chain_tip_block_summary) = <span class="self">self
-            </span>.esplora_client
-            .get_blocks(<span class="prelude-val">None</span>)
-            .<span class="kw">await
-            </span>.map_err(|e| LightningRpcError::FailedToGetNodeInfo {
-                failure_reason: <span class="macro">format!</span>(<span class="string">"Failed get chain tip block summary: {e:?}"</span>),
-            })<span class="question-mark">?
-            </span>.into_iter()
-            .next()
-        <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedToGetNodeInfo {
-                failure_reason:
-                    <span class="string">"Failed to get chain tip block summary (empty block list was returned)"
-                        </span>.to_string(),
-            });
-        };
-
-        <span class="kw">let </span>esplora_chain_tip_block_height = esplora_chain_tip_block_summary.time.height;
-        <span class="kw">let </span>ldk_block_height: u32 = node_status.current_best_block.height;
-        <span class="kw">let </span>synced_to_chain = esplora_chain_tip_block_height == ldk_block_height;
+        <span class="kw">let </span>chain_tip_block_height =
+            u32::try_from(<span class="self">self</span>.bitcoind_rpc.get_block_count().<span class="kw">await</span>.map_err(|e| {
+                LightningRpcError::FailedToGetNodeInfo {
+                    failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to get block count from chain source: {e}"</span>),
+                }
+            })<span class="question-mark">?</span>)
+            .expect(<span class="string">"Failed to convert block count to u32"</span>)
+                - <span class="number">1</span>;
+        <span class="kw">let </span>ldk_block_height = node_status.current_best_block.height;
+        <span class="kw">let </span>synced_to_chain = chain_tip_block_height == ldk_block_height;
 
         <span class="macro">assert!</span>(
-            esplora_chain_tip_block_height &gt;= ldk_block_height,
+            chain_tip_block_height &gt;= ldk_block_height,
             <span class="string">"LDK Block Height is in the future"
         </span>);
 

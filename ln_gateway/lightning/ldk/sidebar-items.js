@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["GatewayLdkClient"]};
+window.SIDEBAR_ITEMS = {"enum":["GatewayLdkChainSourceConfig"],"struct":["GatewayLdkClient"]};

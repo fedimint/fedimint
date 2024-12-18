@@ -384,7 +384,7 @@
         FM_PORT_GW_LDK: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_GW_LDK"</span>;
         FM_PORT_FAUCET: u16 = <span class="number">15243u16</span>; env: <span class="string">"FM_PORT_FAUCET"</span>;
 
-        FM_LDK_ESPLORA_SERVER_URL: String = <span class="macro">format!</span>(<span class="string">"http://127.0.0.1:{FM_PORT_ESPLORA}"</span>); env: <span class="string">"FM_LDK_ESPLORA_SERVER_URL"</span>;
+        FM_LDK_BITCOIND_RPC_URL: String = <span class="macro">format!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"</span>); env: <span class="string">"FM_LDK_BITCOIND_RPC_URL"</span>;
 
         FM_CLN_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"cln"</span>)).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_CLN_DIR"</span>;
         FM_LND_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"lnd"</span>)).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_LND_DIR"</span>;

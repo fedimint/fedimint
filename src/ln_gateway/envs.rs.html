@@ -63,7 +63,11 @@
 <a href="#62" id="62">62</a>
 <a href="#63" id="63">63</a>
 <a href="#64" id="64">64</a>
-<a href="#65" id="65">65</a></pre></div><pre class="rust"><code><span class="doccomment">/// Environment variable that specifies the directory of the gateway's database.
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a></pre></div><pre class="rust"><code><span class="doccomment">/// Environment variable that specifies the directory of the gateway's database.
 </span><span class="kw">pub const </span>FM_GATEWAY_DATA_DIR_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_DATA_DIR"</span>;
 
 <span class="doccomment">/// Environment variable that specifies the address the gateway's HTTP server
@@ -97,9 +101,13 @@
 /// Necessary for LND configuration.
 </span><span class="kw">pub const </span>FM_LND_MACAROON_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LND_MACAROON"</span>;
 
-<span class="doccomment">/// Environment variable that specifies the URL of an Esplora server. Necessary
-/// for LDK configuration.
+<span class="doccomment">/// Environment variable that specifies the URL of an Esplora server.
+/// Necessary for LDK configuration if using esplora as the backend.
 </span><span class="kw">pub const </span>FM_LDK_ESPLORA_SERVER_URL: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LDK_ESPLORA_SERVER_URL"</span>;
+
+<span class="doccomment">/// Environment variable that specifies the bitcoind node.
+/// Necessary for LDK configuration if using bitcoind as the backend.
+</span><span class="kw">pub const </span>FM_LDK_BITCOIND_RPC_URL: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LDK_BITCOIND_RPC_URL"</span>;
 
 <span class="doccomment">/// Environment variable that specifies the Bitcoin network that the LDK Node
 /// should use. Must match `FM_GATEWAY_NETWORK`. Necessary for LDK
