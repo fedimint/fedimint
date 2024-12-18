@@ -84,4 +84,13 @@ fn get_earliest_index(batch: &Vec<LogEntry>) -> usize {
     index
 }
 
+pub struct FilteredPaymentEvents {
+    pub outgoing_start_events: Vec<LogEntry>,
+    pub outgoing_success_events: Vec<LogEntry>,
+    pub outgoing_failure_events: Vec<LogEntry>,
+    pub incoming_start_events: Vec<LogEntry>,
+    pub incoming_success_events: Vec<LogEntry>,
+    pub incoming_failure_events: Vec<LogEntry>,
+}
+
 // TODO: Add Gateway specific events
