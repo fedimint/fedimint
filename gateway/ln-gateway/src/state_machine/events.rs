@@ -141,23 +141,41 @@ impl Event for CompleteLightningPaymentSucceeded {
 
 pub fn compute_lnv1_stats(all_events: Vec<LogEntry>) -> PaymentSummaryResponse {
     let lnv1_events = filter_lnv1_events(all_events);
-    let (success_stats, failure_stats) = join_outgoing_lnv1_events(
+    let (outgoing_success_stats, outgoing_failure_stats) = join_outgoing_lnv1_events(
         &lnv1_events.outgoing_start_events,
         &lnv1_events.outgoing_success_events,
         &lnv1_events.outgoing_failure_events,
     );
-    let sum_fees = success_stats.iter().map(|(_, f)| f.msats).sum();
-    let sum_success_latency: u64 = success_stats.iter().map(|(l, _)| l).sum();
-    let average_outgoing_latency = if success_stats.len() > 0 {
-        sum_success_latency / success_stats.len() as u64
+    let sum_outgoing_fees = outgoing_success_stats.iter().map(|(_, f)| f.msats).sum();
+    let sum_outgoing_success_latency: u64 = outgoing_success_stats.iter().map(|(l, _)| l).sum();
+    let average_outgoing_latency = if outgoing_success_stats.len() > 0 {
+        sum_outgoing_success_latency / outgoing_success_stats.len() as u64
     } else {
         0
     };
+
+    let (incoming_success_stats, incoming_failure_stats) = join_incoming_lnv1_events(
+        &lnv1_events.incoming_start_events,
+        &lnv1_events.incoming_success_events,
+        &lnv1_events.incoming_failure_events,
+    );
+    let sum_incoming_fees = incoming_success_stats.iter().map(|(_, f)| f.msats).sum();
+    let sum_incoming_success_latency: u64 = incoming_success_stats.iter().map(|(l, _)| l).sum();
+    let average_incoming_latency = if incoming_success_stats.len() > 0 {
+        sum_incoming_success_latency / incoming_success_stats.len() as u64
+    } else {
+        0
+    };
+
     PaymentSummaryResponse {
         average_outgoing_latency,
-        total_fees: Amount::from_msats(sum_fees),
-        total_outgoing_success: success_stats.len(),
-        total_outgoing_failure: failure_stats.len(),
+        average_incoming_latency,
+        total_outgoing_fees: Amount::from_msats(sum_outgoing_fees),
+        total_incoming_fees: Amount::from_msats(sum_incoming_fees),
+        total_outgoing_success: outgoing_success_stats.len(),
+        total_outgoing_failure: outgoing_failure_stats.len(),
+        total_incoming_success: incoming_success_stats.len(),
+        total_incoming_failure: incoming_failure_stats.len(),
     }
 }
 
@@ -165,8 +183,12 @@ struct Lnv1Events {
     pub outgoing_start_events: Vec<LogEntry>,
     pub outgoing_success_events: Vec<LogEntry>,
     pub outgoing_failure_events: Vec<LogEntry>,
+    pub incoming_start_events: Vec<LogEntry>,
+    pub incoming_success_events: Vec<LogEntry>,
+    pub incoming_failure_events: Vec<LogEntry>,
 }
 
+// TODO: Can we improve this by not cloning every time?
 fn filter_lnv1_events(all_events: Vec<LogEntry>) -> Lnv1Events {
     let outgoing_start_events = all_events
         .clone()
@@ -193,9 +215,45 @@ fn filter_lnv1_events(all_events: Vec<LogEntry>) -> Lnv1Events {
         .collect::<Vec<_>>();
 
     let outgoing_failure_events = all_events
+        .clone()
         .into_iter()
         .filter_map(|e| {
             if e.1 == OutgoingPaymentFailed::KIND {
+                Some(e)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let incoming_start_events = all_events
+        .clone()
+        .into_iter()
+        .filter_map(|e| {
+            if e.1 == IncomingPaymentStarted::KIND {
+                Some(e)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let incoming_success_events = all_events
+        .clone()
+        .into_iter()
+        .filter_map(|e| {
+            if e.1 == IncomingPaymentSucceeded::KIND {
+                Some(e)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let incoming_failure_events = all_events
+        .into_iter()
+        .filter_map(|e| {
+            if e.1 == IncomingPaymentFailed::KIND {
                 Some(e)
             } else {
                 None
@@ -207,6 +265,9 @@ fn filter_lnv1_events(all_events: Vec<LogEntry>) -> Lnv1Events {
         outgoing_start_events,
         outgoing_success_events,
         outgoing_failure_events,
+        incoming_start_events,
+        incoming_success_events,
+        incoming_failure_events,
     }
 }
 
@@ -245,6 +306,51 @@ fn join_outgoing_lnv1_events(
             let fail_event: OutgoingPaymentFailed =
                 serde_json::from_value(success.4.clone()).expect("could not parse JSON");
             if start_event.contract_id == fail_event.contract_id {
+                let latency = success.3 - start.3;
+                Some(latency)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    (success_stats, failure_stats)
+}
+
+fn join_incoming_lnv1_events(
+    start_events: &Vec<LogEntry>,
+    success_events: &Vec<LogEntry>,
+    failure_events: &Vec<LogEntry>,
+) -> (Vec<(u64, Amount)>, Vec<u64>) {
+    let success_stats = zip(start_events, success_events)
+        .filter_map(|(start, success)| {
+            let start_event: IncomingPaymentStarted =
+                serde_json::from_value(start.4.clone()).expect("could not parse JSON");
+            let success_event: IncomingPaymentSucceeded =
+                serde_json::from_value(success.4.clone()).expect("could not parse JSON");
+            if start_event.payment_hash == success_event.payment_hash {
+                let latency = success.3 - start.3;
+                let fee = start_event
+                    .contract_amount
+                    .checked_sub(start_event.invoice_amount);
+                if let Some(fee) = fee {
+                    Some((latency, fee))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let failure_stats = zip(start_events, failure_events)
+        .filter_map(|(start, success)| {
+            let start_event: IncomingPaymentStarted =
+                serde_json::from_value(start.4.clone()).expect("could not parse JSON");
+            let fail_event: IncomingPaymentFailed =
+                serde_json::from_value(success.4.clone()).expect("could not parse JSON");
+            if start_event.payment_hash == fail_event.payment_hash {
                 let latency = success.3 - start.3;
                 Some(latency)
             } else {
