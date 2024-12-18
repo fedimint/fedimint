@@ -2296,7 +2296,10 @@
 <a href="#2295" id="2295">2295</a>
 <a href="#2296" id="2296">2296</a>
 <a href="#2297" id="2297">2297</a>
-<a href="#2298" id="2298">2298</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2298" id="2298">2298</a>
+<a href="#2299" id="2299">2299</a>
+<a href="#2300" id="2300">2300</a>
+<a href="#2301" id="2301">2301</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -3919,7 +3922,10 @@
                         <span class="kw">match </span>res {
                             <span class="prelude-val">Ok</span>(ok) =&gt; feerates[i] = <span class="prelude-val">Some</span>(ok),
                             <span class="prelude-val">Err</span>(err) =&gt; {
-                                <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, %err, %name, <span class="string">"Error getting feerate from source"</span>);
+                                <span class="comment">// Regtest node never returns fee rate, so no point spamming about it
+                                </span><span class="kw">if </span>!is_running_in_test_env() {
+                                    <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, %err, %name, <span class="string">"Error getting feerate from source"</span>);
+                                }
                             },
                         }
                     }
@@ -3932,9 +3938,9 @@
                         <span class="kw">let </span>feerate_with_multiplier = Feerate { sats_per_kvb: r * FEERATE_MULTIPLIER };
                         <span class="kw">let _ </span>= fee_rate_tx.send(feerate_with_multiplier);
                     } <span class="kw">else </span>{
-                        <span class="comment">// Regtest node never returns fee rate, so no point spamming about it
+                        <span class="comment">// During tests (regtest) we never get any real feerate, so no point spamming about it
                         </span><span class="kw">if </span>!is_running_in_test_env() {
-                            <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, <span class="string">"Bitcoin node did not return a fee rate"</span>);
+                            <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, <span class="string">"Unable to calculate any fee rate"</span>);
                         }
                     }
                 };
