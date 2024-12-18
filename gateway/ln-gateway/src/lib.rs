@@ -42,7 +42,7 @@ use config::GatewayOpts;
 pub use config::GatewayParameters;
 use db::GatewayDbtxNcExt;
 use error::FederationNotConnected;
-use events::ALL_GATEWAY_EVENTS;
+use events::{get_last_day_events, StructuredPaymentEvents, ALL_GATEWAY_EVENTS};
 use federation_manager::FederationManager;
 use fedimint_api_client::api::net::Connector;
 use fedimint_bip39::{Bip39RootSecretStrategy, Language, Mnemonic};
@@ -82,6 +82,7 @@ use fedimint_wallet_client::{
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
 };
 use futures::stream::StreamExt;
+use gateway_module_v2::events::compute_lnv2_stats;
 use lightning::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, ILnRpcClient, InterceptPaymentRequest,
     InterceptPaymentResponse, InvoiceDescription, LightningBuilder, LightningRpcError,
@@ -92,10 +93,11 @@ use rand::thread_rng;
 use rpc::{
     CloseChannelsWithPeerPayload, CreateInvoiceForOperatorPayload, FederationInfo,
     GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelPayload,
-    PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentLogResponse, ReceiveEcashPayload,
-    ReceiveEcashResponse, SendOnchainPayload, SetFeesPayload, SpendEcashPayload,
-    SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
+    PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentLogResponse, PaymentSummaryResponse,
+    ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainPayload, SetFeesPayload,
+    SpendEcashPayload, SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
 };
+use state_machine::events::compute_lnv1_stats;
 use state_machine::{GatewayClientModule, GatewayExtPayStates};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, info_span, warn};
@@ -1571,6 +1573,32 @@ impl Gateway {
         payment_log.truncate(pagination_size);
 
         Ok(PaymentLogResponse(payment_log))
+    }
+
+    pub async fn handle_payment_summary_msg(&self) -> PaymentSummaryResponse {
+        let federation_manager = self.federation_manager.read().await;
+        let fed_configs = federation_manager.get_all_federation_configs().await;
+        let federation_ids = fed_configs.keys().collect::<Vec<_>>();
+
+        let mut payment_stats = StructuredPaymentEvents::default();
+        for fed_id in federation_ids {
+            let client = federation_manager
+                .client(fed_id)
+                .expect("No client available")
+                .value();
+            let all_events = get_last_day_events(client).await;
+
+            if self.is_running_lnv1() && self.is_running_lnv2() {
+                payment_stats.combine(&mut compute_lnv1_stats(all_events.clone()));
+                payment_stats.combine(&mut compute_lnv2_stats(all_events.clone()));
+            } else if self.is_running_lnv1() {
+                payment_stats.combine(&mut compute_lnv1_stats(all_events.clone()));
+            } else {
+                payment_stats.combine(&mut compute_lnv2_stats(all_events.clone()));
+            }
+        }
+
+        payment_stats.payment_summary_response()
     }
 
     /// Registers the gateway with each specified federation.
