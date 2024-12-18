@@ -8,7 +8,7 @@ use fedimint_ln_common::contracts::ContractId;
 use serde::{Deserialize, Serialize};
 
 use super::pay::OutgoingPaymentError;
-use crate::events::LogEntry;
+use crate::events::{FilteredPaymentEvents, LogEntry};
 use crate::rpc::PaymentSummaryResponse;
 
 /// LNv1 event that is emitted when an outgoing payment attempt is initiated.
@@ -179,23 +179,18 @@ pub fn compute_lnv1_stats(all_events: Vec<LogEntry>) -> PaymentSummaryResponse {
     }
 }
 
-struct Lnv1Events {
-    pub outgoing_start_events: Vec<LogEntry>,
-    pub outgoing_success_events: Vec<LogEntry>,
-    pub outgoing_failure_events: Vec<LogEntry>,
-    pub incoming_start_events: Vec<LogEntry>,
-    pub incoming_success_events: Vec<LogEntry>,
-    pub incoming_failure_events: Vec<LogEntry>,
-}
-
 // TODO: Can we improve this by not cloning every time?
-fn filter_lnv1_events(all_events: Vec<LogEntry>) -> Lnv1Events {
+fn filter_lnv1_events(all_events: Vec<LogEntry>) -> FilteredPaymentEvents {
     let outgoing_start_events = all_events
         .clone()
         .into_iter()
         .filter_map(|e| {
-            if e.1 == OutgoingPaymentStarted::KIND {
-                Some(e)
+            if let Some((m, _)) = &e.2 {
+                if e.1 == OutgoingPaymentStarted::KIND && *m == fedimint_ln_common::KIND {
+                    Some(e)
+                } else {
+                    None
+                }
             } else {
                 None
             }
@@ -206,8 +201,12 @@ fn filter_lnv1_events(all_events: Vec<LogEntry>) -> Lnv1Events {
         .clone()
         .into_iter()
         .filter_map(|e| {
-            if e.1 == OutgoingPaymentSucceeded::KIND {
-                Some(e)
+            if let Some((m, _)) = &e.2 {
+                if e.1 == OutgoingPaymentSucceeded::KIND && *m == fedimint_ln_common::KIND {
+                    Some(e)
+                } else {
+                    None
+                }
             } else {
                 None
             }
@@ -218,8 +217,12 @@ fn filter_lnv1_events(all_events: Vec<LogEntry>) -> Lnv1Events {
         .clone()
         .into_iter()
         .filter_map(|e| {
-            if e.1 == OutgoingPaymentFailed::KIND {
-                Some(e)
+            if let Some((m, _)) = &e.2 {
+                if e.1 == OutgoingPaymentFailed::KIND && *m == fedimint_ln_common::KIND {
+                    Some(e)
+                } else {
+                    None
+                }
             } else {
                 None
             }
@@ -230,8 +233,12 @@ fn filter_lnv1_events(all_events: Vec<LogEntry>) -> Lnv1Events {
         .clone()
         .into_iter()
         .filter_map(|e| {
-            if e.1 == IncomingPaymentStarted::KIND {
-                Some(e)
+            if let Some((m, _)) = &e.2 {
+                if e.1 == IncomingPaymentStarted::KIND && *m == fedimint_ln_common::KIND {
+                    Some(e)
+                } else {
+                    None
+                }
             } else {
                 None
             }
@@ -242,8 +249,12 @@ fn filter_lnv1_events(all_events: Vec<LogEntry>) -> Lnv1Events {
         .clone()
         .into_iter()
         .filter_map(|e| {
-            if e.1 == IncomingPaymentSucceeded::KIND {
-                Some(e)
+            if let Some((m, _)) = &e.2 {
+                if e.1 == IncomingPaymentSucceeded::KIND && *m == fedimint_ln_common::KIND {
+                    Some(e)
+                } else {
+                    None
+                }
             } else {
                 None
             }
@@ -253,15 +264,19 @@ fn filter_lnv1_events(all_events: Vec<LogEntry>) -> Lnv1Events {
     let incoming_failure_events = all_events
         .into_iter()
         .filter_map(|e| {
-            if e.1 == IncomingPaymentFailed::KIND {
-                Some(e)
+            if let Some((m, _)) = &e.2 {
+                if e.1 == IncomingPaymentFailed::KIND && *m == fedimint_ln_common::KIND {
+                    Some(e)
+                } else {
+                    None
+                }
             } else {
                 None
             }
         })
         .collect::<Vec<_>>();
 
-    Lnv1Events {
+    FilteredPaymentEvents {
         outgoing_start_events,
         outgoing_success_events,
         outgoing_failure_events,

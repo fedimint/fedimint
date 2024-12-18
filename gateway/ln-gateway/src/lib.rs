@@ -82,6 +82,7 @@ use fedimint_wallet_client::{
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
 };
 use futures::stream::StreamExt;
+use gateway_module_v2::events::compute_lnv2_stats;
 use lightning::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, ILnRpcClient, InterceptPaymentRequest,
     InterceptPaymentResponse, InvoiceDescription, LightningBuilder, LightningRpcError,
@@ -1588,8 +1589,16 @@ impl Gateway {
             .expect("No client available")
             .value();
         let all_events = get_last_day_events(client).await;
-        let lnv1_stats = compute_lnv1_stats(all_events);
-        lnv1_stats
+        let response = if self.is_running_lnv1() && self.is_running_lnv2() {
+            let mut total_stats = compute_lnv1_stats(all_events.clone());
+            total_stats.aggregate(compute_lnv2_stats(all_events));
+            total_stats
+        } else if self.is_running_lnv1() {
+            compute_lnv1_stats(all_events)
+        } else {
+            compute_lnv2_stats(all_events)
+        };
+        response
     }
 
     /// Registers the gateway with each specified federation.
