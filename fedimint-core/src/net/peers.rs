@@ -1,4 +1,4 @@
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -11,44 +11,26 @@ use crate::task::Cancellable;
 #[cfg(not(target_family = "wasm"))]
 pub mod fake;
 
-/// Owned [`PeerConnections`] trait object type
-pub struct PeerConnections<Msg>(Box<dyn IPeerConnections<Msg> + Send + 'static>);
-
-impl<Msg> Deref for PeerConnections<Msg> {
-    type Target = dyn IPeerConnections<Msg> + Send + 'static;
-
-    fn deref(&self) -> &Self::Target {
-        &*self.0
-    }
-}
-
-impl<Msg> DerefMut for PeerConnections<Msg> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut *self.0
-    }
-}
+pub type DynP2PConnections<M> = Arc<dyn IP2PConnections<M>>;
 
 /// Connection manager that tries to keep connections open to all peers
 #[async_trait]
-pub trait IPeerConnections<M>
-where
-    M: Serialize + DeserializeOwned + Unpin + Send,
-{
+pub trait IP2PConnections<M>: Send + Sync + 'static {
     /// Send message to recipient; block if channel is full.
-    async fn send(&mut self, recipient: Recipient, msg: M);
+    async fn send(&self, recipient: Recipient, msg: M);
 
     /// Try to send message to recipient; drop message if channel is full.
     fn try_send(&self, recipient: Recipient, msg: M);
 
     /// Await receipt of a message; return None if we are shutting down.
-    async fn receive(&mut self) -> Option<(PeerId, M)>;
+    async fn receive(&self) -> Option<(PeerId, M)>;
 
-    /// Converts the struct to a `PeerConnection` trait object
-    fn into_dyn(self) -> PeerConnections<M>
+    /// Convert the struct to trait object.
+    fn into_dyn(self) -> DynP2PConnections<M>
     where
-        Self: Sized + Send + 'static,
+        Self: Sized,
     {
-        PeerConnections(Box::new(self))
+        Arc::new(self)
     }
 }
 
@@ -74,10 +56,10 @@ impl<MuxKey, Msg> Deref for MuxPeerConnections<MuxKey, Msg> {
 }
 
 #[async_trait]
-/// Like [`IPeerConnections`] but with an ability to handle multiple
+/// Like [`IP2PConnections`] but with an ability to handle multiple
 /// destinations (like modules) per each peer-connection.
 ///
-/// Notably, unlike [`IPeerConnections`] implementations need to be thread-safe,
+/// Notably, unlike [`IP2PConnections`] implementations need to be thread-safe,
 /// as the primary intended use should support multiple threads using
 /// multiplexed channel at the same time.
 pub trait IMuxPeerConnections<MuxKey, Msg>
