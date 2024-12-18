@@ -84,6 +84,7 @@ use fedimint_wallet_client::{
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
 };
 use futures::stream::StreamExt;
+use jsonwebtoken::{DecodingKey, EncodingKey};
 use lightning::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, ILnRpcClient, InterceptPaymentRequest,
     InterceptPaymentResponse, InvoiceDescription, LightningBuilder, LightningRpcError,
@@ -99,7 +100,7 @@ use rpc::{
     SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
 };
 use state_machine::{GatewayClientModule, GatewayExtPayStates};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 use tracing::{debug, error, info, info_span, warn};
 
 use crate::config::LightningModuleMode;
@@ -190,7 +191,7 @@ pub struct Gateway {
     federation_manager: Arc<RwLock<FederationManager>>,
 
     /// The gateway's authentication manager
-    auth_manager: Arc<Mutex<AuthManager>>,
+    auth_manager: AuthManager,
 
     /// Builder struct that allows the gateway to build a `ILnRpcClient`, which
     /// represents a connection to a lightning node.
@@ -364,11 +365,16 @@ impl Gateway {
         // time a new JWT token is generated. The encoding secret ensures token's
         // integrity and authenticity, so it is necessary to use a secure random
         // number generator to generate strong keys.
-        let encoding_secret: [u8; 16] = rand::thread_rng().gen();
+        //
+        // Each time that a Gateway is restarted this encoding_secret secret is going
+        // to be generated again making previous JWT invalid.
+        let secret: [u8; 16] = rand::thread_rng().gen();
+        let encoding_key: EncodingKey = EncodingKey::from_secret(&secret);
+        let decoding_key: DecodingKey = DecodingKey::from_secret(&secret);
 
         Ok(Self {
             federation_manager: Arc::new(RwLock::new(FederationManager::new())),
-            auth_manager: Arc::new(Mutex::new(AuthManager::new(encoding_secret, gateway_id))),
+            auth_manager: AuthManager::new(encoding_key, decoding_key, gateway_id),
             lightning_builder,
             state: Arc::new(RwLock::new(gateway_state)),
             client_builder,

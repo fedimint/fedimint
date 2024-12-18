@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::time::UNIX_EPOCH;
 
 use axum::extract::Request;
 use axum::http::{header, StatusCode};
@@ -83,25 +82,10 @@ async fn auth_jwt_middleware_with_password_fallback(
     next: Next,
 ) -> Result<impl IntoResponse, StatusCode> {
     let token = extract_bearer_token(&request)?;
-    let auth_manager = gateway.auth_manager.lock().await;
-    if let Ok(decoded_token_data) = jsonwebtoken::decode::<crate::auth_manager::Session>(
-        &token,
-        &jsonwebtoken::DecodingKey::from_secret(auth_manager.encoding_secret.as_ref()),
-        &jsonwebtoken::Validation::default(),
-    ) {
-        let now = fedimint_core::time::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_secs();
-        if now > decoded_token_data.claims.exp {
-            return Err(StatusCode::UNAUTHORIZED);
-        }
-        return Ok(next.run(request).await);
-    }
-    //TODO remove this fallback when all the callers support JWT auth
-    // fallback to check for password
-    if bcrypt::verify(token, &gateway.bcrypt_password_hash.to_string())
-        .expect("Bcrypt hash is valid since we just stringified it")
+    let auth_manager = &gateway.auth_manager;
+    //TODO remove check_password when all the callers support JWT auth
+    if auth_manager.is_jwt_valid(&token)
+        || check_password(token, &gateway.bcrypt_password_hash.to_string())
     {
         return Ok(next.run(request).await);
     }
@@ -113,19 +97,16 @@ async fn auth_get_jwt_session(
     request: Request,
 ) -> Result<impl IntoResponse, AdminGatewayError> {
     let token = extract_bearer_token(&request).map_err(|_| AdminGatewayError::Unauthorized)?;
-    if bcrypt::verify(token, &gateway.bcrypt_password_hash.to_string())
-        .expect("Bcrypt hash is valid since we just stringified it")
-    {
-        let auth_manager = gateway.auth_manager.lock().await;
-        let session = auth_manager
-            .generate_session()
-            .map_err(|_| AdminGatewayError::Unauthorized)?;
-        let token = session
-            .encode_jwt(&auth_manager.encoding_secret)
-            .map_err(|_| AdminGatewayError::Unauthorized)?;
+    if check_password(token, &gateway.bcrypt_password_hash.to_string()) {
+        let auth_manager = &gateway.auth_manager;
+        let token = auth_manager.generate_jwt()?;
         return Ok(Json(json!(token)));
     }
     Err(AdminGatewayError::Unauthorized)
+}
+
+fn check_password(token: String, password_hash: &str) -> bool {
+    bcrypt::verify(token, password_hash).expect("Bcrypt hash is valid since we just stringified it")
 }
 
 /// Public routes that are used in the LNv1 protocol
