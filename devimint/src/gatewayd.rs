@@ -531,7 +531,12 @@ impl Gatewayd {
             })
             .ok_or_else(|| anyhow!("Federation not found"))?;
 
-        let lightning_fee = fed[fee_key].clone();
+        let lightning_fee = if gatewayd_version >= *VERSION_0_6_0_ALPHA {
+            fed["config"][fee_key].clone()
+        } else {
+            fed[fee_key].clone()
+        };
+
         let base: Amount = serde_json::from_value(lightning_fee[base_key].clone())
             .map_err(|e| anyhow!("Couldnt parse base: {}", e))?;
         let parts_per_million: u64 = serde_json::from_value(lightning_fee[ppm_key].clone())

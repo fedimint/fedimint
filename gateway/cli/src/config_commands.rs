@@ -52,14 +52,15 @@ impl ConfigCommands {
             }
             Self::Display { federation_id } => {
                 let info = create_client().get_info().await?;
-                let federations = if let Some(id) = federation_id {
-                    info.federations
-                        .into_iter()
-                        .filter(|f| id == f.federation_id)
-                        .collect::<Vec<_>>()
-                } else {
-                    info.federations
-                };
+                let federations = info
+                    .federations
+                    .into_iter()
+                    .filter_map(|f| match federation_id {
+                        Some(id) if id == f.federation_id => Some(f.config),
+                        Some(_) => None,
+                        None => Some(f.config),
+                    })
+                    .collect::<Vec<_>>();
                 print_response(federations);
             }
             Self::SetFees {

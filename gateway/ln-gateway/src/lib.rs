@@ -763,7 +763,7 @@ impl Gateway {
             .iter()
             .map(|federation_info| {
                 (
-                    federation_info.federation_index,
+                    federation_info.config.federation_index,
                     federation_info.federation_id,
                 )
             })
@@ -1113,9 +1113,7 @@ impl Gateway {
             federation_id,
             federation_name: federation_manager.federation_name(&client).await,
             balance_msat: client.get_balance().await,
-            federation_index,
-            lightning_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
-            transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
+            config: federation_config.clone(),
         };
 
         if self.is_running_lnv1() {

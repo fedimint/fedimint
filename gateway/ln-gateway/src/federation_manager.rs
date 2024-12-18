@@ -174,16 +174,6 @@ impl FederationManager {
         }
     }
 
-    fn get_index_for_federation(&self, federation_id: FederationId) -> Option<u64> {
-        self.index_to_federation.iter().find_map(|(index, fid)| {
-            if *fid == federation_id {
-                Some(*index)
-            } else {
-                None
-            }
-        })
-    }
-
     pub fn get_client_for_federation_id_prefix(
         &self,
         federation_id_prefix: FederationIdPrefix,
@@ -210,12 +200,6 @@ impl FederationManager {
         federation_id: FederationId,
         dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
     ) -> std::result::Result<FederationInfo, FederationNotConnected> {
-        let Some(federation_index) = self.get_index_for_federation(federation_id) else {
-            return Err(FederationNotConnected {
-                federation_id_prefix: federation_id.to_prefix(),
-            });
-        };
-
         self.clients
             .get(&federation_id)
             .expect("`FederationManager.index_to_federation` is out of sync with `FederationManager.clients`! This is a bug.")
@@ -223,7 +207,7 @@ impl FederationManager {
             .with(|client| async move {
                 let balance_msat = client.get_balance().await;
 
-                let fed_config = dbtx.load_federation_config(federation_id).await.ok_or(FederationNotConnected {
+                let config = dbtx.load_federation_config(federation_id).await.ok_or(FederationNotConnected {
                     federation_id_prefix: federation_id.to_prefix(),
                 })?;
 
@@ -231,9 +215,7 @@ impl FederationManager {
                     federation_id,
                     federation_name: self.federation_name(client).await,
                     balance_msat,
-                    federation_index,
-                    lightning_fee: fed_config.lightning_fee,
-                    transaction_fee: fed_config.transaction_fee,
+                    config,
                 })
             })
             .await
@@ -251,19 +233,15 @@ impl FederationManager {
     ) -> Vec<FederationInfo> {
         let mut federation_infos = Vec::new();
         for (federation_id, client) in &self.clients {
-            let federation_index = self.get_index_for_federation(*federation_id).expect("`FederationManager.index_to_federation` is out of sync with `FederationManager.clients`! This is a bug.");
-
             let balance_msat = client.borrow().with(|client| client.get_balance()).await;
 
-            let fed_config = dbtx.load_federation_config(*federation_id).await;
-            if let Some(fed_config) = fed_config {
+            let config = dbtx.load_federation_config(*federation_id).await;
+            if let Some(config) = config {
                 federation_infos.push(FederationInfo {
                     federation_id: *federation_id,
                     federation_name: self.federation_name(client.value()).await,
                     balance_msat,
-                    federation_index,
-                    lightning_fee: fed_config.lightning_fee,
-                    transaction_fee: fed_config.transaction_fee,
+                    config,
                 });
             }
         }
