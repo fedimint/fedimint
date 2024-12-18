@@ -636,7 +636,9 @@
 <a href="#635" id="635">635</a>
 <a href="#636" id="636">636</a>
 <a href="#637" id="637">637</a>
-<a href="#638" id="638">638</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 
 </span><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::env;
@@ -1265,8 +1267,10 @@
     </span><span class="kw">let </span>scid = <span class="kw">if </span>gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_5_0_ALPHA {
         <span class="kw">let </span>channel_id: <span class="prelude-ty">Option</span>&lt;u64&gt; = serde_json::from_value(leave_fed[<span class="string">"channel_id"</span>].clone())<span class="question-mark">?</span>;
         channel_id.expect(<span class="string">"must have channel id"</span>)
-    } <span class="kw">else </span>{
+    } <span class="kw">else if </span>gatewayd_version &gt;= <span class="kw-2">*</span>VERSION_0_5_0_ALPHA &amp;&amp; gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_6_0_ALPHA {
         serde_json::from_value::&lt;u64&gt;(leave_fed[<span class="string">"federation_index"</span>].clone())<span class="question-mark">?
+    </span>} <span class="kw">else </span>{
+        serde_json::from_value::&lt;u64&gt;(leave_fed[<span class="string">"config"</span>][<span class="string">"federation_index"</span>].clone())<span class="question-mark">?
     </span>};
 
     <span class="macro">assert_eq!</span>(scid, expected_scid);

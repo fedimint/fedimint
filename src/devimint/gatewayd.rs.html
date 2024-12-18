@@ -612,7 +612,12 @@
 <a href="#611" id="611">611</a>
 <a href="#612" id="612">612</a>
 <a href="#613" id="613">613</a>
-<a href="#614" id="614">614</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
+<a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -1145,7 +1150,12 @@
             })
             .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">"Federation not found"</span>))<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>lightning_fee = fed[fee_key].clone();
+        <span class="kw">let </span>lightning_fee = <span class="kw">if </span>gatewayd_version &gt;= <span class="kw-2">*</span>VERSION_0_6_0_ALPHA {
+            fed[<span class="string">"config"</span>][fee_key].clone()
+        } <span class="kw">else </span>{
+            fed[fee_key].clone()
+        };
+
         <span class="kw">let </span>base: Amount = serde_json::from_value(lightning_fee[base_key].clone())
             .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"Couldnt parse base: {}"</span>, e))<span class="question-mark">?</span>;
         <span class="kw">let </span>parts_per_million: u64 = serde_json::from_value(lightning_fee[ppm_key].clone())

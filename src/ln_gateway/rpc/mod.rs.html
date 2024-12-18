@@ -258,9 +258,7 @@
 <a href="#257" id="257">257</a>
 <a href="#258" id="258">258</a>
 <a href="#259" id="259">259</a>
-<a href="#260" id="260">260</a>
-<a href="#261" id="261">261</a>
-<a href="#262" id="262">262</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
+<a href="#260" id="260">260</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
 <span class="kw">pub mod </span>rpc_server;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -271,12 +269,12 @@
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 <span class="kw">use </span>fedimint_eventlog::{EventKind, EventLogId};
-<span class="kw">use </span>fedimint_lnv2_common::gateway_api::PaymentFee;
 <span class="kw">use </span>fedimint_mint_client::OOBNotes;
 <span class="kw">use </span>fedimint_wallet_client::PegOutFees;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
+<span class="kw">use </span><span class="kw">crate</span>::db::FederationConfig;
 <span class="kw">use </span><span class="kw">crate</span>::lightning::LightningMode;
 <span class="kw">use </span><span class="kw">crate</span>::SafeUrl;
 
@@ -364,9 +362,7 @@
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="kw">pub </span>federation_name: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="kw">pub </span>balance_msat: Amount,
-    <span class="kw">pub </span>federation_index: u64,
-    <span class="kw">pub </span>lightning_fee: PaymentFee,
-    <span class="kw">pub </span>transaction_fee: PaymentFee,
+    <span class="kw">pub </span>config: FederationConfig,
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, PartialEq)]

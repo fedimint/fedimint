@@ -296,29 +296,7 @@
 <a href="#295" id="295">295</a>
 <a href="#296" id="296">296</a>
 <a href="#297" id="297">297</a>
-<a href="#298" id="298">298</a>
-<a href="#299" id="299">299</a>
-<a href="#300" id="300">300</a>
-<a href="#301" id="301">301</a>
-<a href="#302" id="302">302</a>
-<a href="#303" id="303">303</a>
-<a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
-<a href="#318" id="318">318</a>
-<a href="#319" id="319">319</a>
-<a href="#320" id="320">320</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#298" id="298">298</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
 <span class="kw">use </span>std::sync::Arc;
 
@@ -494,16 +472,6 @@
         }
     }
 
-    <span class="kw">fn </span>get_index_for_federation(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
-        <span class="self">self</span>.index_to_federation.iter().find_map(|(index, fid)| {
-            <span class="kw">if </span><span class="kw-2">*</span>fid == federation_id {
-                <span class="prelude-val">Some</span>(<span class="kw-2">*</span>index)
-            } <span class="kw">else </span>{
-                <span class="prelude-val">None
-            </span>}
-        })
-    }
-
     <span class="kw">pub fn </span>get_client_for_federation_id_prefix(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         federation_id_prefix: FederationIdPrefix,
@@ -530,12 +498,6 @@
         federation_id: FederationId,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>, NonCommittable&gt;,
     ) -&gt; std::result::Result&lt;FederationInfo, FederationNotConnected&gt; {
-        <span class="kw">let </span><span class="prelude-val">Some</span>(federation_index) = <span class="self">self</span>.get_index_for_federation(federation_id) <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Err</span>(FederationNotConnected {
-                federation_id_prefix: federation_id.to_prefix(),
-            });
-        };
-
         <span class="self">self</span>.clients
             .get(<span class="kw-2">&amp;</span>federation_id)
             .expect(<span class="string">"`FederationManager.index_to_federation` is out of sync with `FederationManager.clients`! This is a bug."</span>)
@@ -543,7 +505,7 @@
             .with(|client| <span class="kw">async move </span>{
                 <span class="kw">let </span>balance_msat = client.get_balance().<span class="kw">await</span>;
 
-                <span class="kw">let </span>fed_config = dbtx.load_federation_config(federation_id).<span class="kw">await</span>.ok_or(FederationNotConnected {
+                <span class="kw">let </span>config = dbtx.load_federation_config(federation_id).<span class="kw">await</span>.ok_or(FederationNotConnected {
                     federation_id_prefix: federation_id.to_prefix(),
                 })<span class="question-mark">?</span>;
 
@@ -551,9 +513,7 @@
                     federation_id,
                     federation_name: <span class="self">self</span>.federation_name(client).<span class="kw">await</span>,
                     balance_msat,
-                    federation_index,
-                    lightning_fee: fed_config.lightning_fee,
-                    transaction_fee: fed_config.transaction_fee,
+                    config,
                 })
             })
             .<span class="kw">await
@@ -571,19 +531,15 @@
     ) -&gt; Vec&lt;FederationInfo&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>federation_infos = Vec::new();
         <span class="kw">for </span>(federation_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.clients {
-            <span class="kw">let </span>federation_index = <span class="self">self</span>.get_index_for_federation(<span class="kw-2">*</span>federation_id).expect(<span class="string">"`FederationManager.index_to_federation` is out of sync with `FederationManager.clients`! This is a bug."</span>);
-
             <span class="kw">let </span>balance_msat = client.borrow().with(|client| client.get_balance()).<span class="kw">await</span>;
 
-            <span class="kw">let </span>fed_config = dbtx.load_federation_config(<span class="kw-2">*</span>federation_id).<span class="kw">await</span>;
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(fed_config) = fed_config {
+            <span class="kw">let </span>config = dbtx.load_federation_config(<span class="kw-2">*</span>federation_id).<span class="kw">await</span>;
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = config {
                 federation_infos.push(FederationInfo {
                     federation_id: <span class="kw-2">*</span>federation_id,
                     federation_name: <span class="self">self</span>.federation_name(client.value()).<span class="kw">await</span>,
                     balance_msat,
-                    federation_index,
-                    lightning_fee: fed_config.lightning_fee,
-                    transaction_fee: fed_config.transaction_fee,
+                    config,
                 });
             }
         }

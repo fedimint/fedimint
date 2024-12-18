@@ -2077,9 +2077,7 @@
 <a href="#2076" id="2076">2076</a>
 <a href="#2077" id="2077">2077</a>
 <a href="#2078" id="2078">2078</a>
-<a href="#2079" id="2079">2079</a>
-<a href="#2080" id="2080">2080</a>
-<a href="#2081" id="2081">2081</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2079" id="2079">2079</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2844,7 +2842,7 @@
             .iter()
             .map(|federation_info| {
                 (
-                    federation_info.federation_index,
+                    federation_info.config.federation_index,
                     federation_info.federation_id,
                 )
             })
@@ -3194,9 +3192,7 @@
             federation_id,
             federation_name: federation_manager.federation_name(<span class="kw-2">&amp;</span>client).<span class="kw">await</span>,
             balance_msat: client.get_balance().<span class="kw">await</span>,
-            federation_index,
-            lightning_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
-            transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
+            config: federation_config.clone(),
         };
 
         <span class="kw">if </span><span class="self">self</span>.is_running_lnv1() {
