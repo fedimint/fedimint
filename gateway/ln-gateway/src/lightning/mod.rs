@@ -377,24 +377,11 @@ impl LightningBuilder for GatewayLightningBuilder {
                 let chain_source_config = {
                     match (esplora_server_url, bitcoind_rpc_url) {
                         (Some(esplora_server_url), None) => GatewayLdkChainSourceConfig::Esplora {
-                            server_url: esplora_server_url,
+                            server_url: SafeUrl::parse(&esplora_server_url.clone()).unwrap(),
                         },
-                        (None, Some(bitcoind_rpc_url)) => {
-                            let url: SafeUrl =
-                                bitcoind_rpc_url.parse().expect("Invalid bitcoind RPC URL");
-
-                            GatewayLdkChainSourceConfig::Bitcoind {
-                                rpc_host: url
-                                    .host_str()
-                                    .expect("Could not retrieve host from bitcoind RPC url")
-                                    .to_string(),
-                                rpc_port: url
-                                    .port()
-                                    .expect("Could not retrieve port from bitcoind RPC url"),
-                                rpc_user: url.username().to_string(),
-                                rpc_password: url.password().unwrap_or_default().to_string(),
-                            }
-                        }
+                        (None, Some(bitcoind_rpc_url)) => GatewayLdkChainSourceConfig::Bitcoind {
+                            server_url: SafeUrl::parse(&bitcoind_rpc_url.clone()).unwrap(),
+                        },
                         (None, None) => {
                             panic!("Either esplora or bitcoind chain info source must be provided")
                         }

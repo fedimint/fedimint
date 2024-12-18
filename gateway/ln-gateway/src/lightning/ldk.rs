@@ -37,35 +37,20 @@ use crate::lightning::{
 use crate::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, SendOnchainPayload};
 
 pub enum GatewayLdkChainSourceConfig {
-    Bitcoind {
-        rpc_host: String,
-        rpc_port: u16,
-        rpc_user: String,
-        rpc_password: String,
-    },
-    Esplora {
-        server_url: String,
-    },
+    Bitcoind { server_url: SafeUrl },
+    Esplora { server_url: SafeUrl },
 }
 
 impl GatewayLdkChainSourceConfig {
     fn bitcoin_rpc_config(&self) -> BitcoinRpcConfig {
         match self {
-            Self::Bitcoind {
-                rpc_host,
-                rpc_port,
-                rpc_user,
-                rpc_password,
-            } => BitcoinRpcConfig {
+            Self::Bitcoind { server_url } => BitcoinRpcConfig {
                 kind: "bitcoind".to_string(),
-                url: SafeUrl::parse(&format!(
-                    "http://{rpc_user}:{rpc_password}@{rpc_host}:{rpc_port}"
-                ))
-                .unwrap(),
+                url: server_url.clone(),
             },
             Self::Esplora { server_url } => BitcoinRpcConfig {
                 kind: "esplora".to_string(),
-                url: SafeUrl::parse(&server_url.clone()).unwrap(),
+                url: server_url.clone(),
             },
         }
     }
@@ -137,17 +122,17 @@ impl GatewayLdkClient {
         let bitcoind_rpc = create_bitcoind(&chain_source_config.bitcoin_rpc_config())?;
 
         match chain_source_config {
-            GatewayLdkChainSourceConfig::Bitcoind {
-                rpc_host,
-                rpc_port,
-                rpc_user,
-                rpc_password,
-            } => {
+            GatewayLdkChainSourceConfig::Bitcoind { server_url } => {
                 node_builder.set_chain_source_bitcoind_rpc(
-                    rpc_host,
-                    rpc_port,
-                    rpc_user,
-                    rpc_password,
+                    server_url
+                        .host_str()
+                        .expect("Could not retrieve host from bitcoind RPC url")
+                        .to_string(),
+                    server_url
+                        .port()
+                        .expect("Could not retrieve port from bitcoind RPC url"),
+                    server_url.username().to_string(),
+                    server_url.password().unwrap_or_default().to_string(),
                 );
             }
             GatewayLdkChainSourceConfig::Esplora { server_url } => {
