@@ -25,6 +25,9 @@ The release process evolves each cycle, so don't hesitate to make frequent edits
 - Publish to crates
   - `just publish-release`
   - `@elsirion`, `@dpc`, and `@bradleystachurski` are the only users with permissions
+- Sign binaries
+  - `just sign-release <tag>`
+  - ex: `just sign-release v0.5.0`
 - Start upgrade tests using the new tag
   - https://github.com/fedimint/fedimint/actions/workflows/upgrade-tests.yml
   - The upgrade paths and upgrade test kinds varies based on the release (coordinated shutdown vs staggered, etc)
