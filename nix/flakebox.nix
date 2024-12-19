@@ -647,6 +647,35 @@ in
         patchShebangs ./scripts; SKIP_CARGO_BUILD=1 ./scripts/tests/wasm-test.sh'';
     };
 
+    wasmBundleClientPkgDeps = craneLib.buildWorkspaceDepsOnly {
+      pname = "${commonArgs.pname}-client-wasm";
+      "CARGO_PROFILE_RELEASE_OPT_LEVEL" = "s";
+      buildPhaseCargoCommand = "runLowPrio cargo build --profile $CARGO_PROFILE --locked -p fedimint-client-wasm";
+    };
+
+    wasmBundleClientPkg = craneLib.buildWorkspace {
+      cargoArtifacts = wasmBundleClientPkgDeps;
+      pname = "${commonArgs.pname}-client-wasm";
+      "CARGO_PROFILE_RELEASE_OPT_LEVEL" = "s";
+      buildPhaseCargoCommand = "runLowPrio cargo build --profile $CARGO_PROFILE --locked -p fedimint-client-wasm";
+    };
+
+    wasmBundle = craneLibTests.mkCargoDerivation {
+      pname = "wasm-bundle";
+      cargoArtifacts = wasmBundleClientPkg;
+      "CARGO_PROFILE_RELEASE_OPT_LEVEL" = "s";
+      nativeBuildInputs = commonCliTestArgs.nativeBuildInputs ++ [
+        pkgs.wasm-bindgen-cli
+        pkgs.wasm-pack
+        pkgs.binaryen
+      ];
+      buildPhaseCargoCommand = ''
+        runLowPrio wasm-pack build fedimint-client-wasm
+        mkdir -p $out/share/fedimint-client-wasm
+        cp fedimint-client-wasm/pkg/* $out/share/fedimint-client-wasm
+      '';
+    };
+
     fedimint-pkgs = fedimintBuildPackageGroup {
       pname = "fedimint-pkgs";
 
