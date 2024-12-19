@@ -32,7 +32,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, util, NumPeersExt, PeerId, TransactionId,
 };
-use fedimint_logging::LOG_CLIENT_NET_API;
+use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_API};
 use futures::future::pending;
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};

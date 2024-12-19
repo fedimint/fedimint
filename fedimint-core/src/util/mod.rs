@@ -65,7 +65,7 @@ where
         if let Some(item) = self.next().await {
             item
         } else {
-            debug!("Stream ended in next_or_pending, pending forever to avoid throwing an error on shutdown");
+            debug!(target: LOG_CORE, "Stream ended in next_or_pending, pending forever to avoid throwing an error on shutdown");
             std::future::pending().await
         }
     }

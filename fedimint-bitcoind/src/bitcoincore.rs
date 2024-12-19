@@ -13,7 +13,7 @@ use fedimint_core::runtime::block_in_place;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Feerate};
-use fedimint_logging::LOG_CORE;
+use fedimint_logging::{LOG_BITCOIND_CORE, LOG_CORE};
 use tracing::{info, warn};
 
 use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory};

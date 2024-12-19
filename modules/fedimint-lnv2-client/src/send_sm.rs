@@ -11,6 +11,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{secp256k1, util, OutPoint, TransactionId};
 use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
+use fedimint_logging::LOG_CLIENT_MODULE_LNV2;
 use futures::future::pending;
 use secp256k1::schnorr::Signature;
 use secp256k1::Keypair;

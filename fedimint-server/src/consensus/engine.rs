@@ -546,6 +546,7 @@ impl ConsensusEngine {
 
         if checkpoint_dir.exists() {
             debug!(
+                target: LOG_CONSENSUS,
                 ?current_session,
                 "Removing database checkpoints up to `current_session`"
             );
@@ -637,7 +638,12 @@ impl ConsensusEngine {
             .with_label_values(&[peer_id_str])
             .start_timer();
 
-        debug!(%peer, item = ?DebugConsensusItem(&item), "Processing consensus item");
+        debug!(
+            target: LOG_CONSENSUS,
+            %peer,
+            item = ?DebugConsensusItem(&item),
+            "Processing consensus item"
+        );
 
         self.last_ci_by_peer
             .write()
@@ -748,7 +754,11 @@ impl ConsensusEngine {
                     .await
                     .is_some()
                 {
-                    debug!(target: LOG_CONSENSUS, %txid, "Transaction already accepted");
+                    debug!(
+                        target: LOG_CONSENSUS,
+                        %txid,
+                        "Transaction already accepted"
+                    );
                     bail!("Transaction is already accepted");
                 }
 

@@ -56,6 +56,7 @@ use fedimint_ln_common::{
     LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0, RemoveGatewayRequest,
     MODULE_CONSENSUS_VERSION,
 };
+use fedimint_logging::LOG_MODULE_LN;
 use fedimint_server::config::distributedgen::PeerHandleOps;
 use futures::StreamExt;
 use metrics::{LN_CANCEL_OUTGOING_CONTRACTS, LN_FUNDED_CONTRACT_SATS, LN_INCOMING_OFFER};
