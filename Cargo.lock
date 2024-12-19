@@ -2903,6 +2903,7 @@ version = "0.6.0-alpha"
 dependencies = [
  "anyhow",
  "fedimint-core",
+ "fedimint-logging",
  "hex",
  "serde",
  "serde_json",
