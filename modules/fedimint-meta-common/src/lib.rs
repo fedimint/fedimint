@@ -14,6 +14,7 @@ use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::plugin_types_trait_impl_common;
+use fedimint_logging::LOG_MODULE_META;
 use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
@@ -113,7 +114,7 @@ impl MetaValue {
         let maybe_lossy_str = String::from_utf8_lossy(self.as_slice());
 
         if maybe_lossy_str.as_bytes() != self.as_slice() {
-            warn!("Value contains invalid utf-8, converting to lossy string");
+            warn!(target: LOG_MODULE_META, "Value contains invalid utf-8, converting to lossy string");
         }
 
         Ok(serde_json::from_str(&maybe_lossy_str)?)

@@ -11,7 +11,7 @@ if grep -E "fedimint-[a-zA-Z0-9]+-(server|client)" fedimint-testing/Cargo.toml |
   return 1
 fi
 find modules/ -name Cargo.toml | grep common/ | while read -r cargo_toml ; do
-  if grep -E "fedimint-" "$cargo_toml" | grep -E -v "fedimint-core|fedimint-api-client|-common" >&2 ; then
+  if grep -E "fedimint-" "$cargo_toml" | grep -E -v "fedimint-core|fedimint-api-client|-common|fedimint-logging" >&2 ; then
     >&2 echo "Fedimint modules' -common crates should not introduce new fedimint dependencies: $cargo_toml"
     >&2 echo "The goal is to avoid circular deps that blow up build times. Ping @dpc for help."
     return 1
