@@ -15,6 +15,10 @@ rustc-args = ["--cfg", "tokio_unstable"]
 # cargo udeps can't detect that one
 normal = ["aquamarine"]
 
+[features]
+default = []
+cli = ["dep:clap"]
+
 [lib]
 name = "fedimint_mint_client"
 path = "src/lib.rs"
@@ -32,7 +36,7 @@ base64 = { workspace = true }
 base64-url = { workspace = true }
 bitcoin_hashes = { workspace = true }
 bls12_381 = { workspace = true }
-clap = { workspace = true }
+clap = { workspace = true, optional = true }
 erased-serde = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
