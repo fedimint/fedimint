@@ -462,6 +462,8 @@
             fedimint-pkgs
             devimint
             ;
+
+          wasmBundle = craneMultiBuild.wasm32-unknown.release.wasmBundle;
         };
 
         lib = {
