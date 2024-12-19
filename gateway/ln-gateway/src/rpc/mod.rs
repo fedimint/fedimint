@@ -21,6 +21,7 @@ use crate::SafeUrl;
 pub const V1_API_ENDPOINT: &str = "v1";
 
 pub const ADDRESS_ENDPOINT: &str = "/address";
+pub const AUTH_SESSION_ENDPOINT: &str = "/auth/session";
 pub const BACKUP_ENDPOINT: &str = "/backup";
 pub const CONFIGURATION_ENDPOINT: &str = "/config";
 pub const CONNECT_FED_ENDPOINT: &str = "/connect_fed";

@@ -52,6 +52,7 @@ fedimint-wallet-client = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
 hex = { workspace = true }
+jsonwebtoken = { version = "9.3.0", default-features = false }
 ldk-node = "0.4.2"
 lightning = { workspace = true }
 lightning-invoice = { workspace = true }
