@@ -150,7 +150,7 @@ impl SendStateMachine {
         })
     }
 
-    #[instrument(skip(refund_keypair, context))]
+    #[instrument(target = LOG_CLIENT_MODULE_LNV2, skip(refund_keypair, context))]
     async fn gateway_send_payment(
         gateway_api: SafeUrl,
         federation_id: FederationId,
@@ -216,7 +216,7 @@ impl SendStateMachine {
         }
     }
 
-    #[instrument(skip(global_context))]
+    #[instrument(target = LOG_CLIENT_MODULE_LNV2, skip(global_context))]
     async fn await_preimage(
         contract: OutgoingContract,
         global_context: DynGlobalClientContext,

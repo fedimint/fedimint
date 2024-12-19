@@ -1711,7 +1711,7 @@ impl Wallet {
     }
 }
 
-#[instrument(level = "debug", skip_all)]
+#[instrument(target = LOG_MODULE_WALLET, level = "debug", skip_all)]
 pub async fn run_broadcast_pending_tx(db: Database, rpc: DynBitcoindRpc, tg_handle: &TaskHandle) {
     while !tg_handle.is_shutting_down() {
         broadcast_pending_tx(db.begin_transaction_nc().await, &rpc).await;

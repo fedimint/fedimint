@@ -87,7 +87,7 @@ impl ConsensusEngine {
         self.cfg.local.identity
     }
 
-    #[instrument(name = "run", skip_all, fields(id=%self.cfg.local.identity))]
+    #[instrument(target = LOG_CONSENSUS, name = "run", skip_all, fields(id=%self.cfg.local.identity))]
     pub async fn run(self) -> anyhow::Result<()> {
         if self.num_peers().total() == 1 {
             self.run_single_guardian(self.task_group.make_handle())
