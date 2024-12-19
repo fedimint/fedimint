@@ -112,6 +112,7 @@ rules:
       - fedimint-server/
       - fedimint-core/
       - fedimint-cli/
+      - fedimint-bitcoind/
       - modules/*-server/
       - modules/*-common/
 
