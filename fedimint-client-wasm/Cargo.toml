@@ -24,7 +24,7 @@ async-trait = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-ln-client = { workspace = true, features = ["cli"] }
+fedimint-ln-client = { workspace = true }
 fedimint-mint-client = { workspace = true }
 futures = { workspace = true }
 imbl = "3.0.0"
