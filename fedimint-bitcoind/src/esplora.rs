@@ -6,6 +6,7 @@ use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Feerate};
+use fedimint_logging::LOG_BITCOIND_ESPLORA;
 use tracing::info;
 
 use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory};

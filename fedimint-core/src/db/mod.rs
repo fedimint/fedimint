@@ -3352,7 +3352,7 @@ where
     KP: DatabaseLookup,
     KP::Record: DatabaseKey,
 {
-    debug!("find by prefix sorted descending");
+    debug!(target: LOG_DB, "find by prefix sorted descending");
     let prefix_bytes = key_prefix.to_bytes();
     tx.raw_find_by_prefix_sorted_descending(&prefix_bytes)
         .await

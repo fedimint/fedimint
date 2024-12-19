@@ -149,9 +149,9 @@ impl TaskGroup {
             let name = name.clone();
             async move {
                 // if receiver is not interested, just drop the message
-                debug!("Starting task {name}");
+                debug!(target: LOG_TASK, "Starting task {name}");
                 let r = f(handle).await;
-                debug!("Finished task {name}");
+                debug!(target: LOG_TASK, "Finished task {name}");
                 let _ = tx.send(r);
             }
         });
@@ -175,7 +175,7 @@ impl TaskGroup {
             let value = handle.cancel_on_shutdown(future).await;
             if value.is_err() {
                 // name will part of span
-                debug!("task cancelled on shutdown");
+                debug!(target: LOG_TASK, "task cancelled on shutdown");
             }
             value
         })
