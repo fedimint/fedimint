@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-find . -name Cargo.lock | while read -r path ; do
+git ls-files | grep -E '(^|/)Cargo.lock' | while read -r path ; do
   (
     cd "$(dirname "$path")"
     "$@"
