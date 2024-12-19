@@ -112,7 +112,7 @@ rules:
       - fedimint-server/
       - fedimint-core/
       - fedimint-cli/
-      - fedimint-client/
+      - modules/*-server/
 
 - id: use-log-instrument-targets
   languages:
