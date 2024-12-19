@@ -241,6 +241,10 @@ docs: build-docs
 bump-version FROM_VERSION TO_VERSION:
   find . -name 'Cargo.toml' -exec sed -i 's/{{FROM_VERSION}}/{{TO_VERSION}}/g' {} +
 
+publish-release:
+  # We need to add CARGO_PROFILE_DEV_OPT_LEVEL because jemalloc fails to compile on our toolchain without optimizations enabled
+  CARGO_PROFILE_DEV_OPT_LEVEL=2 cargo workspaces publish --from-git --allow-dirty
+
 cargo_sort_defaults := "-w -g --order package,features,bin,lib,test,bench,dependencies,dev-dependencies,build-dependencies"
 
 # Fix sort order in `Cargo.toml` files
