@@ -623,7 +623,7 @@ impl ConsensusEngine {
         Ok(())
     }
 
-    #[instrument(target = "fm::consensus", skip(self, item), level = "info")]
+    #[instrument(target = LOG_CONSENSUS, skip(self, item), level = "info")]
     pub async fn process_consensus_item(
         &self,
         session_index: u64,

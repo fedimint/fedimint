@@ -459,7 +459,7 @@ where
     #[allow(clippy::too_many_arguments)] // TODO: consider refactoring
     #[instrument(
         name = "peer_io_thread",
-        target = "net::peer",
+        target = LOG_NET_PEER,
         skip_all,
         // `id` so it doesn't conflict with argument names otherwise will not be shown
         fields(id = %peer_id)
