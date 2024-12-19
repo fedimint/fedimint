@@ -327,7 +327,7 @@ pub async fn fetch_meta_overrides(
 /// Tries to parse `str_value` as JSON. In the special case that `V` is `String`
 /// we return the raw `str_value` if JSON parsing fails. This necessary since
 /// the spec wasn't clear enough in the beginning.
-#[instrument(err)] // log on every failure
+#[instrument(target = LOG_CLIENT, err)] // log on every failure
 pub fn parse_meta_value_static<V: DeserializeOwned + 'static>(
     str_value: &str,
 ) -> anyhow::Result<V> {

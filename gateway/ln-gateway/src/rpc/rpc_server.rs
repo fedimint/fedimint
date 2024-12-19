@@ -15,6 +15,7 @@ use fedimint_lnv2_common::endpoint_constants::{
     CREATE_BOLT11_INVOICE_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_PAYMENT_ENDPOINT,
 };
 use fedimint_lnv2_common::gateway_api::{CreateBolt11InvoicePayload, SendPaymentPayload};
+use fedimint_logging::LOG_GATEWAY;
 use hex::ToHex;
 use serde_json::json;
 use tokio::net::TcpListener;
@@ -184,7 +185,7 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
 /// Display high-level information about the Gateway
 // FIXME: deprecated >= 0.3.0
 // This endpoint exists only to remain backwards-compatible with the original POST endpoint
-#[instrument(skip_all, err)]
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn handle_post_info(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(_payload): Json<InfoPayload>,
@@ -194,7 +195,7 @@ async fn handle_post_info(
 }
 
 /// Display high-level information about the Gateway
-#[instrument(skip_all, err)]
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn info(
     Extension(gateway): Extension<Arc<Gateway>>,
 ) -> Result<impl IntoResponse, AdminGatewayError> {
@@ -203,7 +204,7 @@ async fn info(
 }
 
 /// Display high-level information about the Gateway config
-#[instrument(skip_all, err, fields(?payload))]
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn configuration(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<ConfigPayload>,
@@ -215,7 +216,7 @@ async fn configuration(
 }
 
 /// Generate deposit address
-#[instrument(skip_all, err, fields(?payload))]
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn address(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<DepositAddressPayload>,
@@ -225,7 +226,7 @@ async fn address(
 }
 
 /// Withdraw from a gateway federation.
-#[instrument(skip_all, err, fields(?payload))]
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn withdraw(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<WithdrawPayload>,
@@ -234,7 +235,7 @@ async fn withdraw(
     Ok(Json(json!(txid)))
 }
 
-#[instrument(skip_all, err, fields(?payload))]
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn create_invoice_for_operator(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<CreateInvoiceForOperatorPayload>,
@@ -245,7 +246,7 @@ async fn create_invoice_for_operator(
     Ok(Json(json!(invoice)))
 }
 
-#[instrument(skip_all, err, fields(?payload))]
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn pay_invoice_operator(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<PayInvoiceForOperatorPayload>,
@@ -254,7 +255,7 @@ async fn pay_invoice_operator(
     Ok(Json(json!(preimage.0.encode_hex::<String>())))
 }
 
-#[instrument(skip_all, err, fields(?payload))]
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn pay_invoice(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<fedimint_ln_client::pay::PayInvoicePayload>,
@@ -264,7 +265,7 @@ async fn pay_invoice(
 }
 
 /// Connect a new federation
-#[instrument(skip_all, err, fields(?payload))]
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn connect_fed(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<ConnectFedPayload>,
@@ -274,7 +275,7 @@ async fn connect_fed(
 }
 
 /// Leave a federation
-#[instrument(skip_all, err, fields(?payload))]
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn leave_fed(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<LeaveFedPayload>,
@@ -284,7 +285,7 @@ async fn leave_fed(
 }
 
 /// Backup a gateway actor state
-#[instrument(skip_all, err, fields(?payload))]
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn backup(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<BackupPayload>,
@@ -293,7 +294,7 @@ async fn backup(
     Ok(Json(json!(())))
 }
 
-#[instrument(skip_all, err, fields(?payload))]
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn set_fees(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<SetFeesPayload>,
@@ -302,7 +303,7 @@ async fn set_fees(
     Ok(Json(json!(())))
 }
 
-#[instrument(skip_all, err)]
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn get_ln_onchain_address(
     Extension(gateway): Extension<Arc<Gateway>>,
 ) -> Result<impl IntoResponse, AdminGatewayError> {
@@ -310,7 +311,7 @@ async fn get_ln_onchain_address(
     Ok(Json(json!(address.to_string())))
 }
 
-#[instrument(skip_all, err, fields(?payload))]
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn open_channel(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<OpenChannelPayload>,
@@ -319,7 +320,7 @@ async fn open_channel(
     Ok(Json(json!(funding_txid)))
 }
 
-#[instrument(skip_all, err, fields(?payload))]
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn close_channels_with_peer(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<CloseChannelsWithPeerPayload>,
@@ -328,7 +329,7 @@ async fn close_channels_with_peer(
     Ok(Json(json!(response)))
 }
 
-#[instrument(skip_all, err)]
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn list_active_channels(
     Extension(gateway): Extension<Arc<Gateway>>,
 ) -> Result<impl IntoResponse, AdminGatewayError> {
@@ -336,7 +337,7 @@ async fn list_active_channels(
     Ok(Json(json!(channels)))
 }
 
-#[instrument(skip_all, err)]
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn send_onchain(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<SendOnchainPayload>,
@@ -345,7 +346,7 @@ async fn send_onchain(
     Ok(Json(json!(txid)))
 }
 
-#[instrument(skip_all, err)]
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn get_balances(
     Extension(gateway): Extension<Arc<Gateway>>,
 ) -> Result<impl IntoResponse, AdminGatewayError> {
@@ -353,14 +354,14 @@ async fn get_balances(
     Ok(Json(json!(balances)))
 }
 
-#[instrument(skip_all, err)]
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn get_gateway_id(
     Extension(gateway): Extension<Arc<Gateway>>,
 ) -> Result<impl IntoResponse, PublicGatewayError> {
     Ok(Json(json!(gateway.gateway_id)))
 }
 
-#[instrument(skip_all, err)]
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn routing_info_v2(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(federation_id): Json<FederationId>,
@@ -369,7 +370,7 @@ async fn routing_info_v2(
     Ok(Json(json!(routing_info)))
 }
 
-#[instrument(skip_all, err)]
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn pay_bolt11_invoice_v2(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<SendPaymentPayload>,
@@ -378,7 +379,7 @@ async fn pay_bolt11_invoice_v2(
     Ok(Json(json!(payment_result)))
 }
 
-#[instrument(skip_all, err)]
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn create_bolt11_invoice_v2(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<CreateBolt11InvoicePayload>,
@@ -387,7 +388,7 @@ async fn create_bolt11_invoice_v2(
     Ok(Json(json!(invoice)))
 }
 
-#[instrument(skip_all, err)]
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn spend_ecash(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<SpendEcashPayload>,
@@ -395,7 +396,7 @@ async fn spend_ecash(
     Ok(Json(json!(gateway.handle_spend_ecash_msg(payload).await?)))
 }
 
-#[instrument(skip_all, err)]
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn receive_ecash(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<ReceiveEcashPayload>,
@@ -405,7 +406,7 @@ async fn receive_ecash(
     )))
 }
 
-#[instrument(skip_all, err)]
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn mnemonic(
     Extension(gateway): Extension<Arc<Gateway>>,
 ) -> Result<impl IntoResponse, AdminGatewayError> {
@@ -413,7 +414,7 @@ async fn mnemonic(
     Ok(Json(json!(words)))
 }
 
-#[instrument(skip_all, err)]
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn stop(
     Extension(task_group): Extension<TaskGroup>,
     Extension(gateway): Extension<Arc<Gateway>>,
@@ -422,7 +423,7 @@ async fn stop(
     Ok(Json(json!(())))
 }
 
-#[instrument(skip_all, err)]
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn payment_log(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<PaymentLogPayload>,
