@@ -115,7 +115,7 @@ use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
 use fedimint_core::util::BoxFuture;
-use fedimint_logging::LOG_DB;
+use fedimint_logging::{LOG_CORE, LOG_DB};
 use futures::{Stream, StreamExt};
 use macro_rules_attribute::apply;
 use rand::Rng;
@@ -1559,7 +1559,7 @@ impl<'tx, Cap> WithDecoders for DatabaseTransaction<'tx, Cap> {
     }
 }
 
-#[instrument(level = "trace", skip_all, fields(value_type = std::any::type_name::<V>()), err)]
+#[instrument(target = LOG_DB, level = "trace", skip_all, fields(value_type = std::any::type_name::<V>()), err)]
 fn decode_value<V: DatabaseValue>(
     value_bytes: &[u8],
     decoders: &ModuleDecoderRegistry,
@@ -1781,7 +1781,7 @@ impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
     }
 
     /// Register a hook that will be run after commit succeeds.
-    #[instrument(level = "trace", skip_all)]
+    #[instrument(target = LOG_DB, level = "trace", skip_all)]
     pub fn on_commit(&mut self, f: maybe_add_send!(impl FnOnce() + 'static)) {
         self.on_commit_hooks.push(Box::new(f));
     }

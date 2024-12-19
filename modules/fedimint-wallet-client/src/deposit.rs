@@ -184,7 +184,7 @@ fn transition_deposit_timeout(old_state: &DepositStateMachine) -> DepositStateMa
     }
 }
 
-#[instrument(skip_all, level = "debug")]
+#[instrument(target = LOG_CLIENT_MODULE_WALLET, skip_all, level = "debug")]
 async fn await_btc_transaction_confirmed(
     context: WalletClientContext,
     global_context: DynGlobalClientContext,

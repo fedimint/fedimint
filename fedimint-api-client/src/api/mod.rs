@@ -976,7 +976,7 @@ impl<C> FederationPeer<C>
 where
     C: JsonRpcClient + 'static,
 {
-    #[instrument(level = "trace", fields(peer = %self.peer_id, %method), skip_all)]
+    #[instrument(target = LOG_CLIENT_NET_API, level = "trace", fields(peer = %self.peer_id, %method), skip_all)]
     pub async fn request(&self, method: &str, params: &[Value]) -> JsonRpcResult<Value> {
         // Strategies using timeouts often depend on failing requests returning quickly,
         // so every request gets only one reconnection attempt.

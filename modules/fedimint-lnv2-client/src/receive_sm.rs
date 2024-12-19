@@ -89,7 +89,7 @@ impl State for ReceiveStateMachine {
 }
 
 impl ReceiveStateMachine {
-    #[instrument(skip(global_context))]
+    #[instrument(target = LOG_CLIENT_MODULE_LNV2, skip(global_context))]
     async fn await_incoming_contract(
         contract: IncomingContract,
         global_context: DynGlobalClientContext,
