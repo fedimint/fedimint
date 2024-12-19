@@ -20,7 +20,11 @@
       "inputs": {
         "devshell": "devshell",
         "flake-utils": "flake-utils_3",
-        "nixpkgs": ["cargo-deluxe", "flakebox", "nixpkgs"]
+        "nixpkgs": [
+          "cargo-deluxe",
+          "flakebox",
+          "nixpkgs"
+        ]
       },
       "locked": {
         "lastModified": 1727381935,
@@ -41,7 +45,10 @@
       "inputs": {
         "devshell": "devshell_2",
         "flake-utils": "flake-utils_6",
-        "nixpkgs": ["flakebox", "nixpkgs"]
+        "nixpkgs": [
+          "flakebox",
+          "nixpkgs"
+        ]
       },
       "locked": {
         "lastModified": 1732566114,
@@ -62,7 +69,9 @@
       "inputs": {
         "nix-bundle": "nix-bundle",
         "nix-utils": "nix-utils",
-        "nixpkgs": ["nixpkgs"]
+        "nixpkgs": [
+          "nixpkgs"
+        ]
       },
       "locked": {
         "lastModified": 1729104746,
@@ -83,7 +92,9 @@
       "inputs": {
         "flake-utils": "flake-utils_2",
         "flakebox": "flakebox",
-        "nixpkgs": ["nixpkgs"]
+        "nixpkgs": [
+          "nixpkgs"
+        ]
       },
       "locked": {
         "lastModified": 1729202329,
@@ -102,7 +113,11 @@
     },
     "crane": {
       "inputs": {
-        "nixpkgs": ["cargo-deluxe", "flakebox", "nixpkgs"]
+        "nixpkgs": [
+          "cargo-deluxe",
+          "flakebox",
+          "nixpkgs"
+        ]
       },
       "locked": {
         "lastModified": 1717383740,
@@ -121,7 +136,10 @@
     },
     "crane_2": {
       "inputs": {
-        "nixpkgs": ["flakebox", "nixpkgs"]
+        "nixpkgs": [
+          "flakebox",
+          "nixpkgs"
+        ]
       },
       "locked": {
         "lastModified": 1717383740,
@@ -140,7 +158,12 @@
     },
     "devshell": {
       "inputs": {
-        "nixpkgs": ["cargo-deluxe", "flakebox", "android-nixpkgs", "nixpkgs"],
+        "nixpkgs": [
+          "cargo-deluxe",
+          "flakebox",
+          "android-nixpkgs",
+          "nixpkgs"
+        ],
         "systems": "systems_3"
       },
       "locked": {
@@ -159,7 +182,11 @@
     },
     "devshell_2": {
       "inputs": {
-        "nixpkgs": ["flakebox", "android-nixpkgs", "nixpkgs"]
+        "nixpkgs": [
+          "flakebox",
+          "android-nixpkgs",
+          "nixpkgs"
+        ]
       },
       "locked": {
         "lastModified": 1728330715,
@@ -177,7 +204,11 @@
     },
     "fenix": {
       "inputs": {
-        "nixpkgs": ["cargo-deluxe", "flakebox", "nixpkgs"],
+        "nixpkgs": [
+          "cargo-deluxe",
+          "flakebox",
+          "nixpkgs"
+        ],
         "rust-analyzer-src": "rust-analyzer-src"
       },
       "locked": {
@@ -196,7 +227,9 @@
     },
     "fenix_2": {
       "inputs": {
-        "nixpkgs": ["nixpkgs"],
+        "nixpkgs": [
+          "nixpkgs"
+        ],
         "rust-analyzer-src": "rust-analyzer-src_2"
       },
       "locked": {
@@ -266,7 +299,11 @@
     },
     "flake-utils_4": {
       "inputs": {
-        "systems": ["cargo-deluxe", "flakebox", "systems"]
+        "systems": [
+          "cargo-deluxe",
+          "flakebox",
+          "systems"
+        ]
       },
       "locked": {
         "lastModified": 1694529238,
@@ -320,7 +357,10 @@
     },
     "flake-utils_7": {
       "inputs": {
-        "systems": ["flakebox", "systems"]
+        "systems": [
+          "flakebox",
+          "systems"
+        ]
       },
       "locked": {
         "lastModified": 1731533236,
@@ -363,23 +403,27 @@
       "inputs": {
         "android-nixpkgs": "android-nixpkgs_2",
         "crane": "crane_2",
-        "fenix": ["fenix"],
+        "fenix": [
+          "fenix"
+        ],
         "flake-utils": "flake-utils_7",
-        "nixpkgs": ["nixpkgs"],
+        "nixpkgs": [
+          "nixpkgs"
+        ],
         "systems": "systems_8"
       },
       "locked": {
-        "lastModified": 1732580446,
-        "narHash": "sha256-A7Y0FHFVEns8m/Az3S4XT9iujTpQ//xhB3TJ6rwPZdw=",
+        "lastModified": 1734551360,
+        "narHash": "sha256-C2Mur/p/fn5WkKeb/4bfFdlSugwLaeue/BLxycKV9Cw=",
         "owner": "dpc",
         "repo": "flakebox",
-        "rev": "8e152e27b55df489192b86a14e946e1c983daabe",
+        "rev": "28e43cc8d5c67b0cc13cca1499fbe3fe6a5196f5",
         "type": "github"
       },
       "original": {
         "owner": "dpc",
         "repo": "flakebox",
-        "rev": "8e152e27b55df489192b86a14e946e1c983daabe",
+        "rev": "28e43cc8d5c67b0cc13cca1499fbe3fe6a5196f5",
         "type": "github"
       }
     },
