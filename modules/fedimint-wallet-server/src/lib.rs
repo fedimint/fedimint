@@ -489,7 +489,7 @@ impl ServerModule for Wallet {
 
         match consensus_item {
             WalletConsensusItem::BlockCount(block_count_vote) => {
-                debug!(?peer, ?block_count_vote, "Received block count vote");
+                debug!(target: LOG_MODULE_WALLET, ?peer, ?block_count_vote, "Received block count vote");
 
                 let current_vote = dbtx.get_value(&BlockCountVoteKey(peer)).await.unwrap_or(0);
 
@@ -510,6 +510,7 @@ impl ServerModule for Wallet {
                 let new_consensus_block_count = self.consensus_block_count(dbtx).await;
 
                 debug!(
+                    target: LOG_MODULE_WALLET,
                     ?peer,
                     ?current_vote,
                     ?block_count_vote,
@@ -616,7 +617,7 @@ impl ServerModule for Wallet {
 
                 input.verify(&self.secp, &self.cfg.consensus.peg_in_descriptor)?;
 
-                debug!(outpoint = %input.outpoint(), "Claiming peg-in");
+                debug!(target: LOG_MODULE_WALLET, outpoint = %input.outpoint(), "Claiming peg-in");
 
                 (
                     input.0.outpoint(),
@@ -1711,7 +1712,7 @@ impl Wallet {
     }
 }
 
-#[instrument(level = "debug", skip_all)]
+#[instrument(target = LOG_MODULE_WALLET, level = "debug", skip_all)]
 pub async fn run_broadcast_pending_tx(db: Database, rpc: DynBitcoindRpc, tg_handle: &TaskHandle) {
     while !tg_handle.is_shutting_down() {
         broadcast_pending_tx(db.begin_transaction_nc().await, &rpc).await;

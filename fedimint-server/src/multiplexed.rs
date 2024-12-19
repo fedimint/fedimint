@@ -164,7 +164,7 @@ where
     MuxKey: Serialize + DeserializeOwned + Unpin + Send + Debug + Eq + Hash + Clone,
 {
     async fn send(&self, peers: &[PeerId], key: MuxKey, msg: Msg) -> Cancellable<()> {
-        debug!("Sending to {peers:?}/{key:?}, {msg:?}");
+        debug!(target: LOG_NET_PEER, "Sending to {peers:?}/{key:?}, {msg:?}");
         self.send_requests_tx
             .send((peers.to_vec(), key, msg))
             .await

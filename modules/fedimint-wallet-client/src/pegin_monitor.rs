@@ -313,7 +313,7 @@ impl CheckOutcome {
 /// claim any peg-ins that are ready.
 ///
 /// Return a list of [`CheckOutcome`]s for each matching output.
-#[instrument(skip_all, fields(tweak_idx))]
+#[instrument(target = LOG_CLIENT_MODULE_WALLET, skip_all, fields(tweak_idx))]
 async fn check_idx_pegins(
     data: &WalletClientModuleData,
     tweak_idx: TweakIdx,

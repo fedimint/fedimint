@@ -13,7 +13,7 @@ use fedimint_core::runtime::block_in_place;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Feerate};
-use fedimint_logging::LOG_CORE;
+use fedimint_logging::{LOG_BITCOIND_CORE, LOG_CORE};
 use tracing::{info, warn};
 
 use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory};
@@ -85,14 +85,15 @@ impl IBitcoindRpc for BitcoindClient {
             //
             // https://github.com/bitcoin/bitcoin/blob/daa56f7f665183bcce3df146f143be37f33c123e/src/rpc/protocol.h#L48
             Err(JsonRpc(Rpc(e))) if e.code == -27 => (),
-            Err(e) => info!(?e, "Error broadcasting transaction"),
+            Err(e) => info!(target: LOG_BITCOIND_CORE, ?e, "Error broadcasting transaction"),
             Ok(_) => (),
         }
     }
 
     async fn get_tx_block_height(&self, txid: &Txid) -> anyhow::Result<Option<u64>> {
-        let info = block_in_place(|| self.client.get_raw_transaction_info(txid, None))
-            .map_err(|error| info!(?error, "Unable to get raw transaction"));
+        let info = block_in_place(|| self.client.get_raw_transaction_info(txid, None)).map_err(
+            |error| info!(target: LOG_BITCOIND_CORE, ?error, "Unable to get raw transaction"),
+        );
         let height = match info.ok().and_then(|info| info.blockhash) {
             None => None,
             Some(hash) => Some(block_in_place(|| self.client.get_block_header_info(&hash))?.height),
