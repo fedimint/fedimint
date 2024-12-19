@@ -150,7 +150,7 @@ pub trait FederationApiExt: IRawFederationApi {
 
     /// Make an aggregate request to federation, using `strategy` to logically
     /// merge the responses.
-    #[instrument(target = "fm::api", skip_all, fields(method=method))]
+    #[instrument(target = LOG_NET_API, skip_all, fields(method=method))]
     async fn request_with_strategy<PR: DeserializeOwned, FR: Debug>(
         &self,
         mut strategy: impl QueryStrategy<PR, FR> + MaybeSend,
