@@ -9,6 +9,7 @@
 // Backup and restore logic
 pub mod backup;
 /// Modularized Cli for sending and receiving out-of-band ecash
+#[cfg(feature = "cli")]
 mod cli;
 /// Database keys used throughout the mint client module
 pub mod client_db;
@@ -722,6 +723,7 @@ impl ClientModule for MintClientModule {
         Some(self.cfg.fee_consensus.fee(amount))
     }
 
+    #[cfg(feature = "cli")]
     async fn handle_cli_command(
         &self,
         args: &[std::ffi::OsString],
