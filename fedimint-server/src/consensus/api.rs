@@ -359,7 +359,7 @@ impl ConsensusApi {
         debug!(target: LOG_NET_API, id = %request.id, len = request.payload.len(), "Received client backup request");
         if let Some(prev) = dbtx.get_value(&ClientBackupKey(request.id)).await {
             if request.timestamp <= prev.timestamp {
-                debug!(id = %request.id, len = request.payload.len(), "Received client backup request with old timestamp - ignoring");
+                debug!(target: LOG_NET_API, id = %request.id, len = request.payload.len(), "Received client backup request with old timestamp - ignoring");
                 return Err(ApiError::bad_request("timestamp too small".into()));
             }
         }

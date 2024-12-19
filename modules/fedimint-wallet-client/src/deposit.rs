@@ -11,6 +11,7 @@ use fedimint_core::secp256k1::Keypair;
 use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{OutPoint, TransactionId};
+use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::txoproof::PegInProof;
 use fedimint_wallet_common::WalletInput;
@@ -184,7 +185,7 @@ fn transition_deposit_timeout(old_state: &DepositStateMachine) -> DepositStateMa
     }
 }
 
-#[instrument(skip_all, level = "debug")]
+#[instrument(target = LOG_CLIENT_MODULE_WALLET, skip_all, level = "debug")]
 async fn await_btc_transaction_confirmed(
     context: WalletClientContext,
     global_context: DynGlobalClientContext,
