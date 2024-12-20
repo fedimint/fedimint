@@ -2116,7 +2116,7 @@ pub enum DecodingError {
     WrongPrefix { expected: u8, found: u8 },
     #[error("Key had a wrong length, expected {expected} but got {found}")]
     WrongLength { expected: usize, found: usize },
-    #[error("Other decoding error: {0}")]
+    #[error("Other decoding error: {0:?}")]
     Other(anyhow::Error),
 }
 
