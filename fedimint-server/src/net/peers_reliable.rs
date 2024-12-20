@@ -209,8 +209,8 @@ where
 
             let (peer, connection) = match new_connection.expect("Listener closed") {
                 Ok(connection) => connection,
-                Err(e) => {
-                    warn!(target: LOG_NET_PEER, mint = ?cfg.identity, err = %e, "Error while opening incoming connection");
+                Err(err) => {
+                    warn!(target: LOG_NET_PEER, our_id = %cfg.identity, %err, "Error while opening incoming connection");
                     continue;
                 }
             };
