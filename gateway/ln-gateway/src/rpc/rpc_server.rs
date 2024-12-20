@@ -22,17 +22,7 @@ use tower_http::cors::CorsLayer;
 use tracing::{error, info, instrument};
 
 use super::{
-    BackupPayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
-    CreateInvoiceForOperatorPayload, DepositAddressPayload, InfoPayload, LeaveFedPayload,
-    OpenChannelPayload, PayInvoiceForOperatorPayload, PaymentLogPayload, ReceiveEcashPayload,
-    SendOnchainPayload, SetFeesPayload, SpendEcashPayload, WithdrawPayload, ADDRESS_ENDPOINT,
-    BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
-    CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, GATEWAY_INFO_ENDPOINT,
-    GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
-    LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT,
-    PAYMENT_LOG_ENDPOINT, PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT,
-    SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, V1_API_ENDPOINT,
-    WITHDRAW_ENDPOINT,
+    BackupPayload, CloseChannelsWithPeerPayload, ConnectFedPayload, CreateInvoiceForOperatorPayload, DepositAddressPayload, InfoPayload, LeaveFedPayload, OpenChannelPayload, PayInvoiceForOperatorPayload, PaymentLogPayload, ReceiveEcashPayload, SendOnchainPayload, SetFeesPayload, SpendEcashPayload, WithdrawPayload, ADDRESS_ENDPOINT, AUTH_SESSION_ENDPOINT, BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAYMENT_LOG_ENDPOINT, PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT, SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, V1_API_ENDPOINT, WITHDRAW_ENDPOINT
 };
 use crate::error::{AdminGatewayError, PublicGatewayError};
 use crate::rpc::ConfigPayload;
@@ -83,21 +73,40 @@ fn extract_bearer_token(request: &Request) -> Result<String, StatusCode> {
 }
 
 /// Middleware to authenticate an incoming request. Routes that are
-/// authenticated with this middleware always require a Bearer token to be
-/// supplied in the Authorization header.
-async fn auth_middleware(
+/// authenticated with this middleware always require a Bearer token
+/// with the JWT generated previously to be supplied in the Authorization
+/// header. If jwt fails, try to check authentication with password
+async fn auth_jwt_middleware_with_password_fallback(
     Extension(gateway): Extension<Arc<Gateway>>,
     request: Request,
     next: Next,
 ) -> Result<impl IntoResponse, StatusCode> {
     let token = extract_bearer_token(&request)?;
-    if bcrypt::verify(token, &gateway.bcrypt_password_hash.to_string())
-        .expect("Bcrypt hash is valid since we just stringified it")
+    let auth_manager = &gateway.auth_manager;
+    //TODO remove check_password when all the callers support JWT auth
+    if auth_manager.is_jwt_valid(&token)
+        || check_password(token, &gateway.bcrypt_password_hash.to_string())
     {
         return Ok(next.run(request).await);
     }
-
     Err(StatusCode::UNAUTHORIZED)
+}
+
+async fn auth_get_jwt_session(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    request: Request,
+) -> Result<impl IntoResponse, AdminGatewayError> {
+    let token = extract_bearer_token(&request).map_err(|_| AdminGatewayError::Unauthorized)?;
+    if check_password(token, &gateway.bcrypt_password_hash.to_string()) {
+        let auth_manager = &gateway.auth_manager;
+        let token = auth_manager.generate_jwt()?;
+        return Ok(Json(json!(token)));
+    }
+    Err(AdminGatewayError::Unauthorized)
+}
+
+fn check_password(token: String, password_hash: &str) -> bool {
+    bcrypt::verify(token, password_hash).expect("Bcrypt hash is valid since we just stringified it")
 }
 
 /// Public routes that are used in the LNv1 protocol
@@ -171,11 +180,16 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
         // FIXME: deprecated >= 0.3.0
         .route(GATEWAY_INFO_POST_ENDPOINT, post(handle_post_info))
         .route(GATEWAY_INFO_ENDPOINT, get(info))
-        .layer(middleware::from_fn(auth_middleware));
+        .layer(middleware::from_fn(
+            auth_jwt_middleware_with_password_fallback,
+        ));
+
+    let auth_routes = Router::new().route(AUTH_SESSION_ENDPOINT, get(auth_get_jwt_session));
 
     Router::new()
         .merge(public_routes)
         .merge(authenticated_routes)
+        .merge(auth_routes)
         .layer(Extension(gateway))
         .layer(Extension(task_group))
         .layer(CorsLayer::permissive())

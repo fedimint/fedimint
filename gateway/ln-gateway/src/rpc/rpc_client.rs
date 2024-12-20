@@ -31,19 +31,26 @@ pub struct GatewayRpcClient {
     client: reqwest::Client,
     /// Optional gateway password
     password: Option<String>,
+    /// Optional gateway JWT
+    pub jwt_code: Option<String>,
 }
 
 impl GatewayRpcClient {
-    pub fn new(versioned_api: SafeUrl, password: Option<String>) -> Self {
+    pub fn new(versioned_api: SafeUrl, password: Option<String>, jwt_code: Option<String>) -> Self {
         Self {
             base_url: versioned_api,
             client: reqwest::Client::new(),
             password,
+            jwt_code,
         }
     }
 
     pub fn with_password(&self, password: Option<String>) -> Self {
-        GatewayRpcClient::new(self.base_url.clone(), password)
+        GatewayRpcClient::new(self.base_url.clone(), password, self.jwt_code.clone())
+    }
+
+    pub fn with_jwt_code(&self, jwt_code: Option<String>) -> Self {
+        GatewayRpcClient::new(self.base_url.clone(), self.password.clone(), jwt_code)
     }
 
     pub async fn get_info(&self) -> GatewayRpcResult<GatewayInfo> {
@@ -247,6 +254,14 @@ impl GatewayRpcClient {
         self.call_post(url, payload).await
     }
 
+    pub async fn get_session_jwt_auth(&self) -> GatewayRpcResult<String> {
+        let url = self
+            .base_url
+            .join(AUTH_SESSION_ENDPOINT)
+            .expect("invalid base url");
+        self.call_get(url).await
+    }
+
     async fn call<P: Serialize, T: DeserializeOwned>(
         &self,
         method: Method,
@@ -254,7 +269,10 @@ impl GatewayRpcClient {
         payload: Option<P>,
     ) -> Result<T, GatewayRpcError> {
         let mut builder = self.client.request(method, url.clone().to_unsafe());
-        if let Some(password) = self.password.clone() {
+
+        if let Some(jwt_code) = self.jwt_code.clone() {
+            builder = builder.bearer_auth(jwt_code);
+        } else if let Some(password) = self.password.clone() {
             builder = builder.bearer_auth(password);
         }
         if let Some(payload) = payload {

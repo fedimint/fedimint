@@ -29,6 +29,8 @@ struct Cli {
     /// WARNING: Passing in a password from the command line may be less secure!
     #[clap(long)]
     rpcpassword: Option<String>,
+    #[clap(long)]
+    rpcjwt: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -54,7 +56,13 @@ async fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
     let versioned_api = cli.address.join(V1_API_ENDPOINT)?;
-    let create_client = || GatewayRpcClient::new(versioned_api.clone(), cli.rpcpassword.clone());
+    let create_client = || {
+        GatewayRpcClient::new(
+            versioned_api.clone(),
+            cli.rpcpassword.clone(),
+            cli.rpcjwt.clone(),
+        )
+    };
 
     match cli.command {
         Commands::General(general_command) => general_command.handle(create_client).await?,
