@@ -16,8 +16,11 @@ The release process evolves each cycle, so don't hesitate to make frequent edits
   - Create a new signed tag and push to GH
 - When a tag is pushed, the GH workflow will automatically publish a new release with this tag
 - Publish to crates
-  - `cargo workspaces publish --from-git`
-  - `@elsirion` and `@dpc` are the only two with permissions
+  - `just publish-release`
+  - `@elsirion`, `@dpc`, and `@bradleystachurski` are the only users with permissions
+- Sign binaries
+  - `just sign-release <tag>`
+  - ex: `just sign-release v0.5.0`
 - Start upgrade tests using the new tag
   - https://github.com/fedimint/fedimint/actions/workflows/upgrade-tests.yml
   - The upgrade paths and upgrade test kinds varies based on the release (coordinated shutdown vs staggered, etc)
