@@ -1947,11 +1947,8 @@ where
             return Err(DecodingError::wrong_prefix(Self::DB_PREFIX, data[0]));
         }
 
-        <Self as crate::encoding::Decodable>::consensus_decode(
-            &mut std::io::Cursor::new(&data[1..]),
-            modules,
-        )
-        .map_err(|decode_error| DecodingError::Other(decode_error.0))
+        <Self as crate::encoding::Decodable>::consensus_decode_whole(&data[1..], modules)
+            .map_err(|decode_error| DecodingError::Other(decode_error.0))
     }
 }
 
@@ -1960,8 +1957,7 @@ where
     T: Debug + Encodable + Decodable,
 {
     fn from_bytes(data: &[u8], modules: &ModuleDecoderRegistry) -> Result<Self, DecodingError> {
-        T::consensus_decode(&mut std::io::Cursor::new(data), modules)
-            .map_err(|e| DecodingError::Other(e.0))
+        T::consensus_decode_whole(data, modules).map_err(|e| DecodingError::Other(e.0))
     }
 
     fn to_bytes(&self) -> Vec<u8> {
