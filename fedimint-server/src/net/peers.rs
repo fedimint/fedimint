@@ -62,6 +62,8 @@ pub struct ReconnectPeerConnections<T> {
 
 #[derive(Clone)]
 struct PeerConnection<T> {
+    our_id: PeerId,
+    peer_id: PeerId,
     outgoing: async_channel::Sender<T>,
     outgoing_send_err_count: Arc<AtomicU64>,
     incoming: async_channel::Receiver<T>,
@@ -654,6 +656,8 @@ where
         );
 
         PeerConnection {
+            our_id,
+            peer_id,
             outgoing: outgoing_sender,
             outgoing_send_err_count: Arc::new(AtomicU64::new(0)),
             incoming: incoming_receiver,
@@ -666,7 +670,7 @@ where
                 .outgoing_send_err_count
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             if count % 100 == 0 {
-                debug!(target: LOG_NET_PEER, count, "Could not send outgoing message since the channel is full");
+                debug!(target: LOG_NET_PEER, our_id = %self.our_id, peer_id = %self.peer_id, count, "Could not send outgoing message since the channel is full");
             }
         } else {
             self.outgoing_send_err_count
