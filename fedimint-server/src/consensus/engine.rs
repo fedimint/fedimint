@@ -376,8 +376,8 @@ impl ConsensusEngine {
                                         }
                                         warn!(target: LOG_CONSENSUS, "Not reporting ordering latency on possibly out of sync item");
                                     }
-                                    Err(e) => {
-                                        warn!(target: LOG_CONSENSUS, "Missing submission timestamp: {e}");
+                                    Err(err) => {
+                                        debug!(target: LOG_CONSENSUS, %err, "Missing submission timestamp. This is normal on start");
                                         break;
                                     }
                                 }
