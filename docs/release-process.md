@@ -31,6 +31,8 @@ The release process evolves each cycle, so don't hesitate to make frequent edits
 - Start upgrade tests using the new tag
   - https://github.com/fedimint/fedimint/actions/workflows/upgrade-tests.yml
   - The upgrade paths and upgrade test kinds varies based on the release (coordinated shutdown vs staggered, etc)
+- Update backwards-compatibility versions to use the new tag
+  - `.github/workflows/ci-backwards-compatibility.yml`
 
 ### Commands
 
