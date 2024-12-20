@@ -85,6 +85,8 @@ impl RecoveryFromHistory for MintRecovery {
         dbtx: &mut DatabaseTransaction<'_>,
         args: &ClientModuleRecoverArgs<Self::Init>,
     ) -> anyhow::Result<Option<(Self, RecoveryFromHistoryCommon)>> {
+        dbtx.ensure_isolated()
+            .expect("Must be in prefixed database");
         Ok(dbtx
             .get_value(&RecoveryStateKey)
             .await
@@ -113,6 +115,8 @@ impl RecoveryFromHistory for MintRecovery {
         dbtx: &mut DatabaseTransaction<'_>,
         common: &RecoveryFromHistoryCommon,
     ) {
+        dbtx.ensure_isolated()
+            .expect("Must be in prefixed database");
         dbtx.insert_entry(
             &RecoveryStateKey,
             &(MintRecoveryState::V2(self.state.clone()), common.clone()),
