@@ -183,6 +183,35 @@ pub trait Decodable: Sized {
         Self::consensus_decode(r, modules)
     }
 
+    #[inline]
+    fn consensus_decode_whole(
+        slice: &[u8],
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let total_len = slice.len() as u64;
+
+        let r = &mut &slice[..];
+        let mut r = Read::take(r, total_len);
+
+        // This method is always strictly less general than, `consensus_decode`, so it's
+        // safe and make sense to default to just calling it. This way most
+        // types, that don't care about protecting against resource exhaustion
+        // due to malicious input, can just ignore it.
+        let res = Self::consensus_decode_from_finite_reader(&mut r, modules)?;
+        let left = r.limit();
+
+        if left != 0 {
+            return Err(fedimint_core::encoding::DecodeError::new_custom(
+                anyhow::anyhow!(
+                    "Type did not consume all bytes during decoding; expected={}; left={}; type={}",
+                    total_len,
+                    left,
+                    std::any::type_name::<Self>(),
+                ),
+            ));
+        }
+        Ok(res)
+    }
     /// Decode an object with a well-defined format.
     ///
     /// This is the method that should be implemented for a typical, fixed sized
