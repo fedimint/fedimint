@@ -16,7 +16,7 @@ use fedimint_api_client::api::PeerConnectionStatus;
 use fedimint_core::net::peers::{IPeerConnections, Recipient};
 use fedimint_core::task::{Cancellable, Cancelled, TaskGroup};
 use fedimint_core::util::backoff_util::{api_networking_backoff, FibonacciBackoff};
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
 use fedimint_core::PeerId;
 use fedimint_logging::LOG_NET_PEER;
 use futures::future::select_all;
@@ -320,7 +320,7 @@ where
     }
 
     fn disconnect(&self, error: anyhow::Error) -> PeerConnectionState<M> {
-        info!(target: LOG_NET_PEER, "Disconnected from peer {}: {}", self.peer_id, error);
+        info!(target: LOG_NET_PEER, err = %error.fmt_compact_anyhow(), %self.peer_id, "Disconnected from peer");
 
         PEER_DISCONNECT_COUNT
             .with_label_values(&[&self.our_id_str, &self.peer_id_str])

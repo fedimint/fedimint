@@ -3,7 +3,7 @@ use std::time::{Duration, SystemTime};
 
 use fedimint_core::task::jit::JitTryAnyhow;
 use fedimint_core::time::now;
-use fedimint_core::util::{backoff_util, SafeUrl};
+use fedimint_core::util::{backoff_util, FmtCompact as _, SafeUrl};
 use fedimint_core::PeerId;
 use fedimint_logging::LOG_CLIENT_NET_API;
 use tokio::sync::{Mutex, RwLock};
@@ -112,10 +112,12 @@ where
                 }
                 Err(err) => {
                     debug!(
-                            target: LOG_CLIENT_NET_API,
-                            peer_id = %peer_id,
-                            url = %url,
-                            %err, "Unable to connect to peer");
+                        target: LOG_CLIENT_NET_API,
+                        peer_id = %peer_id,
+                        url = %url,
+                        err = %err.fmt_compact(),
+                        "Unable to connect to peer"
+                    );
                 }
             }
             Ok(res?)
