@@ -198,18 +198,30 @@
 <a href="#197" id="197">197</a>
 <a href="#198" id="198">198</a>
 <a href="#199" id="199">199</a>
-<a href="#200" id="200">200</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
 
 <span class="kw">use </span>fedimint_client::module::init::recovery::RecoveryFromHistoryCommon;
 <span class="kw">use </span>fedimint_client::module::{IdxRange, OutPointRange};
 <span class="kw">use </span>fedimint_core::core::OperationId;
-<span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped <span class="kw">as _</span>};
+<span class="kw">use </span>fedimint_core::db::{DatabaseRecord, DatabaseTransaction, IDatabaseTransactionOpsCore};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, Amount};
+<span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_MINT;
 <span class="kw">use </span>fedimint_mint_common::Nonce;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;
+<span class="kw">use </span>tracing::debug;
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::recovery::MintRecoveryState;
 <span class="kw">use </span><span class="kw">crate</span>::input::{MintInputCommon, MintInputStateMachine, MintInputStateMachineV0};
@@ -327,10 +339,18 @@
 <span class="kw">pub async fn </span>migrate_to_v1(
     dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
 ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;(Vec&lt;(Vec&lt;u8&gt;, OperationId)&gt;, Vec&lt;(Vec&lt;u8&gt;, OperationId)&gt;)&gt;&gt; {
+    dbtx.ensure_isolated().expect(<span class="string">"Must be in our database"</span>);
     <span class="comment">// between v0 and v1, we changed the format of `MintRecoveryState`, and instead
     // of migrating it, we can just delete it, so the recovery will just start
     // again, ignoring any existing state from before the migration
-    </span>dbtx.remove_entry(<span class="kw-2">&amp;</span>RecoveryStateKey).<span class="kw">await</span>;
+    </span><span class="kw">if </span>dbtx
+        .raw_remove_entry(<span class="kw-2">&amp;</span>[RecoveryStateKey::DB_PREFIX])
+        .<span class="kw">await
+        </span>.expect(<span class="string">"Raw operations only fail on low level errors"</span>)
+        .is_some()
+    {
+        <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_MINT, <span class="string">"Deleted previous recovery state"</span>);
+    }
 
     <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
 }
