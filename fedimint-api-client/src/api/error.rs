@@ -74,12 +74,12 @@ impl Display for FederationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Federation rpc error {")?;
         if let Some(general) = self.general.as_ref() {
-            f.write_fmt(format_args!("method => {}), ", self.method))?;
+            f.write_fmt(format_args!("method => {}, ", self.method))?;
             f.write_fmt(format_args!(
-                "params => {:?}), ",
+                "params => {:?}, ",
                 AbbreviateJson(&self.params)
             ))?;
-            f.write_fmt(format_args!("general => {general})"))?;
+            f.write_fmt(format_args!("general => {general}, "))?;
             if !self.peer_errors.is_empty() {
                 f.write_str(", ")?;
             }
