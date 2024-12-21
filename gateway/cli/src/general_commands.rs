@@ -50,6 +50,14 @@ pub enum GeneralCommands {
         #[clap(long)]
         event_kinds: Vec<EventKind>,
     },
+    /// Create a bcrypt hash of a password, for use in gateway deployment
+    CreatePasswordHash {
+        password: String,
+
+        /// The bcrypt cost factor to use when hashing the password
+        #[clap(long)]
+        cost: Option<u32>,
+    },
 }
 
 impl GeneralCommands {
@@ -124,6 +132,10 @@ impl GeneralCommands {
                     .await?;
                 print_response(payment_log);
             }
+            Self::CreatePasswordHash { password, cost } => print_response(
+                bcrypt::hash(password, cost.unwrap_or(bcrypt::DEFAULT_COST))
+                    .expect("Unable to create bcrypt hash"),
+            ),
         }
 
         Ok(())
