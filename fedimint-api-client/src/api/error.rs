@@ -3,6 +3,7 @@ use std::fmt::{self, Debug, Display};
 use std::time::Duration;
 
 use fedimint_core::fmt_utils::AbbreviateJson;
+use fedimint_core::util::WithCauseAnyhow;
 use fedimint_core::PeerId;
 use fedimint_logging::LOG_CLIENT_NET_API;
 use jsonrpsee_core::client::Error as JsonRpcClientError;
@@ -151,7 +152,7 @@ impl FederationError {
     /// Report any errors
     pub fn report_if_important(&self) {
         if let Some(error) = self.general.as_ref() {
-            warn!(target: LOG_CLIENT_NET_API, %error, "General FederationError");
+            warn!(target: LOG_CLIENT_NET_API, err = %WithCauseAnyhow(&error), "General FederationError");
         }
         for (peer_id, e) in &self.peer_errors {
             e.report_if_important(*peer_id);

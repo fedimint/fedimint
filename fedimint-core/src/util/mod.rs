@@ -3,6 +3,7 @@ pub mod backoff_util;
 pub mod broadcaststream;
 pub mod update_merge;
 
+use core::fmt;
 use std::convert::Infallible;
 use std::fmt::{Debug, Display, Formatter};
 use std::future::Future;
@@ -11,7 +12,7 @@ use std::io::Write;
 use std::path::Path;
 use std::pin::Pin;
 use std::str::FromStr;
-use std::{fs, io};
+use std::{error, fs, io};
 
 use anyhow::format_err;
 use fedimint_logging::LOG_CORE;
@@ -450,12 +451,12 @@ where
         attempts += 1;
         match op_fn().await {
             Ok(result) => return Ok(result),
-            Err(error) => {
+            Err(err) => {
                 if let Some(interval) = strategy.next() {
                     // run closure op_fn again
                     debug!(
                         target: LOG_CORE,
-                        %error,
+                        err = %WithCauseAnyhow(&err),
                         %attempts,
                         interval = interval.as_secs(),
                         "{} failed, retrying",
@@ -465,15 +466,53 @@ where
                 } else {
                     warn!(
                         target: LOG_CORE,
-                        ?error,
+                        ?err,
                         %attempts,
                         "{} failed",
                         op_name,
                     );
-                    return Err(error);
+                    return Err(err);
                 }
             }
         }
+    }
+}
+
+/// A wrapper with `fmt::Display` for any `E : Error` that will print chain of
+/// causes
+pub struct WithCause<'e, E>(pub &'e E);
+
+impl<E> fmt::Display for WithCause<'_, E>
+where
+    E: error::Error,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut source_opt: Option<_> = Some(&self.0);
+
+        while source_opt.is_some() {
+            let source = source_opt.take().expect("Just checked");
+            f.write_fmt(format_args!("{source}"))?;
+
+            let source = source.source();
+            if source.is_some() {
+                f.write_str(": ")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// A wrapper with `fmt::Display` for [`anyhow::Error`] that will print chain of
+/// causes
+pub struct WithCauseAnyhow<'e, D>(pub &'e D);
+
+impl<E> fmt::Display for WithCauseAnyhow<'_, E>
+where
+    E: fmt::Display,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        // <https://docs.rs/anyhow/latest/anyhow/struct.Error.html#display-representations>
+        f.write_fmt(format_args!("{:#}", self.0))
     }
 }
 
