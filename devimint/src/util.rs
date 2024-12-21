@@ -18,6 +18,7 @@ use fedimint_core::module::ApiAuth;
 use fedimint_core::task::{self, block_in_place, block_on};
 use fedimint_core::time::now;
 use fedimint_core::util::backoff_util::custom_backoff;
+use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::PeerId;
 use fedimint_logging::LOG_DEVIMINT;
 use semver::Version;
@@ -151,7 +152,7 @@ impl Drop for ProcessHandleInner {
             if let Err(err) = block_on(self.terminate()) {
                 warn!(target: LOG_DEVIMINT,
                         name=%self.name,
-                        %err,
+                        err = %err.fmt_compact_anyhow(),
                         "Error terminating process on drop");
             }
         });

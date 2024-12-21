@@ -29,6 +29,7 @@ where
     E: fmt::Debug + fmt::Display,
 {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        // In neither case we can preserve the source information
         None
     }
 
