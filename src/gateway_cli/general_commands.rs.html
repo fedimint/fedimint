@@ -129,7 +129,19 @@
 <a href="#128" id="128">128</a>
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a></pre></div><pre class="rust"><code><span class="kw">use </span>clap::Subcommand;
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a></pre></div><pre class="rust"><code><span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::fedimint_build_code_version_env;
 <span class="kw">use </span>fedimint_eventlog::{EventKind, EventLogId};
@@ -180,6 +192,14 @@
 
         <span class="attr">#[clap(long)]
         </span>event_kinds: Vec&lt;EventKind&gt;,
+    },
+    <span class="doccomment">/// Create a bcrypt hash of a password, for use in gateway deployment
+    </span>CreatePasswordHash {
+        password: String,
+
+        <span class="doccomment">/// The bcrypt cost factor to use when hashing the password
+        </span><span class="attr">#[clap(long)]
+        </span>cost: <span class="prelude-ty">Option</span>&lt;u32&gt;,
     },
 }
 
@@ -255,6 +275,10 @@
                     .<span class="kw">await</span><span class="question-mark">?</span>;
                 print_response(payment_log);
             }
+            <span class="self">Self</span>::CreatePasswordHash { password, cost } =&gt; print_response(
+                bcrypt::hash(password, cost.unwrap_or(bcrypt::DEFAULT_COST))
+                    .expect(<span class="string">"Unable to create bcrypt hash"</span>),
+            ),
         }
 
         <span class="prelude-val">Ok</span>(())
