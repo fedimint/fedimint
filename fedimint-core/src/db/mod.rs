@@ -128,6 +128,7 @@ use crate::core::ModuleInstanceId;
 use crate::encoding::{Decodable, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
 use crate::task::{MaybeSend, MaybeSync};
+use crate::util::WithCauseAnyhow;
 use crate::{async_trait_maybe_send, maybe_add_send, timing};
 
 pub mod mem_impl;
@@ -586,7 +587,7 @@ impl Database {
                     warn!(
                         target: LOG_DB,
                         curr_attempts,
-                        %err,
+                        err = %WithCauseAnyhow(&err),
                         delay_ms = %delay,
                         "Database commit failed in an autocommit block - retrying"
                     );
