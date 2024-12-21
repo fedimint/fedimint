@@ -955,7 +955,7 @@ impl WalletClientModule {
         self.await_num_deposits(tweak_idx, num_deposits).await
     }
 
-    #[instrument(skip_all, fields(tweak_idx=?tweak_idx, num_deposists=num_deposits))]
+    #[instrument(target = LOG_CLIENT_MODULE_WALLET, skip_all, fields(tweak_idx=?tweak_idx, num_deposists=num_deposits))]
     pub async fn await_num_deposits(
         &self,
         tweak_idx: TweakIdx,

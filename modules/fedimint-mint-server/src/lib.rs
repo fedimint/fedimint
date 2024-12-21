@@ -355,7 +355,7 @@ fn migrate_db_v0(mut migration_context: MigrationContext<'_>) -> BoxFuture<anyho
             .collect::<Vec<_>>()
             .await;
 
-        info!("Found {} blind nonces in history", blind_nonces.len());
+        info!(target: LOG_MODULE_MINT, "Found {} blind nonces in history", blind_nonces.len());
 
         let mut double_issuances = 0usize;
         for blind_nonce in blind_nonces {
@@ -366,12 +366,16 @@ fn migrate_db_v0(mut migration_context: MigrationContext<'_>) -> BoxFuture<anyho
                 .is_some()
             {
                 double_issuances += 1;
-                debug!(?blind_nonce, "Blind nonce already used, money was burned!");
+                debug!(
+                    target: LOG_MODULE_MINT,
+                    ?blind_nonce,
+                    "Blind nonce already used, money was burned!"
+                );
             }
         }
 
         if double_issuances > 0 {
-            warn!("{double_issuances} blind nonces were reused, money was burned by faulty user clients!");
+            warn!(target: LOG_MODULE_MINT, "{double_issuances} blind nonces were reused, money was burned by faulty user clients!");
         }
 
         Ok(())
@@ -514,6 +518,7 @@ impl ServerModule for Mint {
         {
             // TODO: make a consensus rule against this
             warn!(
+                target: LOG_MODULE_MINT,
                 denomination = %output.amount,
                 bnonce = ?output.blind_nonce,
                 "Blind nonce already used, money was burned!"
@@ -634,15 +639,25 @@ impl Mint {
             .verify_valid(secp256k1::SECP256K1)
             .map_err(|_| ApiError::bad_request("invalid request".into()))?;
 
-        debug!(id = %request.id, len = request.payload.len(), "Received user e-cash backup request");
+        debug!(
+            target: LOG_MODULE_MINT,
+            id = %request.id,
+            len = request.payload.len(),
+            "Received user e-cash backup request"
+        );
         if let Some(prev) = dbtx.get_value(&EcashBackupKey(request.id)).await {
             if request.timestamp <= prev.timestamp {
-                debug!(id = %request.id, len = request.payload.len(), "Received user e-cash backup request with old timestamp - ignoring");
+                debug!(
+                    target: LOG_MODULE_MINT,
+                    id = %request.id,
+                    len = request.payload.len(),
+                    "Received user e-cash backup request with old timestamp - ignoring"
+                );
                 return Err(ApiError::bad_request("timestamp too small".into()));
             }
         }
 
-        info!(id = %request.id, len = request.payload.len(), "Storing new user e-cash backup");
+        info!(target: LOG_MODULE_MINT, id = %request.id, len = request.payload.len(), "Storing new user e-cash backup");
         dbtx.insert_entry(
             &EcashBackupKey(request.id),
             &ECashUserBackupSnapshot {

@@ -23,6 +23,7 @@ erased-serde = { workspace = true }
 fedimint-bitcoind = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-ln-common = { workspace = true }
+fedimint-logging = { workspace = true }
 fedimint-metrics = { workspace = true }
 fedimint-server = { workspace = true }
 futures = { workspace = true }

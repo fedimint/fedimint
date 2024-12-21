@@ -11,6 +11,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{secp256k1, util, OutPoint, TransactionId};
 use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
+use fedimint_logging::LOG_CLIENT_MODULE_LNV2;
 use futures::future::pending;
 use secp256k1::schnorr::Signature;
 use secp256k1::Keypair;
@@ -150,7 +151,7 @@ impl SendStateMachine {
         })
     }
 
-    #[instrument(skip(refund_keypair, context))]
+    #[instrument(target = LOG_CLIENT_MODULE_LNV2, skip(refund_keypair, context))]
     async fn gateway_send_payment(
         gateway_api: SafeUrl,
         federation_id: FederationId,
@@ -216,7 +217,7 @@ impl SendStateMachine {
         }
     }
 
-    #[instrument(skip(global_context))]
+    #[instrument(target = LOG_CLIENT_MODULE_LNV2, skip(global_context))]
     async fn await_preimage(
         contract: OutgoingContract,
         global_context: DynGlobalClientContext,
