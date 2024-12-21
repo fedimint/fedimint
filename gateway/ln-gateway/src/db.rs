@@ -4,12 +4,13 @@ use bitcoin::hashes::{sha256, Hash};
 use fedimint_api_client::api::net::Connector;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{
-    CoreMigrationFn, Database, DatabaseTransaction, DatabaseVersion,
+    CoreMigrationFn, Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCore,
     IDatabaseTransactionOpsCoreTyped, MigrationContext,
 };
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1, Amount};
 use fedimint_ln_common::serde_routing_fees;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
@@ -417,6 +418,7 @@ pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, CoreMigra
     migrations.insert(DatabaseVersion(1), |ctx| migrate_to_v2(ctx).boxed());
     migrations.insert(DatabaseVersion(2), |ctx| migrate_to_v3(ctx).boxed());
     migrations.insert(DatabaseVersion(3), |ctx| migrate_to_v4(ctx).boxed());
+    migrations.insert(DatabaseVersion(4), |ctx| migrate_to_v5(ctx).boxed());
     migrations
 }
 
@@ -518,6 +520,77 @@ async fn migrate_to_v4(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Erro
             dbtx.insert_new_entry(&new_key, &new_fed_config).await;
         }
     }
+    Ok(())
+}
+
+async fn migrate_to_v5(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Error> {
+    let mut dbtx = ctx.dbtx();
+
+    // We need to migrate all isolated database entries to be behind the 0x10
+    // prefix. The problem is, if there is a `FederationId` that starts with
+    // 0x04, we cannot read the `FederationId` because the database will be confused
+    // between the isolated DB and the `FederationIdKey` record. To solve this,
+    // what we do first to try and see if there are any entries that begin with
+    // 0x0404. This indicates a joined federation that will have a
+    // problem decoding the ID.
+    let problem_fed_configs = dbtx
+        .raw_find_by_prefix(&[0x04, 0x04])
+        .await?
+        .collect::<BTreeMap<_, _>>()
+        .await;
+    for (problem_key, problem_fed_config) in problem_fed_configs {
+        let federation_id = FederationId::consensus_decode_vec(
+            problem_key[1..33].to_vec(),
+            &ModuleDecoderRegistry::default(),
+        )?;
+        tracing::warn!(
+            ?federation_id,
+            "Found a FederationConfig entry that will cause issues decoding"
+        );
+        let federation_id_bytes = problem_key[1..3].to_vec();
+
+        // Remove the `FederationConfig` entry so that the migration of the isolated
+        // database doesn't accidentally migrate that too.
+        dbtx.raw_remove_entry(&problem_key).await?;
+
+        let isolated_entries = dbtx
+            .raw_find_by_prefix(&federation_id_bytes)
+            .await?
+            .collect::<BTreeMap<_, _>>()
+            .await;
+        for (mut key, value) in isolated_entries {
+            let mut new_key = vec![DbKeyPrefix::ClientDatabase as u8];
+            new_key.append(&mut key);
+            dbtx.raw_remove_entry(&key).await?;
+            dbtx.raw_insert_bytes(&new_key, &value).await?;
+        }
+
+        // Re-insert the `FederationConfig` entry so that it exists after the migration.
+        dbtx.raw_insert_bytes(&problem_key, &problem_fed_config)
+            .await?;
+    }
+
+    // Migrate the rest of the isolated databases that don't overlap with
+    // `FederationConfig`
+    let fed_ids = dbtx
+        .find_by_prefix(&FederationIdKeyPrefix)
+        .await
+        .collect::<BTreeMap<_, _>>()
+        .await;
+    for fed_id in fed_ids.keys() {
+        let isolated_entries = dbtx
+            .raw_find_by_prefix(&fed_id.id.consensus_encode_to_vec())
+            .await?
+            .collect::<Vec<_>>()
+            .await;
+        for (mut key, value) in isolated_entries {
+            let mut new_key = vec![DbKeyPrefix::ClientDatabase as u8];
+            new_key.append(&mut key);
+            dbtx.raw_remove_entry(&key).await?;
+            dbtx.raw_insert_bytes(&new_key, &value).await?;
+        }
+    }
+
     Ok(())
 }
 
