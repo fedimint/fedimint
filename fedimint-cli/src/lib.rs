@@ -26,6 +26,7 @@ use std::{fs, result};
 
 use anyhow::{format_err, Context};
 use clap::{Args, CommandFactory, Parser, Subcommand};
+use client::ModuleSelector;
 use db_locked::LockedBuilder;
 #[cfg(feature = "tor")]
 use envs::FM_USE_TOR_ENV;
@@ -481,6 +482,11 @@ Examples:
         /// Which server to send request to
         #[clap(long = "peer-id")]
         peer_id: Option<u16>,
+
+        /// Module selector (either module id or module kind)
+        #[clap(long = "module")]
+        module: Option<ModuleSelector>,
+
         /// Guardian password in case authenticated API endpoints are being
         /// called. Only use together with --peer-id.
         #[clap(long, requires = "peer_id")]
@@ -912,6 +918,7 @@ impl FedimintCli {
                 params,
                 peer_id,
                 password: auth,
+                module,
             }) => {
                 //Parse params to JSON.
                 //If fails, convert to JSON string.
@@ -936,6 +943,14 @@ impl FedimintCli {
                     client.api_secret(),
                 )
                 .into();
+
+                let method = match module {
+                    Some(selector) => format!(
+                        "module_{}_{method}",
+                        selector.resolve(&client).map_err_cli()?,
+                    ),
+                    None => method,
+                };
                 let response: Value = match peer_id {
                     Some(peer_id) => ws_api
                         .request_raw(peer_id.into(), &method, &[params.to_json()])
