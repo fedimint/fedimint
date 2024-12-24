@@ -76,11 +76,6 @@ jobs:
             PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
             nix develop -c \
             nix shell 'github:rustshop/fs-dir-cache?rev=e9752d00ee16778c9d3d0b93a09c49c44013ac17' -c \
-            nix run 'github:rustshop/perfit?rev=a2ea3bae86b0e70d2ebdbca1fd16a843b7f0a3bd#perfit' -- \
-              run \
-                --metric 5pReH96mSsqIeh513jJQGg \
-                --metadata "commit=${LAST_COMMIT_SHA}" \
-                -- \
             scripts/ci/run-in-fs-dir-cache.sh upgrade-tests \
             env -u RUSTC_WRAPPER \
             env TEST_KINDS="$TEST_KINDS" \
