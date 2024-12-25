@@ -67,12 +67,21 @@ resolver = "2"
 
 [workspace.package]
 version = "0.6.0-alpha"
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "Fedimint is a Federated Chaumian E-Cash Mint, natively compatible with Bitcoin & the Lightning Network"
+documentation = "https://github.com/fedimint/fedimint/tree/master/docs"
+readme = "README.md"
+homepage = "https://fedimint.org"
+repository = "https://github.com/fedimint/fedimint"
+license = "MIT"
+keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
 
 [workspace.metadata]
 name = "fedimint"
 authors = ["The Fedimint Developers"]
 edition = "2021"
-description = "Fedimint is a prototype Federated Chaumian E-Cash Mint implementation, natively compatible with Bitcoin & the Lightning Network. This project is under heavy development, DO NOT USE WITH REAL FUNDS."
+description = "Fedimint is a Federated Chaumian E-Cash Mint, natively compatible with Bitcoin & the Lightning Network"
 documentation = "https://github.com/fedimint/fedimint/tree/master/docs"
 readme = "README.md"
 homepage = "https://fedimint.org"

@@ -1,12 +1,13 @@
 [package]
 name = "fedimint-client"
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
 version = { workspace = true }
-authors = ["The Fedimint Developers"]
-edition = "2021"
-description = "fedimint-client provides a library for sending transactions to the federation."
-license = "MIT"
-readme = "../README.md"
-repository = "https://github.com/fedimint/fedimint"
+readme = { workspace = true }
+description = "Library for sending transactions to the Fedimint federation."
 
 [package.metadata.cargo-udeps.ignore]
 # cargo udeps can't detect that one
