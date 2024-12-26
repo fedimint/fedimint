@@ -169,7 +169,7 @@ impl Bitcoind {
     /// Poll until bitcoind rpc responds for basic commands
     async fn poll_ready(&self) -> anyhow::Result<()> {
         poll("bitcoind rpc ready", || async {
-            self.get_block_count()
+            self.get_block_height()
                 .await
                 .map_err(ControlFlow::Continue::<anyhow::Error, _>)?;
             Ok(())
@@ -185,35 +185,38 @@ impl Bitcoind {
     }
 
     /// Returns the total number of blocks in the chain.
-    ///
-    /// Fedimint's IBitcoindRpc considers block count the total number of
-    /// blocks, where bitcoind's rpc returns the height. Since the genesis
-    /// block has height 0, we need to add 1 to get the total block count.
     pub async fn get_block_count(&self) -> Result<u64> {
-        let client = self.client.clone();
-        Ok(spawn_blocking(move || client.get_block_count()).await?? + 1)
+        Ok(self.get_block_height().await? + 1)
     }
 
-    pub async fn mine_blocks_no_wait(&self, block_num: u64) -> Result<u64> {
+    /// Returns the height of the highest block in the chain, with the
+    /// genesis block at height 0.
+    pub async fn get_block_height(&self) -> Result<u64> {
+        // Bitcoind's getblockcount rpc is a misnomer - it returns the height.
+        // Calling it here is not a mistake.
+        let client = self.client.clone();
+        Ok(spawn_blocking(move || client.get_block_count()).await??)
+    }
+
+    pub async fn mine_blocks_no_wait(&self, block_num: u64) -> Result<()> {
         let start_time = Instant::now();
         debug!(target: LOG_DEVIMINT, ?block_num, "Mining bitcoin blocks");
         let addr = self.get_new_address().await?;
-        let initial_block_count = self.get_block_count().await?;
         self.generate_to_address(block_num, addr).await?;
         debug!(target: LOG_DEVIMINT,
             elapsed_ms = %start_time.elapsed().as_millis(),
             ?block_num, "Mined blocks (no wait)");
 
-        Ok(initial_block_count)
+        Ok(())
     }
 
     pub async fn mine_blocks(&self, block_num: u64) -> Result<()> {
         let start_time = Instant::now();
         debug!(target: LOG_DEVIMINT, ?block_num, "Mining bitcoin blocks");
         let addr = self.get_new_address().await?;
-        let initial_block_count = self.get_block_count().await?;
+        let initial_block_height = self.get_block_height().await?;
         self.generate_to_address(block_num, addr).await?;
-        while self.get_block_count().await? < initial_block_count + block_num {
+        while self.get_block_height().await? < initial_block_height + block_num {
             trace!(target: LOG_DEVIMINT, ?block_num, "Waiting for blocks to be mined");
             sleep(Duration::from_millis(100)).await;
         }
@@ -277,7 +280,7 @@ impl Bitcoind {
             other => return other,
         };
 
-        let block_height = self.get_block_count().await? - 1;
+        let block_height = self.get_block_height().await?;
 
         // Check each block for the tx, starting at the chain tip.
         // Buffer the requests to avoid spamming bitcoind.
@@ -948,7 +951,7 @@ pub async fn open_channels_between_gateways(
     bitcoind: &Bitcoind,
     gateways: &[NamedGateway<'_>],
 ) -> Result<()> {
-    let block_height = bitcoind.get_block_count().await? - 1;
+    let block_height = bitcoind.get_block_height().await?;
     debug!(target: LOG_DEVIMINT, ?block_height, "Syncing gateway lightning nodes to block height...");
     futures::future::try_join_all(
         gateways
@@ -965,7 +968,7 @@ pub async fn open_channels_between_gateways(
 
     bitcoind.mine_blocks(10).await?;
 
-    let block_height = bitcoind.get_block_count().await? - 1;
+    let block_height = bitcoind.get_block_height().await?;
     debug!(target: LOG_DEVIMINT, ?block_height, "Syncing gateway lightning nodes to block height...");
     futures::future::try_join_all(
         gateways
@@ -1046,7 +1049,7 @@ pub async fn open_channels_between_gateways(
 
     bitcoind.mine_blocks(10).await?;
 
-    let block_height = bitcoind.get_block_count().await? - 1;
+    let block_height = bitcoind.get_block_height().await?;
     debug!(target: LOG_DEVIMINT, ?block_height, "Syncing gateway lightning nodes to block height...");
     futures::future::try_join_all(
         gateways
