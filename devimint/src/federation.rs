@@ -1188,8 +1188,6 @@ pub async fn run_cli_dkg(
         hashes.insert(hash);
     }
     assert_eq!(hashes.len(), 1);
-    info!(target: LOG_DEVIMINT, "DKG completed");
-    debug!(target: LOG_DEVIMINT, "Starting consensus");
     for (peer_id, endpoint) in &endpoints {
         let result = crate::util::FedimintCli
             .start_consensus(auth_for(peer_id), endpoint)
@@ -1199,7 +1197,6 @@ pub async fn run_cli_dkg(
         }
         cli_wait_server_status(endpoint, ServerStatus::ConsensusRunning).await?;
     }
-    info!(target: LOG_DEVIMINT, "Consensus running");
     Ok(())
 }
 
@@ -1344,15 +1341,12 @@ pub async fn run_client_dkg(
         hashes.insert(client.get_verify_config_hash(auth_for(peer_id)).await?);
     }
     assert_eq!(hashes.len(), 1);
-    info!(target: LOG_DEVIMINT, "DKG completed");
-    debug!(target: LOG_DEVIMINT, "Starting consensus");
     for (peer_id, client) in &admin_clients {
         if let Err(e) = client.start_consensus(auth_for(peer_id)).await {
             tracing::debug!(target: LOG_DEVIMINT, "Error calling start_consensus: {e:?}, trying to continue...");
         }
         wait_server_status(client, ServerStatus::ConsensusRunning).await?;
     }
-    info!(target: LOG_DEVIMINT, "Consensus running");
     Ok(())
 }
 

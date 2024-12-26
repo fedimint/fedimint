@@ -1001,9 +1001,7 @@ pub async fn open_channels_between_gateways(
                 })
                 .await;
 
-                if res.is_ok() {
-                    info!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Opened channel");
-                } else {
+                if res.is_err() {
                     error!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Failed to open channel");
                 }
 
