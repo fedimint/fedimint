@@ -59,9 +59,9 @@ use fedimint_walletv2_common::config::{
     WalletClientConfig, WalletConfig, WalletConfigLocal, WalletConfigPrivate, WalletGenParams,
 };
 use fedimint_walletv2_common::endpoint_constants::{
-    CONSENSUS_BLOCK_COUNT_ENDPOINT, FEDERATION_WALLET_ENDPOINT, FILTER_UNSPENT_OUTPOINTS_ENDPOINT,
-    LOCAL_BLOCK_COUNT_ENDPOINT, PENDING_TRANSACTIONS_ENDPOINT, RECEIVE_FEE_ENDPOINT,
-    SEND_FEE_ENDPOINT,
+    CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, FEDERATION_WALLET_ENDPOINT,
+    FILTER_UNSPENT_OUTPOINTS_ENDPOINT, LOCAL_BLOCK_COUNT_ENDPOINT, PENDING_TRANSACTIONS_ENDPOINT,
+    RECEIVE_FEE_ENDPOINT, SEND_FEE_ENDPOINT,
 };
 use fedimint_walletv2_common::{
     descriptor, tweak_public_key, FederationWallet, ReceiveFee, SendFee, WalletInputError,
@@ -762,6 +762,13 @@ impl ServerModule for Wallet {
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, _context, _params: ()| -> u64 {
                     module.btc_rpc.get_block_count().await.map_err(|e| ApiError::server_error(e.to_string()))
+                }
+            },
+            api_endpoint! {
+                CONSENSUS_FEERATE_ENDPOINT,
+                ApiVersion::new(0, 0),
+                async |module: &Wallet, context, _params: ()| -> Option<u64> {
+                    Ok(module.consensus_feerate(&mut context.dbtx().into_nc()).await)
                 }
             },
             api_endpoint! {

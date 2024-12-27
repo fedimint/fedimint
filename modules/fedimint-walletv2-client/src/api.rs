@@ -6,14 +6,17 @@ use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_walletv2_common::endpoint_constants::{
-    CONSENSUS_BLOCK_COUNT_ENDPOINT, FEDERATION_WALLET_ENDPOINT, FILTER_UNSPENT_OUTPOINTS_ENDPOINT,
-    PENDING_TRANSACTIONS_ENDPOINT, RECEIVE_FEE_ENDPOINT, SEND_FEE_ENDPOINT,
+    CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, FEDERATION_WALLET_ENDPOINT,
+    FILTER_UNSPENT_OUTPOINTS_ENDPOINT, PENDING_TRANSACTIONS_ENDPOINT, RECEIVE_FEE_ENDPOINT,
+    SEND_FEE_ENDPOINT,
 };
 use fedimint_walletv2_common::{FederationWallet, ReceiveFee, SendFee};
 
 #[apply(async_trait_maybe_send!)]
 pub trait WalletFederationApi {
     async fn consensus_block_count(&self) -> FederationResult<u64>;
+
+    async fn consensus_feerate(&self) -> FederationResult<Option<u64>>;
 
     async fn federation_wallet(&self) -> FederationResult<Option<FederationWallet>>;
 
@@ -37,6 +40,14 @@ where
     async fn consensus_block_count(&self) -> FederationResult<u64> {
         self.request_current_consensus(
             CONSENSUS_BLOCK_COUNT_ENDPOINT.to_string(),
+            ApiRequestErased::new(()),
+        )
+        .await
+    }
+
+    async fn consensus_feerate(&self) -> FederationResult<Option<u64>> {
+        self.request_current_consensus(
+            CONSENSUS_FEERATE_ENDPOINT.to_string(),
             ApiRequestErased::new(()),
         )
         .await
