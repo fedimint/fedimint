@@ -1,11 +1,13 @@
 [package]
 name = "fedimint-gateway-cli"
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
 version = { workspace = true }
-edition = "2021"
-license = "MIT"
-readme = "../../README.md"
+readme = { workspace = true }
 description = "CLI tool to control lightning gateway"
-repository = "https://github.com/fedimint/fedimint"
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
