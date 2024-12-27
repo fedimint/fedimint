@@ -20,9 +20,9 @@ use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCo
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
-    ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions,
-    TransactionItemAmount, CORE_CONSENSUS_VERSION,
+    api_endpoint, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
+    ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
+    SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{timeout, TaskGroup};
@@ -39,14 +39,13 @@ use fedimint_lnv2_common::config::{
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::endpoint_constants::{
     ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT,
-    CONSENSUS_BLOCK_COUNT_ENDPOINT, GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
-    REMOVE_GATEWAY_ENDPOINT,
+    CONSENSUS_BLOCK_COUNT_ENDPOINT, DECRYPTION_KEY_SHARE_ENDPOINT, GATEWAYS_ENDPOINT,
+    OUTGOING_CONTRACT_EXPIRATION_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
 };
 use fedimint_lnv2_common::{
     ContractId, LightningCommonInit, LightningConsensusItem, LightningInput, LightningInputError,
     LightningInputV0, LightningModuleTypes, LightningOutput, LightningOutputError,
-    LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0, OutgoingWitness,
-    MODULE_CONSENSUS_VERSION,
+    LightningOutputOutcome, LightningOutputV0, OutgoingWitness, MODULE_CONSENSUS_VERSION,
 };
 use fedimint_logging::LOG_MODULE_LNV2;
 use fedimint_server::config::distributedgen::{eval_poly_g1, PeerHandleOps};
@@ -58,14 +57,16 @@ use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use strum::IntoEnumIterator;
 use tokio::sync::watch;
-use tpe::{derive_pk_share, AggregatePublicKey, PublicKeyShare, SecretKeyShare};
+use tpe::{
+    derive_pk_share, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare, SecretKeyShare,
+};
 use tracing::debug;
 
 use crate::db::{
-    BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, GatewayKey, GatewayPrefix,
-    IncomingContractKey, IncomingContractPrefix, LightningOutputOutcomePrefix, OutgoingContractKey,
-    OutgoingContractPrefix, OutputOutcomeKey, PreimageKey, PreimagePrefix, UnixTimeVoteKey,
-    UnixTimeVotePrefix,
+    BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, DecryptionKeyShareKey,
+    DecryptionKeySharePrefix, GatewayKey, GatewayPrefix, IncomingContractKey,
+    IncomingContractPrefix, OutgoingContractKey, OutgoingContractPrefix, PreimageKey,
+    PreimagePrefix, UnixTimeVoteKey, UnixTimeVotePrefix,
 };
 
 #[derive(Debug, Clone)]
@@ -128,14 +129,14 @@ impl ModuleInit for LightningInit {
                         "Lightning Incoming Contracts"
                     );
                 }
-                DbKeyPrefix::OutputOutcome => {
+                DbKeyPrefix::DecryptionKeyShare => {
                     push_db_pair_items!(
                         dbtx,
-                        LightningOutputOutcomePrefix,
-                        LightningOutputOutcomeKey,
-                        LightningOutputOutcome,
+                        DecryptionKeySharePrefix,
+                        DecryptionKeyShareKey,
+                        DecryptionKeyShare,
                         lightning,
-                        "Lightning Output Outcomes"
+                        "Lightning Decryption Key Share"
                     );
                 }
                 DbKeyPrefix::Preimage => {
@@ -380,9 +381,7 @@ impl ServerModule for Lightning {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b LightningInput,
     ) -> Result<InputMeta, LightningInputError> {
-        let input = input.ensure_v0_ref()?;
-
-        let (pub_key, amount) = match &input {
+        let (pub_key, amount) = match input.ensure_v0_ref()? {
             LightningInputV0::Outgoing(contract_id, outgoing_witness) => {
                 let contract = dbtx
                     .remove_entry(&OutgoingContractKey(*contract_id))
@@ -456,11 +455,9 @@ impl ServerModule for Lightning {
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a LightningOutput,
-        out_point: OutPoint,
+        _outpoint: OutPoint,
     ) -> Result<TransactionItemAmount, LightningOutputError> {
-        let output = output.ensure_v0_ref()?;
-
-        let outcome = match output {
+        let amount = match output.ensure_v0_ref()? {
             LightningOutputV0::Outgoing(contract) => {
                 if dbtx
                     .insert_entry(&OutgoingContractKey(contract.contract_id()), contract)
@@ -470,7 +467,7 @@ impl ServerModule for Lightning {
                     return Err(LightningOutputError::ContractAlreadyExists);
                 }
 
-                LightningOutputOutcomeV0::Outgoing
+                contract.amount
             }
             LightningOutputV0::Incoming(contract) => {
                 if !contract.verify() {
@@ -491,24 +488,11 @@ impl ServerModule for Lightning {
 
                 let dk_share = contract.create_decryption_key_share(&self.cfg.private.sk);
 
-                LightningOutputOutcomeV0::Incoming(dk_share)
+                dbtx.insert_entry(&DecryptionKeyShareKey(contract.contract_id()), &dk_share)
+                    .await;
+
+                contract.commitment.amount
             }
-        };
-
-        if dbtx
-            .insert_entry(
-                &OutputOutcomeKey(out_point),
-                &LightningOutputOutcome::V0(outcome),
-            )
-            .await
-            .is_some()
-        {
-            panic!("Output Outcome for {out_point:?} already exists");
-        }
-
-        let amount = match output {
-            LightningOutputV0::Outgoing(contract) => contract.amount,
-            LightningOutputV0::Incoming(contract) => contract.commitment.amount,
         };
 
         Ok(TransactionItemAmount {
@@ -519,10 +503,10 @@ impl ServerModule for Lightning {
 
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        out_point: OutPoint,
+        _dbtx: &mut DatabaseTransaction<'_>,
+        _out_point: OutPoint,
     ) -> Option<LightningOutputOutcome> {
-        dbtx.get_value(&OutputOutcomeKey(out_point)).await
+        None
     }
 
     async fn audit(
@@ -580,6 +564,21 @@ impl ServerModule for Lightning {
                     let db = context.db();
 
                     Ok(module.await_preimage(db, params.0, params.1).await)
+                }
+            },
+            api_endpoint! {
+                DECRYPTION_KEY_SHARE_ENDPOINT,
+                ApiVersion::new(0, 0),
+                async |_module: &Lightning, context, params: ContractId| -> DecryptionKeyShare {
+                    let share = context
+                        .db()
+                        .begin_transaction_nc()
+                        .await
+                        .get_value(&DecryptionKeyShareKey(params))
+                        .await
+                        .ok_or(ApiError::bad_request("No decryption key share found".to_string()))?;
+
+                    Ok(share)
                 }
             },
             api_endpoint! {

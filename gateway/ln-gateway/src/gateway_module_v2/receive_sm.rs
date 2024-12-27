@@ -1,24 +1,20 @@
 use core::fmt;
 use std::collections::BTreeMap;
-use std::future::pending;
 
-use anyhow::{anyhow, bail};
-use fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
+use anyhow::{anyhow, ensure};
+use fedimint_api_client::api::FederationApiExt;
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::core::{Decoder, OperationId};
+use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-#[allow(deprecated)]
-use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::secp256k1::Keypair;
-use fedimint_core::{NumPeersExt, OutPoint, PeerId, TransactionId};
+use fedimint_core::{NumPeersExt, OutPoint, PeerId};
 use fedimint_lnv2_common::contracts::IncomingContract;
-use fedimint_lnv2_common::{
-    LightningInput, LightningInputV0, LightningOutputOutcome, LightningOutputOutcomeV0,
-};
+use fedimint_lnv2_common::endpoint_constants::DECRYPTION_KEY_SHARE_ENDPOINT;
+use fedimint_lnv2_common::{ContractId, LightningInput, LightningInputV0};
 use tpe::{aggregate_dk_shares, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare};
 use tracing::error;
 
@@ -101,47 +97,29 @@ impl State for ReceiveStateMachine {
     ) -> Vec<StateTransition<Self>> {
         let gc = global_context.clone();
         let tpe_agg_pk = context.tpe_agg_pk;
-        let gateway_context_rejected = context.clone();
         let gateway_context_ready = context.clone();
 
         match &self.state {
             ReceiveSMState::Funding => {
-                vec![
-                    StateTransition::new(
-                        Self::await_funding_rejected(
-                            global_context.clone(),
-                            self.common.out_point.txid,
-                        ),
-                        move |dbtx, error, old_state| {
-                            Box::pin(Self::transition_funding_rejected(
-                                error,
-                                old_state,
-                                dbtx,
-                                gateway_context_rejected.clone(),
-                            ))
-                        },
+                vec![StateTransition::new(
+                    Self::await_decryption_shares(
+                        global_context.clone(),
+                        context.tpe_pks.clone(),
+                        self.common.out_point,
+                        self.common.contract.contract_id(),
+                        self.common.contract.clone(),
                     ),
-                    StateTransition::new(
-                        #[allow(deprecated)]
-                        Self::await_outcome_ready(
-                            global_context.clone(),
-                            context.decoder.clone(),
-                            context.tpe_pks.clone(),
-                            self.common.out_point,
-                            self.common.contract.clone(),
-                        ),
-                        move |dbtx, output_outcomes, old_state| {
-                            Box::pin(Self::transition_outcome_ready(
-                                dbtx,
-                                output_outcomes,
-                                old_state,
-                                gc.clone(),
-                                tpe_agg_pk,
-                                gateway_context_ready.clone(),
-                            ))
-                        },
-                    ),
-                ]
+                    move |dbtx, output_outcomes, old_state| {
+                        Box::pin(Self::transition_decryption_shares(
+                            dbtx,
+                            output_outcomes,
+                            old_state,
+                            gc.clone(),
+                            tpe_agg_pk,
+                            gateway_context_ready.clone(),
+                        ))
+                    },
+                )]
             }
             ReceiveSMState::Success(..)
             | ReceiveSMState::Rejected(..)
@@ -158,91 +136,72 @@ impl State for ReceiveStateMachine {
 }
 
 impl ReceiveStateMachine {
-    async fn await_funding_rejected(
+    async fn await_decryption_shares(
         global_context: DynGlobalClientContext,
-        txid: TransactionId,
-    ) -> String {
-        match global_context.await_tx_accepted(txid).await {
-            Ok(()) => pending().await,
-            Err(error) => error,
-        }
-    }
-
-    async fn transition_funding_rejected(
-        error: String,
-        old_state: ReceiveStateMachine,
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        client_ctx: GatewayClientContextV2,
-    ) -> ReceiveStateMachine {
-        client_ctx
-            .module
-            .client_ctx
-            .log_event(
-                &mut dbtx.module_tx(),
-                IncomingPaymentFailed {
-                    payment_image: old_state.common.contract.commitment.payment_image.clone(),
-                    error: error.clone(),
-                },
-            )
-            .await;
-        old_state.update(ReceiveSMState::Rejected(error))
-    }
-
-    #[deprecated(note = "https://github.com/fedimint/fedimint/issues/6671")]
-    async fn await_outcome_ready(
-        global_context: DynGlobalClientContext,
-        module_decoder: Decoder,
         tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
-        out_point: OutPoint,
-        decryption_contract: IncomingContract,
-    ) -> BTreeMap<PeerId, DecryptionKeyShare> {
-        global_context
-            .api()
+        outpoint: OutPoint,
+        contract_id: ContractId,
+        contract: IncomingContract,
+    ) -> Result<BTreeMap<PeerId, DecryptionKeyShare>, String> {
+        global_context.await_tx_accepted(outpoint.txid).await?;
+
+        Ok(global_context
+            .module_api()
             .request_with_strategy_retry(
                 FilterMapThreshold::new(
-                    move |peer, outcome: SerdeOutputOutcome| {
-                        let outcome = deserialize_outcome::<LightningOutputOutcome>(
-                            &outcome,
-                            &module_decoder,
-                        )?;
+                    move |peer, share: DecryptionKeyShare| {
+                        ensure!(
+                            contract.verify_decryption_share(
+                                tpe_pks.get(&peer).ok_or(anyhow!("Unknown peer pk"))?,
+                                &share,
+                            ),
+                            "Invalid decryption share"
+                        );
 
-                        match outcome.ensure_v0_ref()? {
-                            LightningOutputOutcomeV0::Incoming(share) => {
-                                if !decryption_contract.verify_decryption_share(
-                                    tpe_pks.get(&peer).ok_or(anyhow!("Unknown peer pk"))?,
-                                    share,
-                                ) {
-                                    bail!("Invalid decryption share");
-                                }
-
-                                Ok(*share)
-                            }
-                            LightningOutputOutcomeV0::Outgoing => {
-                                bail!("Unexpected outcome variant");
-                            }
-                        }
+                        Ok(share)
                     },
                     global_context.api().all_peers().to_num_peers(),
                 ),
-                #[allow(deprecated)]
-                AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
-                ApiRequestErased::new(out_point),
+                DECRYPTION_KEY_SHARE_ENDPOINT.to_owned(),
+                ApiRequestErased::new(contract_id),
             )
-            .await
+            .await)
     }
 
-    async fn transition_outcome_ready(
+    async fn transition_decryption_shares(
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        decryption_shares: BTreeMap<PeerId, DecryptionKeyShare>,
+        decryption_shares: Result<BTreeMap<PeerId, DecryptionKeyShare>, String>,
         old_state: ReceiveStateMachine,
         global_context: DynGlobalClientContext,
         tpe_agg_pk: AggregatePublicKey,
         client_ctx: GatewayClientContextV2,
     ) -> ReceiveStateMachine {
-        let decryption_shares = decryption_shares
-            .into_iter()
-            .map(|(peer, share)| (peer.to_usize() as u64, share))
-            .collect();
+        let decryption_shares = match decryption_shares {
+            Ok(decryption_shares) => decryption_shares
+                .into_iter()
+                .map(|(peer, share)| (peer.to_usize() as u64, share))
+                .collect(),
+            Err(error) => {
+                client_ctx
+                    .module
+                    .client_ctx
+                    .log_event(
+                        &mut dbtx.module_tx(),
+                        IncomingPaymentFailed {
+                            payment_image: old_state
+                                .common
+                                .contract
+                                .commitment
+                                .payment_image
+                                .clone(),
+                            error: error.clone(),
+                        },
+                    )
+                    .await;
+
+                return old_state.update(ReceiveSMState::Rejected(error));
+            }
+        };
 
         let agg_decryption_key = aggregate_dk_shares(&decryption_shares);
 
@@ -286,6 +245,7 @@ impl ReceiveStateMachine {
                     },
                 )
                 .await;
+
             return old_state.update(ReceiveSMState::Success(preimage));
         }
 

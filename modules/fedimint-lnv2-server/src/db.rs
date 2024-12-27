@@ -1,10 +1,11 @@
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{impl_db_lookup, impl_db_record, OutPoint, PeerId};
+use fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
-use fedimint_lnv2_common::{ContractId, LightningOutputOutcome};
+use fedimint_lnv2_common::ContractId;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
+use tpe::DecryptionKeyShare;
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -13,7 +14,7 @@ pub enum DbKeyPrefix {
     UnixTimeVote = 0x42,
     IncomingContract = 0x43,
     OutgoingContract = 0x44,
-    OutputOutcome = 0x45,
+    DecryptionKeyShare = 0x45,
     Preimage = 0x46,
     Gateway = 0x47,
 }
@@ -89,20 +90,21 @@ impl_db_lookup!(
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct OutputOutcomeKey(pub OutPoint);
+pub struct DecryptionKeyShareKey(pub ContractId);
 
 #[derive(Clone, Debug, Encodable, Decodable)]
-pub struct LightningOutputOutcomePrefix;
+pub struct DecryptionKeySharePrefix;
 
 impl_db_record!(
-    key = OutputOutcomeKey,
-    value = LightningOutputOutcome,
-    db_prefix = DbKeyPrefix::OutputOutcome
+    key = DecryptionKeyShareKey,
+    value = DecryptionKeyShare,
+    db_prefix = DbKeyPrefix::DecryptionKeyShare,
+    notify_on_modify = true
 );
 
 impl_db_lookup!(
-    key = OutputOutcomeKey,
-    query_prefix = LightningOutputOutcomePrefix
+    key = DecryptionKeyShareKey,
+    query_prefix = DecryptionKeySharePrefix
 );
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
