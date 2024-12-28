@@ -79,6 +79,10 @@ members = [
     "modules/fedimint-mint-common",
     "modules/fedimint-mint-server",
     "modules/fedimint-mint-tests",
+    "modules/fedimint-mintv2-client",
+    "modules/fedimint-mintv2-common",
+    "modules/fedimint-mintv2-server",
+    "modules/fedimint-mintv2-tests",
     "modules/fedimint-unknown-common",
     "modules/fedimint-unknown-server",
     "modules/fedimint-wallet-client",
@@ -207,6 +211,9 @@ fedimint-metrics = { path = "./fedimint-metrics", version = "=0.11.0-alpha" }
 fedimint-mint-client = { path = "./modules/fedimint-mint-client", version = "=0.11.0-alpha" }
 fedimint-mint-common = { path = "./modules/fedimint-mint-common", version = "=0.11.0-alpha" }
 fedimint-mint-server = { path = "./modules/fedimint-mint-server", version = "=0.11.0-alpha" }
+fedimint-mintv2-client = { path = "./modules/fedimint-mintv2-client", version = "=0.11.0-alpha" }
+fedimint-mintv2-common = { path = "./modules/fedimint-mintv2-common", version = "=0.11.0-alpha" }
+fedimint-mintv2-server = { path = "./modules/fedimint-mintv2-server", version = "=0.11.0-alpha" }
 fedimint-portalloc = { path = "utils/portalloc", version = "=0.11.0-alpha" }
 fedimint-rocksdb = { path = "./fedimint-rocksdb", version = "=0.11.0-alpha" }
 fedimint-server = { path = "./fedimint-server", version = "=0.11.0-alpha" }

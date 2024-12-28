@@ -1,0 +1,25 @@
+[package]
+authors = ["The Fedimint Developers"]
+description = "fedimint-mint-common is a chaumian ecash mint module. (common types)"
+edition = "2021"
+license = "MIT"
+name = "fedimint-mintv2-common"
+readme = "../../README.md"
+repository = "https://github.com/fedimint/fedimint"
+version = { workspace = true }
+
+[package.metadata.docs.rs]
+rustc-args = ["--cfg", "tokio_unstable"]
+
+[lib]
+name = "fedimint_mintv2_common"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+bitcoin_hashes = { workspace = true }
+fedimint-core = { workspace = true }
+serde = { workspace = true }
+tbs = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

@@ -1544,6 +1544,7 @@ dependencies = [
  "anstyle",
  "clap_lex",
  "strsim 0.11.1",
+ "terminal_size",
 ]
 
 [[package]]
@@ -1624,6 +1625,12 @@ checksum = "4ca0197aee26d1ae37445ee532fefce43251d24cc7c166799f4d46817f1d3973"
 dependencies = [
  "crossbeam-utils",
 ]
+
+[[package]]
+name = "condtype"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baf0a07a401f374238ab8e2f11a104d2851bf9ce711ec69804834de8af45c7af"
 
 [[package]]
 name = "console-api"
@@ -2398,6 +2405,31 @@ name = "displaydoc"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97369cbbc041bc366949bc74d34658d6cda5621039731c6310521892a3a20ae0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.104",
+]
+
+[[package]]
+name = "divan"
+version = "0.1.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a405457ec78b8fe08b0e32b4a3570ab5dff6dd16eb9e76a5ee0a9d9cbd898933"
+dependencies = [
+ "cfg-if",
+ "clap",
+ "condtype",
+ "divan-macros",
+ "libc",
+ "regex-lite",
+]
+
+[[package]]
+name = "divan-macros"
+version = "0.1.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9556bc800956545d6420a640173e5ba7dfa82f38d3ea5a167eb555bc69ac3323"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4088,6 +4120,111 @@ dependencies = [
  "futures",
  "rand 0.8.5",
  "serde",
+ "strum 0.27.1",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-mintv2-client"
+version = "0.11.0-alpha"
+dependencies = [
+ "anyhow",
+ "aquamarine",
+ "async-stream",
+ "async-trait",
+ "bitcoin_hashes 0.14.0",
+ "bls12_381",
+ "clap",
+ "divan",
+ "erased-serde",
+ "fedimint-api-client",
+ "fedimint-client",
+ "fedimint-client-module",
+ "fedimint-core",
+ "fedimint-derive-secret",
+ "fedimint-eventlog",
+ "fedimint-logging",
+ "fedimint-mintv2-common",
+ "fedimint-tbs",
+ "fedimint-threshold-crypto",
+ "futures",
+ "hex",
+ "itertools 0.14.0",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "serdect",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
+ "thiserror 2.0.12",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-mintv2-common"
+version = "0.11.0-alpha"
+dependencies = [
+ "anyhow",
+ "bitcoin_hashes 0.14.0",
+ "fedimint-core",
+ "fedimint-tbs",
+ "serde",
+ "thiserror 2.0.12",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-mintv2-server"
+version = "0.11.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bitcoin",
+ "erased-serde",
+ "fedimint-core",
+ "fedimint-logging",
+ "fedimint-metrics",
+ "fedimint-mintv2-common",
+ "fedimint-server-core",
+ "fedimint-tbs",
+ "fedimint-threshold-crypto",
+ "futures",
+ "itertools 0.14.0",
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
+ "serde",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-mintv2-tests"
+version = "0.11.0-alpha"
+dependencies = [
+ "anyhow",
+ "bitcoin_hashes 0.14.0",
+ "bls12_381",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-dummy-client",
+ "fedimint-dummy-common",
+ "fedimint-dummy-server",
+ "fedimint-logging",
+ "fedimint-mintv2-client",
+ "fedimint-mintv2-common",
+ "fedimint-mintv2-server",
+ "fedimint-tbs",
+ "fedimint-testing",
+ "fedimint-threshold-crypto",
+ "ff",
+ "futures",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
  "strum 0.27.1",
  "tokio",
  "tracing",
@@ -10186,6 +10323,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "terminal_size"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60b8cb979cb11c32ce1603f8137b22262a9d131aaa5c37b5678025f22b8becd0"
+dependencies = [
+ "rustix 1.0.7",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]

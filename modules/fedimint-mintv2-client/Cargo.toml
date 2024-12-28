@@ -1,0 +1,63 @@
+[package]
+authors = ["The Fedimint Developers"]
+description = "fedimint-mint is a chaumian ecash mint module."
+edition = "2021"
+license = "MIT"
+name = "fedimint-mintv2-client"
+readme = "../../README.md"
+repository = "https://github.com/fedimint/fedimint"
+version = { workspace = true }
+
+[package.metadata.docs.rs]
+rustc-args = ["--cfg", "tokio_unstable"]
+
+[package.metadata.cargo-udeps.ignore]
+# cargo udeps can't detect that one
+normal = ["aquamarine"]
+
+[features]
+cli = ["dep:clap"]
+default = []
+
+[lib]
+name = "fedimint_mintv2_client"
+path = "src/lib.rs"
+
+[[bench]]
+harness = false
+name = "recovery"
+
+[dependencies]
+anyhow = { workspace = true }
+aquamarine = { workspace = true }
+async-stream = { workspace = true }
+async-trait = { workspace = true }
+bitcoin_hashes = { workspace = true }
+bls12_381 = { workspace = true }
+clap = { workspace = true, optional = true }
+erased-serde = { workspace = true }
+fedimint-api-client = { workspace = true }
+fedimint-client = { workspace = true }
+fedimint-client-module = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-derive-secret = { workspace = true }
+fedimint-eventlog = { workspace = true }
+fedimint-logging = { workspace = true }
+fedimint-mintv2-common = { workspace = true }
+futures = { workspace = true }
+hex = { workspace = true }
+itertools = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serdect = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+tbs = { workspace = true }
+thiserror = { workspace = true }
+threshold_crypto = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+divan = "0.1.21"
