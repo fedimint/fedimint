@@ -471,6 +471,19 @@ impl TransactionUpdates {
         debug!(target: LOG_CLIENT, %await_txid, "Tx accepted");
         Ok(())
     }
+
+    pub async fn await_any_tx_accepted(self) -> Result<(), String> {
+        self.update_stream
+            .filter_map(|tx_update| {
+                std::future::ready(match tx_update.state {
+                    TxSubmissionStates::Accepted(..) => Some(Ok(())),
+                    TxSubmissionStates::Rejected(.., submit_error) => Some(Err(submit_error)),
+                    _ => None,
+                })
+            })
+            .next_or_pending()
+            .await
+    }
 }
 
 /// Admin (guardian) identification and authentication
