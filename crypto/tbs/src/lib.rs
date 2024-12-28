@@ -4,10 +4,12 @@
 //! BLS signatures using the (unrelated) BLS12-381 curve.
 
 use std::collections::BTreeMap;
+use std::io::Write;
 
 use bls12_381::{pairing, G1Affine, G1Projective, G2Affine, G2Projective, Scalar};
-use fedimint_core::bls12_381_serde;
+use fedimint_core::bitcoin::hashes::sha256;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::{bls12_381_serde, BitcoinHash};
 use group::ff::Field;
 use group::{Curve, Group};
 use hex::encode;
@@ -76,6 +78,12 @@ point_hash_impl!(BlindedSignatureShare);
 point_hash_impl!(BlindedSignature);
 point_hash_impl!(Signature);
 
+impl std::hash::Hash for BlindingKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.to_bytes().hash(state);
+    }
+}
+
 impl SecretKeyShare {
     pub fn to_pub_key_share(self) -> PublicKeyShare {
         PublicKeyShare((G2Projective::generator() * self.0).to_affine())
@@ -116,6 +124,22 @@ impl ::core::fmt::Display for BlindingKey {
 impl Message {
     pub fn from_bytes(msg: &[u8]) -> Message {
         Message(hash_bytes_to_g1(msg).to_affine())
+    }
+
+    pub fn from_bytes_sha256(bytes: &[u8]) -> Message {
+        let mut engine = sha256::HashEngine::default();
+
+        engine
+            .write_all("FEDIMINT_TBS_BLS12_381_MESSAGE".as_bytes())
+            .expect("Writing to a hash engine cannot fail");
+
+        engine
+            .write_all(bytes)
+            .expect("Writing to a hash engine cannot fail");
+
+        let seed = sha256::Hash::from_engine(engine).to_byte_array();
+
+        Message(G1Projective::random(&mut ChaChaRng::from_seed(seed)).to_affine())
     }
 }
 

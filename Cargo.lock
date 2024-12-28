@@ -1028,6 +1028,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2225b558afc76c596898f5f1b3fc35cfce0eb1b13635cbd7d1b2a7177dc10ccd"
 
 [[package]]
+name = "bs58"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf88ba1141d185c399bee5288d850d63b8369520c1eafc32a0430b5b6c287bf4"
+dependencies = [
+ "tinyvec",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3058,6 +3067,117 @@ dependencies = [
  "futures",
  "rand",
  "serde",
+ "strum 0.26.3",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-mintv2-client"
+version = "0.6.0-alpha"
+dependencies = [
+ "anyhow",
+ "aquamarine",
+ "async-stream",
+ "async-trait",
+ "bitcoin_hashes 0.14.0",
+ "bls12_381",
+ "bs58",
+ "clap",
+ "criterion",
+ "erased-serde",
+ "fedimint-api-client",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-derive-secret",
+ "fedimint-eventlog",
+ "fedimint-logging",
+ "fedimint-mintv2-common",
+ "fedimint-tbs",
+ "fedimint-threshold-crypto",
+ "futures",
+ "hex",
+ "itertools 0.13.0",
+ "rayon",
+ "serde",
+ "serde-big-array",
+ "serde_json",
+ "serdect",
+ "strum 0.26.3",
+ "strum_macros 0.26.4",
+ "test-log",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-mintv2-common"
+version = "0.6.0-alpha"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "bitcoin_hashes 0.14.0",
+ "fedimint-core",
+ "fedimint-tbs",
+ "serde",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-mintv2-server"
+version = "0.6.0-alpha"
+dependencies = [
+ "anyhow",
+ "assert_matches",
+ "async-trait",
+ "bitcoin",
+ "erased-serde",
+ "fedimint-core",
+ "fedimint-logging",
+ "fedimint-metrics",
+ "fedimint-mintv2-common",
+ "fedimint-server",
+ "fedimint-tbs",
+ "fedimint-threshold-crypto",
+ "futures",
+ "itertools 0.13.0",
+ "rand",
+ "rand_chacha",
+ "serde",
+ "strum 0.26.3",
+ "strum_macros 0.26.4",
+ "test-log",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-mintv2-tests"
+version = "0.6.0-alpha"
+dependencies = [
+ "anyhow",
+ "bitcoin_hashes 0.14.0",
+ "bls12_381",
+ "devimint",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-dummy-client",
+ "fedimint-dummy-common",
+ "fedimint-dummy-server",
+ "fedimint-logging",
+ "fedimint-mintv2-client",
+ "fedimint-mintv2-common",
+ "fedimint-mintv2-server",
+ "fedimint-tbs",
+ "fedimint-testing",
+ "fedimint-threshold-crypto",
+ "ff",
+ "futures",
+ "rand",
+ "serde",
+ "serde_json",
  "strum 0.26.3",
  "tokio",
  "tracing",
