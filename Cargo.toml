@@ -93,7 +93,7 @@ keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
 name = "fedimint"
 
 [workspace.dependencies]
-anyhow = "1.0.94"
+anyhow = "1.0.95"
 aquamarine = "0.5.0"
 assert_matches = "1.5.0"
 async-stream = "0.3.6"
@@ -183,10 +183,10 @@ reqwest = { version = "0.12.9", features = [
 ring = "0.17.8"
 secp256k1 = { version = "0.29.0", default-features = false }
 semver = "1.0.24"
-serde = { version = "1.0.216", features = ["derive"] }
+serde = { version = "1.0.217", features = ["derive"] }
 serdect = "0.2.0"
 serde-big-array = "0.5.1"
-serde_json = "1.0.133"
+serde_json = "1.0.134"
 sha3 = "0.10.8"
 strum = "0.26"
 strum_macros = "0.26"
