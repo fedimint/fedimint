@@ -20,7 +20,7 @@ anyhow = { workspace = true }
 bitcoin = { workspace = true }
 fedimint-core = { workspace = true }
 hex = { workspace = true }
-impl-tools = "0.10.2"
+impl-tools = "0.10.3"
 miniscript = { workspace = true, features = ["serde"] }
 serde = { workspace = true }
 thiserror = { workspace = true }
