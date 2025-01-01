@@ -35,7 +35,7 @@ use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
-    SerdeModuleEncoding, SerdeModuleEncoding2, SupportedApiVersionsSummary,
+    SerdeModuleEncoding, SerdeModuleEncodingBase64, SupportedApiVersionsSummary,
 };
 use fedimint_core::net::api_announcement::{
     ApiAnnouncement, SignedApiAnnouncement, SignedApiAnnouncementSubmission,
@@ -642,7 +642,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         api_endpoint! {
             SESSION_STATUS_V2_ENDPOINT,
             ApiVersion::new(0, 5),
-            async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding2<SessionStatusV2> {
+            async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncodingBase64<SessionStatusV2> {
                 Ok((&fedimint.session_status(index).await).into())
             }
         },

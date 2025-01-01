@@ -279,7 +279,7 @@ where
                                 let items_res = if core_api_version < VERSION_THAT_INTRODUCED_GET_SESSION_STATUS {
                                     api.await_block(session_idx, &decoders).await.map(|s| s.items)
                                 } else {
-                                    api.get_session_status(session_idx, &decoders).await.map(|s| match s {
+                                    api.get_session_status(session_idx, &decoders, core_api_version).await.map(|s| match s {
                                         SessionStatus::Initial => panic!("Federation missing session that existed when we started recovery"),
                                         SessionStatus::Pending(items) => items,
                                         SessionStatus::Complete(s) => s.items,
