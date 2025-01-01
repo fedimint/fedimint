@@ -793,28 +793,19 @@ impl ConsensusEngine {
         let keychain = Keychain::new(&self.cfg);
         let threshold = self.num_peers().threshold();
 
-        let filter_map = move |response: SerdeModuleEncoding<SignedSessionOutcome>| match response
-            .try_into_inner(&decoders)
-        {
-            Ok(signed_session_outcome) => {
-                if signed_session_outcome.signatures.len() == threshold
-                    && signed_session_outcome
-                        .signatures
-                        .iter()
-                        .all(|(peer_id, sig)| {
-                            keychain.verify(
-                                &signed_session_outcome.session_outcome.header(index),
-                                sig,
-                                to_node_index(*peer_id),
-                            )
-                        })
-                {
-                    Ok(signed_session_outcome)
-                } else {
-                    Err(anyhow!("Invalid signatures"))
-                }
+        let filter_map = move |response: SerdeModuleEncoding<SignedSessionOutcome>| {
+            let signed_session_outcome = response.try_into_inner(&decoders)?;
+            let header = signed_session_outcome.session_outcome.header(index);
+            if signed_session_outcome.signatures.len() == threshold
+                && signed_session_outcome
+                    .signatures
+                    .iter()
+                    .all(|(peer_id, sig)| keychain.verify(&header, sig, to_node_index(*peer_id)))
+            {
+                Ok(signed_session_outcome)
+            } else {
+                Err(anyhow!("Invalid signatures"))
             }
-            Err(error) => Err(anyhow!(error.to_string())),
         };
 
         loop {
