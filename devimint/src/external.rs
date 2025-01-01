@@ -84,11 +84,15 @@ impl Bitcoind {
             Ok(Arc::new(client))
         });
 
-        Ok(Self {
+        let bitcoind = Self {
             _process: process,
             client: Arc::new(client),
             wallet_client: Arc::new(wallet_client),
-        })
+        };
+
+        bitcoind.poll_ready().await?;
+
+        Ok(bitcoind)
     }
 
     fn new_bitcoin_rpc(
@@ -143,7 +147,7 @@ impl Bitcoind {
             trace!(target: LOG_DEVIMINT, blocks_num=blocks, %address, "Mining blocks to address complete");
         }
 
-        // wait bitciond is ready
+        // wait bitcoind is ready
         poll("bitcoind", || async {
             let info = block_in_place(|| client.get_blockchain_info())
                 .context("bitcoind getblockchaininfo")
@@ -163,7 +167,7 @@ impl Bitcoind {
     }
 
     /// Poll until bitcoind rpc responds for basic commands
-    pub async fn poll_ready(&self) -> anyhow::Result<()> {
+    async fn poll_ready(&self) -> anyhow::Result<()> {
         poll("bitcoind rpc ready", || async {
             self.get_block_count()
                 .await
@@ -419,9 +423,6 @@ impl Lightningd {
             bitcoin_rpcport = process_mgr.globals.FM_PORT_BTC_RPC,
         );
         write_overwrite_async(process_mgr.globals.FM_CLN_DIR.join("config"), conf).await?;
-        // workaround: will crash on start if it gets a bad response from
-        // bitcoind
-        bitcoind.poll_ready().await?;
         let process = Lightningd::start(process_mgr, cln_dir).await?;
 
         let socket_cln = cln_dir.join("regtest/lightning-rpc");
@@ -573,9 +574,6 @@ pub struct Lnd {
 
 impl Lnd {
     pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
-        // workaround: will crash on start if it gets a bad response from
-        // bitcoind
-        bitcoind.poll_ready().await?;
         let (process, client) = Lnd::start(process_mgr).await?;
         let this = Self {
             _bitcoind: bitcoind,
@@ -847,12 +845,9 @@ pub async fn open_channel(
     cln: &Lightningd,
     lnd: &Lnd,
 ) -> Result<()> {
-    debug!(target: LOG_DEVIMINT, "Opening channel between gateways (the old way)");
-
     debug!(target: LOG_DEVIMINT, "Await block ln nodes block processing");
     tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
 
-    info!(target: LOG_DEVIMINT, "Opening LN channel between CLN and LND");
     let cln_addr = cln
         .request(cln_rpc::model::requests::NewaddrRequest { addresstype: None })
         .await?
@@ -998,7 +993,7 @@ pub async fn open_channels_between_gateways(
             let gw_b_name = (*gw_b_name).to_string();
 
             let sats_per_side = 5_000_000;
-            info!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Opening channel with {sats_per_side} sats on each side...");
+            debug!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Opening channel with {sats_per_side} sats on each side...");
             tokio::task::spawn(async move {
                 // Sometimes channel openings just after funding the lightning nodes don't work right away.
                 let res = poll_with_timeout(&format!("Open channel from {gw_a_name} to {gw_b_name}"), Duration::from_secs(30), || async {
@@ -1006,9 +1001,7 @@ pub async fn open_channels_between_gateways(
                 })
                 .await;
 
-                if res.is_ok() {
-                    info!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Opened channel");
-                } else {
+                if res.is_err() {
                     error!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Failed to open channel");
                 }
 
@@ -1119,9 +1112,6 @@ pub struct Electrs {
 
 impl Electrs {
     pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
-        // workaround: will crash on start if it gets a bad response from
-        // bitcoind
-        bitcoind.poll_ready().await?;
         debug!(target: LOG_DEVIMINT, "Starting electrs");
         let electrs_dir = process_mgr
             .globals
@@ -1168,9 +1158,6 @@ pub struct Esplora {
 
 impl Esplora {
     pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
-        // workaround: will crash(?) on start if it gets a bad response from
-        // bitcoind
-        bitcoind.poll_ready().await?;
         debug!("Starting esplora");
         let daemon_dir = process_mgr
             .globals
@@ -1215,6 +1202,8 @@ impl Esplora {
             "http://localhost:{}",
             process_mgr.globals.FM_PORT_ESPLORA
         ))
+        // Disable retrying in the client since we're already retrying in the poll below.
+        .max_retries(0)
         .build_async()
         .expect("esplora client build failed");
 

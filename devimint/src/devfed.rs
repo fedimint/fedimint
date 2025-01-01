@@ -7,7 +7,7 @@ use fedimint_core::runtime;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_logging::LOG_DEVIMINT;
 use tokio::join;
-use tracing::debug;
+use tracing::{debug, info};
 
 use crate::external::{
     open_channel, open_channels_between_gateways, Bitcoind, Electrs, Esplora, Lightningd, Lnd,
@@ -106,25 +106,36 @@ impl DevJitFed {
 
         let bitcoind = JitTry::new_try({
             let process_mgr = process_mgr.to_owned();
-            move || async move { Ok(Arc::new(Bitcoind::new(&process_mgr, skip_setup).await?)) }
+            move || async move {
+                debug!(target: LOG_DEVIMINT, "Starting bitcoind...");
+                let start_time = fedimint_core::time::now();
+                let bitcoind = Bitcoind::new(&process_mgr, skip_setup).await?;
+                info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Started bitcoind");
+                Ok(Arc::new(bitcoind))
+            }
         });
         let cln = JitTry::new_try({
             let process_mgr = process_mgr.to_owned();
             let bitcoind = bitcoind.clone();
             || async move {
-                Ok(Arc::new(
-                    Lightningd::new(&process_mgr, bitcoind.get_try().await?.deref().clone())
-                        .await?,
-                ))
+                let bitcoind = bitcoind.get_try().await?.deref().clone();
+                debug!(target: LOG_DEVIMINT, "Starting cln...");
+                let start_time = fedimint_core::time::now();
+                let lightningd = Lightningd::new(&process_mgr, bitcoind).await?;
+                info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Started cln");
+                Ok(Arc::new(lightningd))
             }
         });
         let lnd = JitTry::new_try({
             let process_mgr = process_mgr.to_owned();
             let bitcoind = bitcoind.clone();
             || async move {
-                Ok(Arc::new(
-                    Lnd::new(&process_mgr, bitcoind.get_try().await?.deref().clone()).await?,
-                ))
+                let bitcoind = bitcoind.get_try().await?.deref().clone();
+                debug!(target: LOG_DEVIMINT, "Starting lnd...");
+                let start_time = fedimint_core::time::now();
+                let lnd = Lnd::new(&process_mgr, bitcoind).await?;
+                info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Started lnd");
+                Ok(Arc::new(lnd))
             }
         });
         let electrs = JitTryAnyhow::new_try({
@@ -132,7 +143,11 @@ impl DevJitFed {
             let bitcoind = bitcoind.clone();
             || async move {
                 let bitcoind = bitcoind.get_try().await?.deref().clone();
-                Ok(Arc::new(Electrs::new(&process_mgr, bitcoind).await?))
+                debug!(target: LOG_DEVIMINT, "Starting electrs...");
+                let start_time = fedimint_core::time::now();
+                let electrs = Electrs::new(&process_mgr, bitcoind).await?;
+                info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Started electrs");
+                Ok(Arc::new(electrs))
             }
         });
         let esplora = JitTryAnyhow::new_try({
@@ -140,7 +155,11 @@ impl DevJitFed {
             let bitcoind = bitcoind.clone();
             || async move {
                 let bitcoind = bitcoind.get_try().await?.deref().clone();
-                Ok(Arc::new(Esplora::new(&process_mgr, bitcoind).await?))
+                debug!(target: LOG_DEVIMINT, "Starting esplora...");
+                let start_time = fedimint_core::time::now();
+                let esplora = Esplora::new(&process_mgr, bitcoind).await?;
+                info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Started esplora");
+                Ok(Arc::new(esplora))
             }
         });
 
@@ -149,6 +168,8 @@ impl DevJitFed {
             let bitcoind = bitcoind.clone();
             move || async move {
                 let bitcoind = bitcoind.get_try().await?.deref().clone();
+                debug!(target: LOG_DEVIMINT, "Starting federation...");
+                let start_time = fedimint_core::time::now();
                 let mut fed = Federation::new(
                     &process_mgr,
                     bitcoind,
@@ -161,6 +182,8 @@ impl DevJitFed {
                 // Create a degraded federation if there are offline nodes
                 fed.degrade_federation(&process_mgr).await?;
 
+                info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Started federation");
+
                 Ok(Arc::new(fed))
             }
         });
@@ -170,9 +193,11 @@ impl DevJitFed {
             let lnd = lnd.clone();
             || async move {
                 let lnd = lnd.get_try().await?.deref().clone();
-                Ok(Arc::new(
-                    Gatewayd::new(&process_mgr, LightningNode::Lnd(lnd)).await?,
-                ))
+                debug!(target: LOG_DEVIMINT, "Starting lnd gateway...");
+                let start_time = fedimint_core::time::now();
+                let lnd_gw = Gatewayd::new(&process_mgr, LightningNode::Lnd(lnd)).await?;
+                info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Started lnd gateway");
+                Ok(Arc::new(lnd_gw))
             }
         });
         let gw_lnd_registered = JitTryAnyhow::new_try({
@@ -181,12 +206,16 @@ impl DevJitFed {
             move || async move {
                 let gw_lnd = gw_lnd.get_try().await?.deref();
                 let fed = fed.get_try().await?.deref();
+                debug!(target: LOG_DEVIMINT, "Registering lnd gateway...");
+                let start_time = fedimint_core::time::now();
                 if !skip_setup {
                     gw_lnd.connect_fed(fed).await?;
                 }
+                info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Registered lnd gateway");
                 Ok(Arc::new(()))
             }
         });
+
         let gw_ldk = JitTryAnyhow::new_try({
             let process_mgr = process_mgr.to_owned();
             move || async move {
@@ -198,9 +227,11 @@ impl DevJitFed {
                     // and lnv2 was not explicitly disabled
                     && !is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV)
                 {
-                    Ok(Arc::new(Some(
-                        Gatewayd::new(&process_mgr, LightningNode::Ldk).await?,
-                    )))
+                    debug!(target: LOG_DEVIMINT, "Starting ldk gateway...");
+                    let start_time = fedimint_core::time::now();
+                    let ldk_gw = Gatewayd::new(&process_mgr, LightningNode::Ldk).await?;
+                    info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Started ldk gateway");
+                    Ok(Arc::new(Some(ldk_gw)))
                 } else {
                     Ok(Arc::new(None))
                 }
@@ -213,9 +244,12 @@ impl DevJitFed {
                 let gw_ldk = gw_ldk.get_try().await?.deref();
                 if let Some(gw_ldk) = gw_ldk {
                     let fed = fed.get_try().await?.deref();
+                    debug!(target: LOG_DEVIMINT, "Registering ldk gateway...");
+                    let start_time = fedimint_core::time::now();
                     if !skip_setup {
                         gw_ldk.connect_fed(fed).await?;
                     }
+                    info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Registered ldk gateway");
                 }
                 Ok(Arc::new(()))
             }
@@ -247,21 +281,39 @@ impl DevJitFed {
                     let lnd = lnd.get_try().await?.deref().clone();
                     let cln = cln.get_try().await?.deref().clone();
 
+                    debug!(target: LOG_DEVIMINT, "Opening channels between cln and lnd...");
+                    let start_time = fedimint_core::time::now();
                     open_channel(&process_mgr, &bitcoind, &cln, &lnd).await?;
+                    info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Opened channels between cln and lnd");
                 } else {
-                    let gw_lnd = gw_lnd.get_try().await?.deref();
-                    let gw_ldk = gw_ldk
-                        .get_try()
-                        .await?
-                        .deref()
-                        .as_ref()
-                        .expect("GW LDK should be present");
-                    let gateways: &[NamedGateway<'_>] = &[(gw_lnd, "LND"), (gw_ldk, "LDK")];
-                    open_channels_between_gateways(&bitcoind, gateways).await?;
+                    tokio::try_join!(
+                        async {
+                            let gw_lnd = gw_lnd.get_try().await?.deref();
+                            let gw_ldk = gw_ldk
+                                .get_try()
+                                .await?
+                                .deref()
+                                .as_ref()
+                                .expect("GW LDK should be present");
+                            let gateways: &[NamedGateway<'_>] = &[(gw_lnd, "LND"), (gw_ldk, "LDK")];
 
-                    let lnd = lnd.get_try().await?.deref().clone();
-                    let cln = cln.get_try().await?.deref().clone();
-                    open_channel(&process_mgr, &bitcoind, &cln, &lnd).await?;
+                            debug!(target: LOG_DEVIMINT, "Opening channels between gateways...");
+                            let start_time = fedimint_core::time::now();
+                            let res = open_channels_between_gateways(&bitcoind, gateways).await;
+                            info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Opened channels between gateways");
+                            res
+                        },
+                        async {
+                            let lnd = lnd.get_try().await?.deref().clone();
+                            let cln = cln.get_try().await?.deref().clone();
+
+                            debug!(target: LOG_DEVIMINT, "Opening channels between cln and lnd...");
+                            let start_time = fedimint_core::time::now();
+                            let res = open_channel(&process_mgr, &bitcoind, &cln, &lnd).await;
+                            info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Opened channels between cln and lnd");
+                            res
+                        }
+                    )?;
                 }
 
                 Ok(Arc::new(()))
@@ -272,9 +324,12 @@ impl DevJitFed {
             let fed = fed.clone();
             move || async move {
                 let fed = fed.get_try().await?.deref().clone();
+                debug!(target: LOG_DEVIMINT, "Generating federation epoch...");
+                let start_time = fedimint_core::time::now();
                 if !skip_setup {
                     fed.mine_then_wait_blocks_sync(10).await?;
                 }
+                info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Generated federation epoch");
                 Ok(Arc::new(()))
             }
         });
