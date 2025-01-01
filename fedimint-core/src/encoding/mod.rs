@@ -26,6 +26,8 @@ use std::io::{self, Error, Read, Write};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
+use base64_serde::base64_serde_type;
+use base64_url::base64;
 use bitcoin::hashes::sha256;
 pub use fedimint_derive::{Decodable, Encodable};
 use hex::{FromHex, ToHex};
@@ -756,6 +758,11 @@ where
         }
     }
 }
+
+base64_serde_type!(
+    pub Base64UrlSafe,
+    base64::engine::general_purpose::URL_SAFE
+);
 
 #[cfg(test)]
 mod tests {

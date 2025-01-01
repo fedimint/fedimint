@@ -79,3 +79,22 @@ pub enum SessionStatus {
     Pending(Vec<AcceptedItem>),
     Complete(SessionOutcome),
 }
+
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
+pub enum SessionStatusV2 {
+    Initial,
+    Pending(Vec<AcceptedItem>),
+    Complete(SignedSessionOutcome),
+}
+
+impl From<SessionStatusV2> for SessionStatus {
+    fn from(value: SessionStatusV2) -> Self {
+        match value {
+            SessionStatusV2::Initial => Self::Initial,
+            SessionStatusV2::Pending(items) => Self::Pending(items),
+            SessionStatusV2::Complete(signed_session_outcome) => {
+                Self::Complete(signed_session_outcome.session_outcome)
+            }
+        }
+    }
+}

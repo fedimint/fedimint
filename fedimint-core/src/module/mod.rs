@@ -955,6 +955,13 @@ pub struct SerdeModuleEncoding<T: Encodable + Decodable>(
     #[serde(skip)] PhantomData<T>,
 );
 
+/// Same as [`SerdeModuleEncoding`] but uses base64 instead of hex encoding.
+#[derive(Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct SerdeModuleEncoding2<T: Encodable + Decodable>(
+    #[serde(with = "::fedimint_core::encoding::Base64UrlSafe")] Vec<u8>,
+    #[serde(skip)] PhantomData<T>,
+);
+
 impl<T> fmt::Debug for SerdeModuleEncoding<T>
 where
     T: Encodable + Decodable,
@@ -977,6 +984,61 @@ impl<T: Encodable + Decodable> From<&T> for SerdeModuleEncoding<T> {
 }
 
 impl<T: Encodable + Decodable + 'static> SerdeModuleEncoding<T> {
+    pub fn try_into_inner(&self, modules: &ModuleDecoderRegistry) -> Result<T, DecodeError> {
+        Decodable::consensus_decode_whole(&self.0, modules)
+    }
+
+    /// In cases where we know exactly which module kind we expect but don't
+    /// have access to all decoders this function can be used instead.
+    ///
+    /// Note that it just assumes the decoded module instance id to be valid
+    /// since it cannot validate against the decoder registry. The lack of
+    /// access to a decoder registry also makes decoding structs impossible that
+    /// themselves contain module dyn-types (e.g. a module output containing a
+    /// fedimint transaction).
+    pub fn try_into_inner_known_module_kind(&self, decoder: &Decoder) -> Result<T, DecodeError> {
+        let mut reader = std::io::Cursor::new(&self.0);
+        let module_instance = ModuleInstanceId::consensus_decode_partial(
+            &mut reader,
+            &ModuleDecoderRegistry::default(),
+        )?;
+
+        let total_len =
+            u64::consensus_decode_partial(&mut reader, &ModuleDecoderRegistry::default())?;
+
+        // No recursive module decoding is supported since we give an empty decoder
+        // registry to the decode function
+        decoder.decode_complete(
+            &mut reader,
+            total_len,
+            module_instance,
+            &ModuleRegistry::default(),
+        )
+    }
+}
+
+impl<T> fmt::Debug for SerdeModuleEncoding2<T>
+where
+    T: Encodable + Decodable,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str("SerdeModuleEncoding2(")?;
+        fmt::Debug::fmt(&AbbreviateHexBytes(&self.0), f)?;
+        f.write_str(")")?;
+        Ok(())
+    }
+}
+
+impl<T: Encodable + Decodable> From<&T> for SerdeModuleEncoding2<T> {
+    fn from(value: &T) -> Self {
+        let mut bytes = vec![];
+        fedimint_core::encoding::Encodable::consensus_encode(value, &mut bytes)
+            .expect("Writing to buffer can never fail");
+        Self(bytes, PhantomData)
+    }
+}
+
+impl<T: Encodable + Decodable + 'static> SerdeModuleEncoding2<T> {
     pub fn try_into_inner(&self, modules: &ModuleDecoderRegistry) -> Result<T, DecodeError> {
         Decodable::consensus_decode_whole(&self.0, modules)
     }
