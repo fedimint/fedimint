@@ -1255,18 +1255,7 @@
 <a href="#1254" id="1254">1254</a>
 <a href="#1255" id="1255">1255</a>
 <a href="#1256" id="1256">1256</a>
-<a href="#1257" id="1257">1257</a>
-<a href="#1258" id="1258">1258</a>
-<a href="#1259" id="1259">1259</a>
-<a href="#1260" id="1260">1260</a>
-<a href="#1261" id="1261">1261</a>
-<a href="#1262" id="1262">1262</a>
-<a href="#1263" id="1263">1263</a>
-<a href="#1264" id="1264">1264</a>
-<a href="#1265" id="1265">1265</a>
-<a href="#1266" id="1266">1266</a>
-<a href="#1267" id="1267">1267</a>
-<a href="#1268" id="1268">1268</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
+<a href="#1257" id="1257">1257</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -1352,11 +1341,15 @@
             <span class="prelude-val">Ok</span>(Arc::new(client))
         });
 
-        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+        <span class="kw">let </span>bitcoind = <span class="self">Self </span>{
             _process: process,
             client: Arc::new(client),
             wallet_client: Arc::new(wallet_client),
-        })
+        };
+
+        bitcoind.poll_ready().<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(bitcoind)
     }
 
     <span class="kw">fn </span>new_bitcoin_rpc(
@@ -1411,7 +1404,7 @@
             <span class="macro">trace!</span>(target: LOG_DEVIMINT, blocks_num=blocks, %address, <span class="string">"Mining blocks to address complete"</span>);
         }
 
-        <span class="comment">// wait bitciond is ready
+        <span class="comment">// wait bitcoind is ready
         </span>poll(<span class="string">"bitcoind"</span>, || <span class="kw">async </span>{
             <span class="kw">let </span>info = block_in_place(|| client.get_blockchain_info())
                 .context(<span class="string">"bitcoind getblockchaininfo"</span>)
@@ -1431,7 +1424,7 @@
     }
 
     <span class="doccomment">/// Poll until bitcoind rpc responds for basic commands
-    </span><span class="kw">pub async fn </span>poll_ready(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+    </span><span class="kw">async fn </span>poll_ready(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
         poll(<span class="string">"bitcoind rpc ready"</span>, || <span class="kw">async </span>{
             <span class="self">self</span>.get_block_count()
                 .<span class="kw">await
@@ -1687,9 +1680,6 @@
             bitcoin_rpcport = process_mgr.globals.FM_PORT_BTC_RPC,
         );
         write_overwrite_async(process_mgr.globals.FM_CLN_DIR.join(<span class="string">"config"</span>), conf).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="comment">// workaround: will crash on start if it gets a bad response from
-        // bitcoind
-        </span>bitcoind.poll_ready().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>process = Lightningd::start(process_mgr, cln_dir).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>socket_cln = cln_dir.join(<span class="string">"regtest/lightning-rpc"</span>);
@@ -1841,9 +1831,6 @@
 
 <span class="kw">impl </span>Lnd {
     <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, bitcoind: Bitcoind) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="comment">// workaround: will crash on start if it gets a bad response from
-        // bitcoind
-        </span>bitcoind.poll_ready().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>(process, client) = Lnd::start(process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>this = <span class="self">Self </span>{
             _bitcoind: bitcoind,
@@ -2115,12 +2102,9 @@
     cln: <span class="kw-2">&amp;</span>Lightningd,
     lnd: <span class="kw-2">&amp;</span>Lnd,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Opening channel between gateways (the old way)"</span>);
-
     <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Await block ln nodes block processing"</span>);
     <span class="macro">tokio::try_join!</span>(cln.await_block_processing(), lnd.await_block_processing())<span class="question-mark">?</span>;
 
-    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"Opening LN channel between CLN and LND"</span>);
     <span class="kw">let </span>cln_addr = cln
         .request(cln_rpc::model::requests::NewaddrRequest { addresstype: <span class="prelude-val">None </span>})
         .<span class="kw">await</span><span class="question-mark">?
@@ -2266,7 +2250,7 @@
             <span class="kw">let </span>gw_b_name = (<span class="kw-2">*</span>gw_b_name).to_string();
 
             <span class="kw">let </span>sats_per_side = <span class="number">5_000_000</span>;
-            <span class="macro">info!</span>(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, <span class="string">"Opening channel with {sats_per_side} sats on each side..."</span>);
+            <span class="macro">debug!</span>(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, <span class="string">"Opening channel with {sats_per_side} sats on each side..."</span>);
             tokio::task::spawn(<span class="kw">async move </span>{
                 <span class="comment">// Sometimes channel openings just after funding the lightning nodes don't work right away.
                 </span><span class="kw">let </span>res = poll_with_timeout(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Open channel from {gw_a_name} to {gw_b_name}"</span>), Duration::from_secs(<span class="number">30</span>), || <span class="kw">async </span>{
@@ -2274,9 +2258,7 @@
                 })
                 .<span class="kw">await</span>;
 
-                <span class="kw">if </span>res.is_ok() {
-                    <span class="macro">info!</span>(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, <span class="string">"Opened channel"</span>);
-                } <span class="kw">else </span>{
+                <span class="kw">if </span>res.is_err() {
                     <span class="macro">error!</span>(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, <span class="string">"Failed to open channel"</span>);
                 }
 
@@ -2387,9 +2369,6 @@
 
 <span class="kw">impl </span>Electrs {
     <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, bitcoind: Bitcoind) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="comment">// workaround: will crash on start if it gets a bad response from
-        // bitcoind
-        </span>bitcoind.poll_ready().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting electrs"</span>);
         <span class="kw">let </span>electrs_dir = process_mgr
             .globals
@@ -2436,9 +2415,6 @@
 
 <span class="kw">impl </span>Esplora {
     <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, bitcoind: Bitcoind) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="comment">// workaround: will crash(?) on start if it gets a bad response from
-        // bitcoind
-        </span>bitcoind.poll_ready().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">debug!</span>(<span class="string">"Starting esplora"</span>);
         <span class="kw">let </span>daemon_dir = process_mgr
             .globals
@@ -2483,6 +2459,8 @@
             <span class="string">"http://localhost:{}"</span>,
             process_mgr.globals.FM_PORT_ESPLORA
         ))
+        <span class="comment">// Disable retrying in the client since we're already retrying in the poll below.
+        </span>.max_retries(<span class="number">0</span>)
         .build_async()
         .expect(<span class="string">"esplora client build failed"</span>);
 

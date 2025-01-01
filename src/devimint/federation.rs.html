@@ -1465,13 +1465,7 @@
 <a href="#1464" id="1464">1464</a>
 <a href="#1465" id="1465">1465</a>
 <a href="#1466" id="1466">1466</a>
-<a href="#1467" id="1467">1467</a>
-<a href="#1468" id="1468">1468</a>
-<a href="#1469" id="1469">1469</a>
-<a href="#1470" id="1470">1470</a>
-<a href="#1471" id="1471">1471</a>
-<a href="#1472" id="1472">1472</a>
-<a href="#1473" id="1473">1473</a></pre></div><pre class="rust"><code><span class="kw">mod </span>config;
+<a href="#1467" id="1467">1467</a></pre></div><pre class="rust"><code><span class="kw">mod </span>config;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2661,8 +2655,6 @@
         hashes.insert(hash);
     }
     <span class="macro">assert_eq!</span>(hashes.len(), <span class="number">1</span>);
-    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"DKG completed"</span>);
-    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting consensus"</span>);
     <span class="kw">for </span>(peer_id, endpoint) <span class="kw">in </span><span class="kw-2">&amp;</span>endpoints {
         <span class="kw">let </span>result = <span class="kw">crate</span>::util::FedimintCli
             .start_consensus(auth_for(peer_id), endpoint)
@@ -2672,7 +2664,6 @@
         }
         cli_wait_server_status(endpoint, ServerStatus::ConsensusRunning).<span class="kw">await</span><span class="question-mark">?</span>;
     }
-    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"Consensus running"</span>);
     <span class="prelude-val">Ok</span>(())
 }
 
@@ -2817,15 +2808,12 @@
         hashes.insert(client.get_verify_config_hash(auth_for(peer_id)).<span class="kw">await</span><span class="question-mark">?</span>);
     }
     <span class="macro">assert_eq!</span>(hashes.len(), <span class="number">1</span>);
-    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"DKG completed"</span>);
-    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting consensus"</span>);
     <span class="kw">for </span>(peer_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span>admin_clients {
         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = client.start_consensus(auth_for(peer_id)).<span class="kw">await </span>{
             <span class="macro">tracing::debug!</span>(target: LOG_DEVIMINT, <span class="string">"Error calling start_consensus: {e:?}, trying to continue..."</span>);
         }
         wait_server_status(client, ServerStatus::ConsensusRunning).<span class="kw">await</span><span class="question-mark">?</span>;
     }
-    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"Consensus running"</span>);
     <span class="prelude-val">Ok</span>(())
 }
 
