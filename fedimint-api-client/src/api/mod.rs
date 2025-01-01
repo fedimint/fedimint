@@ -481,6 +481,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         &self,
         block_index: u64,
         decoders: &ModuleDecoderRegistry,
+        core_api_version: ApiVersion,
     ) -> anyhow::Result<SessionStatus>;
 
     async fn session_count(&self) -> FederationResult<u64>;

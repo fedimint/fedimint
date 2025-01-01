@@ -913,7 +913,7 @@ pub struct SerdeModuleEncoding<T: Encodable + Decodable>(
 
 /// Same as [`SerdeModuleEncoding`] but uses base64 instead of hex encoding.
 #[derive(Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct SerdeModuleEncoding2<T: Encodable + Decodable>(
+pub struct SerdeModuleEncodingBase64<T: Encodable + Decodable>(
     #[serde(with = "::fedimint_core::encoding::Base64UrlSafe")] Vec<u8>,
     #[serde(skip)] PhantomData<T>,
 );
@@ -971,7 +971,7 @@ impl<T: Encodable + Decodable + 'static> SerdeModuleEncoding<T> {
     }
 }
 
-impl<T> fmt::Debug for SerdeModuleEncoding2<T>
+impl<T> fmt::Debug for SerdeModuleEncodingBase64<T>
 where
     T: Encodable + Decodable,
 {
@@ -983,7 +983,7 @@ where
     }
 }
 
-impl<T: Encodable + Decodable> From<&T> for SerdeModuleEncoding2<T> {
+impl<T: Encodable + Decodable> From<&T> for SerdeModuleEncodingBase64<T> {
     fn from(value: &T) -> Self {
         let mut bytes = vec![];
         fedimint_core::encoding::Encodable::consensus_encode(value, &mut bytes)
@@ -992,7 +992,7 @@ impl<T: Encodable + Decodable> From<&T> for SerdeModuleEncoding2<T> {
     }
 }
 
-impl<T: Encodable + Decodable + 'static> SerdeModuleEncoding2<T> {
+impl<T: Encodable + Decodable + 'static> SerdeModuleEncodingBase64<T> {
     pub fn try_into_inner(&self, modules: &ModuleDecoderRegistry) -> Result<T, DecodeError> {
         let mut reader = std::io::Cursor::new(&self.0);
         Decodable::consensus_decode(&mut reader, modules)

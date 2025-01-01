@@ -4,13 +4,14 @@ use std::num::NonZeroUsize;
 use std::result;
 use std::sync::Arc;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, format_err};
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1;
 use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams,
 };
 use fedimint_core::backup::ClientBackupSnapshot;
+use fedimint_core::config::ClientConfig;
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::endpoint_constants::{
@@ -20,25 +21,32 @@ use fedimint_core::endpoint_constants::{
     DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
     GUARDIAN_CONFIG_BACKUP_ENDPOINT, RECOVER_ENDPOINT, RESTART_FEDERATION_SETUP_ENDPOINT,
     RUN_DKG_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT,
-    SESSION_STATUS_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT, SET_CONFIG_GEN_PARAMS_ENDPOINT,
-    SET_PASSWORD_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT,
-    START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
-    SUBMIT_TRANSACTION_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
+    SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
+    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, SHUTDOWN_ENDPOINT,
+    SIGN_API_ANNOUNCEMENT_ENDPOINT, START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT,
+    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT,
+    VERIFY_CONFIG_HASH_ENDPOINT,
 };
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::{ApiAuth, ApiRequestErased, SerdeModuleEncoding};
+use fedimint_core::module::{
+    ApiAuth, ApiRequestErased, ApiVersion, SerdeModuleEncoding, SerdeModuleEncodingBase64,
+};
 use fedimint_core::net::api_announcement::{
     SignedApiAnnouncement, SignedApiAnnouncementSubmission,
 };
-use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SessionStatus};
+use fedimint_core::session_outcome::{
+    AcceptedItem, SessionOutcome, SessionStatus, SessionStatusV2, SignedSessionOutcome,
+};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId, TransactionId};
 use fedimint_logging::LOG_CLIENT_NET_API;
 use futures::future::join_all;
+use itertools::Itertools;
 use jsonrpsee_core::client::Error as JsonRpcClientError;
+use rand::seq::SliceRandom;
 use serde_json::Value;
 use tokio::sync::OnceCell;
 use tracing::debug;
@@ -129,12 +137,61 @@ where
         .map_err(|e| anyhow!(e.to_string()))
     }
 
-    async fn get_session_status_raw(
+    fn select_peers_for_status(&self) -> impl Iterator<Item = PeerId> + '_ {
+        let mut peers = self.all_peers().iter().copied().collect_vec();
+        peers.shuffle(&mut rand::thread_rng());
+        peers.into_iter()
+    }
+
+    async fn get_session_status_raw_v2(
         &self,
         block_index: u64,
         decoders: &ModuleDecoderRegistry,
     ) -> anyhow::Result<SessionStatus> {
         debug!(target: LOG_CLIENT_NET_API, block_index, "Fetching block's outcome from Federation");
+        let verify = |_s: &SignedSessionOutcome| -> bool { todo!() };
+        let params = ApiRequestErased::new(block_index);
+        let mut last_error = None;
+        // fetch serially
+        for peer_id in self.select_peers_for_status() {
+            match self
+                .request_single_peer_federation::<SerdeModuleEncodingBase64<SessionStatusV2>>(
+                    SESSION_STATUS_V2_ENDPOINT.to_string(),
+                    params.clone(),
+                    peer_id,
+                )
+                .await
+                .map_err(anyhow::Error::from)
+                .and_then(|s| Ok(s.try_into_inner(decoders)?))
+            {
+                Ok(SessionStatusV2::Complete(signed_session_outcome)) => {
+                    if verify(&signed_session_outcome) {
+                        // early return
+                        return Ok(SessionStatus::Complete(
+                            signed_session_outcome.session_outcome,
+                        ));
+                    }
+                    last_error = Some(format_err!("Invalid signature"));
+                }
+                Ok(SessionStatusV2::Initial | SessionStatusV2::Pending(..)) => {
+                    // no signature: use fallback method
+                    return self.get_session_status_raw(block_index, decoders).await;
+                }
+                Err(err) => {
+                    last_error = Some(err);
+                }
+            }
+            // if we loop then we must have last_error
+            assert!(last_error.is_some());
+        }
+        Err(last_error.expect("must have at least one peer"))
+    }
+
+    async fn get_session_status_raw(
+        &self,
+        block_index: u64,
+        decoders: &ModuleDecoderRegistry,
+    ) -> anyhow::Result<SessionStatus> {
         self.request_current_consensus::<SerdeModuleEncoding<SessionStatus>>(
             SESSION_STATUS_ENDPOINT.to_string(),
             ApiRequestErased::new(block_index),
@@ -202,7 +259,9 @@ where
         &self,
         session_idx: u64,
         decoders: &ModuleDecoderRegistry,
+        core_api_version: ApiVersion,
     ) -> anyhow::Result<SessionStatus> {
+        const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2: ApiVersion = ApiVersion::new(0, 5);
         let mut lru_lock = self.get_session_status_lru.lock().await;
 
         let entry_arc = lru_lock
@@ -219,7 +278,13 @@ where
         }
         match entry_arc
             .get_or_try_init(|| async {
-                match self.get_session_status_raw(session_idx, decoders).await {
+                let session_status =
+                    if core_api_version < VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2 {
+                        self.get_session_status_raw(session_idx, decoders).await
+                    } else {
+                        self.get_session_status_raw_v2(session_idx, decoders).await
+                    };
+                match session_status {
                     Err(e) => Err(NoCacheErr::Err(e)),
                     Ok(SessionStatus::Initial) => Err(NoCacheErr::Initial),
                     Ok(SessionStatus::Pending(s)) => Err(NoCacheErr::Pending(s)),
