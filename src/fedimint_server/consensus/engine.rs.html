@@ -1228,8 +1228,8 @@
                                         }
                                         <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">"Not reporting ordering latency on possibly out of sync item"</span>);
                                     }
-                                    <span class="prelude-val">Err</span>(e) =&gt; {
-                                        <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">"Missing submission timestamp: {e}"</span>);
+                                    <span class="prelude-val">Err</span>(err) =&gt; {
+                                        <span class="macro">debug!</span>(target: LOG_CONSENSUS, %err, <span class="string">"Missing submission timestamp. This is normal on start"</span>);
                                         <span class="kw">break</span>;
                                     }
                                 }
