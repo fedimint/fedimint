@@ -481,8 +481,8 @@ impl TransactionBuilder {
         let input_states = self
             .inputs
             .into_iter()
-            .filter(|bundle| !bundle.is_empty())
             .enumerate()
+            .filter(|(_, bundle)| !bundle.is_empty())
             .flat_map(|(bundle_idx, bundle)| {
                 let input_idxs = find_range_of_matching_items(&input_idx_to_bundle_idx, bundle_idx)
                     .expect("Non empty bundles must always have a match");
@@ -497,8 +497,8 @@ impl TransactionBuilder {
         let output_states = self
             .outputs
             .into_iter()
-            .filter(|bundle| !bundle.is_empty())
             .enumerate()
+            .filter(|(_, bundle)| !bundle.is_empty())
             .flat_map(|(bundle_idx, bundle)| {
                 let output_idxs =
                     find_range_of_matching_items(&output_idx_to_bundle_idx, bundle_idx)
@@ -562,3 +562,6 @@ where
             .collect()
     })
 }
+
+#[cfg(test)]
+mod tests;
