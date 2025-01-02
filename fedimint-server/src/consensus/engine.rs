@@ -822,8 +822,11 @@ impl ConsensusEngine {
 
             match result {
                 Ok(signed_session_outcome) => return signed_session_outcome,
-                Err(error) => {
-                    tracing::error!(target: LOG_CONSENSUS, "Error while requesting signed session outcome: {}", error);
+                Err(err) => {
+                    // Workaround: timeout messages here are annoying
+                    if !err.to_string().contains("Rpc error: Request timeout") {
+                        warn!(target: LOG_CONSENSUS, %err, "Error while requesting signed session outcome");
+                    }
                 }
             }
         }
