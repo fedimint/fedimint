@@ -9,14 +9,13 @@ use std::collections::BTreeMap;
 use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::bail;
 use async_channel::Sender;
 use db::get_global_database_migrations;
 use fedimint_api_client::api::net::Connector;
-use fedimint_api_client::api::DynGlobalApi;
+use fedimint_api_client::api::{DynGlobalApi, P2PConnectionStatus};
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{apply_migrations, apply_migrations_server, Database};
@@ -28,7 +27,7 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::NumPeers;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
 use jsonrpsee::server::ServerHandle;
-use tokio::sync::{watch, RwLock};
+use tokio::sync::watch;
 use tracing::{info, warn};
 
 use crate::config::{ServerConfig, ServerConfigLocal};
@@ -101,8 +100,20 @@ pub async fn run(
 
     let (submission_sender, submission_receiver) = async_channel::bounded(TRANSACTION_BUFFER);
     let (shutdown_sender, shutdown_receiver) = watch::channel(None);
-    let connection_status_channels = Arc::new(RwLock::new(BTreeMap::new()));
-    let last_ci_by_peer = Arc::new(RwLock::new(BTreeMap::new()));
+
+    let mut p2p_status_senders = BTreeMap::new();
+    let mut ci_status_senders = BTreeMap::new();
+    let mut status_receivers = BTreeMap::new();
+
+    for peer in cfg.consensus.broadcast_public_keys.keys().copied() {
+        let (p2p_sender, p2p_receiver) = watch::channel(P2PConnectionStatus::Disconnected);
+        let (ci_sender, ci_receiver) = watch::channel(None);
+
+        p2p_status_senders.insert(peer, p2p_sender);
+        ci_status_senders.insert(peer, ci_sender);
+
+        status_receivers.insert(peer, (p2p_receiver, ci_receiver));
+    }
 
     let consensus_api = ConsensusApi {
         cfg: cfg.clone(),
@@ -116,8 +127,7 @@ pub async fn run(
             &cfg.consensus.modules,
             &module_init_registry,
         ),
-        last_ci_by_peer: last_ci_by_peer.clone(),
-        connection_status_channels: connection_status_channels.clone(),
+        status_receivers,
         force_api_secret: force_api_secrets.get_active(),
         code_version_str,
     };
@@ -169,10 +179,10 @@ pub async fn run(
             .map(|x| x.to_string())
             .collect(),
         cfg: cfg.clone(),
-        connection_status_channels,
+        p2p_status_senders,
+        ci_status_senders,
         submission_receiver,
         shutdown_receiver,
-        last_ci_by_peer,
         modules: module_registry,
         task_group: task_group.clone(),
         data_dir,

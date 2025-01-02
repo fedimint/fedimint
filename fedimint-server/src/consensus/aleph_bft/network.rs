@@ -1,12 +1,11 @@
 use bitcoin::hashes::{sha256, Hash};
 use fedimint_core::encoding::Encodable;
-use fedimint_core::net::peers::{IPeerConnections, Recipient};
+use fedimint_core::net::peers::{DynP2PConnections, Recipient};
 use parity_scale_codec::{Decode, Encode, IoReader};
 
 use super::data_provider::UnitData;
 use super::keychain::Keychain;
 use super::Message;
-use crate::net::peers::ReconnectPeerConnections;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Hasher;
@@ -27,11 +26,11 @@ pub type NetworkData = aleph_bft::NetworkData<
 >;
 
 pub struct Network {
-    connections: ReconnectPeerConnections<Message>,
+    connections: DynP2PConnections<Message>,
 }
 
 impl Network {
-    pub fn new(connections: ReconnectPeerConnections<Message>) -> Self {
+    pub fn new(connections: DynP2PConnections<Message>) -> Self {
         Self { connections }
     }
 }
@@ -47,9 +46,6 @@ impl aleph_bft::Network<NetworkData> for Network {
             aleph_bft::Recipient::Everyone => Recipient::Everyone,
         };
 
-        // since NetworkData does not implement Encodable we use
-        // parity_scale_codec::Encode to serialize it such that Message can
-        // implement Encodable
         self.connections
             .try_send(recipient, Message(network_data.encode()));
     }
