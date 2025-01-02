@@ -289,12 +289,12 @@
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
         f.write_str(<span class="string">"Federation rpc error {"</span>)<span class="question-mark">?</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(general) = <span class="self">self</span>.general.as_ref() {
-            f.write_fmt(<span class="macro">format_args!</span>(<span class="string">"method =&gt; {}), "</span>, <span class="self">self</span>.method))<span class="question-mark">?</span>;
+            f.write_fmt(<span class="macro">format_args!</span>(<span class="string">"method =&gt; {}, "</span>, <span class="self">self</span>.method))<span class="question-mark">?</span>;
             f.write_fmt(<span class="macro">format_args!</span>(
-                <span class="string">"params =&gt; {:?}), "</span>,
+                <span class="string">"params =&gt; {:?}, "</span>,
                 AbbreviateJson(<span class="kw-2">&amp;</span><span class="self">self</span>.params)
             ))<span class="question-mark">?</span>;
-            f.write_fmt(<span class="macro">format_args!</span>(<span class="string">"general =&gt; {general})"</span>))<span class="question-mark">?</span>;
+            f.write_fmt(<span class="macro">format_args!</span>(<span class="string">"general =&gt; {general}, "</span>))<span class="question-mark">?</span>;
             <span class="kw">if </span>!<span class="self">self</span>.peer_errors.is_empty() {
                 f.write_str(<span class="string">", "</span>)<span class="question-mark">?</span>;
             }
