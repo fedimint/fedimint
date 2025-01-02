@@ -157,8 +157,8 @@ where
                             break;
                         }
                     },
-                    Err(e) => {
-                        warn!(target: LOG_NET_PEER, "Error while opening incoming connection: {}", e);
+                    Err(err) => {
+                        warn!(target: LOG_NET_PEER, our_id = %cfg.identity, %err, "Error while opening incoming connection");
                     }
                 }
             }
