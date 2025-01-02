@@ -753,8 +753,8 @@
                             <span class="kw">break</span>;
                         }
                     },
-                    <span class="prelude-val">Err</span>(e) =&gt; {
-                        <span class="macro">warn!</span>(target: LOG_NET_PEER, <span class="string">"Error while opening incoming connection: {}"</span>, e);
+                    <span class="prelude-val">Err</span>(err) =&gt; {
+                        <span class="macro">warn!</span>(target: LOG_NET_PEER, our_id = %cfg.identity, %err, <span class="string">"Error while opening incoming connection"</span>);
                     }
                 }
             }
