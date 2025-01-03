@@ -278,7 +278,8 @@
 <a href="#277" id="277">277</a>
 <a href="#278" id="278">278</a>
 <a href="#279" id="279">279</a>
-<a href="#280" id="280">280</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -294,6 +295,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 <span class="kw">use </span>fedimint_core::plugin_types_trait_impl_common;
+<span class="kw">use </span>fedimint_logging::LOG_MODULE_META;
 <span class="kw">use </span>serde::de::{<span class="self">self</span>, Visitor};
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
 <span class="kw">use </span>thiserror::Error;
@@ -393,7 +395,7 @@
         <span class="kw">let </span>maybe_lossy_str = String::from_utf8_lossy(<span class="self">self</span>.as_slice());
 
         <span class="kw">if </span>maybe_lossy_str.as_bytes() != <span class="self">self</span>.as_slice() {
-            <span class="macro">warn!</span>(<span class="string">"Value contains invalid utf-8, converting to lossy string"</span>);
+            <span class="macro">warn!</span>(target: LOG_MODULE_META, <span class="string">"Value contains invalid utf-8, converting to lossy string"</span>);
         }
 
         <span class="prelude-val">Ok</span>(serde_json::from_str(<span class="kw-2">&amp;</span>maybe_lossy_str)<span class="question-mark">?</span>)

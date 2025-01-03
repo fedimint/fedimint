@@ -262,7 +262,8 @@
 <a href="#261" id="261">261</a>
 <a href="#262" id="262">262</a>
 <a href="#263" id="263">263</a>
-<a href="#264" id="264">264</a></pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::ensure;
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a></pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::ensure;
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
@@ -275,6 +276,7 @@
 <span class="kw">use </span>fedimint_core::{secp256k1, util, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_lnv2_common::contracts::OutgoingContract;
 <span class="kw">use </span>fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
+<span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_LNV2;
 <span class="kw">use </span>futures::future::pending;
 <span class="kw">use </span>secp256k1::schnorr::Signature;
 <span class="kw">use </span>secp256k1::Keypair;
@@ -414,7 +416,7 @@
         })
     }
 
-    <span class="attr">#[instrument(skip(refund_keypair, context))]
+    <span class="attr">#[instrument(target = LOG_CLIENT_MODULE_LNV2, skip(refund_keypair, context))]
     </span><span class="kw">async fn </span>gateway_send_payment(
         gateway_api: SafeUrl,
         federation_id: FederationId,
@@ -480,7 +482,7 @@
         }
     }
 
-    <span class="attr">#[instrument(skip(global_context))]
+    <span class="attr">#[instrument(target = LOG_CLIENT_MODULE_LNV2, skip(global_context))]
     </span><span class="kw">async fn </span>await_preimage(
         contract: OutgoingContract,
         global_context: DynGlobalClientContext,

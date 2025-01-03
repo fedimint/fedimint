@@ -845,7 +845,7 @@
 /// claim any peg-ins that are ready.
 ///
 /// Return a list of [`CheckOutcome`]s for each matching output.
-</span><span class="attr">#[instrument(skip_all, fields(tweak_idx))]
+</span><span class="attr">#[instrument(target = LOG_CLIENT_MODULE_WALLET, skip_all, fields(tweak_idx))]
 </span><span class="kw">async fn </span>check_idx_pegins(
     data: <span class="kw-2">&amp;</span>WalletClientModuleData,
     tweak_idx: TweakIdx,

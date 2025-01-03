@@ -179,7 +179,8 @@
 <a href="#178" id="178">178</a>
 <a href="#179" id="179">179</a>
 <a href="#180" id="180">180</a>
-<a href="#181" id="181">181</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::{bail, format_err, Context};
 <span class="kw">use </span>bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
@@ -187,6 +188,7 @@
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Feerate};
+<span class="kw">use </span>fedimint_logging::LOG_BITCOIND_ESPLORA;
 <span class="kw">use </span>tracing::info;
 
 <span class="kw">use crate</span>::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory};
@@ -278,7 +280,7 @@
             // TODO: Suppress `esplora-client` already submitted errors when client is
             // updated
             // https://github.com/fedimint/fedimint/issues/3732
-            </span><span class="macro">info!</span>(<span class="question-mark">?</span>error, <span class="string">"Error broadcasting transaction"</span>);
+            </span><span class="macro">info!</span>(target: LOG_BITCOIND_ESPLORA, <span class="question-mark">?</span>error, <span class="string">"Error broadcasting transaction"</span>);
         });
     }
 

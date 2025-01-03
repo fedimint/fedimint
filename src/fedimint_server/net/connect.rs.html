@@ -1020,7 +1020,9 @@
 <a href="#1019" id="1019">1019</a>
 <a href="#1020" id="1020">1020</a>
 <a href="#1021" id="1021">1021</a>
-<a href="#1022" id="1022">1022</a></pre></div><pre class="rust"><code><span class="doccomment">//! Provides an abstract network connection interface and multiple
+<a href="#1022" id="1022">1022</a>
+<a href="#1023" id="1023">1023</a>
+<a href="#1024" id="1024">1024</a></pre></div><pre class="rust"><code><span class="doccomment">//! Provides an abstract network connection interface and multiple
 //! implementations
 
 </span><span class="kw">use </span>std::collections::BTreeMap;
@@ -1282,6 +1284,7 @@
     <span class="kw">use </span>fedimint_core::task::sleep;
     <span class="kw">use </span>fedimint_core::util::SafeUrl;
     <span class="kw">use </span>fedimint_core::{task, PeerId};
+    <span class="kw">use </span>fedimint_logging::{LOG_NET, LOG_NET_PEER};
     <span class="kw">use </span>futures::{pin_mut, FutureExt, SinkExt, Stream, StreamExt};
     <span class="kw">use </span>rand::Rng;
     <span class="kw">use </span>tokio::io::{
@@ -1395,6 +1398,7 @@
             }
             <span class="kw">if </span><span class="self">self</span>.failure_rate.random_fail() {
                 <span class="macro">tracing::debug!</span>(
+                    target: LOG_NET,
                     <span class="string">"Returning random error on unreliable stream after {} successes"</span>,
                     <span class="self">self</span>.successes
                 );
@@ -1704,7 +1708,7 @@
                     <span class="kw">let </span>peer = <span class="kw">match </span>do_handshake(our_id, <span class="kw-2">&amp;mut </span>connection).<span class="kw">await </span>{
                         <span class="prelude-val">Ok</span>(peer) =&gt; peer,
                         <span class="prelude-val">Err</span>(e) =&gt; {
-                            <span class="macro">tracing::debug!</span>(<span class="string">"Error during handshake: {e:?}"</span>);
+                            <span class="macro">tracing::debug!</span>(target: LOG_NET, <span class="string">"Error during handshake: {e:?}"</span>);
                             <span class="kw">return </span><span class="prelude-val">Some</span>((<span class="prelude-val">Err</span>(e), receive));
                         }
                     };

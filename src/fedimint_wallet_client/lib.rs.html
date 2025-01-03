@@ -2324,7 +2324,7 @@
         <span class="self">self</span>.await_num_deposits(tweak_idx, num_deposits).<span class="kw">await
     </span>}
 
-    <span class="attr">#[instrument(skip_all, fields(tweak_idx=<span class="question-mark">?</span>tweak_idx, num_deposists=num_deposits))]
+    <span class="attr">#[instrument(target = LOG_CLIENT_MODULE_WALLET, skip_all, fields(tweak_idx=<span class="question-mark">?</span>tweak_idx, num_deposists=num_deposits))]
     </span><span class="kw">pub async fn </span>await_num_deposits(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         tweak_idx: TweakIdx,

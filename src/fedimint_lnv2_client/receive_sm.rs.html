@@ -127,7 +127,8 @@
 <a href="#126" id="126">126</a>
 <a href="#127" id="127">127</a>
 <a href="#128" id="128">128</a>
-<a href="#129" id="129">129</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::OperationId;
@@ -136,6 +137,7 @@
 <span class="kw">use </span>fedimint_core::OutPoint;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::IncomingContract;
 <span class="kw">use </span>fedimint_lnv2_common::{LightningInput, LightningInputV0};
+<span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_LNV2;
 <span class="kw">use </span>tpe::AggregateDecryptionKey;
 <span class="kw">use </span>tracing::instrument;
 
@@ -218,7 +220,7 @@
 }
 
 <span class="kw">impl </span>ReceiveStateMachine {
-    <span class="attr">#[instrument(skip(global_context))]
+    <span class="attr">#[instrument(target = LOG_CLIENT_MODULE_LNV2, skip(global_context))]
     </span><span class="kw">async fn </span>await_incoming_contract(
         contract: IncomingContract,
         global_context: DynGlobalClientContext,

@@ -346,7 +346,8 @@
 <a href="#345" id="345">345</a>
 <a href="#346" id="346">346</a>
 <a href="#347" id="347">347</a>
-<a href="#348" id="348">348</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -359,6 +360,7 @@
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::{OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 <span class="kw">use </span>fedimint_wallet_common::tweakable::Tweakable;
 <span class="kw">use </span>fedimint_wallet_common::txoproof::PegInProof;
 <span class="kw">use </span>fedimint_wallet_common::WalletInput;
@@ -532,7 +534,7 @@
     }
 }
 
-<span class="attr">#[instrument(skip_all, level = <span class="string">"debug"</span>)]
+<span class="attr">#[instrument(target = LOG_CLIENT_MODULE_WALLET, skip_all, level = <span class="string">"debug"</span>)]
 </span><span class="kw">async fn </span>await_btc_transaction_confirmed(
     context: WalletClientContext,
     global_context: DynGlobalClientContext,

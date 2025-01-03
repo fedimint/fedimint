@@ -132,7 +132,8 @@
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
@@ -145,6 +146,7 @@
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, secp256k1, PeerId};
+<span class="kw">use </span>fedimint_logging::LOG_NET_API;
 <span class="kw">use </span>tokio::select;
 <span class="kw">use </span>tracing::debug;
 
@@ -203,7 +205,7 @@
                 .submit_api_announcement(our_peer_id, announcement.clone())
                 .<span class="kw">await
             </span>{
-                <span class="macro">debug!</span>(<span class="question-mark">?</span>e, <span class="string">"Announcing our API URL did not succeed for all peers, retrying in {FAILURE_RETRY_SECONDS} seconds"</span>);
+                <span class="macro">debug!</span>(target: LOG_NET_API, <span class="question-mark">?</span>e, <span class="string">"Announcing our API URL did not succeed for all peers, retrying in {FAILURE_RETRY_SECONDS} seconds"</span>);
                 sleep(Duration::from_secs(FAILURE_RETRY_SECONDS)).<span class="kw">await</span>;
             } <span class="kw">else </span>{
                 <span class="kw">let </span>our_announcement_key = ApiAnnouncementKey(our_peer_id);

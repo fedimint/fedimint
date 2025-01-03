@@ -614,9 +614,9 @@
             <span class="kw">let </span>name = name.clone();
             <span class="kw">async move </span>{
                 <span class="comment">// if receiver is not interested, just drop the message
-                </span><span class="macro">debug!</span>(<span class="string">"Starting task {name}"</span>);
+                </span><span class="macro">debug!</span>(target: LOG_TASK, <span class="string">"Starting task {name}"</span>);
                 <span class="kw">let </span>r = f(handle).<span class="kw">await</span>;
-                <span class="macro">debug!</span>(<span class="string">"Finished task {name}"</span>);
+                <span class="macro">debug!</span>(target: LOG_TASK, <span class="string">"Finished task {name}"</span>);
                 <span class="kw">let _ </span>= tx.send(r);
             }
         });
@@ -640,7 +640,7 @@
             <span class="kw">let </span>value = handle.cancel_on_shutdown(future).<span class="kw">await</span>;
             <span class="kw">if </span>value.is_err() {
                 <span class="comment">// name will part of span
-                </span><span class="macro">debug!</span>(<span class="string">"task cancelled on shutdown"</span>);
+                </span><span class="macro">debug!</span>(target: LOG_TASK, <span class="string">"task cancelled on shutdown"</span>);
             }
             value
         })

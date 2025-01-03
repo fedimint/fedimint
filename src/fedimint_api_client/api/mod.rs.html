@@ -1225,7 +1225,7 @@
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, util, NumPeersExt, PeerId, TransactionId,
 };
-<span class="kw">use </span>fedimint_logging::LOG_CLIENT_NET_API;
+<span class="kw">use </span>fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_API};
 <span class="kw">use </span>futures::future::pending;
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>futures::{Future, StreamExt};
@@ -1343,7 +1343,7 @@
 
     <span class="doccomment">/// Make an aggregate request to federation, using `strategy` to logically
     /// merge the responses.
-    </span><span class="attr">#[instrument(target = <span class="string">"fm::api"</span>, skip_all, fields(method=method))]
+    </span><span class="attr">#[instrument(target = LOG_NET_API, skip_all, fields(method=method))]
     </span><span class="kw">async fn </span>request_with_strategy&lt;PR: DeserializeOwned, FR: Debug&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="kw-2">mut </span>strategy: <span class="kw">impl </span>QueryStrategy&lt;PR, FR&gt; + MaybeSend,
@@ -2169,7 +2169,7 @@
 <span class="kw">where
     </span>C: JsonRpcClient + <span class="lifetime">'static</span>,
 {
-    <span class="attr">#[instrument(level = <span class="string">"trace"</span>, fields(peer = %<span class="self">self</span>.peer_id, %method), skip_all)]
+    <span class="attr">#[instrument(target = LOG_CLIENT_NET_API, level = <span class="string">"trace"</span>, fields(peer = %<span class="self">self</span>.peer_id, %method), skip_all)]
     </span><span class="kw">pub async fn </span>request(<span class="kw-2">&amp;</span><span class="self">self</span>, method: <span class="kw-2">&amp;</span>str, params: <span class="kw-2">&amp;</span>[Value]) -&gt; JsonRpcResult&lt;Value&gt; {
         <span class="comment">// Strategies using timeouts often depend on failing requests returning quickly,
         // so every request gets only one reconnection attempt.

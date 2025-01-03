@@ -677,7 +677,7 @@
 <span class="doccomment">/// Tries to parse `str_value` as JSON. In the special case that `V` is `String`
 /// we return the raw `str_value` if JSON parsing fails. This necessary since
 /// the spec wasn't clear enough in the beginning.
-</span><span class="attr">#[instrument(err)] </span><span class="comment">// log on every failure
+</span><span class="attr">#[instrument(target = LOG_CLIENT, err)] </span><span class="comment">// log on every failure
 </span><span class="kw">pub fn </span>parse_meta_value_static&lt;V: DeserializeOwned + <span class="lifetime">'static</span>&gt;(
     str_value: <span class="kw-2">&amp;</span>str,
 ) -&gt; anyhow::Result&lt;V&gt; {

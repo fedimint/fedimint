@@ -922,7 +922,7 @@
     </span>}
 
     <span class="doccomment">/// Sets the outcome of an operation
-    </span><span class="attr">#[instrument(skip(db), level = <span class="string">"debug"</span>)]
+    </span><span class="attr">#[instrument(target = LOG_CLIENT, skip(db), level = <span class="string">"debug"</span>)]
     </span><span class="kw">pub async fn </span>set_operation_outcome(
         db: <span class="kw-2">&amp;</span>Database,
         operation_id: OperationId,

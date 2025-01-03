@@ -1084,7 +1084,7 @@
         <span class="macro">debug!</span>(target: LOG_NET_API, id = %request.id, len = request.payload.len(), <span class="string">"Received client backup request"</span>);
         <span class="kw">if let </span><span class="prelude-val">Some</span>(prev) = dbtx.get_value(<span class="kw-2">&amp;</span>ClientBackupKey(request.id)).<span class="kw">await </span>{
             <span class="kw">if </span>request.timestamp &lt;= prev.timestamp {
-                <span class="macro">debug!</span>(id = %request.id, len = request.payload.len(), <span class="string">"Received client backup request with old timestamp - ignoring"</span>);
+                <span class="macro">debug!</span>(target: LOG_NET_API, id = %request.id, len = request.payload.len(), <span class="string">"Received client backup request with old timestamp - ignoring"</span>);
                 <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::bad_request(<span class="string">"timestamp too small"</span>.into()));
             }
         }

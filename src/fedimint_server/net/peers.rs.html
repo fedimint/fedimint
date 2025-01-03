@@ -700,7 +700,7 @@
     /// network config and a [`Connector`](crate::net::connect::Connector).
     /// See [`ReconnectPeerConnections`] for requirements on the
     /// `Connector`.
-    </span><span class="attr">#[instrument(skip_all)]
+    </span><span class="attr">#[instrument(target = LOG_NET_PEER, skip_all)]
     </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>new(
         cfg: NetworkConfig,
         connector: PeerConnector&lt;T&gt;,
@@ -1054,8 +1054,8 @@
 
     <span class="attr">#[allow(clippy::too_many_arguments)] </span><span class="comment">// TODO: consider refactoring
     </span><span class="attr">#[instrument(
+        target = LOG_NET_PEER,
         name = <span class="string">"peer_io_thread"</span>,
-        target = <span class="string">"net::peer"</span>,
         skip_all,
         <span class="comment">// `id` so it doesn't conflict with argument names otherwise will not be shown
         </span>fields(id = %peer_id)

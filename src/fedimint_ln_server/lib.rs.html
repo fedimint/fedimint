@@ -1470,7 +1470,8 @@
 <a href="#1469" id="1469">1469</a>
 <a href="#1470" id="1470">1470</a>
 <a href="#1471" id="1471">1471</a>
-<a href="#1472" id="1472">1472</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1472" id="1472">1472</a>
+<a href="#1473" id="1473">1473</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -1528,6 +1529,7 @@
     LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0, RemoveGatewayRequest,
     MODULE_CONSENSUS_VERSION,
 };
+<span class="kw">use </span>fedimint_logging::LOG_MODULE_LN;
 <span class="kw">use </span>fedimint_server::config::distributedgen::PeerHandleOps;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>metrics::{LN_CANCEL_OUTGOING_CONTRACTS, LN_FUNDED_CONTRACT_SATS, LN_INCOMING_OFFER};
@@ -1884,7 +1886,7 @@
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                 }
 
-                <span class="macro">debug!</span>(<span class="string">"Beginning to decrypt preimage"</span>);
+                <span class="macro">debug!</span>(target: LOG_MODULE_LN, <span class="string">"Beginning to decrypt preimage"</span>);
 
                 <span class="kw">let </span><span class="prelude-val">Ok</span>(preimage_vec) = <span class="self">self</span>.cfg.consensus.threshold_pub_keys.decrypt(
                     decryption_shares
@@ -1894,7 +1896,7 @@
                 ) <span class="kw">else </span>{
                     <span class="comment">// TODO: check if that can happen even though shares are verified
                     // before
-                    </span><span class="macro">error!</span>(contract_hash = %contract.hash, <span class="string">"Failed to decrypt preimage"</span>);
+                    </span><span class="macro">error!</span>(target: LOG_MODULE_LN, contract_hash = %contract.hash, <span class="string">"Failed to decrypt preimage"</span>);
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                 };
 
@@ -1924,7 +1926,7 @@
                     DecryptedPreimage::Invalid
                 };
 
-                <span class="macro">debug!</span>(<span class="question-mark">?</span>decrypted_preimage);
+                <span class="macro">debug!</span>(target: LOG_MODULE_LN, <span class="question-mark">?</span>decrypted_preimage);
 
                 <span class="comment">// TODO: maybe define update helper fn
                 // Update contract
@@ -2390,7 +2392,7 @@
                     <span class="kw">match </span>module.remove_gateway(remove_gateway_request.clone(), <span class="kw-2">&amp;mut </span>context.dbtx().into_nc()).<span class="kw">await </span>{
                         <span class="prelude-val">Ok</span>(()) =&gt; <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>),
                         <span class="prelude-val">Err</span>(e) =&gt; {
-                            <span class="macro">warn!</span>(<span class="string">"Unable to remove gateway registration {remove_gateway_request:?} Error: {e:?}"</span>);
+                            <span class="macro">warn!</span>(target: LOG_MODULE_LN, <span class="string">"Unable to remove gateway registration {remove_gateway_request:?} Error: {e:?}"</span>);
                             <span class="prelude-val">Ok</span>(<span class="bool-val">false</span>)
                         },
                     }
@@ -2413,7 +2415,7 @@
     <span class="kw">async fn </span>block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;u64&gt; {
         <span class="kw">let </span>res = <span class="self">self</span>.btc_rpc.get_block_count().<span class="kw">await</span>;
         <span class="kw">if let </span><span class="prelude-val">Err</span>(<span class="kw-2">ref </span>err) = res {
-            <span class="macro">error!</span>(<span class="string">"Error while calling get_block_count: {:?}"</span>, err);
+            <span class="macro">error!</span>(target: LOG_MODULE_LN, <span class="string">"Error while calling get_block_count: {:?}"</span>, err);
         }
         res
     }
@@ -2666,7 +2668,7 @@
             .signatures
             .get(<span class="kw-2">&amp;</span>our_peer_id)
             .ok_or_else(|| {
-                <span class="macro">warn!</span>(<span class="string">"No signature provided for gateway: {gateway_id}"</span>);
+                <span class="macro">warn!</span>(target: LOG_MODULE_LN, <span class="string">"No signature provided for gateway: {gateway_id}"</span>);
                 <span class="macro">anyhow::anyhow!</span>(<span class="string">"No signature provided for gateway {gateway_id}"</span>)
             })<span class="question-mark">?</span>;
 
@@ -2684,7 +2686,7 @@
         signature.verify(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>gateway_id.x_only_public_key().<span class="number">0</span>)<span class="question-mark">?</span>;
 
         dbtx.remove_entry(<span class="kw-2">&amp;</span>LightningGatewayKey(gateway_id)).<span class="kw">await</span>;
-        <span class="macro">info!</span>(<span class="string">"Successfully removed gateway: {gateway_id}"</span>);
+        <span class="macro">info!</span>(target: LOG_MODULE_LN, <span class="string">"Successfully removed gateway: {gateway_id}"</span>);
         <span class="prelude-val">Ok</span>(())
     }
 }

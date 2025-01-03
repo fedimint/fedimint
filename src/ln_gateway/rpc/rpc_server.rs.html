@@ -430,7 +430,8 @@
 <a href="#429" id="429">429</a>
 <a href="#430" id="430">430</a>
 <a href="#431" id="431">431</a>
-<a href="#432" id="432">432</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>axum::extract::Request;
 <span class="kw">use </span>axum::http::{header, StatusCode};
@@ -447,6 +448,7 @@
     CREATE_BOLT11_INVOICE_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_PAYMENT_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_lnv2_common::gateway_api::{CreateBolt11InvoicePayload, SendPaymentPayload};
+<span class="kw">use </span>fedimint_logging::LOG_GATEWAY;
 <span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>tokio::net::TcpListener;
@@ -616,7 +618,7 @@
 <span class="doccomment">/// Display high-level information about the Gateway
 </span><span class="comment">// FIXME: deprecated &gt;= 0.3.0
 // This endpoint exists only to remain backwards-compatible with the original POST endpoint
-</span><span class="attr">#[instrument(skip_all, err)]
+</span><span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err)]
 </span><span class="kw">async fn </span>handle_post_info(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(_payload): Json&lt;InfoPayload&gt;,
@@ -626,7 +628,7 @@
 }
 
 <span class="doccomment">/// Display high-level information about the Gateway
-</span><span class="attr">#[instrument(skip_all, err)]
+</span><span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err)]
 </span><span class="kw">async fn </span>info(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, AdminGatewayError&gt; {
@@ -635,7 +637,7 @@
 }
 
 <span class="doccomment">/// Display high-level information about the Gateway config
-</span><span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
+</span><span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>configuration(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;ConfigPayload&gt;,
@@ -647,7 +649,7 @@
 }
 
 <span class="doccomment">/// Generate deposit address
-</span><span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
+</span><span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>address(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;DepositAddressPayload&gt;,
@@ -657,7 +659,7 @@
 }
 
 <span class="doccomment">/// Withdraw from a gateway federation.
-</span><span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
+</span><span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>withdraw(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;WithdrawPayload&gt;,
@@ -666,7 +668,7 @@
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(txid)))
 }
 
-<span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
+<span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>create_invoice_for_operator(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;CreateInvoiceForOperatorPayload&gt;,
@@ -677,7 +679,7 @@
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(invoice)))
 }
 
-<span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
+<span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>pay_invoice_operator(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;PayInvoiceForOperatorPayload&gt;,
@@ -686,7 +688,7 @@
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(preimage.<span class="number">0</span>.encode_hex::&lt;String&gt;())))
 }
 
-<span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
+<span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>pay_invoice(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;fedimint_ln_client::pay::PayInvoicePayload&gt;,
@@ -696,7 +698,7 @@
 }
 
 <span class="doccomment">/// Connect a new federation
-</span><span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
+</span><span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>connect_fed(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;ConnectFedPayload&gt;,
@@ -706,7 +708,7 @@
 }
 
 <span class="doccomment">/// Leave a federation
-</span><span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
+</span><span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>leave_fed(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;LeaveFedPayload&gt;,
@@ -716,7 +718,7 @@
 }
 
 <span class="doccomment">/// Backup a gateway actor state
-</span><span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
+</span><span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>backup(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;BackupPayload&gt;,
@@ -725,7 +727,7 @@
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(())))
 }
 
-<span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
+<span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>set_fees(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;SetFeesPayload&gt;,
@@ -734,7 +736,7 @@
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(())))
 }
 
-<span class="attr">#[instrument(skip_all, err)]
+<span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err)]
 </span><span class="kw">async fn </span>get_ln_onchain_address(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, AdminGatewayError&gt; {
@@ -742,7 +744,7 @@
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(address.to_string())))
 }
 
-<span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
+<span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>open_channel(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;OpenChannelPayload&gt;,
@@ -751,7 +753,7 @@
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(funding_txid)))
 }
 
-<span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
+<span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>close_channels_with_peer(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;CloseChannelsWithPeerPayload&gt;,
@@ -760,7 +762,7 @@
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(response)))
 }
 
-<span class="attr">#[instrument(skip_all, err)]
+<span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err)]
 </span><span class="kw">async fn </span>list_active_channels(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, AdminGatewayError&gt; {
@@ -768,7 +770,7 @@
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(channels)))
 }
 
-<span class="attr">#[instrument(skip_all, err)]
+<span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err)]
 </span><span class="kw">async fn </span>send_onchain(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;SendOnchainPayload&gt;,
@@ -777,7 +779,7 @@
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(txid)))
 }
 
-<span class="attr">#[instrument(skip_all, err)]
+<span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err)]
 </span><span class="kw">async fn </span>get_balances(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, AdminGatewayError&gt; {
@@ -785,14 +787,14 @@
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(balances)))
 }
 
-<span class="attr">#[instrument(skip_all, err)]
+<span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err)]
 </span><span class="kw">async fn </span>get_gateway_id(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, PublicGatewayError&gt; {
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(gateway.gateway_id)))
 }
 
-<span class="attr">#[instrument(skip_all, err)]
+<span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err)]
 </span><span class="kw">async fn </span>routing_info_v2(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(federation_id): Json&lt;FederationId&gt;,
@@ -801,7 +803,7 @@
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(routing_info)))
 }
 
-<span class="attr">#[instrument(skip_all, err)]
+<span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err)]
 </span><span class="kw">async fn </span>pay_bolt11_invoice_v2(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;SendPaymentPayload&gt;,
@@ -810,7 +812,7 @@
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(payment_result)))
 }
 
-<span class="attr">#[instrument(skip_all, err)]
+<span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err)]
 </span><span class="kw">async fn </span>create_bolt11_invoice_v2(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;CreateBolt11InvoicePayload&gt;,
@@ -819,7 +821,7 @@
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(invoice)))
 }
 
-<span class="attr">#[instrument(skip_all, err)]
+<span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err)]
 </span><span class="kw">async fn </span>spend_ecash(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;SpendEcashPayload&gt;,
@@ -827,7 +829,7 @@
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(gateway.handle_spend_ecash_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>)))
 }
 
-<span class="attr">#[instrument(skip_all, err)]
+<span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err)]
 </span><span class="kw">async fn </span>receive_ecash(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;ReceiveEcashPayload&gt;,
@@ -837,7 +839,7 @@
     </span>)))
 }
 
-<span class="attr">#[instrument(skip_all, err)]
+<span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err)]
 </span><span class="kw">async fn </span>mnemonic(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, AdminGatewayError&gt; {
@@ -845,7 +847,7 @@
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(words)))
 }
 
-<span class="attr">#[instrument(skip_all, err)]
+<span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err)]
 </span><span class="kw">async fn </span>stop(
     Extension(task_group): Extension&lt;TaskGroup&gt;,
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
@@ -854,7 +856,7 @@
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(())))
 }
 
-<span class="attr">#[instrument(skip_all, err)]
+<span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err)]
 </span><span class="kw">async fn </span>payment_log(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;PaymentLogPayload&gt;,
