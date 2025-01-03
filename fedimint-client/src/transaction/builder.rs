@@ -87,7 +87,7 @@ impl sm::State for NeverClientStateMachine {
 #[derive(Clone, Debug)]
 pub struct ClientInputBundle<I = DynInput, S = DynState> {
     pub(crate) inputs: Vec<ClientInput<I>>,
-    pub(crate) sms: Vec<ClientInputSM<S>>,
+    pub(crate) sm_gens: Vec<ClientInputSM<S>>,
 }
 
 impl<I> ClientInputBundle<I, NeverClientStateMachine> {
@@ -102,7 +102,7 @@ impl<I> ClientInputBundle<I, NeverClientStateMachine> {
         }
         Self {
             inputs,
-            sms: vec![],
+            sm_gens: vec![],
         }
     }
 }
@@ -112,12 +112,8 @@ where
     I: IInput + MaybeSend + MaybeSync + 'static,
     S: sm::IState + MaybeSend + MaybeSync + 'static,
 {
-    pub fn new(inputs: Vec<ClientInput<I>>, sms: Vec<ClientInputSM<S>>) -> Self {
-        if inputs.is_empty() {
-            // TODO: Make it return Result or assert?
-            warn!(target: LOG_CLIENT, "Empty input bundle will be illegal in the future");
-        }
-        Self { inputs, sms }
+    pub fn new(inputs: Vec<ClientInput<I>>, sm_gens: Vec<ClientInputSM<S>>) -> Self {
+        Self { inputs, sm_gens }
     }
 
     pub fn inputs(&self) -> &[ClientInput<I>] {
@@ -125,7 +121,7 @@ where
     }
 
     pub fn sms(&self) -> &[ClientInputSM<S>] {
-        &self.sms
+        &self.sm_gens
     }
 
     pub fn into_instanceless(self) -> InstancelessDynClientInputBundle {
@@ -139,14 +135,21 @@ where
                     amount: input.amount,
                 })
                 .collect(),
-            sms: self
-                .sms
+            sm_gens: self
+                .sm_gens
                 .into_iter()
                 .map(|input_sm| InstancelessDynClientInputSM {
                     state_machines: states_to_instanceless_dyn(input_sm.state_machines),
                 })
                 .collect(),
         }
+    }
+}
+
+impl<I, S> ClientInputBundle<I, S> {
+    pub fn is_empty(&self) -> bool {
+        // Notably, sm_gen will not be called when inputs are empty anyway
+        self.inputs.is_empty()
     }
 }
 
@@ -193,8 +196,8 @@ where
                 .map(|input| input.into_dyn(module_instance_id))
                 .collect::<Vec<ClientInput>>(),
 
-            sms: self
-                .sms
+            sm_gens: self
+                .sm_gens
                 .into_iter()
                 .map(|input_sm| input_sm.into_dyn(module_instance_id))
                 .collect::<Vec<ClientInputSM>>(),
@@ -217,8 +220,8 @@ impl IntoDynInstance for InstancelessDynClientInputBundle {
                 })
                 .collect::<Vec<ClientInput>>(),
 
-            sms: self
-                .sms
+            sm_gens: self
+                .sm_gens
                 .into_iter()
                 .map(|input_sm| ClientInputSM {
                     state_machines: states_add_instance(
@@ -234,7 +237,7 @@ impl IntoDynInstance for InstancelessDynClientInputBundle {
 #[derive(Clone, Debug)]
 pub struct ClientOutputBundle<O = DynOutput, S = DynState> {
     pub(crate) outputs: Vec<ClientOutput<O>>,
-    pub(crate) sms: Vec<ClientOutputSM<S>>,
+    pub(crate) sm_gens: Vec<ClientOutputSM<S>>,
 }
 
 #[derive(Clone, Debug)]
@@ -265,7 +268,7 @@ impl<O> ClientOutputBundle<O, NeverClientStateMachine> {
         }
         Self {
             outputs,
-            sms: vec![],
+            sm_gens: vec![],
         }
     }
 }
@@ -275,12 +278,8 @@ where
     O: IOutput + MaybeSend + MaybeSync + 'static,
     S: sm::IState + MaybeSend + MaybeSync + 'static,
 {
-    pub fn new(outputs: Vec<ClientOutput<O>>, sms: Vec<ClientOutputSM<S>>) -> Self {
-        if outputs.is_empty() {
-            // TODO: Make it return Result or assert?
-            warn!(target: LOG_CLIENT, "Empty output bundle will be illegal in the future");
-        }
-        Self { outputs, sms }
+    pub fn new(outputs: Vec<ClientOutput<O>>, sm_gens: Vec<ClientOutputSM<S>>) -> Self {
+        Self { outputs, sm_gens }
     }
 
     pub fn outputs(&self) -> &[ClientOutput<O>] {
@@ -288,12 +287,12 @@ where
     }
 
     pub fn sms(&self) -> &[ClientOutputSM<S>] {
-        &self.sms
+        &self.sm_gens
     }
 
     pub fn with(mut self, other: Self) -> Self {
         self.outputs.extend(other.outputs);
-        self.sms.extend(other.sms);
+        self.sm_gens.extend(other.sm_gens);
         self
     }
 
@@ -307,14 +306,21 @@ where
                     amount: output.amount,
                 })
                 .collect(),
-            sms: self
-                .sms
+            sm_gens: self
+                .sm_gens
                 .into_iter()
                 .map(|output_sm| InstancelessDynClientOutputSM {
                     state_machines: states_to_instanceless_dyn(output_sm.state_machines),
                 })
                 .collect(),
         }
+    }
+}
+
+impl<O, S> ClientOutputBundle<O, S> {
+    pub fn is_empty(&self) -> bool {
+        // Notably, sm_gen will not be called when outputs are empty anyway
+        self.outputs.is_empty()
     }
 }
 
@@ -333,8 +339,8 @@ where
                 .map(|output| output.into_dyn(module_instance_id))
                 .collect::<Vec<ClientOutput>>(),
 
-            sms: self
-                .sms
+            sm_gens: self
+                .sm_gens
                 .into_iter()
                 .map(|output_sm| output_sm.into_dyn(module_instance_id))
                 .collect::<Vec<ClientOutputSM>>(),
@@ -356,8 +362,8 @@ impl IntoDynInstance for InstancelessDynClientOutputBundle {
                 })
                 .collect::<Vec<ClientOutput>>(),
 
-            sms: self
-                .sms
+            sm_gens: self
+                .sm_gens
                 .into_iter()
                 .map(|output_sm| ClientOutputSM {
                     state_machines: states_add_instance(
@@ -476,43 +482,35 @@ impl TransactionBuilder {
             .inputs
             .into_iter()
             .enumerate()
+            .filter(|(_, bundle)| !bundle.is_empty())
             .flat_map(|(bundle_idx, bundle)| {
-                let input_idxs = find_range_of_matching_items(&input_idx_to_bundle_idx, bundle_idx);
-                bundle.sms.into_iter().flat_map(move |sm| {
-                    if let Some(input_idxs) = input_idxs.as_ref() {
-                        (sm.state_machines)(OutPointRange::new(
-                            txid,
-                            IdxRange::from_inclusive(input_idxs.clone()).expect("can't overflow"),
-                        ))
-                    } else {
-                        // TODO: In the future `InputBundle` and `OutputBundle` should make empty
-                        // bundles impossible, so this should not be possible
-                        vec![]
-                    }
+                let input_idxs = find_range_of_matching_items(&input_idx_to_bundle_idx, bundle_idx)
+                    .expect("Non empty bundles must always have a match");
+                bundle.sm_gens.into_iter().flat_map(move |sm| {
+                    (sm.state_machines)(OutPointRange::new(
+                        txid,
+                        IdxRange::from_inclusive(input_idxs.clone()).expect("can't overflow"),
+                    ))
                 })
             });
 
-        let output_states =
-            self.outputs
-                .into_iter()
-                .enumerate()
-                .flat_map(|(bundle_idx, bundle)| {
-                    let output_idxs =
-                        find_range_of_matching_items(&output_idx_to_bundle_idx, bundle_idx);
-                    bundle.sms.into_iter().flat_map(move |sm| {
-                        if let Some(output_idxs) = output_idxs.as_ref() {
-                            (sm.state_machines)(OutPointRange::new(
-                                txid,
-                                IdxRange::from_inclusive(output_idxs.clone())
-                                    .expect("can't possibly overflow"),
-                            ))
-                        } else {
-                            // TODO: In the future `InputBundle` and `OutputBundle` should make
-                            // empty bundles impossible, so this should not be possible
-                            vec![]
-                        }
-                    })
-                });
+        let output_states = self
+            .outputs
+            .into_iter()
+            .enumerate()
+            .filter(|(_, bundle)| !bundle.is_empty())
+            .flat_map(|(bundle_idx, bundle)| {
+                let output_idxs =
+                    find_range_of_matching_items(&output_idx_to_bundle_idx, bundle_idx)
+                        .expect("Non empty bundles must always have a match");
+                bundle.sm_gens.into_iter().flat_map(move |sm| {
+                    (sm.state_machines)(OutPointRange::new(
+                        txid,
+                        IdxRange::from_inclusive(output_idxs.clone())
+                            .expect("can't possibly overflow"),
+                    ))
+                })
+            });
         (transaction, input_states.chain(output_states).collect())
     }
 
@@ -564,3 +562,6 @@ where
             .collect()
     })
 }
+
+#[cfg(test)]
+mod tests;
