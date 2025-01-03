@@ -189,7 +189,7 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
         match meta_values {
             Ok(meta_values) => self.save_meta_values(client, &meta_values).await,
             Err(error) => {
-                warn!(target: LOG_CLIENT, err = %error.fmt_compact_anyhow(), "failed to fetch source")
+                warn!(target: LOG_CLIENT, err = %error.fmt_compact_anyhow(), "failed to fetch source");
             }
         };
         self.initial_fetch_waiter.done();
