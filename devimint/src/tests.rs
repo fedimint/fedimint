@@ -1506,7 +1506,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     // TODO(support:v0.3): `block_height` field was introduced in v0.4.0
     // see: https://github.com/fedimint/fedimint/pull/4514
     if gatewayd_version >= *VERSION_0_4_0 {
-        let block_height = bitcoind.get_block_count().await? - 1;
+        let block_height = bitcoind.get_block_height().await?;
         if let Some(gw_ldk) = &gw_ldk {
             try_join!(
                 gw_lnd.wait_for_block_height(block_height),
