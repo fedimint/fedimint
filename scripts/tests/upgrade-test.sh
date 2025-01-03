@@ -10,13 +10,6 @@ if [ "$#" -eq 0 ]; then
   exit 1
 fi
 
-# allows versions to be passed in as either a single string or multiple params
-# e.g. `"v0.3.0 v0.4.0"` is the same as `v0.3.0 v0.4.0`
-if [ "$#" -eq 1 ]; then
-  IFS=' ' read -r -a versions <<< "$1"
-else
-  versions=("$@")
-fi
 
 # TODO(v0.5.0): We do not need to run the `gatewayd-mnemonic` test from v0.4.0
 # -> v0.5.0 over and over again. Once we have verified this test passes for
@@ -39,10 +32,6 @@ else
   done
 fi
 
-echo "## Running upgrade tests
-versions: ${versions[*]}
-kinds: ${test_kinds[*]}"
-
 build_workspace
 add_target_dir_to_path
 
@@ -50,67 +39,80 @@ export FM_BACKWARDS_COMPATIBILITY_TEST=1
 
 upgrade_tests=()
 
-if contains "fedimintd" "${test_kinds[@]}"; then
-  fedimintd_paths=()
-  for version in "${versions[@]}"; do
-    if [ "$version" == "current" ]; then
-      # Add current binaries from PATH
-      fedimintd_paths+=("fedimintd")
-    else
-      fedimintd_paths+=("$(nix_build_binary_for_version 'fedimintd' "$version")")
-    fi
-  done
+IFS=',' read -r -a version_paths <<< "$@"
+for version_path in "${version_paths[@]}"; do
+  echo "$version_path"
+done
 
-  upgrade_tests+=(
-    "devimint upgrade-tests fedimintd --paths $(printf "%s " "${fedimintd_paths[@]}")"
-  )
-fi
+for version_path in "${version_paths[@]}"; do
+  IFS=' ' read -r -a versions <<< "$version_path"
+  echo "## Running upgrade tests
+  versions: ${versions[*]}
+  kinds: ${test_kinds[*]}"
 
-if contains "fedimint-cli" "${test_kinds[@]}"; then
-  fedimint_cli_paths=()
-  for version in "${versions[@]}"; do
-    if [ "$version" == "current" ]; then
-      # Add current binaries from PATH
-      fedimint_cli_paths+=("fedimint-cli")
-    else
-      fedimint_cli_paths+=("$(nix_build_binary_for_version 'fedimint-cli' "$version")")
-    fi
-  done
+  if contains "fedimintd" "${test_kinds[@]}"; then
+    fedimintd_paths=()
+    for version in "${versions[@]}"; do
+      if [ "$version" == "current" ]; then
+        # Add current binaries from PATH
+        fedimintd_paths+=("fedimintd")
+      else
+        fedimintd_paths+=("$(nix_build_binary_for_version 'fedimintd' "$version")")
+      fi
+    done
 
-  upgrade_tests+=(
-    "devimint upgrade-tests fedimint-cli --paths $(printf "%s " "${fedimint_cli_paths[@]}")"
-  )
-fi
+    upgrade_tests+=(
+      "devimint upgrade-tests fedimintd --paths $(printf "%s " "${fedimintd_paths[@]}")"
+    )
+  fi
 
-if contains "gateway" "${test_kinds[@]}"; then
-  gatewayd_paths=()
-  gateway_cli_paths=()
-  for version in "${versions[@]}"; do
-    if [ "$version" == "current" ]; then
-      # Add current binaries from PATH
-      gatewayd_paths+=("gatewayd")
-      gateway_cli_paths+=("gateway-cli")
-    else
-      gatewayd_paths+=("$(nix_build_binary_for_version 'gatewayd' "$version")")
-      gateway_cli_paths+=("$(nix_build_binary_for_version 'gateway-cli' "$version")")
-    fi
-  done
+  if contains "fedimint-cli" "${test_kinds[@]}"; then
+    fedimint_cli_paths=()
+    for version in "${versions[@]}"; do
+      if [ "$version" == "current" ]; then
+        # Add current binaries from PATH
+        fedimint_cli_paths+=("fedimint-cli")
+      else
+        fedimint_cli_paths+=("$(nix_build_binary_for_version 'fedimint-cli' "$version")")
+      fi
+    done
 
-  upgrade_tests+=(
-    "devimint upgrade-tests gatewayd --gatewayd-paths $(printf "%s " "${gatewayd_paths[@]}") --gateway-cli-paths $(printf "%s " "${gateway_cli_paths[@]}")"
-  )
-fi
+    upgrade_tests+=(
+      "devimint upgrade-tests fedimint-cli --paths $(printf "%s " "${fedimint_cli_paths[@]}")"
+    )
+  fi
 
-if contains "mnemonic" "${test_kinds[@]}"; then
-  old_gatewayd=$(nix_build_binary_for_version 'gatewayd' "v0.4.0")
-  new_gatewayd="gatewayd"
-  old_gateway_cli=$(nix_build_binary_for_version 'gateway-cli' "v0.4.0")
-  new_gateway_cli="gateway-cli"
+  if contains "gateway" "${test_kinds[@]}"; then
+    gatewayd_paths=()
+    gateway_cli_paths=()
+    for version in "${versions[@]}"; do
+      if [ "$version" == "current" ]; then
+        # Add current binaries from PATH
+        gatewayd_paths+=("gatewayd")
+        gateway_cli_paths+=("gateway-cli")
+      else
+        gatewayd_paths+=("$(nix_build_binary_for_version 'gatewayd' "$version")")
+        gateway_cli_paths+=("$(nix_build_binary_for_version 'gateway-cli' "$version")")
+      fi
+    done
 
-  upgrade_tests+=(
-    "gateway-tests gatewayd-mnemonic --old-gatewayd-path $old_gatewayd --new-gatewayd-path $new_gatewayd --gw-type lnd --old-gateway-cli-path $old_gateway_cli --new-gateway-cli-path $new_gateway_cli"
-  )
-fi
+    upgrade_tests+=(
+      "devimint upgrade-tests gatewayd --gatewayd-paths $(printf "%s " "${gatewayd_paths[@]}") --gateway-cli-paths $(printf "%s " "${gateway_cli_paths[@]}")"
+    )
+  fi
+
+  if contains "mnemonic" "${test_kinds[@]}"; then
+    old_gatewayd=$(nix_build_binary_for_version 'gatewayd' "v0.4.0")
+    new_gatewayd="gatewayd"
+    old_gateway_cli=$(nix_build_binary_for_version 'gateway-cli' "v0.4.0")
+    new_gateway_cli="gateway-cli"
+
+    upgrade_tests+=(
+      "gateway-tests gatewayd-mnemonic --old-gatewayd-path $old_gatewayd --new-gatewayd-path $new_gatewayd --gw-type lnd --old-gateway-cli-path $old_gateway_cli --new-gateway-cli-path $new_gateway_cli"
+    )
+  fi
+done
+
 
 parsed_test_commands=$(printf "%s\n" "${upgrade_tests[@]}")
 
@@ -136,6 +138,8 @@ parallel_args+=(
 >&2 echo "## Starting all tests in parallel..."
 >&2 echo "parallel ${parallel_args[*]}"
 
+start=$(date +%s)  # Record start time in nanoseconds
+
 echo "$parsed_test_commands" | if parallel "${parallel_args[@]}"; then
   >&2 echo "All tests successful"
 else
@@ -143,3 +147,8 @@ else
   awk '{ if($7 != "0") print $0 "\n" }' < "$joblog"
   exit 1
 fi
+
+end=$(date +%s)    # Record end time in nanoseconds
+runtime=$((end - start)) # Calculate the difference
+echo "Runtime: $runtime seconds"
+

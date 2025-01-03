@@ -626,6 +626,7 @@ impl ServerModule for Wallet {
                 )
             }
             WalletInput::V1(input) => {
+                info!("input.outpoint: {:?}", input.outpoint);
                 let input_tx_out = dbtx
                     .get_value(&UnspentTxOutKey(input.outpoint))
                     .await
@@ -1246,38 +1247,34 @@ impl Wallet {
                 .await
                 .expect("bitcoind rpc to get block hash");
 
-            if self.consensus_module_consensus_version(dbtx).await
-                >= ModuleConsensusVersion::new(2, 2)
-            {
-                let block = retry("get_block", backoff_util::background_backoff(), || {
-                    self.btc_rpc.get_block(&block_hash)
-                })
-                .await
-                .expect("bitcoind rpc to get block");
+            let block = retry("get_block", backoff_util::background_backoff(), || {
+                self.btc_rpc.get_block(&block_hash)
+            })
+            .await
+            .expect("bitcoind rpc to get block");
 
-                for transaction in block.txdata {
-                    // We maintain the subset of unspent P2WSH transaction outputs created
-                    // since the federation was established in the database.
+            for transaction in block.txdata {
+                // We maintain the subset of unspent P2WSH transaction outputs created
+                // since the federation was established in the database.
 
-                    for tx_in in &transaction.input {
-                        dbtx.remove_entry(&UnspentTxOutKey(tx_in.previous_output))
+                for tx_in in &transaction.input {
+                    dbtx.remove_entry(&UnspentTxOutKey(tx_in.previous_output))
+                        .await;
+                }
+
+                for (vout, tx_out) in transaction.output.iter().enumerate() {
+                    if if self.cfg.consensus.peer_peg_in_keys.len() > 1 {
+                        tx_out.script_pubkey.is_p2wsh()
+                    } else {
+                        tx_out.script_pubkey.is_p2wpkh()
+                    } {
+                        let outpoint = bitcoin::OutPoint {
+                            txid: transaction.compute_txid(),
+                            vout: vout as u32,
+                        };
+
+                        dbtx.insert_new_entry(&UnspentTxOutKey(outpoint), tx_out)
                             .await;
-                    }
-
-                    for (vout, tx_out) in transaction.output.iter().enumerate() {
-                        if if self.cfg.consensus.peer_peg_in_keys.len() > 1 {
-                            tx_out.script_pubkey.is_p2wsh()
-                        } else {
-                            tx_out.script_pubkey.is_p2wpkh()
-                        } {
-                            let outpoint = bitcoin::OutPoint {
-                                txid: transaction.compute_txid(),
-                                vout: vout as u32,
-                            };
-
-                            dbtx.insert_new_entry(&UnspentTxOutKey(outpoint), tx_out)
-                                .await;
-                        }
                     }
                 }
             }
