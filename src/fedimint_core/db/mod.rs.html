@@ -5699,7 +5699,7 @@
     </span>WrongPrefix { expected: u8, found: u8 },
     <span class="attr">#[error(<span class="string">"Key had a wrong length, expected {expected} but got {found}"</span>)]
     </span>WrongLength { expected: usize, found: usize },
-    <span class="attr">#[error(<span class="string">"Other decoding error: {0:?}"</span>)]
+    <span class="attr">#[error(<span class="string">"Other decoding error: {0:#}"</span>)]
     </span>Other(anyhow::Error),
 }
 
