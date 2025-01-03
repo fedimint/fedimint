@@ -50,6 +50,8 @@ impl SessionOutcome {
 
         if let Some(root) = bitcoin::merkle_tree::calculate_root(leaf_hashes) {
             header[8..].copy_from_slice(&root.to_byte_array());
+        } else {
+            assert!(self.items.is_empty());
         }
 
         header
