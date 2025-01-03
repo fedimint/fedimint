@@ -564,7 +564,8 @@
 <a href="#563" id="563">563</a>
 <a href="#564" id="564">564</a>
 <a href="#565" id="565">565</a>
-<a href="#566" id="566">566</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::ops::RangeInclusive;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -653,7 +654,7 @@
 </span><span class="attr">#[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>ClientInputBundle&lt;I = DynInput, S = DynState&gt; {
     <span class="kw">pub</span>(<span class="kw">crate</span>) inputs: Vec&lt;ClientInput&lt;I&gt;&gt;,
-    <span class="kw">pub</span>(<span class="kw">crate</span>) sms: Vec&lt;ClientInputSM&lt;S&gt;&gt;,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) sm_gens: Vec&lt;ClientInputSM&lt;S&gt;&gt;,
 }
 
 <span class="kw">impl</span>&lt;I&gt; ClientInputBundle&lt;I, NeverClientStateMachine&gt; {
@@ -668,7 +669,7 @@
         }
         <span class="self">Self </span>{
             inputs,
-            sms: <span class="macro">vec!</span>[],
+            sm_gens: <span class="macro">vec!</span>[],
         }
     }
 }
@@ -678,12 +679,8 @@
     </span>I: IInput + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
     S: sm::IState + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
 {
-    <span class="kw">pub fn </span>new(inputs: Vec&lt;ClientInput&lt;I&gt;&gt;, sms: Vec&lt;ClientInputSM&lt;S&gt;&gt;) -&gt; <span class="self">Self </span>{
-        <span class="kw">if </span>inputs.is_empty() {
-            <span class="comment">// TODO: Make it return Result or assert?
-            </span><span class="macro">warn!</span>(target: LOG_CLIENT, <span class="string">"Empty input bundle will be illegal in the future"</span>);
-        }
-        <span class="self">Self </span>{ inputs, sms }
+    <span class="kw">pub fn </span>new(inputs: Vec&lt;ClientInput&lt;I&gt;&gt;, sm_gens: Vec&lt;ClientInputSM&lt;S&gt;&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ inputs, sm_gens }
     }
 
     <span class="kw">pub fn </span>inputs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[ClientInput&lt;I&gt;] {
@@ -691,7 +688,7 @@
     }
 
     <span class="kw">pub fn </span>sms(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[ClientInputSM&lt;S&gt;] {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.sms
+        <span class="kw-2">&amp;</span><span class="self">self</span>.sm_gens
     }
 
     <span class="kw">pub fn </span>into_instanceless(<span class="self">self</span>) -&gt; InstancelessDynClientInputBundle {
@@ -705,14 +702,21 @@
                     amount: input.amount,
                 })
                 .collect(),
-            sms: <span class="self">self
-                </span>.sms
+            sm_gens: <span class="self">self
+                </span>.sm_gens
                 .into_iter()
                 .map(|input_sm| InstancelessDynClientInputSM {
                     state_machines: states_to_instanceless_dyn(input_sm.state_machines),
                 })
                 .collect(),
         }
+    }
+}
+
+<span class="kw">impl</span>&lt;I, S&gt; ClientInputBundle&lt;I, S&gt; {
+    <span class="kw">pub fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="comment">// Notably, sm_gen will not be called when inputs are empty anyway
+        </span><span class="self">self</span>.inputs.is_empty()
     }
 }
 
@@ -759,8 +763,8 @@
                 .map(|input| input.into_dyn(module_instance_id))
                 .collect::&lt;Vec&lt;ClientInput&gt;&gt;(),
 
-            sms: <span class="self">self
-                </span>.sms
+            sm_gens: <span class="self">self
+                </span>.sm_gens
                 .into_iter()
                 .map(|input_sm| input_sm.into_dyn(module_instance_id))
                 .collect::&lt;Vec&lt;ClientInputSM&gt;&gt;(),
@@ -783,8 +787,8 @@
                 })
                 .collect::&lt;Vec&lt;ClientInput&gt;&gt;(),
 
-            sms: <span class="self">self
-                </span>.sms
+            sm_gens: <span class="self">self
+                </span>.sm_gens
                 .into_iter()
                 .map(|input_sm| ClientInputSM {
                     state_machines: states_add_instance(
@@ -800,7 +804,7 @@
 <span class="attr">#[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>ClientOutputBundle&lt;O = DynOutput, S = DynState&gt; {
     <span class="kw">pub</span>(<span class="kw">crate</span>) outputs: Vec&lt;ClientOutput&lt;O&gt;&gt;,
-    <span class="kw">pub</span>(<span class="kw">crate</span>) sms: Vec&lt;ClientOutputSM&lt;S&gt;&gt;,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) sm_gens: Vec&lt;ClientOutputSM&lt;S&gt;&gt;,
 }
 
 <span class="attr">#[derive(Clone, Debug)]
@@ -831,7 +835,7 @@
         }
         <span class="self">Self </span>{
             outputs,
-            sms: <span class="macro">vec!</span>[],
+            sm_gens: <span class="macro">vec!</span>[],
         }
     }
 }
@@ -841,12 +845,8 @@
     </span>O: IOutput + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
     S: sm::IState + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
 {
-    <span class="kw">pub fn </span>new(outputs: Vec&lt;ClientOutput&lt;O&gt;&gt;, sms: Vec&lt;ClientOutputSM&lt;S&gt;&gt;) -&gt; <span class="self">Self </span>{
-        <span class="kw">if </span>outputs.is_empty() {
-            <span class="comment">// TODO: Make it return Result or assert?
-            </span><span class="macro">warn!</span>(target: LOG_CLIENT, <span class="string">"Empty output bundle will be illegal in the future"</span>);
-        }
-        <span class="self">Self </span>{ outputs, sms }
+    <span class="kw">pub fn </span>new(outputs: Vec&lt;ClientOutput&lt;O&gt;&gt;, sm_gens: Vec&lt;ClientOutputSM&lt;S&gt;&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ outputs, sm_gens }
     }
 
     <span class="kw">pub fn </span>outputs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[ClientOutput&lt;O&gt;] {
@@ -854,12 +854,12 @@
     }
 
     <span class="kw">pub fn </span>sms(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[ClientOutputSM&lt;S&gt;] {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.sms
+        <span class="kw-2">&amp;</span><span class="self">self</span>.sm_gens
     }
 
     <span class="kw">pub fn </span>with(<span class="kw-2">mut </span><span class="self">self</span>, other: <span class="self">Self</span>) -&gt; <span class="self">Self </span>{
         <span class="self">self</span>.outputs.extend(other.outputs);
-        <span class="self">self</span>.sms.extend(other.sms);
+        <span class="self">self</span>.sm_gens.extend(other.sm_gens);
         <span class="self">self
     </span>}
 
@@ -873,14 +873,21 @@
                     amount: output.amount,
                 })
                 .collect(),
-            sms: <span class="self">self
-                </span>.sms
+            sm_gens: <span class="self">self
+                </span>.sm_gens
                 .into_iter()
                 .map(|output_sm| InstancelessDynClientOutputSM {
                     state_machines: states_to_instanceless_dyn(output_sm.state_machines),
                 })
                 .collect(),
         }
+    }
+}
+
+<span class="kw">impl</span>&lt;O, S&gt; ClientOutputBundle&lt;O, S&gt; {
+    <span class="kw">pub fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="comment">// Notably, sm_gen will not be called when outputs are empty anyway
+        </span><span class="self">self</span>.outputs.is_empty()
     }
 }
 
@@ -899,8 +906,8 @@
                 .map(|output| output.into_dyn(module_instance_id))
                 .collect::&lt;Vec&lt;ClientOutput&gt;&gt;(),
 
-            sms: <span class="self">self
-                </span>.sms
+            sm_gens: <span class="self">self
+                </span>.sm_gens
                 .into_iter()
                 .map(|output_sm| output_sm.into_dyn(module_instance_id))
                 .collect::&lt;Vec&lt;ClientOutputSM&gt;&gt;(),
@@ -922,8 +929,8 @@
                 })
                 .collect::&lt;Vec&lt;ClientOutput&gt;&gt;(),
 
-            sms: <span class="self">self
-                </span>.sms
+            sm_gens: <span class="self">self
+                </span>.sm_gens
                 .into_iter()
                 .map(|output_sm| ClientOutputSM {
                     state_machines: states_add_instance(
@@ -1042,43 +1049,35 @@
             </span>.inputs
             .into_iter()
             .enumerate()
+            .filter(|(<span class="kw">_</span>, bundle)| !bundle.is_empty())
             .flat_map(|(bundle_idx, bundle)| {
-                <span class="kw">let </span>input_idxs = find_range_of_matching_items(<span class="kw-2">&amp;</span>input_idx_to_bundle_idx, bundle_idx);
-                bundle.sms.into_iter().flat_map(<span class="kw">move </span>|sm| {
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(input_idxs) = input_idxs.as_ref() {
-                        (sm.state_machines)(OutPointRange::new(
-                            txid,
-                            IdxRange::from_inclusive(input_idxs.clone()).expect(<span class="string">"can't overflow"</span>),
-                        ))
-                    } <span class="kw">else </span>{
-                        <span class="comment">// TODO: In the future `InputBundle` and `OutputBundle` should make empty
-                        // bundles impossible, so this should not be possible
-                        </span><span class="macro">vec!</span>[]
-                    }
+                <span class="kw">let </span>input_idxs = find_range_of_matching_items(<span class="kw-2">&amp;</span>input_idx_to_bundle_idx, bundle_idx)
+                    .expect(<span class="string">"Non empty bundles must always have a match"</span>);
+                bundle.sm_gens.into_iter().flat_map(<span class="kw">move </span>|sm| {
+                    (sm.state_machines)(OutPointRange::new(
+                        txid,
+                        IdxRange::from_inclusive(input_idxs.clone()).expect(<span class="string">"can't overflow"</span>),
+                    ))
                 })
             });
 
-        <span class="kw">let </span>output_states =
-            <span class="self">self</span>.outputs
-                .into_iter()
-                .enumerate()
-                .flat_map(|(bundle_idx, bundle)| {
-                    <span class="kw">let </span>output_idxs =
-                        find_range_of_matching_items(<span class="kw-2">&amp;</span>output_idx_to_bundle_idx, bundle_idx);
-                    bundle.sms.into_iter().flat_map(<span class="kw">move </span>|sm| {
-                        <span class="kw">if let </span><span class="prelude-val">Some</span>(output_idxs) = output_idxs.as_ref() {
-                            (sm.state_machines)(OutPointRange::new(
-                                txid,
-                                IdxRange::from_inclusive(output_idxs.clone())
-                                    .expect(<span class="string">"can't possibly overflow"</span>),
-                            ))
-                        } <span class="kw">else </span>{
-                            <span class="comment">// TODO: In the future `InputBundle` and `OutputBundle` should make
-                            // empty bundles impossible, so this should not be possible
-                            </span><span class="macro">vec!</span>[]
-                        }
-                    })
-                });
+        <span class="kw">let </span>output_states = <span class="self">self
+            </span>.outputs
+            .into_iter()
+            .enumerate()
+            .filter(|(<span class="kw">_</span>, bundle)| !bundle.is_empty())
+            .flat_map(|(bundle_idx, bundle)| {
+                <span class="kw">let </span>output_idxs =
+                    find_range_of_matching_items(<span class="kw-2">&amp;</span>output_idx_to_bundle_idx, bundle_idx)
+                        .expect(<span class="string">"Non empty bundles must always have a match"</span>);
+                bundle.sm_gens.into_iter().flat_map(<span class="kw">move </span>|sm| {
+                    (sm.state_machines)(OutPointRange::new(
+                        txid,
+                        IdxRange::from_inclusive(output_idxs.clone())
+                            .expect(<span class="string">"can't possibly overflow"</span>),
+                    ))
+                })
+            });
         (transaction, input_states.chain(output_states).collect())
     }
 
@@ -1130,4 +1129,7 @@
             .collect()
     })
 }
+
+<span class="attr">#[cfg(test)]
+</span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>
