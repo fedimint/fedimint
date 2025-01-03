@@ -706,7 +706,15 @@
 <a href="#705" id="705">705</a>
 <a href="#706" id="706">706</a>
 <a href="#707" id="707">707</a>
-<a href="#708" id="708">708</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#708" id="708">708</a>
+<a href="#709" id="709">709</a>
+<a href="#710" id="710">710</a>
+<a href="#711" id="711">711</a>
+<a href="#712" id="712">712</a>
+<a href="#713" id="713">713</a>
+<a href="#714" id="714">714</a>
+<a href="#715" id="715">715</a>
+<a href="#716" id="716">716</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -717,7 +725,7 @@
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>fedimint_bip39::Mnemonic;
 <span class="kw">use </span>fedimint_client::backup::Metadata;
-<span class="kw">use </span>fedimint_client::ClientHandleArc;
+<span class="kw">use </span>fedimint_client::{Client, ClientHandleArc};
 <span class="kw">use </span>fedimint_core::config::{ClientModuleConfig, FederationId};
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
@@ -748,6 +756,19 @@
     Kind(ModuleKind),
 }
 
+<span class="kw">impl </span>ModuleSelector {
+    <span class="kw">pub fn </span>resolve(<span class="kw-2">&amp;</span><span class="self">self</span>, client: <span class="kw-2">&amp;</span>Client) -&gt; anyhow::Result&lt;ModuleInstanceId&gt; {
+        <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="self">self </span>{
+            ModuleSelector::Id(id) =&gt; {
+                client.get_module_client_dyn(<span class="kw-2">*</span>id)<span class="question-mark">?</span>;
+                <span class="kw-2">*</span>id
+            }
+            ModuleSelector::Kind(kind) =&gt; client
+                .get_first_instance(kind)
+                .context(<span class="string">"No module with this kind found"</span>)<span class="question-mark">?</span>,
+        })
+    }
+}
 <span class="attr">#[derive(Debug, Clone, Serialize)]
 </span><span class="kw">pub enum </span>ModuleStatus {
     Active,
@@ -1319,12 +1340,7 @@
         }
         ClientCmd::Module { module, args } =&gt; {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(module) = module {
-                <span class="kw">let </span>module_instance_id = <span class="kw">match </span>module {
-                    ModuleSelector::Id(id) =&gt; id,
-                    ModuleSelector::Kind(kind) =&gt; client
-                        .get_first_instance(<span class="kw-2">&amp;</span>kind)
-                        .context(<span class="string">"No module with this kind found"</span>)<span class="question-mark">?</span>,
-                };
+                <span class="kw">let </span>module_instance_id = module.resolve(<span class="kw-2">&amp;</span>client)<span class="question-mark">?</span>;
 
                 client
                     .get_module_client_dyn(module_instance_id)
