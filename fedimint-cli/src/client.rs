@@ -9,7 +9,7 @@ use bitcoin::{secp256k1, Network};
 use clap::Subcommand;
 use fedimint_bip39::Mnemonic;
 use fedimint_client::backup::Metadata;
-use fedimint_client::ClientHandleArc;
+use fedimint_client::{Client, ClientHandleArc};
 use fedimint_core::config::{ClientModuleConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::Encodable;
@@ -40,6 +40,19 @@ pub enum ModuleSelector {
     Kind(ModuleKind),
 }
 
+impl ModuleSelector {
+    pub fn resolve(&self, client: &Client) -> anyhow::Result<ModuleInstanceId> {
+        Ok(match self {
+            ModuleSelector::Id(id) => {
+                client.get_module_client_dyn(*id)?;
+                *id
+            }
+            ModuleSelector::Kind(kind) => client
+                .get_first_instance(kind)
+                .context("No module with this kind found")?,
+        })
+    }
+}
 #[derive(Debug, Clone, Serialize)]
 pub enum ModuleStatus {
     Active,
@@ -611,12 +624,7 @@ pub async fn handle_command(
         }
         ClientCmd::Module { module, args } => {
             if let Some(module) = module {
-                let module_instance_id = match module {
-                    ModuleSelector::Id(id) => id,
-                    ModuleSelector::Kind(kind) => client
-                        .get_first_instance(&kind)
-                        .context("No module with this kind found")?,
-                };
+                let module_instance_id = module.resolve(&client)?;
 
                 client
                     .get_module_client_dyn(module_instance_id)
