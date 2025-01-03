@@ -260,6 +260,7 @@ pub mod mock {
     use fedimint_core::task::sleep;
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{task, PeerId};
+    use fedimint_logging::{LOG_NET, LOG_NET_PEER};
     use futures::{pin_mut, FutureExt, SinkExt, Stream, StreamExt};
     use rand::Rng;
     use tokio::io::{
@@ -373,6 +374,7 @@ pub mod mock {
             }
             if self.failure_rate.random_fail() {
                 tracing::debug!(
+                    target: LOG_NET,
                     "Returning random error on unreliable stream after {} successes",
                     self.successes
                 );
@@ -682,7 +684,7 @@ pub mod mock {
                     let peer = match do_handshake(our_id, &mut connection).await {
                         Ok(peer) => peer,
                         Err(e) => {
-                            tracing::debug!("Error during handshake: {e:?}");
+                            tracing::debug!(target: LOG_NET, "Error during handshake: {e:?}");
                             return Some((Err(e), receive));
                         }
                     };

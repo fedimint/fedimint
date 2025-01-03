@@ -56,6 +56,7 @@ use fedimint_ln_common::{
     LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0, RemoveGatewayRequest,
     MODULE_CONSENSUS_VERSION,
 };
+use fedimint_logging::LOG_MODULE_LN;
 use fedimint_server::config::distributedgen::PeerHandleOps;
 use futures::StreamExt;
 use metrics::{LN_CANCEL_OUTGOING_CONTRACTS, LN_FUNDED_CONTRACT_SATS, LN_INCOMING_OFFER};
@@ -412,7 +413,7 @@ impl ServerModule for Lightning {
                     return Ok(());
                 }
 
-                debug!("Beginning to decrypt preimage");
+                debug!(target: LOG_MODULE_LN, "Beginning to decrypt preimage");
 
                 let Ok(preimage_vec) = self.cfg.consensus.threshold_pub_keys.decrypt(
                     decryption_shares
@@ -422,7 +423,7 @@ impl ServerModule for Lightning {
                 ) else {
                     // TODO: check if that can happen even though shares are verified
                     // before
-                    error!(contract_hash = %contract.hash, "Failed to decrypt preimage");
+                    error!(target: LOG_MODULE_LN, contract_hash = %contract.hash, "Failed to decrypt preimage");
                     return Ok(());
                 };
 
@@ -452,7 +453,7 @@ impl ServerModule for Lightning {
                     DecryptedPreimage::Invalid
                 };
 
-                debug!(?decrypted_preimage);
+                debug!(target: LOG_MODULE_LN, ?decrypted_preimage);
 
                 // TODO: maybe define update helper fn
                 // Update contract
@@ -918,7 +919,7 @@ impl ServerModule for Lightning {
                     match module.remove_gateway(remove_gateway_request.clone(), &mut context.dbtx().into_nc()).await {
                         Ok(()) => Ok(true),
                         Err(e) => {
-                            warn!("Unable to remove gateway registration {remove_gateway_request:?} Error: {e:?}");
+                            warn!(target: LOG_MODULE_LN, "Unable to remove gateway registration {remove_gateway_request:?} Error: {e:?}");
                             Ok(false)
                         },
                     }
@@ -941,7 +942,7 @@ impl Lightning {
     async fn block_count(&self) -> anyhow::Result<u64> {
         let res = self.btc_rpc.get_block_count().await;
         if let Err(ref err) = res {
-            error!("Error while calling get_block_count: {:?}", err);
+            error!(target: LOG_MODULE_LN, "Error while calling get_block_count: {:?}", err);
         }
         res
     }
@@ -1194,7 +1195,7 @@ impl Lightning {
             .signatures
             .get(&our_peer_id)
             .ok_or_else(|| {
-                warn!("No signature provided for gateway: {gateway_id}");
+                warn!(target: LOG_MODULE_LN, "No signature provided for gateway: {gateway_id}");
                 anyhow::anyhow!("No signature provided for gateway {gateway_id}")
             })?;
 
@@ -1212,7 +1213,7 @@ impl Lightning {
         signature.verify(&msg, &gateway_id.x_only_public_key().0)?;
 
         dbtx.remove_entry(&LightningGatewayKey(gateway_id)).await;
-        info!("Successfully removed gateway: {gateway_id}");
+        info!(target: LOG_MODULE_LN, "Successfully removed gateway: {gateway_id}");
         Ok(())
     }
 }

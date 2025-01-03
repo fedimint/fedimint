@@ -174,7 +174,7 @@ impl OperationLog {
     }
 
     /// Sets the outcome of an operation
-    #[instrument(skip(db), level = "debug")]
+    #[instrument(target = LOG_CLIENT, skip(db), level = "debug")]
     pub async fn set_operation_outcome(
         db: &Database,
         operation_id: OperationId,

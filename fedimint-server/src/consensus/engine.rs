@@ -87,7 +87,7 @@ impl ConsensusEngine {
         self.cfg.local.identity
     }
 
-    #[instrument(name = "run", skip_all, fields(id=%self.cfg.local.identity))]
+    #[instrument(target = LOG_CONSENSUS, name = "run", skip_all, fields(id=%self.cfg.local.identity))]
     pub async fn run(self) -> anyhow::Result<()> {
         if self.num_peers().total() == 1 {
             self.run_single_guardian(self.task_group.make_handle())
@@ -546,6 +546,7 @@ impl ConsensusEngine {
 
         if checkpoint_dir.exists() {
             debug!(
+                target: LOG_CONSENSUS,
                 ?current_session,
                 "Removing database checkpoints up to `current_session`"
             );
@@ -623,7 +624,7 @@ impl ConsensusEngine {
         Ok(())
     }
 
-    #[instrument(target = "fm::consensus", skip(self, item), level = "info")]
+    #[instrument(target = LOG_CONSENSUS, skip(self, item), level = "info")]
     pub async fn process_consensus_item(
         &self,
         session_index: u64,
@@ -637,7 +638,12 @@ impl ConsensusEngine {
             .with_label_values(&[peer_id_str])
             .start_timer();
 
-        debug!(%peer, item = ?DebugConsensusItem(&item), "Processing consensus item");
+        debug!(
+            target: LOG_CONSENSUS,
+            %peer,
+            item = ?DebugConsensusItem(&item),
+            "Processing consensus item"
+        );
 
         self.last_ci_by_peer
             .write()
@@ -748,7 +754,11 @@ impl ConsensusEngine {
                     .await
                     .is_some()
                 {
-                    debug!(target: LOG_CONSENSUS, %txid, "Transaction already accepted");
+                    debug!(
+                        target: LOG_CONSENSUS,
+                        %txid,
+                        "Transaction already accepted"
+                    );
                     bail!("Transaction is already accepted");
                 }
 

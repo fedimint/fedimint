@@ -2705,6 +2705,7 @@ dependencies = [
  "fedimint-bitcoind",
  "fedimint-core",
  "fedimint-ln-common",
+ "fedimint-logging",
  "fedimint-metrics",
  "fedimint-server",
  "fedimint-threshold-crypto",
@@ -2760,6 +2761,7 @@ dependencies = [
  "fedimint-client",
  "fedimint-core",
  "fedimint-lnv2-common",
+ "fedimint-logging",
  "fedimint-tpe",
  "futures",
  "itertools 0.13.0",
@@ -2904,6 +2906,7 @@ version = "0.6.0-alpha"
 dependencies = [
  "anyhow",
  "fedimint-core",
+ "fedimint-logging",
  "hex",
  "serde",
  "serde_json",

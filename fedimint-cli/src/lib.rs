@@ -613,7 +613,7 @@ impl FedimintCli {
             .expect("tracing initializes");
 
         let version = env!("CARGO_PKG_VERSION");
-        debug!("Starting fedimint-cli (version: {version} version_hash: {version_hash})");
+        debug!(target: LOG_CLIENT, "Starting fedimint-cli (version: {version} version_hash: {version_hash})");
 
         Ok(Self {
             module_inits: ClientModuleInitRegistry::new(),
@@ -644,7 +644,7 @@ impl FedimintCli {
                 let _ = writeln!(std::io::stdout(), "{output}");
             }
             Err(err) => {
-                debug!(err = %err.error, "Command failed");
+                debug!(target: LOG_CLIENT, err = %err.error, "Command failed");
                 let _ = writeln!(std::io::stdout(), "{err}");
                 exit(1);
             }
@@ -817,10 +817,10 @@ impl FedimintCli {
 
                 // TODO: until we implement recovery for other modules we can't really wait
                 // for more than this one
-                debug!("Waiting for mint module recovery to finish");
+                debug!(target: LOG_CLIENT, "Waiting for mint module recovery to finish");
                 client.wait_for_all_recoveries().await.map_err_cli()?;
 
-                debug!("Recovery complete");
+                debug!(target: LOG_CLIENT, "Recovery complete");
 
                 Ok(CliOutput::Raw(serde_json::to_value(()).unwrap()))
             }
@@ -917,6 +917,7 @@ impl FedimintCli {
                 //If fails, convert to JSON string.
                 let params = serde_json::from_str::<Value>(&params).unwrap_or_else(|err| {
                     debug!(
+                        target: LOG_CLIENT,
                         "Failed to serialize params:{}. Converting it to JSON string",
                         err
                     );

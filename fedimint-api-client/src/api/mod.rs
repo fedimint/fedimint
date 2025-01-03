@@ -32,7 +32,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, util, NumPeersExt, PeerId, TransactionId,
 };
-use fedimint_logging::LOG_CLIENT_NET_API;
+use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_API};
 use futures::future::pending;
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
@@ -150,7 +150,7 @@ pub trait FederationApiExt: IRawFederationApi {
 
     /// Make an aggregate request to federation, using `strategy` to logically
     /// merge the responses.
-    #[instrument(target = "fm::api", skip_all, fields(method=method))]
+    #[instrument(target = LOG_NET_API, skip_all, fields(method=method))]
     async fn request_with_strategy<PR: DeserializeOwned, FR: Debug>(
         &self,
         mut strategy: impl QueryStrategy<PR, FR> + MaybeSend,
@@ -976,7 +976,7 @@ impl<C> FederationPeer<C>
 where
     C: JsonRpcClient + 'static,
 {
-    #[instrument(level = "trace", fields(peer = %self.peer_id, %method), skip_all)]
+    #[instrument(target = LOG_CLIENT_NET_API, level = "trace", fields(peer = %self.peer_id, %method), skip_all)]
     pub async fn request(&self, method: &str, params: &[Value]) -> JsonRpcResult<Value> {
         // Strategies using timeouts often depend on failing requests returning quickly,
         // so every request gets only one reconnection attempt.

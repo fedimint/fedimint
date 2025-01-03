@@ -104,15 +104,28 @@ rules:
   patterns:
     # semgrep struggles with finding boundaries of rust macro invocation when ellipsis (`...`) is used
     # so matching this one with raw regexes instead
-    - pattern-regex: (error|warn|info)!\([^;]*?\);
-    - pattern-not-regex: '(error|warn|info)!\(\s*target: [^;]*?\);'
+    - pattern-regex: (error|warn|info|debug)!\([^;]*?\);
+    - pattern-not-regex: '(error|warn|info|debug)!\(\s*target: [^;]*?\);'
   severity: WARNING
   paths:
     include:
       - fedimint-server/
       - fedimint-core/
       - fedimint-cli/
-      - fedimint-client/
+      - fedimint-bitcoind/
+      - modules/*-server/
+      - modules/*-common/
+
+- id: use-log-instrument-targets
+  languages:
+    - rust
+  message: Instrument statements should have static target defined to aid filtering
+  patterns:
+    # semgrep struggles with finding boundaries of rust macro invocation when ellipsis (`...`) is used
+    # so matching this one with raw regexes instead
+    - pattern-regex: '#\[instrument\([^;]*?\)\]'
+    - pattern-not-regex: '#\[instrument\(\s*target\s*=\s*[^;]*?\)\]'
+  severity: WARNING
 
 - id: use-client-log-targets
   languages:

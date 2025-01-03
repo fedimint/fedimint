@@ -7,6 +7,7 @@ use fedimint_core::secp256k1::Keypair;
 use fedimint_core::OutPoint;
 use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0};
+use fedimint_logging::LOG_CLIENT_MODULE_LNV2;
 use tpe::AggregateDecryptionKey;
 use tracing::instrument;
 
@@ -89,7 +90,7 @@ impl State for ReceiveStateMachine {
 }
 
 impl ReceiveStateMachine {
-    #[instrument(skip(global_context))]
+    #[instrument(target = LOG_CLIENT_MODULE_LNV2, skip(global_context))]
     async fn await_incoming_contract(
         contract: IncomingContract,
         global_context: DynGlobalClientContext,

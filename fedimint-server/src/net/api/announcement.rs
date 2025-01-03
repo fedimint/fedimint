@@ -11,6 +11,7 @@ use fedimint_core::net::api_announcement::{
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{impl_db_lookup, impl_db_record, secp256k1, PeerId};
+use fedimint_logging::LOG_NET_API;
 use tokio::select;
 use tracing::debug;
 
@@ -69,7 +70,7 @@ pub async fn start_api_announcement_service(
                 .submit_api_announcement(our_peer_id, announcement.clone())
                 .await
             {
-                debug!(?e, "Announcing our API URL did not succeed for all peers, retrying in {FAILURE_RETRY_SECONDS} seconds");
+                debug!(target: LOG_NET_API, ?e, "Announcing our API URL did not succeed for all peers, retrying in {FAILURE_RETRY_SECONDS} seconds");
                 sleep(Duration::from_secs(FAILURE_RETRY_SECONDS)).await;
             } else {
                 let our_announcement_key = ApiAnnouncementKey(our_peer_id);
