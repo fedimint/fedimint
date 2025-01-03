@@ -15,7 +15,7 @@ use cln_rpc::ClnRpc;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_core::task::{block_in_place, block_on, sleep, timeout};
-use fedimint_core::util::write_overwrite_async;
+use fedimint_core::util::{write_overwrite_async, FmtCompact as _};
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing::gateway::LightningNodeType;
 use futures::StreamExt;
@@ -125,7 +125,7 @@ impl Bitcoind {
                         break;
                     }
                     if attempt % 20 == 19 {
-                        debug!(target: LOG_DEVIMINT, %attempt, %err, "Waiting for initial bitcoind wallet initialization");
+                        debug!(target: LOG_DEVIMINT, %attempt, err = %err.fmt_compact(), "Waiting for initial bitcoind wallet initialization");
                     }
                     sleep(Duration::from_millis(100)).await;
                 }

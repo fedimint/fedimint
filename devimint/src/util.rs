@@ -457,7 +457,7 @@ where
                     .expect("time goes forward")
                     < timeout =>
             {
-                debug!(target: LOG_DEVIMINT, %attempt, %err, "Polling {name} failed, will retry...");
+                debug!(target: LOG_DEVIMINT, %attempt, err = %err.fmt_compact_anyhow(), "Polling {name} failed, will retry...");
                 task::sleep(backoff.next().unwrap_or(MAX_BACKOFF)).await;
             }
             Err(ControlFlow::Continue(err)) => {

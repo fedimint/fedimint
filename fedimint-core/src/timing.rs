@@ -4,6 +4,8 @@ use std::time;
 use fedimint_logging::LOG_TIMING;
 use tracing::{debug, info, trace, warn, Level};
 
+use crate::util::FmtCompact as _;
+
 /// Data inside `TimeReporter`, in another struct to be able to move it out of
 /// without violating `drop` consistency
 struct TimeReporterInner {
@@ -20,7 +22,7 @@ impl TimeReporterInner {
             .map_err(|error| {
                 warn!(
                     target: LOG_TIMING,
-                    %error,
+                    err = %error.fmt_compact(),
                     "Timer reporter duration overflow. This should not happen."
                 );
                 error

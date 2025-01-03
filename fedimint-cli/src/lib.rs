@@ -140,7 +140,8 @@ trait CliResultExt<O, E> {
     /// Map error into `CliError` wrapping the original error message
     fn map_err_cli(self) -> Result<O, CliError>;
     /// Map error into `CliError` using custom error message `msg`
-    fn map_err_cli_msg(self, msg: impl Into<String>) -> Result<O, CliError>;
+    fn map_err_cli_msg(self, msg: impl fmt::Display + Send + Sync + 'static)
+        -> Result<O, CliError>;
 }
 
 impl<O, E> CliResultExt<O, E> for result::Result<O, E>
@@ -151,13 +152,20 @@ where
         self.map_err(|e| {
             let e = e.into();
             CliError {
-                error: e.to_string(),
+                error: format!("{e:#}"),
             }
         })
     }
 
-    fn map_err_cli_msg(self, msg: impl Into<String>) -> Result<O, CliError> {
-        self.map_err(|_| CliError { error: msg.into() })
+    fn map_err_cli_msg(
+        self,
+        msg: impl fmt::Display + Send + Sync + 'static,
+    ) -> Result<O, CliError> {
+        self.map_err(|e| Into::<anyhow::Error>::into(e))
+            .context(msg)
+            .map_err(|e| CliError {
+                error: format!("{e:#}"),
+            })
     }
 }
 
@@ -650,7 +658,7 @@ impl FedimintCli {
                 let _ = writeln!(std::io::stdout(), "{output}");
             }
             Err(err) => {
-                debug!(target: LOG_CLIENT, err = %err.error, "Command failed");
+                debug!(target: LOG_CLIENT, err = %err.error.as_str(), "Command failed");
                 let _ = writeln!(std::io::stdout(), "{err}");
                 exit(1);
             }

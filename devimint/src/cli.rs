@@ -7,7 +7,7 @@ use std::time::Duration;
 use anyhow::{anyhow, ensure, Context, Result};
 use clap::{Parser, Subcommand};
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::write_overwrite_async;
+use fedimint_core::util::{write_overwrite_async, FmtCompactAnyhow as _};
 use fedimint_logging::LOG_DEVIMINT;
 use rand::distributions::Alphanumeric;
 use rand::Rng as _;
@@ -209,7 +209,7 @@ pub async fn cleanup_on_exit<T>(
             Ok(Some(v))
         }
         Ok(Err(err)) => {
-            warn!(target: LOG_DEVIMINT, %err, "Main process failed, will shutdown");
+            warn!(target: LOG_DEVIMINT, err = %err.fmt_compact_anyhow(), "Main process failed, will shutdown");
             Err(err)
         }
     }
