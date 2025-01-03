@@ -19,13 +19,12 @@ impl TimeReporterInner {
     fn report(&self) {
         let duration = crate::time::now()
             .duration_since(self.start)
-            .map_err(|error| {
+            .inspect_err(|error| {
                 warn!(
                     target: LOG_TIMING,
                     err = %error.fmt_compact(),
                     "Timer reporter duration overflow. This should not happen."
                 );
-                error
             })
             .unwrap_or_default();
 
