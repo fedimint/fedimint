@@ -1,6 +1,8 @@
+use std::collections::BTreeMap;
 use std::time::Duration;
 use std::{cmp, ops};
 
+use bitcoin::secp256k1::PublicKey;
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -11,7 +13,7 @@ use fedimint_core::session_outcome::{AcceptedItem, SessionStatus};
 use fedimint_core::task::{MaybeSend, MaybeSync, ShuttingDownError, TaskGroup};
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::FmtCompactAnyhow as _;
-use fedimint_core::{apply, async_trait_maybe_send, OutPoint};
+use fedimint_core::{apply, async_trait_maybe_send, OutPoint, PeerId};
 use fedimint_logging::LOG_CLIENT_RECOVERY;
 use futures::{Stream, StreamExt as _};
 use rand::{thread_rng, Rng as _};
@@ -247,6 +249,7 @@ where
             core_api_version: ApiVersion,
             decoders: ModuleDecoderRegistry,
             epoch_range: ops::Range<u64>,
+            broadcast_public_keys: Option<BTreeMap<PeerId, PublicKey>>,
             task_group: TaskGroup,
         ) -> impl futures::Stream<Item = Result<(u64, Vec<AcceptedItem>), ShuttingDownError>> + 'a
         {
@@ -260,6 +263,7 @@ where
                     let api = api.clone();
                     let decoders = decoders.clone();
                     let task_group = task_group.clone();
+                    let broadcast_public_keys = broadcast_public_keys.clone();
 
                     Box::pin(async move {
                         // NOTE: Each block is fetched in a spawned task. This avoids a footgun
@@ -279,7 +283,7 @@ where
                                 let items_res = if core_api_version < VERSION_THAT_INTRODUCED_GET_SESSION_STATUS {
                                     api.await_block(session_idx, &decoders).await.map(|s| s.items)
                                 } else {
-                                    api.get_session_status(session_idx, &decoders, core_api_version).await.map(|s| match s {
+                                    api.get_session_status(session_idx, &decoders, core_api_version, broadcast_public_keys.as_ref()).await.map(|s| match s {
                                         SessionStatus::Initial => panic!("Federation missing session that existed when we started recovery"),
                                         SessionStatus::Pending(items) => items,
                                         SessionStatus::Complete(s) => s.items,
@@ -427,6 +431,12 @@ where
             *self.core_api_version(),
             client_ctx.decoders(),
             block_stream_session_range,
+            client_ctx
+                .get_config()
+                .await
+                .global
+                .broadcast_public_keys
+                .clone(),
             self.task_group().clone(),
         );
         let client_ctx = self.context();

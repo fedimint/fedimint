@@ -2429,6 +2429,7 @@ dependencies = [
  "jsonrpsee-wasm-client",
  "jsonrpsee-ws-client",
  "lru",
+ "rand",
  "rustls-pki-types",
  "serde",
  "serde_json",

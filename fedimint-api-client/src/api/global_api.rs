@@ -11,7 +11,6 @@ use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams,
 };
 use fedimint_core::backup::ClientBackupSnapshot;
-use fedimint_core::config::ClientConfig;
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::endpoint_constants::{
@@ -36,7 +35,7 @@ use fedimint_core::net::api_announcement::{
     SignedApiAnnouncement, SignedApiAnnouncementSubmission,
 };
 use fedimint_core::session_outcome::{
-    AcceptedItem, SessionOutcome, SessionStatus, SessionStatusV2, SignedSessionOutcome,
+    AcceptedItem, SessionOutcome, SessionStatus, SessionStatusV2,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionSubmissionOutcome};
@@ -146,10 +145,10 @@ where
     async fn get_session_status_raw_v2(
         &self,
         block_index: u64,
+        broadcast_public_keys: &BTreeMap<PeerId, secp256k1::PublicKey>,
         decoders: &ModuleDecoderRegistry,
     ) -> anyhow::Result<SessionStatus> {
         debug!(target: LOG_CLIENT_NET_API, block_index, "Fetching block's outcome from Federation");
-        let verify = |_s: &SignedSessionOutcome| -> bool { todo!() };
         let params = ApiRequestErased::new(block_index);
         let mut last_error = None;
         // fetch serially
@@ -165,7 +164,7 @@ where
                 .and_then(|s| Ok(s.try_into_inner(decoders)?))
             {
                 Ok(SessionStatusV2::Complete(signed_session_outcome)) => {
-                    if verify(&signed_session_outcome) {
+                    if signed_session_outcome.verify(broadcast_public_keys, block_index) {
                         // early return
                         return Ok(SessionStatus::Complete(
                             signed_session_outcome.session_outcome,
@@ -260,6 +259,7 @@ where
         session_idx: u64,
         decoders: &ModuleDecoderRegistry,
         core_api_version: ApiVersion,
+        broadcast_public_keys: Option<&BTreeMap<PeerId, secp256k1::PublicKey>>,
     ) -> anyhow::Result<SessionStatus> {
         const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2: ApiVersion = ApiVersion::new(0, 5);
         let mut lru_lock = self.get_session_status_lru.lock().await;
@@ -281,8 +281,11 @@ where
                 let session_status =
                     if core_api_version < VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2 {
                         self.get_session_status_raw(session_idx, decoders).await
+                    } else if let Some(broadcast_public_keys) = broadcast_public_keys {
+                        self.get_session_status_raw_v2(session_idx, broadcast_public_keys, decoders)
+                            .await
                     } else {
-                        self.get_session_status_raw_v2(session_idx, decoders).await
+                        self.get_session_status_raw(session_idx, decoders).await
                     };
                 match session_status {
                     Err(e) => Err(NoCacheErr::Err(e)),
