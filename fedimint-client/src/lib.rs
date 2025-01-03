@@ -126,7 +126,9 @@ use fedimint_core::module::{
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::{Elapsed, MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::transaction::Transaction;
-use fedimint_core::util::{backoff_util, retry, BoxStream, NextOrPending, SafeUrl};
+use fedimint_core::util::{
+    backoff_util, retry, BoxStream, FmtCompact as _, FmtCompactAnyhow as _, NextOrPending, SafeUrl,
+};
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, fedimint_build_code_version_env,
     maybe_add_send, maybe_add_send_sync, runtime, Amount, NumPeers, OutPoint, PeerId,
@@ -696,7 +698,7 @@ impl ClientHandle {
             .shutdown_join_all(Some(Duration::from_secs(30)))
             .await
         {
-            warn!(target: LOG_CLIENT, %err, "Error waiting for client task group to shut down");
+            warn!(target: LOG_CLIENT, err = %err.fmt_compact_anyhow(), "Error waiting for client task group to shut down");
         }
 
         let client_strong_count = Arc::strong_count(&inner);
@@ -1556,9 +1558,9 @@ impl Client {
                         .await
                         .is_some()
                     {
-                        debug!(target: LOG_CLIENT, %peer_id, %err, "Failed to refresh API versions of a peer, but we have a previous response");
+                        debug!(target: LOG_CLIENT, %peer_id, err = %err.fmt_compact(), "Failed to refresh API versions of a peer, but we have a previous response");
                     } else {
-                        debug!(target: LOG_CLIENT, %peer_id, %err, "Failed to refresh API versions of a peer, will retry");
+                        debug!(target: LOG_CLIENT, %peer_id, err = %err.fmt_compact(), "Failed to refresh API versions of a peer, will retry");
                         requests.push(make_request(Duration::from_secs(15), peer_id, &api));
                     }
                 }
@@ -1666,7 +1668,7 @@ impl Client {
                     {
                         warn!(
                             target: LOG_CLIENT,
-                            %error, "Failed to discover common api versions"
+                            err = %error.fmt_compact_anyhow(), "Failed to discover common api versions"
                         );
                     }
                 });
@@ -1903,7 +1905,7 @@ impl Client {
                     Err(err) => {
                         warn!(
                             target: LOG_CLIENT,
-                            %err, module_instance_id, "Module recovery failed"
+                            err = %err.fmt_compact_anyhow(), module_instance_id, "Module recovery failed"
                         );
                         // a module recovery that failed reports and error and
                         // just never finishes, so we don't need a separate state
@@ -2781,7 +2783,7 @@ impl ClientBuilder {
         )
         .await
         .inspect_err(|err| {
-            warn!(target: LOG_CLIENT, %err, "Failed to discover initial API version to use.");
+            warn!(target: LOG_CLIENT, err = %err.fmt_compact_anyhow(), "Failed to discover initial API version to use.");
         })
         .unwrap_or(ApiVersionSet {
             core: ApiVersion::new(0, 0),
@@ -2868,7 +2870,7 @@ impl ClientBuilder {
                                     .map_err(|err| {
                                         warn!(
                                             target: LOG_CLIENT,
-                                            module_id = module_instance_id, %kind, %err, "Module failed to recover"
+                                            module_id = module_instance_id, %kind, err = %err.fmt_compact_anyhow(), "Module failed to recover"
                                         );
                                         err
                                     })

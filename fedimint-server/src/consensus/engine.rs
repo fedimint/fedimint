@@ -25,6 +25,7 @@ use fedimint_core::session_outcome::{
 };
 use fedimint_core::task::{sleep, TaskGroup, TaskHandle};
 use fedimint_core::timing::TimeReporter;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{timing, NumPeers, NumPeersExt, PeerId};
 use futures::StreamExt;
 use rand::Rng;
@@ -378,7 +379,7 @@ impl ConsensusEngine {
                                         warn!(target: LOG_CONSENSUS, "Not reporting ordering latency on possibly out of sync item");
                                     }
                                     Err(err) => {
-                                        debug!(target: LOG_CONSENSUS, %err, "Missing submission timestamp. This is normal on start");
+                                        debug!(target: LOG_CONSENSUS, err = %err.fmt_compact(), "Missing submission timestamp. This is normal on start");
                                         break;
                                     }
                                 }

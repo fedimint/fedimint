@@ -17,7 +17,7 @@ use fedimint_core::fmt_utils::AbbreviateJson;
 use fedimint_core::maybe_add_send_sync;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::BoxFuture;
+use fedimint_core::util::{BoxFuture, FmtCompactAnyhow as _};
 use fedimint_logging::LOG_CLIENT_REACTOR;
 use futures::future::{self, select_all};
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -439,7 +439,7 @@ impl ExecutorInner {
         {
             warn!(
                 target: LOG_CLIENT_REACTOR,
-                %err,
+                err = %err.fmt_compact_anyhow(),
                 "An unexpected error occurred during a state transition"
             );
         }
