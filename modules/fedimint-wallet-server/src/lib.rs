@@ -1222,7 +1222,7 @@ impl Wallet {
             target: LOG_MODULE_WALLET,
             new_count,
             blocks_to_go = new_count - old_count,
-            "New consensus count, syncing up",
+            "New block count consensus, syncing up",
         );
 
         // Before we can safely call our bitcoin backend to process the new consensus
