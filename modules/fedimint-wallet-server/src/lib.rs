@@ -64,7 +64,7 @@ use fedimint_core::server::DynServerModule;
 use fedimint_core::task::sleep;
 use fedimint_core::task::{TaskGroup, TaskHandle};
 use fedimint_core::time::now;
-use fedimint_core::util::{backoff_util, retry};
+use fedimint_core::util::{backoff_util, retry, FmtCompactAnyhow as _};
 use fedimint_core::{
     apply, async_trait_maybe_send, get_network_for_address, push_db_key_items, push_db_pair_items,
     Feerate, NumPeersExt, OutPoint, PeerId, ServerModule,
@@ -457,7 +457,7 @@ impl ServerModule for Wallet {
                 items.push(WalletConsensusItem::BlockCount(block_count_vote));
             }
             Err(err) => {
-                warn!(target: LOG_MODULE_WALLET, %err, "Can't update block count");
+                warn!(target: LOG_MODULE_WALLET, err = %err.fmt_compact_anyhow(), "Can't update block count");
             }
         }
 
@@ -1607,7 +1607,7 @@ impl Wallet {
                             let _ = block_count_tx.send(Some(c));
                         },
                         Err(err) => {
-                            warn!(target: LOG_MODULE_WALLET, %err, "Unable to get block count from the node");
+                            warn!(target: LOG_MODULE_WALLET, err = %err.fmt_compact_anyhow(), "Unable to get block count from the node");
                         }
                     }
                 };
@@ -1624,7 +1624,7 @@ impl Wallet {
                             Err(err) => {
                                 // Regtest node never returns fee rate, so no point spamming about it
                                 if !is_running_in_test_env() {
-                                    warn!(target: LOG_MODULE_WALLET, %err, %name, "Error getting feerate from source");
+                                    warn!(target: LOG_MODULE_WALLET, err = %err.fmt_compact_anyhow(), %name, "Error getting feerate from source");
                                 }
                             },
                         }

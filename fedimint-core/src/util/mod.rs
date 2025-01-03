@@ -1,6 +1,7 @@
 pub mod backoff_util;
 /// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
 pub mod broadcaststream;
+mod error;
 pub mod update_merge;
 
 use std::convert::Infallible;
@@ -14,6 +15,7 @@ use std::str::FromStr;
 use std::{fs, io};
 
 use anyhow::format_err;
+pub use error::*;
 use fedimint_logging::LOG_CORE;
 use futures::StreamExt;
 use serde::Serialize;
@@ -450,12 +452,12 @@ where
         attempts += 1;
         match op_fn().await {
             Ok(result) => return Ok(result),
-            Err(error) => {
+            Err(err) => {
                 if let Some(interval) = strategy.next() {
                     // run closure op_fn again
                     debug!(
                         target: LOG_CORE,
-                        %error,
+                        err = %err.fmt_compact_anyhow(),
                         %attempts,
                         interval = interval.as_secs(),
                         "{} failed, retrying",
@@ -465,12 +467,12 @@ where
                 } else {
                     warn!(
                         target: LOG_CORE,
-                        ?error,
+                        ?err,
                         %attempts,
                         "{} failed",
                         op_name,
                     );
-                    return Err(error);
+                    return Err(err);
                 }
             }
         }

@@ -7,11 +7,13 @@ pub const FM_DISCOVER_API_VERSION_TIMEOUT_ENV: &str = "FM_DISCOVER_API_VERSION_T
 
 #[cfg(not(target_family = "wasm"))]
 pub fn get_discover_api_version_timeout() -> Duration {
+    use fedimint_core::util::FmtCompact as _;
+
     if let Ok(s) = std::env::var(FM_DISCOVER_API_VERSION_TIMEOUT_ENV) {
         match FromStr::from_str(&s) {
             Ok(secs) => return Duration::from_secs(secs),
             Err(err) => warn!(
-                %err,
+                err = %err.fmt_compact(),
                 var = FM_DISCOVER_API_VERSION_TIMEOUT_ENV,
                 "Could not parse env variable"
             ),

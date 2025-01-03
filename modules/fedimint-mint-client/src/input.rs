@@ -159,7 +159,7 @@ impl MintInputStateCreated {
             }
             Err(err) => {
                 // Transaction rejected: attempting to refund
-                debug!(target: LOG_CLIENT_MODULE_MINT, %err, "Refunding mint transaction input due to transaction error");
+                debug!(target: LOG_CLIENT_MODULE_MINT, err = %err.as_str(), "Refunding mint transaction input due to transaction error");
                 Self::refund(dbtx, old_state, global_context).await
             }
         }
@@ -252,7 +252,7 @@ impl MintInputStateCreatedBundle {
             }
             Err(err) => {
                 // Transaction rejected: attempting to refund
-                debug!(target: LOG_CLIENT_MODULE_MINT, %err, "Refunding mint transaction input due to transaction error");
+                debug!(target: LOG_CLIENT_MODULE_MINT, err = %err.as_str(), "Refunding mint transaction input due to transaction error");
                 Self::refund(dbtx, old_state, global_context).await
             }
         }
@@ -360,7 +360,7 @@ impl MintInputStateRefundedBundle {
             }
             Err(err) => {
                 // Transaction rejected: attempting to refund
-                debug!(target: LOG_CLIENT_MODULE_MINT, %err, "Refunding mint transaction input due to transaction error on multi-note refund");
+                debug!(target: LOG_CLIENT_MODULE_MINT, err = %err.as_str(), "Refunding mint transaction input due to transaction error on multi-note refund");
                 Self::refund(dbtx, old_state, global_context).await
             }
         }
@@ -451,7 +451,7 @@ impl MintInputStateRefund {
             Err(err) => {
                 // Refund failed
                 // TODO: include e-cash notes for recovery? Although, they are in the log …
-                warn!(target: LOG_CLIENT_MODULE_MINT, %err, %refund_txid, "Refund transaction rejected. Notes probably lost.");
+                warn!(target: LOG_CLIENT_MODULE_MINT, err = %err.as_str(), %refund_txid, "Refund transaction rejected. Notes probably lost.");
                 MintInputStateMachine {
                     common: old_state.common,
                     state: MintInputStates::Error(MintInputStateError {

@@ -14,6 +14,7 @@ use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
+use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::{secp256k1, time};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use fedimint_wallet_common::txoproof::PegInProof;
@@ -113,7 +114,7 @@ pub(crate) async fn run_peg_in_monitor(
         )
         .await
         {
-            warn!(%err, "Error checking for deposits");
+            warn!(target: LOG_CLIENT_MODULE_WALLET, error = %err.fmt_compact_anyhow(), "Error checking for deposits");
             continue;
         }
 
@@ -220,7 +221,7 @@ async fn check_and_claim_idx_pegins(
                 .await?;
         }
         Err(err) => {
-            debug!(target: LOG_CLIENT_MODULE_WALLET, %err, tweak_idx=%due_key.0, "Error checking tweak_idx");
+            debug!(target: LOG_CLIENT_MODULE_WALLET, err = %err.fmt_compact_anyhow(), tweak_idx=%due_key.0, "Error checking tweak_idx");
         }
     }
     Ok(())
