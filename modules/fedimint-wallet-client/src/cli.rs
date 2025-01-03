@@ -15,8 +15,11 @@ enum Opts {
         #[arg(long, default_value = "1")]
         num: usize,
     },
+    GetConsensusBlockCount,
     /// Returns the Bitcoin RPC kind
-    GetBitcoinRpcKind { peer_id: u16 },
+    GetBitcoinRpcKind {
+        peer_id: u16,
+    },
     /// Returns the Bitcoin RPC kind and URL, if authenticated
     GetBitcoinRpcConfig,
 }
@@ -49,6 +52,10 @@ pub(crate) async fn handle_cli_command(
                 .ok_or(anyhow::anyhow!("Admin auth not set"))?;
 
             serde_json::to_value(module.module_api.fetch_bitcoin_rpc_config(auth).await?)
+                .expect("JSON serialization failed")
+        }
+        Opts::GetConsensusBlockCount => {
+            serde_json::to_value(module.module_api.fetch_consensus_block_count().await?)
                 .expect("JSON serialization failed")
         }
     };
