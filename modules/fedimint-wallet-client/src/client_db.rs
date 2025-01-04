@@ -1,5 +1,6 @@
 use core::fmt;
 use std::ops;
+use std::str::FromStr;
 use std::time::SystemTime;
 
 use fedimint_client::module::init::recovery::RecoveryFromHistoryCommon;
@@ -58,6 +59,14 @@ pub struct TweakIdx(pub u64);
 impl fmt::Display for TweakIdx {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!("TweakIdx({})", self.0))
+    }
+}
+
+impl FromStr for TweakIdx {
+    type Err = <u64 as FromStr>::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(FromStr::from_str(s)?))
     }
 }
 

@@ -82,7 +82,7 @@ async fn peg_in<'a>(
     bitcoin.mine_blocks(finality_delay).await;
 
     wallet_module
-        .await_num_deposit_by_operation_id(op, 1)
+        .await_num_deposits_by_operation_id(op, 1)
         .await?;
     assert_eq!(
         client.get_balance().await,
@@ -361,7 +361,7 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
         info!(?height, ?tx, txid = ?tx.compute_txid(), "First peg-in transaction mined");
         bitcoin.mine_blocks(finality_delay).await;
         wallet_module
-            .await_num_deposit_by_operation_id(op, 1)
+            .await_num_deposits_by_operation_id(op, 1)
             .await?;
         assert_eq!(
             client.get_balance().await,
