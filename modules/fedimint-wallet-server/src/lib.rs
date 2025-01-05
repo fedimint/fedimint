@@ -71,7 +71,8 @@ use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGen
 use fedimint_wallet_common::endpoint_constants::{
     ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT, BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT,
     BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT,
-    PEG_OUT_FEES_ENDPOINT, UTXO_CONFIRMED_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
+    PEG_OUT_FEES_ENDPOINT, SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT, UTXO_CONFIRMED_ENDPOINT,
+    WALLET_SUMMARY_ENDPOINT,
 };
 use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
@@ -898,6 +899,13 @@ impl ServerModule for Wallet {
                 ApiVersion::new(0, 2),
                 async |module: &Wallet, context, _params: ()| -> ModuleConsensusVersion {
                     Ok(module.consensus_module_consensus_version(&mut context.dbtx().into_nc()).await)
+                }
+            },
+            api_endpoint! {
+                SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT,
+                ApiVersion::new(0, 2),
+                async |_module: &Wallet, _context, _params: ()| -> ModuleConsensusVersion {
+                    Ok(MODULE_CONSENSUS_VERSION)
                 }
             },
             api_endpoint! {
