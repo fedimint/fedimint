@@ -85,7 +85,7 @@ use std::fmt::{Debug, Formatter};
 use std::future::pending;
 use std::ops::{self, Range};
 use std::pin::Pin;
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, RwLock, Weak};
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, ensure, format_err, Context};
@@ -151,7 +151,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 #[cfg(not(target_family = "wasm"))]
 use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
-use tokio::sync::{broadcast, watch, RwLock};
+use tokio::sync::{broadcast, watch};
 use tokio_stream::wrappers::WatchStream;
 use tracing::{debug, error, info, trace, warn};
 use transaction::{
@@ -295,7 +295,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
     /// calls can be made
     fn module_api(&self) -> DynModuleApi;
 
-    async fn client_config(&self) -> ClientConfig;
+    fn client_config(&self) -> ClientConfig;
 
     /// Returns a reference to the client's federation API client. The provided
     /// interface [`IGlobalFederationApi`] typically does not provide the
@@ -351,7 +351,7 @@ impl IGlobalClientContext for () {
         unimplemented!("fake implementation, only for tests");
     }
 
-    async fn client_config(&self) -> ClientConfig {
+    fn client_config(&self) -> ClientConfig {
         unimplemented!("fake implementation, only for tests");
     }
 
@@ -552,8 +552,8 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         self.client.decoders()
     }
 
-    async fn client_config(&self) -> ClientConfig {
-        self.client.config().await
+    fn client_config(&self) -> ClientConfig {
+        self.client.config()
     }
 
     async fn claim_inputs_dyn(
@@ -730,7 +730,7 @@ impl ClientHandle {
                 .as_ref()
                 .ok_or_else(|| format_err!("Already stopped"))?;
             let builder = ClientBuilder::from_existing(client);
-            let config = client.config().await;
+            let config = client.config();
             let api_secret = client.api_secret.clone();
             let root_secret = client.root_secret.clone();
 
@@ -1034,8 +1034,8 @@ impl Client {
         })
     }
 
-    pub async fn config(&self) -> ClientConfig {
-        self.config.read().await.clone()
+    pub fn config(&self) -> ClientConfig {
+        self.config.read().expect("poisoned").clone()
     }
 
     pub fn api_secret(&self) -> &Option<String> {
@@ -1456,8 +1456,8 @@ impl Client {
     /// Compared to the consensus module format where module configs are binary
     /// encoded this format cannot be cryptographically verified but is easier
     /// to consume and to some degree human-readable.
-    pub async fn get_config_json(&self) -> JsonClientConfig {
-        self.config().await.to_json()
+    pub fn get_config_json(&self) -> JsonClientConfig {
+        self.config().to_json()
     }
 
     /// Get the primary module
@@ -1614,7 +1614,7 @@ impl Client {
 
     pub async fn load_and_refresh_common_api_version(&self) -> anyhow::Result<ApiVersionSet> {
         Self::load_and_refresh_common_api_version_static(
-            &self.config().await,
+            &self.config(),
             &self.module_inits,
             &self.api,
             &self.db,
@@ -1821,7 +1821,7 @@ impl Client {
         module_kind: ModuleKind,
     ) -> anyhow::Result<()> {
         let mut recovery_receiver = self.client_recovery_progress_receiver.clone();
-        let config = self.config().await;
+        let config = self.config();
         recovery_receiver
             .wait_for(|in_progress| {
                 !in_progress
@@ -2019,7 +2019,7 @@ impl Client {
 
     /// Returns a list of guardian API URLs
     pub async fn get_peer_urls(&self) -> BTreeMap<PeerId, SafeUrl> {
-        get_api_urls(&self.db, &self.config().await).await
+        get_api_urls(&self.db, &self.config()).await
     }
 
     /// Create an invite code with the api endpoint of the given peer which can
@@ -2046,7 +2046,7 @@ impl Client {
         &self,
     ) -> BTreeMap<PeerId, fedimint_core::secp256k1::PublicKey> {
         self.db.autocommit(|dbtx, _| Box::pin(async move {
-            let config = self.config().await;
+            let config = self.config();
 
             let guardian_pub_keys = if let Some(guardian_pub_keys) = config.global.broadcast_public_keys {guardian_pub_keys}else{
                 let fetched_config = retry(
@@ -2080,7 +2080,7 @@ impl Client {
                 };
 
                 dbtx.insert_entry(&ClientConfigKey, &new_config).await;
-                *(self.config.write().await) = new_config;
+                *(self.config.write().expect("poisoned")) = new_config;
                 guardian_pub_keys
             };
 
@@ -2106,7 +2106,7 @@ impl Client {
                     }
                 }
                 "get_config" => {
-                    let config = self.config().await;
+                    let config = self.config();
                     yield serde_json::to_value(config)?;
                 }
                 "get_federation_id" => {

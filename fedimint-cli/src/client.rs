@@ -626,7 +626,6 @@ pub async fn handle_command(
             } else {
                 let module_list: Vec<ModuleInfo> = client
                     .config()
-                    .await
                     .modules
                     .iter()
                     .map(|(id, ClientModuleConfig { kind, .. })| ModuleInfo {
@@ -645,7 +644,7 @@ pub async fn handle_command(
             }
         }
         ClientCmd::Config => {
-            let config = client.get_config_json().await;
+            let config = client.get_config_json();
             Ok(serde_json::to_value(config).expect("Client config is serializable"))
         }
         ClientCmd::SessionCount => {
@@ -671,7 +670,7 @@ async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json
     Ok(serde_json::to_value(InfoResponse {
         federation_id: client.federation_id(),
         network: wallet_client.get_network(),
-        meta: client.config().await.global.meta.clone(),
+        meta: client.config().global.meta.clone(),
         total_amount_msat: summary.total_amount(),
         total_num_notes: summary.count_items(),
         denominations_msat: summary,

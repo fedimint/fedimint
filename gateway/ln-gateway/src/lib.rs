@@ -806,8 +806,7 @@ impl Gateway {
                 self.federation_manager
                     .read()
                     .await
-                    .get_federation_config(federation_id)
-                    .await?,
+                    .get_federation_config(federation_id)?,
             );
             federations
         } else {
@@ -815,7 +814,6 @@ impl Gateway {
                 .read()
                 .await
                 .get_all_federation_configs()
-                .await
         };
 
         Ok(GatewayFedConfig { federations })
@@ -1111,13 +1109,13 @@ impl Gateway {
         // federation info here because short channel id is not yet persisted.
         let federation_info = FederationInfo {
             federation_id,
-            federation_name: federation_manager.federation_name(&client).await,
+            federation_name: FederationManager::federation_name(&client),
             balance_msat: client.get_balance().await,
             config: federation_config.clone(),
         };
 
         if self.is_running_lnv1() {
-            Self::check_lnv1_federation_network(&client, self.network).await?;
+            Self::check_lnv1_federation_network(&client, self.network)?;
             client
                 .get_first_module::<GatewayClientModule>()?
                 .try_register_with_federation(
@@ -1131,7 +1129,7 @@ impl Gateway {
         }
 
         if self.is_running_lnv2() {
-            Self::check_lnv2_federation_network(&client, self.network).await?;
+            Self::check_lnv2_federation_network(&client, self.network)?;
         }
 
         // no need to enter span earlier, because connect-fed has a span
@@ -1210,7 +1208,6 @@ impl Gateway {
             .read()
             .await
             .get_all_federation_configs()
-            .await
             .keys()
             .copied()
             .collect::<BTreeSet<_>>();
@@ -1740,12 +1737,12 @@ impl Gateway {
 
     /// Verifies that the supplied `network` matches the Bitcoin network in the
     /// connected client's LNv1 configuration.
-    async fn check_lnv1_federation_network(
+    fn check_lnv1_federation_network(
         client: &ClientHandleArc,
         network: Network,
     ) -> AdminResult<()> {
         let federation_id = client.federation_id();
-        let config = client.config().await;
+        let config = client.config();
         let cfg = config
             .modules
             .values()
@@ -1771,12 +1768,12 @@ impl Gateway {
 
     /// Verifies that the supplied `network` matches the Bitcoin network in the
     /// connected client's LNv2 configuration.
-    async fn check_lnv2_federation_network(
+    fn check_lnv2_federation_network(
         client: &ClientHandleArc,
         network: Network,
     ) -> AdminResult<()> {
         let federation_id = client.federation_id();
-        let config = client.config().await;
+        let config = client.config();
         let cfg = config
             .modules
             .values()
