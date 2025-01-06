@@ -6,7 +6,8 @@ use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_mint_client::OOBNotes;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
-    BackupPayload, DepositAddressPayload, ReceiveEcashPayload, SpendEcashPayload, WithdrawPayload,
+    BackupPayload, DepositAddressPayload, DepositAddressRecheckPayload, ReceiveEcashPayload,
+    SpendEcashPayload, WithdrawPayload,
 };
 
 use crate::print_response;
@@ -21,6 +22,13 @@ pub enum EcashCommands {
     /// Generate a new peg-in address to a federation that the gateway can claim
     /// e-cash for later.
     Pegin {
+        #[clap(long)]
+        federation_id: FederationId,
+    },
+    /// Trigger a recheck for deposits on a deposit address
+    PeginRecheck {
+        #[clap(long)]
+        address: bitcoin::Address<NetworkUnchecked>,
         #[clap(long)]
         federation_id: FederationId,
     },
@@ -72,6 +80,18 @@ impl EcashCommands {
                     .get_deposit_address(DepositAddressPayload { federation_id })
                     .await?;
 
+                print_response(response);
+            }
+            Self::PeginRecheck {
+                address,
+                federation_id,
+            } => {
+                let response = create_client()
+                    .recheck_address(DepositAddressRecheckPayload {
+                        address,
+                        federation_id,
+                    })
+                    .await?;
                 print_response(response);
             }
             Self::Pegout {

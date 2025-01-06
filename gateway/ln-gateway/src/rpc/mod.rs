@@ -21,6 +21,7 @@ use crate::SafeUrl;
 pub const V1_API_ENDPOINT: &str = "v1";
 
 pub const ADDRESS_ENDPOINT: &str = "/address";
+pub const ADDRESS_RECHECK_ENDPOINT: &str = "/address_recheck";
 pub const BACKUP_ENDPOINT: &str = "/backup";
 pub const CONFIGURATION_ENDPOINT: &str = "/config";
 pub const CONNECT_FED_ENDPOINT: &str = "/connect_fed";
@@ -80,6 +81,12 @@ pub struct ConfigPayload {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DepositAddressPayload {
+    pub federation_id: FederationId,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DepositAddressRecheckPayload {
+    pub address: Address<NetworkUnchecked>,
     pub federation_id: FederationId,
 }
 

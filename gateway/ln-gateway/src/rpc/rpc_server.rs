@@ -24,16 +24,16 @@ use tracing::{error, info, instrument};
 
 use super::{
     BackupPayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
-    CreateInvoiceForOperatorPayload, DepositAddressPayload, InfoPayload, LeaveFedPayload,
-    OpenChannelPayload, PayInvoiceForOperatorPayload, PaymentLogPayload, ReceiveEcashPayload,
-    SendOnchainPayload, SetFeesPayload, SpendEcashPayload, WithdrawPayload, ADDRESS_ENDPOINT,
-    BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
-    CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, GATEWAY_INFO_ENDPOINT,
-    GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
-    LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT,
-    PAYMENT_LOG_ENDPOINT, PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT,
-    SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, V1_API_ENDPOINT,
-    WITHDRAW_ENDPOINT,
+    CreateInvoiceForOperatorPayload, DepositAddressPayload, DepositAddressRecheckPayload,
+    InfoPayload, LeaveFedPayload, OpenChannelPayload, PayInvoiceForOperatorPayload,
+    PaymentLogPayload, ReceiveEcashPayload, SendOnchainPayload, SetFeesPayload, SpendEcashPayload,
+    WithdrawPayload, ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT,
+    CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
+    CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT,
+    GET_BALANCES_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT,
+    LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAYMENT_LOG_ENDPOINT,
+    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT, SEND_ONCHAIN_ENDPOINT,
+    SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, V1_API_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 use crate::error::{AdminGatewayError, PublicGatewayError};
 use crate::rpc::ConfigPayload;
@@ -162,6 +162,7 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
         )
         .route(LIST_ACTIVE_CHANNELS_ENDPOINT, get(list_active_channels))
         .route(SEND_ONCHAIN_ENDPOINT, post(send_onchain))
+        .route(ADDRESS_RECHECK_ENDPOINT, post(recheck_address))
         .route(GET_BALANCES_ENDPOINT, get(get_balances))
         .route(SPEND_ECASH_ENDPOINT, post(spend_ecash))
         .route(MNEMONIC_ENDPOINT, get(mnemonic))
@@ -344,6 +345,15 @@ async fn send_onchain(
 ) -> Result<impl IntoResponse, AdminGatewayError> {
     let txid = gateway.handle_send_onchain_msg(payload).await?;
     Ok(Json(json!(txid)))
+}
+
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
+async fn recheck_address(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<DepositAddressRecheckPayload>,
+) -> Result<impl IntoResponse, AdminGatewayError> {
+    gateway.handle_recheck_address_msg(payload).await?;
+    Ok(Json(json!({})))
 }
 
 #[instrument(target = LOG_GATEWAY, skip_all, err)]

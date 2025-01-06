@@ -90,11 +90,11 @@ use lightning::{
 use lightning_invoice::Bolt11Invoice;
 use rand::thread_rng;
 use rpc::{
-    CloseChannelsWithPeerPayload, CreateInvoiceForOperatorPayload, FederationInfo,
-    GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelPayload,
-    PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentLogResponse, ReceiveEcashPayload,
-    ReceiveEcashResponse, SendOnchainPayload, SetFeesPayload, SpendEcashPayload,
-    SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
+    CloseChannelsWithPeerPayload, CreateInvoiceForOperatorPayload, DepositAddressRecheckPayload,
+    FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse,
+    OpenChannelPayload, PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentLogResponse,
+    ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainPayload, SetFeesPayload,
+    SpendEcashPayload, SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
 };
 use state_machine::{GatewayClientModule, GatewayExtPayStates};
 use tokio::sync::RwLock;
@@ -1356,6 +1356,21 @@ impl Gateway {
         Txid::from_str(&response.txid).map_err(|e| AdminGatewayError::WithdrawError {
             failure_reason: format!("Failed to parse withdrawal TXID: {e}"),
         })
+    }
+
+    /// Trigger rechecking for deposits on an address
+    pub async fn handle_recheck_address_msg(
+        &self,
+        payload: DepositAddressRecheckPayload,
+    ) -> AdminResult<()> {
+        self.select_client(payload.federation_id)
+            .await?
+            .value()
+            .get_first_module::<WalletClientModule>()
+            .expect("Must have client module")
+            .recheck_pegin_address_by_address(payload.address)
+            .await?;
+        Ok(())
     }
 
     /// Returns the ecash, lightning, and onchain balances for the gateway and
