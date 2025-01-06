@@ -1604,12 +1604,12 @@ impl Gateway {
             let all_events = get_last_day_events(client).await;
 
             if self.is_running_lnv1() && self.is_running_lnv2() {
-                payment_stats.combine(&mut compute_lnv1_stats(all_events.clone()));
-                payment_stats.combine(&mut compute_lnv2_stats(all_events.clone()));
+                payment_stats.combine(&mut compute_lnv1_stats(&all_events));
+                payment_stats.combine(&mut compute_lnv2_stats(&all_events));
             } else if self.is_running_lnv1() {
-                payment_stats.combine(&mut compute_lnv1_stats(all_events.clone()));
+                payment_stats.combine(&mut compute_lnv1_stats(&all_events));
             } else {
-                payment_stats.combine(&mut compute_lnv2_stats(all_events.clone()));
+                payment_stats.combine(&mut compute_lnv2_stats(&all_events));
             }
         }
 

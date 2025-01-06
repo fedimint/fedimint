@@ -1,5 +1,3 @@
-use std::iter::zip;
-
 use fedimint_core::core::{ModuleKind, OperationId};
 use fedimint_core::Amount;
 use fedimint_eventlog::{Event, EventKind};
@@ -8,7 +6,7 @@ use fedimint_ln_common::contracts::ContractId;
 use serde::{Deserialize, Serialize};
 
 use super::pay::OutgoingPaymentError;
-use crate::events::{FilteredPaymentEvents, LogEntry, StructuredPaymentEvents};
+use crate::events::{filter_events, join_events, LogEntry, StructuredPaymentEvents};
 
 /// LNv1 event that is emitted when an outgoing payment attempt is initiated.
 #[derive(Serialize, Deserialize)]
@@ -138,221 +136,91 @@ impl Event for CompleteLightningPaymentSucceeded {
     const KIND: EventKind = EventKind::from_static("complete-lightning-payment-succeeded");
 }
 
-pub fn compute_lnv1_stats(all_events: Vec<LogEntry>) -> StructuredPaymentEvents {
-    let lnv1_events = filter_lnv1_events(all_events);
-    let (outgoing_success_stats, outgoing_failure_stats) = join_outgoing_lnv1_events(
-        &lnv1_events.outgoing_start_events,
-        &lnv1_events.outgoing_success_events,
-        &lnv1_events.outgoing_failure_events,
+pub fn compute_lnv1_stats(all_events: &[LogEntry]) -> StructuredPaymentEvents {
+    let outgoing_start_events = filter_events(
+        all_events,
+        OutgoingPaymentStarted::KIND,
+        fedimint_ln_common::KIND,
     );
-    let (incoming_success_stats, incoming_failure_stats) = join_incoming_lnv1_events(
-        &lnv1_events.incoming_start_events,
-        &lnv1_events.incoming_success_events,
-        &lnv1_events.incoming_failure_events,
+    let outgoing_success_events = filter_events(
+        all_events,
+        OutgoingPaymentSucceeded::KIND,
+        fedimint_ln_common::KIND,
+    );
+    let outgoing_failure_events = filter_events(
+        all_events,
+        OutgoingPaymentFailed::KIND,
+        fedimint_ln_common::KIND,
     );
 
+    let (outgoing_success_stats, outgoing_failure_stats) =
+        join_events::<OutgoingPaymentStarted, OutgoingPaymentSucceeded, OutgoingPaymentFailed>(
+            &outgoing_start_events,
+            &outgoing_success_events,
+            &outgoing_failure_events,
+            |start_event, success_event, latency| {
+                if start_event.contract_id == success_event.contract_id {
+                    success_event
+                        .outgoing_contract
+                        .amount
+                        .checked_sub(start_event.invoice_amount)
+                        .map(|fee| (latency, fee))
+                } else {
+                    None
+                }
+            },
+            |start_event, fail_event, latency| {
+                if start_event.contract_id == fail_event.contract_id {
+                    Some(latency)
+                } else {
+                    None
+                }
+            },
+        );
+
+    let incoming_start_events = filter_events(
+        all_events,
+        IncomingPaymentStarted::KIND,
+        fedimint_ln_common::KIND,
+    );
+    let incoming_success_events = filter_events(
+        all_events,
+        IncomingPaymentSucceeded::KIND,
+        fedimint_ln_common::KIND,
+    );
+    let incoming_failure_events = filter_events(
+        all_events,
+        IncomingPaymentFailed::KIND,
+        fedimint_ln_common::KIND,
+    );
+    let (incoming_success_stats, incoming_failure_stats) =
+        join_events::<IncomingPaymentStarted, IncomingPaymentSucceeded, IncomingPaymentFailed>(
+            &incoming_start_events,
+            &incoming_success_events,
+            &incoming_failure_events,
+            |start_event, success_event, latency| {
+                if start_event.payment_hash == success_event.payment_hash {
+                    start_event
+                        .contract_amount
+                        .checked_sub(start_event.invoice_amount)
+                        .map(|fee| (latency, fee))
+                } else {
+                    None
+                }
+            },
+            |start_event, fail_event, latency| {
+                if start_event.payment_hash == fail_event.payment_hash {
+                    Some(latency)
+                } else {
+                    None
+                }
+            },
+        );
+
     StructuredPaymentEvents::new(
-        outgoing_success_stats,
-        incoming_success_stats,
+        &outgoing_success_stats,
+        &incoming_success_stats,
         outgoing_failure_stats,
         incoming_failure_stats,
     )
-}
-
-// TODO: Can we improve this by not cloning every time?
-fn filter_lnv1_events(all_events: Vec<LogEntry>) -> FilteredPaymentEvents {
-    let outgoing_start_events = all_events
-        .clone()
-        .into_iter()
-        .filter_map(|e| {
-            if let Some((m, _)) = &e.2 {
-                if e.1 == OutgoingPaymentStarted::KIND && *m == fedimint_ln_common::KIND {
-                    Some(e)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-
-    let outgoing_success_events = all_events
-        .clone()
-        .into_iter()
-        .filter_map(|e| {
-            if let Some((m, _)) = &e.2 {
-                if e.1 == OutgoingPaymentSucceeded::KIND && *m == fedimint_ln_common::KIND {
-                    Some(e)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-
-    let outgoing_failure_events = all_events
-        .clone()
-        .into_iter()
-        .filter_map(|e| {
-            if let Some((m, _)) = &e.2 {
-                if e.1 == OutgoingPaymentFailed::KIND && *m == fedimint_ln_common::KIND {
-                    Some(e)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-
-    let incoming_start_events = all_events
-        .clone()
-        .into_iter()
-        .filter_map(|e| {
-            if let Some((m, _)) = &e.2 {
-                if e.1 == IncomingPaymentStarted::KIND && *m == fedimint_ln_common::KIND {
-                    Some(e)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-
-    let incoming_success_events = all_events
-        .clone()
-        .into_iter()
-        .filter_map(|e| {
-            if let Some((m, _)) = &e.2 {
-                if e.1 == IncomingPaymentSucceeded::KIND && *m == fedimint_ln_common::KIND {
-                    Some(e)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-
-    let incoming_failure_events = all_events
-        .into_iter()
-        .filter_map(|e| {
-            if let Some((m, _)) = &e.2 {
-                if e.1 == IncomingPaymentFailed::KIND && *m == fedimint_ln_common::KIND {
-                    Some(e)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-
-    FilteredPaymentEvents {
-        outgoing_start_events,
-        outgoing_success_events,
-        outgoing_failure_events,
-        incoming_start_events,
-        incoming_success_events,
-        incoming_failure_events,
-    }
-}
-
-fn join_outgoing_lnv1_events(
-    start_events: &Vec<LogEntry>,
-    success_events: &Vec<LogEntry>,
-    failure_events: &Vec<LogEntry>,
-) -> (Vec<(u64, Amount)>, Vec<u64>) {
-    let success_stats = zip(start_events, success_events)
-        .filter_map(|(start, success)| {
-            let start_event: OutgoingPaymentStarted =
-                serde_json::from_value(start.4.clone()).expect("could not parse JSON");
-            let success_event: OutgoingPaymentSucceeded =
-                serde_json::from_value(success.4.clone()).expect("could not parse JSON");
-            if start_event.contract_id == success_event.contract_id {
-                let latency = success.3 - start.3;
-                let fee = success_event
-                    .outgoing_contract
-                    .amount
-                    .checked_sub(start_event.invoice_amount);
-                if let Some(fee) = fee {
-                    Some((latency, fee))
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-
-    let failure_stats = zip(start_events, failure_events)
-        .filter_map(|(start, success)| {
-            let start_event: OutgoingPaymentStarted =
-                serde_json::from_value(start.4.clone()).expect("could not parse JSON");
-            let fail_event: OutgoingPaymentFailed =
-                serde_json::from_value(success.4.clone()).expect("could not parse JSON");
-            if start_event.contract_id == fail_event.contract_id {
-                let latency = success.3 - start.3;
-                Some(latency)
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-
-    (success_stats, failure_stats)
-}
-
-fn join_incoming_lnv1_events(
-    start_events: &Vec<LogEntry>,
-    success_events: &Vec<LogEntry>,
-    failure_events: &Vec<LogEntry>,
-) -> (Vec<(u64, Amount)>, Vec<u64>) {
-    let success_stats = zip(start_events, success_events)
-        .filter_map(|(start, success)| {
-            let start_event: IncomingPaymentStarted =
-                serde_json::from_value(start.4.clone()).expect("could not parse JSON");
-            let success_event: IncomingPaymentSucceeded =
-                serde_json::from_value(success.4.clone()).expect("could not parse JSON");
-            if start_event.payment_hash == success_event.payment_hash {
-                let latency = success.3 - start.3;
-                let fee = start_event
-                    .contract_amount
-                    .checked_sub(start_event.invoice_amount);
-                if let Some(fee) = fee {
-                    Some((latency, fee))
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-
-    let failure_stats = zip(start_events, failure_events)
-        .filter_map(|(start, success)| {
-            let start_event: IncomingPaymentStarted =
-                serde_json::from_value(start.4.clone()).expect("could not parse JSON");
-            let fail_event: IncomingPaymentFailed =
-                serde_json::from_value(success.4.clone()).expect("could not parse JSON");
-            if start_event.payment_hash == fail_event.payment_hash {
-                let latency = success.3 - start.3;
-                Some(latency)
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-
-    (success_stats, failure_stats)
 }

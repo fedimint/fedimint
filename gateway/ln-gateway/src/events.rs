@@ -1,3 +1,4 @@
+use std::iter::zip;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 
@@ -69,7 +70,7 @@ pub async fn get_last_day_events(client: &Arc<ClientHandle>) -> Vec<LogEntry> {
     all_events
 }
 
-fn get_earliest_index(batch: &Vec<LogEntry>) -> usize {
+fn get_earliest_index(batch: &[LogEntry]) -> usize {
     let one_day_ago = now()
         .checked_sub(Duration::from_secs(60 * 60 * 24))
         .expect("outside valid SystemTime bounds");
@@ -79,24 +80,67 @@ fn get_earliest_index(batch: &Vec<LogEntry>) -> usize {
         .expect("before unix epoch")
         .as_micros() as u64;
     let index = timestamps.binary_search(&one_day_ago_micros);
-    let index = match index {
-        Ok(index) => index,
-        Err(index) => index,
-    };
-    index
+    match index {
+        Err(index) | Ok(index) => index,
+    }
 }
 
-#[derive(Debug)]
-pub struct FilteredPaymentEvents {
-    pub outgoing_start_events: Vec<LogEntry>,
-    pub outgoing_success_events: Vec<LogEntry>,
-    pub outgoing_failure_events: Vec<LogEntry>,
-    pub incoming_start_events: Vec<LogEntry>,
-    pub incoming_success_events: Vec<LogEntry>,
-    pub incoming_failure_events: Vec<LogEntry>,
+pub(crate) fn filter_events(
+    all_events: &[LogEntry],
+    event_kind: EventKind,
+    module_kind: ModuleKind,
+) -> Vec<&LogEntry> {
+    let events = all_events
+        .iter()
+        .filter(|e| {
+            if let Some((m, _)) = &e.2 {
+                e.1 == event_kind && *m == module_kind
+            } else {
+                false
+            }
+        })
+        .collect::<Vec<_>>();
+    drop(event_kind);
+    drop(module_kind);
+    events
 }
 
-#[derive(Debug)]
+pub(crate) fn join_events<Start, Success, Failure>(
+    start_events: &Vec<&LogEntry>,
+    success_events: &Vec<&LogEntry>,
+    failure_events: &Vec<&LogEntry>,
+    success_join_predicate: fn(Start, Success, u64) -> Option<(u64, Amount)>,
+    failure_join_predicate: fn(Start, Failure, u64) -> Option<u64>,
+) -> (Vec<(u64, Amount)>, Vec<u64>)
+where
+    Start: Event,
+    Success: Event,
+    Failure: Event,
+{
+    let success_stats = zip(start_events, success_events)
+        .filter_map(|(start, success)| {
+            let start_event: Start =
+                serde_json::from_value(start.4.clone()).expect("could not parse JSON");
+            let success_event: Success =
+                serde_json::from_value(success.4.clone()).expect("could not parse JSON");
+            success_join_predicate(start_event, success_event, success.3 - start.3)
+        })
+        .collect::<Vec<_>>();
+
+    let failure_stats = zip(start_events, failure_events)
+        .filter_map(|(start, failure)| {
+            let start_event: Start =
+                serde_json::from_value(start.4.clone()).expect("could not parse JSON");
+            let fail_event: Failure =
+                serde_json::from_value(failure.4.clone()).expect("could not parse JSON");
+            failure_join_predicate(start_event, fail_event, failure.3 - start.3)
+        })
+        .collect::<Vec<_>>();
+
+    (success_stats, failure_stats)
+}
+
+#[derive(Debug, Default)]
 pub struct StructuredPaymentEvents {
     outgoing_latencies: Vec<u64>,
     incoming_latencies: Vec<u64>,
@@ -106,23 +150,10 @@ pub struct StructuredPaymentEvents {
     incoming_latencies_failure: Vec<u64>,
 }
 
-impl Default for StructuredPaymentEvents {
-    fn default() -> Self {
-        StructuredPaymentEvents {
-            outgoing_latencies: Vec::new(),
-            incoming_latencies: Vec::new(),
-            outgoing_fees: Vec::new(),
-            incoming_fees: Vec::new(),
-            outgoing_latencies_failure: Vec::new(),
-            incoming_latencies_failure: Vec::new(),
-        }
-    }
-}
-
 impl StructuredPaymentEvents {
     pub fn new(
-        outgoing_success_stats: Vec<(u64, Amount)>,
-        incoming_success_stats: Vec<(u64, Amount)>,
+        outgoing_success_stats: &[(u64, Amount)],
+        incoming_success_stats: &[(u64, Amount)],
         outgoing_failure_stats: Vec<u64>,
         incoming_failure_stats: Vec<u64>,
     ) -> StructuredPaymentEvents {
@@ -153,12 +184,12 @@ impl StructuredPaymentEvents {
     }
 
     fn sort(&mut self) {
-        self.outgoing_latencies.sort();
-        self.incoming_latencies.sort();
-        self.outgoing_fees.sort();
-        self.incoming_fees.sort();
-        self.outgoing_latencies_failure.sort();
-        self.incoming_latencies_failure.sort();
+        self.outgoing_latencies.sort_unstable();
+        self.incoming_latencies.sort_unstable();
+        self.outgoing_fees.sort_unstable();
+        self.incoming_fees.sort_unstable();
+        self.outgoing_latencies_failure.sort_unstable();
+        self.incoming_latencies_failure.sort_unstable();
     }
 
     pub fn payment_summary_response(&self) -> PaymentSummaryResponse {
@@ -177,9 +208,9 @@ impl StructuredPaymentEvents {
     }
 
     fn compute_payment_stats(
-        latencies: &Vec<u64>,
-        fees: &Vec<Amount>,
-        latencies_failure: &Vec<u64>,
+        latencies: &[u64],
+        fees: &[Amount],
+        latencies_failure: &[u64],
     ) -> PaymentStats {
         PaymentStats {
             average_latency_micros: average(latencies),
@@ -191,24 +222,23 @@ impl StructuredPaymentEvents {
     }
 }
 
-fn average(data: &Vec<u64>) -> u64 {
+fn average(data: &[u64]) -> u64 {
     let sum: u64 = data.iter().sum();
-    if data.len() > 0 {
-        sum / data.len() as u64
-    } else {
+    if data.is_empty() {
         0
+    } else {
+        sum / data.len() as u64
     }
 }
 
-fn median(data: &Vec<u64>) -> u64 {
+fn median(data: &[u64]) -> u64 {
     if data.is_empty() {
         return 0;
     }
 
     let length = data.len();
     if length % 2 == 0 {
-        let mid1 = data[length / 2 - 1];
-        mid1
+        data[length / 2 - 1]
     } else {
         data[length / 2]
     }

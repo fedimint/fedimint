@@ -444,7 +444,7 @@ async fn payment_log(
     Ok(Json(json!(payment_log)))
 }
 
-#[instrument(skip_all, err)]
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn payment_summary(
     Extension(gateway): Extension<Arc<Gateway>>,
 ) -> Result<impl IntoResponse, AdminGatewayError> {
