@@ -328,7 +328,18 @@ in
       }
     );
 
+    devimintStaticDataDir = pkgs.stdenv.mkDerivation {
+      name = "devimint-static-data-dir";
+      src = pkgs.emptyDirectory;
+
+      installPhase = ''
+        mkdir -p $out/share/
+        cp -r ${../devimint/share}/* $out/share/devimint/
+      '';
+    };
+
     # copied and modified from flakebox, to add `runLowPrio`, due to mistake in flakebox
+    # and also, it wraps the `devimint` into a shell scrip that points at the the static
     rawBuildPackageGroup =
       {
         pname ? null,
@@ -368,6 +379,25 @@ in
           meta = { inherit mainProgram; };
           cargoBuildCommand = "runLowPrio cargo build --profile $CARGO_PROFILE";
           cargoExtraArgs = "${pkgsArgs}";
+
+          # If the build contains `devimint`, wrap it in a script that will set
+          # a correct `FM_DEVIMINT_STATIC_DATA_DIR`.
+          postInstall = ''
+            if [ -f $out/bin/devimint ]; then
+              mv $out/bin/devimint $out/bin/devimint.orig
+              cat > $out/bin/devimint << 'EOF'
+            #!${pkgs.bash}/bin/bash
+            SCRIPT_PATH="$(${pkgs.coreutils}/bin/readlink -f "$0")"
+            SCRIPT_DIR="$(${pkgs.coreutils}/bin/dirname "$SCRIPT_PATH")"
+
+            export FM_DEVIMINT_STATIC_DATA_DIR
+            FM_DEVIMINT_STATIC_DATA_DIR=''${FM_DEVIMINT_STATIC_DATA_DIR:-${devimintStaticDataDir}/share/devimint}
+            exec -a devimint "$SCRIPT_DIR/devimint.orig" "$@"
+            EOF
+              chmod +x $out/bin/devimint
+            fi
+          '';
+
         }
       );
 
@@ -386,6 +416,7 @@ in
     inherit commonArgs;
     inherit commonEnvsShell commonEnvsCrossShell;
     inherit gitHashPlaceholderValue;
+    inherit devimintStaticDataDir;
     commonArgsBase = commonArgs;
 
     workspaceDeps = craneLib.buildWorkspaceDepsOnly {
@@ -716,7 +747,11 @@ in
 
     devimint = flakeboxLib.pickBinary {
       pkg = devimint-pkgs;
-      bin = "devimint";
+      name = "devimint";
+      bins = [
+        "devimint"
+        "devimint.orig"
+      ];
     };
 
     devimint-faucet = flakeboxLib.pickBinary {

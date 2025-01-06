@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+fedimint-cli --data-dir "$FM_CLIENT_DIR" "$@"
