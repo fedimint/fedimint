@@ -28,8 +28,7 @@ use tracing::warn;
 use crate::core::DynClientConfig;
 use crate::encoding::Decodable;
 use crate::module::{
-    CoreConsensusVersion, DynCommonModuleInit, DynServerModuleInit, IDynCommonModuleInit,
-    ModuleConsensusVersion,
+    CoreConsensusVersion, DynCommonModuleInit, IDynCommonModuleInit, ModuleConsensusVersion,
 };
 use crate::{bls12_381_serde, maybe_add_send_sync, PeerId};
 
@@ -473,6 +472,12 @@ impl ClientConfig {
 #[derive(Clone, Debug)]
 pub struct ModuleInitRegistry<M>(BTreeMap<ModuleKind, M>);
 
+impl<M> ModuleInitRegistry<M> {
+    pub fn iter(&self) -> impl Iterator<Item = (&ModuleKind, &M)> {
+        self.0.iter()
+    }
+}
+
 impl<M> Default for ModuleInitRegistry<M> {
     fn default() -> Self {
         Self(BTreeMap::new())
@@ -486,8 +491,6 @@ pub struct ConfigGenModuleParams {
     pub local: serde_json::Value,
     pub consensus: serde_json::Value,
 }
-
-pub type ServerModuleInitRegistry = ModuleInitRegistry<DynServerModuleInit>;
 
 impl ConfigGenModuleParams {
     pub fn new(local: serde_json::Value, consensus: serde_json::Value) -> Self {
@@ -633,17 +636,6 @@ impl ModuleRegistry<ConfigGenModuleParams> {
             .unwrap_or_else(|err| panic!("Invalid config gen params for {kind}: {err}"));
         self.append_module(kind, params);
         self
-    }
-}
-
-impl ServerModuleInitRegistry {
-    pub fn to_common(&self) -> CommonModuleInitRegistry {
-        ModuleInitRegistry(
-            self.0
-                .iter()
-                .map(|(k, v)| (k.clone(), v.to_dyn_common()))
-                .collect(),
-        )
     }
 }
 

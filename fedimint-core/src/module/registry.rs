@@ -4,7 +4,6 @@ use anyhow::anyhow;
 
 pub use crate::core::ModuleInstanceId;
 use crate::core::{Decoder, ModuleKind};
-use crate::server::DynServerModule;
 
 /// Module Registry hold module-specific data `M` by the `ModuleInstanceId`
 #[derive(Debug)]
@@ -156,20 +155,6 @@ impl<M: std::fmt::Debug, State> ModuleRegistry<M, State> {
             self.inner.insert(last_id, (kind, module)).is_none(),
             "Module was already registered?!"
         );
-    }
-}
-
-/// Collection of server modules
-pub type ServerModuleRegistry = ModuleRegistry<DynServerModule>;
-
-impl ServerModuleRegistry {
-    /// Generate a `ModuleDecoderRegistry` from this `ModuleRegistry`
-    pub fn decoder_registry(&self) -> ModuleDecoderRegistry {
-        // TODO: cache decoders
-        self.inner
-            .iter()
-            .map(|(&id, (kind, module))| (id, kind.clone(), module.decoder()))
-            .collect::<ModuleDecoderRegistry>()
     }
 }
 

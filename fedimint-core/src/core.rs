@@ -28,8 +28,6 @@ use crate::{
     module_plugin_static_trait_define, module_plugin_static_trait_define_config,
 };
 
-pub mod server;
-
 pub mod backup;
 
 /// Unique identifier for one semantic, correlatable operation.

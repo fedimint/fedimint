@@ -15,11 +15,9 @@ use fedimint_core::db::{CoreMigrationFn, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     ApiEndpoint, CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle,
-    ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
-    CORE_CONSENSUS_VERSION,
+    SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
-use fedimint_core::server::DynServerModule;
-use fedimint_core::{push_db_pair_items, OutPoint, PeerId, ServerModule};
+use fedimint_core::{push_db_pair_items, OutPoint, PeerId};
 use fedimint_empty_common::config::{
     EmptyClientConfig, EmptyConfig, EmptyConfigConsensus, EmptyConfigLocal, EmptyConfigPrivate,
     EmptyGenParams,
@@ -28,6 +26,7 @@ use fedimint_empty_common::{
     EmptyCommonInit, EmptyConsensusItem, EmptyInput, EmptyInputError, EmptyModuleTypes,
     EmptyOutput, EmptyOutputError, EmptyOutputOutcome, MODULE_CONSENSUS_VERSION,
 };
+use fedimint_server_core::{DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use futures::StreamExt;
 use strum::IntoEnumIterator;
 

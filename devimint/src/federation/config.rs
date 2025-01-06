@@ -4,7 +4,6 @@ use fedimint_core::envs::{
     is_env_var_set, BitcoinRpcConfig, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV,
     FM_USE_UNKNOWN_MODULE_ENV,
 };
-use fedimint_core::module::ServerModuleInit as _;
 use fedimint_ln_server::common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
 };
@@ -12,6 +11,7 @@ use fedimint_ln_server::LightningInit;
 use fedimint_meta_server::{MetaGenParams, MetaInit};
 use fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
 use fedimint_mint_server::MintInit;
+use fedimint_server::core::ServerModuleInit as _;
 use fedimint_unknown_server::common::config::UnknownGenParams;
 use fedimint_unknown_server::UnknownInit;
 use fedimint_wallet_client::config::{

@@ -1,0 +1,21 @@
+[package]
+name = "fedimint-server-core"
+version = { workspace = true }
+authors = { workspace = true }
+description = { workspace = true }
+documentation = { workspace = true }
+edition = { workspace = true }
+readme = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+keywords = { workspace = true }
+
+[lib]
+name = "fedimint_server_core"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+fedimint-core = { workspace = true }

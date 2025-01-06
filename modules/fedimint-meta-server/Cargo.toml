@@ -22,6 +22,7 @@ erased-serde = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-meta-common = { workspace = true }
+fedimint-server = { workspace = true }
 futures = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }

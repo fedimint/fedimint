@@ -1,8 +1,8 @@
 use fedimint_core::db::DatabaseTransaction;
-use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::{CoreConsensusVersion, TransactionItemAmount};
 use fedimint_core::transaction::{Transaction, TransactionError, TRANSACTION_OVERFLOW_ERROR};
 use fedimint_core::{Amount, OutPoint};
+use fedimint_server_core::ServerModuleRegistry;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::metrics::{CONSENSUS_TX_PROCESSED_INPUTS, CONSENSUS_TX_PROCESSED_OUTPUTS};

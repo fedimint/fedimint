@@ -155,7 +155,6 @@ mod fedimint_migration_tests {
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
     use fedimint_core::encoding::Encodable;
-    use fedimint_core::module::DynServerModuleInit;
     use fedimint_core::{secp256k1, Amount, BitcoinHash, OutPoint, TransactionId};
     use fedimint_dummy_client::db::{
         DummyClientFundsKeyV0, DummyClientFundsKeyV1, DummyClientNameKey,
@@ -168,6 +167,7 @@ mod fedimint_migration_tests {
     };
     use fedimint_dummy_server::DummyInit;
     use fedimint_logging::TracingSetup;
+    use fedimint_server::core::DynServerModuleInit;
     use fedimint_testing::db::{
         snapshot_db_migrations, snapshot_db_migrations_client, validate_migrations_client,
         validate_migrations_server, BYTE_32, TEST_MODULE_INSTANCE_ID,

@@ -22,6 +22,7 @@ fedimint-logging = { workspace = true }
 fedimint-mint-client = { workspace = true }
 fedimint-mint-common = { workspace = true }
 fedimint-mint-server = { workspace = true }
+fedimint-server = { workspace = true }
 fedimint-testing = { workspace = true }
 ff = "0.13.0"
 futures = { workspace = true }

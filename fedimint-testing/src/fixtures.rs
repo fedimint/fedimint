@@ -8,18 +8,16 @@ use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_client::module::init::{
     ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
-use fedimint_core::config::{
-    ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
-};
+use fedimint_core::config::{ModuleInitParams, ServerModuleConfigGenParamsRegistry};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::registry::ModuleRegistry;
-use fedimint_core::module::{DynServerModuleInit, IServerModuleInit};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::TracingSetup;
+use fedimint_server::core::{DynServerModuleInit, IServerModuleInit, ServerModuleInitRegistry};
 use fedimint_testing_core::test_dir;
 use ln_gateway::client::GatewayClientBuilder;
 use ln_gateway::config::LightningModuleMode;

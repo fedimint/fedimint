@@ -1,11 +1,16 @@
-//! Fedimint supports modules to allow extending it's functionality.
+//! Core module system traits and types.
+//!
+//! Fedimint supports modules to allow extending its functionality.
 //! Some of the standard functionality is implemented in form of modules as
-//! well.
+//! well. This rust module houses the core trait
+//! [`fedimint_core::module::ModuleCommon`] used by both the server and client
+//! side module traits. Specific server and client traits exist in their
+//! respective crates.
 //!
 //! The top level server-side types are:
 //!
-//! * [`fedimint_core::module::ModuleInit`]
-//! * [`fedimint_core::module::ServerModule`]
+//! * `fedimint_server::core::ServerModuleInit`
+//! * `fedimint_server::core::ServerModule`
 //!
 //! Top level client-side types are:
 //!
@@ -14,9 +19,8 @@
 pub mod audit;
 pub mod registry;
 
-use std::collections::BTreeMap;
 use std::fmt::{self, Debug, Formatter};
-use std::marker::{self, PhantomData};
+use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -31,28 +35,19 @@ use tracing::Instrument;
 // TODO: Make this module public and remove the wildcard `pub use` below
 mod version;
 pub use self::version::*;
-use crate::config::{
-    ClientModuleConfig, ConfigGenModuleParams, DkgPeerMsg, ModuleInitParams, ServerModuleConfig,
-    ServerModuleConsensusConfig,
-};
+use crate::config::DkgPeerMsg;
 use crate::core::{
     ClientConfig, Decoder, DecoderBuilder, Input, InputError, ModuleConsensusItem,
     ModuleInstanceId, ModuleKind, Output, OutputError, OutputOutcome,
 };
 use crate::db::{
-    Committable, CoreMigrationFn, Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord,
-    DatabaseTransaction, DatabaseVersion,
+    Committable, Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord, DatabaseTransaction,
 };
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
-use crate::module::audit::Audit;
 use crate::net::peers::DynP2PConnections;
-use crate::server::DynServerModule;
-use crate::task::{MaybeSend, TaskGroup};
-use crate::{
-    apply, async_trait_maybe_send, maybe_add_send, maybe_add_send_sync, Amount, NumPeers, OutPoint,
-    PeerId,
-};
+use crate::task::MaybeSend;
+use crate::{apply, async_trait_maybe_send, maybe_add_send, maybe_add_send_sync, Amount, PeerId};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct InputMeta {
@@ -330,6 +325,7 @@ macro_rules! __api_endpoint {
 }
 
 pub use __api_endpoint as api_endpoint;
+use fedimint_core::NumPeers;
 
 use self::registry::ModuleDecoderRegistry;
 
@@ -477,59 +473,6 @@ where
     }
 }
 
-/// Interface for Module Generation
-///
-/// This trait contains the methods responsible for the module's
-/// - initialization
-/// - config generation
-/// - config validation
-///
-/// Once the module configuration is ready, the module can be instantiated via
-/// `[Self::init]`.
-#[apply(async_trait_maybe_send!)]
-pub trait IServerModuleInit: IDynCommonModuleInit {
-    fn as_common(&self) -> &(dyn IDynCommonModuleInit + Send + Sync + 'static);
-
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions;
-
-    /// Initialize the [`DynServerModule`] instance from its config
-    async fn init(
-        &self,
-        peer_num: NumPeers,
-        cfg: ServerModuleConfig,
-        db: Database,
-        task_group: &TaskGroup,
-        our_peer_id: PeerId,
-    ) -> anyhow::Result<DynServerModule>;
-
-    fn validate_params(&self, params: &ConfigGenModuleParams) -> anyhow::Result<()>;
-
-    fn trusted_dealer_gen(
-        &self,
-        peers: &[PeerId],
-        params: &ConfigGenModuleParams,
-    ) -> BTreeMap<PeerId, ServerModuleConfig>;
-
-    async fn distributed_gen(
-        &self,
-        peers: &PeerHandle,
-        params: &ConfigGenModuleParams,
-    ) -> anyhow::Result<ServerModuleConfig>;
-
-    fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
-
-    fn get_client_config(
-        &self,
-        module_instance_id: ModuleInstanceId,
-        config: &ServerModuleConsensusConfig,
-    ) -> anyhow::Result<ClientModuleConfig>;
-
-    /// Retrieves the migrations map from the server module to be applied to the
-    /// database before the module is initialized. The migrations map is
-    /// indexed on the from version.
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn>;
-}
-
 dyn_newtype_define!(
     #[derive(Clone)]
     pub DynCommonModuleInit(Arc<IDynCommonModuleInit>)
@@ -549,17 +492,6 @@ impl DynCommonModuleInit {
     }
 }
 
-dyn_newtype_define!(
-    #[derive(Clone)]
-    pub DynServerModuleInit(Arc<IServerModuleInit>)
-);
-
-impl AsRef<dyn IDynCommonModuleInit + Send + Sync + 'static> for DynServerModuleInit {
-    fn as_ref(&self) -> &(dyn IDynCommonModuleInit + Send + Sync + 'static) {
-        self.inner.as_common()
-    }
-}
-
 /// Logic and constant common between server side and client side modules
 #[apply(async_trait_maybe_send!)]
 pub trait CommonModuleInit: Debug + Sized {
@@ -569,187 +501,6 @@ pub trait CommonModuleInit: Debug + Sized {
     type ClientConfig: ClientConfig;
 
     fn decoder() -> Decoder;
-}
-
-pub struct ServerModuleInitArgs<S>
-where
-    S: ServerModuleInit,
-{
-    cfg: ServerModuleConfig,
-    db: Database,
-    task_group: TaskGroup,
-    our_peer_id: PeerId,
-    num_peers: NumPeers,
-    // ClientModuleInitArgs needs a bound because sometimes we need
-    // to pass associated-types data, so let's just put it here right away
-    _marker: marker::PhantomData<S>,
-}
-
-impl<S> ServerModuleInitArgs<S>
-where
-    S: ServerModuleInit,
-{
-    pub fn cfg(&self) -> &ServerModuleConfig {
-        &self.cfg
-    }
-
-    pub fn db(&self) -> &Database {
-        &self.db
-    }
-
-    pub fn num_peers(&self) -> NumPeers {
-        self.num_peers
-    }
-
-    pub fn task_group(&self) -> &TaskGroup {
-        &self.task_group
-    }
-
-    pub fn our_peer_id(&self) -> PeerId {
-        self.our_peer_id
-    }
-}
-/// Module Generation trait with associated types
-///
-/// Needs to be implemented by module generation type
-///
-/// For examples, take a look at one of the `MintConfigGenerator`,
-/// `WalletConfigGenerator`, or `LightningConfigGenerator` structs.
-#[apply(async_trait_maybe_send!)]
-pub trait ServerModuleInit: ModuleInit + Sized {
-    type Params: ModuleInitParams;
-
-    /// Version of the module consensus supported by this implementation given a
-    /// certain [`CoreConsensusVersion`].
-    ///
-    /// Refer to [`ModuleConsensusVersion`] for more information about
-    /// versioning.
-    ///
-    /// One module implementation ([`ServerModuleInit`] of a given
-    /// [`ModuleKind`]) can potentially implement multiple versions of the
-    /// consensus, and depending on the config module instance config,
-    /// instantiate the desired one. This method should expose all the
-    /// available versions, purely for information, setup UI and sanity
-    /// checking purposes.
-    fn versions(&self, core: CoreConsensusVersion) -> &[ModuleConsensusVersion];
-
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions;
-
-    fn kind() -> ModuleKind {
-        <Self as ModuleInit>::Common::KIND
-    }
-
-    /// Initialize the [`DynServerModule`] instance from its config
-    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule>;
-
-    fn parse_params(&self, params: &ConfigGenModuleParams) -> anyhow::Result<Self::Params> {
-        params.to_typed::<Self::Params>()
-    }
-
-    fn trusted_dealer_gen(
-        &self,
-        peers: &[PeerId],
-        params: &ConfigGenModuleParams,
-    ) -> BTreeMap<PeerId, ServerModuleConfig>;
-
-    async fn distributed_gen(
-        &self,
-        peer: &PeerHandle,
-        params: &ConfigGenModuleParams,
-    ) -> anyhow::Result<ServerModuleConfig>;
-
-    fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
-
-    /// Converts the consensus config into the client config
-    fn get_client_config(
-        &self,
-        config: &ServerModuleConsensusConfig,
-    ) -> anyhow::Result<<<Self as ModuleInit>::Common as CommonModuleInit>::ClientConfig>;
-
-    /// Retrieves the migrations map from the server module to be applied to the
-    /// database before the module is initialized. The migrations map is
-    /// indexed on the from version.
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
-        BTreeMap::new()
-    }
-}
-
-#[apply(async_trait_maybe_send!)]
-impl<T> IServerModuleInit for T
-where
-    T: ServerModuleInit + 'static + Sync,
-{
-    fn as_common(&self) -> &(dyn IDynCommonModuleInit + Send + Sync + 'static) {
-        self
-    }
-
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        <Self as ServerModuleInit>::supported_api_versions(self)
-    }
-
-    async fn init(
-        &self,
-        num_peers: NumPeers,
-        cfg: ServerModuleConfig,
-        db: Database,
-        task_group: &TaskGroup,
-        our_peer_id: PeerId,
-    ) -> anyhow::Result<DynServerModule> {
-        <Self as ServerModuleInit>::init(
-            self,
-            &ServerModuleInitArgs {
-                num_peers,
-                cfg,
-                db,
-                task_group: task_group.clone(),
-                our_peer_id,
-                _marker: PhantomData,
-            },
-        )
-        .await
-    }
-
-    fn validate_params(&self, params: &ConfigGenModuleParams) -> anyhow::Result<()> {
-        <Self as ServerModuleInit>::parse_params(self, params)?;
-        Ok(())
-    }
-
-    fn trusted_dealer_gen(
-        &self,
-        peers: &[PeerId],
-        params: &ConfigGenModuleParams,
-    ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        <Self as ServerModuleInit>::trusted_dealer_gen(self, peers, params)
-    }
-
-    async fn distributed_gen(
-        &self,
-        peers: &PeerHandle,
-        params: &ConfigGenModuleParams,
-    ) -> anyhow::Result<ServerModuleConfig> {
-        <Self as ServerModuleInit>::distributed_gen(self, peers, params).await
-    }
-
-    fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
-        <Self as ServerModuleInit>::validate_config(self, identity, config)
-    }
-
-    fn get_client_config(
-        &self,
-        module_instance_id: ModuleInstanceId,
-        config: &ServerModuleConsensusConfig,
-    ) -> anyhow::Result<ClientModuleConfig> {
-        ClientModuleConfig::from_typed(
-            module_instance_id,
-            <Self as ServerModuleInit>::kind(),
-            config.version,
-            <Self as ServerModuleInit>::get_client_config(self, config)?,
-        )
-    }
-
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
-        <Self as ServerModuleInit>::get_database_migrations(self)
-    }
 }
 
 /// Module associated types required by both client and server
@@ -778,168 +529,6 @@ pub trait ModuleCommon {
     fn decoder() -> Decoder {
         Self::decoder_builder().build()
     }
-}
-
-#[apply(async_trait_maybe_send!)]
-pub trait ServerModule: Debug + Sized {
-    type Common: ModuleCommon;
-
-    type Init: ServerModuleInit;
-
-    fn module_kind() -> ModuleKind {
-        // Note: All modules should define kinds as &'static str, so this doesn't
-        // allocate
-        <Self::Init as ModuleInit>::Common::KIND
-    }
-
-    /// Returns a decoder for the following associated types of this module:
-    /// * `ClientConfig`
-    /// * `Input`
-    /// * `Output`
-    /// * `OutputOutcome`
-    /// * `ConsensusItem`
-    /// * `InputError`
-    /// * `OutputError`
-    fn decoder() -> Decoder {
-        Self::Common::decoder_builder().build()
-    }
-
-    /// This module's contribution to the next consensus proposal. This method
-    /// is only guaranteed to be called once every few seconds. Consensus items
-    /// are not meant to be latency critical; do not create them as
-    /// a response to a processed transaction. Only use consensus items to
-    /// establish consensus on a value that is required to verify
-    /// transactions, like unix time, block heights and feerates, and model all
-    /// other state changes trough transactions. The intention for this method
-    /// is to always return all available consensus items even if they are
-    /// redundant while process_consensus_item returns an error for the
-    /// redundant proposals.
-    ///
-    /// If you think you actually do require latency critical consensus items or
-    /// have trouble designing your module in order to avoid them please contact
-    /// the Fedimint developers.
-    async fn consensus_proposal<'a>(
-        &'a self,
-        dbtx: &mut DatabaseTransaction<'_>,
-    ) -> Vec<<Self::Common as ModuleCommon>::ConsensusItem>;
-
-    /// This function is called once for every consensus item. The function
-    /// should return Ok if and only if the consensus item changes
-    /// the system state. *Therefore this method should return an error in case
-    /// of merely redundant consensus items such that they will be purged from
-    /// the history of the federation.* This enables consensus_proposal to
-    /// return all available consensus item without wasting disk
-    /// space with redundant consensus items.
-    async fn process_consensus_item<'a, 'b>(
-        &'a self,
-        dbtx: &mut DatabaseTransaction<'b>,
-        consensus_item: <Self::Common as ModuleCommon>::ConsensusItem,
-        peer_id: PeerId,
-    ) -> anyhow::Result<()>;
-
-    // Use this function to parallelise stateless cryptographic verification of
-    // inputs across a transaction. All inputs of a transaction are verified
-    // before any input is processed.
-    fn verify_input(
-        &self,
-        _input: &<Self::Common as ModuleCommon>::Input,
-    ) -> Result<(), <Self::Common as ModuleCommon>::InputError> {
-        Ok(())
-    }
-
-    /// Try to spend a transaction input. On success all necessary updates will
-    /// be part of the database transaction. On failure (e.g. double spend)
-    /// the database transaction is rolled back and the operation will take
-    /// no effect.
-    async fn process_input<'a, 'b, 'c>(
-        &'a self,
-        dbtx: &mut DatabaseTransaction<'c>,
-        input: &'b <Self::Common as ModuleCommon>::Input,
-    ) -> Result<InputMeta, <Self::Common as ModuleCommon>::InputError>;
-
-    /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
-    /// all necessary updates to the database will be part of the database
-    /// transaction. On failure (e.g. double spend) the database transaction
-    /// is rolled back and the operation will take no effect.
-    ///
-    /// The supplied `out_point` identifies the operation (e.g. a peg-out or
-    /// note issuance) and can be used to retrieve its outcome later using
-    /// `output_status`.
-    async fn process_output<'a, 'b>(
-        &'a self,
-        dbtx: &mut DatabaseTransaction<'b>,
-        output: &'a <Self::Common as ModuleCommon>::Output,
-        out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, <Self::Common as ModuleCommon>::OutputError>;
-
-    /// Retrieve the current status of the output.
-    ///
-    /// **Deprecated**: Modules should not be using it. Instead they should
-    /// implement their own custom endpoints with semantics, versioning,
-    /// serialization, etc. that suits them. Potentially multiple or none.
-    ///
-    /// Depending on the module this might contain data needed by the client to
-    /// access funds or give an estimate of when funds will be available.
-    ///
-    /// Since this has become deprecated you may return None even if the output
-    /// is known as long as the output outcome is not used inside the module.
-    #[deprecated(note = "https://github.com/fedimint/fedimint/issues/6671")]
-    async fn output_status(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        out_point: OutPoint,
-    ) -> Option<<Self::Common as ModuleCommon>::OutputOutcome>;
-
-    /// Verify submission-only checks for an input
-    ///
-    /// Most modules should not need to know or implement it, so the default
-    /// implementation just returns OK.
-    ///
-    /// In special circumstances it is useful to enforce requirements on the
-    /// included transaction outside of the consensus, in a similar way
-    /// Bitcoin enforces mempool policies.
-    ///
-    /// This functionality might be removed in the future versions, as more
-    /// checks become part of the consensus, so it is advised not to use it.
-    #[doc(hidden)]
-    async fn verify_input_submission<'a, 'b, 'c>(
-        &'a self,
-        _dbtx: &mut DatabaseTransaction<'c>,
-        _input: &'b <Self::Common as ModuleCommon>::Input,
-    ) -> Result<(), <Self::Common as ModuleCommon>::InputError> {
-        Ok(())
-    }
-
-    /// Verify submission-only checks for an output
-    ///
-    /// See [`Self::verify_input_submission`] for more information.
-    #[doc(hidden)]
-    async fn verify_output_submission<'a, 'b>(
-        &'a self,
-        _dbtx: &mut DatabaseTransaction<'b>,
-        _output: &'a <Self::Common as ModuleCommon>::Output,
-        _out_point: OutPoint,
-    ) -> Result<(), <Self::Common as ModuleCommon>::OutputError> {
-        Ok(())
-    }
-
-    /// Queries the database and returns all assets and liabilities of the
-    /// module.
-    ///
-    /// Summing over all modules, if liabilities > assets then an error has
-    /// occurred in the database and consensus should halt.
-    async fn audit(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        audit: &mut Audit,
-        module_instance_id: ModuleInstanceId,
-    );
-
-    /// Returns a list of custom API endpoints defined by the module. These are
-    /// made available both to users as well as to other modules. They thus
-    /// should be deterministic, only dependant on their input and the
-    /// current epoch.
-    fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>>;
 }
 
 /// Creates a struct that can be used to make our module-decodable structs
@@ -1069,7 +658,7 @@ impl<T: Encodable + Decodable + 'static> SerdeModuleEncodingBase64<T> {
     }
 }
 
-/// A handle passed to [`ServerModuleInit::distributed_gen`]
+/// A handle passed to `ServerModuleInit::distributed_gen`
 ///
 /// This struct encapsulates dkg data that the module should not have a direct
 /// access to, and implements higher level dkg operations available to the

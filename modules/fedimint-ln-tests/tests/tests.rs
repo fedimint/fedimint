@@ -612,7 +612,6 @@ mod fedimint_migration_tests {
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
     use fedimint_core::encoding::Encodable;
-    use fedimint_core::module::DynServerModuleInit;
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{secp256k1, Amount, OutPoint, PeerId, TransactionId};
     use fedimint_ln_client::db::{PaymentResult, PaymentResultKey, PaymentResultPrefix};
@@ -648,6 +647,7 @@ mod fedimint_migration_tests {
         ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
     };
     use fedimint_logging::TracingSetup;
+    use fedimint_server::core::DynServerModuleInit;
     use fedimint_testing::db::{
         snapshot_db_migrations, snapshot_db_migrations_client, validate_migrations_client,
         validate_migrations_server, BYTE_32, BYTE_33, BYTE_8, STRING_64, TEST_MODULE_INSTANCE_ID,

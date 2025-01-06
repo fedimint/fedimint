@@ -1,0 +1,37 @@
+[package]
+name = "fedimint-server-tests"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+description = { workspace = true }
+documentation = { workspace = true }
+readme = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+keywords = { workspace = true }
+
+[[test]]
+name = "fedimint_server_configgen"
+path = "tests/configgen.rs"
+
+[[test]]
+name = "fedimint_server_migration"
+path = "tests/migration.rs"
+
+[dev-dependencies]
+bitcoin = { workspace = true }
+fedimint-api-client = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-dummy-common = { workspace = true }
+fedimint-dummy-server = { workspace = true }
+fedimint-logging = { workspace = true }
+fedimint-portalloc = { workspace = true }
+fedimint-server = { workspace = true }
+fedimint-testing-core = { workspace = true }
+futures = { workspace = true }
+itertools = { workspace = true }
+rand = { workspace = true }
+strum = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }

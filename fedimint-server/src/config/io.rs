@@ -4,7 +4,7 @@ use std::io::Write;
 use std::path::Path;
 
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key, LessSafeKey};
-use fedimint_core::config::ServerModuleInitRegistry;
+use fedimint_server_core::ServerModuleInitRegistry;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 

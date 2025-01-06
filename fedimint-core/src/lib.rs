@@ -51,7 +51,6 @@ use bitcoin::{Address, Network};
 use lightning::util::ser::Writeable;
 use lightning_types::features::Bolt11InvoiceFeatures;
 pub use macro_rules_attribute::apply;
-pub use module::ServerModule;
 pub use peer_id::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -59,7 +58,6 @@ pub use tiered::Tiered;
 pub use tiered_multi::*;
 pub use {bitcoin, hex, secp256k1};
 
-pub use crate::core::server;
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
 
@@ -90,7 +88,7 @@ pub mod invite_code;
 /// Common macros
 #[macro_use]
 pub mod macros;
-/// Extenable module sysystem
+/// Extendable module sysystem
 pub mod module;
 /// Peer networking
 pub mod net;

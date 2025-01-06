@@ -15,11 +15,10 @@ use fedimint_core::db::{CoreMigrationFn, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     ApiEndpoint, CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle,
-    ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
-    CORE_CONSENSUS_VERSION,
+    SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
-use fedimint_core::server::DynServerModule;
-use fedimint_core::{OutPoint, PeerId, ServerModule};
+use fedimint_core::{OutPoint, PeerId};
+use fedimint_server_core::{DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs};
 pub use fedimint_unknown_common as common;
 use fedimint_unknown_common::config::{
     UnknownClientConfig, UnknownConfig, UnknownConfigConsensus, UnknownConfigLocal,

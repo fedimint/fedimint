@@ -4,24 +4,189 @@
 //!
 //! This (Rust) module defines common interoperability types
 //! and functionality that are only used on the server side.
+
+mod init;
+use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use fedimint_core::core::{
+    Decoder, DynInput, DynInputError, DynModuleConsensusItem, DynOutput, DynOutputError,
+    DynOutputOutcome, ModuleInstanceId, ModuleKind,
+};
+use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::module::audit::Audit;
-use fedimint_core::{apply, async_trait_maybe_send, OutPoint, PeerId};
+use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
+use fedimint_core::module::{
+    ApiEndpoint, ApiEndpointContext, ApiRequestErased, CommonModuleInit, InputMeta, ModuleCommon,
+    ModuleInit, TransactionItemAmount,
+};
+use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, OutPoint, PeerId};
+pub use init::*;
 
-use super::ModuleKind;
-use crate::core::{
-    Any, Decoder, DynInput, DynInputError, DynModuleConsensusItem, DynOutput, DynOutputError,
-    DynOutputOutcome,
-};
-use crate::db::DatabaseTransaction;
-use crate::dyn_newtype_define;
-use crate::module::registry::ModuleInstanceId;
-use crate::module::{
-    ApiEndpoint, ApiEndpointContext, ApiRequestErased, InputMeta, ModuleCommon, ServerModule,
-    TransactionItemAmount,
-};
+#[apply(async_trait_maybe_send!)]
+pub trait ServerModule: Debug + Sized {
+    type Common: ModuleCommon;
+
+    type Init: ServerModuleInit;
+
+    fn module_kind() -> ModuleKind {
+        // Note: All modules should define kinds as &'static str, so this doesn't
+        // allocate
+        <Self::Init as ModuleInit>::Common::KIND
+    }
+
+    /// Returns a decoder for the following associated types of this module:
+    /// * `ClientConfig`
+    /// * `Input`
+    /// * `Output`
+    /// * `OutputOutcome`
+    /// * `ConsensusItem`
+    /// * `InputError`
+    /// * `OutputError`
+    fn decoder() -> Decoder {
+        Self::Common::decoder_builder().build()
+    }
+
+    /// This module's contribution to the next consensus proposal. This method
+    /// is only guaranteed to be called once every few seconds. Consensus items
+    /// are not meant to be latency critical; do not create them as
+    /// a response to a processed transaction. Only use consensus items to
+    /// establish consensus on a value that is required to verify
+    /// transactions, like unix time, block heights and feerates, and model all
+    /// other state changes trough transactions. The intention for this method
+    /// is to always return all available consensus items even if they are
+    /// redundant while process_consensus_item returns an error for the
+    /// redundant proposals.
+    ///
+    /// If you think you actually do require latency critical consensus items or
+    /// have trouble designing your module in order to avoid them please contact
+    /// the Fedimint developers.
+    async fn consensus_proposal<'a>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> Vec<<Self::Common as ModuleCommon>::ConsensusItem>;
+
+    /// This function is called once for every consensus item. The function
+    /// should return Ok if and only if the consensus item changes
+    /// the system state. *Therefore this method should return an error in case
+    /// of merely redundant consensus items such that they will be purged from
+    /// the history of the federation.* This enables consensus_proposal to
+    /// return all available consensus item without wasting disk
+    /// space with redundant consensus items.
+    async fn process_consensus_item<'a, 'b>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'b>,
+        consensus_item: <Self::Common as ModuleCommon>::ConsensusItem,
+        peer_id: PeerId,
+    ) -> anyhow::Result<()>;
+
+    // Use this function to parallelise stateless cryptographic verification of
+    // inputs across a transaction. All inputs of a transaction are verified
+    // before any input is processed.
+    fn verify_input(
+        &self,
+        _input: &<Self::Common as ModuleCommon>::Input,
+    ) -> Result<(), <Self::Common as ModuleCommon>::InputError> {
+        Ok(())
+    }
+
+    /// Try to spend a transaction input. On success all necessary updates will
+    /// be part of the database transaction. On failure (e.g. double spend)
+    /// the database transaction is rolled back and the operation will take
+    /// no effect.
+    async fn process_input<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'c>,
+        input: &'b <Self::Common as ModuleCommon>::Input,
+    ) -> Result<InputMeta, <Self::Common as ModuleCommon>::InputError>;
+
+    /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
+    /// all necessary updates to the database will be part of the database
+    /// transaction. On failure (e.g. double spend) the database transaction
+    /// is rolled back and the operation will take no effect.
+    ///
+    /// The supplied `out_point` identifies the operation (e.g. a peg-out or
+    /// note issuance) and can be used to retrieve its outcome later using
+    /// `output_status`.
+    async fn process_output<'a, 'b>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'b>,
+        output: &'a <Self::Common as ModuleCommon>::Output,
+        out_point: OutPoint,
+    ) -> Result<TransactionItemAmount, <Self::Common as ModuleCommon>::OutputError>;
+
+    /// **Deprecated**: Modules should not be using it. Instead, they should
+    /// implement their own custom endpoints with semantics, versioning,
+    /// serialization, etc. that suits them. Potentially multiple or none.
+    ///
+    /// Depending on the module this might contain data needed by the client to
+    /// access funds or give an estimate of when funds will be available.
+    ///
+    /// Returns `None` if the output is unknown, **NOT** if it is just not ready
+    /// yet.
+    ///
+    /// Since this has become deprecated you may return `None` even if the
+    /// output is known as long as the output outcome is not used inside the
+    /// module.
+    #[deprecated(note = "https://github.com/fedimint/fedimint/issues/6671")]
+    async fn output_status(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        out_point: OutPoint,
+    ) -> Option<<Self::Common as ModuleCommon>::OutputOutcome>;
+
+    /// Verify submission-only checks for an input
+    ///
+    /// Most modules should not need to know or implement it, so the default
+    /// implementation just returns OK.
+    ///
+    /// In special circumstances it is useful to enforce requirements on the
+    /// included transaction outside of the consensus, in a similar way
+    /// Bitcoin enforces mempool policies.
+    ///
+    /// This functionality might be removed in the future versions, as more
+    /// checks become part of the consensus, so it is advised not to use it.
+    #[doc(hidden)]
+    async fn verify_input_submission<'a, 'b, 'c>(
+        &'a self,
+        _dbtx: &mut DatabaseTransaction<'c>,
+        _input: &'b <Self::Common as ModuleCommon>::Input,
+    ) -> Result<(), <Self::Common as ModuleCommon>::InputError> {
+        Ok(())
+    }
+
+    /// Verify submission-only checks for an output
+    ///
+    /// See [`Self::verify_input_submission`] for more information.
+    #[doc(hidden)]
+    async fn verify_output_submission<'a, 'b>(
+        &'a self,
+        _dbtx: &mut DatabaseTransaction<'b>,
+        _output: &'a <Self::Common as ModuleCommon>::Output,
+        _out_point: OutPoint,
+    ) -> Result<(), <Self::Common as ModuleCommon>::OutputError> {
+        Ok(())
+    }
+
+    /// Queries the database and returns all assets and liabilities of the
+    /// module.
+    ///
+    /// Summing over all modules, if liabilities > assets then an error has
+    /// occurred in the database and consensus should halt.
+    async fn audit(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        audit: &mut Audit,
+        module_instance_id: ModuleInstanceId,
+    );
+
+    /// Returns a list of custom API endpoints defined by the module. These are
+    /// made available both to users as well as to other modules. They thus
+    /// should be deterministic, only dependant on their input and the
+    /// current epoch.
+    fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>>;
+}
 
 /// Backend side module interface
 ///
@@ -284,6 +449,7 @@ where
         .map_err(|v| DynOutputError::from_typed(output.module_instance_id(), v))
     }
 
+    /// See [`ServerModule::output_status`]
     async fn output_status(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -328,5 +494,22 @@ where
                 ),
             })
             .collect()
+    }
+}
+
+/// Collection of server modules
+pub type ServerModuleRegistry = ModuleRegistry<DynServerModule>;
+
+pub trait ServerModuleRegistryExt {
+    fn decoder_registry(&self) -> ModuleDecoderRegistry;
+}
+
+impl ServerModuleRegistryExt for ServerModuleRegistry {
+    /// Generate a `ModuleDecoderRegistry` from this `ModuleRegistry`
+    fn decoder_registry(&self) -> ModuleDecoderRegistry {
+        // TODO: cache decoders
+        self.iter_modules()
+            .map(|(id, kind, module)| (id, kind.clone(), module.decoder()))
+            .collect::<ModuleDecoderRegistry>()
     }
 }
