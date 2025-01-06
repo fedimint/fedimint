@@ -20,6 +20,8 @@ function devimint_env {
   # For starship users, we can actually make the prompt distinct so there's
   # no confusion.
   export STARSHIP_CONFIG="${REPO_ROOT}/scripts/dev/devimint-env/starship.toml"
+  source "${REPO_ROOT}/scripts/dev/aliases.sh"
+
 
   >&2 echo "Devimint Env Shell Ready (exit to shutdown):"
   if [ "$SHELL" == "fish" ] || [[ "$SHELL" == */fish ]]; then

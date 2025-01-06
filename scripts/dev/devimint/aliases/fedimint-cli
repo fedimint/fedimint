@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+$FM_ALIAS_ORIG_FEDIMINT_CLI --data-dir "$FM_CLIENT_DIR" "$@"
