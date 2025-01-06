@@ -928,8 +928,8 @@ pub async fn open_channel(
                 Ok(_) => {
                     return Ok(());
                 }
-                Err(e) => {
-                    debug!(%e, "Getting chan info failed");
+                Err(err) => {
+                    debug!(target: LOG_DEVIMINT, err = %err.fmt_compact(), "Getting chan info failed");
                 }
             }
         }

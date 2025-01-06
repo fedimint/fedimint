@@ -10,6 +10,7 @@ use fedimint_core::module::{ApiVersion, ModuleCommon};
 use fedimint_core::session_outcome::{AcceptedItem, SessionStatus};
 use fedimint_core::task::{MaybeSend, MaybeSync, ShuttingDownError, TaskGroup};
 use fedimint_core::transaction::Transaction;
+use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::{apply, async_trait_maybe_send, OutPoint};
 use fedimint_logging::LOG_CLIENT_RECOVERY;
 use futures::{Stream, StreamExt as _};
@@ -290,10 +291,10 @@ where
                                         debug!(target: LOG_CLIENT_RECOVERY, session_idx, "Got signed session");
                                         break block
                                     },
-                                    Err(e) => {
+                                    Err(err) => {
                                         const MAX_SLEEP: Duration = Duration::from_secs(120);
 
-                                        warn!(target: LOG_CLIENT_RECOVERY, e = %e, session_idx, "Error trying to fetch signed block");
+                                        warn!(target: LOG_CLIENT_RECOVERY, err = %err.fmt_compact_anyhow(), session_idx, "Error trying to fetch signed block");
                                         // We don't want PARALLELISM_LEVEL tasks hammering Federation
                                         // with requests, so max sleep is significant
                                         if retry_sleep <= MAX_SLEEP {

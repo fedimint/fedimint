@@ -45,7 +45,7 @@ use fedimint_core::session_outcome::{SessionOutcome, SessionStatus, SignedSessio
 use fedimint_core::transaction::{
     SerdeTransaction, Transaction, TransactionError, TransactionSubmissionOutcome,
 };
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{secp256k1, OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
 use futures::StreamExt;
@@ -129,16 +129,16 @@ impl ConsensusApi {
             self.cfg.consensus.version,
         )
         .await
-        .inspect_err(|e| {
-            debug!(target: LOG_NET_API, %txid, %e, "Transaction rejected");
+        .inspect_err(|err| {
+            debug!(target: LOG_NET_API, %txid, err = %err.fmt_compact(), "Transaction rejected");
         })?;
 
         let _ = self
             .submission_sender
             .send(ConsensusItem::Transaction(transaction.clone()))
             .await
-            .inspect_err(|e| {
-                warn!(target: LOG_NET_API, %txid, %e, "Unable to submit the tx into consensus");
+            .inspect_err(|err| {
+                warn!(target: LOG_NET_API, %txid, err = %err.fmt_compact(), "Unable to submit the tx into consensus");
             });
 
         Ok(txid)
