@@ -16,7 +16,7 @@ time_out_path="$(mktemp --tmpdir fm-XXXXX)"
 time_fmt='%e\t%M\t%w\t%c'
 
 export FM_TEST_NAME="$test_name"
-TMPDIR="$(mktemp -d --tmpdir "${FM_TEST_NAME}-XXXX")"
+TMPDIR="$(mktemp -d --tmpdir "fm-${FM_TEST_NAME:0:12}-XXXX")"
 FM_RUN_TEST_TMPDIR="$TMPDIR"
 
 echo "## RUN:  $test_name$version_str"
