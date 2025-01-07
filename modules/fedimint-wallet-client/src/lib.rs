@@ -830,6 +830,29 @@ impl WalletClientModule {
         }))
     }
 
+    pub async fn find_tweak_idx_by_address(
+        &self,
+        address: bitcoin::Address<NetworkUnchecked>,
+    ) -> anyhow::Result<TweakIdx> {
+        let data = self.data.clone();
+        let Some((tweak_idx, _)) = self
+            .db
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix(&PegInTweakIndexPrefix)
+            .await
+            .filter(|(k, _)| {
+                let (_, derived_address, _tweak_key, _) = data.derive_peg_in_script(k.0);
+                future::ready(derived_address.into_unchecked() == address)
+            })
+            .next()
+            .await
+        else {
+            bail!("Address not found in the list of derived keys");
+        };
+
+        Ok(tweak_idx.0)
+    }
     pub async fn find_tweak_idx_by_operation_id(
         &self,
         operation_id: OperationId,
@@ -910,6 +933,15 @@ impl WalletClientModule {
     }
 
     /// Schedule given address for immediate re-check for deposits
+    pub async fn recheck_pegin_address_by_address(
+        &self,
+        address: bitcoin::Address<NetworkUnchecked>,
+    ) -> anyhow::Result<()> {
+        self.recheck_pegin_address(self.find_tweak_idx_by_address(address).await?)
+            .await
+    }
+
+    /// Schedule given address for immediate re-check for deposits
     pub async fn recheck_pegin_address(&self, tweak_idx: TweakIdx) -> anyhow::Result<()> {
         self.db
             .autocommit(
@@ -946,13 +978,22 @@ impl WalletClientModule {
     }
 
     /// Await for num deposit by [`OperationId`]
-    pub async fn await_num_deposit_by_operation_id(
+    pub async fn await_num_deposits_by_operation_id(
         &self,
         operation_id: OperationId,
         num_deposits: usize,
     ) -> anyhow::Result<()> {
         let tweak_idx = self.find_tweak_idx_by_operation_id(operation_id).await?;
         self.await_num_deposits(tweak_idx, num_deposits).await
+    }
+
+    pub async fn await_num_deposits_by_address(
+        &self,
+        address: bitcoin::Address<NetworkUnchecked>,
+        num_deposits: usize,
+    ) -> anyhow::Result<()> {
+        self.await_num_deposits(self.find_tweak_idx_by_address(address).await?, num_deposits)
+            .await
     }
 
     #[instrument(target = LOG_CLIENT_MODULE_WALLET, skip_all, fields(tweak_idx=?tweak_idx, num_deposists=num_deposits))]

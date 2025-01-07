@@ -160,8 +160,10 @@ pub enum ClientCmd {
         no_update: bool,
     },
     /// Generate a new deposit address, funds sent to it can later be claimed
+    #[clap(hide = true)]
     DepositAddress,
     /// Wait for deposit on previously generated address
+    #[clap(hide = true)]
     AwaitDeposit { operation_id: OperationId },
     /// Withdraw funds from the federation
     Withdraw {
@@ -491,6 +493,9 @@ pub async fn handle_command(
             Ok(json!(&gateways))
         }
         ClientCmd::DepositAddress => {
+            eprintln!(
+                "`deposit-address` command is deprecated. Use `module wallet new-deposit-address` instead."
+            );
             let (operation_id, address, tweak_idx) = client
                 .get_first_module::<WalletClientModule>()?
                 .allocate_deposit_address_expert_only(())
@@ -504,9 +509,10 @@ pub async fn handle_command(
             })
         }
         ClientCmd::AwaitDeposit { operation_id } => {
+            eprintln!("`await-deposit` is deprecated. Use `module wallet await-deposit` instead.");
             client
                 .get_first_module::<WalletClientModule>()?
-                .await_num_deposit_by_operation_id(operation_id, 1)
+                .await_num_deposits_by_operation_id(operation_id, 1)
                 .await?;
 
             Ok(serde_json::to_value(()).unwrap())
