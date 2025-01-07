@@ -1367,7 +1367,48 @@
 <a href="#1366" id="1366">1366</a>
 <a href="#1367" id="1367">1367</a>
 <a href="#1368" id="1368">1368</a>
-<a href="#1369" id="1369">1369</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1369" id="1369">1369</a>
+<a href="#1370" id="1370">1370</a>
+<a href="#1371" id="1371">1371</a>
+<a href="#1372" id="1372">1372</a>
+<a href="#1373" id="1373">1373</a>
+<a href="#1374" id="1374">1374</a>
+<a href="#1375" id="1375">1375</a>
+<a href="#1376" id="1376">1376</a>
+<a href="#1377" id="1377">1377</a>
+<a href="#1378" id="1378">1378</a>
+<a href="#1379" id="1379">1379</a>
+<a href="#1380" id="1380">1380</a>
+<a href="#1381" id="1381">1381</a>
+<a href="#1382" id="1382">1382</a>
+<a href="#1383" id="1383">1383</a>
+<a href="#1384" id="1384">1384</a>
+<a href="#1385" id="1385">1385</a>
+<a href="#1386" id="1386">1386</a>
+<a href="#1387" id="1387">1387</a>
+<a href="#1388" id="1388">1388</a>
+<a href="#1389" id="1389">1389</a>
+<a href="#1390" id="1390">1390</a>
+<a href="#1391" id="1391">1391</a>
+<a href="#1392" id="1392">1392</a>
+<a href="#1393" id="1393">1393</a>
+<a href="#1394" id="1394">1394</a>
+<a href="#1395" id="1395">1395</a>
+<a href="#1396" id="1396">1396</a>
+<a href="#1397" id="1397">1397</a>
+<a href="#1398" id="1398">1398</a>
+<a href="#1399" id="1399">1399</a>
+<a href="#1400" id="1400">1400</a>
+<a href="#1401" id="1401">1401</a>
+<a href="#1402" id="1402">1402</a>
+<a href="#1403" id="1403">1403</a>
+<a href="#1404" id="1404">1404</a>
+<a href="#1405" id="1405">1405</a>
+<a href="#1406" id="1406">1406</a>
+<a href="#1407" id="1407">1407</a>
+<a href="#1408" id="1408">1408</a>
+<a href="#1409" id="1409">1409</a>
+<a href="#1410" id="1410">1410</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2199,6 +2240,29 @@
         }))
     }
 
+    <span class="kw">pub async fn </span>find_tweak_idx_by_address(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        address: bitcoin::Address&lt;NetworkUnchecked&gt;,
+    ) -&gt; anyhow::Result&lt;TweakIdx&gt; {
+        <span class="kw">let </span>data = <span class="self">self</span>.data.clone();
+        <span class="kw">let </span><span class="prelude-val">Some</span>((tweak_idx, <span class="kw">_</span>)) = <span class="self">self
+            </span>.db
+            .begin_transaction_nc()
+            .<span class="kw">await
+            </span>.find_by_prefix(<span class="kw-2">&amp;</span>PegInTweakIndexPrefix)
+            .<span class="kw">await
+            </span>.filter(|(k, <span class="kw">_</span>)| {
+                <span class="kw">let </span>(<span class="kw">_</span>, derived_address, _tweak_key, <span class="kw">_</span>) = data.derive_peg_in_script(k.<span class="number">0</span>);
+                future::ready(derived_address.into_unchecked() == address)
+            })
+            .next()
+            .<span class="kw">await
+        else </span>{
+            <span class="macro">bail!</span>(<span class="string">"Address not found in the list of derived keys"</span>);
+        };
+
+        <span class="prelude-val">Ok</span>(tweak_idx.<span class="number">0</span>)
+    }
     <span class="kw">pub async fn </span>find_tweak_idx_by_operation_id(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
@@ -2279,6 +2343,15 @@
     </span>}
 
     <span class="doccomment">/// Schedule given address for immediate re-check for deposits
+    </span><span class="kw">pub async fn </span>recheck_pegin_address_by_address(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        address: bitcoin::Address&lt;NetworkUnchecked&gt;,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="self">self</span>.recheck_pegin_address(<span class="self">self</span>.find_tweak_idx_by_address(address).<span class="kw">await</span><span class="question-mark">?</span>)
+            .<span class="kw">await
+    </span>}
+
+    <span class="doccomment">/// Schedule given address for immediate re-check for deposits
     </span><span class="kw">pub async fn </span>recheck_pegin_address(<span class="kw-2">&amp;</span><span class="self">self</span>, tweak_idx: TweakIdx) -&gt; anyhow::Result&lt;()&gt; {
         <span class="self">self</span>.db
             .autocommit(
@@ -2315,13 +2388,22 @@
     }
 
     <span class="doccomment">/// Await for num deposit by [`OperationId`]
-    </span><span class="kw">pub async fn </span>await_num_deposit_by_operation_id(
+    </span><span class="kw">pub async fn </span>await_num_deposits_by_operation_id(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         num_deposits: usize,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>tweak_idx = <span class="self">self</span>.find_tweak_idx_by_operation_id(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.await_num_deposits(tweak_idx, num_deposits).<span class="kw">await
+    </span>}
+
+    <span class="kw">pub async fn </span>await_num_deposits_by_address(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        address: bitcoin::Address&lt;NetworkUnchecked&gt;,
+        num_deposits: usize,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="self">self</span>.await_num_deposits(<span class="self">self</span>.find_tweak_idx_by_address(address).<span class="kw">await</span><span class="question-mark">?</span>, num_deposits)
+            .<span class="kw">await
     </span>}
 
     <span class="attr">#[instrument(target = LOG_CLIENT_MODULE_WALLET, skip_all, fields(tweak_idx=<span class="question-mark">?</span>tweak_idx, num_deposists=num_deposits))]

@@ -120,10 +120,28 @@
 <a href="#119" id="119">119</a>
 <a href="#120" id="120">120</a>
 <a href="#121" id="121">121</a>
-<a href="#122" id="122">122</a></pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::bail;
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a></pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>devimint::cmd;
 <span class="kw">use </span>devimint::util::{FedimintCli, FedimintdCmd};
-<span class="kw">use </span>devimint::version_constants::VERSION_0_4_0;
+<span class="kw">use </span>devimint::version_constants::{VERSION_0_4_0, VERSION_0_6_0_ALPHA};
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
 <span class="kw">use </span>futures::try_join;
 <span class="kw">use </span>tracing::info;
@@ -169,9 +187,15 @@
                 .new_restored(<span class="string">"restored-without-backup"</span>, fed.invite_code()<span class="question-mark">?</span>)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="macro">cmd!</span>(restored, <span class="string">"module"</span>, <span class="string">"wallet"</span>, <span class="string">"await-deposit"</span>, operation_id)
-                .run()
-                .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if </span>fedimint_cli_version &lt; <span class="kw-2">*</span>VERSION_0_6_0_ALPHA {
+                <span class="macro">cmd!</span>(restored, <span class="string">"module"</span>, <span class="string">"wallet"</span>, <span class="string">"await-deposit"</span>, operation_id)
+                    .run()
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+            } <span class="kw">else </span>{
+                <span class="macro">cmd!</span>(restored, <span class="string">"module"</span>, <span class="string">"wallet"</span>, <span class="string">"await-deposit"</span>, <span class="string">"--operation-id"</span>, operation_id)
+                    .run()
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+            }
 
             <span class="macro">info!</span>(<span class="string">"Check if claimed"</span>);
             <span class="macro">assert_eq!</span>(peg_in_amount_sats * <span class="number">1000</span>, restored.balance().<span class="kw">await</span><span class="question-mark">?</span>);
@@ -200,9 +224,15 @@
                 .new_restored(<span class="string">"restored-with-backup"</span>, fed.invite_code()<span class="question-mark">?</span>)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="macro">cmd!</span>(restored, <span class="string">"module"</span>, <span class="string">"wallet"</span>, <span class="string">"await-deposit"</span>, operation_id)
-                .run()
-                .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if </span>fedimint_cli_version &lt; <span class="kw-2">*</span>VERSION_0_6_0_ALPHA {
+                <span class="macro">cmd!</span>(restored, <span class="string">"module"</span>, <span class="string">"wallet"</span>, <span class="string">"await-deposit"</span>, operation_id)
+                    .run()
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+            } <span class="kw">else </span>{
+                <span class="macro">cmd!</span>(restored, <span class="string">"module"</span>, <span class="string">"wallet"</span>, <span class="string">"await-deposit"</span>, <span class="string">"--operation-id"</span>, operation_id)
+                    .run()
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+            }
 
             <span class="macro">info!</span>(<span class="string">"Check if claimed"</span>);
             <span class="macro">assert_eq!</span>(peg_in_amount_sats * <span class="number">1000 </span>* <span class="number">2</span>, restored.balance().<span class="kw">await</span><span class="question-mark">?</span>);
@@ -230,9 +260,15 @@
                 .new_restored(<span class="string">"client-slow-restored-without-backup"</span>, fed.invite_code()<span class="question-mark">?</span>)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="macro">cmd!</span>(restored, <span class="string">"module"</span>, <span class="string">"wallet"</span>, <span class="string">"await-deposit"</span>, operation_id)
-                .run()
-                .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if </span>fedimint_cli_version &lt; <span class="kw-2">*</span>VERSION_0_6_0_ALPHA {
+                <span class="macro">cmd!</span>(restored, <span class="string">"module"</span>, <span class="string">"wallet"</span>, <span class="string">"await-deposit"</span>, operation_id)
+                    .run()
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+            } <span class="kw">else </span>{
+                <span class="macro">cmd!</span>(restored, <span class="string">"module"</span>, <span class="string">"wallet"</span>, <span class="string">"await-deposit"</span>, <span class="string">"--operation-id"</span>, operation_id)
+                    .run()
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+            }
 
             <span class="macro">info!</span>(<span class="string">"Client slow: Check if claimed"</span>);
             <span class="macro">assert_eq!</span>(peg_in_amount_sats * <span class="number">1000 </span>* <span class="number">2</span>, restored.balance().<span class="kw">await</span><span class="question-mark">?</span>);
