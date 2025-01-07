@@ -97,6 +97,17 @@ rules:
   pattern: url::Url
   severity: WARNING
 
+- id: use-err-formatting
+  languages:
+    - rust
+  message: Use `.fmt_compact` or `.fmt_compact_anyhow` to include error causes when reporting them, or .as_str if the error itself is a string.
+  patterns:
+    # semgrep struggles with finding boundaries of rust macro invocation when ellipsis (`...`) is used
+    # so matching this one with raw regexes instead
+    - pattern-regex: '%e\b|%err\b|%error\b'
+    - pattern-not-regex: '%err[a-zA-Z\.]+(fmt|as_str)'
+  severity: WARNING
+
 - id: use-log-targets
   languages:
     - rust

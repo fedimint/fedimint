@@ -10,6 +10,7 @@ use tracing::{debug, error, info, warn};
 
 use super::{TaskGroup, TaskShutdownToken};
 use crate::runtime::{JoinError, JoinHandle};
+use crate::util::FmtCompact as _;
 
 #[derive(Debug)]
 pub struct TaskGroupInner {
@@ -108,9 +109,9 @@ impl TaskGroupInner {
                 Ok(Ok(())) => {
                     debug!(target: LOG_TASK, task=%name, "Task finished");
                 }
-                Ok(Err(e)) => {
-                    error!(target: LOG_TASK, task=%name, error=%e, "Task panicked");
-                    errors.push(e);
+                Ok(Err(err)) => {
+                    error!(target: LOG_TASK, task=%name, err=%err.fmt_compact(), "Task panicked");
+                    errors.push(err);
                 }
                 Err(_) => {
                     warn!(

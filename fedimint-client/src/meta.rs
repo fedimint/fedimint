@@ -10,7 +10,7 @@ use fedimint_core::config::ClientConfig;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::task::waiter::Waiter;
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::util::{backoff_util, retry};
+use fedimint_core::util::{backoff_util, retry, FmtCompactAnyhow as _};
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::LOG_CLIENT;
 use serde::de::DeserializeOwned;
@@ -188,7 +188,9 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
         let failed_initial = meta_values.is_err();
         match meta_values {
             Ok(meta_values) => self.save_meta_values(client, &meta_values).await,
-            Err(error) => warn!(target: LOG_CLIENT, %error, "failed to fetch source"),
+            Err(error) => {
+                warn!(target: LOG_CLIENT, err = %error.fmt_compact_anyhow(), "failed to fetch source");
+            }
         };
         self.initial_fetch_waiter.done();
 

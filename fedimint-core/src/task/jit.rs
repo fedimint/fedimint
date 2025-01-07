@@ -9,6 +9,7 @@ use tokio::sync;
 use tracing::warn;
 
 use super::MaybeSend;
+use crate::util::FmtCompact;
 
 pub type Jit<T> = JitCore<T, Infallible>;
 pub type JitTry<T, E> = JitCore<T, E>;
@@ -29,6 +30,7 @@ where
     E: fmt::Debug + fmt::Display,
 {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        // In neither case we can preserve the source information
         None
     }
 
@@ -120,13 +122,13 @@ where
 
                             #[cfg(not(target_family = "wasm"))]
                             if err.is_panic() {
-                                warn!(target: LOG_TASK, %err, type_name = %std::any::type_name::<T>(), "Jit value panicked");
+                                warn!(target: LOG_TASK, err = %err.fmt_compact(), type_name = %std::any::type_name::<T>(), "Jit value panicked");
                                 // Resume the panic on the main task
                                 panic::resume_unwind(err.into_panic());
                             }
                             #[cfg(not(target_family = "wasm"))]
                             if err.is_cancelled() {
-                                warn!(target: LOG_TASK, %err, type_name = %std::any::type_name::<T>(), "Jit value task canceled:");
+                                warn!(target: LOG_TASK, err = %err.fmt_compact(), type_name = %std::any::type_name::<T>(), "Jit value task canceled:");
                             }
                             Err(format!("Jit value {} failed unexpectedly with: {}", std::any::type_name::<T>(), err))
                         },

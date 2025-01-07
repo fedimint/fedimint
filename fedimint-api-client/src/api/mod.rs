@@ -28,7 +28,7 @@ use fedimint_core::session_outcome::{SessionOutcome, SessionStatus};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::backoff_util::api_networking_backoff;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, util, NumPeersExt, PeerId, TransactionId,
 };
@@ -993,11 +993,11 @@ where
                 Ok(client) if client.is_connected() => {
                     return client.request::<_, _>(method, params).await;
                 }
-                Err(e) => {
+                Err(err) => {
                     if RETRIES <= attempts {
-                        return Err(JsonRpcClientError::Transport(e.into()));
+                        return Err(JsonRpcClientError::Transport(err.into()));
                     }
-                    debug!(target: LOG_CLIENT_NET_API, err=%e, "Triggering reconnection after connection error");
+                    debug!(target: LOG_CLIENT_NET_API, err=%err.fmt_compact(), "Triggering reconnection after connection error");
                 }
                 Ok(_client) => {
                     if RETRIES <= attempts {
