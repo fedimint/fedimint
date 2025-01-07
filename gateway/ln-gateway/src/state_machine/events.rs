@@ -136,6 +136,8 @@ impl Event for CompleteLightningPaymentSucceeded {
     const KIND: EventKind = EventKind::from_static("complete-lightning-payment-succeeded");
 }
 
+/// Computes the `StructurePaymentEvents` for all LNv1 payments by filtering the
+/// event set for LNv1 events and joining them together.
 pub fn compute_lnv1_stats(all_events: &[LogEntry]) -> StructuredPaymentEvents {
     let outgoing_start_events = filter_events(
         all_events,

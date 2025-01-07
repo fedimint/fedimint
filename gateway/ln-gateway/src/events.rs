@@ -39,6 +39,11 @@ pub type LogEntry = (
     serde_json::Value,
 );
 
+/// Searches through the event log for all events that occurred within the last
+/// 24 hours. Because it is inefficient to search the log backwards, instead
+/// this function traverses the log forwards, but in batches of 10000 events.
+/// All events are appended to an array until the cutoff event where the
+/// timestamp is greater than a day old is found.
 pub async fn get_last_day_events(client: &Arc<ClientHandle>) -> Vec<LogEntry> {
     // Start at the end of the log and find the first event where the timestamp <
     // `one_day_ago`
@@ -53,6 +58,8 @@ pub async fn get_last_day_events(client: &Arc<ClientHandle>) -> Vec<LogEntry> {
     let mut batch = client.get_event_log(Some(start_position), BATCH_SIZE).await;
     let mut index = get_earliest_index(&batch);
     let log_start = EventLogId::new(0);
+    // An index of 0 indicates that all events were within the last day and we
+    // should re-query for more events.
     while index == 0 {
         all_events.append(&mut batch);
         // Compute the start position for the next batch query
@@ -70,6 +77,9 @@ pub async fn get_last_day_events(client: &Arc<ClientHandle>) -> Vec<LogEntry> {
     all_events
 }
 
+/// Binary searches the `LogEntry` slice for a timestamp
+/// that is older than one day old. If all events are within the last day
+/// then the index of 0 is returned.
 fn get_earliest_index(batch: &[LogEntry]) -> usize {
     let one_day_ago = now()
         .checked_sub(Duration::from_secs(60 * 60 * 24))
@@ -85,6 +95,7 @@ fn get_earliest_index(batch: &[LogEntry]) -> usize {
     }
 }
 
+/// Filters the given `LogEntry` slice by the `EventKind` and `ModuleKind`.
 pub(crate) fn filter_events(
     all_events: &[LogEntry],
     event_kind: EventKind,
@@ -105,6 +116,14 @@ pub(crate) fn filter_events(
     events
 }
 
+/// This function computes a "nested loop join" by first computing the cross
+/// product of the start event vector and the success/failure event vectors. The
+/// resulting cartesian product is then filtered according to the join predicate
+/// supplied in the parameters.
+///
+/// This function is intended for small data sets. If the data set relations
+/// grow, this function should implement a different join algorithm or be moved
+/// out of the gateway.
 pub(crate) fn join_events<Start, Success, Failure>(
     start_events: &Vec<&LogEntry>,
     success_events: &Vec<&LogEntry>,
@@ -158,6 +177,8 @@ where
     (success_stats, failure_stats)
 }
 
+/// Helper struct for storing computed data about outgoing and incoming
+/// payments.
 #[derive(Debug, Default)]
 pub struct StructuredPaymentEvents {
     outgoing_latencies: Vec<u64>,
@@ -187,6 +208,8 @@ impl StructuredPaymentEvents {
         events
     }
 
+    /// Combines this `StructuredPaymentEvents` with the `other`
+    /// `StructuredPaymentEvents` by appending all of the internal vectors.
     pub fn combine(&mut self, other: &mut StructuredPaymentEvents) {
         self.outgoing_latencies
             .append(&mut other.outgoing_latencies);
@@ -201,6 +224,8 @@ impl StructuredPaymentEvents {
         self.sort();
     }
 
+    /// Sorts this `StructuredPaymentEvents` by sorting all of the internal
+    /// vectors.
     fn sort(&mut self) {
         self.outgoing_latencies.sort_unstable();
         self.incoming_latencies.sort_unstable();
@@ -210,6 +235,8 @@ impl StructuredPaymentEvents {
         self.incoming_latencies_failure.sort_unstable();
     }
 
+    /// Computes a `PaymentSummaryResponse` that can display at a glance
+    /// statistics about the outgoing and incoming payments.
     pub fn payment_summary_response(&self) -> PaymentSummaryResponse {
         PaymentSummaryResponse {
             outgoing: Self::compute_payment_stats(
@@ -225,6 +252,7 @@ impl StructuredPaymentEvents {
         }
     }
 
+    /// Computes the payment statistics for the given input data.
     fn compute_payment_stats(
         latencies: &[u64],
         fees: &[Amount],
@@ -240,6 +268,7 @@ impl StructuredPaymentEvents {
     }
 }
 
+/// Computes the average of the given `u64` slice.
 fn average(data: &[u64]) -> u64 {
     let sum: u64 = data.iter().sum();
     if data.is_empty() {
@@ -249,6 +278,7 @@ fn average(data: &[u64]) -> u64 {
     }
 }
 
+/// Computes the median of the given `u64` slice.
 fn median(data: &[u64]) -> u64 {
     if data.is_empty() {
         return 0;

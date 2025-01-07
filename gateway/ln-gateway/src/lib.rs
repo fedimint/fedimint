@@ -1590,6 +1590,8 @@ impl Gateway {
         Ok(PaymentLogResponse(payment_log))
     }
 
+    /// Computes the 24 hour payment summary statistics for this gateway.
+    /// Combines the LNv1 and LNv2 stats together.
     pub async fn handle_payment_summary_msg(&self) -> PaymentSummaryResponse {
         let federation_manager = self.federation_manager.read().await;
         let fed_configs = federation_manager.get_all_federation_configs().await;
