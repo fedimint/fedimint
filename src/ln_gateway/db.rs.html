@@ -647,18 +647,215 @@
 <a href="#646" id="646">646</a>
 <a href="#647" id="647">647</a>
 <a href="#648" id="648">648</a>
-<a href="#649" id="649">649</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
+<a href="#672" id="672">672</a>
+<a href="#673" id="673">673</a>
+<a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
+<a href="#683" id="683">683</a>
+<a href="#684" id="684">684</a>
+<a href="#685" id="685">685</a>
+<a href="#686" id="686">686</a>
+<a href="#687" id="687">687</a>
+<a href="#688" id="688">688</a>
+<a href="#689" id="689">689</a>
+<a href="#690" id="690">690</a>
+<a href="#691" id="691">691</a>
+<a href="#692" id="692">692</a>
+<a href="#693" id="693">693</a>
+<a href="#694" id="694">694</a>
+<a href="#695" id="695">695</a>
+<a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
+<a href="#702" id="702">702</a>
+<a href="#703" id="703">703</a>
+<a href="#704" id="704">704</a>
+<a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
+<a href="#707" id="707">707</a>
+<a href="#708" id="708">708</a>
+<a href="#709" id="709">709</a>
+<a href="#710" id="710">710</a>
+<a href="#711" id="711">711</a>
+<a href="#712" id="712">712</a>
+<a href="#713" id="713">713</a>
+<a href="#714" id="714">714</a>
+<a href="#715" id="715">715</a>
+<a href="#716" id="716">716</a>
+<a href="#717" id="717">717</a>
+<a href="#718" id="718">718</a>
+<a href="#719" id="719">719</a>
+<a href="#720" id="720">720</a>
+<a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a>
+<a href="#723" id="723">723</a>
+<a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
+<a href="#740" id="740">740</a>
+<a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
+<a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::db::{
-    CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-    MigrationContext,
+    CoreMigrationFn, Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCore,
+    IDatabaseTransactionOpsCoreTyped, MigrationContext,
 };
 <span class="kw">use </span>fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
+<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1, Amount};
 <span class="kw">use </span>fedimint_ln_common::serde_routing_fees;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
@@ -671,6 +868,18 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>strum_macros::EnumIter;
+
+<span class="kw">pub trait </span>GatewayDbExt {
+    <span class="kw">fn </span>get_client_database(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: <span class="kw-2">&amp;</span>FederationId) -&gt; Database;
+}
+
+<span class="kw">impl </span>GatewayDbExt <span class="kw">for </span>Database {
+    <span class="kw">fn </span>get_client_database(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: <span class="kw-2">&amp;</span>FederationId) -&gt; Database {
+        <span class="kw">let </span><span class="kw-2">mut </span>prefix = <span class="macro">vec!</span>[DbKeyPrefix::ClientDatabase <span class="kw">as </span>u8];
+        prefix.append(<span class="kw-2">&amp;mut </span>federation_id.consensus_encode_to_vec());
+        <span class="self">self</span>.with_prefix(prefix)
+    }
+}
 
 <span class="kw">pub trait </span>GatewayDbtxNcExt {
     <span class="kw">async fn </span>save_federation_config(<span class="kw-2">&amp;mut </span><span class="self">self</span>, config: <span class="kw-2">&amp;</span>FederationConfig);
@@ -732,21 +941,21 @@
 <span class="kw">impl</span>&lt;Cap: Send&gt; GatewayDbtxNcExt <span class="kw">for </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>, Cap&gt; {
     <span class="kw">async fn </span>save_federation_config(<span class="kw-2">&amp;mut </span><span class="self">self</span>, config: <span class="kw-2">&amp;</span>FederationConfig) {
         <span class="kw">let </span>id = config.invite_code.federation_id();
-        <span class="self">self</span>.insert_entry(<span class="kw-2">&amp;</span>FederationIdKey { id }, config).<span class="kw">await</span>;
+        <span class="self">self</span>.insert_entry(<span class="kw-2">&amp;</span>FederationConfigKey { id }, config).<span class="kw">await</span>;
     }
 
     <span class="kw">async fn </span>load_federation_configs_v0(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; BTreeMap&lt;FederationId, FederationConfigV0&gt; {
-        <span class="self">self</span>.find_by_prefix(<span class="kw-2">&amp;</span>FederationIdKeyPrefixV0)
+        <span class="self">self</span>.find_by_prefix(<span class="kw-2">&amp;</span>FederationConfigKeyPrefixV0)
             .<span class="kw">await
-            </span>.map(|(key, config): (FederationIdKeyV0, FederationConfigV0)| (key.id, config))
+            </span>.map(|(key, config): (FederationConfigKeyV0, FederationConfigV0)| (key.id, config))
             .collect::&lt;BTreeMap&lt;FederationId, FederationConfigV0&gt;&gt;()
             .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>load_federation_configs(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; BTreeMap&lt;FederationId, FederationConfig&gt; {
-        <span class="self">self</span>.find_by_prefix(<span class="kw-2">&amp;</span>FederationIdKeyPrefix)
+        <span class="self">self</span>.find_by_prefix(<span class="kw-2">&amp;</span>FederationConfigKeyPrefix)
             .<span class="kw">await
-            </span>.map(|(key, config): (FederationIdKey, FederationConfig)| (key.id, config))
+            </span>.map(|(key, config): (FederationConfigKey, FederationConfig)| (key.id, config))
             .collect::&lt;BTreeMap&lt;FederationId, FederationConfig&gt;&gt;()
             .<span class="kw">await
     </span>}
@@ -755,11 +964,12 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         federation_id: FederationId,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;FederationConfig&gt; {
-        <span class="self">self</span>.get_value(<span class="kw-2">&amp;</span>FederationIdKey { id: federation_id }).<span class="kw">await
+        <span class="self">self</span>.get_value(<span class="kw-2">&amp;</span>FederationConfigKey { id: federation_id })
+            .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>remove_federation_config(<span class="kw-2">&amp;mut </span><span class="self">self</span>, federation_id: FederationId) {
-        <span class="self">self</span>.remove_entry(<span class="kw-2">&amp;</span>FederationIdKey { id: federation_id })
+        <span class="self">self</span>.remove_entry(<span class="kw-2">&amp;</span>FederationConfigKey { id: federation_id })
             .<span class="kw">await</span>;
     }
 
@@ -842,8 +1052,8 @@
                 DbKeyPrefix::FederationConfig =&gt; {
                     <span class="macro">push_db_pair_items!</span>(
                         <span class="self">self</span>,
-                        FederationIdKeyPrefix,
-                        FederationIdKey,
+                        FederationConfigKeyPrefix,
+                        FederationConfigKey,
                         FederationConfig,
                         gateway_items,
                         <span class="string">"Federation Config"
@@ -871,6 +1081,7 @@
     GatewayConfiguration = <span class="number">0x07</span>,
     PreimageAuthentication = <span class="number">0x08</span>,
     RegisteredIncomingContract = <span class="number">0x09</span>,
+    ClientDatabase = <span class="number">0x10</span>,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
@@ -880,16 +1091,16 @@
 }
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
-</span><span class="kw">struct </span>FederationIdKeyPrefixV0;
+</span><span class="kw">struct </span>FederationConfigKeyPrefixV0;
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
-</span><span class="kw">struct </span>FederationIdKeyPrefixV1;
+</span><span class="kw">struct </span>FederationConfigKeyPrefixV1;
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
-</span><span class="kw">struct </span>FederationIdKeyPrefix;
+</span><span class="kw">struct </span>FederationConfigKeyPrefix;
 
 <span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
-</span><span class="kw">struct </span>FederationIdKeyV0 {
+</span><span class="kw">struct </span>FederationConfigKeyV0 {
     id: FederationId,
 }
 
@@ -903,7 +1114,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
-</span><span class="kw">struct </span>FederationIdKeyV1 {
+</span><span class="kw">struct </span>FederationConfigKeyV1 {
     id: FederationId,
 }
 
@@ -921,7 +1132,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
-</span><span class="kw">struct </span>FederationIdKey {
+</span><span class="kw">struct </span>FederationConfigKey {
     id: FederationId,
 }
 
@@ -938,32 +1149,35 @@
 }
 
 <span class="macro">impl_db_record!</span>(
-    key = FederationIdKeyV0,
+    key = FederationConfigKeyV0,
     value = FederationConfigV0,
     db_prefix = DbKeyPrefix::FederationConfig,
 );
 
 <span class="macro">impl_db_record!</span>(
-    key = FederationIdKeyV1,
+    key = FederationConfigKeyV1,
     value = FederationConfigV1,
     db_prefix = DbKeyPrefix::FederationConfig,
 );
 
 <span class="macro">impl_db_record!</span>(
-    key = FederationIdKey,
+    key = FederationConfigKey,
     value = FederationConfig,
     db_prefix = DbKeyPrefix::FederationConfig,
 );
 
 <span class="macro">impl_db_lookup!</span>(
-    key = FederationIdKeyV0,
-    query_prefix = FederationIdKeyPrefixV0
+    key = FederationConfigKeyV0,
+    query_prefix = FederationConfigKeyPrefixV0
 );
 <span class="macro">impl_db_lookup!</span>(
-    key = FederationIdKeyV1,
-    query_prefix = FederationIdKeyPrefixV1
+    key = FederationConfigKeyV1,
+    query_prefix = FederationConfigKeyPrefixV1
 );
-<span class="macro">impl_db_lookup!</span>(key = FederationIdKey, query_prefix = FederationIdKeyPrefix);
+<span class="macro">impl_db_lookup!</span>(
+    key = FederationConfigKey,
+    query_prefix = FederationConfigKeyPrefix
+);
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
 </span><span class="kw">struct </span>GatewayPublicKey;
@@ -1053,6 +1267,7 @@
     migrations.insert(DatabaseVersion(<span class="number">1</span>), |ctx| migrate_to_v2(ctx).boxed());
     migrations.insert(DatabaseVersion(<span class="number">2</span>), |ctx| migrate_to_v3(ctx).boxed());
     migrations.insert(DatabaseVersion(<span class="number">3</span>), |ctx| migrate_to_v4(ctx).boxed());
+    migrations.insert(DatabaseVersion(<span class="number">4</span>), |ctx| migrate_to_v5(ctx).boxed());
     migrations
 }
 
@@ -1092,7 +1307,7 @@
     <span class="comment">// If there is no old federation configuration, there is nothing to do.
     </span><span class="kw">for </span>(old_federation_id, _old_federation_config) <span class="kw">in </span>dbtx.load_federation_configs_v0().<span class="kw">await </span>{
         <span class="kw">if let </span><span class="prelude-val">Some</span>(old_federation_config) = dbtx
-            .remove_entry(<span class="kw-2">&amp;</span>FederationIdKeyV0 {
+            .remove_entry(<span class="kw-2">&amp;</span>FederationConfigKeyV0 {
                 id: old_federation_id,
             })
             .<span class="kw">await
@@ -1104,7 +1319,7 @@
                 fees: old_federation_config.fees,
                 connector: Connector::default(),
             };
-            <span class="kw">let </span>new_federation_key = FederationIdKeyV1 {
+            <span class="kw">let </span>new_federation_key = FederationConfigKeyV1 {
                 id: old_federation_id,
             };
             dbtx.insert_entry(<span class="kw-2">&amp;</span>new_federation_key, <span class="kw-2">&amp;</span>new_federation_config)
@@ -1137,7 +1352,7 @@
     dbtx.remove_entry(<span class="kw-2">&amp;</span>GatewayConfigurationKeyV2).<span class="kw">await</span>;
 
     <span class="kw">let </span>configs = dbtx
-        .find_by_prefix(<span class="kw-2">&amp;</span>FederationIdKeyPrefixV1)
+        .find_by_prefix(<span class="kw-2">&amp;</span>FederationConfigKeyPrefixV1)
         .<span class="kw">await
         </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
         .<span class="kw">await</span>;
@@ -1150,10 +1365,86 @@
                 transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
                 connector: Connector::default(),
             };
-            <span class="kw">let </span>new_key = FederationIdKey { id: fed_id.id };
+            <span class="kw">let </span>new_key = FederationConfigKey { id: fed_id.id };
             dbtx.insert_new_entry(<span class="kw-2">&amp;</span>new_key, <span class="kw-2">&amp;</span>new_fed_config).<span class="kw">await</span>;
         }
     }
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="doccomment">/// Introduced in v0.5, there is a db key clash between the `FederationConfig`
+/// record and the isolated databases used for each client. We must migrate the
+/// isolated databases to be behind the `ClientDatabase` prefix to allow the
+/// gateway to properly read the federation configs.
+</span><span class="kw">async fn </span>migrate_to_v5(<span class="kw-2">mut </span>ctx: MigrationContext&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = ctx.dbtx();
+    migrate_federation_configs(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await
+</span>}
+
+<span class="kw">async fn </span>migrate_federation_configs(
+    dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+    <span class="comment">// We need to migrate all isolated database entries to be behind the 0x10
+    // prefix. The problem is, if there is a `FederationId` that starts with
+    // 0x04, we cannot read the `FederationId` because the database will be confused
+    // between the isolated DB and the `FederationConfigKey` record. To solve this,
+    // we try and decode each key as a Federation ID and each value as a
+    // FederationConfig. If that is successful and the federation ID in the
+    // config matches the key, then we skip that record and migrate the rest of
+    // the entries.
+    </span><span class="kw">let </span>problem_entries = dbtx
+        .raw_find_by_prefix(<span class="kw-2">&amp;</span>[<span class="number">0x04</span>])
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;()
+        .<span class="kw">await</span>;
+    <span class="kw">for </span>(<span class="kw-2">mut </span>problem_key, value) <span class="kw">in </span>problem_entries {
+        <span class="comment">// Try and decode the key as a FederationId and the value as a FederationConfig
+        // The key should be 33 bytes because a FederationID is 32 bytes and there is a
+        // 1 byte prefix.
+        </span><span class="kw">if </span>problem_key.len() == <span class="number">33 </span>{
+            <span class="kw">if let </span><span class="prelude-val">Ok</span>(federation_id) = FederationId::consensus_decode_whole(
+                <span class="kw-2">&amp;</span>problem_key[<span class="number">1</span>..<span class="number">33</span>],
+                <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
+            ) {
+                <span class="kw">if let </span><span class="prelude-val">Ok</span>(federation_config) = FederationConfig::consensus_decode_whole(
+                    <span class="kw-2">&amp;</span>value,
+                    <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
+                ) {
+                    <span class="kw">if </span>federation_id == federation_config.invite_code.federation_id() {
+                        <span class="kw">continue</span>;
+                    }
+                }
+            }
+        }
+
+        dbtx.raw_remove_entry(<span class="kw-2">&amp;</span>problem_key).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>new_key = <span class="macro">vec!</span>[DbKeyPrefix::ClientDatabase <span class="kw">as </span>u8];
+        new_key.append(<span class="kw-2">&amp;mut </span>problem_key);
+        dbtx.raw_insert_bytes(<span class="kw-2">&amp;</span>new_key, <span class="kw-2">&amp;</span>value).<span class="kw">await</span><span class="question-mark">?</span>;
+    }
+
+    <span class="comment">// Migrate all entries of the isolated databases that don't overlap with
+    // `FederationConfig` entries.
+    </span><span class="kw">let </span>fed_ids = dbtx
+        .find_by_prefix(<span class="kw-2">&amp;</span>FederationConfigKeyPrefix)
+        .<span class="kw">await
+        </span>.collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;()
+        .<span class="kw">await</span>;
+    <span class="kw">for </span>fed_id <span class="kw">in </span>fed_ids.keys() {
+        <span class="kw">let </span>federation_id_bytes = fed_id.id.consensus_encode_to_vec();
+        <span class="kw">let </span>isolated_entries = dbtx
+            .raw_find_by_prefix(<span class="kw-2">&amp;</span>federation_id_bytes)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;()
+            .<span class="kw">await</span>;
+        <span class="kw">for </span>(<span class="kw-2">mut </span>key, value) <span class="kw">in </span>isolated_entries {
+            dbtx.raw_remove_entry(<span class="kw-2">&amp;</span>key).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>new_key = <span class="macro">vec!</span>[DbKeyPrefix::ClientDatabase <span class="kw">as </span>u8];
+            new_key.append(<span class="kw-2">&amp;mut </span>key);
+            dbtx.raw_insert_bytes(<span class="kw-2">&amp;</span>new_key, <span class="kw-2">&amp;</span>value).<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+    }
+
     <span class="prelude-val">Ok</span>(())
 }
 
@@ -1180,9 +1471,11 @@
 
     <span class="kw">use </span>anyhow::ensure;
     <span class="kw">use </span>bitcoin::hashes::Hash;
+    <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::Database;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::util::SafeUrl;
+    <span class="kw">use </span>fedimint_core::PeerId;
     <span class="kw">use </span>fedimint_lnv2_common::gateway_api::PaymentFee;
     <span class="kw">use </span>fedimint_logging::TracingSetup;
     <span class="kw">use </span>fedimint_testing::db::{
@@ -1209,8 +1502,11 @@
             fees: PaymentFee::TRANSACTION_FEE_DEFAULT.into(),
         };
 
-        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>FederationIdKeyV0 { id: federation_id }, <span class="kw-2">&amp;</span>federation_config)
-            .<span class="kw">await</span>;
+        dbtx.insert_new_entry(
+            <span class="kw-2">&amp;</span>FederationConfigKeyV0 { id: federation_id },
+            <span class="kw-2">&amp;</span>federation_config,
+        )
+        .<span class="kw">await</span>;
 
         <span class="kw">let </span>context = secp256k1::Secp256k1::new();
         <span class="kw">let </span>(secret, <span class="kw">_</span>) = context.generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
@@ -1262,7 +1558,7 @@
                     <span class="kw">match </span>prefix {
                         DbKeyPrefix::FederationConfig =&gt; {
                             <span class="kw">let </span>configs = dbtx
-                                .find_by_prefix(<span class="kw-2">&amp;</span>FederationIdKeyPrefix)
+                                .find_by_prefix(<span class="kw-2">&amp;</span>FederationConfigKeyPrefix)
                                 .<span class="kw">await
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;
@@ -1295,5 +1591,101 @@
         )
         .<span class="kw">await
     </span>}
+
+    <span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>)]
+    </span><span class="kw">async fn </span>test_isolated_db_migration() -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">async fn </span>create_isolated_record(prefix: Vec&lt;u8&gt;, db: <span class="kw-2">&amp;</span>Database) {
+            <span class="comment">// Create an isolated database the old way where there was no prefix
+            </span><span class="kw">let </span>isolated_db = db.with_prefix(prefix);
+            <span class="kw">let </span><span class="kw-2">mut </span>isolated_dbtx = isolated_db.begin_transaction().<span class="kw">await</span>;
+
+            <span class="comment">// Insert a record into the isolated db (doesn't matter what it is)
+            </span>isolated_dbtx
+                .insert_new_entry(
+                    <span class="kw-2">&amp;</span>GatewayPublicKey,
+                    <span class="kw-2">&amp;</span>Keypair::new(secp256k1::SECP256K1, <span class="kw-2">&amp;mut </span>rand::thread_rng()),
+                )
+                .<span class="kw">await</span>;
+            isolated_dbtx.commit_tx().<span class="kw">await</span>;
+        }
+
+        <span class="kw">let </span>nonconflicting_fed_id = FederationId::from_str(
+            <span class="string">"1106afdc71a052d2787eab7e84c95803636d2a84c272eb81b4e01b27acb86c6f"</span>,
+        )
+        .expect(<span class="string">"invalid federation ID"</span>);
+        <span class="kw">let </span>conflicting_fed_id = FederationId::from_str(
+            <span class="string">"0406afdc71a052d2787eab7e84c95803636d2a84c272eb81b4e01b27acb86c6f"</span>,
+        )
+        .expect(<span class="string">"invalid federation ID"</span>);
+        <span class="kw">let _ </span>= TracingSetup::default().init();
+        <span class="kw">let </span>db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+        dbtx.insert_new_entry(
+            <span class="kw-2">&amp;</span>FederationConfigKey {
+                id: conflicting_fed_id,
+            },
+            <span class="kw-2">&amp;</span>FederationConfig {
+                invite_code: InviteCode::new(
+                    SafeUrl::from_str(<span class="string">"http://testfed.com"</span>).unwrap(),
+                    PeerId::from(<span class="number">0</span>),
+                    conflicting_fed_id,
+                    <span class="prelude-val">None</span>,
+                ),
+                federation_index: <span class="number">0</span>,
+                lightning_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
+                transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
+                connector: Connector::Tcp,
+            },
+        )
+        .<span class="kw">await</span>;
+
+        dbtx.insert_new_entry(
+            <span class="kw-2">&amp;</span>FederationConfigKey {
+                id: nonconflicting_fed_id,
+            },
+            <span class="kw-2">&amp;</span>FederationConfig {
+                invite_code: InviteCode::new(
+                    SafeUrl::from_str(<span class="string">"http://testfed2.com"</span>).unwrap(),
+                    PeerId::from(<span class="number">0</span>),
+                    nonconflicting_fed_id,
+                    <span class="prelude-val">None</span>,
+                ),
+                federation_index: <span class="number">1</span>,
+                lightning_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
+                transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
+                connector: Connector::Tcp,
+            },
+        )
+        .<span class="kw">await</span>;
+        dbtx.commit_tx().<span class="kw">await</span>;
+
+        create_isolated_record(conflicting_fed_id.consensus_encode_to_vec(), <span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
+        create_isolated_record(nonconflicting_fed_id.consensus_encode_to_vec(), <span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
+
+        <span class="kw">let </span><span class="kw-2">mut </span>migration_dbtx = db.begin_transaction().<span class="kw">await</span>;
+        migrate_federation_configs(<span class="kw-2">&amp;mut </span>migration_dbtx.to_ref_nc()).<span class="kw">await</span><span class="question-mark">?</span>;
+        migration_dbtx.commit_tx().<span class="kw">await</span>;
+
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
+
+        <span class="kw">let </span>num_configs = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>FederationConfigKeyPrefix)
+            .<span class="kw">await
+            </span>.collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;()
+            .<span class="kw">await
+            </span>.len();
+        <span class="macro">assert_eq!</span>(num_configs, <span class="number">2</span>);
+
+        <span class="comment">// Verify that the client databases migrated successfully.
+        </span><span class="kw">let </span>isolated_db = db.get_client_database(<span class="kw-2">&amp;</span>conflicting_fed_id);
+        <span class="kw">let </span><span class="kw-2">mut </span>isolated_dbtx = isolated_db.begin_transaction_nc().<span class="kw">await</span>;
+        <span class="macro">assert!</span>(isolated_dbtx.get_value(<span class="kw-2">&amp;</span>GatewayPublicKey).<span class="kw">await</span>.is_some());
+
+        <span class="kw">let </span>isolated_db = db.get_client_database(<span class="kw-2">&amp;</span>nonconflicting_fed_id);
+        <span class="kw">let </span><span class="kw-2">mut </span>isolated_dbtx = isolated_db.begin_transaction_nc().<span class="kw">await</span>;
+        <span class="macro">assert!</span>(isolated_dbtx.get_value(<span class="kw-2">&amp;</span>GatewayPublicKey).<span class="kw">await</span>.is_some());
+
+        <span class="prelude-val">Ok</span>(())
+    }
 }
 </code></pre></div></section></main></body></html>

@@ -216,12 +216,7 @@
 <a href="#215" id="215">215</a>
 <a href="#216" id="216">216</a>
 <a href="#217" id="217">217</a>
-<a href="#218" id="218">218</a>
-<a href="#219" id="219">219</a>
-<a href="#220" id="220">220</a>
-<a href="#221" id="221">221</a>
-<a href="#222" id="222">222</a>
-<a href="#223" id="223">223</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
+<a href="#218" id="218">218</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
@@ -235,10 +230,9 @@
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
-<span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 
-<span class="kw">use </span><span class="kw">crate</span>::db::FederationConfig;
+<span class="kw">use </span><span class="kw">crate</span>::db::{FederationConfig, GatewayDbExt};
 <span class="kw">use </span><span class="kw">crate</span>::error::AdminGatewayError;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::GatewayClientInitV2;
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayClientInit;
@@ -327,9 +321,7 @@
             .<span class="kw">await
             </span>.map_err(AdminGatewayError::ClientCreationError)<span class="question-mark">?</span>;
         <span class="kw">let </span>federation_id = config.invite_code.federation_id();
-        <span class="kw">let </span>db = gateway
-            .gateway_db
-            .with_prefix(federation_id.consensus_encode_to_vec());
+        <span class="kw">let </span>db = gateway.gateway_db.get_client_database(<span class="kw-2">&amp;</span>federation_id);
         <span class="kw">let </span>client_builder = <span class="self">self
             </span>.create_client_builder(db, <span class="kw-2">&amp;</span>config, gateway.clone())
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -378,9 +370,7 @@
             <span class="kw">let </span>root_secret = <span class="self">self</span>.client_plainrootsecret(<span class="kw-2">&amp;</span>db).<span class="kw">await</span><span class="question-mark">?</span>;
             (db, root_secret)
         } <span class="kw">else </span>{
-            <span class="kw">let </span>db = gateway
-                .gateway_db
-                .with_prefix(federation_id.consensus_encode_to_vec());
+            <span class="kw">let </span>db = gateway.gateway_db.get_client_database(<span class="kw-2">&amp;</span>federation_id);
             <span class="kw">let </span>secret = <span class="self">Self</span>::derive_federation_secret(mnemonic, <span class="kw-2">&amp;</span>federation_id);
             (db, secret)
         };
