@@ -431,7 +431,17 @@
 <a href="#430" id="430">430</a>
 <a href="#431" id="431">431</a>
 <a href="#432" id="432">432</a>
-<a href="#433" id="433">433</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>axum::extract::Request;
 <span class="kw">use </span>axum::http::{header, StatusCode};
@@ -457,16 +467,16 @@
 
 <span class="kw">use super</span>::{
     BackupPayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
-    CreateInvoiceForOperatorPayload, DepositAddressPayload, InfoPayload, LeaveFedPayload,
-    OpenChannelPayload, PayInvoiceForOperatorPayload, PaymentLogPayload, ReceiveEcashPayload,
-    SendOnchainPayload, SetFeesPayload, SpendEcashPayload, WithdrawPayload, ADDRESS_ENDPOINT,
-    BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
-    CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, GATEWAY_INFO_ENDPOINT,
-    GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
-    LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT,
-    PAYMENT_LOG_ENDPOINT, PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT,
-    SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, V1_API_ENDPOINT,
-    WITHDRAW_ENDPOINT,
+    CreateInvoiceForOperatorPayload, DepositAddressPayload, DepositAddressRecheckPayload,
+    InfoPayload, LeaveFedPayload, OpenChannelPayload, PayInvoiceForOperatorPayload,
+    PaymentLogPayload, ReceiveEcashPayload, SendOnchainPayload, SetFeesPayload, SpendEcashPayload,
+    WithdrawPayload, ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT,
+    CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
+    CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT,
+    GET_BALANCES_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT,
+    LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAYMENT_LOG_ENDPOINT,
+    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT, SEND_ONCHAIN_ENDPOINT,
+    SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, V1_API_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 <span class="kw">use </span><span class="kw">crate</span>::error::{AdminGatewayError, PublicGatewayError};
 <span class="kw">use </span><span class="kw">crate</span>::rpc::ConfigPayload;
@@ -595,6 +605,7 @@
         )
         .route(LIST_ACTIVE_CHANNELS_ENDPOINT, get(list_active_channels))
         .route(SEND_ONCHAIN_ENDPOINT, post(send_onchain))
+        .route(ADDRESS_RECHECK_ENDPOINT, post(recheck_address))
         .route(GET_BALANCES_ENDPOINT, get(get_balances))
         .route(SPEND_ECASH_ENDPOINT, post(spend_ecash))
         .route(MNEMONIC_ENDPOINT, get(mnemonic))
@@ -777,6 +788,15 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, AdminGatewayError&gt; {
     <span class="kw">let </span>txid = gateway.handle_send_onchain_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(txid)))
+}
+
+<span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err)]
+</span><span class="kw">async fn </span>recheck_address(
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
+    Json(payload): Json&lt;DepositAddressRecheckPayload&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, AdminGatewayError&gt; {
+    gateway.handle_recheck_address_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>({})))
 }
 
 <span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err)]

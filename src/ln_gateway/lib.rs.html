@@ -2077,7 +2077,22 @@
 <a href="#2076" id="2076">2076</a>
 <a href="#2077" id="2077">2077</a>
 <a href="#2078" id="2078">2078</a>
-<a href="#2079" id="2079">2079</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2079" id="2079">2079</a>
+<a href="#2080" id="2080">2080</a>
+<a href="#2081" id="2081">2081</a>
+<a href="#2082" id="2082">2082</a>
+<a href="#2083" id="2083">2083</a>
+<a href="#2084" id="2084">2084</a>
+<a href="#2085" id="2085">2085</a>
+<a href="#2086" id="2086">2086</a>
+<a href="#2087" id="2087">2087</a>
+<a href="#2088" id="2088">2088</a>
+<a href="#2089" id="2089">2089</a>
+<a href="#2090" id="2090">2090</a>
+<a href="#2091" id="2091">2091</a>
+<a href="#2092" id="2092">2092</a>
+<a href="#2093" id="2093">2093</a>
+<a href="#2094" id="2094">2094</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2169,11 +2184,11 @@
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>rand::thread_rng;
 <span class="kw">use </span>rpc::{
-    CloseChannelsWithPeerPayload, CreateInvoiceForOperatorPayload, FederationInfo,
-    GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelPayload,
-    PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentLogResponse, ReceiveEcashPayload,
-    ReceiveEcashResponse, SendOnchainPayload, SetFeesPayload, SpendEcashPayload,
-    SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
+    CloseChannelsWithPeerPayload, CreateInvoiceForOperatorPayload, DepositAddressRecheckPayload,
+    FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse,
+    OpenChannelPayload, PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentLogResponse,
+    ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainPayload, SetFeesPayload,
+    SpendEcashPayload, SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
 };
 <span class="kw">use </span>state_machine::{GatewayClientModule, GatewayExtPayStates};
 <span class="kw">use </span>tokio::sync::RwLock;
@@ -3435,6 +3450,21 @@
         Txid::from_str(<span class="kw-2">&amp;</span>response.txid).map_err(|e| AdminGatewayError::WithdrawError {
             failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to parse withdrawal TXID: {e}"</span>),
         })
+    }
+
+    <span class="doccomment">/// Trigger rechecking for deposits on an address
+    </span><span class="kw">pub async fn </span>handle_recheck_address_msg(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        payload: DepositAddressRecheckPayload,
+    ) -&gt; AdminResult&lt;()&gt; {
+        <span class="self">self</span>.select_client(payload.federation_id)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.value()
+            .get_first_module::&lt;WalletClientModule&gt;()
+            .expect(<span class="string">"Must have client module"</span>)
+            .recheck_pegin_address_by_address(payload.address)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="doccomment">/// Returns the ecash, lightning, and onchain balances for the gateway and
