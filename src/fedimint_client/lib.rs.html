@@ -3161,7 +3161,8 @@
 <a href="#3160" id="3160">3160</a>
 <a href="#3161" id="3161">3161</a>
 <a href="#3162" id="3162">3162</a>
-<a href="#3163" id="3163">3163</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#3163" id="3163">3163</a>
+<a href="#3164" id="3164">3164</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
@@ -3289,7 +3290,9 @@
 <span class="kw">use </span>fedimint_core::net::api_announcement::SignedApiAnnouncement;
 <span class="kw">use </span>fedimint_core::task::{Elapsed, MaybeSend, MaybeSync, TaskGroup};
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
-<span class="kw">use </span>fedimint_core::util::{backoff_util, retry, BoxStream, NextOrPending, SafeUrl};
+<span class="kw">use </span>fedimint_core::util::{
+    backoff_util, retry, BoxStream, FmtCompact <span class="kw">as _</span>, FmtCompactAnyhow <span class="kw">as _</span>, NextOrPending, SafeUrl,
+};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, fedimint_build_code_version_env,
     maybe_add_send, maybe_add_send_sync, runtime, Amount, NumPeers, OutPoint, PeerId,
@@ -3859,7 +3862,7 @@
             .shutdown_join_all(<span class="prelude-val">Some</span>(Duration::from_secs(<span class="number">30</span>)))
             .<span class="kw">await
         </span>{
-            <span class="macro">warn!</span>(target: LOG_CLIENT, %err, <span class="string">"Error waiting for client task group to shut down"</span>);
+            <span class="macro">warn!</span>(target: LOG_CLIENT, err = %err.fmt_compact_anyhow(), <span class="string">"Error waiting for client task group to shut down"</span>);
         }
 
         <span class="kw">let </span>client_strong_count = Arc::strong_count(<span class="kw-2">&amp;</span>inner);
@@ -4719,9 +4722,9 @@
                         .<span class="kw">await
                         </span>.is_some()
                     {
-                        <span class="macro">debug!</span>(target: LOG_CLIENT, %peer_id, %err, <span class="string">"Failed to refresh API versions of a peer, but we have a previous response"</span>);
+                        <span class="macro">debug!</span>(target: LOG_CLIENT, %peer_id, err = %err.fmt_compact(), <span class="string">"Failed to refresh API versions of a peer, but we have a previous response"</span>);
                     } <span class="kw">else </span>{
-                        <span class="macro">debug!</span>(target: LOG_CLIENT, %peer_id, %err, <span class="string">"Failed to refresh API versions of a peer, will retry"</span>);
+                        <span class="macro">debug!</span>(target: LOG_CLIENT, %peer_id, err = %err.fmt_compact(), <span class="string">"Failed to refresh API versions of a peer, will retry"</span>);
                         requests.push(make_request(Duration::from_secs(<span class="number">15</span>), peer_id, <span class="kw-2">&amp;</span>api));
                     }
                 }
@@ -4829,7 +4832,7 @@
                     </span>{
                         <span class="macro">warn!</span>(
                             target: LOG_CLIENT,
-                            %error, <span class="string">"Failed to discover common api versions"
+                            err = %error.fmt_compact_anyhow(), <span class="string">"Failed to discover common api versions"
                         </span>);
                     }
                 });
@@ -5066,7 +5069,7 @@
                     <span class="prelude-val">Err</span>(err) =&gt; {
                         <span class="macro">warn!</span>(
                             target: LOG_CLIENT,
-                            %err, module_instance_id, <span class="string">"Module recovery failed"
+                            err = %err.fmt_compact_anyhow(), module_instance_id, <span class="string">"Module recovery failed"
                         </span>);
                         <span class="comment">// a module recovery that failed reports and error and
                         // just never finishes, so we don't need a separate state
@@ -5944,7 +5947,7 @@
         )
         .<span class="kw">await
         </span>.inspect_err(|err| {
-            <span class="macro">warn!</span>(target: LOG_CLIENT, %err, <span class="string">"Failed to discover initial API version to use."</span>);
+            <span class="macro">warn!</span>(target: LOG_CLIENT, err = %err.fmt_compact_anyhow(), <span class="string">"Failed to discover initial API version to use."</span>);
         })
         .unwrap_or(ApiVersionSet {
             core: ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
@@ -6028,12 +6031,11 @@
                                         task_group,
                                     )
                                     .<span class="kw">await
-                                    </span>.map_err(|err| {
+                                    </span>.inspect_err(|err| {
                                         <span class="macro">warn!</span>(
                                             target: LOG_CLIENT,
-                                            module_id = module_instance_id, %kind, %err, <span class="string">"Module failed to recover"
+                                            module_id = module_instance_id, %kind, err = %err.fmt_compact_anyhow(), <span class="string">"Module failed to recover"
                                         </span>);
-                                        err
                                     })
                             }),
                             progress_rx,

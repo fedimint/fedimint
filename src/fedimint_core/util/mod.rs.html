@@ -606,9 +606,12 @@
 <a href="#605" id="605">605</a>
 <a href="#606" id="606">606</a>
 <a href="#607" id="607">607</a>
-<a href="#608" id="608">608</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>backoff_util;
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>backoff_util;
 <span class="doccomment">/// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
 </span><span class="kw">pub mod </span>broadcaststream;
+<span class="kw">mod </span>error;
 <span class="kw">pub mod </span>update_merge;
 
 <span class="kw">use </span>std::convert::Infallible;
@@ -622,6 +625,7 @@
 <span class="kw">use </span>std::{fs, io};
 
 <span class="kw">use </span>anyhow::format_err;
+<span class="kw">pub use </span>error::<span class="kw-2">*</span>;
 <span class="kw">use </span>fedimint_logging::LOG_CORE;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>serde::Serialize;
@@ -1058,12 +1062,12 @@
         attempts += <span class="number">1</span>;
         <span class="kw">match </span>op_fn().<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(result) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(result),
-            <span class="prelude-val">Err</span>(error) =&gt; {
+            <span class="prelude-val">Err</span>(err) =&gt; {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(interval) = strategy.next() {
                     <span class="comment">// run closure op_fn again
                     </span><span class="macro">debug!</span>(
                         target: LOG_CORE,
-                        %error,
+                        err = %err.fmt_compact_anyhow(),
                         %attempts,
                         interval = interval.as_secs(),
                         <span class="string">"{} failed, retrying"</span>,
@@ -1073,12 +1077,12 @@
                 } <span class="kw">else </span>{
                     <span class="macro">warn!</span>(
                         target: LOG_CORE,
-                        <span class="question-mark">?</span>error,
+                        <span class="question-mark">?</span>err,
                         %attempts,
                         <span class="string">"{} failed"</span>,
                         op_name,
                     );
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(error);
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(err);
                 }
             }
         }

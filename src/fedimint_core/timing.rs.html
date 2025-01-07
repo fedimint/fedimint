@@ -142,11 +142,14 @@
 <a href="#141" id="141">141</a>
 <a href="#142" id="142">142</a>
 <a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::time;
 
 <span class="kw">use </span>fedimint_logging::LOG_TIMING;
 <span class="kw">use </span>tracing::{debug, info, trace, warn, Level};
+
+<span class="kw">use </span><span class="kw">crate</span>::util::FmtCompact <span class="kw">as _</span>;
 
 <span class="doccomment">/// Data inside `TimeReporter`, in another struct to be able to move it out of
 /// without violating `drop` consistency
@@ -161,13 +164,12 @@
     <span class="kw">fn </span>report(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">let </span>duration = <span class="kw">crate</span>::time::now()
             .duration_since(<span class="self">self</span>.start)
-            .map_err(|error| {
+            .inspect_err(|error| {
                 <span class="macro">warn!</span>(
                     target: LOG_TIMING,
-                    %error,
+                    err = %error.fmt_compact(),
                     <span class="string">"Timer reporter duration overflow. This should not happen."
                 </span>);
-                error
             })
             .unwrap_or_default();
 

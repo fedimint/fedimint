@@ -770,7 +770,7 @@
 <span class="kw">use </span>fedimint_core::transaction::{
     SerdeTransaction, Transaction, TransactionError, TransactionSubmissionOutcome,
 };
-<span class="kw">use </span>fedimint_core::util::SafeUrl;
+<span class="kw">use </span>fedimint_core::util::{FmtCompact, SafeUrl};
 <span class="kw">use </span>fedimint_core::{secp256k1, OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_logging::LOG_NET_API;
 <span class="kw">use </span>futures::StreamExt;
@@ -854,16 +854,16 @@
             <span class="self">self</span>.cfg.consensus.version,
         )
         .<span class="kw">await
-        </span>.inspect_err(|e| {
-            <span class="macro">debug!</span>(target: LOG_NET_API, %txid, %e, <span class="string">"Transaction rejected"</span>);
+        </span>.inspect_err(|err| {
+            <span class="macro">debug!</span>(target: LOG_NET_API, %txid, err = %err.fmt_compact(), <span class="string">"Transaction rejected"</span>);
         })<span class="question-mark">?</span>;
 
         <span class="kw">let _ </span>= <span class="self">self
             </span>.submission_sender
             .send(ConsensusItem::Transaction(transaction.clone()))
             .<span class="kw">await
-            </span>.inspect_err(|e| {
-                <span class="macro">warn!</span>(target: LOG_NET_API, %txid, %e, <span class="string">"Unable to submit the tx into consensus"</span>);
+            </span>.inspect_err(|err| {
+                <span class="macro">warn!</span>(target: LOG_NET_API, %txid, err = %err.fmt_compact(), <span class="string">"Unable to submit the tx into consensus"</span>);
             });
 
         <span class="prelude-val">Ok</span>(txid)

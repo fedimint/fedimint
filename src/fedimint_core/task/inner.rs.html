@@ -129,7 +129,8 @@
 <a href="#128" id="128">128</a>
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::future::Future;
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
@@ -141,6 +142,7 @@
 
 <span class="kw">use super</span>::{TaskGroup, TaskShutdownToken};
 <span class="kw">use </span><span class="kw">crate</span>::runtime::{JoinError, JoinHandle};
+<span class="kw">use </span><span class="kw">crate</span>::util::FmtCompact <span class="kw">as _</span>;
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>TaskGroupInner {
@@ -239,9 +241,9 @@
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(())) =&gt; {
                     <span class="macro">debug!</span>(target: LOG_TASK, task=%name, <span class="string">"Task finished"</span>);
                 }
-                <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(e)) =&gt; {
-                    <span class="macro">error!</span>(target: LOG_TASK, task=%name, error=%e, <span class="string">"Task panicked"</span>);
-                    errors.push(e);
+                <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(err)) =&gt; {
+                    <span class="macro">error!</span>(target: LOG_TASK, task=%name, err=%err.fmt_compact(), <span class="string">"Task panicked"</span>);
+                    errors.push(err);
                 }
                 <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
                     <span class="macro">warn!</span>(

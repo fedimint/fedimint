@@ -488,7 +488,7 @@
 <span class="kw">use </span>anyhow::{anyhow, ensure, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
-<span class="kw">use </span>fedimint_core::util::write_overwrite_async;
+<span class="kw">use </span>fedimint_core::util::{write_overwrite_async, FmtCompactAnyhow <span class="kw">as _</span>};
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>rand::distributions::Alphanumeric;
 <span class="kw">use </span>rand::Rng <span class="kw">as _</span>;
@@ -690,7 +690,7 @@
             </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(v))
         }
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(err)) =&gt; {
-            <span class="macro">warn!</span>(target: LOG_DEVIMINT, %err, <span class="string">"Main process failed, will shutdown"</span>);
+            <span class="macro">warn!</span>(target: LOG_DEVIMINT, err = %err.fmt_compact_anyhow(), <span class="string">"Main process failed, will shutdown"</span>);
             <span class="prelude-val">Err</span>(err)
         }
     }

@@ -859,7 +859,8 @@
 <a href="#858" id="858">858</a>
 <a href="#859" id="859">859</a>
 <a href="#860" id="860">860</a>
-<a href="#861" id="861">861</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#861" id="861">861</a>
+<a href="#862" id="862">862</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -886,6 +887,7 @@
 };
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::timing::TimeReporter;
+<span class="kw">use </span>fedimint_core::util::FmtCompact <span class="kw">as _</span>;
 <span class="kw">use </span>fedimint_core::{timing, NumPeers, NumPeersExt, PeerId};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>rand::Rng;
@@ -1239,7 +1241,7 @@
                                         <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">"Not reporting ordering latency on possibly out of sync item"</span>);
                                     }
                                     <span class="prelude-val">Err</span>(err) =&gt; {
-                                        <span class="macro">debug!</span>(target: LOG_CONSENSUS, %err, <span class="string">"Missing submission timestamp. This is normal on start"</span>);
+                                        <span class="macro">debug!</span>(target: LOG_CONSENSUS, err = %err.fmt_compact(), <span class="string">"Missing submission timestamp. This is normal on start"</span>);
                                         <span class="kw">break</span>;
                                     }
                                 }

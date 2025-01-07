@@ -1343,7 +1343,15 @@
 <a href="#1342" id="1342">1342</a>
 <a href="#1343" id="1343">1343</a>
 <a href="#1344" id="1344">1344</a>
-<a href="#1345" id="1345">1345</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1345" id="1345">1345</a>
+<a href="#1346" id="1346">1346</a>
+<a href="#1347" id="1347">1347</a>
+<a href="#1348" id="1348">1348</a>
+<a href="#1349" id="1349">1349</a>
+<a href="#1350" id="1350">1350</a>
+<a href="#1351" id="1351">1351</a>
+<a href="#1352" id="1352">1352</a>
+<a href="#1353" id="1353">1353</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1485,7 +1493,8 @@
     <span class="doccomment">/// Map error into `CliError` wrapping the original error message
     </span><span class="kw">fn </span>map_err_cli(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;O, CliError&gt;;
     <span class="doccomment">/// Map error into `CliError` using custom error message `msg`
-    </span><span class="kw">fn </span>map_err_cli_msg(<span class="self">self</span>, msg: <span class="kw">impl </span>Into&lt;String&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;O, CliError&gt;;
+    </span><span class="kw">fn </span>map_err_cli_msg(<span class="self">self</span>, msg: <span class="kw">impl </span>fmt::Display + Send + Sync + <span class="lifetime">'static</span>)
+        -&gt; <span class="prelude-ty">Result</span>&lt;O, CliError&gt;;
 }
 
 <span class="kw">impl</span>&lt;O, E&gt; CliResultExt&lt;O, E&gt; <span class="kw">for </span>result::Result&lt;O, E&gt;
@@ -1496,13 +1505,20 @@
         <span class="self">self</span>.map_err(|e| {
             <span class="kw">let </span>e = e.into();
             CliError {
-                error: e.to_string(),
+                error: <span class="macro">format!</span>(<span class="string">"{e:#}"</span>),
             }
         })
     }
 
-    <span class="kw">fn </span>map_err_cli_msg(<span class="self">self</span>, msg: <span class="kw">impl </span>Into&lt;String&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;O, CliError&gt; {
-        <span class="self">self</span>.map_err(|<span class="kw">_</span>| CliError { error: msg.into() })
+    <span class="kw">fn </span>map_err_cli_msg(
+        <span class="self">self</span>,
+        msg: <span class="kw">impl </span>fmt::Display + Send + Sync + <span class="lifetime">'static</span>,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;O, CliError&gt; {
+        <span class="self">self</span>.map_err(|e| Into::&lt;anyhow::Error&gt;::into(e))
+            .context(msg)
+            .map_err(|e| CliError {
+                error: <span class="macro">format!</span>(<span class="string">"{e:#}"</span>),
+            })
     }
 }
 
@@ -1995,7 +2011,7 @@ Examples:
                 </span><span class="kw">let _ </span>= <span class="macro">writeln!</span>(std::io::stdout(), <span class="string">"{output}"</span>);
             }
             <span class="prelude-val">Err</span>(err) =&gt; {
-                <span class="macro">debug!</span>(target: LOG_CLIENT, err = %err.error, <span class="string">"Command failed"</span>);
+                <span class="macro">debug!</span>(target: LOG_CLIENT, err = %err.error.as_str(), <span class="string">"Command failed"</span>);
                 <span class="kw">let _ </span>= <span class="macro">writeln!</span>(std::io::stdout(), <span class="string">"{err}"</span>);
                 exit(<span class="number">1</span>);
             }

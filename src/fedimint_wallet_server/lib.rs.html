@@ -2366,7 +2366,7 @@
 </span><span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::task::{TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::time::now;
-<span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
+<span class="kw">use </span>fedimint_core::util::{backoff_util, retry, FmtCompactAnyhow <span class="kw">as _</span>};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, get_network_for_address, push_db_key_items, push_db_pair_items,
     Feerate, NumPeersExt, OutPoint, PeerId, ServerModule,
@@ -2759,7 +2759,7 @@
                 items.push(WalletConsensusItem::BlockCount(block_count_vote));
             }
             <span class="prelude-val">Err</span>(err) =&gt; {
-                <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, %err, <span class="string">"Can't update block count"</span>);
+                <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, err = %err.fmt_compact_anyhow(), <span class="string">"Can't update block count"</span>);
             }
         }
 
@@ -3909,7 +3909,7 @@
                             <span class="kw">let _ </span>= block_count_tx.send(<span class="prelude-val">Some</span>(c));
                         },
                         <span class="prelude-val">Err</span>(err) =&gt; {
-                            <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, %err, <span class="string">"Unable to get block count from the node"</span>);
+                            <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, err = %err.fmt_compact_anyhow(), <span class="string">"Unable to get block count from the node"</span>);
                         }
                     }
                 };
@@ -3926,7 +3926,7 @@
                             <span class="prelude-val">Err</span>(err) =&gt; {
                                 <span class="comment">// Regtest node never returns fee rate, so no point spamming about it
                                 </span><span class="kw">if </span>!is_running_in_test_env() {
-                                    <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, %err, %name, <span class="string">"Error getting feerate from source"</span>);
+                                    <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, err = %err.fmt_compact_anyhow(), %name, <span class="string">"Error getting feerate from source"</span>);
                                 }
                             },
                         }

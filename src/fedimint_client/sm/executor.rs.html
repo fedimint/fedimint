@@ -1472,7 +1472,7 @@
 <span class="kw">use </span>fedimint_core::maybe_add_send_sync;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
-<span class="kw">use </span>fedimint_core::util::BoxFuture;
+<span class="kw">use </span>fedimint_core::util::{BoxFuture, FmtCompactAnyhow <span class="kw">as _</span>};
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_REACTOR;
 <span class="kw">use </span>futures::future::{<span class="self">self</span>, select_all};
 <span class="kw">use </span>futures::stream::{FuturesUnordered, StreamExt};
@@ -1894,7 +1894,7 @@
         </span>{
             <span class="macro">warn!</span>(
                 target: LOG_CLIENT_REACTOR,
-                %err,
+                err = %err.fmt_compact_anyhow(),
                 <span class="string">"An unexpected error occurred during a state transition"
             </span>);
         }

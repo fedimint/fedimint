@@ -217,12 +217,14 @@
 <a href="#216" id="216">216</a>
 <a href="#217" id="217">217</a>
 <a href="#218" id="218">218</a>
-<a href="#219" id="219">219</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>fedimint_core::task::jit::JitTryAnyhow;
 <span class="kw">use </span>fedimint_core::time::now;
-<span class="kw">use </span>fedimint_core::util::{backoff_util, SafeUrl};
+<span class="kw">use </span>fedimint_core::util::{backoff_util, FmtCompact <span class="kw">as _</span>, SafeUrl};
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_NET_API;
 <span class="kw">use </span>tokio::sync::{Mutex, RwLock};
@@ -331,10 +333,12 @@
                 }
                 <span class="prelude-val">Err</span>(err) =&gt; {
                     <span class="macro">debug!</span>(
-                            target: LOG_CLIENT_NET_API,
-                            peer_id = %peer_id,
-                            url = %url,
-                            %err, <span class="string">"Unable to connect to peer"</span>);
+                        target: LOG_CLIENT_NET_API,
+                        peer_id = %peer_id,
+                        url = %url,
+                        err = %err.fmt_compact(),
+                        <span class="string">"Unable to connect to peer"
+                    </span>);
                 }
             }
             <span class="prelude-val">Ok</span>(res<span class="question-mark">?</span>)

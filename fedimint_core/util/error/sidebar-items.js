@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["FmtCompactErrorAnyhow","FmtErrorCompact"],"trait":["FmtCompact","FmtCompactAnyhow"]};

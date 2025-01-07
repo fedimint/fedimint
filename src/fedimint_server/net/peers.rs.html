@@ -612,7 +612,7 @@
 <span class="kw">use </span>fedimint_core::net::peers::{IPeerConnections, Recipient};
 <span class="kw">use </span>fedimint_core::task::{Cancellable, Cancelled, TaskGroup};
 <span class="kw">use </span>fedimint_core::util::backoff_util::{api_networking_backoff, FibonacciBackoff};
-<span class="kw">use </span>fedimint_core::util::SafeUrl;
+<span class="kw">use </span>fedimint_core::util::{FmtCompactAnyhow <span class="kw">as _</span>, SafeUrl};
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>fedimint_logging::LOG_NET_PEER;
 <span class="kw">use </span>futures::future::select_all;
@@ -754,7 +754,7 @@
                         }
                     },
                     <span class="prelude-val">Err</span>(err) =&gt; {
-                        <span class="macro">warn!</span>(target: LOG_NET_PEER, our_id = %cfg.identity, %err, <span class="string">"Error while opening incoming connection"</span>);
+                        <span class="macro">warn!</span>(target: LOG_NET_PEER, our_id = %cfg.identity, err = %err.fmt_compact_anyhow(), <span class="string">"Error while opening incoming connection"</span>);
                     }
                 }
             }
@@ -916,7 +916,7 @@
     }
 
     <span class="kw">fn </span>disconnect(<span class="kw-2">&amp;</span><span class="self">self</span>, error: anyhow::Error) -&gt; PeerConnectionState&lt;M&gt; {
-        <span class="macro">info!</span>(target: LOG_NET_PEER, <span class="string">"Disconnected from peer {}: {}"</span>, <span class="self">self</span>.peer_id, error);
+        <span class="macro">info!</span>(target: LOG_NET_PEER, err = %error.fmt_compact_anyhow(), %<span class="self">self</span>.peer_id, <span class="string">"Disconnected from peer"</span>);
 
         PEER_DISCONNECT_COUNT
             .with_label_values(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span><span class="self">self</span>.our_id_str, <span class="kw-2">&amp;</span><span class="self">self</span>.peer_id_str])

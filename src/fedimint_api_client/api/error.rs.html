@@ -213,11 +213,13 @@
 <a href="#212" id="212">212</a>
 <a href="#213" id="213">213</a>
 <a href="#214" id="214">214</a>
-<a href="#215" id="215">215</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display};
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_core::fmt_utils::AbbreviateJson;
+<span class="kw">use </span>fedimint_core::util::FmtCompactAnyhow <span class="kw">as _</span>;
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_NET_API;
 <span class="kw">use </span>jsonrpsee_core::client::Error <span class="kw">as </span>JsonRpcClientError;
@@ -366,7 +368,7 @@
     <span class="doccomment">/// Report any errors
     </span><span class="kw">pub fn </span>report_if_important(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(error) = <span class="self">self</span>.general.as_ref() {
-            <span class="macro">warn!</span>(target: LOG_CLIENT_NET_API, %error, <span class="string">"General FederationError"</span>);
+            <span class="macro">warn!</span>(target: LOG_CLIENT_NET_API, err = %error.fmt_compact_anyhow(), <span class="string">"General FederationError"</span>);
         }
         <span class="kw">for </span>(peer_id, e) <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.peer_errors {
             e.report_if_important(<span class="kw-2">*</span>peer_id);

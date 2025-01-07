@@ -485,7 +485,8 @@
 <a href="#484" id="484">484</a>
 <a href="#485" id="485">485</a>
 <a href="#486" id="486">486</a>
-<a href="#487" id="487">487</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::{cmp, ops};
 
 <span class="kw">use </span>fedimint_api_client::api::DynGlobalApi;
@@ -497,6 +498,7 @@
 <span class="kw">use </span>fedimint_core::session_outcome::{AcceptedItem, SessionStatus};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, ShuttingDownError, TaskGroup};
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
+<span class="kw">use </span>fedimint_core::util::FmtCompactAnyhow <span class="kw">as _</span>;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, OutPoint};
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_RECOVERY;
 <span class="kw">use </span>futures::{Stream, StreamExt <span class="kw">as _</span>};
@@ -777,10 +779,10 @@
                                         <span class="macro">debug!</span>(target: LOG_CLIENT_RECOVERY, session_idx, <span class="string">"Got signed session"</span>);
                                         <span class="kw">break </span>block
                                     },
-                                    <span class="prelude-val">Err</span>(e) =&gt; {
+                                    <span class="prelude-val">Err</span>(err) =&gt; {
                                         <span class="kw">const </span>MAX_SLEEP: Duration = Duration::from_secs(<span class="number">120</span>);
 
-                                        <span class="macro">warn!</span>(target: LOG_CLIENT_RECOVERY, e = %e, session_idx, <span class="string">"Error trying to fetch signed block"</span>);
+                                        <span class="macro">warn!</span>(target: LOG_CLIENT_RECOVERY, err = %err.fmt_compact_anyhow(), session_idx, <span class="string">"Error trying to fetch signed block"</span>);
                                         <span class="comment">// We don't want PARALLELISM_LEVEL tasks hammering Federation
                                         // with requests, so max sleep is significant
                                         </span><span class="kw">if </span>retry_sleep &lt;= MAX_SLEEP {

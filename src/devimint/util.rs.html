@@ -1099,7 +1099,8 @@
 <a href="#1098" id="1098">1098</a>
 <a href="#1099" id="1099">1099</a>
 <a href="#1100" id="1100">1100</a>
-<a href="#1101" id="1101">1101</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#1101" id="1101">1101</a>
+<a href="#1102" id="1102">1102</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -1119,6 +1120,7 @@
 <span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, block_in_place, block_on};
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::util::backoff_util::custom_backoff;
+<span class="kw">use </span>fedimint_core::util::FmtCompactAnyhow <span class="kw">as _</span>;
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>semver::Version;
@@ -1252,7 +1254,7 @@
             <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = block_on(<span class="self">self</span>.terminate()) {
                 <span class="macro">warn!</span>(target: LOG_DEVIMINT,
                         name=%<span class="self">self</span>.name,
-                        %err,
+                        err = %err.fmt_compact_anyhow(),
                         <span class="string">"Error terminating process on drop"</span>);
             }
         });
@@ -1557,7 +1559,7 @@
                     .expect(<span class="string">"time goes forward"</span>)
                     &lt; timeout =&gt;
             {
-                <span class="macro">debug!</span>(target: LOG_DEVIMINT, %attempt, %err, <span class="string">"Polling {name} failed, will retry..."</span>);
+                <span class="macro">debug!</span>(target: LOG_DEVIMINT, %attempt, err = %err.fmt_compact_anyhow(), <span class="string">"Polling {name} failed, will retry..."</span>);
                 task::sleep(backoff.next().unwrap_or(MAX_BACKOFF)).<span class="kw">await</span>;
             }
             <span class="prelude-val">Err</span>(ControlFlow::Continue(err)) =&gt; {

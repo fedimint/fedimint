@@ -348,7 +348,9 @@
 <a href="#347" id="347">347</a>
 <a href="#348" id="348">348</a>
 <a href="#349" id="349">349</a>
-<a href="#350" id="350">350</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::pin::pin;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
@@ -360,7 +362,7 @@
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::task::waiter::Waiter;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
-<span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
+<span class="kw">use </span>fedimint_core::util::{backoff_util, retry, FmtCompactAnyhow <span class="kw">as _</span>};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send};
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT;
 <span class="kw">use </span>serde::de::DeserializeOwned;
@@ -538,7 +540,9 @@
         <span class="kw">let </span>failed_initial = meta_values.is_err();
         <span class="kw">match </span>meta_values {
             <span class="prelude-val">Ok</span>(meta_values) =&gt; <span class="self">self</span>.save_meta_values(client, <span class="kw-2">&amp;</span>meta_values).<span class="kw">await</span>,
-            <span class="prelude-val">Err</span>(error) =&gt; <span class="macro">warn!</span>(target: LOG_CLIENT, %error, <span class="string">"failed to fetch source"</span>),
+            <span class="prelude-val">Err</span>(error) =&gt; {
+                <span class="macro">warn!</span>(target: LOG_CLIENT, err = %error.fmt_compact_anyhow(), <span class="string">"failed to fetch source"</span>);
+            }
         };
         <span class="self">self</span>.initial_fetch_waiter.done();
 

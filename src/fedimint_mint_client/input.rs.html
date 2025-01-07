@@ -641,7 +641,7 @@
             }
             <span class="prelude-val">Err</span>(err) =&gt; {
                 <span class="comment">// Transaction rejected: attempting to refund
-                </span><span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_MINT, %err, <span class="string">"Refunding mint transaction input due to transaction error"</span>);
+                </span><span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_MINT, err = %err.as_str(), <span class="string">"Refunding mint transaction input due to transaction error"</span>);
                 <span class="self">Self</span>::refund(dbtx, old_state, global_context).<span class="kw">await
             </span>}
         }
@@ -734,7 +734,7 @@
             }
             <span class="prelude-val">Err</span>(err) =&gt; {
                 <span class="comment">// Transaction rejected: attempting to refund
-                </span><span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_MINT, %err, <span class="string">"Refunding mint transaction input due to transaction error"</span>);
+                </span><span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_MINT, err = %err.as_str(), <span class="string">"Refunding mint transaction input due to transaction error"</span>);
                 <span class="self">Self</span>::refund(dbtx, old_state, global_context).<span class="kw">await
             </span>}
         }
@@ -842,7 +842,7 @@
             }
             <span class="prelude-val">Err</span>(err) =&gt; {
                 <span class="comment">// Transaction rejected: attempting to refund
-                </span><span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_MINT, %err, <span class="string">"Refunding mint transaction input due to transaction error on multi-note refund"</span>);
+                </span><span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_MINT, err = %err.as_str(), <span class="string">"Refunding mint transaction input due to transaction error on multi-note refund"</span>);
                 <span class="self">Self</span>::refund(dbtx, old_state, global_context).<span class="kw">await
             </span>}
         }
@@ -933,7 +933,7 @@
             <span class="prelude-val">Err</span>(err) =&gt; {
                 <span class="comment">// Refund failed
                 // TODO: include e-cash notes for recovery? Although, they are in the log …
-                </span><span class="macro">warn!</span>(target: LOG_CLIENT_MODULE_MINT, %err, %refund_txid, <span class="string">"Refund transaction rejected. Notes probably lost."</span>);
+                </span><span class="macro">warn!</span>(target: LOG_CLIENT_MODULE_MINT, err = %err.as_str(), %refund_txid, <span class="string">"Refund transaction rejected. Notes probably lost."</span>);
                 MintInputStateMachine {
                     common: old_state.common,
                     state: MintInputStates::Error(MintInputStateError {

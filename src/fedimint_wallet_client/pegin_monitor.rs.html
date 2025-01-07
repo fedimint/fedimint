@@ -530,7 +530,8 @@
 <a href="#529" id="529">529</a>
 <a href="#530" id="530">530</a>
 <a href="#531" id="531">531</a>
-<a href="#532" id="532">532</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
+<a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>bitcoin::ScriptBuf;
@@ -546,6 +547,7 @@
 <span class="kw">use </span>fedimint_core::module::ModuleConsensusVersion;
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
+<span class="kw">use </span>fedimint_core::util::FmtCompactAnyhow <span class="kw">as _</span>;
 <span class="kw">use </span>fedimint_core::{secp256k1, time};
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 <span class="kw">use </span>fedimint_wallet_common::txoproof::PegInProof;
@@ -645,7 +647,7 @@
         )
         .<span class="kw">await
         </span>{
-            <span class="macro">warn!</span>(%err, <span class="string">"Error checking for deposits"</span>);
+            <span class="macro">warn!</span>(target: LOG_CLIENT_MODULE_WALLET, error = %err.fmt_compact_anyhow(), <span class="string">"Error checking for deposits"</span>);
             <span class="kw">continue</span>;
         }
 
@@ -752,7 +754,7 @@
                 .<span class="kw">await</span><span class="question-mark">?</span>;
         }
         <span class="prelude-val">Err</span>(err) =&gt; {
-            <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_WALLET, %err, tweak_idx=%due_key.<span class="number">0</span>, <span class="string">"Error checking tweak_idx"</span>);
+            <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_WALLET, err = %err.fmt_compact_anyhow(), tweak_idx=%due_key.<span class="number">0</span>, <span class="string">"Error checking tweak_idx"</span>);
         }
     }
     <span class="prelude-val">Ok</span>(())

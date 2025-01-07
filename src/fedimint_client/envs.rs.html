@@ -24,7 +24,9 @@
 <a href="#23" id="23">23</a>
 <a href="#24" id="24">24</a>
 <a href="#25" id="25">25</a>
-<a href="#26" id="26">26</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>tracing::warn;
@@ -33,11 +35,13 @@
 
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
 </span><span class="kw">pub fn </span>get_discover_api_version_timeout() -&gt; Duration {
+    <span class="kw">use </span>fedimint_core::util::FmtCompact <span class="kw">as _</span>;
+
     <span class="kw">if let </span><span class="prelude-val">Ok</span>(s) = std::env::var(FM_DISCOVER_API_VERSION_TIMEOUT_ENV) {
         <span class="kw">match </span>FromStr::from_str(<span class="kw-2">&amp;</span>s) {
             <span class="prelude-val">Ok</span>(secs) =&gt; <span class="kw">return </span>Duration::from_secs(secs),
             <span class="prelude-val">Err</span>(err) =&gt; <span class="macro">warn!</span>(
-                %err,
+                err = %err.fmt_compact(),
                 var = FM_DISCOVER_API_VERSION_TIMEOUT_ENV,
                 <span class="string">"Could not parse env variable"
             </span>),

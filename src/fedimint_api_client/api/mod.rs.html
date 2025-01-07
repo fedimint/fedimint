@@ -1221,7 +1221,7 @@
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 <span class="kw">use </span>fedimint_core::util::backoff_util::api_networking_backoff;
-<span class="kw">use </span>fedimint_core::util::SafeUrl;
+<span class="kw">use </span>fedimint_core::util::{FmtCompact <span class="kw">as _</span>, SafeUrl};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, util, NumPeersExt, PeerId, TransactionId,
 };
@@ -2186,11 +2186,11 @@
                 <span class="prelude-val">Ok</span>(client) <span class="kw">if </span>client.is_connected() =&gt; {
                     <span class="kw">return </span>client.request::&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;(method, params).<span class="kw">await</span>;
                 }
-                <span class="prelude-val">Err</span>(e) =&gt; {
+                <span class="prelude-val">Err</span>(err) =&gt; {
                     <span class="kw">if </span>RETRIES &lt;= attempts {
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(JsonRpcClientError::Transport(e.into()));
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(JsonRpcClientError::Transport(err.into()));
                     }
-                    <span class="macro">debug!</span>(target: LOG_CLIENT_NET_API, err=%e, <span class="string">"Triggering reconnection after connection error"</span>);
+                    <span class="macro">debug!</span>(target: LOG_CLIENT_NET_API, err=%err.fmt_compact(), <span class="string">"Triggering reconnection after connection error"</span>);
                 }
                 <span class="prelude-val">Ok</span>(_client) =&gt; {
                     <span class="kw">if </span>RETRIES &lt;= attempts {

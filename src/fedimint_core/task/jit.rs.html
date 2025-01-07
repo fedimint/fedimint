@@ -203,7 +203,9 @@
 <a href="#202" id="202">202</a>
 <a href="#203" id="203">203</a>
 <a href="#204" id="204">204</a>
-<a href="#205" id="205">205</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::convert::Infallible;
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::{fmt, panic};
 
@@ -214,6 +216,7 @@
 <span class="kw">use </span>tracing::warn;
 
 <span class="kw">use </span><span class="kw">super</span>::MaybeSend;
+<span class="kw">use </span><span class="kw">crate</span>::util::FmtCompact;
 
 <span class="kw">pub type </span>Jit&lt;T&gt; = JitCore&lt;T, Infallible&gt;;
 <span class="kw">pub type </span>JitTry&lt;T, E&gt; = JitCore&lt;T, E&gt;;
@@ -234,7 +237,8 @@
     </span>E: fmt::Debug + fmt::Display,
 {
     <span class="kw">fn </span>source(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>(<span class="kw">dyn </span>std::error::Error + <span class="lifetime">'static</span>)&gt; {
-        <span class="prelude-val">None
+        <span class="comment">// In neither case we can preserve the source information
+        </span><span class="prelude-val">None
     </span>}
 
     <span class="kw">fn </span>cause(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="kw">dyn </span>std::error::Error&gt; {
@@ -325,13 +329,13 @@
 
                             <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
                             </span><span class="kw">if </span>err.is_panic() {
-                                <span class="macro">warn!</span>(target: LOG_TASK, %err, type_name = %std::any::type_name::&lt;T&gt;(), <span class="string">"Jit value panicked"</span>);
+                                <span class="macro">warn!</span>(target: LOG_TASK, err = %err.fmt_compact(), type_name = %std::any::type_name::&lt;T&gt;(), <span class="string">"Jit value panicked"</span>);
                                 <span class="comment">// Resume the panic on the main task
                                 </span>panic::resume_unwind(err.into_panic());
                             }
                             <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
                             </span><span class="kw">if </span>err.is_cancelled() {
-                                <span class="macro">warn!</span>(target: LOG_TASK, %err, type_name = %std::any::type_name::&lt;T&gt;(), <span class="string">"Jit value task canceled:"</span>);
+                                <span class="macro">warn!</span>(target: LOG_TASK, err = %err.fmt_compact(), type_name = %std::any::type_name::&lt;T&gt;(), <span class="string">"Jit value task canceled:"</span>);
                             }
                             <span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"Jit value {} failed unexpectedly with: {}"</span>, std::any::type_name::&lt;T&gt;(), err))
                         },
