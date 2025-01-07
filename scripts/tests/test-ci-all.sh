@@ -54,55 +54,55 @@ function reconnect_test() {
 }
 export -f reconnect_test
 
-function lightning_reconnect_test() {
+function ln_reconnect_test() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/lightning-reconnect-test.sh
 }
-export -f lightning_reconnect_test
+export -f ln_reconnect_test
 
-function gateway_reboot_test() {
+function gw_reboot_test() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/gateway-reboot-test.sh
 }
-export -f gateway_reboot_test
+export -f gw_reboot_test
 
-function gateway_config_test_lnd() {
+function gw_config_test_lnd() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/gateway-module-test.sh config-test lnd
 }
-export -f gateway_config_test_lnd
+export -f gw_config_test_lnd
 
-function gateway_restore_test() {
+function gw_restore_test() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/gateway-module-test.sh backup-restore-test
 }
-export -f gateway_restore_test
+export -f gw_restore_test
 
-function gateway_liquidity_test() {
+function gw_liquidity_test() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/gateway-module-test.sh liquidity-test
 }
-export -f gateway_liquidity_test
+export -f gw_liquidity_test
 
-function latency_test_reissue() {
+function latency_reissue() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh reissue
 }
-export -f latency_test_reissue
+export -f latency_reissue
 
-function latency_test_ln_send() {
+function latency_ln_send() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh ln-send
 }
-export -f latency_test_ln_send
+export -f latency_ln_send
 
-function latency_test_ln_receive() {
+function latency_ln_receive() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh ln-receive
 }
-export -f latency_test_ln_receive
+export -f latency_ln_receive
 
-function latency_test_fm_pay() {
+function latency_fm_pay() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh fm-pay
 }
-export -f latency_test_fm_pay
+export -f latency_fm_pay
 
-function latency_test_restore() {
+function latency_restore() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh restore
 }
-export -f latency_test_restore
+export -f latency_restore
 
 function meta_module() {
   fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/meta-module-test.sh
@@ -302,17 +302,17 @@ tests_to_run_in_parallel+=(
   # disabling while we investigate 60s timeouts causing CI flakiness
   # "bckn_electrs"
   "bckn_esplora"
-  "latency_test_reissue"
-  "latency_test_ln_send"
-  "latency_test_ln_receive"
-  "latency_test_fm_pay"
-  "latency_test_restore"
+  "latency_reissue"
+  "latency_ln_send"
+  "latency_ln_receive"
+  "latency_fm_pay"
+  "latency_restore"
   "reconnect_test"
-  "lightning_reconnect_test"
-  "gateway_reboot_test"
-  "gateway_config_test_lnd"
-  "gateway_restore_test"
-  "gateway_liquidity_test"
+  "ln_reconnect_test"
+  "gw_reboot_test"
+  "gw_config_test_lnd"
+  "gw_restore_test"
+  "gw_liquidity_test"
   "lnv2_module"
   "devimint_cli_test"
   "devimint_cli_test_single"
