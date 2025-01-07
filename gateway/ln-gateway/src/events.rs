@@ -1,4 +1,3 @@
-use std::iter::zip;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 
@@ -9,6 +8,7 @@ use fedimint_core::Amount;
 use fedimint_eventlog::{DBTransactionEventLogExt, Event, EventKind, EventLogId};
 use fedimint_mint_client::event::{OOBNotesReissued, OOBNotesSpent};
 use fedimint_wallet_client::events::{DepositConfirmed, WithdrawRequest};
+use itertools::Itertools;
 
 use crate::gateway_module_v2::events::{
     CompleteLightningPaymentSucceeded, IncomingPaymentFailed, IncomingPaymentStarted,
@@ -117,23 +117,41 @@ where
     Success: Event,
     Failure: Event,
 {
-    let success_stats = zip(start_events, success_events)
+    let cross_product = start_events
+        .iter()
+        .cartesian_product(success_events)
+        .collect::<Vec<_>>();
+    let success_stats = cross_product
+        .into_iter()
         .filter_map(|(start, success)| {
-            let start_event: Start =
-                serde_json::from_value(start.4.clone()).expect("could not parse JSON");
-            let success_event: Success =
-                serde_json::from_value(success.4.clone()).expect("could not parse JSON");
-            success_join_predicate(start_event, success_event, success.3 - start.3)
+            if let Some(latency) = success.3.checked_sub(start.3) {
+                let start_event: Start =
+                    serde_json::from_value(start.4.clone()).expect("could not parse JSON");
+                let success_event: Success =
+                    serde_json::from_value(success.4.clone()).expect("could not parse JSON");
+                success_join_predicate(start_event, success_event, latency)
+            } else {
+                None
+            }
         })
         .collect::<Vec<_>>();
 
-    let failure_stats = zip(start_events, failure_events)
+    let cross_product = start_events
+        .iter()
+        .cartesian_product(failure_events)
+        .collect::<Vec<_>>();
+    let failure_stats = cross_product
+        .into_iter()
         .filter_map(|(start, failure)| {
-            let start_event: Start =
-                serde_json::from_value(start.4.clone()).expect("could not parse JSON");
-            let fail_event: Failure =
-                serde_json::from_value(failure.4.clone()).expect("could not parse JSON");
-            failure_join_predicate(start_event, fail_event, failure.3 - start.3)
+            if let Some(latency) = failure.3.checked_sub(start.3) {
+                let start_event: Start =
+                    serde_json::from_value(start.4.clone()).expect("could not parse JSON");
+                let fail_event: Failure =
+                    serde_json::from_value(failure.4.clone()).expect("could not parse JSON");
+                failure_join_predicate(start_event, fail_event, latency)
+            } else {
+                None
+            }
         })
         .collect::<Vec<_>>();
 

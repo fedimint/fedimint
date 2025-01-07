@@ -12,7 +12,7 @@ use super::send_sm::Cancelled;
 use crate::events::{filter_events, join_events, LogEntry, StructuredPaymentEvents};
 
 /// Event that is emitted when an outgoing payment attempt is initiated.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct OutgoingPaymentStarted {
     /// The timestamp that the operation begins, including the API calls to the
     /// federation to get the consensus block height.
@@ -40,7 +40,7 @@ impl Event for OutgoingPaymentStarted {
 }
 
 /// Event that is emitted when an outgoing payment attempt has succeeded.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct OutgoingPaymentSucceeded {
     /// The payment image of the invoice that was paid.
     pub payment_image: PaymentImage,
@@ -56,7 +56,7 @@ impl Event for OutgoingPaymentSucceeded {
 }
 
 /// Event that is emitted when an outgoing payment attempt has failed.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct OutgoingPaymentFailed {
     /// The payment image of the invoice that failed.
     pub payment_image: PaymentImage,
@@ -73,7 +73,7 @@ impl Event for OutgoingPaymentFailed {
 
 /// Event that is emitted when an incoming payment attempt has started. Includes
 /// both internal swaps and outside LN payments.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct IncomingPaymentStarted {
     /// The timestamp that the operation begins, including any metadata checks
     /// before the state machine has spawned.
@@ -95,7 +95,7 @@ impl Event for IncomingPaymentStarted {
 
 /// Event that is emitted when an incoming payment attempt has succeeded.
 /// Includes both internal swaps and outside LN payments.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct IncomingPaymentSucceeded {
     /// The payment image of the invoice that was paid.
     pub payment_image: PaymentImage,
@@ -108,7 +108,7 @@ impl Event for IncomingPaymentSucceeded {
 }
 
 /// Event that is emitted when an incoming payment attempt has failed.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct IncomingPaymentFailed {
     /// The payment image of the invoice that failed
     pub payment_image: PaymentImage,
@@ -126,7 +126,7 @@ impl Event for IncomingPaymentFailed {
 /// Event that is emitted when a preimage is revealed to the Lightning network.
 /// Only emitted for payments that are received from an external Lightning node,
 /// not internal swaps.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct CompleteLightningPaymentSucceeded {
     /// The payment image of the invoice that was paid.
     pub payment_image: PaymentImage,

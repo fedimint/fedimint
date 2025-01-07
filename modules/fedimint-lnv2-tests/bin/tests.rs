@@ -305,6 +305,19 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     // relative fee. Gateway receives: 1_000_000 payment.
     test_fees(fed_id, &client, gw_lnd, gw_ldk, 1_000_000 - 1_000 - 1_000).await?;
 
+    info!("Testing payment summary");
+    let lnd_payment_summary = gw_lnd.payment_summary().await?;
+    assert_eq!(lnd_payment_summary.outgoing.total_success, 4);
+    assert_eq!(lnd_payment_summary.outgoing.total_failure, 2);
+    assert_eq!(lnd_payment_summary.incoming.total_success, 3);
+    assert_eq!(lnd_payment_summary.incoming.total_failure, 0);
+
+    let ldk_payment_summary = gw_ldk.payment_summary().await?;
+    assert_eq!(ldk_payment_summary.outgoing.total_success, 4);
+    assert_eq!(ldk_payment_summary.outgoing.total_failure, 2);
+    assert_eq!(ldk_payment_summary.incoming.total_success, 4);
+    assert_eq!(ldk_payment_summary.incoming.total_failure, 0);
+
     Ok(())
 }
 

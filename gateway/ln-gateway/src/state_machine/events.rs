@@ -9,7 +9,7 @@ use super::pay::OutgoingPaymentError;
 use crate::events::{filter_events, join_events, LogEntry, StructuredPaymentEvents};
 
 /// LNv1 event that is emitted when an outgoing payment attempt is initiated.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct OutgoingPaymentStarted {
     /// The contract ID that uniquely identifies the outgoing contract.
     pub contract_id: ContractId,
@@ -28,7 +28,7 @@ impl Event for OutgoingPaymentStarted {
 }
 
 /// LNv1 event that is emitted when an outgoing payment attempt has succeeded.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct OutgoingPaymentSucceeded {
     /// LNv1 outgoing contract
     pub outgoing_contract: OutgoingContractAccount,
@@ -47,7 +47,7 @@ impl Event for OutgoingPaymentSucceeded {
 }
 
 /// LNv1 event that is emitted when an outgoing payment attempt has failed.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct OutgoingPaymentFailed {
     /// LNv1 outgoing contract
     pub outgoing_contract: OutgoingContractAccount,
@@ -66,7 +66,7 @@ impl Event for OutgoingPaymentFailed {
 }
 
 /// LNv1 event that is emitted when an incoming payment attempt has started.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct IncomingPaymentStarted {
     /// The contract ID that uniquely identifies the incoming contract.
     pub contract_id: ContractId,
@@ -91,7 +91,7 @@ impl Event for IncomingPaymentStarted {
 }
 
 /// LNv1 event that is emitted when an incoming payment attempt was successful.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct IncomingPaymentSucceeded {
     /// The payment hash of the invoice that was paid.
     pub payment_hash: bitcoin::hashes::sha256::Hash,
@@ -107,7 +107,7 @@ impl Event for IncomingPaymentSucceeded {
 }
 
 /// LNv1 event that is emitted when an incoming payment attempt has failed.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct IncomingPaymentFailed {
     /// The payment hash of the invoice that failed to be paid.
     pub payment_hash: bitcoin::hashes::sha256::Hash,
@@ -124,7 +124,7 @@ impl Event for IncomingPaymentFailed {
 
 /// LNv1 event that is emitted when a preimage was successfully revealed to the
 /// Lightning Network.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct CompleteLightningPaymentSucceeded {
     /// The payment hash of the payment.
     pub payment_hash: bitcoin::hashes::sha256::Hash,
