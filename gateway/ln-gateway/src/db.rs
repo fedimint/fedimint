@@ -4,12 +4,13 @@ use bitcoin::hashes::{sha256, Hash};
 use fedimint_api_client::api::net::Connector;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{
-    CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-    MigrationContext,
+    CoreMigrationFn, Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCore,
+    IDatabaseTransactionOpsCoreTyped, MigrationContext,
 };
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1, Amount};
 use fedimint_ln_common::serde_routing_fees;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
@@ -22,6 +23,18 @@ use secp256k1::{Keypair, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
+
+pub trait GatewayDbExt {
+    fn get_client_database(&self, federation_id: &FederationId) -> Database;
+}
+
+impl GatewayDbExt for Database {
+    fn get_client_database(&self, federation_id: &FederationId) -> Database {
+        let mut prefix = vec![DbKeyPrefix::ClientDatabase as u8];
+        prefix.append(&mut federation_id.consensus_encode_to_vec());
+        self.with_prefix(prefix)
+    }
+}
 
 pub trait GatewayDbtxNcExt {
     async fn save_federation_config(&mut self, config: &FederationConfig);
@@ -83,21 +96,21 @@ pub trait GatewayDbtxNcExt {
 impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
     async fn save_federation_config(&mut self, config: &FederationConfig) {
         let id = config.invite_code.federation_id();
-        self.insert_entry(&FederationIdKey { id }, config).await;
+        self.insert_entry(&FederationConfigKey { id }, config).await;
     }
 
     async fn load_federation_configs_v0(&mut self) -> BTreeMap<FederationId, FederationConfigV0> {
-        self.find_by_prefix(&FederationIdKeyPrefixV0)
+        self.find_by_prefix(&FederationConfigKeyPrefixV0)
             .await
-            .map(|(key, config): (FederationIdKeyV0, FederationConfigV0)| (key.id, config))
+            .map(|(key, config): (FederationConfigKeyV0, FederationConfigV0)| (key.id, config))
             .collect::<BTreeMap<FederationId, FederationConfigV0>>()
             .await
     }
 
     async fn load_federation_configs(&mut self) -> BTreeMap<FederationId, FederationConfig> {
-        self.find_by_prefix(&FederationIdKeyPrefix)
+        self.find_by_prefix(&FederationConfigKeyPrefix)
             .await
-            .map(|(key, config): (FederationIdKey, FederationConfig)| (key.id, config))
+            .map(|(key, config): (FederationConfigKey, FederationConfig)| (key.id, config))
             .collect::<BTreeMap<FederationId, FederationConfig>>()
             .await
     }
@@ -106,11 +119,12 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
         &mut self,
         federation_id: FederationId,
     ) -> Option<FederationConfig> {
-        self.get_value(&FederationIdKey { id: federation_id }).await
+        self.get_value(&FederationConfigKey { id: federation_id })
+            .await
     }
 
     async fn remove_federation_config(&mut self, federation_id: FederationId) {
-        self.remove_entry(&FederationIdKey { id: federation_id })
+        self.remove_entry(&FederationConfigKey { id: federation_id })
             .await;
     }
 
@@ -193,8 +207,8 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
                 DbKeyPrefix::FederationConfig => {
                     push_db_pair_items!(
                         self,
-                        FederationIdKeyPrefix,
-                        FederationIdKey,
+                        FederationConfigKeyPrefix,
+                        FederationConfigKey,
                         FederationConfig,
                         gateway_items,
                         "Federation Config"
@@ -222,6 +236,7 @@ enum DbKeyPrefix {
     GatewayConfiguration = 0x07,
     PreimageAuthentication = 0x08,
     RegisteredIncomingContract = 0x09,
+    ClientDatabase = 0x10,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -231,16 +246,16 @@ impl std::fmt::Display for DbKeyPrefix {
 }
 
 #[derive(Debug, Encodable, Decodable)]
-struct FederationIdKeyPrefixV0;
+struct FederationConfigKeyPrefixV0;
 
 #[derive(Debug, Encodable, Decodable)]
-struct FederationIdKeyPrefixV1;
+struct FederationConfigKeyPrefixV1;
 
 #[derive(Debug, Encodable, Decodable)]
-struct FederationIdKeyPrefix;
+struct FederationConfigKeyPrefix;
 
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
-struct FederationIdKeyV0 {
+struct FederationConfigKeyV0 {
     id: FederationId,
 }
 
@@ -254,7 +269,7 @@ pub struct FederationConfigV0 {
 }
 
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
-struct FederationIdKeyV1 {
+struct FederationConfigKeyV1 {
     id: FederationId,
 }
 
@@ -272,7 +287,7 @@ pub struct FederationConfigV1 {
 }
 
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
-struct FederationIdKey {
+struct FederationConfigKey {
     id: FederationId,
 }
 
@@ -289,32 +304,35 @@ pub struct FederationConfig {
 }
 
 impl_db_record!(
-    key = FederationIdKeyV0,
+    key = FederationConfigKeyV0,
     value = FederationConfigV0,
     db_prefix = DbKeyPrefix::FederationConfig,
 );
 
 impl_db_record!(
-    key = FederationIdKeyV1,
+    key = FederationConfigKeyV1,
     value = FederationConfigV1,
     db_prefix = DbKeyPrefix::FederationConfig,
 );
 
 impl_db_record!(
-    key = FederationIdKey,
+    key = FederationConfigKey,
     value = FederationConfig,
     db_prefix = DbKeyPrefix::FederationConfig,
 );
 
 impl_db_lookup!(
-    key = FederationIdKeyV0,
-    query_prefix = FederationIdKeyPrefixV0
+    key = FederationConfigKeyV0,
+    query_prefix = FederationConfigKeyPrefixV0
 );
 impl_db_lookup!(
-    key = FederationIdKeyV1,
-    query_prefix = FederationIdKeyPrefixV1
+    key = FederationConfigKeyV1,
+    query_prefix = FederationConfigKeyPrefixV1
 );
-impl_db_lookup!(key = FederationIdKey, query_prefix = FederationIdKeyPrefix);
+impl_db_lookup!(
+    key = FederationConfigKey,
+    query_prefix = FederationConfigKeyPrefix
+);
 
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
 struct GatewayPublicKey;
@@ -404,6 +422,7 @@ pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, CoreMigra
     migrations.insert(DatabaseVersion(1), |ctx| migrate_to_v2(ctx).boxed());
     migrations.insert(DatabaseVersion(2), |ctx| migrate_to_v3(ctx).boxed());
     migrations.insert(DatabaseVersion(3), |ctx| migrate_to_v4(ctx).boxed());
+    migrations.insert(DatabaseVersion(4), |ctx| migrate_to_v5(ctx).boxed());
     migrations
 }
 
@@ -443,7 +462,7 @@ async fn migrate_to_v2(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Erro
     // If there is no old federation configuration, there is nothing to do.
     for (old_federation_id, _old_federation_config) in dbtx.load_federation_configs_v0().await {
         if let Some(old_federation_config) = dbtx
-            .remove_entry(&FederationIdKeyV0 {
+            .remove_entry(&FederationConfigKeyV0 {
                 id: old_federation_id,
             })
             .await
@@ -455,7 +474,7 @@ async fn migrate_to_v2(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Erro
                 fees: old_federation_config.fees,
                 connector: Connector::default(),
             };
-            let new_federation_key = FederationIdKeyV1 {
+            let new_federation_key = FederationConfigKeyV1 {
                 id: old_federation_id,
             };
             dbtx.insert_entry(&new_federation_key, &new_federation_config)
@@ -488,7 +507,7 @@ async fn migrate_to_v4(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Erro
     dbtx.remove_entry(&GatewayConfigurationKeyV2).await;
 
     let configs = dbtx
-        .find_by_prefix(&FederationIdKeyPrefixV1)
+        .find_by_prefix(&FederationConfigKeyPrefixV1)
         .await
         .collect::<Vec<_>>()
         .await;
@@ -501,10 +520,86 @@ async fn migrate_to_v4(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Erro
                 transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
                 connector: Connector::default(),
             };
-            let new_key = FederationIdKey { id: fed_id.id };
+            let new_key = FederationConfigKey { id: fed_id.id };
             dbtx.insert_new_entry(&new_key, &new_fed_config).await;
         }
     }
+    Ok(())
+}
+
+/// Introduced in v0.5, there is a db key clash between the `FederationConfig`
+/// record and the isolated databases used for each client. We must migrate the
+/// isolated databases to be behind the `ClientDatabase` prefix to allow the
+/// gateway to properly read the federation configs.
+async fn migrate_to_v5(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Error> {
+    let mut dbtx = ctx.dbtx();
+    migrate_federation_configs(&mut dbtx).await
+}
+
+async fn migrate_federation_configs(
+    dbtx: &mut DatabaseTransaction<'_>,
+) -> Result<(), anyhow::Error> {
+    // We need to migrate all isolated database entries to be behind the 0x10
+    // prefix. The problem is, if there is a `FederationId` that starts with
+    // 0x04, we cannot read the `FederationId` because the database will be confused
+    // between the isolated DB and the `FederationConfigKey` record. To solve this,
+    // we try and decode each key as a Federation ID and each value as a
+    // FederationConfig. If that is successful and the federation ID in the
+    // config matches the key, then we skip that record and migrate the rest of
+    // the entries.
+    let problem_entries = dbtx
+        .raw_find_by_prefix(&[0x04])
+        .await?
+        .collect::<BTreeMap<_, _>>()
+        .await;
+    for (mut problem_key, value) in problem_entries {
+        // Try and decode the key as a FederationId and the value as a FederationConfig
+        // The key should be 33 bytes because a FederationID is 32 bytes and there is a
+        // 1 byte prefix.
+        if problem_key.len() == 33 {
+            if let Ok(federation_id) = FederationId::consensus_decode_whole(
+                &problem_key[1..33],
+                &ModuleDecoderRegistry::default(),
+            ) {
+                if let Ok(federation_config) = FederationConfig::consensus_decode_whole(
+                    &value,
+                    &ModuleDecoderRegistry::default(),
+                ) {
+                    if federation_id == federation_config.invite_code.federation_id() {
+                        continue;
+                    }
+                }
+            }
+        }
+
+        dbtx.raw_remove_entry(&problem_key).await?;
+        let mut new_key = vec![DbKeyPrefix::ClientDatabase as u8];
+        new_key.append(&mut problem_key);
+        dbtx.raw_insert_bytes(&new_key, &value).await?;
+    }
+
+    // Migrate all entries of the isolated databases that don't overlap with
+    // `FederationConfig` entries.
+    let fed_ids = dbtx
+        .find_by_prefix(&FederationConfigKeyPrefix)
+        .await
+        .collect::<BTreeMap<_, _>>()
+        .await;
+    for fed_id in fed_ids.keys() {
+        let federation_id_bytes = fed_id.id.consensus_encode_to_vec();
+        let isolated_entries = dbtx
+            .raw_find_by_prefix(&federation_id_bytes)
+            .await?
+            .collect::<BTreeMap<_, _>>()
+            .await;
+        for (mut key, value) in isolated_entries {
+            dbtx.raw_remove_entry(&key).await?;
+            let mut new_key = vec![DbKeyPrefix::ClientDatabase as u8];
+            new_key.append(&mut key);
+            dbtx.raw_insert_bytes(&new_key, &value).await?;
+        }
+    }
+
     Ok(())
 }
 
@@ -531,9 +626,11 @@ mod fedimint_migration_tests {
 
     use anyhow::ensure;
     use bitcoin::hashes::Hash;
+    use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::util::SafeUrl;
+    use fedimint_core::PeerId;
     use fedimint_lnv2_common::gateway_api::PaymentFee;
     use fedimint_logging::TracingSetup;
     use fedimint_testing::db::{
@@ -560,8 +657,11 @@ mod fedimint_migration_tests {
             fees: PaymentFee::TRANSACTION_FEE_DEFAULT.into(),
         };
 
-        dbtx.insert_new_entry(&FederationIdKeyV0 { id: federation_id }, &federation_config)
-            .await;
+        dbtx.insert_new_entry(
+            &FederationConfigKeyV0 { id: federation_id },
+            &federation_config,
+        )
+        .await;
 
         let context = secp256k1::Secp256k1::new();
         let (secret, _) = context.generate_keypair(&mut OsRng);
@@ -613,7 +713,7 @@ mod fedimint_migration_tests {
                     match prefix {
                         DbKeyPrefix::FederationConfig => {
                             let configs = dbtx
-                                .find_by_prefix(&FederationIdKeyPrefix)
+                                .find_by_prefix(&FederationConfigKeyPrefix)
                                 .await
                                 .collect::<Vec<_>>()
                                 .await;
@@ -645,5 +745,101 @@ mod fedimint_migration_tests {
             ModuleDecoderRegistry::from_iter([]),
         )
         .await
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_isolated_db_migration() -> anyhow::Result<()> {
+        async fn create_isolated_record(prefix: Vec<u8>, db: &Database) {
+            // Create an isolated database the old way where there was no prefix
+            let isolated_db = db.with_prefix(prefix);
+            let mut isolated_dbtx = isolated_db.begin_transaction().await;
+
+            // Insert a record into the isolated db (doesn't matter what it is)
+            isolated_dbtx
+                .insert_new_entry(
+                    &GatewayPublicKey,
+                    &Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()),
+                )
+                .await;
+            isolated_dbtx.commit_tx().await;
+        }
+
+        let nonconflicting_fed_id = FederationId::from_str(
+            "1106afdc71a052d2787eab7e84c95803636d2a84c272eb81b4e01b27acb86c6f",
+        )
+        .expect("invalid federation ID");
+        let conflicting_fed_id = FederationId::from_str(
+            "0406afdc71a052d2787eab7e84c95803636d2a84c272eb81b4e01b27acb86c6f",
+        )
+        .expect("invalid federation ID");
+        let _ = TracingSetup::default().init();
+        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+        let mut dbtx = db.begin_transaction().await;
+        dbtx.insert_new_entry(
+            &FederationConfigKey {
+                id: conflicting_fed_id,
+            },
+            &FederationConfig {
+                invite_code: InviteCode::new(
+                    SafeUrl::from_str("http://testfed.com").unwrap(),
+                    PeerId::from(0),
+                    conflicting_fed_id,
+                    None,
+                ),
+                federation_index: 0,
+                lightning_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
+                transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
+                connector: Connector::Tcp,
+            },
+        )
+        .await;
+
+        dbtx.insert_new_entry(
+            &FederationConfigKey {
+                id: nonconflicting_fed_id,
+            },
+            &FederationConfig {
+                invite_code: InviteCode::new(
+                    SafeUrl::from_str("http://testfed2.com").unwrap(),
+                    PeerId::from(0),
+                    nonconflicting_fed_id,
+                    None,
+                ),
+                federation_index: 1,
+                lightning_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
+                transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
+                connector: Connector::Tcp,
+            },
+        )
+        .await;
+        dbtx.commit_tx().await;
+
+        create_isolated_record(conflicting_fed_id.consensus_encode_to_vec(), &db).await;
+        create_isolated_record(nonconflicting_fed_id.consensus_encode_to_vec(), &db).await;
+
+        let mut migration_dbtx = db.begin_transaction().await;
+        migrate_federation_configs(&mut migration_dbtx.to_ref_nc()).await?;
+        migration_dbtx.commit_tx().await;
+
+        let mut dbtx = db.begin_transaction_nc().await;
+
+        let num_configs = dbtx
+            .find_by_prefix(&FederationConfigKeyPrefix)
+            .await
+            .collect::<BTreeMap<_, _>>()
+            .await
+            .len();
+        assert_eq!(num_configs, 2);
+
+        // Verify that the client databases migrated successfully.
+        let isolated_db = db.get_client_database(&conflicting_fed_id);
+        let mut isolated_dbtx = isolated_db.begin_transaction_nc().await;
+        assert!(isolated_dbtx.get_value(&GatewayPublicKey).await.is_some());
+
+        let isolated_db = db.get_client_database(&nonconflicting_fed_id);
+        let mut isolated_dbtx = isolated_db.begin_transaction_nc().await;
+        assert!(isolated_dbtx.get_value(&GatewayPublicKey).await.is_some());
+
+        Ok(())
     }
 }
