@@ -138,7 +138,7 @@ pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{
     self, run_event_log_ordering_task, DBTransactionEventLogExt, Event, EventKind, EventLogEntry,
-    EventLogId,
+    EventLogId, PersistedLogEntry,
 };
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API, LOG_CLIENT_RECOVERY};
 use futures::stream::FuturesUnordered;
@@ -2215,13 +2215,7 @@ impl Client {
         &self,
         pos: Option<EventLogId>,
         limit: u64,
-    ) -> Vec<(
-        EventLogId,
-        EventKind,
-        Option<(ModuleKind, ModuleInstanceId)>,
-        u64,
-        serde_json::Value,
-    )> {
+    ) -> Vec<PersistedLogEntry> {
         self.get_event_log_dbtx(&mut self.db.begin_transaction_nc().await, pos, limit)
             .await
     }
@@ -2231,13 +2225,7 @@ impl Client {
         dbtx: &mut DatabaseTransaction<'_, Cap>,
         pos: Option<EventLogId>,
         limit: u64,
-    ) -> Vec<(
-        EventLogId,
-        EventKind,
-        Option<(ModuleKind, ModuleInstanceId)>,
-        u64,
-        serde_json::Value,
-    )>
+    ) -> Vec<PersistedLogEntry>
     where
         Cap: Send,
     {

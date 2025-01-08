@@ -1,12 +1,12 @@
 use fedimint_core::core::{ModuleKind, OperationId};
 use fedimint_core::Amount;
-use fedimint_eventlog::{Event, EventKind};
+use fedimint_eventlog::{Event, EventKind, PersistedLogEntry};
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::ContractId;
 use serde::{Deserialize, Serialize};
 
 use super::pay::OutgoingPaymentError;
-use crate::events::{filter_events, join_events, LogEntry, StructuredPaymentEvents};
+use crate::events::{filter_events, join_events, StructuredPaymentEvents};
 
 /// LNv1 event that is emitted when an outgoing payment attempt is initiated.
 #[derive(Serialize, Deserialize, Debug)]
@@ -138,7 +138,7 @@ impl Event for CompleteLightningPaymentSucceeded {
 
 /// Computes the `StructurePaymentEvents` for all LNv1 payments by filtering the
 /// event set for LNv1 events and joining them together.
-pub fn compute_lnv1_stats(all_events: &[LogEntry]) -> StructuredPaymentEvents {
+pub fn compute_lnv1_stats(all_events: &[PersistedLogEntry]) -> StructuredPaymentEvents {
     let outgoing_start_events = filter_events(
         all_events,
         OutgoingPaymentStarted::KIND,

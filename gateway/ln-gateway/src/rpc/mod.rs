@@ -6,9 +6,9 @@ use std::collections::BTreeMap;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Network};
 use fedimint_core::config::{FederationId, JsonClientConfig};
-use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
+use fedimint_core::core::OperationId;
 use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
-use fedimint_eventlog::{EventKind, EventLogId};
+use fedimint_eventlog::{EventKind, EventLogId, PersistedLogEntry};
 use fedimint_mint_client::OOBNotes;
 use fedimint_wallet_client::PegOutFees;
 use lightning_invoice::Bolt11Invoice;
@@ -44,14 +44,6 @@ pub const STOP_ENDPOINT: &str = "/stop";
 pub const SEND_ONCHAIN_ENDPOINT: &str = "/send_onchain";
 pub const SPEND_ECASH_ENDPOINT: &str = "/spend_ecash";
 pub const WITHDRAW_ENDPOINT: &str = "/withdraw";
-
-type GatewayTransactionEvent = (
-    EventLogId,
-    EventKind,
-    Option<(ModuleKind, ModuleInstanceId)>,
-    u64,
-    serde_json::Value,
-);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConnectFedPayload {
@@ -265,7 +257,7 @@ pub struct PaymentLogPayload {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PaymentLogResponse(pub Vec<GatewayTransactionEvent>);
+pub struct PaymentLogResponse(pub Vec<PersistedLogEntry>);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PaymentSummaryResponse {

@@ -5,7 +5,9 @@ use fedimint_client::ClientHandle;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::time::now;
 use fedimint_core::Amount;
-use fedimint_eventlog::{DBTransactionEventLogExt, Event, EventKind, EventLogId};
+use fedimint_eventlog::{
+    DBTransactionEventLogExt, Event, EventKind, EventLogId, PersistedLogEntry,
+};
 use fedimint_mint_client::event::{OOBNotesReissued, OOBNotesSpent};
 use fedimint_wallet_client::events::{DepositConfirmed, WithdrawRequest};
 use itertools::Itertools;
@@ -31,20 +33,12 @@ pub const ALL_GATEWAY_EVENTS: [EventKind; 11] = [
     DepositConfirmed::KIND,
 ];
 
-pub type LogEntry = (
-    EventLogId,
-    EventKind,
-    Option<(ModuleKind, u16)>,
-    u64,
-    serde_json::Value,
-);
-
 /// Searches through the event log for all events that occurred within the last
 /// 24 hours. Because it is inefficient to search the log backwards, instead
 /// this function traverses the log forwards, but in batches of 10000 events.
 /// All events are appended to an array until the cutoff event where the
 /// timestamp is greater than a day old is found.
-pub async fn get_last_day_events(client: &Arc<ClientHandle>) -> Vec<LogEntry> {
+pub async fn get_last_day_events(client: &Arc<ClientHandle>) -> Vec<PersistedLogEntry> {
     // Start at the end of the log and find the first event where the timestamp <
     // `one_day_ago`
     const BATCH_SIZE: u64 = 10_000;
@@ -77,14 +71,14 @@ pub async fn get_last_day_events(client: &Arc<ClientHandle>) -> Vec<LogEntry> {
     all_events
 }
 
-/// Binary searches the `LogEntry` slice for a timestamp
+/// Binary searches the `PersistedLogEntry` slice for a timestamp
 /// that is older than one day old. If all events are within the last day
 /// then the index of 0 is returned.
-fn get_earliest_index(batch: &[LogEntry]) -> usize {
+fn get_earliest_index(batch: &[PersistedLogEntry]) -> usize {
     let one_day_ago = now()
         .checked_sub(Duration::from_secs(60 * 60 * 24))
         .expect("outside valid SystemTime bounds");
-    let timestamps = batch.iter().map(|e| e.3).collect::<Vec<_>>();
+    let timestamps = batch.iter().map(|e| e.timestamp).collect::<Vec<_>>();
     let one_day_ago_micros = one_day_ago
         .duration_since(UNIX_EPOCH)
         .expect("before unix epoch")
@@ -95,17 +89,18 @@ fn get_earliest_index(batch: &[LogEntry]) -> usize {
     }
 }
 
-/// Filters the given `LogEntry` slice by the `EventKind` and `ModuleKind`.
+/// Filters the given `PersistedLogEntry` slice by the `EventKind` and
+/// `ModuleKind`.
 pub(crate) fn filter_events(
-    all_events: &[LogEntry],
+    all_events: &[PersistedLogEntry],
     event_kind: EventKind,
     module_kind: ModuleKind,
-) -> Vec<&LogEntry> {
+) -> Vec<&PersistedLogEntry> {
     let events = all_events
         .iter()
         .filter(|e| {
-            if let Some((m, _)) = &e.2 {
-                e.1 == event_kind && *m == module_kind
+            if let Some((m, _)) = &e.module {
+                e.event_kind == event_kind && *m == module_kind
             } else {
                 false
             }
@@ -125,9 +120,9 @@ pub(crate) fn filter_events(
 /// grow, this function should implement a different join algorithm or be moved
 /// out of the gateway.
 pub(crate) fn join_events<Start, Success, Failure>(
-    start_events: &Vec<&LogEntry>,
-    success_events: &Vec<&LogEntry>,
-    failure_events: &Vec<&LogEntry>,
+    start_events: &Vec<&PersistedLogEntry>,
+    success_events: &Vec<&PersistedLogEntry>,
+    failure_events: &Vec<&PersistedLogEntry>,
     success_join_predicate: fn(Start, Success, u64) -> Option<(u64, Amount)>,
     failure_join_predicate: fn(Start, Failure, u64) -> Option<u64>,
 ) -> (Vec<(u64, Amount)>, Vec<u64>)
@@ -143,11 +138,11 @@ where
     let success_stats = cross_product
         .into_iter()
         .filter_map(|(start, success)| {
-            if let Some(latency) = success.3.checked_sub(start.3) {
+            if let Some(latency) = success.timestamp.checked_sub(start.timestamp) {
                 let start_event: Start =
-                    serde_json::from_value(start.4.clone()).expect("could not parse JSON");
+                    serde_json::from_value(start.value.clone()).expect("could not parse JSON");
                 let success_event: Success =
-                    serde_json::from_value(success.4.clone()).expect("could not parse JSON");
+                    serde_json::from_value(success.value.clone()).expect("could not parse JSON");
                 success_join_predicate(start_event, success_event, latency)
             } else {
                 None
@@ -162,11 +157,11 @@ where
     let failure_stats = cross_product
         .into_iter()
         .filter_map(|(start, failure)| {
-            if let Some(latency) = failure.3.checked_sub(start.3) {
+            if let Some(latency) = failure.timestamp.checked_sub(start.timestamp) {
                 let start_event: Start =
-                    serde_json::from_value(start.4.clone()).expect("could not parse JSON");
+                    serde_json::from_value(start.value.clone()).expect("could not parse JSON");
                 let fail_event: Failure =
-                    serde_json::from_value(failure.4.clone()).expect("could not parse JSON");
+                    serde_json::from_value(failure.value.clone()).expect("could not parse JSON");
                 failure_join_predicate(start_event, fail_event, latency)
             } else {
                 None

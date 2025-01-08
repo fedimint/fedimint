@@ -3,13 +3,13 @@ use std::time::SystemTime;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::Amount;
-use fedimint_eventlog::{Event, EventKind};
+use fedimint_eventlog::{Event, EventKind, PersistedLogEntry};
 use fedimint_lnv2_common::contracts::{Commitment, OutgoingContract, PaymentImage};
 use serde::{Deserialize, Serialize};
 use serde_millis;
 
 use super::send_sm::Cancelled;
-use crate::events::{filter_events, join_events, LogEntry, StructuredPaymentEvents};
+use crate::events::{filter_events, join_events, StructuredPaymentEvents};
 
 /// Event that is emitted when an outgoing payment attempt is initiated.
 #[derive(Serialize, Deserialize, Debug)]
@@ -140,7 +140,7 @@ impl Event for CompleteLightningPaymentSucceeded {
 
 /// Computes the `StructurePaymentEvents` for all LNv2 payments by filtering the
 /// event set for LNv2 events and joining them together.
-pub fn compute_lnv2_stats(all_events: &[LogEntry]) -> StructuredPaymentEvents {
+pub fn compute_lnv2_stats(all_events: &[PersistedLogEntry]) -> StructuredPaymentEvents {
     let outgoing_start_events = filter_events(
         all_events,
         OutgoingPaymentStarted::KIND,

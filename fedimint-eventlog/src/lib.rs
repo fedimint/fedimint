@@ -171,6 +171,16 @@ pub struct EventLogEntry {
     pub payload: Vec<u8>,
 }
 
+/// Struct used for processing log entries after they have been persisted.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PersistedLogEntry {
+    pub event_id: EventLogId,
+    pub event_kind: EventKind,
+    pub module: Option<(ModuleKind, u16)>,
+    pub timestamp: u64,
+    pub value: serde_json::Value,
+}
+
 impl_db_record!(
     key = UnordedEventLogId,
     value = UnorderedEventLogEntry,
@@ -247,13 +257,7 @@ pub trait DBTransactionEventLogExt {
         &mut self,
         pos: Option<EventLogId>,
         limit: u64,
-    ) -> Vec<(
-        EventLogId,
-        EventKind,
-        Option<(ModuleKind, ModuleInstanceId)>,
-        u64,
-        serde_json::Value,
-    )>;
+    ) -> Vec<PersistedLogEntry>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -315,24 +319,16 @@ where
         &mut self,
         pos: Option<EventLogId>,
         limit: u64,
-    ) -> Vec<(
-        EventLogId,
-        EventKind,
-        Option<(ModuleKind, ModuleInstanceId)>,
-        u64,
-        serde_json::Value,
-    )> {
+    ) -> Vec<PersistedLogEntry> {
         let pos = pos.unwrap_or_default();
         self.find_by_range(pos..pos.saturating_add(limit))
             .await
-            .map(|(k, v)| {
-                (
-                    k,
-                    v.kind,
-                    v.module,
-                    v.ts_usecs,
-                    serde_json::from_slice(&v.payload).unwrap_or_default(),
-                )
+            .map(|(k, v)| PersistedLogEntry {
+                event_id: k,
+                event_kind: v.kind,
+                module: v.module,
+                timestamp: v.ts_usecs,
+                value: serde_json::from_slice(&v.payload).unwrap_or_default(),
             })
             .collect()
             .await
