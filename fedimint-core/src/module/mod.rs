@@ -894,6 +894,39 @@ pub trait ServerModule: Debug + Sized {
         out_point: OutPoint,
     ) -> Option<<Self::Common as ModuleCommon>::OutputOutcome>;
 
+    /// Verify submission-only checks for an input
+    ///
+    /// Most modules should not need to know or implement it, so the default
+    /// implementation just returns OK.
+    ///
+    /// In special circumstances it is useful to enforce requirements on the
+    /// included transaction outside of the consensus, in a similar way
+    /// Bitcoin enforces mempool policies.
+    ///
+    /// This functionality might be removed in the future versions, as more
+    /// checks become part of the consensus, so it is advised not to use it.
+    #[doc(hidden)]
+    async fn verify_input_submission<'a, 'b, 'c>(
+        &'a self,
+        _dbtx: &mut DatabaseTransaction<'c>,
+        _input: &'b <Self::Common as ModuleCommon>::Input,
+    ) -> Result<(), <Self::Common as ModuleCommon>::InputError> {
+        Ok(())
+    }
+
+    /// Verify submission-only checks for an output
+    ///
+    /// See [`Self::verify_input_submission`] for more information.
+    #[doc(hidden)]
+    async fn verify_output_submission<'a, 'b>(
+        &'a self,
+        _dbtx: &mut DatabaseTransaction<'b>,
+        _output: &'a <Self::Common as ModuleCommon>::Output,
+        _out_point: OutPoint,
+    ) -> Result<(), <Self::Common as ModuleCommon>::OutputError> {
+        Ok(())
+    }
+
     /// Queries the database and returns all assets and liabilities of the
     /// module.
     ///

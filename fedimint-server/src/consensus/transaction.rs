@@ -7,11 +7,18 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::metrics::{CONSENSUS_TX_PROCESSED_INPUTS, CONSENSUS_TX_PROCESSED_OUTPUTS};
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum TxProcessingMode {
+    Submission,
+    Consensus,
+}
+
 pub async fn process_transaction_with_dbtx(
     modules: ServerModuleRegistry,
     dbtx: &mut DatabaseTransaction<'_>,
     transaction: &Transaction,
     version: CoreConsensusVersion,
+    mode: TxProcessingMode,
 ) -> Result<(), TransactionError> {
     let in_count = transaction.inputs.len();
     let out_count = transaction.outputs.len();
@@ -40,6 +47,20 @@ pub async fn process_transaction_with_dbtx(
     let mut public_keys = Vec::new();
 
     for input in &transaction.inputs {
+        // somewhat unfortunately, we need to do the extra checks berofe `process_x`
+        // does the changes in the dbtx
+        if mode == TxProcessingMode::Submission {
+            modules
+                .get_expect(input.module_instance_id())
+                .verify_input_submission(
+                    &mut dbtx
+                        .to_ref_with_prefix_module_id(input.module_instance_id())
+                        .0,
+                    input,
+                )
+                .await
+                .map_err(TransactionError::Input)?;
+        }
         let meta = modules
             .get_expect(input.module_instance_id())
             .process_input(
@@ -60,6 +81,22 @@ pub async fn process_transaction_with_dbtx(
     let txid = transaction.tx_hash();
 
     for (output, out_idx) in transaction.outputs.iter().zip(0u64..) {
+        // somewhat unfortunately, we need to do the extra checks berofe `process_x`
+        // does the changes in the dbtx
+        if mode == TxProcessingMode::Submission {
+            modules
+                .get_expect(output.module_instance_id())
+                .verify_output_submission(
+                    &mut dbtx
+                        .to_ref_with_prefix_module_id(output.module_instance_id())
+                        .0,
+                    output,
+                    OutPoint { txid, out_idx },
+                )
+                .await
+                .map_err(TransactionError::Output)?;
+        }
+
         let amount = modules
             .get_expect(output.module_instance_id())
             .process_output(

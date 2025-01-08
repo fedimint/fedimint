@@ -541,6 +541,26 @@ impl ServerModule for Mint {
         dbtx.get_value(&MintOutputOutcomeKey(out_point)).await
     }
 
+    #[doc(hidden)]
+    async fn verify_output_submission<'a, 'b>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'b>,
+        output: &'a MintOutput,
+        _out_point: OutPoint,
+    ) -> Result<(), MintOutputError> {
+        let output = output.ensure_v0_ref()?;
+
+        if dbtx
+            .get_value(&BlindNonceKey(output.blind_nonce))
+            .await
+            .is_some()
+        {
+            return Err(MintOutputError::BlindNonceAlreadyUsed);
+        }
+
+        Ok(())
+    }
+
     async fn audit(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,

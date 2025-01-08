@@ -82,6 +82,23 @@ pub trait IServerModule: Debug {
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, DynOutputError>;
 
+    /// See [`ServerModule::verify_input_submission`]
+    #[doc(hidden)]
+    async fn verify_input_submission<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'c>,
+        input: &'b DynInput,
+    ) -> Result<(), DynInputError>;
+
+    /// See [`ServerModule::verify_output_submission`]
+    #[doc(hidden)]
+    async fn verify_output_submission<'a>(
+        &self,
+        _dbtx: &mut DatabaseTransaction<'a>,
+        _output: &DynOutput,
+        _out_point: OutPoint,
+    ) -> Result<(), DynOutputError>;
+
     /// See [`ServerModule::output_status`]
     #[deprecated(note = "https://github.com/fedimint/fedimint/issues/6671")]
     async fn output_status(
@@ -218,6 +235,43 @@ where
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, DynOutputError> {
         <Self as ServerModule>::process_output(
+            self,
+            dbtx,
+            output
+                .as_any()
+                .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Output>()
+                .expect("incorrect output type passed to module plugin"),
+            out_point,
+        )
+        .await
+        .map_err(|v| DynOutputError::from_typed(output.module_instance_id(), v))
+    }
+
+    async fn verify_input_submission<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'c>,
+        input: &'b DynInput,
+    ) -> Result<(), DynInputError> {
+        <Self as ServerModule>::verify_input_submission(
+            self,
+            dbtx,
+            input
+                .as_any()
+                .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Input>()
+                .expect("incorrect input type passed to module plugin"),
+        )
+        .await
+        .map(Into::into)
+        .map_err(|v| DynInputError::from_typed(input.module_instance_id(), v))
+    }
+
+    async fn verify_output_submission<'a>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'a>,
+        output: &DynOutput,
+        out_point: OutPoint,
+    ) -> Result<(), DynOutputError> {
+        <Self as ServerModule>::verify_output_submission(
             self,
             dbtx,
             output

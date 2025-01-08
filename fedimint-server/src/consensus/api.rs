@@ -58,7 +58,7 @@ use crate::config::io::{
 use crate::config::ServerConfig;
 use crate::consensus::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
 use crate::consensus::engine::get_finished_session_count_static;
-use crate::consensus::transaction::process_transaction_with_dbtx;
+use crate::consensus::transaction::{process_transaction_with_dbtx, TxProcessingMode};
 use crate::fedimint_core::encoding::Encodable;
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
 use crate::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix};
@@ -126,6 +126,7 @@ impl ConsensusApi {
             &mut dbtx,
             &transaction,
             self.cfg.consensus.version,
+            TxProcessingMode::Submission,
         )
         .await
         .inspect_err(|err| {
