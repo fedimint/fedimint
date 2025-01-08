@@ -44,14 +44,15 @@ impl<T> Decodable for Vec<T>
 where
     T: Decodable + 'static,
 {
-    fn consensus_decode_from_finite_reader<D: std::io::Read>(
+    fn consensus_decode_partial_from_finite_reader<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         const CHUNK_SIZE: usize = 64 * 1024;
 
         if TypeId::of::<T>() == TypeId::of::<u8>() {
-            let len = u64::consensus_decode_from_finite_reader(d, &ModuleRegistry::default())?;
+            let len =
+                u64::consensus_decode_partial_from_finite_reader(d, &ModuleRegistry::default())?;
 
             let mut len: usize =
                 usize::try_from(len).map_err(|_| DecodeError::from_str("size exceeds memory"))?;
@@ -72,7 +73,7 @@ where
             // unsafe: we've just checked that T is `u8` so the transmute here is a no-op
             return Ok(unsafe { std::mem::transmute::<Vec<u8>, Self>(bytes) });
         }
-        let len = u64::consensus_decode_from_finite_reader(d, modules)?;
+        let len = u64::consensus_decode_partial_from_finite_reader(d, modules)?;
 
         // `collect` under the hood uses `FromIter::from_iter`, which can potentially be
         // backed by code like:
@@ -85,12 +86,12 @@ where
         // Up to a cap, use the (potentially specialized for better perf in stdlib)
         // `from_iter`.
         let mut v: Self = (0..cap_len)
-            .map(|_| T::consensus_decode_from_finite_reader(d, modules))
+            .map(|_| T::consensus_decode_partial_from_finite_reader(d, modules))
             .collect::<Result<Self, DecodeError>>()?;
 
         // Add any excess manually avoiding any surprises.
         while (v.len() as u64) < len {
-            v.push(T::consensus_decode_from_finite_reader(d, modules)?);
+            v.push(T::consensus_decode_partial_from_finite_reader(d, modules)?);
         }
 
         assert_eq!(v.len() as u64, len);
@@ -116,13 +117,13 @@ impl<T> Decodable for VecDeque<T>
 where
     T: Decodable + 'static,
 {
-    fn consensus_decode_from_finite_reader<D: std::io::Read>(
+    fn consensus_decode_partial_from_finite_reader<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Ok(Self::from(Vec::<T>::consensus_decode_from_finite_reader(
-            d, modules,
-        )?))
+        Ok(Self::from(
+            Vec::<T>::consensus_decode_partial_from_finite_reader(d, modules)?,
+        ))
     }
 }
 
@@ -150,7 +151,7 @@ impl<T, const SIZE: usize> Decodable for [T; SIZE]
 where
     T: Decodable + Debug + Default + Copy + 'static,
 {
-    fn consensus_decode_from_finite_reader<D: std::io::Read>(
+    fn consensus_decode_partial_from_finite_reader<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
@@ -176,7 +177,7 @@ where
         // todo: impl without copy
         let mut data = [T::default(); SIZE];
         for item in &mut data {
-            *item = T::consensus_decode_from_finite_reader(d, modules)?;
+            *item = T::consensus_decode_partial_from_finite_reader(d, modules)?;
         }
         Ok(data)
     }
@@ -203,21 +204,21 @@ where
     K: Decodable + Ord,
     V: Decodable,
 {
-    fn consensus_decode_from_finite_reader<D: std::io::Read>(
+    fn consensus_decode_partial_from_finite_reader<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let mut res = Self::new();
-        let len = u64::consensus_decode_from_finite_reader(d, modules)?;
+        let len = u64::consensus_decode_partial_from_finite_reader(d, modules)?;
         for _ in 0..len {
-            let k = K::consensus_decode_from_finite_reader(d, modules)?;
+            let k = K::consensus_decode_partial_from_finite_reader(d, modules)?;
             if res
                 .last_key_value()
                 .is_some_and(|(prev_key, _v)| k <= *prev_key)
             {
                 return Err(DecodeError::from_str("Non-canonical encoding"));
             }
-            let v = V::consensus_decode_from_finite_reader(d, modules)?;
+            let v = V::consensus_decode_partial_from_finite_reader(d, modules)?;
             if res.insert(k, v).is_some() {
                 return Err(DecodeError(anyhow::format_err!("Duplicate key")));
             }
@@ -244,14 +245,14 @@ impl<K> Decodable for BTreeSet<K>
 where
     K: Decodable + Ord,
 {
-    fn consensus_decode_from_finite_reader<D: std::io::Read>(
+    fn consensus_decode_partial_from_finite_reader<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let mut res = Self::new();
-        let len = u64::consensus_decode_from_finite_reader(d, modules)?;
+        let len = u64::consensus_decode_partial_from_finite_reader(d, modules)?;
         for _ in 0..len {
-            let k = K::consensus_decode_from_finite_reader(d, modules)?;
+            let k = K::consensus_decode_partial_from_finite_reader(d, modules)?;
             if res.last().is_some_and(|prev_key| k <= *prev_key) {
                 return Err(DecodeError::from_str("Non-canonical encoding"));
             }
@@ -286,39 +287,30 @@ mod tests {
 
         // A length prefix greater than the number of elements should return an error.
         let buf = [4u8, 1, 2, 3];
-        assert!(
-            Vec::<u8>::consensus_decode(&mut buf.as_slice(), &ModuleRegistry::default()).is_err()
-        );
-        assert!(
-            Vec::<u16>::consensus_decode(&mut buf.as_slice(), &ModuleRegistry::default()).is_err()
-        );
-        assert!(
-            VecDeque::<u8>::consensus_decode(&mut buf.as_slice(), &ModuleRegistry::default())
-                .is_err()
-        );
-        assert!(
-            VecDeque::<u16>::consensus_decode(&mut buf.as_slice(), &ModuleRegistry::default())
-                .is_err()
-        );
+        assert!(Vec::<u8>::consensus_decode_whole(&buf, &ModuleRegistry::default()).is_err());
+        assert!(Vec::<u16>::consensus_decode_whole(&buf, &ModuleRegistry::default()).is_err());
+        assert!(VecDeque::<u8>::consensus_decode_whole(&buf, &ModuleRegistry::default()).is_err());
+        assert!(VecDeque::<u16>::consensus_decode_whole(&buf, &ModuleRegistry::default()).is_err());
 
         // A length prefix less than the number of elements should skip elements beyond
         // the encoded length.
         let buf = [2u8, 1, 2, 3];
         assert_eq!(
-            Vec::<u8>::consensus_decode(&mut buf.as_slice(), &ModuleRegistry::default()).unwrap(),
+            Vec::<u8>::consensus_decode_partial(&mut &buf[..], &ModuleRegistry::default()).unwrap(),
             vec![1u8, 2]
         );
         assert_eq!(
-            Vec::<u16>::consensus_decode(&mut buf.as_slice(), &ModuleRegistry::default()).unwrap(),
+            Vec::<u16>::consensus_decode_partial(&mut &buf[..], &ModuleRegistry::default())
+                .unwrap(),
             vec![1u16, 2]
         );
         assert_eq!(
-            VecDeque::<u8>::consensus_decode(&mut buf.as_slice(), &ModuleRegistry::default())
+            VecDeque::<u8>::consensus_decode_partial(&mut &buf[..], &ModuleRegistry::default())
                 .unwrap(),
             vec![1u8, 2]
         );
         assert_eq!(
-            VecDeque::<u16>::consensus_decode(&mut buf.as_slice(), &ModuleRegistry::default())
+            VecDeque::<u16>::consensus_decode_partial(&mut &buf[..], &ModuleRegistry::default())
                 .unwrap(),
             vec![1u16, 2]
         );

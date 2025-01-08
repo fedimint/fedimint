@@ -152,12 +152,12 @@ pub(crate) fn migrate_state_to_v2(
 ) -> anyhow::Result<Option<(Vec<u8>, OperationId)>> {
     let decoders = ModuleDecoderRegistry::default();
 
-    let mint_client_state_machine_variant = u16::consensus_decode(cursor, &decoders)?;
+    let mint_client_state_machine_variant = u16::consensus_decode_partial(cursor, &decoders)?;
 
     let new_mint_state_machine = match mint_client_state_machine_variant {
         0 => {
-            let _output_sm_len = u16::consensus_decode(cursor, &decoders)?;
-            let old_state = MintOutputStateMachineV0::consensus_decode(cursor, &decoders)?;
+            let _output_sm_len = u16::consensus_decode_partial(cursor, &decoders)?;
+            let old_state = MintOutputStateMachineV0::consensus_decode_partial(cursor, &decoders)?;
 
             MintClientStateMachines::Output(MintOutputStateMachine {
                 common: MintOutputCommon {
@@ -172,8 +172,8 @@ pub(crate) fn migrate_state_to_v2(
             })
         }
         1 => {
-            let _input_sm_len = u16::consensus_decode(cursor, &decoders)?;
-            let old_state = MintInputStateMachineV0::consensus_decode(cursor, &decoders)?;
+            let _input_sm_len = u16::consensus_decode_partial(cursor, &decoders)?;
+            let old_state = MintInputStateMachineV0::consensus_decode_partial(cursor, &decoders)?;
 
             MintClientStateMachines::Input(MintInputStateMachine {
                 common: MintInputCommon {
@@ -188,8 +188,8 @@ pub(crate) fn migrate_state_to_v2(
             })
         }
         2 => {
-            let _oob_sm_len = u16::consensus_decode(cursor, &decoders)?;
-            let old_state = MintOOBStateMachineV0::consensus_decode(cursor, &decoders)?;
+            let _oob_sm_len = u16::consensus_decode_partial(cursor, &decoders)?;
+            let old_state = MintOOBStateMachineV0::consensus_decode_partial(cursor, &decoders)?;
 
             let new_state = match old_state.state {
                 MintOOBStatesV0::Created(created) => MintOOBStates::Created(created),

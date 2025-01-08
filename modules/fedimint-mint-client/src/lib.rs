@@ -263,11 +263,12 @@ impl OOBNotes {
 }
 
 impl Decodable for OOBNotes {
-    fn consensus_decode<R: Read>(
+    fn consensus_decode_partial<R: Read>(
         r: &mut R,
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let inner = Vec::<OOBNotesPart>::consensus_decode(r, &ModuleDecoderRegistry::default())?;
+        let inner =
+            Vec::<OOBNotesPart>::consensus_decode_partial(r, &ModuleDecoderRegistry::default())?;
 
         // TODO: maybe write some macros for defining TLV structs?
         if !inner
@@ -339,10 +340,8 @@ impl FromStr for OOBNotes {
         } else {
             base64::engine::general_purpose::STANDARD.decode(&s)?
         };
-        let oob_notes: OOBNotes = Decodable::consensus_decode(
-            &mut std::io::Cursor::new(bytes),
-            &ModuleDecoderRegistry::default(),
-        )?;
+        let oob_notes: OOBNotes =
+            Decodable::consensus_decode_whole(&bytes, &ModuleDecoderRegistry::default())?;
 
         ensure!(!oob_notes.notes().is_empty(), "OOBNotes cannot be empty");
 
@@ -2270,7 +2269,7 @@ impl SpendableNoteUndecoded {
 
     pub fn decode(self) -> anyhow::Result<SpendableNote> {
         Ok(SpendableNote {
-            signature: Decodable::consensus_decode_from_finite_reader(
+            signature: Decodable::consensus_decode_partial_from_finite_reader(
                 &mut self.signature.as_slice(),
                 &ModuleRegistry::default(),
             )?,

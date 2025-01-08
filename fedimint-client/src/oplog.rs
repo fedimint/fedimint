@@ -380,16 +380,16 @@ impl Encodable for OperationLogEntry {
 }
 
 impl Decodable for OperationLogEntry {
-    fn consensus_decode<R: Read>(
+    fn consensus_decode_partial<R: Read>(
         r: &mut R,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let operation_type = String::consensus_decode(r, modules)?;
+        let operation_type = String::consensus_decode_partial(r, modules)?;
 
-        let meta_str = String::consensus_decode(r, modules)?;
+        let meta_str = String::consensus_decode_partial(r, modules)?;
         let meta = serde_json::from_str(&meta_str).map_err(DecodeError::from_err)?;
 
-        let outcome_str = Option::<String>::consensus_decode(r, modules)?;
+        let outcome_str = Option::<String>::consensus_decode_partial(r, modules)?;
         let outcome = outcome_str
             .map(|outcome_str| serde_json::from_str(&outcome_str).map_err(DecodeError::from_err))
             .transpose()?;

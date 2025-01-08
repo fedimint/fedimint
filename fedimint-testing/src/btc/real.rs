@@ -1,4 +1,3 @@
-use std::io::Cursor;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -106,8 +105,8 @@ impl BitcoinTest for RealBitcoinTestNoLock {
             .client
             .get_raw_transaction(&id, Some(mined_block_hash))
             .expect(Self::ERROR);
-        let proof = TxOutProof::consensus_decode(
-            &mut Cursor::new(loop {
+        let proof = TxOutProof::consensus_decode_whole(
+            &loop {
                 match self.client.get_tx_out_proof(&[id], None) {
                     Ok(o) => break o,
                     Err(e) => {
@@ -119,7 +118,7 @@ impl BitcoinTest for RealBitcoinTestNoLock {
                         panic!("Could not get txoutproof: {e}");
                     }
                 }
-            }),
+            },
             &ModuleDecoderRegistry::default(),
         )
         .expect(Self::ERROR);

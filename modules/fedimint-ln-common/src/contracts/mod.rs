@@ -106,13 +106,13 @@ impl Encodable for ContractId {
 }
 
 impl Decodable for ContractId {
-    fn consensus_decode<D: std::io::Read>(
+    fn consensus_decode_partial<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Ok(ContractId::from_byte_array(Decodable::consensus_decode(
-            d, modules,
-        )?))
+        Ok(ContractId::from_byte_array(
+            Decodable::consensus_decode_partial(d, modules)?,
+        ))
     }
 }
 

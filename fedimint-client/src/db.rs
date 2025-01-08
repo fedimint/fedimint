@@ -736,8 +736,10 @@ pub fn migrate_state(
 
         let decoders = ModuleDecoderRegistry::default();
         let mut cursor = std::io::Cursor::new(bytes);
-        let module_instance_id =
-            fedimint_core::core::ModuleInstanceId::consensus_decode(&mut cursor, &decoders)?;
+        let module_instance_id = fedimint_core::core::ModuleInstanceId::consensus_decode_partial(
+            &mut cursor,
+            &decoders,
+        )?;
 
         let state = match migrate(operation_id, &mut cursor)? {
             Some((mut state, operation_id)) => {
@@ -757,8 +759,10 @@ pub fn migrate_state(
 
         let decoders = ModuleDecoderRegistry::default();
         let mut cursor = std::io::Cursor::new(bytes);
-        let module_instance_id =
-            fedimint_core::core::ModuleInstanceId::consensus_decode(&mut cursor, &decoders)?;
+        let module_instance_id = fedimint_core::core::ModuleInstanceId::consensus_decode_partial(
+            &mut cursor,
+            &decoders,
+        )?;
 
         let state = match migrate(operation_id, &mut cursor)? {
             Some((mut state, operation_id)) => {

@@ -122,11 +122,11 @@ impl MetaValue {
 }
 
 impl Decodable for MetaValue {
-    fn consensus_decode<R: std::io::Read>(
+    fn consensus_decode_partial<R: std::io::Read>(
         r: &mut R,
         modules: &fedimint_core::module::registry::ModuleDecoderRegistry,
     ) -> Result<Self, fedimint_core::encoding::DecodeError> {
-        let bytes = Vec::consensus_decode(r, modules)?;
+        let bytes = Vec::consensus_decode_partial(r, modules)?;
 
         if Self::MAX_LEN_BYTES < bytes.len() {
             return Err(DecodeError::new_custom(anyhow::format_err!("Too long")));

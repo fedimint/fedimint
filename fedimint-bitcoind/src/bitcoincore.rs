@@ -1,5 +1,4 @@
 use std::env;
-use std::io::Cursor;
 use std::path::PathBuf;
 
 use anyhow::{anyhow as format_err, bail};
@@ -141,10 +140,8 @@ impl IBitcoindRpc for BitcoindClient {
     }
 
     async fn get_txout_proof(&self, txid: Txid) -> anyhow::Result<TxOutProof> {
-        TxOutProof::consensus_decode(
-            &mut Cursor::new(block_in_place(|| {
-                self.client.get_tx_out_proof(&[txid], None)
-            })?),
+        TxOutProof::consensus_decode_whole(
+            &block_in_place(|| self.client.get_tx_out_proof(&[txid], None))?,
             &ModuleDecoderRegistry::default(),
         )
         .map_err(|error| format_err!("Could not decode tx: {}", error))

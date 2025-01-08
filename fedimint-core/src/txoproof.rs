@@ -38,12 +38,12 @@ impl TxOutProof {
 }
 
 impl Decodable for TxOutProof {
-    fn consensus_decode<D: std::io::Read>(
+    fn consensus_decode_partial<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let block_header = BlockHeader::consensus_decode(d, modules)?;
-        let merkle_proof = PartialMerkleTree::consensus_decode(d, modules)?;
+        let block_header = BlockHeader::consensus_decode_partial(d, modules)?;
+        let merkle_proof = PartialMerkleTree::consensus_decode_partial(d, modules)?;
 
         let mut transactions = Vec::new();
         let mut indices = Vec::new();
@@ -98,13 +98,13 @@ impl<'de> Deserialize<'de> for TxOutProof {
             let hex_str: Cow<str> = Deserialize::deserialize(deserializer)?;
             let bytes = Vec::from_hex(hex_str.as_ref()).map_err(D::Error::custom)?;
             Ok(
-                Self::consensus_decode(&mut Cursor::new(bytes), &empty_module_registry)
+                Self::consensus_decode_partial(&mut Cursor::new(bytes), &empty_module_registry)
                     .map_err(D::Error::custom)?,
             )
         } else {
             let bytes: &[u8] = Deserialize::deserialize(deserializer)?;
             Ok(
-                Self::consensus_decode(&mut Cursor::new(bytes), &empty_module_registry)
+                Self::consensus_decode_partial(&mut Cursor::new(bytes), &empty_module_registry)
                     .map_err(D::Error::custom)?,
             )
         }

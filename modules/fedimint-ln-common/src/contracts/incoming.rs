@@ -102,13 +102,13 @@ impl Encodable for OfferId {
 }
 
 impl Decodable for OfferId {
-    fn consensus_decode<D: std::io::Read>(
+    fn consensus_decode_partial<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Ok(OfferId::from_byte_array(Decodable::consensus_decode(
-            d, modules,
-        )?))
+        Ok(OfferId::from_byte_array(
+            Decodable::consensus_decode_partial(d, modules)?,
+        ))
     }
 }
 

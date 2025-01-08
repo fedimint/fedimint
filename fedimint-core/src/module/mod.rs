@@ -934,8 +934,7 @@ impl<T: Encodable + Decodable> From<&T> for SerdeModuleEncoding<T> {
 
 impl<T: Encodable + Decodable + 'static> SerdeModuleEncoding<T> {
     pub fn try_into_inner(&self, modules: &ModuleDecoderRegistry) -> Result<T, DecodeError> {
-        let mut reader = std::io::Cursor::new(&self.0);
-        Decodable::consensus_decode(&mut reader, modules)
+        Decodable::consensus_decode_whole(&self.0, modules)
     }
 
     /// In cases where we know exactly which module kind we expect but don't
@@ -948,10 +947,13 @@ impl<T: Encodable + Decodable + 'static> SerdeModuleEncoding<T> {
     /// fedimint transaction).
     pub fn try_into_inner_known_module_kind(&self, decoder: &Decoder) -> Result<T, DecodeError> {
         let mut reader = std::io::Cursor::new(&self.0);
-        let module_instance =
-            ModuleInstanceId::consensus_decode(&mut reader, &ModuleDecoderRegistry::default())?;
+        let module_instance = ModuleInstanceId::consensus_decode_partial(
+            &mut reader,
+            &ModuleDecoderRegistry::default(),
+        )?;
 
-        let total_len = u64::consensus_decode(&mut reader, &ModuleDecoderRegistry::default())?;
+        let total_len =
+            u64::consensus_decode_partial(&mut reader, &ModuleDecoderRegistry::default())?;
 
         // No recursive module decoding is supported since we give an empty decoder
         // registry to the decode function

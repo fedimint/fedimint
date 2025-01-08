@@ -1,6 +1,6 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::{Cursor, Error, Read, Write};
+use std::io::{Error, Read, Write};
 
 use anyhow::{bail, ensure, Context, Result};
 use bitcoin::secp256k1::{Keypair, PublicKey, Secp256k1, SignOnly};
@@ -189,16 +189,16 @@ impl Encodable for ClientBackup {
 }
 
 impl Decodable for ClientBackup {
-    fn consensus_decode<R: Read>(
+    fn consensus_decode_partial<R: Read>(
         r: &mut R,
         modules: &ModuleDecoderRegistry,
     ) -> std::result::Result<Self, DecodeError> {
-        let session_count = u64::consensus_decode(r, modules).context("session_count")?;
-        let metadata = Metadata::consensus_decode(r, modules).context("metadata")?;
+        let session_count = u64::consensus_decode_partial(r, modules).context("session_count")?;
+        let metadata = Metadata::consensus_decode_partial(r, modules).context("metadata")?;
         let module_backups =
-            BTreeMap::<ModuleInstanceId, DynModuleBackup>::consensus_decode(r, modules)
+            BTreeMap::<ModuleInstanceId, DynModuleBackup>::consensus_decode_partial(r, modules)
                 .context("module_backups")?;
-        let _padding = Vec::<u8>::consensus_decode(r, modules).context("padding")?;
+        let _padding = Vec::<u8>::consensus_decode_partial(r, modules).context("padding")?;
 
         Ok(Self {
             session_count,
@@ -219,10 +219,7 @@ impl EncryptedClientBackup {
         decoders: &ModuleDecoderRegistry,
     ) -> Result<ClientBackup> {
         let decrypted = fedimint_aead::decrypt(&mut self.0, key)?;
-        Ok(ClientBackup::consensus_decode(
-            &mut Cursor::new(decrypted),
-            decoders,
-        )?)
+        Ok(ClientBackup::consensus_decode_whole(decrypted, decoders)?)
     }
 
     pub fn into_backup_request(self, keypair: &Keypair) -> Result<SignedBackupRequest> {
@@ -426,7 +423,6 @@ impl Client {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
-    use std::io::Cursor;
 
     use anyhow::Result;
     use fedimint_core::encoding::{Decodable, Encodable};
@@ -464,7 +460,7 @@ mod tests {
         assert_eq!(encoded.len(), ClientBackup::PADDING_ALIGNMENT);
         assert_eq!(
             orig,
-            ClientBackup::consensus_decode(&mut Cursor::new(encoded), &ModuleRegistry::default())?
+            ClientBackup::consensus_decode_whole(&encoded, &ModuleRegistry::default())?
         );
 
         Ok(())

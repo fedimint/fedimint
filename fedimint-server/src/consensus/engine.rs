@@ -386,7 +386,7 @@ impl ConsensusEngine {
                             }
                         }
 
-                        if let Ok(items) = Vec::<ConsensusItem>::consensus_decode(&mut bytes.as_slice(), &self.decoders()){
+                        if let Ok(items) = Vec::<ConsensusItem>::consensus_decode_whole(&bytes, &self.decoders()){
                             for item in items {
                                 if self.process_consensus_item(
                                     session_index,

@@ -327,18 +327,18 @@ macro_rules! module_plugin_dyn_newtype_encode_decode {
         }
 
         impl Decodable for $name {
-            fn consensus_decode_from_finite_reader<R: std::io::Read>(
+            fn consensus_decode_partial_from_finite_reader<R: std::io::Read>(
                 reader: &mut R,
                 decoders: &$crate::module::registry::ModuleDecoderRegistry,
             ) -> Result<Self, fedimint_core::encoding::DecodeError> {
                 let module_instance_id =
-                    fedimint_core::core::ModuleInstanceId::consensus_decode_from_finite_reader(
+                    fedimint_core::core::ModuleInstanceId::consensus_decode_partial_from_finite_reader(
                         reader, decoders,
                     )?;
                 let val = match decoders.get(module_instance_id) {
                     Some(decoder) => {
                         let total_len_u64 =
-                            u64::consensus_decode_from_finite_reader(reader, decoders)?;
+                            u64::consensus_decode_partial_from_finite_reader(reader, decoders)?;
                         decoder.decode_complete(
                             reader,
                             total_len_u64,
@@ -357,7 +357,7 @@ macro_rules! module_plugin_dyn_newtype_encode_decode {
                         $crate::module::registry::DecodingMode::Fallback => $name::from_typed(
                             module_instance_id,
                             $crate::core::DynUnknown(
-                                Vec::<u8>::consensus_decode_from_finite_reader(
+                                Vec::<u8>::consensus_decode_partial_from_finite_reader(
                                     reader,
                                     &Default::default(),
                                 )?,

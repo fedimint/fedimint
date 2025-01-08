@@ -86,7 +86,7 @@ pub(crate) fn get_v1_migrated_state(
     cursor: &mut Cursor<&[u8]>,
 ) -> anyhow::Result<Option<(Vec<u8>, OperationId)>> {
     let decoders = ModuleDecoderRegistry::default();
-    let dummy_sm_variant = u16::consensus_decode(cursor, &decoders)?;
+    let dummy_sm_variant = u16::consensus_decode_partial(cursor, &decoders)?;
 
     // We are only migrating the type of one of the variants, so we do nothing on
     // other discriminants.
@@ -94,10 +94,10 @@ pub(crate) fn get_v1_migrated_state(
         return Ok(None);
     }
 
-    let _unreachable_state_length = u16::consensus_decode(cursor, &decoders)?;
+    let _unreachable_state_length = u16::consensus_decode_partial(cursor, &decoders)?;
 
     // Migrate `Unreachable` states to `OutputDone`
-    let unreachable = Unreachable::consensus_decode(cursor, &decoders)?;
+    let unreachable = Unreachable::consensus_decode_partial(cursor, &decoders)?;
     let new_state = DummyStateMachine::OutputDone(
         unreachable.amount,
         unreachable.txid,
@@ -115,13 +115,13 @@ struct Unreachable {
 }
 
 impl Decodable for Unreachable {
-    fn consensus_decode<R: std::io::Read>(
+    fn consensus_decode_partial<R: std::io::Read>(
         reader: &mut R,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, fedimint_core::encoding::DecodeError> {
-        let operation_id = OperationId::consensus_decode(reader, modules)?;
-        let txid = TransactionId::consensus_decode(reader, modules)?;
-        let amount = Amount::consensus_decode(reader, modules)?;
+        let operation_id = OperationId::consensus_decode_partial(reader, modules)?;
+        let txid = TransactionId::consensus_decode_partial(reader, modules)?;
+        let amount = Amount::consensus_decode_partial(reader, modules)?;
 
         Ok(Unreachable {
             operation_id,

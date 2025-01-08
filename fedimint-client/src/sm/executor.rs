@@ -927,12 +927,12 @@ impl Encodable for ActiveStateKey {
 }
 
 impl Decodable for ActiveStateKey {
-    fn consensus_decode<R: Read>(
+    fn consensus_decode_partial<R: Read>(
         reader: &mut R,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let operation_id = OperationId::consensus_decode(reader, modules)?;
-        let state = DynState::consensus_decode(reader, modules)?;
+        let operation_id = OperationId::consensus_decode_partial(reader, modules)?;
+        let state = DynState::consensus_decode_partial(reader, modules)?;
 
         Ok(ActiveStateKey {
             operation_id,
@@ -958,12 +958,12 @@ impl Encodable for ActiveStateKeyBytes {
 }
 
 impl Decodable for ActiveStateKeyBytes {
-    fn consensus_decode<R: std::io::Read>(
+    fn consensus_decode_partial<R: std::io::Read>(
         reader: &mut R,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let operation_id = OperationId::consensus_decode(reader, modules)?;
-        let module_instance_id = ModuleInstanceId::consensus_decode(reader, modules)?;
+        let operation_id = OperationId::consensus_decode_partial(reader, modules)?;
+        let module_instance_id = ModuleInstanceId::consensus_decode_partial(reader, modules)?;
         let mut bytes = Vec::new();
         reader
             .read_to_end(&mut bytes)
@@ -1099,12 +1099,12 @@ impl Encodable for InactiveStateKey {
 }
 
 impl Decodable for InactiveStateKey {
-    fn consensus_decode<R: Read>(
+    fn consensus_decode_partial<R: Read>(
         reader: &mut R,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let operation_id = OperationId::consensus_decode(reader, modules)?;
-        let state = DynState::consensus_decode(reader, modules)?;
+        let operation_id = OperationId::consensus_decode_partial(reader, modules)?;
+        let state = DynState::consensus_decode_partial(reader, modules)?;
 
         Ok(InactiveStateKey {
             operation_id,
@@ -1130,12 +1130,12 @@ impl Encodable for InactiveStateKeyBytes {
 }
 
 impl Decodable for InactiveStateKeyBytes {
-    fn consensus_decode<R: std::io::Read>(
+    fn consensus_decode_partial<R: std::io::Read>(
         reader: &mut R,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let operation_id = OperationId::consensus_decode(reader, modules)?;
-        let module_instance_id = ModuleInstanceId::consensus_decode(reader, modules)?;
+        let operation_id = OperationId::consensus_decode_partial(reader, modules)?;
+        let module_instance_id = ModuleInstanceId::consensus_decode_partial(reader, modules)?;
         let mut bytes = Vec::new();
         reader
             .read_to_end(&mut bytes)

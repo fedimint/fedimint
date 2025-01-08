@@ -276,11 +276,11 @@ impl Encodable for LightningGatewayRegistration {
 }
 
 impl Decodable for LightningGatewayRegistration {
-    fn consensus_decode<R: Read>(
+    fn consensus_decode_partial<R: Read>(
         r: &mut R,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let json_repr = String::consensus_decode(r, modules)?;
+        let json_repr = String::consensus_decode_partial(r, modules)?;
         serde_json::from_str(&json_repr).map_err(|e| {
             DecodeError::new_custom(
                 anyhow::Error::new(e).context("Failed to deserialize LightningGatewayRegistration"),

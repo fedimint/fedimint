@@ -10,11 +10,11 @@ impl Encodable for Scalar {
 }
 
 impl Decodable for Scalar {
-    fn consensus_decode<D: std::io::Read>(
+    fn consensus_decode_partial<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let byte_array = <[u8; 32]>::consensus_decode(d, modules)?;
+        let byte_array = <[u8; 32]>::consensus_decode_partial(d, modules)?;
 
         Option::from(Self::from_bytes(&byte_array))
             .ok_or_else(|| DecodeError::from_str("Error decoding Scalar"))
@@ -28,11 +28,11 @@ impl Encodable for G1Affine {
 }
 
 impl Decodable for G1Affine {
-    fn consensus_decode<D: std::io::Read>(
+    fn consensus_decode_partial<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let byte_array = <[u8; 48]>::consensus_decode(d, modules)?;
+        let byte_array = <[u8; 48]>::consensus_decode_partial(d, modules)?;
 
         Option::from(Self::from_compressed(&byte_array))
             .ok_or_else(|| DecodeError::from_str("Error decoding G1Affine"))
@@ -46,11 +46,11 @@ impl Encodable for G2Affine {
 }
 
 impl Decodable for G2Affine {
-    fn consensus_decode<D: std::io::Read>(
+    fn consensus_decode_partial<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let byte_array = <[u8; 96]>::consensus_decode(d, modules)?;
+        let byte_array = <[u8; 96]>::consensus_decode_partial(d, modules)?;
 
         Option::from(Self::from_compressed(&byte_array))
             .ok_or_else(|| DecodeError::from_str("Error decoding G2Affine"))

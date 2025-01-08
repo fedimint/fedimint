@@ -22,14 +22,14 @@ impl Encodable for threshold_crypto::PublicKeySet {
 }
 
 impl Decodable for threshold_crypto::PublicKeySet {
-    fn consensus_decode<R: Read>(
+    fn consensus_decode_partial<R: Read>(
         r: &mut R,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let num_coeff = u64::consensus_decode(r, modules)?;
+        let num_coeff = u64::consensus_decode_partial(r, modules)?;
         (0..num_coeff)
             .map(|_| {
-                let bytes: [u8; 48] = Decodable::consensus_decode(r, modules)?;
+                let bytes: [u8; 48] = Decodable::consensus_decode_partial(r, modules)?;
                 let point = G1Affine::from_compressed(&bytes);
                 if point.is_some().unwrap_u8() == 1 {
                     let affine = point.unwrap();
@@ -52,11 +52,11 @@ impl Encodable for threshold_crypto::PublicKey {
 }
 
 impl Decodable for threshold_crypto::PublicKey {
-    fn consensus_decode<R: Read>(
+    fn consensus_decode_partial<R: Read>(
         r: &mut R,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let bytes: [u8; 48] = Decodable::consensus_decode(r, modules)?;
+        let bytes: [u8; 48] = Decodable::consensus_decode_partial(r, modules)?;
         Self::from_bytes(bytes).map_err(DecodeError::from_err)
     }
 }
@@ -68,11 +68,11 @@ impl Encodable for threshold_crypto::Ciphertext {
 }
 
 impl Decodable for threshold_crypto::Ciphertext {
-    fn consensus_decode<R: Read>(
+    fn consensus_decode_partial<R: Read>(
         reader: &mut R,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let ciphertext_bytes = Vec::<u8>::consensus_decode(reader, modules)?;
+        let ciphertext_bytes = Vec::<u8>::consensus_decode_partial(reader, modules)?;
         Self::from_bytes(&ciphertext_bytes).ok_or_else(|| {
             DecodeError::from_str("Error decoding threshold_crypto::Ciphertext from bytes")
         })
@@ -86,11 +86,11 @@ impl Encodable for threshold_crypto::DecryptionShare {
 }
 
 impl Decodable for threshold_crypto::DecryptionShare {
-    fn consensus_decode<R: Read>(
+    fn consensus_decode_partial<R: Read>(
         reader: &mut R,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let decryption_share_bytes = <[u8; 48]>::consensus_decode(reader, modules)?;
+        let decryption_share_bytes = <[u8; 48]>::consensus_decode_partial(reader, modules)?;
         Self::from_bytes(&decryption_share_bytes).ok_or_else(|| {
             DecodeError::from_str("Error decoding threshold_crypto::DecryptionShare from bytes")
         })

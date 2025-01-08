@@ -810,8 +810,8 @@ impl ServerModuleConfig {
     pub fn to_typed<T: TypedServerModuleConfig>(&self) -> anyhow::Result<T> {
         let local = serde_json::from_value(self.local.value().clone())?;
         let private = serde_json::from_value(self.private.value().clone())?;
-        let consensus = <T::Consensus>::consensus_decode(
-            &mut &self.consensus.config[..],
+        let consensus = <T::Consensus>::consensus_decode_whole(
+            &self.consensus.config[..],
             &ModuleRegistry::default(),
         )?;
 
@@ -830,8 +830,8 @@ pub trait TypedServerModuleConsensusConfig:
     fn version(&self) -> ModuleConsensusVersion;
 
     fn from_erased(erased: &ServerModuleConsensusConfig) -> anyhow::Result<Self> {
-        Ok(Self::consensus_decode(
-            &mut &erased.config[..],
+        Ok(Self::consensus_decode_whole(
+            &erased.config[..],
             &ModuleRegistry::default(),
         )?)
     }

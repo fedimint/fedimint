@@ -1,4 +1,3 @@
-use std::io::Cursor;
 use std::time::Duration;
 
 use bls12_381::G1Affine;
@@ -302,11 +301,9 @@ async fn backup_encode_decode_roundtrip() -> anyhow::Result<()> {
 
     let backup_bin = fedimint_core::encoding::Encodable::consensus_encode_to_vec(&backup);
 
-    let backup_decoded: ClientBackup = fedimint_core::encoding::Decodable::consensus_decode(
-        &mut Cursor::new(&backup_bin),
-        client.decoders(),
-    )
-    .expect("decode");
+    let backup_decoded: ClientBackup =
+        fedimint_core::encoding::Decodable::consensus_decode_whole(&backup_bin, client.decoders())
+            .expect("decode");
 
     assert_eq!(backup, backup_decoded);
 

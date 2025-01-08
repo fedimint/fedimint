@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::io::Cursor;
 
 use bls12_381::{G2Projective, Scalar};
 use criterion::{criterion_group, criterion_main, Criterion};
@@ -125,8 +124,7 @@ fn bench_decode_signature(c: &mut Criterion) {
 
     c.bench_function("signature decoding", |b| {
         b.iter(|| {
-            let mut sig_bytes_cursor = Cursor::new(&sig_bytes);
-            Signature::consensus_decode(&mut sig_bytes_cursor, &Default::default())
+            Signature::consensus_decode_whole(&sig_bytes, &Default::default())
                 .expect("Decoding works")
         })
     });

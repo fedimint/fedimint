@@ -361,11 +361,12 @@ impl Encodable for DynState {
     }
 }
 impl Decodable for DynState {
-    fn consensus_decode<R: std::io::Read>(
+    fn consensus_decode_partial<R: std::io::Read>(
         reader: &mut R,
         decoders: &::fedimint_core::module::registry::ModuleDecoderRegistry,
     ) -> Result<Self, fedimint_core::encoding::DecodeError> {
-        let module_id = fedimint_core::core::ModuleInstanceId::consensus_decode(reader, decoders)?;
+        let module_id =
+            fedimint_core::core::ModuleInstanceId::consensus_decode_partial(reader, decoders)?;
         decoders
             .get_expect(module_id)
             .decode_partial(reader, module_id, decoders)
@@ -467,12 +468,12 @@ impl<S> Decodable for OperationState<S>
 where
     S: State,
 {
-    fn consensus_decode<R: Read>(
+    fn consensus_decode_partial<R: Read>(
         read: &mut R,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let operation_id = OperationId::consensus_decode(read, modules)?;
-        let state = S::consensus_decode(read, modules)?;
+        let operation_id = OperationId::consensus_decode_partial(read, modules)?;
+        let state = S::consensus_decode_partial(read, modules)?;
 
         Ok(OperationState {
             operation_id,

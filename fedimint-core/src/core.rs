@@ -289,12 +289,13 @@ impl DecoderBuilder {
                 } else {
                     &ModuleRegistry::default()
                 };
-                let typed_val = Type::consensus_decode(&mut reader, decoders).map_err(|err| {
-                    let err: anyhow::Error = err.into();
-                    DecodeError::new_custom(
-                        err.context(format!("while decoding Dyn type module_id={instance}")),
-                    )
-                })?;
+                let typed_val =
+                    Type::consensus_decode_partial(&mut reader, decoders).map_err(|err| {
+                        let err: anyhow::Error = err.into();
+                        DecodeError::new_custom(
+                            err.context(format!("while decoding Dyn type module_id={instance}")),
+                        )
+                    })?;
                 let dyn_val = typed_val.into_dyn(instance);
                 let any_val: Box<dyn Any> = Box::new(dyn_val);
                 Ok(any_val)
