@@ -592,7 +592,7 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
                 .await?
             {
                 (peer, DkgPeerMsg::Module(bytes)) => {
-                    let received_data: T = T::consensus_decode_vec(bytes, &modules)
+                    let received_data: T = T::consensus_decode_whole(&bytes, &modules)
                         .map_err(|_| DkgError::ModuleDecodeError(kind.clone()))?;
                     peer_data.insert(peer, received_data);
                 }

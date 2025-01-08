@@ -237,16 +237,7 @@ pub trait Decodable: Sized {
         let bytes = Vec::<u8>::from_hex(hex)
             .map_err(anyhow::Error::from)
             .map_err(DecodeError::new_custom)?;
-        let mut reader = std::io::Cursor::new(bytes);
-        Decodable::consensus_decode(&mut reader, modules)
-    }
-
-    fn consensus_decode_vec(
-        bytes: Vec<u8>,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        let mut reader = std::io::Cursor::new(bytes);
-        Decodable::consensus_decode(&mut reader, modules)
+        Decodable::consensus_decode_whole(&bytes, modules)
     }
 }
 
@@ -966,7 +957,7 @@ mod tests {
 
         for (old, new) in test_vector {
             let old_bytes = old.consensus_encode_to_vec();
-            let decoded_new = New::consensus_decode_vec(old_bytes, &ModuleRegistry::default())
+            let decoded_new = New::consensus_decode_whole(&old_bytes, &ModuleRegistry::default())
                 .expect("Decoding failed");
             assert_eq!(decoded_new, new);
         }
