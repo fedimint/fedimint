@@ -145,6 +145,11 @@ function wallet_recovery() {
 }
 export -f wallet_recovery
 
+function wallet_recovery_2() {
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/wallet-recovery-test-2.sh
+}
+export -f wallet_recovery_2
+
 function devimint_cli_test() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/devimint-cli-test.sh
 }
@@ -325,6 +330,7 @@ tests_to_run_in_parallel+=(
   "cannot_replay_tx"
   "circular_deposit"
   "wallet_recovery"
+  "wallet_recovery_2"
 )
 done
 
