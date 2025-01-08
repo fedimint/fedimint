@@ -104,6 +104,10 @@ impl EventLogId {
         Self(self.0.saturating_sub(rhs))
     }
 
+    pub fn distance(self, rhs: EventLogId) -> Option<u64> {
+        self.0.checked_sub(rhs.0)
+    }
+
     pub fn new(log: u64) -> Self {
         Self(log)
     }

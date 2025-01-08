@@ -31,7 +31,7 @@ use std::fmt::Display;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, UNIX_EPOCH};
 
 use anyhow::{anyhow, Context};
 use bitcoin::hashes::sha256;
@@ -42,7 +42,7 @@ use config::GatewayOpts;
 pub use config::GatewayParameters;
 use db::GatewayDbtxNcExt;
 use error::FederationNotConnected;
-use events::{get_last_day_events, StructuredPaymentEvents, ALL_GATEWAY_EVENTS};
+use events::{get_events_for_duration, StructuredPaymentEvents, ALL_GATEWAY_EVENTS};
 use federation_manager::FederationManager;
 use fedimint_api_client::api::net::Connector;
 use fedimint_bip39::{Bip39RootSecretStrategy, Language, Mnemonic};
@@ -94,8 +94,9 @@ use rpc::{
     CloseChannelsWithPeerPayload, CreateInvoiceForOperatorPayload, DepositAddressRecheckPayload,
     FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse,
     OpenChannelPayload, PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentLogResponse,
-    PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainPayload,
-    SetFeesPayload, SpendEcashPayload, SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
+    PaymentSummaryPayload, PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse,
+    SendOnchainPayload, SetFeesPayload, SpendEcashPayload, SpendEcashResponse, WithdrawResponse,
+    V1_API_ENDPOINT,
 };
 use state_machine::events::compute_lnv1_stats;
 use state_machine::{GatewayClientModule, GatewayExtPayStates};
@@ -1592,10 +1593,22 @@ impl Gateway {
 
     /// Computes the 24 hour payment summary statistics for this gateway.
     /// Combines the LNv1 and LNv2 stats together.
-    pub async fn handle_payment_summary_msg(&self) -> PaymentSummaryResponse {
+    pub async fn handle_payment_summary_msg(
+        &self,
+        PaymentSummaryPayload {
+            start_millis,
+            end_millis,
+        }: PaymentSummaryPayload,
+    ) -> AdminResult<PaymentSummaryResponse> {
         let federation_manager = self.federation_manager.read().await;
         let fed_configs = federation_manager.get_all_federation_configs().await;
         let federation_ids = fed_configs.keys().collect::<Vec<_>>();
+        let start = UNIX_EPOCH + Duration::from_millis(start_millis);
+        let end = UNIX_EPOCH + Duration::from_millis(end_millis);
+
+        if start > end {
+            return Err(AdminGatewayError::Unexpected(anyhow!("Invalid time range")));
+        }
 
         let mut payment_stats = StructuredPaymentEvents::default();
         for fed_id in federation_ids {
@@ -1603,7 +1616,7 @@ impl Gateway {
                 .client(fed_id)
                 .expect("No client available")
                 .value();
-            let all_events = get_last_day_events(client).await;
+            let all_events = get_events_for_duration(client, start, end).await;
 
             if self.is_running_lnv1() && self.is_running_lnv2() {
                 payment_stats.combine(&mut compute_lnv1_stats(&all_events));
@@ -1615,7 +1628,7 @@ impl Gateway {
             }
         }
 
-        payment_stats.payment_summary_response()
+        Ok(payment_stats.payment_summary_response())
     }
 
     /// Registers the gateway with each specified federation.

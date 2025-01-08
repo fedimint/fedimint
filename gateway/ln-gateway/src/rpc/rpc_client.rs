@@ -12,16 +12,16 @@ use super::{
     CreateInvoiceForOperatorPayload, DepositAddressPayload, DepositAddressRecheckPayload,
     FederationInfo, GatewayBalances, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
     MnemonicResponse, OpenChannelPayload, PayInvoiceForOperatorPayload, PaymentLogPayload,
-    PaymentLogResponse, PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse,
-    SendOnchainPayload, SetFeesPayload, SpendEcashPayload, SpendEcashResponse, WithdrawPayload,
-    WithdrawResponse, ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT,
-    CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
-    CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT,
-    GET_BALANCES_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT,
-    LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAYMENT_LOG_ENDPOINT,
-    PAYMENT_SUMMARY_ENDPOINT, PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT,
-    SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
-    WITHDRAW_ENDPOINT,
+    PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse, ReceiveEcashPayload,
+    ReceiveEcashResponse, SendOnchainPayload, SetFeesPayload, SpendEcashPayload,
+    SpendEcashResponse, WithdrawPayload, WithdrawResponse, ADDRESS_ENDPOINT,
+    ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
+    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
+    GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
+    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
+    MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT,
+    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT, SEND_ONCHAIN_ENDPOINT,
+    SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 use crate::lightning::{ChannelInfo, CloseChannelsWithPeerResponse};
 
@@ -260,12 +260,15 @@ impl GatewayRpcClient {
         self.call_post(url, payload).await
     }
 
-    pub async fn payment_summary(&self) -> GatewayRpcResult<PaymentSummaryResponse> {
+    pub async fn payment_summary(
+        &self,
+        payload: PaymentSummaryPayload,
+    ) -> GatewayRpcResult<PaymentSummaryResponse> {
         let url = self
             .base_url
             .join(PAYMENT_SUMMARY_ENDPOINT)
             .expect("invalid base url");
-        self.call_get(url).await
+        self.call_post(url, payload).await
     }
 
     async fn call<P: Serialize, T: DeserializeOwned>(

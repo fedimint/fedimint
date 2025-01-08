@@ -273,3 +273,9 @@ pub struct PaymentStats {
     pub total_success: usize,
     pub total_failure: usize,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PaymentSummaryPayload {
+    pub start_millis: u64,
+    pub end_millis: u64,
+}

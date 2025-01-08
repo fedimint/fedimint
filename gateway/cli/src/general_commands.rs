@@ -1,9 +1,14 @@
+use std::time::{Duration, UNIX_EPOCH};
+
 use clap::Subcommand;
 use fedimint_core::config::FederationId;
 use fedimint_core::fedimint_build_code_version_env;
+use fedimint_core::time::now;
 use fedimint_eventlog::{EventKind, EventLogId};
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
-use ln_gateway::rpc::{ConnectFedPayload, LeaveFedPayload, PaymentLogPayload};
+use ln_gateway::rpc::{
+    ConnectFedPayload, LeaveFedPayload, PaymentLogPayload, PaymentSummaryPayload,
+};
 
 use crate::print_response;
 
@@ -59,7 +64,13 @@ pub enum GeneralCommands {
         cost: Option<u32>,
     },
     /// List a payment summary for the last day
-    PaymentSummary,
+    PaymentSummary {
+        #[clap(long)]
+        start: Option<u64>,
+
+        #[clap(long)]
+        end: Option<u64>,
+    },
 }
 
 impl GeneralCommands {
@@ -138,8 +149,29 @@ impl GeneralCommands {
                 bcrypt::hash(password, cost.unwrap_or(bcrypt::DEFAULT_COST))
                     .expect("Unable to create bcrypt hash"),
             ),
-            Self::PaymentSummary => {
-                let payment_summary = create_client().payment_summary().await?;
+            Self::PaymentSummary { start, end } => {
+                let now = now();
+                let now_millis = now
+                    .duration_since(UNIX_EPOCH)
+                    .expect("Before unix epoch")
+                    .as_millis()
+                    .try_into()?;
+                let one_day_ago = now
+                    .checked_sub(Duration::from_secs(60 * 60 * 24))
+                    .expect("Before unix epoch");
+                let one_day_ago_millis = one_day_ago
+                    .duration_since(UNIX_EPOCH)
+                    .expect("Before unix epoch")
+                    .as_millis()
+                    .try_into()?;
+                let end_millis = end.unwrap_or(now_millis);
+                let start_millis = start.unwrap_or(one_day_ago_millis);
+                let payment_summary = create_client()
+                    .payment_summary(PaymentSummaryPayload {
+                        start_millis,
+                        end_millis,
+                    })
+                    .await?;
                 print_response(payment_summary);
             }
         }

@@ -1,9 +1,8 @@
 use std::sync::Arc;
-use std::time::{Duration, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use fedimint_client::ClientHandle;
 use fedimint_core::core::ModuleKind;
-use fedimint_core::time::now;
 use fedimint_core::Amount;
 use fedimint_eventlog::{
     DBTransactionEventLogExt, Event, EventKind, EventLogId, PersistedLogEntry,
@@ -33,60 +32,92 @@ pub const ALL_GATEWAY_EVENTS: [EventKind; 11] = [
     DepositConfirmed::KIND,
 ];
 
-/// Searches through the event log for all events that occurred within the last
-/// 24 hours. Because it is inefficient to search the log backwards, instead
-/// this function traverses the log forwards, but in batches of 10000 events.
+/// Searches through the event log for all events that occurred within the
+/// specified time bounds. Because it is inefficient to search the log
+/// backwards, instead this function traverses the log forwards, but in batches.
 /// All events are appended to an array until the cutoff event where the
-/// timestamp is greater than a day old is found.
-pub async fn get_last_day_events(client: &Arc<ClientHandle>) -> Vec<PersistedLogEntry> {
-    // Start at the end of the log and find the first event where the timestamp <
-    // `one_day_ago`
+/// timestamp is greater than the start timestamp or the end of the log is hit.
+pub async fn get_events_for_duration(
+    client: &Arc<ClientHandle>,
+    start: SystemTime,
+    end: SystemTime,
+) -> Vec<PersistedLogEntry> {
     const BATCH_SIZE: u64 = 10_000;
-    let end_position = {
+    let mut end_position = {
         let mut dbtx = client.db().begin_transaction_nc().await;
         dbtx.get_next_event_log_id().await
     };
 
     let mut start_position = end_position.saturating_sub(BATCH_SIZE);
     let mut all_events = Vec::new();
-    let mut batch = client.get_event_log(Some(start_position), BATCH_SIZE).await;
-    let mut index = get_earliest_index(&batch);
-    let log_start = EventLogId::new(0);
-    // An index of 0 indicates that all events were within the last day and we
-    // should re-query for more events.
-    while index == 0 {
-        all_events.append(&mut batch);
-        // Compute the start position for the next batch query
-        start_position = start_position.saturating_sub(BATCH_SIZE);
 
-        if start_position == log_start {
-            break;
+    let log_start = EventLogId::new(0);
+
+    // Read the event log until we hit the end.
+    while start_position != log_start {
+        let batch = client.get_event_log(Some(start_position), BATCH_SIZE).await;
+        let (start_index, end_index) = get_index_bounds(&batch, start, end);
+
+        // If the `end_index` is non-zero, that means that all events < `end_index` are
+        // within our time bounds
+        if end_index > 0 {
+            let events = &batch[start_index..end_index];
+            all_events.append(&mut events.to_vec());
+
+            // If the `start_index` is non-zero, we have found the last event to be
+            // included. Return all events.
+            if start_index > 0 {
+                return all_events;
+            }
         }
-        batch = client.get_event_log(Some(start_position), BATCH_SIZE).await;
-        index = get_earliest_index(&batch);
+
+        end_position = start_position;
+        start_position = start_position.saturating_sub(BATCH_SIZE);
     }
 
-    let partial_events = &batch[index..];
-    all_events.append(&mut partial_events.to_vec());
+    let remaining_log = end_position.distance(start_position);
+    if let Some(batch_size) = remaining_log {
+        let batch = client.get_event_log(Some(start_position), batch_size).await;
+        let (start_index, end_index) = get_index_bounds(&batch, start, end);
+
+        if end_index > 0 {
+            let events = &batch[start_index..end_index];
+            all_events.append(&mut events.to_vec());
+        }
+    }
+
     all_events
 }
 
-/// Binary searches the `PersistedLogEntry` slice for a timestamp
-/// that is older than one day old. If all events are within the last day
-/// then the index of 0 is returned.
-fn get_earliest_index(batch: &[PersistedLogEntry]) -> usize {
-    let one_day_ago = now()
-        .checked_sub(Duration::from_secs(60 * 60 * 24))
-        .expect("outside valid SystemTime bounds");
+/// Binary searches the `PersistedLogEntry` slice for the start timestamp and
+/// end timestamp and returns the index of each. If an exact match is not found,
+/// the index where start or end could be inserted to maintain ordering
+/// is returned.
+fn get_index_bounds(
+    batch: &[PersistedLogEntry],
+    start: SystemTime,
+    end: SystemTime,
+) -> (usize, usize) {
     let timestamps = batch.iter().map(|e| e.timestamp).collect::<Vec<_>>();
-    let one_day_ago_micros = one_day_ago
+    let start_micros = start
         .duration_since(UNIX_EPOCH)
         .expect("before unix epoch")
         .as_micros() as u64;
-    let index = timestamps.binary_search(&one_day_ago_micros);
-    match index {
+    let index = timestamps.binary_search(&start_micros);
+    let start_index = match index {
         Err(index) | Ok(index) => index,
-    }
+    };
+
+    let end_micros = end
+        .duration_since(UNIX_EPOCH)
+        .expect("before unix epoch")
+        .as_micros() as u64;
+    let index = timestamps.binary_search(&end_micros);
+    let end_index = match index {
+        Err(index) | Ok(index) => index,
+    };
+
+    (start_index, end_index)
 }
 
 /// Filters the given `PersistedLogEntry` slice by the `EventKind` and
