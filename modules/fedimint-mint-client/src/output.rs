@@ -245,7 +245,7 @@ impl MintOutputStatesCreated {
         let agg_blind_signature = aggregate_signature_shares(
             &blinded_signature_shares
                 .into_iter()
-                .map(|(peer, share)| (peer.to_usize() as u64 + 1, share))
+                .map(|(peer, share)| (peer.to_usize() as u64, share))
                 .collect(),
         );
 
@@ -485,7 +485,7 @@ impl MintOutputStatesCreatedMulti {
                 let agg_blind_signature = aggregate_signature_shares(
                     &blinded_signature_shares
                         .into_iter()
-                        .map(|(peer, share)| (peer.to_usize() as u64 + 1, share))
+                        .map(|(peer, share)| (peer.to_usize() as u64, share))
                         .collect(),
                 );
 
@@ -562,7 +562,7 @@ pub fn verify_blind_share(
         .tier(&amount)
         .map_err(|_| anyhow!("Invalid Amount Tier"))?;
 
-    if !tbs::verify_blind_share(blinded_message, blinded_signature_share, *amount_key) {
+    if !tbs::verify_signature_share(blinded_message, blinded_signature_share, *amount_key) {
         bail!("Invalid blind signature")
     }
 

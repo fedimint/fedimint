@@ -55,7 +55,7 @@ use metrics::{
 use rand::rngs::OsRng;
 use strum::IntoEnumIterator;
 use tbs::{
-    aggregate_public_key_shares, sign_blinded_msg, AggregatePublicKey, PublicKeyShare,
+    aggregate_public_key_shares, derive_pk_share, sign_message, AggregatePublicKey, PublicKeyShare,
     SecretKeyShare,
 };
 use threshold_crypto::ff::Field;
@@ -276,7 +276,7 @@ impl ServerModuleInit for MintInit {
             .private
             .tbs_sks
             .iter()
-            .map(|(amount, sk)| (amount, sk.to_pub_key_share()))
+            .map(|(amount, sk)| (amount, derive_pk_share(sk)))
             .collect();
         let pks: BTreeMap<Amount, PublicKeyShare> = config
             .consensus
@@ -309,7 +309,7 @@ impl ServerModuleInit for MintInit {
             TieredMulti::new_aggregate_from_tiered_iter(config.peer_tbs_pks.values().cloned())
                 .into_iter()
                 .map(|(amt, keys)| {
-                    let keys = (1_u64..)
+                    let keys = (0_u64..)
                         .zip(keys)
                         .take(config.peer_tbs_pks.to_num_peers().threshold())
                         .collect();
@@ -500,7 +500,7 @@ impl ServerModule for Mint {
 
         dbtx.insert_new_entry(
             &MintOutputOutcomeKey(out_point),
-            &MintOutputOutcome::new_v0(sign_blinded_msg(output.blind_nonce.0, *amount_key)),
+            &MintOutputOutcome::new_v0(sign_message(output.blind_nonce.0, *amount_key)),
         )
         .await;
 
@@ -721,7 +721,7 @@ impl Mint {
             .private
             .tbs_sks
             .iter()
-            .map(|(amt, key)| (amt, key.to_pub_key_share()))
+            .map(|(amount, sk)| (amount, derive_pk_share(sk)))
             .collect();
 
         // Find our key index and make sure we know the private key for all our public
@@ -738,7 +738,7 @@ impl Mint {
             cfg.private
                 .tbs_sks
                 .iter()
-                .map(|(amount, sk)| (amount, sk.to_pub_key_share()))
+                .map(|(amount, sk)| (amount, derive_pk_share(sk)))
                 .collect()
         );
 
@@ -750,7 +750,7 @@ impl Mint {
         )
         .into_iter()
         .map(|(amt, keys)| {
-            let keys = (1_u64..)
+            let keys = (0_u64..)
                 .zip(keys)
                 .take(cfg.consensus.peer_tbs_pks.to_num_peers().threshold())
                 .collect();
@@ -857,7 +857,7 @@ mod test {
         let blinding_key = tbs::BlindingKey::random();
         let blind_msg = blind_message(message, blinding_key);
 
-        let bsig_shares = (1_u64..)
+        let bsig_shares = (0_u64..)
             .zip(server_cfgs.iter().map(|cfg| {
                 let sks = *cfg
                     .to_typed::<MintConfig>()
@@ -866,7 +866,7 @@ mod test {
                     .tbs_sks
                     .get(denomination)
                     .expect("Mint cannot issue a note of this denomination");
-                tbs::sign_blinded_msg(blind_msg, sks)
+                tbs::sign_message(blind_msg, sks)
             }))
             .take(server_cfgs.len() - ((server_cfgs.len() - 1) / 3))
             .collect();

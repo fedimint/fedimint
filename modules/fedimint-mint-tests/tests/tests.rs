@@ -549,7 +549,7 @@ mod fedimint_migration_tests {
     use secp256k1::Keypair;
     use strum::IntoEnumIterator;
     use tbs::{
-        blind_message, sign_blinded_msg, AggregatePublicKey, BlindingKey, Message, PublicKeyShare,
+        blind_message, sign_message, AggregatePublicKey, BlindingKey, Message, PublicKeyShare,
         SecretKeyShare, Signature,
     };
     use threshold_crypto::{G1Affine, G2Affine};
@@ -583,7 +583,7 @@ mod fedimint_migration_tests {
         let message = Message::from_bytes(&BYTE_8);
         let blinded_message = blind_message(message, blinding_key);
         let secret_key_share = SecretKeyShare(Scalar::random(&mut OsRng));
-        let blind_signature_share = sign_blinded_msg(blinded_message, secret_key_share);
+        let blind_signature_share = sign_message(blinded_message, secret_key_share);
         dbtx.insert_new_entry(
             &MintOutputOutcomeKey(out_point),
             &MintOutputOutcome::new_v0(blind_signature_share),

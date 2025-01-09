@@ -232,7 +232,6 @@ impl_hash_with_serialized_compressed!(PublicKeyShare);
 
 #[cfg(test)]
 mod tests {
-
     use bitcoin_hashes::{sha256, Hash};
     use bls12_381::{G1Projective, Scalar};
     use group::ff::Field;
@@ -261,7 +260,7 @@ mod tests {
         // using the Horner schema.
 
         let y = (0..threshold)
-            .map(|index| coefficient(index))
+            .map(coefficient)
             .rev()
             .reduce(|accumulator, c| accumulator * x + c)
             .expect("We have at least one coefficient");
