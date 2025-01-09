@@ -1,8 +1,8 @@
-use std::ffi;
 use std::fmt::Write;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use std::{env, ffi};
 
 use anyhow::{anyhow, ensure, Context, Result};
 use clap::{Parser, Subcommand};
@@ -18,8 +18,8 @@ use tracing::{debug, error, info, trace, warn};
 
 use crate::devfed::DevJitFed;
 use crate::envs::{
-    FM_FED_SIZE_ENV, FM_INVITE_CODE_ENV, FM_LINK_TEST_DIR_ENV, FM_OFFLINE_NODES_ENV,
-    FM_TEST_DIR_ENV,
+    FM_DEVIMINT_STATIC_DATA_DIR_ENV, FM_FED_SIZE_ENV, FM_INVITE_CODE_ENV, FM_LINK_TEST_DIR_ENV,
+    FM_OFFLINE_NODES_ENV, FM_TEST_DIR_ENV,
 };
 use crate::federation::Fedimintd;
 use crate::util::{poll, ProcessManager};
@@ -351,14 +351,26 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
     Ok(())
 }
 
-pub async fn exec_user_command(exec: Vec<ffi::OsString>) -> Result<(), anyhow::Error> {
-    let cmd_str = exec
+pub async fn exec_user_command(path: Vec<ffi::OsString>) -> Result<(), anyhow::Error> {
+    let cmd_str = path
         .join(ffi::OsStr::new(" "))
         .to_string_lossy()
         .to_string();
+
+    let path_with_aliases = if let Some(existing_path) = env::var_os("PATH") {
+        let mut path = devimint_static_data_dir();
+        path.push("/aliases:");
+        path.push(existing_path);
+        path
+    } else {
+        let mut path = devimint_static_data_dir();
+        path.push("/aliases");
+        path
+    };
     debug!(target: LOG_DEVIMINT, cmd = %cmd_str, "Executing user command");
-    if !tokio::process::Command::new(&exec[0])
-        .args(&exec[1..])
+    if !tokio::process::Command::new(&path[0])
+        .args(&path[1..])
+        .env("PATH", path_with_aliases)
         .kill_on_drop(true)
         .status()
         .await
@@ -369,6 +381,17 @@ pub async fn exec_user_command(exec: Vec<ffi::OsString>) -> Result<(), anyhow::E
         return Err(anyhow!("User command failed: {cmd_str}"));
     }
     Ok(())
+}
+
+fn devimint_static_data_dir() -> ffi::OsString {
+    // If set, use the runtime, otherwise the compile time value
+    env::var_os(FM_DEVIMINT_STATIC_DATA_DIR_ENV).unwrap_or(
+        env!(
+            // Note: consant expression, not allowed, so we can't use the constant :/
+            "FM_DEVIMINT_STATIC_DATA_DIR"
+        )
+        .into(),
+    )
 }
 
 pub async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {

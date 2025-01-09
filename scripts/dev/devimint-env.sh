@@ -20,6 +20,7 @@ function devimint_env {
   # For starship users, we can actually make the prompt distinct so there's
   # no confusion.
   export STARSHIP_CONFIG="${REPO_ROOT}/scripts/dev/devimint-env/starship.toml"
+  source "${REPO_ROOT}/scripts/dev/aliases.sh"
 
   >&2 echo "Devimint Env Shell Ready (exit to shutdown):"
   if [ "$SHELL" == "fish" ] || [[ "$SHELL" == */fish ]]; then
@@ -37,6 +38,9 @@ function devimint_env {
   fi
 }
 export -f devimint_env
+
+# In our dev env we want to use the current aliases from the source code
+export FM_DEVIMINT_STATIC_DATA_DIR="${REPO_ROOT}/devimint/share"
 
 env RUST_LOG="${RUST_LOG:-info,jsonrpsee-client=off}" \
   devimint --link-test-dir "${CARGO_BUILD_TARGET_DIR:-$PWD/target}/devimint" "$@" dev-fed \

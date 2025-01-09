@@ -132,3 +132,13 @@ pub const FM_DEVIMINT_CMD_INHERIT_STDERR_ENV: &str = "FM_DEVIMINT_CMD_INHERIT_ST
 
 /// Force devimint to run a test with a deprecated configuration
 pub const FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV: &str = "FM_DEVIMINT_RUN_DEPRECATED_TESTS";
+
+/// Devimint's "data dir" (think `/usr/devimint/`).
+///
+/// "Static" because we use "data dir" for the directory `devimint` puts all the
+/// runtime state in, which is typically a per-invocation temporary directory.
+///
+/// Can be set during `cargo build` to force the default one, then available in
+/// Rust code during building, and also checked at runtime to allow
+/// overwriting.
+pub const FM_DEVIMINT_STATIC_DATA_DIR_ENV: &str = "FM_DEVIMINT_STATIC_DATA_DIR";
