@@ -10,6 +10,13 @@ use bitcoin::secp256k1::{self, PublicKey, SecretKey};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::BoxStream;
 use fedimint_core::Amount;
+use fedimint_lightning::{
+    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
+    CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
+    GetRouteHintsResponse, ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse,
+    LightningRpcError, ListActiveChannelsResponse, OpenChannelRequest, OpenChannelResponse,
+    PayInvoiceResponse, RouteHtlcStream, SendOnchainRequest, SendOnchainResponse,
+};
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::PrunedInvoice;
@@ -17,14 +24,6 @@ use fedimint_logging::LOG_TEST;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, DEFAULT_EXPIRY_TIME,
 };
-use ln_gateway::lightning::{
-    CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
-    GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse, LightningRpcError,
-    ListActiveChannelsResponse, OpenChannelResponse, PayInvoiceResponse, RouteHtlcStream,
-    SendOnchainResponse,
-};
-use ln_gateway::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, SendOnchainPayload};
 use rand::rngs::OsRng;
 use tokio::sync::mpsc;
 use tracing::info;
@@ -255,7 +254,7 @@ impl ILnRpcClient for FakeLightningTest {
 
     async fn send_onchain(
         &self,
-        _payload: SendOnchainPayload,
+        _payload: SendOnchainRequest,
     ) -> Result<SendOnchainResponse, LightningRpcError> {
         Err(LightningRpcError::FailedToWithdrawOnchain {
             failure_reason: "FakeLightningTest does not support withdrawing funds on-chain"
@@ -265,7 +264,7 @@ impl ILnRpcClient for FakeLightningTest {
 
     async fn open_channel(
         &self,
-        _payload: OpenChannelPayload,
+        _payload: OpenChannelRequest,
     ) -> Result<OpenChannelResponse, LightningRpcError> {
         Err(LightningRpcError::FailedToOpenChannel {
             failure_reason: "FakeLightningTest does not support opening channels".to_string(),
@@ -274,7 +273,7 @@ impl ILnRpcClient for FakeLightningTest {
 
     async fn close_channels_with_peer(
         &self,
-        _payload: CloseChannelsWithPeerPayload,
+        _payload: CloseChannelsWithPeerRequest,
     ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError> {
         Err(LightningRpcError::FailedToCloseChannelsWithPeer {
             failure_reason: "FakeLightningTest does not support closing channels by peer"

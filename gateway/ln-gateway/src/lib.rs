@@ -20,7 +20,6 @@ mod error;
 mod events;
 mod federation_manager;
 pub mod gateway_module_v2;
-pub mod lightning;
 pub mod rpc;
 pub mod state_machine;
 mod types;
@@ -38,9 +37,10 @@ use bitcoin::hashes::sha256;
 use bitcoin::{Address, Network, Txid};
 use clap::Parser;
 use client::GatewayClientBuilder;
-use config::GatewayOpts;
 pub use config::GatewayParameters;
+use config::{GatewayLightningBuilder, GatewayOpts, LightningBuilder, LightningMode};
 use db::GatewayDbtxNcExt;
+use envs::FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV;
 use error::FederationNotConnected;
 use events::ALL_GATEWAY_EVENTS;
 use federation_manager::FederationManager;
@@ -55,6 +55,7 @@ use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::db::{apply_migrations_server, Database, DatabaseTransaction};
+use fedimint_core::envs::is_env_var_set;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::secp256k1::schnorr::Signature;
@@ -66,6 +67,12 @@ use fedimint_core::{
     fedimint_build_code_version_env, get_network_for_address, Amount, BitcoinAmountOrAll,
 };
 use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId};
+use fedimint_lightning::{
+    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
+    ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
+    LightningContext, LightningRpcError, OpenChannelRequest, PaymentAction, RouteHtlcStream,
+    SendOnchainRequest,
+};
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::LightningCommonInit;
@@ -82,19 +89,13 @@ use fedimint_wallet_client::{
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
 };
 use futures::stream::StreamExt;
-use lightning::{
-    CloseChannelsWithPeerResponse, CreateInvoiceRequest, ILnRpcClient, InterceptPaymentRequest,
-    InterceptPaymentResponse, InvoiceDescription, LightningBuilder, LightningRpcError,
-    PaymentAction,
-};
 use lightning_invoice::Bolt11Invoice;
 use rand::thread_rng;
 use rpc::{
-    CloseChannelsWithPeerPayload, CreateInvoiceForOperatorPayload, DepositAddressRecheckPayload,
-    FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse,
-    OpenChannelPayload, PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentLogResponse,
-    ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainPayload, SetFeesPayload,
-    SpendEcashPayload, SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
+    CreateInvoiceForOperatorPayload, DepositAddressRecheckPayload, FederationInfo,
+    GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, PayInvoiceForOperatorPayload,
+    PaymentLogPayload, PaymentLogResponse, ReceiveEcashPayload, ReceiveEcashResponse,
+    SetFeesPayload, SpendEcashPayload, SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
 };
 use state_machine::{GatewayClientModule, GatewayExtPayStates};
 use tokio::sync::RwLock;
@@ -105,7 +106,6 @@ use crate::db::{get_gatewayd_database_migrations, FederationConfig};
 use crate::envs::FM_GATEWAY_MNEMONIC_ENV;
 use crate::error::{AdminGatewayError, LNv1Error, LNv2Error, PublicGatewayError};
 use crate::gateway_module_v2::GatewayClientModuleV2;
-use crate::lightning::{GatewayLightningBuilder, LightningContext, LightningMode, RouteHtlcStream};
 use crate::rpc::rpc_server::run_webserver;
 use crate::rpc::{
     BackupPayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
@@ -502,7 +502,7 @@ impl Gateway {
 
         assert!(self.network == lightning_network, "Lightning node network does not match Gateway's network. LN: {lightning_network} Gateway: {}", self.network);
 
-        if synced_to_chain {
+        if synced_to_chain || is_env_var_set(FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV) {
             info!("Gateway is already synced to chain");
         } else {
             self.set_gateway_state(GatewayState::Syncing).await;
@@ -1318,7 +1318,7 @@ impl Gateway {
 
     /// Instructs the Gateway's Lightning node to open a channel to a peer
     /// specified by `pubkey`.
-    pub async fn handle_open_channel_msg(&self, payload: OpenChannelPayload) -> AdminResult<Txid> {
+    pub async fn handle_open_channel_msg(&self, payload: OpenChannelRequest) -> AdminResult<Txid> {
         let context = self.get_lightning_context().await?;
         let res = context.lnrpc.open_channel(payload).await?;
         Txid::from_str(&res.funding_txid).map_err(|e| {
@@ -1332,7 +1332,7 @@ impl Gateway {
     /// specified by `pubkey`.
     pub async fn handle_close_channels_with_peer_msg(
         &self,
-        payload: CloseChannelsWithPeerPayload,
+        payload: CloseChannelsWithPeerRequest,
     ) -> AdminResult<CloseChannelsWithPeerResponse> {
         let context = self.get_lightning_context().await?;
         let response = context.lnrpc.close_channels_with_peer(payload).await?;
@@ -1343,14 +1343,14 @@ impl Gateway {
     /// Lightning node.
     pub async fn handle_list_active_channels_msg(
         &self,
-    ) -> AdminResult<Vec<lightning::ChannelInfo>> {
+    ) -> AdminResult<Vec<fedimint_lightning::ChannelInfo>> {
         let context = self.get_lightning_context().await?;
         let response = context.lnrpc.list_active_channels().await?;
         Ok(response.channels)
     }
 
     /// Send funds from the gateway's lightning node on-chain wallet.
-    pub async fn handle_send_onchain_msg(&self, payload: SendOnchainPayload) -> AdminResult<Txid> {
+    pub async fn handle_send_onchain_msg(&self, payload: SendOnchainRequest) -> AdminResult<Txid> {
         let context = self.get_lightning_context().await?;
         let response = context.lnrpc.send_onchain(payload).await?;
         Txid::from_str(&response.txid).map_err(|e| AdminGatewayError::WithdrawError {

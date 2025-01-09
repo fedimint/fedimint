@@ -10,11 +10,11 @@ use fedimint_core::envs::{is_env_var_set, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{Amount, BitcoinAmountOrAll};
+use fedimint_lightning::ChannelInfo;
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_testing::gateway::LightningNodeType;
 use ln_gateway::envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV;
-use ln_gateway::lightning::ChannelInfo;
 use ln_gateway::rpc::{GatewayBalances, MnemonicResponse, V1_API_ENDPOINT};
 use tracing::info;
 

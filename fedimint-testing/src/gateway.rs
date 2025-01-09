@@ -3,7 +3,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use ln_gateway::lightning::{ILnRpcClient, LightningBuilder};
+use fedimint_lightning::ILnRpcClient;
+use ln_gateway::config::LightningBuilder;
 
 use crate::ln::FakeLightningTest;
 

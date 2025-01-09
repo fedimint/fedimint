@@ -2,37 +2,26 @@ pub mod ldk;
 pub mod lnd;
 
 use std::fmt::Debug;
-use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use bitcoin::Network;
-use clap::{arg, Subcommand};
-use fedimint_bip39::Mnemonic;
-use fedimint_core::db::Database;
+use bitcoin::address::NetworkUnchecked;
+use bitcoin::hashes::sha256;
+use bitcoin::{Address, Network};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::is_env_var_set;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::{backoff_util, retry, SafeUrl};
-use fedimint_core::{secp256k1, Amount};
+use fedimint_core::util::{backoff_util, retry};
+use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
+use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::PrunedInvoice;
 use futures::stream::BoxStream;
-use ldk::GatewayLdkChainSourceConfig;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::{debug, info, warn};
-
-use self::lnd::GatewayLndClient;
-use crate::envs::{
-    FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV, FM_LDK_BITCOIND_RPC_URL, FM_LDK_ESPLORA_SERVER_URL,
-    FM_LDK_NETWORK, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
-};
-use crate::rpc::{CloseChannelsWithPeerPayload, SendOnchainPayload};
-use crate::{OpenChannelPayload, Preimage};
+use tracing::{info, warn};
 
 pub const MAX_LIGHTNING_RETRIES: u32 = 10;
 
@@ -200,19 +189,19 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// wallet.
     async fn send_onchain(
         &self,
-        payload: SendOnchainPayload,
+        payload: SendOnchainRequest,
     ) -> Result<SendOnchainResponse, LightningRpcError>;
 
     /// Opens a channel with a peer lightning node.
     async fn open_channel(
         &self,
-        payload: OpenChannelPayload,
+        payload: OpenChannelRequest,
     ) -> Result<OpenChannelResponse, LightningRpcError>;
 
     /// Closes all channels with a peer lightning node.
     async fn close_channels_with_peer(
         &self,
-        payload: CloseChannelsWithPeerPayload,
+        payload: CloseChannelsWithPeerRequest,
     ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError>;
 
     /// Lists the lightning node's active channels with all peers.
@@ -262,11 +251,6 @@ impl dyn ILnRpcClient {
 
     /// Waits for the Lightning node to be synced to the Bitcoin blockchain.
     pub async fn wait_for_chain_sync(&self) -> std::result::Result<(), LightningRpcError> {
-        if is_env_var_set(FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV) {
-            debug!("Skip waiting for gateway to sync to chain");
-            return Ok(());
-        }
-
         retry(
             "Wait for chain sync",
             backoff_util::background_backoff(),
@@ -300,117 +284,6 @@ pub struct ChannelInfo {
     pub short_channel_id: u64,
 }
 
-#[derive(Debug, Clone, Subcommand, Serialize, Deserialize, Eq, PartialEq)]
-pub enum LightningMode {
-    #[clap(name = "lnd")]
-    Lnd {
-        /// LND RPC address
-        #[arg(long = "lnd-rpc-host", env = FM_LND_RPC_ADDR_ENV)]
-        lnd_rpc_addr: String,
-
-        /// LND TLS cert file path
-        #[arg(long = "lnd-tls-cert", env = FM_LND_TLS_CERT_ENV)]
-        lnd_tls_cert: String,
-
-        /// LND macaroon file path
-        #[arg(long = "lnd-macaroon", env = FM_LND_MACAROON_ENV)]
-        lnd_macaroon: String,
-    },
-    #[clap(name = "ldk")]
-    Ldk {
-        /// LDK esplora server URL
-        #[arg(long = "ldk-esplora-server-url", env = FM_LDK_ESPLORA_SERVER_URL)]
-        esplora_server_url: Option<String>,
-
-        /// LDK bitcoind server URL
-        #[arg(long = "ldk-bitcoind-rpc-url", env = FM_LDK_BITCOIND_RPC_URL)]
-        bitcoind_rpc_url: Option<String>,
-
-        /// LDK network (defaults to regtest if not provided)
-        #[arg(long = "ldk-network", env = FM_LDK_NETWORK, default_value = "regtest")]
-        network: Network,
-
-        /// LDK lightning server port
-        #[arg(long = "ldk-lightning-port", env = FM_PORT_LDK)]
-        lightning_port: u16,
-    },
-}
-
-#[async_trait]
-pub trait LightningBuilder {
-    async fn build(&self, runtime: Arc<tokio::runtime::Runtime>) -> Box<dyn ILnRpcClient>;
-
-    fn lightning_mode(&self) -> Option<LightningMode> {
-        None
-    }
-}
-
-#[derive(Clone)]
-pub struct GatewayLightningBuilder {
-    pub lightning_mode: LightningMode,
-    pub gateway_db: Database,
-    pub ldk_data_dir: PathBuf,
-    pub mnemonic: Mnemonic,
-}
-
-#[async_trait]
-impl LightningBuilder for GatewayLightningBuilder {
-    async fn build(&self, runtime: Arc<tokio::runtime::Runtime>) -> Box<dyn ILnRpcClient> {
-        match self.lightning_mode.clone() {
-            LightningMode::Lnd {
-                lnd_rpc_addr,
-                lnd_tls_cert,
-                lnd_macaroon,
-            } => Box::new(GatewayLndClient::new(
-                lnd_rpc_addr,
-                lnd_tls_cert,
-                lnd_macaroon,
-                None,
-                self.gateway_db.clone(),
-            )),
-            LightningMode::Ldk {
-                esplora_server_url,
-                bitcoind_rpc_url,
-                network,
-                lightning_port,
-            } => {
-                let chain_source_config = {
-                    match (esplora_server_url, bitcoind_rpc_url) {
-                        (Some(esplora_server_url), None) => GatewayLdkChainSourceConfig::Esplora {
-                            server_url: SafeUrl::parse(&esplora_server_url.clone()).unwrap(),
-                        },
-                        (None, Some(bitcoind_rpc_url)) => GatewayLdkChainSourceConfig::Bitcoind {
-                            server_url: SafeUrl::parse(&bitcoind_rpc_url.clone()).unwrap(),
-                        },
-                        (None, None) => {
-                            panic!("Either esplora or bitcoind chain info source must be provided")
-                        }
-                        (Some(_), Some(_)) => {
-                            panic!("Either esplora or bitcoind chain info source must be provided, but not both")
-                        }
-                    }
-                };
-
-                Box::new(
-                    ldk::GatewayLdkClient::new(
-                        &self.ldk_data_dir,
-                        chain_source_config,
-                        network,
-                        lightning_port,
-                        self.mnemonic.clone(),
-                        runtime,
-                    )
-                    .expect("Failed to create LDK client"),
-                )
-            }
-        }
-    }
-
-    fn lightning_mode(&self) -> Option<LightningMode> {
-        Some(self.lightning_mode.clone())
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GetNodeInfoResponse {
     pub pub_key: PublicKey,
@@ -422,7 +295,7 @@ pub struct GetNodeInfoResponse {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct InterceptPaymentRequest {
-    pub payment_hash: crate::sha256::Hash,
+    pub payment_hash: sha256::Hash,
     pub amount_msat: u64,
     pub expiry: u32,
     pub incoming_chan_id: u64,
@@ -434,7 +307,7 @@ pub struct InterceptPaymentRequest {
 pub struct InterceptPaymentResponse {
     pub incoming_chan_id: u64,
     pub htlc_id: u64,
-    pub payment_hash: crate::sha256::Hash,
+    pub payment_hash: sha256::Hash,
     pub action: PaymentAction,
 }
 
@@ -457,7 +330,7 @@ pub struct PayInvoiceResponse {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CreateInvoiceRequest {
-    pub payment_hash: Option<crate::sha256::Hash>,
+    pub payment_hash: Option<sha256::Hash>,
     pub amount_msat: u64,
     pub expiry_secs: u32,
     pub description: Option<InvoiceDescription>,
@@ -466,7 +339,7 @@ pub struct CreateInvoiceRequest {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum InvoiceDescription {
     Direct(String),
-    Hash(crate::sha256::Hash),
+    Hash(sha256::Hash),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -504,4 +377,24 @@ pub struct GetBalancesResponse {
     pub onchain_balance_sats: u64,
     pub lightning_balance_msats: u64,
     pub inbound_lightning_liquidity_msats: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OpenChannelRequest {
+    pub pubkey: secp256k1::PublicKey,
+    pub host: String,
+    pub channel_size_sats: u64,
+    pub push_amount_sats: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SendOnchainRequest {
+    pub address: Address<NetworkUnchecked>,
+    pub amount: BitcoinAmountOrAll,
+    pub fee_rate_sats_per_vbyte: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CloseChannelsWithPeerRequest {
+    pub pubkey: secp256k1::PublicKey,
 }

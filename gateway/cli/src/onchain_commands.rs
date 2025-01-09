@@ -1,8 +1,8 @@
 use bitcoin::address::NetworkUnchecked;
 use clap::Subcommand;
 use fedimint_core::BitcoinAmountOrAll;
+use fedimint_lightning::SendOnchainRequest;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
-use ln_gateway::rpc::SendOnchainPayload;
 
 use crate::print_response;
 
@@ -50,7 +50,7 @@ impl OnchainCommands {
                 fee_rate_sats_per_vbyte,
             } => {
                 let response = create_client()
-                    .send_onchain(SendOnchainPayload {
+                    .send_onchain(SendOnchainRequest {
                         address,
                         amount,
                         fee_rate_sats_per_vbyte,

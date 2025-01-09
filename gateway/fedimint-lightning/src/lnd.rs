@@ -46,14 +46,13 @@ use super::{
     ChannelInfo, ILnRpcClient, LightningRpcError, ListActiveChannelsResponse, RouteHtlcStream,
     MAX_LIGHTNING_RETRIES,
 };
-use crate::db::GatewayDbtxNcExt;
-use crate::lightning::{
-    CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
-    GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription, OpenChannelResponse,
-    PayInvoiceResponse, PaymentAction, SendOnchainResponse,
+use crate::{
+    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
+    CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
+    GetRouteHintsResponse, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
+    OpenChannelResponse, PayInvoiceResponse, PaymentAction, SendOnchainRequest,
+    SendOnchainResponse,
 };
-use crate::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, SendOnchainPayload};
 
 type HtlcSubscriptionSender = mpsc::Sender<InterceptPaymentRequest>;
 
@@ -292,6 +291,9 @@ impl GatewayLndClient {
                     .read()
                     .await
                     .contains(&payment_hash);
+
+                /*
+                FIXME
                 let db_contains_payment_hash = self_copy
                     .gateway_db
                     .begin_transaction_nc()
@@ -306,6 +308,8 @@ impl GatewayLndClient {
                     ))
                     .await
                     .is_some();
+                    */
+                let db_contains_payment_hash = false;
                 let contains_payment_hash = created_payment_hash || db_contains_payment_hash;
 
                 debug!(
@@ -1116,11 +1120,11 @@ impl ILnRpcClient for GatewayLndClient {
 
     async fn send_onchain(
         &self,
-        SendOnchainPayload {
+        SendOnchainRequest {
             address,
             amount,
             fee_rate_sats_per_vbyte,
-        }: SendOnchainPayload,
+        }: SendOnchainRequest,
     ) -> Result<SendOnchainResponse, LightningRpcError> {
         #[allow(deprecated)]
         let request = match amount {
@@ -1160,12 +1164,12 @@ impl ILnRpcClient for GatewayLndClient {
 
     async fn open_channel(
         &self,
-        OpenChannelPayload {
+        crate::OpenChannelRequest {
             pubkey,
             host,
             channel_size_sats,
             push_amount_sats,
-        }: OpenChannelPayload,
+        }: crate::OpenChannelRequest,
     ) -> Result<OpenChannelResponse, LightningRpcError> {
         let mut client = self.connect().await?;
 
@@ -1229,7 +1233,7 @@ impl ILnRpcClient for GatewayLndClient {
 
     async fn close_channels_with_peer(
         &self,
-        CloseChannelsWithPeerPayload { pubkey }: CloseChannelsWithPeerPayload,
+        CloseChannelsWithPeerRequest { pubkey }: CloseChannelsWithPeerRequest,
     ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError> {
         let mut client = self.connect().await?;
 

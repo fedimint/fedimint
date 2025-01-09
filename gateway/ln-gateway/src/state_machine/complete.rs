@@ -6,6 +6,7 @@ use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
+use fedimint_lightning::{InterceptPaymentResponse, PaymentAction};
 use fedimint_ln_client::incoming::IncomingSmStates;
 use fedimint_ln_common::contracts::Preimage;
 use futures::StreamExt;
@@ -17,7 +18,6 @@ use super::events::{
     CompleteLightningPaymentSucceeded, IncomingPaymentFailed, IncomingPaymentSucceeded,
 };
 use super::{GatewayClientContext, GatewayClientStateMachines};
-use crate::lightning::{InterceptPaymentResponse, PaymentAction};
 
 #[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
 enum CompleteHtlcError {

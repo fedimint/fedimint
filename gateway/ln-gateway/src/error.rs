@@ -4,12 +4,12 @@ use axum::response::{IntoResponse, Response};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::fmt_utils::OptStacktrace;
+use fedimint_lightning::LightningRpcError;
 use reqwest::StatusCode;
 use thiserror::Error;
 use tracing::error;
 
 use crate::envs::FM_DEBUG_GATEWAY_ENV;
-use crate::lightning::LightningRpcError;
 use crate::state_machine::pay::OutgoingPaymentError;
 
 /// Errors that unauthenticated endpoints can encounter. For privacy reasons,

@@ -36,10 +36,10 @@ erased-serde = { workspace = true }
 esplora-client = { workspace = true }
 fedimint-api-client = { path = "../../fedimint-api-client", version = "=0.6.0-alpha" }
 fedimint-bip39 = { version = "=0.6.0-alpha", path = "../../fedimint-bip39" }
-fedimint-bitcoind = { workspace = true }
 fedimint-client = { path = "../../fedimint-client", version = "=0.6.0-alpha" }
 fedimint-core = { workspace = true }
 fedimint-eventlog = { workspace = true }
+fedimint-lightning = { path = "../fedimint-lightning", version = "=0.6.0-alpha" }
 fedimint-ln-client = { workspace = true }
 fedimint-ln-common = { workspace = true }
 fedimint-lnv2-client = { workspace = true }
@@ -51,8 +51,6 @@ fedimint-wallet-client = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
 hex = { workspace = true }
-ldk-node = "0.4.2"
-lightning = { workspace = true }
 lightning-invoice = { workspace = true }
 lockable = "0.1.1"
 prost = "0.13.4"

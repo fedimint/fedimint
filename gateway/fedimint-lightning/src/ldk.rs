@@ -28,13 +28,13 @@ use tracing::{error, info};
 use super::{
     ChannelInfo, ILnRpcClient, LightningRpcError, ListActiveChannelsResponse, RouteHtlcStream,
 };
-use crate::lightning::{
-    CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
-    GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription, OpenChannelResponse,
-    PayInvoiceResponse, PaymentAction, SendOnchainResponse,
+use crate::{
+    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
+    CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
+    GetRouteHintsResponse, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
+    OpenChannelRequest, OpenChannelResponse, PayInvoiceResponse, PaymentAction, SendOnchainRequest,
+    SendOnchainResponse,
 };
-use crate::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload, SendOnchainPayload};
 
 pub enum GatewayLdkChainSourceConfig {
     Bitcoind { server_url: SafeUrl },
@@ -501,14 +501,14 @@ impl ILnRpcClient for GatewayLdkClient {
 
     async fn send_onchain(
         &self,
-        SendOnchainPayload {
+        SendOnchainRequest {
             address,
             amount,
             // TODO: Respect this fee rate once `ldk-node` supports setting a custom fee rate.
             // This work is planned to be in `ldk-node` v0.4 and is tracked here:
             // https://github.com/lightningdevkit/ldk-node/issues/176
             fee_rate_sats_per_vbyte: _,
-        }: SendOnchainPayload,
+        }: SendOnchainRequest,
     ) -> Result<SendOnchainResponse, LightningRpcError> {
         let onchain = self.node.onchain_payment();
 
@@ -529,12 +529,12 @@ impl ILnRpcClient for GatewayLdkClient {
 
     async fn open_channel(
         &self,
-        OpenChannelPayload {
+        OpenChannelRequest {
             pubkey,
             host,
             channel_size_sats,
             push_amount_sats,
-        }: OpenChannelPayload,
+        }: OpenChannelRequest,
     ) -> Result<OpenChannelResponse, LightningRpcError> {
         let push_amount_msats_or = if push_amount_sats == 0 {
             None
@@ -585,7 +585,7 @@ impl ILnRpcClient for GatewayLdkClient {
 
     async fn close_channels_with_peer(
         &self,
-        CloseChannelsWithPeerPayload { pubkey }: CloseChannelsWithPeerPayload,
+        CloseChannelsWithPeerRequest { pubkey }: CloseChannelsWithPeerRequest,
     ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError> {
         let mut num_channels_closed = 0;
 

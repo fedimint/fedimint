@@ -19,11 +19,11 @@ use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{DynServerModuleInit, IServerModuleInit};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
+use fedimint_lightning::{ILnRpcClient, LightningContext};
 use fedimint_logging::TracingSetup;
 use fedimint_testing_core::test_dir;
 use ln_gateway::client::GatewayClientBuilder;
-use ln_gateway::config::LightningModuleMode;
-use ln_gateway::lightning::{ILnRpcClient, LightningBuilder, LightningContext};
+use ln_gateway::config::{LightningBuilder, LightningModuleMode};
 use ln_gateway::Gateway;
 
 use crate::btc::mock::FakeBitcoinFactory;

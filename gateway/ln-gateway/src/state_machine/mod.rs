@@ -30,6 +30,7 @@ use fedimint_core::db::{AutocommitError, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion};
 use fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint};
+use fedimint_lightning::{InterceptPaymentRequest, LightningContext};
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
@@ -58,7 +59,6 @@ use self::pay::{
     GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates,
     OutgoingPaymentError,
 };
-use crate::lightning::{InterceptPaymentRequest, LightningContext};
 use crate::state_machine::complete::{
     GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState,
 };
