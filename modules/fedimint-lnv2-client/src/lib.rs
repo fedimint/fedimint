@@ -56,7 +56,7 @@ use secp256k1::{ecdh, Keypair, PublicKey, Scalar, SecretKey};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
-use tpe::{derive_agg_decryption_key, AggregateDecryptionKey};
+use tpe::{derive_agg_dk, AggregateDecryptionKey};
 use tracing::warn;
 
 use crate::api::LightningFederationApi;
@@ -915,7 +915,7 @@ impl LightningClientModule {
             return None; // The claim key is not derived from our pk
         }
 
-        let agg_decryption_key = derive_agg_decryption_key(&self.cfg.tpe_agg_pk, &encryption_seed);
+        let agg_decryption_key = derive_agg_dk(&self.cfg.tpe_agg_pk, &encryption_seed);
 
         if !contract.verify_agg_decryption_key(&self.cfg.tpe_agg_pk, &agg_decryption_key) {
             return None; // The decryption key is not derived from our pk

@@ -56,7 +56,7 @@ use group::Curve;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use strum::IntoEnumIterator;
-use tpe::{derive_public_key_share, AggregatePublicKey, PublicKeyShare, SecretKeyShare};
+use tpe::{derive_pk_share, AggregatePublicKey, PublicKeyShare, SecretKeyShare};
 
 use crate::db::{
     BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, GatewayKey, GatewayPrefix,
@@ -264,7 +264,7 @@ impl ServerModuleInit for LightningInit {
         let config = config.to_typed::<LightningConfig>()?;
 
         ensure!(
-            tpe::derive_public_key_share(&config.private.sk)
+            tpe::derive_pk_share(&config.private.sk)
                 == *config
                     .consensus
                     .tpe_pks
@@ -295,7 +295,7 @@ fn dealer_agg_pk() -> AggregatePublicKey {
 }
 
 fn dealer_pk(num_peers: NumPeers, peer: PeerId) -> PublicKeyShare {
-    derive_public_key_share(&dealer_sk(num_peers, peer))
+    derive_pk_share(&dealer_sk(num_peers, peer))
 }
 
 fn dealer_sk(num_peers: NumPeers, peer: PeerId) -> SecretKeyShare {

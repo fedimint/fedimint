@@ -18,7 +18,7 @@ use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_lnv2_common::{
     LightningInput, LightningInputV0, LightningOutputOutcome, LightningOutputOutcomeV0,
 };
-use tpe::{aggregate_decryption_shares, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare};
+use tpe::{aggregate_dk_shares, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare};
 use tracing::error;
 
 use super::events::{IncomingPaymentFailed, IncomingPaymentSucceeded};
@@ -237,10 +237,10 @@ impl ReceiveStateMachine {
     ) -> ReceiveStateMachine {
         let decryption_shares = decryption_shares
             .into_iter()
-            .map(|(peer, share)| (peer.to_usize() as u64 + 1, share))
+            .map(|(peer, share)| (peer.to_usize() as u64, share))
             .collect();
 
-        let agg_decryption_key = aggregate_decryption_shares(&decryption_shares);
+        let agg_decryption_key = aggregate_dk_shares(&decryption_shares);
 
         if !old_state
             .common
