@@ -132,7 +132,17 @@
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a></pre></div><pre class="rust"><code><span class="comment">// faucet.rs
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a></pre></div><pre class="rust"><code><span class="comment">// faucet.rs
 
 // Env variable to TODO
 </span><span class="kw">pub const </span>FM_FAUCET_BIND_ADDR_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_FAUCET_BIND_ADDR"</span>;
@@ -266,4 +276,14 @@
 
 <span class="doccomment">/// Force devimint to run a test with a deprecated configuration
 </span><span class="kw">pub const </span>FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_DEVIMINT_RUN_DEPRECATED_TESTS"</span>;
+
+<span class="doccomment">/// Devimint's "data dir" (think `/usr/devimint/`).
+///
+/// "Static" because we use "data dir" for the directory `devimint` puts all the
+/// runtime state in, which is typically a per-invocation temporary directory.
+///
+/// Can be set during `cargo build` to force the default one, then available in
+/// Rust code during building, and also checked at runtime to allow
+/// overwriting.
+</span><span class="kw">pub const </span>FM_DEVIMINT_STATIC_DATA_DIR_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_DEVIMINT_STATIC_DATA_DIR"</span>;
 </code></pre></div></section></main></body></html>
