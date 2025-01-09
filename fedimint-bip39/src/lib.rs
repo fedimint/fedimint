@@ -35,10 +35,10 @@ impl<const WORD_COUNT: usize> RootSecretStrategy for Bip39RootSecretStrategy<WOR
         secret.to_entropy().consensus_encode(writer)
     }
 
-    fn consensus_decode(
+    fn consensus_decode_partial(
         reader: &mut impl Read,
     ) -> Result<Self::Encoding, fedimint_core::encoding::DecodeError> {
-        let bytes = Vec::<u8>::consensus_decode(reader, &ModuleRegistry::default())?;
+        let bytes = Vec::<u8>::consensus_decode_partial(reader, &ModuleRegistry::default())?;
         Mnemonic::from_entropy(&bytes).map_err(DecodeError::from_err)
     }
 

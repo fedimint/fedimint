@@ -12,11 +12,11 @@ impl Encodable for secp256k1::ecdsa::Signature {
 }
 
 impl Decodable for secp256k1::ecdsa::Signature {
-    fn consensus_decode<D: std::io::Read>(
+    fn consensus_decode_partial<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Self::from_compact(&<[u8; 64]>::consensus_decode(d, modules)?)
+        Self::from_compact(&<[u8; 64]>::consensus_decode_partial(d, modules)?)
             .map_err(DecodeError::from_err)
     }
 }
@@ -28,11 +28,12 @@ impl Encodable for secp256k1::PublicKey {
 }
 
 impl Decodable for secp256k1::PublicKey {
-    fn consensus_decode<D: std::io::Read>(
+    fn consensus_decode_partial<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Self::from_slice(&<[u8; 33]>::consensus_decode(d, modules)?).map_err(DecodeError::from_err)
+        Self::from_slice(&<[u8; 33]>::consensus_decode_partial(d, modules)?)
+            .map_err(DecodeError::from_err)
     }
 }
 
@@ -43,11 +44,12 @@ impl Encodable for secp256k1::SecretKey {
 }
 
 impl Decodable for secp256k1::SecretKey {
-    fn consensus_decode<D: std::io::Read>(
+    fn consensus_decode_partial<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Self::from_slice(&<[u8; 32]>::consensus_decode(d, modules)?).map_err(DecodeError::from_err)
+        Self::from_slice(&<[u8; 32]>::consensus_decode_partial(d, modules)?)
+            .map_err(DecodeError::from_err)
     }
 }
 
@@ -61,12 +63,13 @@ impl Encodable for secp256k1::schnorr::Signature {
 }
 
 impl Decodable for secp256k1::schnorr::Signature {
-    fn consensus_decode<D: std::io::Read>(
+    fn consensus_decode_partial<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let bytes =
-            <[u8; secp256k1::constants::SCHNORR_SIGNATURE_SIZE]>::consensus_decode(d, modules)?;
+        let bytes = <[u8; secp256k1::constants::SCHNORR_SIGNATURE_SIZE]>::consensus_decode_partial(
+            d, modules,
+        )?;
         Self::from_slice(&bytes).map_err(DecodeError::from_err)
     }
 }
@@ -78,11 +81,11 @@ impl Encodable for bitcoin::key::Keypair {
 }
 
 impl Decodable for bitcoin::key::Keypair {
-    fn consensus_decode<D: Read>(
+    fn consensus_decode_partial<D: Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let sec_bytes = <[u8; 32]>::consensus_decode(d, modules)?;
+        let sec_bytes = <[u8; 32]>::consensus_decode_partial(d, modules)?;
         Self::from_seckey_slice(bitcoin::secp256k1::global::SECP256K1, &sec_bytes) // FIXME: evaluate security risk of global ctx
             .map_err(DecodeError::from_err)
     }

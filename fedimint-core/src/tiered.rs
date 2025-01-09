@@ -130,11 +130,11 @@ impl<C> Decodable for Tiered<C>
 where
     C: Decodable,
 {
-    fn consensus_decode<D: std::io::Read>(
+    fn consensus_decode_partial<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Ok(Self(BTreeMap::consensus_decode(d, modules)?))
+        Ok(Self(BTreeMap::consensus_decode_partial(d, modules)?))
     }
 }
 

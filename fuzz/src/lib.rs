@@ -44,7 +44,7 @@ pub fn test_decodable_with_decoders<T>(data: &[u8], decoders: &ModuleDecoderRegi
 where
     T: Decodable + Encodable,
 {
-    if let Ok(v) = T::consensus_decode(&mut &data[..], decoders) {
+    if let Ok(v) = T::consensus_decode_partial(&mut &data[..], decoders) {
         assert!(data.len() <= encoding::MAX_DECODE_SIZE);
 
         let encoded_vec = v.consensus_encode_to_vec();
@@ -63,8 +63,8 @@ where
     T: Decodable + Encodable + fmt::Debug,
 {
     match (
-        T::consensus_decode(&mut &data[..], decoders),
-        T::consensus_decode(
+        T::consensus_decode_partial(&mut &data[..], decoders),
+        T::consensus_decode_partial(
             &mut &data[..],
             &ModuleDecoderRegistry::default().with_fallback(),
         ),

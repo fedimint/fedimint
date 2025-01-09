@@ -197,15 +197,15 @@ fn validate_peg_in_proof(proof: &PegInProof) -> Result<(), anyhow::Error> {
 }
 
 impl Decodable for PegInProof {
-    fn consensus_decode<D: std::io::Read>(
+    fn consensus_decode_partial<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let slf = PegInProof {
-            txout_proof: TxOutProof::consensus_decode(d, modules)?,
-            transaction: Transaction::consensus_decode(d, modules)?,
-            output_idx: u32::consensus_decode(d, modules)?,
-            tweak_contract_key: PublicKey::consensus_decode(d, modules)?,
+            txout_proof: TxOutProof::consensus_decode_partial(d, modules)?,
+            transaction: Transaction::consensus_decode_partial(d, modules)?,
+            output_idx: u32::consensus_decode_partial(d, modules)?,
+            tweak_contract_key: PublicKey::consensus_decode_partial(d, modules)?,
         };
 
         validate_peg_in_proof(&slf).map_err(DecodeError::new_custom)?;
@@ -227,8 +227,6 @@ pub enum PegInProofError {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
-
     use fedimint_core::encoding::Decodable;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::txoproof::TxOutProof;
@@ -250,8 +248,8 @@ mod tests {
         58a30f7ae5b909ffdd020073f04ff370000";
 
         let empty_module_registry = ModuleDecoderRegistry::default();
-        let txoutproof = TxOutProof::consensus_decode(
-            &mut Cursor::new(Vec::from_hex(txoutproof_hex).unwrap()),
+        let txoutproof = TxOutProof::consensus_decode_whole(
+            &Vec::from_hex(txoutproof_hex).unwrap(),
             &empty_module_registry,
         )
         .unwrap();

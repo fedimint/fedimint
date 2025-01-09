@@ -2,7 +2,7 @@ use core::fmt;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
-use std::io::{Cursor, Read};
+use std::io::Read;
 use std::str::FromStr;
 
 use anyhow::ensure;
@@ -27,11 +27,11 @@ use crate::{NumPeersExt, PeerId};
 pub struct InviteCode(Vec<InviteCodePart>);
 
 impl Decodable for InviteCode {
-    fn consensus_decode<R: Read>(
+    fn consensus_decode_partial<R: Read>(
         r: &mut R,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let inner: Vec<InviteCodePart> = Decodable::consensus_decode(r, modules)?;
+        let inner: Vec<InviteCodePart> = Decodable::consensus_decode_partial(r, modules)?;
 
         if !inner
             .iter()
@@ -222,7 +222,7 @@ impl FromStr for InviteCode {
 
         ensure!(hrp == BECH32_HRP, "Invalid HRP in bech32 encoding");
 
-        let invite = Self::consensus_decode(&mut Cursor::new(data), &ModuleRegistry::default())?;
+        let invite = Self::consensus_decode_whole(&data, &ModuleRegistry::default())?;
 
         Ok(invite)
     }

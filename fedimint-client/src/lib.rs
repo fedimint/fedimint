@@ -983,7 +983,7 @@ impl Client {
 
         Ok(match client_secret {
             Some(client_secret) => Some(
-                T::consensus_decode(&mut client_secret.as_slice(), &ModuleRegistry::default())
+                T::consensus_decode_whole(&client_secret, &ModuleRegistry::default())
                     .map_err(|e| anyhow!("Decoding failed: {e}"))?,
             ),
             None => None,
@@ -3134,7 +3134,7 @@ pub async fn get_decoded_client_secret<T: Decodable>(db: &Database) -> anyhow::R
 
     match client_secret {
         Some(client_secret) => {
-            T::consensus_decode(&mut client_secret.as_slice(), &ModuleRegistry::default())
+            T::consensus_decode_whole(&client_secret, &ModuleRegistry::default())
                 .map_err(|e| anyhow!("Decoding failed: {e}"))
         }
         None => bail!("Encoded client secret not present in DB"),

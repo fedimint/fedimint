@@ -112,23 +112,23 @@ pub(crate) fn get_v1_migrated_state(
     }
 
     let decoders = ModuleDecoderRegistry::default();
-    let ln_sm_variant = u16::consensus_decode(cursor, &decoders)?;
+    let ln_sm_variant = u16::consensus_decode_partial(cursor, &decoders)?;
 
     // If the state machine is not a receive state machine, return None
     if ln_sm_variant != 2 {
         return Ok(None);
     }
 
-    let _ln_sm_len = u16::consensus_decode(cursor, &decoders)?;
-    let _operation_id = OperationId::consensus_decode(cursor, &decoders)?;
-    let receive_sm_variant = u16::consensus_decode(cursor, &decoders)?;
+    let _ln_sm_len = u16::consensus_decode_partial(cursor, &decoders)?;
+    let _operation_id = OperationId::consensus_decode_partial(cursor, &decoders)?;
+    let receive_sm_variant = u16::consensus_decode_partial(cursor, &decoders)?;
 
     let new = match receive_sm_variant {
         // SubmittedOfferV0
         0 => {
-            let _receive_sm_len = u16::consensus_decode(cursor, &decoders)?;
+            let _receive_sm_len = u16::consensus_decode_partial(cursor, &decoders)?;
 
-            let v0 = LightningReceiveSubmittedOfferV0::consensus_decode(cursor, &decoders)?;
+            let v0 = LightningReceiveSubmittedOfferV0::consensus_decode_partial(cursor, &decoders)?;
 
             let new_offer = LightningReceiveSubmittedOffer {
                 offer_txid: v0.offer_txid,
@@ -143,9 +143,9 @@ pub(crate) fn get_v1_migrated_state(
         }
         // ConfirmedInvoiceV0
         2 => {
-            let _receive_sm_len = u16::consensus_decode(cursor, &decoders)?;
+            let _receive_sm_len = u16::consensus_decode_partial(cursor, &decoders)?;
             let confirmed_old =
-                LightningReceiveConfirmedInvoiceV0::consensus_decode(cursor, &decoders)?;
+                LightningReceiveConfirmedInvoiceV0::consensus_decode_partial(cursor, &decoders)?;
             let confirmed_new = LightningReceiveConfirmedInvoice {
                 invoice: confirmed_old.invoice,
                 receiving_key: ReceivingKey::Personal(confirmed_old.receiving_key),
@@ -168,22 +168,22 @@ pub(crate) fn get_v2_migrated_state(
     cursor: &mut Cursor<&[u8]>,
 ) -> anyhow::Result<Option<(Vec<u8>, OperationId)>> {
     let decoders = ModuleDecoderRegistry::default();
-    let ln_sm_variant = u16::consensus_decode(cursor, &decoders)?;
+    let ln_sm_variant = u16::consensus_decode_partial(cursor, &decoders)?;
 
     // If the state machine is not a receive state machine, return None
     if ln_sm_variant != 2 {
         return Ok(None);
     }
 
-    let _ln_sm_len = u16::consensus_decode(cursor, &decoders)?;
-    let _operation_id = OperationId::consensus_decode(cursor, &decoders)?;
-    let receive_sm_variant = u16::consensus_decode(cursor, &decoders)?;
+    let _ln_sm_len = u16::consensus_decode_partial(cursor, &decoders)?;
+    let _operation_id = OperationId::consensus_decode_partial(cursor, &decoders)?;
+    let receive_sm_variant = u16::consensus_decode_partial(cursor, &decoders)?;
     if receive_sm_variant != 5 {
         return Ok(None);
     }
 
-    let _receive_sm_len = u16::consensus_decode(cursor, &decoders)?;
-    let old = LightningReceiveSubmittedOffer::consensus_decode(cursor, &decoders)?;
+    let _receive_sm_len = u16::consensus_decode_partial(cursor, &decoders)?;
+    let old = LightningReceiveSubmittedOffer::consensus_decode_partial(cursor, &decoders)?;
 
     let new_recv = LightningClientStateMachines::Receive(LightningReceiveStateMachine {
         operation_id,
@@ -201,18 +201,18 @@ pub(crate) fn get_v3_migrated_state(
     cursor: &mut Cursor<&[u8]>,
 ) -> anyhow::Result<Option<(Vec<u8>, OperationId)>> {
     let decoders = ModuleDecoderRegistry::default();
-    let ln_sm_variant = u16::consensus_decode(cursor, &decoders)?;
+    let ln_sm_variant = u16::consensus_decode_partial(cursor, &decoders)?;
 
     // If the state machine is not a pay state machine, return None
     if ln_sm_variant != 1 {
         return Ok(None);
     }
 
-    let _ln_sm_len = u16::consensus_decode(cursor, &decoders)?;
-    let common = LightningPayCommon::consensus_decode(cursor, &decoders)?;
-    let pay_sm_variant = u16::consensus_decode(cursor, &decoders)?;
+    let _ln_sm_len = u16::consensus_decode_partial(cursor, &decoders)?;
+    let common = LightningPayCommon::consensus_decode_partial(cursor, &decoders)?;
+    let pay_sm_variant = u16::consensus_decode_partial(cursor, &decoders)?;
 
-    let _pay_sm_len = u16::consensus_decode(cursor, &decoders)?;
+    let _pay_sm_len = u16::consensus_decode_partial(cursor, &decoders)?;
 
     // if the pay state machine is not `Refund` or `Funded` variant, return none
     match pay_sm_variant {
@@ -225,7 +225,7 @@ pub(crate) fn get_v3_migrated_state(
                 pub timelock: u32,
             }
 
-            let v0 = LightningPayFundedV0::consensus_decode(cursor, &decoders)?;
+            let v0 = LightningPayFundedV0::consensus_decode_partial(cursor, &decoders)?;
             let v1 = LightningPayFunded {
                 payload: v0.payload,
                 gateway: v0.gateway,
@@ -249,7 +249,7 @@ pub(crate) fn get_v3_migrated_state(
                 out_points: Vec<OutPoint>,
             }
 
-            let v0 = LightningPayRefundV0::consensus_decode(cursor, &decoders)?;
+            let v0 = LightningPayRefundV0::consensus_decode_partial(cursor, &decoders)?;
             let v1 = LightningPayRefund {
                 txid: v0.txid,
                 out_points: v0.out_points,

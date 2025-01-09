@@ -205,7 +205,7 @@ impl Encodable for TransactionId {
 }
 
 impl Decodable for TransactionId {
-    fn consensus_decode<D: std::io::Read>(
+    fn consensus_decode_partial<D: std::io::Read>(
         d: &mut D,
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {

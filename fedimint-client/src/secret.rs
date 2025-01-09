@@ -65,7 +65,9 @@ pub trait RootSecretStrategy: Debug {
     ) -> std::io::Result<usize>;
 
     /// Deserialization function for the external encoding
-    fn consensus_decode(reader: &mut impl std::io::Read) -> Result<Self::Encoding, DecodeError>;
+    fn consensus_decode_partial(
+        reader: &mut impl std::io::Read,
+    ) -> Result<Self::Encoding, DecodeError>;
 
     /// Random generation function for the external secret type
     fn random<R>(rng: &mut R) -> Self::Encoding
@@ -92,8 +94,8 @@ impl RootSecretStrategy for PlainRootSecretStrategy {
         secret.consensus_encode(writer)
     }
 
-    fn consensus_decode(reader: &mut impl Read) -> Result<Self::Encoding, DecodeError> {
-        Self::Encoding::consensus_decode(reader, &ModuleRegistry::default())
+    fn consensus_decode_partial(reader: &mut impl Read) -> Result<Self::Encoding, DecodeError> {
+        Self::Encoding::consensus_decode_partial(reader, &ModuleRegistry::default())
     }
 
     fn random<R>(rng: &mut R) -> Self::Encoding
