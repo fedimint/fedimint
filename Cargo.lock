@@ -2807,6 +2807,7 @@ dependencies = [
  "futures",
  "group",
  "rand",
+ "rand_chacha",
  "serde",
  "strum 0.26.3",
  "strum_macros 0.26.4",
