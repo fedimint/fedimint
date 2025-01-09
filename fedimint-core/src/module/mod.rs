@@ -306,6 +306,7 @@ macro_rules! __api_endpoint {
 
         #[$crate::apply($crate::async_trait_maybe_send!)]
         impl $crate::module::TypedApiEndpoint for Endpoint {
+            #[allow(deprecated)]
             const PATH: &'static str = $path;
             type State = $state_ty;
             type Param = $param_ty;
@@ -872,10 +873,21 @@ pub trait ServerModule: Debug + Sized {
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, <Self::Common as ModuleCommon>::OutputError>;
 
-    /// Retrieve the current status of the output. Depending on the module this
-    /// might contain data needed by the client to access funds or give an
-    /// estimate of when funds will be available. Returns `None` if the
-    /// output is unknown, **NOT** if it is just not ready yet.
+    /// Retrieve the current status of the output.
+    ///
+    /// **Deprecated**: Modules should not be using it. Instead they should
+    /// implement their own custom endpoints with semantics, versioning,
+    /// serialization, etc. that suits them. Potentially multiple or none.
+    ///
+    /// Depending on the module this might contain data needed by the client to
+    /// access funds or give an estimate of when funds will be available.
+    ///
+    /// Returns `None` if the output is unknown, **NOT** if it is just not ready
+    /// yet.
+    ///
+    /// In other words: after module has processed a given output it **MUST
+    /// NOT** return `None` for it, as it will lead to the panic.
+    #[deprecated(note = "https://github.com/fedimint/fedimint/issues/6671")]
     async fn output_status(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
