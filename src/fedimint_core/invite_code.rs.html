@@ -345,7 +345,7 @@
 <span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::{Display, Formatter};
-<span class="kw">use </span>std::io::{Cursor, Read};
+<span class="kw">use </span>std::io::Read;
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::ensure;
@@ -370,11 +370,11 @@
 </span><span class="kw">pub struct </span>InviteCode(Vec&lt;InviteCodePart&gt;);
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>InviteCode {
-    <span class="kw">fn </span>consensus_decode&lt;R: Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;R: Read&gt;(
         r: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>inner: Vec&lt;InviteCodePart&gt; = Decodable::consensus_decode(r, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>inner: Vec&lt;InviteCodePart&gt; = Decodable::consensus_decode_partial(r, modules)<span class="question-mark">?</span>;
 
         <span class="kw">if </span>!inner
             .iter()
@@ -565,7 +565,7 @@
 
         <span class="macro">ensure!</span>(hrp == BECH32_HRP, <span class="string">"Invalid HRP in bech32 encoding"</span>);
 
-        <span class="kw">let </span>invite = <span class="self">Self</span>::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(data), <span class="kw-2">&amp;</span>ModuleRegistry::default())<span class="question-mark">?</span>;
+        <span class="kw">let </span>invite = <span class="self">Self</span>::consensus_decode_whole(<span class="kw-2">&amp;</span>data, <span class="kw-2">&amp;</span>ModuleRegistry::default())<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(invite)
     }

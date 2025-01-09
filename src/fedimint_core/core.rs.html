@@ -606,7 +606,8 @@
 <a href="#605" id="605">605</a>
 <a href="#606" id="606">606</a>
 <a href="#607" id="607">607</a>
-<a href="#608" id="608">608</a></pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint Core API (common) module interface
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a></pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint Core API (common) module interface
 //!
 //! Fedimint supports externally implemented modules.
 //!
@@ -897,12 +898,13 @@
                 } <span class="kw">else </span>{
                     <span class="kw-2">&amp;</span>ModuleRegistry::default()
                 };
-                <span class="kw">let </span>typed_val = Type::consensus_decode(<span class="kw-2">&amp;mut </span>reader, decoders).map_err(|err| {
-                    <span class="kw">let </span>err: anyhow::Error = err.into();
-                    DecodeError::new_custom(
-                        err.context(<span class="macro">format!</span>(<span class="string">"while decoding Dyn type module_id={instance}"</span>)),
-                    )
-                })<span class="question-mark">?</span>;
+                <span class="kw">let </span>typed_val =
+                    Type::consensus_decode_partial(<span class="kw-2">&amp;mut </span>reader, decoders).map_err(|err| {
+                        <span class="kw">let </span>err: anyhow::Error = err.into();
+                        DecodeError::new_custom(
+                            err.context(<span class="macro">format!</span>(<span class="string">"while decoding Dyn type module_id={instance}"</span>)),
+                        )
+                    })<span class="question-mark">?</span>;
                 <span class="kw">let </span>dyn_val = typed_val.into_dyn(instance);
                 <span class="kw">let </span>any_val: Box&lt;<span class="kw">dyn </span>Any&gt; = Box::new(dyn_val);
                 <span class="prelude-val">Ok</span>(any_val)

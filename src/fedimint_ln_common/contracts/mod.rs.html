@@ -285,13 +285,13 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>ContractId {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(ContractId::from_byte_array(Decodable::consensus_decode(
-            d, modules,
-        )<span class="question-mark">?</span>))
+        <span class="prelude-val">Ok</span>(ContractId::from_byte_array(
+            Decodable::consensus_decode_partial(d, modules)<span class="question-mark">?</span>,
+        ))
     }
 }
 

@@ -599,23 +599,23 @@
     }
 
     <span class="kw">let </span>decoders = ModuleDecoderRegistry::default();
-    <span class="kw">let </span>ln_sm_variant = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>ln_sm_variant = u16::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
     <span class="comment">// If the state machine is not a receive state machine, return None
     </span><span class="kw">if </span>ln_sm_variant != <span class="number">2 </span>{
         <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
     }
 
-    <span class="kw">let </span>_ln_sm_len = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
-    <span class="kw">let </span>_operation_id = OperationId::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
-    <span class="kw">let </span>receive_sm_variant = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>_ln_sm_len = u16::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>_operation_id = OperationId::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>receive_sm_variant = u16::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
     <span class="kw">let </span>new = <span class="kw">match </span>receive_sm_variant {
         <span class="comment">// SubmittedOfferV0
         </span><span class="number">0 </span>=&gt; {
-            <span class="kw">let </span>_receive_sm_len = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+            <span class="kw">let </span>_receive_sm_len = u16::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
-            <span class="kw">let </span>v0 = LightningReceiveSubmittedOfferV0::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+            <span class="kw">let </span>v0 = LightningReceiveSubmittedOfferV0::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
             <span class="kw">let </span>new_offer = LightningReceiveSubmittedOffer {
                 offer_txid: v0.offer_txid,
@@ -630,9 +630,9 @@
         }
         <span class="comment">// ConfirmedInvoiceV0
         </span><span class="number">2 </span>=&gt; {
-            <span class="kw">let </span>_receive_sm_len = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+            <span class="kw">let </span>_receive_sm_len = u16::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
             <span class="kw">let </span>confirmed_old =
-                LightningReceiveConfirmedInvoiceV0::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+                LightningReceiveConfirmedInvoiceV0::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
             <span class="kw">let </span>confirmed_new = LightningReceiveConfirmedInvoice {
                 invoice: confirmed_old.invoice,
                 receiving_key: ReceivingKey::Personal(confirmed_old.receiving_key),
@@ -655,22 +655,22 @@
     cursor: <span class="kw-2">&amp;mut </span>Cursor&lt;<span class="kw-2">&amp;</span>[u8]&gt;,
 ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;(Vec&lt;u8&gt;, OperationId)&gt;&gt; {
     <span class="kw">let </span>decoders = ModuleDecoderRegistry::default();
-    <span class="kw">let </span>ln_sm_variant = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>ln_sm_variant = u16::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
     <span class="comment">// If the state machine is not a receive state machine, return None
     </span><span class="kw">if </span>ln_sm_variant != <span class="number">2 </span>{
         <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
     }
 
-    <span class="kw">let </span>_ln_sm_len = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
-    <span class="kw">let </span>_operation_id = OperationId::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
-    <span class="kw">let </span>receive_sm_variant = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>_ln_sm_len = u16::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>_operation_id = OperationId::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>receive_sm_variant = u16::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
     <span class="kw">if </span>receive_sm_variant != <span class="number">5 </span>{
         <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
     }
 
-    <span class="kw">let </span>_receive_sm_len = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
-    <span class="kw">let </span>old = LightningReceiveSubmittedOffer::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>_receive_sm_len = u16::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>old = LightningReceiveSubmittedOffer::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
     <span class="kw">let </span>new_recv = LightningClientStateMachines::Receive(LightningReceiveStateMachine {
         operation_id,
@@ -688,18 +688,18 @@
     cursor: <span class="kw-2">&amp;mut </span>Cursor&lt;<span class="kw-2">&amp;</span>[u8]&gt;,
 ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;(Vec&lt;u8&gt;, OperationId)&gt;&gt; {
     <span class="kw">let </span>decoders = ModuleDecoderRegistry::default();
-    <span class="kw">let </span>ln_sm_variant = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>ln_sm_variant = u16::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
     <span class="comment">// If the state machine is not a pay state machine, return None
     </span><span class="kw">if </span>ln_sm_variant != <span class="number">1 </span>{
         <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
     }
 
-    <span class="kw">let </span>_ln_sm_len = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
-    <span class="kw">let </span>common = LightningPayCommon::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
-    <span class="kw">let </span>pay_sm_variant = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>_ln_sm_len = u16::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>common = LightningPayCommon::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>pay_sm_variant = u16::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
-    <span class="kw">let </span>_pay_sm_len = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>_pay_sm_len = u16::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
     <span class="comment">// if the pay state machine is not `Refund` or `Funded` variant, return none
     </span><span class="kw">match </span>pay_sm_variant {
@@ -712,7 +712,7 @@
                 <span class="kw">pub </span>timelock: u32,
             }
 
-            <span class="kw">let </span>v0 = LightningPayFundedV0::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+            <span class="kw">let </span>v0 = LightningPayFundedV0::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
             <span class="kw">let </span>v1 = LightningPayFunded {
                 payload: v0.payload,
                 gateway: v0.gateway,
@@ -736,7 +736,7 @@
                 out_points: Vec&lt;OutPoint&gt;,
             }
 
-            <span class="kw">let </span>v0 = LightningPayRefundV0::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+            <span class="kw">let </span>v0 = LightningPayRefundV0::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
             <span class="kw">let </span>v1 = LightningPayRefund {
                 txid: v0.txid,
                 out_points: v0.out_points,

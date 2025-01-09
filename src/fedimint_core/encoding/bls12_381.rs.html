@@ -68,11 +68,11 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>Scalar {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>byte_array = &lt;[u8; <span class="number">32</span>]&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>byte_array = &lt;[u8; <span class="number">32</span>]&gt;::consensus_decode_partial(d, modules)<span class="question-mark">?</span>;
 
         Option::from(<span class="self">Self</span>::from_bytes(<span class="kw-2">&amp;</span>byte_array))
             .ok_or_else(|| DecodeError::from_str(<span class="string">"Error decoding Scalar"</span>))
@@ -86,11 +86,11 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>G1Affine {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>byte_array = &lt;[u8; <span class="number">48</span>]&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>byte_array = &lt;[u8; <span class="number">48</span>]&gt;::consensus_decode_partial(d, modules)<span class="question-mark">?</span>;
 
         Option::from(<span class="self">Self</span>::from_compressed(<span class="kw-2">&amp;</span>byte_array))
             .ok_or_else(|| DecodeError::from_str(<span class="string">"Error decoding G1Affine"</span>))
@@ -104,11 +104,11 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>G2Affine {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>byte_array = &lt;[u8; <span class="number">96</span>]&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>byte_array = &lt;[u8; <span class="number">96</span>]&gt;::consensus_decode_partial(d, modules)<span class="question-mark">?</span>;
 
         Option::from(<span class="self">Self</span>::from_compressed(<span class="kw-2">&amp;</span>byte_array))
             .ok_or_else(|| DecodeError::from_str(<span class="string">"Error decoding G2Affine"</span>))

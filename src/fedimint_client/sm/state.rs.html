@@ -514,7 +514,8 @@
 <a href="#513" id="513">513</a>
 <a href="#514" id="514">514</a>
 <a href="#515" id="515">515</a>
-<a href="#516" id="516">516</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::any::Any;
+<a href="#516" id="516">516</a>
+<a href="#517" id="517">517</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>std::hash;
@@ -877,11 +878,12 @@
     }
 }
 <span class="kw">impl </span>Decodable <span class="kw">for </span>DynState {
-    <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;R: std::io::Read&gt;(
         reader: <span class="kw-2">&amp;mut </span>R,
         decoders: <span class="kw-2">&amp;</span>::fedimint_core::module::registry::ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, fedimint_core::encoding::DecodeError&gt; {
-        <span class="kw">let </span>module_id = fedimint_core::core::ModuleInstanceId::consensus_decode(reader, decoders)<span class="question-mark">?</span>;
+        <span class="kw">let </span>module_id =
+            fedimint_core::core::ModuleInstanceId::consensus_decode_partial(reader, decoders)<span class="question-mark">?</span>;
         decoders
             .get_expect(module_id)
             .decode_partial(reader, module_id, decoders)
@@ -983,12 +985,12 @@
 <span class="kw">where
     </span>S: State,
 {
-    <span class="kw">fn </span>consensus_decode&lt;R: Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;R: Read&gt;(
         read: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>operation_id = OperationId::consensus_decode(read, modules)<span class="question-mark">?</span>;
-        <span class="kw">let </span>state = S::consensus_decode(read, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>operation_id = OperationId::consensus_decode_partial(read, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>state = S::consensus_decode_partial(read, modules)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(OperationState {
             operation_id,

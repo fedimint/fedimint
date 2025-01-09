@@ -1128,16 +1128,16 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>OperationLogEntry {
-    <span class="kw">fn </span>consensus_decode&lt;R: Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;R: Read&gt;(
         r: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>operation_type = String::consensus_decode(r, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>operation_type = String::consensus_decode_partial(r, modules)<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>meta_str = String::consensus_decode(r, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>meta_str = String::consensus_decode_partial(r, modules)<span class="question-mark">?</span>;
         <span class="kw">let </span>meta = serde_json::from_str(<span class="kw-2">&amp;</span>meta_str).map_err(DecodeError::from_err)<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>outcome_str = <span class="prelude-ty">Option</span>::&lt;String&gt;::consensus_decode(r, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>outcome_str = <span class="prelude-ty">Option</span>::&lt;String&gt;::consensus_decode_partial(r, modules)<span class="question-mark">?</span>;
         <span class="kw">let </span>outcome = outcome_str
             .map(|outcome_str| serde_json::from_str(<span class="kw-2">&amp;</span>outcome_str).map_err(DecodeError::from_err))
             .transpose()<span class="question-mark">?</span>;

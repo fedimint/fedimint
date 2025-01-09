@@ -165,12 +165,12 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>TxOutProof {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>block_header = BlockHeader::consensus_decode(d, modules)<span class="question-mark">?</span>;
-        <span class="kw">let </span>merkle_proof = PartialMerkleTree::consensus_decode(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>block_header = BlockHeader::consensus_decode_partial(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>merkle_proof = PartialMerkleTree::consensus_decode_partial(d, modules)<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>transactions = Vec::new();
         <span class="kw">let </span><span class="kw-2">mut </span>indices = Vec::new();
@@ -225,13 +225,13 @@
             <span class="kw">let </span>hex_str: Cow&lt;str&gt; = Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
             <span class="kw">let </span>bytes = Vec::from_hex(hex_str.as_ref()).map_err(D::Error::custom)<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(
-                <span class="self">Self</span>::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(bytes), <span class="kw-2">&amp;</span>empty_module_registry)
+                <span class="self">Self</span>::consensus_decode_partial(<span class="kw-2">&amp;mut </span>Cursor::new(bytes), <span class="kw-2">&amp;</span>empty_module_registry)
                     .map_err(D::Error::custom)<span class="question-mark">?</span>,
             )
         } <span class="kw">else </span>{
             <span class="kw">let </span>bytes: <span class="kw-2">&amp;</span>[u8] = Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(
-                <span class="self">Self</span>::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(bytes), <span class="kw-2">&amp;</span>empty_module_registry)
+                <span class="self">Self</span>::consensus_decode_partial(<span class="kw-2">&amp;mut </span>Cursor::new(bytes), <span class="kw-2">&amp;</span>empty_module_registry)
                     .map_err(D::Error::custom)<span class="question-mark">?</span>,
             )
         }

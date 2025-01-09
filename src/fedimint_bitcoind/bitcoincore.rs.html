@@ -194,11 +194,7 @@
 <a href="#193" id="193">193</a>
 <a href="#194" id="194">194</a>
 <a href="#195" id="195">195</a>
-<a href="#196" id="196">196</a>
-<a href="#197" id="197">197</a>
-<a href="#198" id="198">198</a>
-<a href="#199" id="199">199</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
-<span class="kw">use </span>std::io::Cursor;
+<a href="#196" id="196">196</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>anyhow::{anyhow <span class="kw">as </span>format_err, bail};
@@ -340,10 +336,8 @@
     }
 
     <span class="kw">async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: Txid) -&gt; anyhow::Result&lt;TxOutProof&gt; {
-        TxOutProof::consensus_decode(
-            <span class="kw-2">&amp;mut </span>Cursor::new(block_in_place(|| {
-                <span class="self">self</span>.client.get_tx_out_proof(<span class="kw-2">&amp;</span>[txid], <span class="prelude-val">None</span>)
-            })<span class="question-mark">?</span>),
+        TxOutProof::consensus_decode_whole(
+            <span class="kw-2">&amp;</span>block_in_place(|| <span class="self">self</span>.client.get_tx_out_proof(<span class="kw-2">&amp;</span>[txid], <span class="prelude-val">None</span>))<span class="question-mark">?</span>,
             <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
         )
         .map_err(|error| <span class="macro">format_err!</span>(<span class="string">"Could not decode tx: {}"</span>, error))

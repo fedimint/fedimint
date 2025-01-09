@@ -1271,7 +1271,7 @@
                 .<span class="kw">await</span><span class="question-mark">?
             </span>{
                 (peer, DkgPeerMsg::Module(bytes)) =&gt; {
-                    <span class="kw">let </span>received_data: T = T::consensus_decode_vec(bytes, <span class="kw-2">&amp;</span>modules)
+                    <span class="kw">let </span>received_data: T = T::consensus_decode_whole(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;</span>modules)
                         .map_err(|<span class="kw">_</span>| DkgError::ModuleDecodeError(kind.clone()))<span class="question-mark">?</span>;
                     peer_data.insert(peer, received_data);
                 }

@@ -997,11 +997,11 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>LightningGatewayRegistration {
-    <span class="kw">fn </span>consensus_decode&lt;R: Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;R: Read&gt;(
         r: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>json_repr = String::consensus_decode(r, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>json_repr = String::consensus_decode_partial(r, modules)<span class="question-mark">?</span>;
         serde_json::from_str(<span class="kw-2">&amp;</span>json_repr).map_err(|e| {
             DecodeError::new_custom(
                 anyhow::Error::new(e).context(<span class="string">"Failed to deserialize LightningGatewayRegistration"</span>),

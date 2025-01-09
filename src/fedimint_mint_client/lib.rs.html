@@ -2790,8 +2790,7 @@
 <a href="#2789" id="2789">2789</a>
 <a href="#2790" id="2790">2790</a>
 <a href="#2791" id="2791">2791</a>
-<a href="#2792" id="2792">2792</a>
-<a href="#2793" id="2793">2793</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2792" id="2792">2792</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -3056,11 +3055,12 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>OOBNotes {
-    <span class="kw">fn </span>consensus_decode&lt;R: Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;R: Read&gt;(
         r: <span class="kw-2">&amp;mut </span>R,
         _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>inner = Vec::&lt;OOBNotesPart&gt;::consensus_decode(r, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())<span class="question-mark">?</span>;
+        <span class="kw">let </span>inner =
+            Vec::&lt;OOBNotesPart&gt;::consensus_decode_partial(r, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())<span class="question-mark">?</span>;
 
         <span class="comment">// TODO: maybe write some macros for defining TLV structs?
         </span><span class="kw">if </span>!inner
@@ -3132,10 +3132,8 @@
         } <span class="kw">else </span>{
             base64::engine::general_purpose::STANDARD.decode(<span class="kw-2">&amp;</span>s)<span class="question-mark">?
         </span>};
-        <span class="kw">let </span>oob_notes: OOBNotes = Decodable::consensus_decode(
-            <span class="kw-2">&amp;mut </span>std::io::Cursor::new(bytes),
-            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
-        )<span class="question-mark">?</span>;
+        <span class="kw">let </span>oob_notes: OOBNotes =
+            Decodable::consensus_decode_whole(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())<span class="question-mark">?</span>;
 
         <span class="macro">ensure!</span>(!oob_notes.notes().is_empty(), <span class="string">"OOBNotes cannot be empty"</span>);
 
@@ -5063,7 +5061,7 @@
 
     <span class="kw">pub fn </span>decode(<span class="self">self</span>) -&gt; anyhow::Result&lt;SpendableNote&gt; {
         <span class="prelude-val">Ok</span>(SpendableNote {
-            signature: Decodable::consensus_decode_from_finite_reader(
+            signature: Decodable::consensus_decode_partial_from_finite_reader(
                 <span class="kw-2">&amp;mut </span><span class="self">self</span>.signature.as_slice(),
                 <span class="kw-2">&amp;</span>ModuleRegistry::default(),
             )<span class="question-mark">?</span>,

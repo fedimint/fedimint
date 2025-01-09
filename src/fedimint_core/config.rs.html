@@ -1927,8 +1927,8 @@
     <span class="kw">pub fn </span>to_typed&lt;T: TypedServerModuleConfig&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;T&gt; {
         <span class="kw">let </span>local = serde_json::from_value(<span class="self">self</span>.local.value().clone())<span class="question-mark">?</span>;
         <span class="kw">let </span>private = serde_json::from_value(<span class="self">self</span>.private.value().clone())<span class="question-mark">?</span>;
-        <span class="kw">let </span>consensus = &lt;T::Consensus&gt;::consensus_decode(
-            <span class="kw-2">&amp;mut &amp;</span><span class="self">self</span>.consensus.config[..],
+        <span class="kw">let </span>consensus = &lt;T::Consensus&gt;::consensus_decode_whole(
+            <span class="kw-2">&amp;</span><span class="self">self</span>.consensus.config[..],
             <span class="kw-2">&amp;</span>ModuleRegistry::default(),
         )<span class="question-mark">?</span>;
 
@@ -1947,8 +1947,8 @@
     <span class="kw">fn </span>version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleConsensusVersion;
 
     <span class="kw">fn </span>from_erased(erased: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::consensus_decode(
-            <span class="kw-2">&amp;mut &amp;</span>erased.config[..],
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::consensus_decode_whole(
+            <span class="kw-2">&amp;</span>erased.config[..],
             <span class="kw-2">&amp;</span>ModuleRegistry::default(),
         )<span class="question-mark">?</span>)
     }

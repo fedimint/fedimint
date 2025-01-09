@@ -693,7 +693,7 @@
     <span class="kw">let </span>output = <span class="macro">quote!</span> {
         <span class="attr">#[allow(deprecated)]
         </span><span class="kw">impl </span>::fedimint_core::encoding::Decodable <span class="kw">for </span>#ident {
-            <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D, modules: <span class="kw-2">&amp;</span>::fedimint_core::module::registry::ModuleDecoderRegistry) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_core::encoding::DecodeError&gt; {
+            <span class="kw">fn </span>consensus_decode_partial_from_finite_reader&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D, modules: <span class="kw-2">&amp;</span>::fedimint_core::module::registry::ModuleDecoderRegistry) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_core::encoding::DecodeError&gt; {
                 <span class="kw">use </span>::fedimint_core:: anyhow::Context;
                 #decode_inner
             }
@@ -743,7 +743,7 @@
             </span><span class="macro">quote!</span> {
                 #variant_idx =&gt; {
                     <span class="comment">// FIXME: feels like there's a way more elegant way to do this with limited readers
-                    </span><span class="kw">let </span>bytes: Vec&lt;u8&gt; = ::fedimint_core::encoding::Decodable::consensus_decode_from_finite_reader(d, modules)
+                    </span><span class="kw">let </span>bytes: Vec&lt;u8&gt; = ::fedimint_core::encoding::Decodable::consensus_decode_partial_from_finite_reader(d, modules)
                         .context(<span class="macro">concat!</span>(
                             <span class="string">"Decoding bytes of "</span>,
                             <span class="macro">stringify!</span>(#ident)
@@ -773,7 +773,7 @@
     <span class="kw">let </span>default_match_arm = <span class="kw">if </span>variants.iter().any(is_default_variant_enforce_valid) {
         <span class="macro">quote!</span> {
             variant =&gt; {
-                <span class="kw">let </span>bytes: Vec&lt;u8&gt; = ::fedimint_core::encoding::Decodable::consensus_decode_from_finite_reader(d, modules)
+                <span class="kw">let </span>bytes: Vec&lt;u8&gt; = ::fedimint_core::encoding::Decodable::consensus_decode_partial_from_finite_reader(d, modules)
                     .context(<span class="macro">concat!</span>(
                         <span class="string">"Decoding default variant of "</span>,
                         <span class="macro">stringify!</span>(#ident)
@@ -794,7 +794,7 @@
     };
 
     <span class="macro">quote!</span> {
-        <span class="kw">let </span>variant = &lt;u64 <span class="kw">as </span>::fedimint_core::encoding::Decodable&gt;::consensus_decode_from_finite_reader(d, modules)
+        <span class="kw">let </span>variant = &lt;u64 <span class="kw">as </span>::fedimint_core::encoding::Decodable&gt;::consensus_decode_partial_from_finite_reader(d, modules)
             .context(<span class="macro">concat!</span>(
                 <span class="string">"Decoding default variant of "</span>,
                 <span class="macro">stringify!</span>(#ident)
@@ -843,7 +843,7 @@
     <span class="macro">quote!</span> {
         {
             #(
-                <span class="kw">let </span>#field_names = ::fedimint_core::encoding::Decodable::consensus_decode_from_finite_reader(#reader, modules)
+                <span class="kw">let </span>#field_names = ::fedimint_core::encoding::Decodable::consensus_decode_partial_from_finite_reader(#reader, modules)
                     .context(<span class="macro">concat!</span>(
                         <span class="string">"Decoding tuple block "</span>,
                         <span class="macro">stringify!</span>(#ident),
@@ -869,7 +869,7 @@
     <span class="macro">quote!</span> {
         {
             #(
-                <span class="kw">let </span>#variant_fields = ::fedimint_core::encoding::Decodable::consensus_decode_from_finite_reader(#reader, modules)
+                <span class="kw">let </span>#variant_fields = ::fedimint_core::encoding::Decodable::consensus_decode_partial_from_finite_reader(#reader, modules)
                     .context(<span class="macro">concat!</span>(
                         <span class="string">"Decoding named block field: "</span>,
                         <span class="macro">stringify!</span>(#ident),

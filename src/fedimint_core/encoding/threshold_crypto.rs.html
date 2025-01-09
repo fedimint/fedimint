@@ -139,14 +139,14 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>threshold_crypto::PublicKeySet {
-    <span class="kw">fn </span>consensus_decode&lt;R: Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;R: Read&gt;(
         r: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>num_coeff = u64::consensus_decode(r, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>num_coeff = u64::consensus_decode_partial(r, modules)<span class="question-mark">?</span>;
         (<span class="number">0</span>..num_coeff)
             .map(|<span class="kw">_</span>| {
-                <span class="kw">let </span>bytes: [u8; <span class="number">48</span>] = Decodable::consensus_decode(r, modules)<span class="question-mark">?</span>;
+                <span class="kw">let </span>bytes: [u8; <span class="number">48</span>] = Decodable::consensus_decode_partial(r, modules)<span class="question-mark">?</span>;
                 <span class="kw">let </span>point = G1Affine::from_compressed(<span class="kw-2">&amp;</span>bytes);
                 <span class="kw">if </span>point.is_some().unwrap_u8() == <span class="number">1 </span>{
                     <span class="kw">let </span>affine = point.unwrap();
@@ -169,11 +169,11 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>threshold_crypto::PublicKey {
-    <span class="kw">fn </span>consensus_decode&lt;R: Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;R: Read&gt;(
         r: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>bytes: [u8; <span class="number">48</span>] = Decodable::consensus_decode(r, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>bytes: [u8; <span class="number">48</span>] = Decodable::consensus_decode_partial(r, modules)<span class="question-mark">?</span>;
         <span class="self">Self</span>::from_bytes(bytes).map_err(DecodeError::from_err)
     }
 }
@@ -185,11 +185,11 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>threshold_crypto::Ciphertext {
-    <span class="kw">fn </span>consensus_decode&lt;R: Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;R: Read&gt;(
         reader: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>ciphertext_bytes = Vec::&lt;u8&gt;::consensus_decode(reader, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>ciphertext_bytes = Vec::&lt;u8&gt;::consensus_decode_partial(reader, modules)<span class="question-mark">?</span>;
         <span class="self">Self</span>::from_bytes(<span class="kw-2">&amp;</span>ciphertext_bytes).ok_or_else(|| {
             DecodeError::from_str(<span class="string">"Error decoding threshold_crypto::Ciphertext from bytes"</span>)
         })
@@ -203,11 +203,11 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>threshold_crypto::DecryptionShare {
-    <span class="kw">fn </span>consensus_decode&lt;R: Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;R: Read&gt;(
         reader: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>decryption_share_bytes = &lt;[u8; <span class="number">48</span>]&gt;::consensus_decode(reader, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>decryption_share_bytes = &lt;[u8; <span class="number">48</span>]&gt;::consensus_decode_partial(reader, modules)<span class="question-mark">?</span>;
         <span class="self">Self</span>::from_bytes(<span class="kw-2">&amp;</span>decryption_share_bytes).ok_or_else(|| {
             DecodeError::from_str(<span class="string">"Error decoding threshold_crypto::DecryptionShare from bytes"</span>)
         })

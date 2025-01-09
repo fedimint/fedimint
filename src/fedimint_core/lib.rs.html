@@ -558,7 +558,7 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>TransactionId {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {

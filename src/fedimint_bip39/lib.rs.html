@@ -87,10 +87,10 @@
         secret.to_entropy().consensus_encode(writer)
     }
 
-    <span class="kw">fn </span>consensus_decode(
+    <span class="kw">fn </span>consensus_decode_partial(
         reader: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Read,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Encoding, fedimint_core::encoding::DecodeError&gt; {
-        <span class="kw">let </span>bytes = Vec::&lt;u8&gt;::consensus_decode(reader, <span class="kw-2">&amp;</span>ModuleRegistry::default())<span class="question-mark">?</span>;
+        <span class="kw">let </span>bytes = Vec::&lt;u8&gt;::consensus_decode_partial(reader, <span class="kw-2">&amp;</span>ModuleRegistry::default())<span class="question-mark">?</span>;
         Mnemonic::from_entropy(<span class="kw-2">&amp;</span>bytes).map_err(DecodeError::from_err)
     }
 

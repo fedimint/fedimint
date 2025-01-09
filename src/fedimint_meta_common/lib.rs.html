@@ -403,11 +403,11 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>MetaValue {
-    <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;R: std::io::Read&gt;(
         r: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>fedimint_core::module::registry::ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, fedimint_core::encoding::DecodeError&gt; {
-        <span class="kw">let </span>bytes = Vec::consensus_decode(r, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>bytes = Vec::consensus_decode_partial(r, modules)<span class="question-mark">?</span>;
 
         <span class="kw">if </span><span class="self">Self</span>::MAX_LEN_BYTES &lt; bytes.len() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError::new_custom(<span class="macro">anyhow::format_err!</span>(<span class="string">"Too long"</span>)));

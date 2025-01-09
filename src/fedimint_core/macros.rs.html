@@ -1157,18 +1157,18 @@
         }
 
         <span class="kw">impl </span>Decodable <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
-            <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;R: std::io::Read&gt;(
+            <span class="kw">fn </span>consensus_decode_partial_from_finite_reader&lt;R: std::io::Read&gt;(
                 reader: <span class="kw-2">&amp;mut </span>R,
                 decoders: <span class="kw-2">&amp;</span><span class="macro-nonterminal">$crate::module::registry::ModuleDecoderRegistry</span>,
             ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, fedimint_core::encoding::DecodeError&gt; {
                 <span class="kw">let </span>module_instance_id =
-                    fedimint_core::core::ModuleInstanceId::consensus_decode_from_finite_reader(
+                    fedimint_core::core::ModuleInstanceId::consensus_decode_partial_from_finite_reader(
                         reader, decoders,
                     )<span class="question-mark">?</span>;
                 <span class="kw">let </span>val = <span class="kw">match </span>decoders.get(module_instance_id) {
                     <span class="prelude-val">Some</span>(decoder) =&gt; {
                         <span class="kw">let </span>total_len_u64 =
-                            u64::consensus_decode_from_finite_reader(reader, decoders)<span class="question-mark">?</span>;
+                            u64::consensus_decode_partial_from_finite_reader(reader, decoders)<span class="question-mark">?</span>;
                         decoder.decode_complete(
                             reader,
                             total_len_u64,
@@ -1187,7 +1187,7 @@
                         <span class="macro-nonterminal">$crate::module::registry::DecodingMode::Fallback </span>=&gt; <span class="macro-nonterminal">$name::from_typed</span>(
                             module_instance_id,
                             <span class="macro-nonterminal">$crate::core::DynUnknown</span>(
-                                Vec::&lt;u8&gt;::consensus_decode_from_finite_reader(
+                                Vec::&lt;u8&gt;::consensus_decode_partial_from_finite_reader(
                                     reader,
                                     <span class="kw-2">&amp;</span>Default::default(),
                                 )<span class="question-mark">?</span>,

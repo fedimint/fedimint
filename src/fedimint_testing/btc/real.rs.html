@@ -338,9 +338,7 @@
 <a href="#337" id="337">337</a>
 <a href="#338" id="338">338</a>
 <a href="#339" id="339">339</a>
-<a href="#340" id="340">340</a>
-<a href="#341" id="341">341</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
-<span class="kw">use </span>std::sync::Arc;
+<a href="#340" id="340">340</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::Context;
@@ -447,8 +445,8 @@
             </span>.client
             .get_raw_transaction(<span class="kw-2">&amp;</span>id, <span class="prelude-val">Some</span>(mined_block_hash))
             .expect(<span class="self">Self</span>::ERROR);
-        <span class="kw">let </span>proof = TxOutProof::consensus_decode(
-            <span class="kw-2">&amp;mut </span>Cursor::new(<span class="kw">loop </span>{
+        <span class="kw">let </span>proof = TxOutProof::consensus_decode_whole(
+            <span class="kw-2">&amp;</span><span class="kw">loop </span>{
                 <span class="kw">match </span><span class="self">self</span>.client.get_tx_out_proof(<span class="kw-2">&amp;</span>[id], <span class="prelude-val">None</span>) {
                     <span class="prelude-val">Ok</span>(o) =&gt; <span class="kw">break </span>o,
                     <span class="prelude-val">Err</span>(e) =&gt; {
@@ -460,7 +458,7 @@
                         <span class="macro">panic!</span>(<span class="string">"Could not get txoutproof: {e}"</span>);
                     }
                 }
-            }),
+            },
             <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
         )
         .expect(<span class="self">Self</span>::ERROR);

@@ -486,13 +486,9 @@
 <a href="#485" id="485">485</a>
 <a href="#486" id="486">486</a>
 <a href="#487" id="487">487</a>
-<a href="#488" id="488">488</a>
-<a href="#489" id="489">489</a>
-<a href="#490" id="490">490</a>
-<a href="#491" id="491">491</a>
-<a href="#492" id="492">492</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::Reverse;
+<a href="#488" id="488">488</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::Reverse;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
-<span class="kw">use </span>std::io::{Cursor, Error, Read, Write};
+<span class="kw">use </span>std::io::{Error, Read, Write};
 
 <span class="kw">use </span>anyhow::{bail, ensure, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>bitcoin::secp256k1::{Keypair, PublicKey, Secp256k1, SignOnly};
@@ -681,16 +677,16 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>ClientBackup {
-    <span class="kw">fn </span>consensus_decode&lt;R: Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;R: Read&gt;(
         r: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; std::result::Result&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>session_count = u64::consensus_decode(r, modules).context(<span class="string">"session_count"</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>metadata = Metadata::consensus_decode(r, modules).context(<span class="string">"metadata"</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>session_count = u64::consensus_decode_partial(r, modules).context(<span class="string">"session_count"</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>metadata = Metadata::consensus_decode_partial(r, modules).context(<span class="string">"metadata"</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>module_backups =
-            BTreeMap::&lt;ModuleInstanceId, DynModuleBackup&gt;::consensus_decode(r, modules)
+            BTreeMap::&lt;ModuleInstanceId, DynModuleBackup&gt;::consensus_decode_partial(r, modules)
                 .context(<span class="string">"module_backups"</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>_padding = Vec::&lt;u8&gt;::consensus_decode(r, modules).context(<span class="string">"padding"</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>_padding = Vec::&lt;u8&gt;::consensus_decode_partial(r, modules).context(<span class="string">"padding"</span>)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             session_count,
@@ -711,10 +707,7 @@
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ClientBackup&gt; {
         <span class="kw">let </span>decrypted = fedimint_aead::decrypt(<span class="kw-2">&amp;mut </span><span class="self">self</span>.<span class="number">0</span>, key)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(ClientBackup::consensus_decode(
-            <span class="kw-2">&amp;mut </span>Cursor::new(decrypted),
-            decoders,
-        )<span class="question-mark">?</span>)
+        <span class="prelude-val">Ok</span>(ClientBackup::consensus_decode_whole(decrypted, decoders)<span class="question-mark">?</span>)
     }
 
     <span class="kw">pub fn </span>into_backup_request(<span class="self">self</span>, keypair: <span class="kw-2">&amp;</span>Keypair) -&gt; <span class="prelude-ty">Result</span>&lt;SignedBackupRequest&gt; {
@@ -918,7 +911,6 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::collections::BTreeMap;
-    <span class="kw">use </span>std::io::Cursor;
 
     <span class="kw">use </span>anyhow::Result;
     <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -956,7 +948,7 @@
         <span class="macro">assert_eq!</span>(encoded.len(), ClientBackup::PADDING_ALIGNMENT);
         <span class="macro">assert_eq!</span>(
             orig,
-            ClientBackup::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(encoded), <span class="kw-2">&amp;</span>ModuleRegistry::default())<span class="question-mark">?
+            ClientBackup::consensus_decode_whole(<span class="kw-2">&amp;</span>encoded, <span class="kw-2">&amp;</span>ModuleRegistry::default())<span class="question-mark">?
         </span>);
 
         <span class="prelude-val">Ok</span>(())

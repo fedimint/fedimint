@@ -1029,7 +1029,17 @@
 <a href="#1028" id="1028">1028</a>
 <a href="#1029" id="1029">1029</a>
 <a href="#1030" id="1030">1030</a>
-<a href="#1031" id="1031">1031</a></pre></div><pre class="rust"><code><span class="doccomment">//! Binary encoding interface suitable for
+<a href="#1031" id="1031">1031</a>
+<a href="#1032" id="1032">1032</a>
+<a href="#1033" id="1033">1033</a>
+<a href="#1034" id="1034">1034</a>
+<a href="#1035" id="1035">1035</a>
+<a href="#1036" id="1036">1036</a>
+<a href="#1037" id="1037">1037</a>
+<a href="#1038" id="1038">1038</a>
+<a href="#1039" id="1039">1039</a>
+<a href="#1040" id="1040">1040</a>
+<a href="#1041" id="1041">1041</a></pre></div><pre class="rust"><code><span class="doccomment">//! Binary encoding interface suitable for
 //! consensus critical encoding.
 //!
 //! Over time all structs that ! need to be encoded to binary will be migrated
@@ -1170,48 +1180,50 @@
 </span><span class="kw">pub trait </span>Decodable: Sized {
     <span class="doccomment">/// Decode `Self` from a size-limited reader.
     ///
-    /// Like `consensus_decode` but relies on the reader being limited in the
-    /// amount of data it returns, e.g. by being wrapped in
+    /// Like `consensus_decode_partial` but relies on the reader being limited
+    /// in the amount of data it returns, e.g. by being wrapped in
     /// [`std::io::Take`].
     ///
     /// Failing to abide to this requirement might lead to memory exhaustion
     /// caused by malicious inputs.
     ///
-    /// Users should default to `consensus_decode`, but when data to be decoded
-    /// is already in a byte vector of a limited size, calling this function
-    /// directly might be marginally faster (due to avoiding extra checks).
+    /// Users should default to `consensus_decode_partial`, but when data to be
+    /// decoded is already in a byte vector of a limited size, calling this
+    /// function directly might be marginally faster (due to avoiding extra
+    /// checks).
     ///
     /// ### Rules for trait implementations
     ///
     /// * Simple types that that have a fixed size (own and member fields),
     ///   don't have to overwrite this method, or be concern with it, should
-    ///   only impl `consensus_decode`.
+    ///   only impl `consensus_decode_partial`.
     /// * Types that deserialize based on decoded untrusted length should
-    ///   implement `consensus_decode_from_finite_reader` only:
-    ///   * Default implementation of `consensus_decode` will forward to
-    ///     `consensus_decode_bytes_from_finite_reader` with the reader wrapped
-    ///     by `Take`, protecting from readers that keep returning data.
+    ///   implement `consensus_decode_partial_from_finite_reader` only:
+    ///   * Default implementation of `consensus_decode_partial` will forward to
+    ///     `consensus_decode_partial_from_finite_reader` with the reader
+    ///     wrapped by `Take`, protecting from readers that keep returning data.
     ///   * Implementation must make sure to put a cap on things like
     ///     `Vec::with_capacity` and other allocations to avoid oversized
     ///     allocations, and rely on the reader being finite and running out of
     ///     data, and collections reallocating on a legitimately oversized input
     ///     data, instead of trying to enforce arbitrary length limits.
     /// * Types that contain other types that might be require limited reader
-    ///   (thus implementing `consensus_decode_from_finite_reader`), should also
-    ///   implement it applying same rules, and in addition make sure to call
-    ///   `consensus_decode_from_finite_reader` on all members, to avoid
-    ///   creating redundant `Take` wrappers (`Take&lt;Take&lt;...&gt;&gt;`). Failure to do
-    ///   so might result only in a tiny performance hit.
+    ///   (thus implementing `consensus_decode_partial_from_finite_reader`),
+    ///   should also implement it applying same rules, and in addition make
+    ///   sure to call `consensus_decode_partial_from_finite_reader` on all
+    ///   members, to avoid creating redundant `Take` wrappers
+    ///   (`Take&lt;Take&lt;...&gt;&gt;`). Failure to do so might result only in a tiny
+    ///   performance hit.
     </span><span class="attr">#[inline]
-    </span><span class="kw">fn </span>consensus_decode_from_finite_reader&lt;R: std::io::Read&gt;(
+    </span><span class="kw">fn </span>consensus_decode_partial_from_finite_reader&lt;R: std::io::Read&gt;(
         r: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="comment">// This method is always strictly less general than, `consensus_decode`, so it's
-        // safe and make sense to default to just calling it. This way most
-        // types, that don't care about protecting against resource exhaustion
-        // due to malicious input, can just ignore it.
-        </span><span class="self">Self</span>::consensus_decode(r, modules)
+        <span class="comment">// This method is always strictly less general than, `consensus_decode_partial`,
+        // so it's safe and make sense to default to just calling it. This way
+        // most types, that don't care about protecting against resource
+        // exhaustion due to malicious input, can just ignore it.
+        </span><span class="self">Self</span>::consensus_decode_partial(r, modules)
     }
 
     <span class="attr">#[inline]
@@ -1224,11 +1236,11 @@
         <span class="kw">let </span>r = <span class="kw-2">&amp;mut &amp;</span>slice[..];
         <span class="kw">let </span><span class="kw-2">mut </span>r = Read::take(r, total_len);
 
-        <span class="comment">// This method is always strictly less general than, `consensus_decode`, so it's
-        // safe and make sense to default to just calling it. This way most
-        // types, that don't care about protecting against resource exhaustion
-        // due to malicious input, can just ignore it.
-        </span><span class="kw">let </span>res = <span class="self">Self</span>::consensus_decode_from_finite_reader(<span class="kw-2">&amp;mut </span>r, modules)<span class="question-mark">?</span>;
+        <span class="comment">// This method is always strictly less general than, `consensus_decode_partial`,
+        // so it's safe and make sense to default to just calling it. This way
+        // most types, that don't care about protecting against resource
+        // exhaustion due to malicious input, can just ignore it.
+        </span><span class="kw">let </span>res = <span class="self">Self</span>::consensus_decode_partial_from_finite_reader(<span class="kw-2">&amp;mut </span>r, modules)<span class="question-mark">?</span>;
         <span class="kw">let </span>left = r.limit();
 
         <span class="kw">if </span>left != <span class="number">0 </span>{
@@ -1249,15 +1261,18 @@
     /// type implementing this trait. Default implementation is wrapping the
     /// reader in [`std::io::Take`] to limit the input size to
     /// [`MAX_DECODE_SIZE`], and forwards the call to
-    /// [`Self::consensus_decode_from_finite_reader`], which is convenient
-    /// for types that override [`Self::consensus_decode_from_finite_reader`]
-    /// instead.
+    /// [`Self::consensus_decode_partial_from_finite_reader`], which is
+    /// convenient for types that override
+    /// [`Self::consensus_decode_partial_from_finite_reader`] instead.
     </span><span class="attr">#[inline]
-    </span><span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
+    </span><span class="kw">fn </span>consensus_decode_partial&lt;R: std::io::Read&gt;(
         r: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="self">Self</span>::consensus_decode_from_finite_reader(<span class="kw-2">&amp;mut </span>r.take(MAX_DECODE_SIZE <span class="kw">as </span>u64), modules)
+        <span class="self">Self</span>::consensus_decode_partial_from_finite_reader(
+            <span class="kw-2">&amp;mut </span>r.take(MAX_DECODE_SIZE <span class="kw">as </span>u64),
+            modules,
+        )
     }
 
     <span class="doccomment">/// Decode an object from hex
@@ -1268,16 +1283,7 @@
         <span class="kw">let </span>bytes = Vec::&lt;u8&gt;::from_hex(hex)
             .map_err(anyhow::Error::from)
             .map_err(DecodeError::new_custom)<span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>reader = std::io::Cursor::new(bytes);
-        Decodable::consensus_decode(<span class="kw-2">&amp;mut </span>reader, modules)
-    }
-
-    <span class="kw">fn </span>consensus_decode_vec(
-        bytes: Vec&lt;u8&gt;,
-        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>reader = std::io::Cursor::new(bytes);
-        Decodable::consensus_decode(<span class="kw-2">&amp;mut </span>reader, modules)
+        Decodable::consensus_decode_whole(<span class="kw-2">&amp;</span>bytes, modules)
     }
 }
 
@@ -1288,11 +1294,11 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>SafeUrl {
-    <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial_from_finite_reader&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        String::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?
+        String::consensus_decode_partial_from_finite_reader(d, modules)<span class="question-mark">?
             </span>.parse::&lt;<span class="self">Self</span>&gt;()
             .map_err(DecodeError::from_err)
     }
@@ -1324,7 +1330,7 @@
         }
 
         <span class="kw">impl </span>Decodable <span class="kw">for </span><span class="macro-nonterminal">$num_type </span>{
-            <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+            <span class="kw">fn </span>consensus_decode_partial&lt;D: std::io::Read&gt;(
                 d: <span class="kw-2">&amp;mut </span>D,
                 _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
             ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
@@ -1345,11 +1351,11 @@
         }
 
         <span class="kw">impl </span>Decodable <span class="kw">for </span><span class="macro-nonterminal">$num_type </span>{
-            <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+            <span class="kw">fn </span>consensus_decode_partial&lt;D: std::io::Read&gt;(
                 d: <span class="kw-2">&amp;mut </span>D,
                 _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
             ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
-                <span class="kw">let </span>varint = BigSize::consensus_decode(d, <span class="kw-2">&amp;</span>Default::default())
+                <span class="kw">let </span>varint = BigSize::consensus_decode_partial(d, <span class="kw-2">&amp;</span>Default::default())
                     .context(<span class="macro">concat!</span>(<span class="string">"VarInt inside "</span>, <span class="macro">stringify!</span>(<span class="macro-nonterminal">$num_type</span>)))<span class="question-mark">?</span>;
                 &lt;<span class="macro-nonterminal">$num_type</span>&gt;::try_from(varint.<span class="number">0</span>).map_err(<span class="kw">crate</span>::encoding::DecodeError::from_err)
             }
@@ -1376,8 +1382,8 @@
 
         <span class="attr">#[allow(non_snake_case)]
         </span><span class="kw">impl</span>&lt;$(<span class="macro-nonterminal">$x</span>: Decodable),<span class="kw-2">*</span>&gt; Decodable <span class="kw">for </span>($(<span class="macro-nonterminal">$x</span>),<span class="kw-2">*</span>) {
-            <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D, modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-                <span class="prelude-val">Ok</span>(($({<span class="kw">let </span><span class="macro-nonterminal">$x </span>= Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>; <span class="macro-nonterminal">$x </span>}),<span class="kw-2">*</span>))
+            <span class="kw">fn </span>consensus_decode_partial&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D, modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+                <span class="prelude-val">Ok</span>(($({<span class="kw">let </span><span class="macro-nonterminal">$x </span>= Decodable::consensus_decode_partial(d, modules)<span class="question-mark">?</span>; <span class="macro-nonterminal">$x </span>}),<span class="kw-2">*</span>))
             }
         }
     );
@@ -1407,14 +1413,16 @@
 <span class="kw">where
     </span>T: Decodable,
 {
-    <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial_from_finite_reader&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>flag = u8::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>flag = u8::consensus_decode_partial_from_finite_reader(d, modules)<span class="question-mark">?</span>;
         <span class="kw">match </span>flag {
             <span class="number">0 </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
-            <span class="number">1 </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(T::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>)),
+            <span class="number">1 </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(T::consensus_decode_partial_from_finite_reader(
+                d, modules,
+            )<span class="question-mark">?</span>)),
             <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(DecodeError::from_str(
                 <span class="string">"Invalid flag for option enum, expected 0 or 1"</span>,
             )),
@@ -1450,14 +1458,18 @@
     </span>T: Decodable,
     E: Decodable,
 {
-    <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial_from_finite_reader&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>flag = u8::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>flag = u8::consensus_decode_partial_from_finite_reader(d, modules)<span class="question-mark">?</span>;
         <span class="kw">match </span>flag {
-            <span class="number">0 </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(E::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>)),
-            <span class="number">1 </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(T::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>)),
+            <span class="number">0 </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(E::consensus_decode_partial_from_finite_reader(
+                d, modules,
+            )<span class="question-mark">?</span>)),
+            <span class="number">1 </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(T::consensus_decode_partial_from_finite_reader(
+                d, modules,
+            )<span class="question-mark">?</span>)),
             <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(DecodeError::from_str(
                 <span class="string">"Invalid flag for option enum, expected 0 or 1"</span>,
             )),
@@ -1478,11 +1490,11 @@
 <span class="kw">where
     </span>T: Decodable,
 {
-    <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial_from_finite_reader&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::new(T::consensus_decode_from_finite_reader(
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::new(T::consensus_decode_partial_from_finite_reader(
             d, modules,
         )<span class="question-mark">?</span>))
     }
@@ -1498,7 +1510,7 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>() {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;D: std::io::Read&gt;(
         _d: <span class="kw-2">&amp;mut </span>D,
         _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
@@ -1519,12 +1531,14 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>String {
-    <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial_from_finite_reader&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="self">Self</span>::from_utf8(Decodable::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>)
-            .map_err(DecodeError::from_err)
+        <span class="self">Self</span>::from_utf8(Decodable::consensus_decode_partial_from_finite_reader(
+            d, modules,
+        )<span class="question-mark">?</span>)
+        .map_err(DecodeError::from_err)
     }
 }
 
@@ -1536,11 +1550,11 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>SystemTime {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>duration = Duration::consensus_decode(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>duration = Duration::consensus_decode_partial(d, modules)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(UNIX_EPOCH + duration)
     }
 }
@@ -1556,12 +1570,12 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>Duration {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>secs = Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>;
-        <span class="kw">let </span>nsecs = Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>secs = Decodable::consensus_decode_partial(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>nsecs = Decodable::consensus_decode_partial(d, modules)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="self">Self</span>::new(secs, nsecs))
     }
 }
@@ -1575,7 +1589,7 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>bool {
-    <span class="kw">fn </span>consensus_decode&lt;D: Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;D: Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
@@ -1626,11 +1640,11 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>Cow&lt;<span class="lifetime">'static</span>, str&gt; {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(Cow::Owned(String::consensus_decode(d, modules)<span class="question-mark">?</span>))
+        <span class="prelude-val">Ok</span>(Cow::Owned(String::consensus_decode_partial(d, modules)<span class="question-mark">?</span>))
     }
 }
 
@@ -1733,17 +1747,18 @@
 <span class="kw">where
     </span>T: Decodable + <span class="lifetime">'static</span>,
 {
-    <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;R: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial_from_finite_reader&lt;R: std::io::Read&gt;(
         reader: <span class="kw-2">&amp;mut </span>R,
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
         <span class="kw">let </span>module_instance_id =
-            fedimint_core::core::ModuleInstanceId::consensus_decode_from_finite_reader(
+            fedimint_core::core::ModuleInstanceId::consensus_decode_partial_from_finite_reader(
                 reader, decoders,
             )<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="kw">match </span>decoders.get(module_instance_id) {
             <span class="prelude-val">Some</span>(decoder) =&gt; {
-                <span class="kw">let </span>total_len_u64 = u64::consensus_decode_from_finite_reader(reader, decoders)<span class="question-mark">?</span>;
+                <span class="kw">let </span>total_len_u64 =
+                    u64::consensus_decode_partial_from_finite_reader(reader, decoders)<span class="question-mark">?</span>;
                 <span class="self">Self</span>::Decoded(decoder.decode_complete(
                     reader,
                     total_len_u64,
@@ -1755,7 +1770,7 @@
                 <span class="comment">// since the decoder is not available, just read the raw data
                 </span><span class="self">Self</span>::Raw {
                     module_instance_id,
-                    raw: Vec::consensus_decode_from_finite_reader(reader, decoders)<span class="question-mark">?</span>,
+                    raw: Vec::consensus_decode_partial_from_finite_reader(reader, decoders)<span class="question-mark">?</span>,
                 }
             }
         })
@@ -1799,7 +1814,8 @@
         <span class="macro">assert_eq!</span>(len, bytes.len());
 
         <span class="kw">let </span><span class="kw-2">mut </span>cursor = Cursor::new(bytes);
-        <span class="kw">let </span>decoded = T::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default()).unwrap();
+        <span class="kw">let </span>decoded =
+            T::consensus_decode_partial(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default()).unwrap();
         <span class="macro">assert_eq!</span>(value, <span class="kw-2">&amp;</span>decoded);
         <span class="macro">assert_eq!</span>(cursor.position(), len <span class="kw">as </span>u64);
     }
@@ -1814,7 +1830,8 @@
         <span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>expected, <span class="kw-2">&amp;</span>bytes);
 
         <span class="kw">let </span><span class="kw-2">mut </span>cursor = Cursor::new(bytes);
-        <span class="kw">let </span>decoded = T::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default()).unwrap();
+        <span class="kw">let </span>decoded =
+            T::consensus_decode_partial(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default()).unwrap();
         <span class="macro">assert_eq!</span>(value, <span class="kw-2">&amp;</span>decoded);
         <span class="macro">assert_eq!</span>(cursor.position(), len <span class="kw">as </span>u64);
     }
@@ -1865,7 +1882,8 @@
             .unwrap();
 
         <span class="kw">let </span><span class="kw-2">mut </span>cursor = Cursor::new(<span class="kw-2">&amp;</span>unknown_variant_encoding);
-        <span class="kw">let </span>decode_res = NoDefaultEnum::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>ModuleRegistry::default());
+        <span class="kw">let </span>decode_res =
+            NoDefaultEnum::consensus_decode_partial(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>ModuleRegistry::default());
 
         <span class="kw">match </span>decode_res {
             <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">panic!</span>(<span class="string">"Should return error"</span>),
@@ -1882,7 +1900,8 @@
             .unwrap();
 
         <span class="kw">let </span><span class="kw-2">mut </span>cursor = Cursor::new(<span class="kw-2">&amp;</span>unknown_variant_encoding);
-        <span class="kw">let </span>decode_res = DefaultEnum::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>ModuleRegistry::default());
+        <span class="kw">let </span>decode_res =
+            DefaultEnum::consensus_decode_partial(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>ModuleRegistry::default());
 
         <span class="macro">assert_eq!</span>(
             decode_res.unwrap(),
@@ -1958,10 +1977,11 @@
         <span class="kw">let </span>vec = <span class="macro">vec!</span>[<span class="number">42u8</span>];
         <span class="kw">let </span><span class="kw-2">mut </span>cursor = Cursor::new(vec);
 
-        <span class="macro">assert!</span>(
-            NotConstructable::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())
-                .is_err()
-        );
+        <span class="macro">assert!</span>(NotConstructable::consensus_decode_partial(
+            <span class="kw-2">&amp;mut </span>cursor,
+            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default()
+        )
+        .is_err());
     }
 
     <span class="attr">#[test]
@@ -1997,7 +2017,7 @@
 
         <span class="kw">for </span>(old, new) <span class="kw">in </span>test_vector {
             <span class="kw">let </span>old_bytes = old.consensus_encode_to_vec();
-            <span class="kw">let </span>decoded_new = New::consensus_decode_vec(old_bytes, <span class="kw-2">&amp;</span>ModuleRegistry::default())
+            <span class="kw">let </span>decoded_new = New::consensus_decode_whole(<span class="kw-2">&amp;</span>old_bytes, <span class="kw-2">&amp;</span>ModuleRegistry::default())
                 .expect(<span class="string">"Decoding failed"</span>);
             <span class="macro">assert_eq!</span>(decoded_new, new);
         }
@@ -2009,15 +2029,15 @@
         writer
     }
 
-    <span class="kw">fn </span>decode_value&lt;T: Decodable&gt;(bytes: <span class="kw-2">&amp;</span>Vec&lt;u8&gt;) -&gt; T {
-        T::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(bytes), <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default()).unwrap()
+    <span class="kw">fn </span>decode_value&lt;T: Decodable&gt;(bytes: <span class="kw-2">&amp;</span>[u8]) -&gt; T {
+        T::consensus_decode_whole(bytes, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default()).unwrap()
     }
 
     <span class="kw">fn </span>keeps_ordering_after_serialization&lt;T: Ord + Encodable + Decodable + Debug&gt;(<span class="kw-2">mut </span>vec: Vec&lt;T&gt;) {
         vec.sort();
         <span class="kw">let </span><span class="kw-2">mut </span>encoded = vec.iter().map(encode_value).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         encoded.sort();
-        <span class="kw">let </span>decoded = encoded.iter().map(decode_value).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="kw">let </span>decoded = encoded.iter().map(|v| decode_value(v)).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         <span class="kw">for </span>(i, (a, b)) <span class="kw">in </span>vec.iter().zip(decoded.iter()).enumerate() {
             <span class="macro">assert_eq!</span>(a, b, <span class="string">"difference at index {i}"</span>);
         }

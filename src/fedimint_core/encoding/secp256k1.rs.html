@@ -123,7 +123,10 @@
 <a href="#122" id="122">122</a>
 <a href="#123" id="123">123</a>
 <a href="#124" id="124">124</a>
-<a href="#125" id="125">125</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Read, Write};
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Read, Write};
 
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
@@ -137,11 +140,11 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>secp256k1::ecdsa::Signature {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="self">Self</span>::from_compact(<span class="kw-2">&amp;</span>&lt;[u8; <span class="number">64</span>]&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>)
+        <span class="self">Self</span>::from_compact(<span class="kw-2">&amp;</span>&lt;[u8; <span class="number">64</span>]&gt;::consensus_decode_partial(d, modules)<span class="question-mark">?</span>)
             .map_err(DecodeError::from_err)
     }
 }
@@ -153,11 +156,12 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>secp256k1::PublicKey {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="self">Self</span>::from_slice(<span class="kw-2">&amp;</span>&lt;[u8; <span class="number">33</span>]&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>).map_err(DecodeError::from_err)
+        <span class="self">Self</span>::from_slice(<span class="kw-2">&amp;</span>&lt;[u8; <span class="number">33</span>]&gt;::consensus_decode_partial(d, modules)<span class="question-mark">?</span>)
+            .map_err(DecodeError::from_err)
     }
 }
 
@@ -168,11 +172,12 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>secp256k1::SecretKey {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="self">Self</span>::from_slice(<span class="kw-2">&amp;</span>&lt;[u8; <span class="number">32</span>]&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>).map_err(DecodeError::from_err)
+        <span class="self">Self</span>::from_slice(<span class="kw-2">&amp;</span>&lt;[u8; <span class="number">32</span>]&gt;::consensus_decode_partial(d, modules)<span class="question-mark">?</span>)
+            .map_err(DecodeError::from_err)
     }
 }
 
@@ -186,12 +191,13 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>secp256k1::schnorr::Signature {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>bytes =
-            &lt;[u8; secp256k1::constants::SCHNORR_SIGNATURE_SIZE]&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>bytes = &lt;[u8; secp256k1::constants::SCHNORR_SIGNATURE_SIZE]&gt;::consensus_decode_partial(
+            d, modules,
+        )<span class="question-mark">?</span>;
         <span class="self">Self</span>::from_slice(<span class="kw-2">&amp;</span>bytes).map_err(DecodeError::from_err)
     }
 }
@@ -203,11 +209,11 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>bitcoin::key::Keypair {
-    <span class="kw">fn </span>consensus_decode&lt;D: Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;D: Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>sec_bytes = &lt;[u8; <span class="number">32</span>]&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>sec_bytes = &lt;[u8; <span class="number">32</span>]&gt;::consensus_decode_partial(d, modules)<span class="question-mark">?</span>;
         <span class="self">Self</span>::from_seckey_slice(bitcoin::secp256k1::global::SECP256K1, <span class="kw-2">&amp;</span>sec_bytes) <span class="comment">// FIXME: evaluate security risk of global ctx
             </span>.map_err(DecodeError::from_err)
     }

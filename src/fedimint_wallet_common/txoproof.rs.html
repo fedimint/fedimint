@@ -268,9 +268,7 @@
 <a href="#267" id="267">267</a>
 <a href="#268" id="268">268</a>
 <a href="#269" id="269">269</a>
-<a href="#270" id="270">270</a>
-<a href="#271" id="271">271</a>
-<a href="#272" id="272">272</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::convert::Infallible;
+<a href="#270" id="270">270</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::hash::Hash;
 
 <span class="kw">use </span>anyhow::format_err;
@@ -469,15 +467,15 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>PegInProof {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span>slf = PegInProof {
-            txout_proof: TxOutProof::consensus_decode(d, modules)<span class="question-mark">?</span>,
-            transaction: Transaction::consensus_decode(d, modules)<span class="question-mark">?</span>,
-            output_idx: u32::consensus_decode(d, modules)<span class="question-mark">?</span>,
-            tweak_contract_key: PublicKey::consensus_decode(d, modules)<span class="question-mark">?</span>,
+            txout_proof: TxOutProof::consensus_decode_partial(d, modules)<span class="question-mark">?</span>,
+            transaction: Transaction::consensus_decode_partial(d, modules)<span class="question-mark">?</span>,
+            output_idx: u32::consensus_decode_partial(d, modules)<span class="question-mark">?</span>,
+            tweak_contract_key: PublicKey::consensus_decode_partial(d, modules)<span class="question-mark">?</span>,
         };
 
         validate_peg_in_proof(<span class="kw-2">&amp;</span>slf).map_err(DecodeError::new_custom)<span class="question-mark">?</span>;
@@ -499,8 +497,6 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span>std::io::Cursor;
-
     <span class="kw">use </span>fedimint_core::encoding::Decodable;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
@@ -522,8 +518,8 @@
         58a30f7ae5b909ffdd020073f04ff370000"</span>;
 
         <span class="kw">let </span>empty_module_registry = ModuleDecoderRegistry::default();
-        <span class="kw">let </span>txoutproof = TxOutProof::consensus_decode(
-            <span class="kw-2">&amp;mut </span>Cursor::new(Vec::from_hex(txoutproof_hex).unwrap()),
+        <span class="kw">let </span>txoutproof = TxOutProof::consensus_decode_whole(
+            <span class="kw-2">&amp;</span>Vec::from_hex(txoutproof_hex).unwrap(),
             <span class="kw-2">&amp;</span>empty_module_registry,
         )
         .unwrap();

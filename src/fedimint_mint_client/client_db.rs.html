@@ -362,12 +362,12 @@
 ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;(Vec&lt;u8&gt;, OperationId)&gt;&gt; {
     <span class="kw">let </span>decoders = ModuleDecoderRegistry::default();
 
-    <span class="kw">let </span>mint_client_state_machine_variant = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>mint_client_state_machine_variant = u16::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
     <span class="kw">let </span>new_mint_state_machine = <span class="kw">match </span>mint_client_state_machine_variant {
         <span class="number">0 </span>=&gt; {
-            <span class="kw">let </span>_output_sm_len = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
-            <span class="kw">let </span>old_state = MintOutputStateMachineV0::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+            <span class="kw">let </span>_output_sm_len = u16::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+            <span class="kw">let </span>old_state = MintOutputStateMachineV0::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
             MintClientStateMachines::Output(MintOutputStateMachine {
                 common: MintOutputCommon {
@@ -382,8 +382,8 @@
             })
         }
         <span class="number">1 </span>=&gt; {
-            <span class="kw">let </span>_input_sm_len = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
-            <span class="kw">let </span>old_state = MintInputStateMachineV0::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+            <span class="kw">let </span>_input_sm_len = u16::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+            <span class="kw">let </span>old_state = MintInputStateMachineV0::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
             MintClientStateMachines::Input(MintInputStateMachine {
                 common: MintInputCommon {
@@ -398,8 +398,8 @@
             })
         }
         <span class="number">2 </span>=&gt; {
-            <span class="kw">let </span>_oob_sm_len = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
-            <span class="kw">let </span>old_state = MintOOBStateMachineV0::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+            <span class="kw">let </span>_oob_sm_len = u16::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+            <span class="kw">let </span>old_state = MintOOBStateMachineV0::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
             <span class="kw">let </span>new_state = <span class="kw">match </span>old_state.state {
                 MintOOBStatesV0::Created(created) =&gt; MintOOBStates::Created(created),

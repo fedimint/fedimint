@@ -218,7 +218,7 @@
     cursor: <span class="kw-2">&amp;mut </span>Cursor&lt;<span class="kw-2">&amp;</span>[u8]&gt;,
 ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;(Vec&lt;u8&gt;, OperationId)&gt;&gt; {
     <span class="kw">let </span>decoders = ModuleDecoderRegistry::default();
-    <span class="kw">let </span>dummy_sm_variant = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>dummy_sm_variant = u16::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
     <span class="comment">// We are only migrating the type of one of the variants, so we do nothing on
     // other discriminants.
@@ -226,10 +226,10 @@
         <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
     }
 
-    <span class="kw">let </span>_unreachable_state_length = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>_unreachable_state_length = u16::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
     <span class="comment">// Migrate `Unreachable` states to `OutputDone`
-    </span><span class="kw">let </span>unreachable = Unreachable::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    </span><span class="kw">let </span>unreachable = Unreachable::consensus_decode_partial(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
     <span class="kw">let </span>new_state = DummyStateMachine::OutputDone(
         unreachable.amount,
         unreachable.txid,
@@ -247,13 +247,13 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>Unreachable {
-    <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial&lt;R: std::io::Read&gt;(
         reader: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, fedimint_core::encoding::DecodeError&gt; {
-        <span class="kw">let </span>operation_id = OperationId::consensus_decode(reader, modules)<span class="question-mark">?</span>;
-        <span class="kw">let </span>txid = TransactionId::consensus_decode(reader, modules)<span class="question-mark">?</span>;
-        <span class="kw">let </span>amount = Amount::consensus_decode(reader, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>operation_id = OperationId::consensus_decode_partial(reader, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>txid = TransactionId::consensus_decode_partial(reader, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>amount = Amount::consensus_decode_partial(reader, modules)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(Unreachable {
             operation_id,

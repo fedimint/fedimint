@@ -332,15 +332,7 @@
 <a href="#331" id="331">331</a>
 <a href="#332" id="332">332</a>
 <a href="#333" id="333">333</a>
-<a href="#334" id="334">334</a>
-<a href="#335" id="335">335</a>
-<a href="#336" id="336">336</a>
-<a href="#337" id="337">337</a>
-<a href="#338" id="338">338</a>
-<a href="#339" id="339">339</a>
-<a href="#340" id="340">340</a>
-<a href="#341" id="341">341</a>
-<a href="#342" id="342">342</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::any::TypeId;
+<a href="#334" id="334">334</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::any::TypeId;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, VecDeque};
 <span class="kw">use </span>std::fmt::Debug;
 
@@ -386,14 +378,15 @@
 <span class="kw">where
     </span>T: Decodable + <span class="lifetime">'static</span>,
 {
-    <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial_from_finite_reader&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">const </span>CHUNK_SIZE: usize = <span class="number">64 </span>* <span class="number">1024</span>;
 
         <span class="kw">if </span>TypeId::of::&lt;T&gt;() == TypeId::of::&lt;u8&gt;() {
-            <span class="kw">let </span>len = u64::consensus_decode_from_finite_reader(d, <span class="kw-2">&amp;</span>ModuleRegistry::default())<span class="question-mark">?</span>;
+            <span class="kw">let </span>len =
+                u64::consensus_decode_partial_from_finite_reader(d, <span class="kw-2">&amp;</span>ModuleRegistry::default())<span class="question-mark">?</span>;
 
             <span class="kw">let </span><span class="kw-2">mut </span>len: usize =
                 usize::try_from(len).map_err(|<span class="kw">_</span>| DecodeError::from_str(<span class="string">"size exceeds memory"</span>))<span class="question-mark">?</span>;
@@ -414,7 +407,7 @@
             <span class="comment">// unsafe: we've just checked that T is `u8` so the transmute here is a no-op
             </span><span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="kw">unsafe </span>{ std::mem::transmute::&lt;Vec&lt;u8&gt;, <span class="self">Self</span>&gt;(bytes) });
         }
-        <span class="kw">let </span>len = u64::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>len = u64::consensus_decode_partial_from_finite_reader(d, modules)<span class="question-mark">?</span>;
 
         <span class="comment">// `collect` under the hood uses `FromIter::from_iter`, which can potentially be
         // backed by code like:
@@ -427,12 +420,12 @@
         <span class="comment">// Up to a cap, use the (potentially specialized for better perf in stdlib)
         // `from_iter`.
         </span><span class="kw">let </span><span class="kw-2">mut </span>v: <span class="self">Self </span>= (<span class="number">0</span>..cap_len)
-            .map(|<span class="kw">_</span>| T::consensus_decode_from_finite_reader(d, modules))
+            .map(|<span class="kw">_</span>| T::consensus_decode_partial_from_finite_reader(d, modules))
             .collect::&lt;<span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;&gt;()<span class="question-mark">?</span>;
 
         <span class="comment">// Add any excess manually avoiding any surprises.
         </span><span class="kw">while </span>(v.len() <span class="kw">as </span>u64) &lt; len {
-            v.push(T::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>);
+            v.push(T::consensus_decode_partial_from_finite_reader(d, modules)<span class="question-mark">?</span>);
         }
 
         <span class="macro">assert_eq!</span>(v.len() <span class="kw">as </span>u64, len);
@@ -458,13 +451,13 @@
 <span class="kw">where
     </span>T: Decodable + <span class="lifetime">'static</span>,
 {
-    <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial_from_finite_reader&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::from(Vec::&lt;T&gt;::consensus_decode_from_finite_reader(
-            d, modules,
-        )<span class="question-mark">?</span>))
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::from(
+            Vec::&lt;T&gt;::consensus_decode_partial_from_finite_reader(d, modules)<span class="question-mark">?</span>,
+        ))
     }
 }
 
@@ -492,7 +485,7 @@
 <span class="kw">where
     </span>T: Decodable + Debug + Default + Copy + <span class="lifetime">'static</span>,
 {
-    <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial_from_finite_reader&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
@@ -518,7 +511,7 @@
         <span class="comment">// todo: impl without copy
         </span><span class="kw">let </span><span class="kw-2">mut </span>data = [T::default(); SIZE];
         <span class="kw">for </span>item <span class="kw">in </span><span class="kw-2">&amp;mut </span>data {
-            <span class="kw-2">*</span>item = T::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
+            <span class="kw-2">*</span>item = T::consensus_decode_partial_from_finite_reader(d, modules)<span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(data)
     }
@@ -545,21 +538,21 @@
     </span>K: Decodable + Ord,
     V: Decodable,
 {
-    <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial_from_finite_reader&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>res = <span class="self">Self</span>::new();
-        <span class="kw">let </span>len = u64::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>len = u64::consensus_decode_partial_from_finite_reader(d, modules)<span class="question-mark">?</span>;
         <span class="kw">for _ in </span><span class="number">0</span>..len {
-            <span class="kw">let </span>k = K::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
+            <span class="kw">let </span>k = K::consensus_decode_partial_from_finite_reader(d, modules)<span class="question-mark">?</span>;
             <span class="kw">if </span>res
                 .last_key_value()
                 .is_some_and(|(prev_key, _v)| k &lt;= <span class="kw-2">*</span>prev_key)
             {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError::from_str(<span class="string">"Non-canonical encoding"</span>));
             }
-            <span class="kw">let </span>v = V::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
+            <span class="kw">let </span>v = V::consensus_decode_partial_from_finite_reader(d, modules)<span class="question-mark">?</span>;
             <span class="kw">if </span>res.insert(k, v).is_some() {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError(<span class="macro">anyhow::format_err!</span>(<span class="string">"Duplicate key"</span>)));
             }
@@ -586,14 +579,14 @@
 <span class="kw">where
     </span>K: Decodable + Ord,
 {
-    <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_partial_from_finite_reader&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>res = <span class="self">Self</span>::new();
-        <span class="kw">let </span>len = u64::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>len = u64::consensus_decode_partial_from_finite_reader(d, modules)<span class="question-mark">?</span>;
         <span class="kw">for _ in </span><span class="number">0</span>..len {
-            <span class="kw">let </span>k = K::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
+            <span class="kw">let </span>k = K::consensus_decode_partial_from_finite_reader(d, modules)<span class="question-mark">?</span>;
             <span class="kw">if </span>res.last().is_some_and(|prev_key| k &lt;= <span class="kw-2">*</span>prev_key) {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError::from_str(<span class="string">"Non-canonical encoding"</span>));
             }
@@ -628,39 +621,30 @@
 
         <span class="comment">// A length prefix greater than the number of elements should return an error.
         </span><span class="kw">let </span>buf = [<span class="number">4u8</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>];
-        <span class="macro">assert!</span>(
-            Vec::&lt;u8&gt;::consensus_decode(<span class="kw-2">&amp;mut </span>buf.as_slice(), <span class="kw-2">&amp;</span>ModuleRegistry::default()).is_err()
-        );
-        <span class="macro">assert!</span>(
-            Vec::&lt;u16&gt;::consensus_decode(<span class="kw-2">&amp;mut </span>buf.as_slice(), <span class="kw-2">&amp;</span>ModuleRegistry::default()).is_err()
-        );
-        <span class="macro">assert!</span>(
-            VecDeque::&lt;u8&gt;::consensus_decode(<span class="kw-2">&amp;mut </span>buf.as_slice(), <span class="kw-2">&amp;</span>ModuleRegistry::default())
-                .is_err()
-        );
-        <span class="macro">assert!</span>(
-            VecDeque::&lt;u16&gt;::consensus_decode(<span class="kw-2">&amp;mut </span>buf.as_slice(), <span class="kw-2">&amp;</span>ModuleRegistry::default())
-                .is_err()
-        );
+        <span class="macro">assert!</span>(Vec::&lt;u8&gt;::consensus_decode_whole(<span class="kw-2">&amp;</span>buf, <span class="kw-2">&amp;</span>ModuleRegistry::default()).is_err());
+        <span class="macro">assert!</span>(Vec::&lt;u16&gt;::consensus_decode_whole(<span class="kw-2">&amp;</span>buf, <span class="kw-2">&amp;</span>ModuleRegistry::default()).is_err());
+        <span class="macro">assert!</span>(VecDeque::&lt;u8&gt;::consensus_decode_whole(<span class="kw-2">&amp;</span>buf, <span class="kw-2">&amp;</span>ModuleRegistry::default()).is_err());
+        <span class="macro">assert!</span>(VecDeque::&lt;u16&gt;::consensus_decode_whole(<span class="kw-2">&amp;</span>buf, <span class="kw-2">&amp;</span>ModuleRegistry::default()).is_err());
 
         <span class="comment">// A length prefix less than the number of elements should skip elements beyond
         // the encoded length.
         </span><span class="kw">let </span>buf = [<span class="number">2u8</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>];
         <span class="macro">assert_eq!</span>(
-            Vec::&lt;u8&gt;::consensus_decode(<span class="kw-2">&amp;mut </span>buf.as_slice(), <span class="kw-2">&amp;</span>ModuleRegistry::default()).unwrap(),
+            Vec::&lt;u8&gt;::consensus_decode_partial(<span class="kw-2">&amp;mut &amp;</span>buf[..], <span class="kw-2">&amp;</span>ModuleRegistry::default()).unwrap(),
             <span class="macro">vec!</span>[<span class="number">1u8</span>, <span class="number">2</span>]
         );
         <span class="macro">assert_eq!</span>(
-            Vec::&lt;u16&gt;::consensus_decode(<span class="kw-2">&amp;mut </span>buf.as_slice(), <span class="kw-2">&amp;</span>ModuleRegistry::default()).unwrap(),
+            Vec::&lt;u16&gt;::consensus_decode_partial(<span class="kw-2">&amp;mut &amp;</span>buf[..], <span class="kw-2">&amp;</span>ModuleRegistry::default())
+                .unwrap(),
             <span class="macro">vec!</span>[<span class="number">1u16</span>, <span class="number">2</span>]
         );
         <span class="macro">assert_eq!</span>(
-            VecDeque::&lt;u8&gt;::consensus_decode(<span class="kw-2">&amp;mut </span>buf.as_slice(), <span class="kw-2">&amp;</span>ModuleRegistry::default())
+            VecDeque::&lt;u8&gt;::consensus_decode_partial(<span class="kw-2">&amp;mut &amp;</span>buf[..], <span class="kw-2">&amp;</span>ModuleRegistry::default())
                 .unwrap(),
             <span class="macro">vec!</span>[<span class="number">1u8</span>, <span class="number">2</span>]
         );
         <span class="macro">assert_eq!</span>(
-            VecDeque::&lt;u16&gt;::consensus_decode(<span class="kw-2">&amp;mut </span>buf.as_slice(), <span class="kw-2">&amp;</span>ModuleRegistry::default())
+            VecDeque::&lt;u16&gt;::consensus_decode_partial(<span class="kw-2">&amp;mut &amp;</span>buf[..], <span class="kw-2">&amp;</span>ModuleRegistry::default())
                 .unwrap(),
             <span class="macro">vec!</span>[<span class="number">1u16</span>, <span class="number">2</span>]
         );
