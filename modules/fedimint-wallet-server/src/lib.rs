@@ -33,6 +33,7 @@ use common::{
     TxOutputSummary, WalletCommonInit, WalletConsensusItem, WalletCreationError, WalletInput,
     WalletModuleTypes, WalletOutput, WalletOutputOutcome, WalletSummary, DEPRECATED_RBF_ERROR,
 };
+use fedimint_api_client::api::{DynModuleApi, FederationApiExt};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -48,8 +49,8 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{is_rbf_withdrawal_enabled, is_running_in_test_env, BitcoinRpcConfig};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
+    api_endpoint, ApiEndpoint, ApiError, ApiRequestErased, ApiVersion, CoreConsensusVersion,
+    InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
     TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
 #[cfg(not(target_family = "wasm"))]
@@ -80,7 +81,9 @@ use fedimint_wallet_common::{
     Rbf, UnknownWalletInputVariantError, WalletInputError, WalletOutputError, WalletOutputV0,
     CONFIRMATION_TARGET, FEERATE_MULTIPLIER, MODULE_CONSENSUS_VERSION,
 };
+use futures::future::join_all;
 use futures::{FutureExt, StreamExt};
+use itertools::Itertools;
 use metrics::{
     WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS, WALLET_PEGIN_SATS,
     WALLET_PEGOUT_FEES_SATS, WALLET_PEGOUT_SATS,
@@ -91,7 +94,7 @@ use rand::rngs::OsRng;
 use serde::Serialize;
 use strum::IntoEnumIterator;
 use tokio::sync::watch;
-use tracing::{debug, info, instrument, trace, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::db::{
     migrate_to_v1, BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix,
@@ -288,6 +291,7 @@ impl ServerModuleInit for WalletInit {
             args.db(),
             args.task_group(),
             args.our_peer_id(),
+            args.module_api().clone(),
         )
         .await?
         .into())
@@ -459,15 +463,30 @@ impl ServerModule for Wallet {
 
         items.push(WalletConsensusItem::Feerate(fee_rate_proposal));
 
-        if dbtx
+        // Consensus upgrade activation voting
+        let manual_vote = dbtx
             .get_value(&ConsensusVersionVotingActivationKey)
             .await
-            .is_some()
-            || is_running_in_test_env()
-        {
-            items.push(WalletConsensusItem::ModuleConsensusVersion(
-                MODULE_CONSENSUS_VERSION,
-            ));
+            .map(|()| {
+                // TODO: allow voting on any version between the currently active and max
+                // supported one in case we support a too high one already
+                MODULE_CONSENSUS_VERSION
+            });
+
+        let active_consensus_version = self.consensus_module_consensus_version(dbtx).await;
+        let automatic_vote = self.peer_supported_consensus_version.borrow().and_then(
+            |supported_consensus_version| {
+                // Only automatically vote if the commonly supported version is higher than the
+                // currently active one
+                (active_consensus_version < supported_consensus_version)
+                    .then_some(supported_consensus_version)
+            },
+        );
+
+        // Prioritizing automatic vote for now since the manual vote never resets. Once
+        // that is fixed this should be switched around.
+        if let Some(vote_version) = automatic_vote.or(manual_vote) {
+            items.push(WalletConsensusItem::ModuleConsensusVersion(vote_version));
         }
 
         items
@@ -980,6 +999,10 @@ pub struct Wallet {
     /// Fee rate updated periodically by a background task
     fee_rate_rx: watch::Receiver<Feerate>,
     task_group: TaskGroup,
+    /// Maximum consensus version supported by *all* our peers. Used to
+    /// automatically activate new consensus versions as soon as everyone
+    /// upgrades.
+    peer_supported_consensus_version: watch::Receiver<Option<ModuleConsensusVersion>>,
 }
 
 impl Wallet {
@@ -988,9 +1011,10 @@ impl Wallet {
         db: &Database,
         task_group: &TaskGroup,
         our_peer_id: PeerId,
+        module_api: DynModuleApi,
     ) -> anyhow::Result<Wallet> {
         let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
-        Ok(Self::new_with_bitcoind(cfg, db, btc_rpc, task_group, our_peer_id).await?)
+        Ok(Self::new_with_bitcoind(cfg, db, btc_rpc, task_group, our_peer_id, module_api).await?)
     }
 
     pub async fn new_with_bitcoind(
@@ -999,6 +1023,7 @@ impl Wallet {
         bitcoind: DynBitcoindRpc,
         task_group: &TaskGroup,
         our_peer_id: PeerId,
+        module_api: DynModuleApi,
     ) -> Result<Wallet, WalletCreationError> {
         Self::spawn_broadcast_pending_task(task_group, &bitcoind, db);
 
@@ -1015,6 +1040,9 @@ impl Wallet {
             .clone()
             .spawn_block_count_update_task(task_group)
             .map_err(|e| WalletCreationError::BlockCountSourceError(e.to_string()))?;
+
+        let peer_supported_consensus_version =
+            Self::spawn_peer_supported_consensus_version_task(module_api, task_group);
 
         let bitcoind_rpc = bitcoind;
 
@@ -1040,6 +1068,7 @@ impl Wallet {
             block_count_rx,
             fee_rate_rx,
             task_group: task_group.clone(),
+            peer_supported_consensus_version,
         };
 
         Ok(wallet)
@@ -1646,6 +1675,75 @@ impl Wallet {
         {
             self.graceful_shutdown().await;
         }
+    }
+
+    fn spawn_peer_supported_consensus_version_task(
+        api_client: DynModuleApi,
+        task_group: &TaskGroup,
+    ) -> watch::Receiver<Option<ModuleConsensusVersion>> {
+        let (sender, receiver) = watch::channel(None);
+        task_group.spawn_cancellable("fetch-peer-consensus-versions", async move {
+            loop {
+                let request_futures = api_client.all_peers().iter().map(|&peer| {
+                    let api_client_inner = api_client.clone();
+                    async move {
+                        api_client_inner
+                            .request_single_peer::<ModuleConsensusVersion>(
+                                SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT.to_owned(),
+                                ApiRequestErased::default(),
+                                peer,
+                            )
+                            .await
+                            .ok()
+                    }
+                });
+
+                let peer_consensus_versions = join_all(request_futures)
+                    .await
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>();
+
+                let sorted_consensus_versions = peer_consensus_versions
+                    .into_iter()
+                    .chain(std::iter::once(MODULE_CONSENSUS_VERSION))
+                    .sorted()
+                    .collect::<Vec<_>>();
+                let all_peers_supported_version =
+                    if sorted_consensus_versions.len() == api_client.all_peers().len() {
+                        let min_supported_version = *sorted_consensus_versions
+                            .first()
+                            .expect("at least one element");
+
+                        debug!(
+                            target: LOG_MODULE_WALLET,
+                            ?sorted_consensus_versions,
+                            "Fetched supported consensus versions from peers"
+                        );
+
+                        Some(min_supported_version)
+                    } else {
+                        trace!(
+                            target: LOG_MODULE_WALLET,
+                            ?sorted_consensus_versions,
+                            "Not all peers have reported their consensus version yet"
+                        );
+                        None
+                    };
+
+                if sender.send(all_peers_supported_version).is_err() {
+                    error!(target: LOG_MODULE_WALLET, "Failed to send consensus version to watch channel, stopping task");
+                    break;
+                }
+
+                if is_running_in_test_env() {
+                    sleep(Duration::from_secs(1)).await;
+                } else {
+                    sleep(Duration::from_secs(3600)).await;
+                }
+            }
+        });
+        receiver
     }
 }
 

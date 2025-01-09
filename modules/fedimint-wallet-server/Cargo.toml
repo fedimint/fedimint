@@ -20,6 +20,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
 erased-serde = { workspace = true }
+fedimint-api-client = { workspace = true }
 fedimint-bitcoind = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
@@ -28,6 +29,9 @@ fedimint-server = { workspace = true }
 fedimint-wallet-common = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
+itertools = { workspace = true }
+jaq-core = { workspace = true }
+jaq-json = { workspace = true }
 miniscript = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
