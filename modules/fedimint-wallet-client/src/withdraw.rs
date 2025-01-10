@@ -4,6 +4,7 @@ use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
+#[allow(deprecated)]
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::OutPoint;
@@ -72,6 +73,7 @@ async fn await_withdraw_processed(
         .await_tx_accepted(created.fm_outpoint.txid)
         .await?;
 
+    #[allow(deprecated)]
     let outcome = global_context
         .api()
         .request_current_consensus_retry(

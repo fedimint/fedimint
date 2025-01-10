@@ -82,10 +82,8 @@ pub trait IServerModule: Debug {
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, DynOutputError>;
 
-    /// Retrieve the current status of the output. Depending on the module this
-    /// might contain data needed by the client to access funds or give an
-    /// estimate of when funds will be available. Returns `None` if the
-    /// output is unknown, **NOT** if it is just not ready yet.
+    /// See [`ServerModule::output_status`]
+    #[deprecated(note = "https://github.com/fedimint/fedimint/issues/6671")]
     async fn output_status(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -232,16 +230,13 @@ where
         .map_err(|v| DynOutputError::from_typed(output.module_instance_id(), v))
     }
 
-    /// Retrieve the current status of the output. Depending on the module this
-    /// might contain data needed by the client to access funds or give an
-    /// estimate of when funds will be available. Returns `None` if the
-    /// output is unknown, **NOT** if it is just not ready yet.
     async fn output_status(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
     ) -> Option<DynOutputOutcome> {
+        #[allow(deprecated)]
         <Self as ServerModule>::output_status(self, dbtx, out_point)
             .await
             .map(|v| DynOutputOutcome::from_typed(module_instance_id, v))

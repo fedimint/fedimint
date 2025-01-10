@@ -10,6 +10,7 @@ use fedimint_client::transaction::{ClientInput, ClientInputBundle};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
+#[allow(deprecated)]
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::secp256k1::Keypair;
@@ -121,6 +122,7 @@ impl State for ReceiveStateMachine {
                         },
                     ),
                     StateTransition::new(
+                        #[allow(deprecated)]
                         Self::await_outcome_ready(
                             global_context.clone(),
                             context.decoder.clone(),
@@ -186,6 +188,7 @@ impl ReceiveStateMachine {
         old_state.update(ReceiveSMState::Rejected(error))
     }
 
+    #[deprecated(note = "https://github.com/fedimint/fedimint/issues/6671")]
     async fn await_outcome_ready(
         global_context: DynGlobalClientContext,
         module_decoder: Decoder,
@@ -221,6 +224,7 @@ impl ReceiveStateMachine {
                     },
                     global_context.api().all_peers().to_num_peers(),
                 ),
+                #[allow(deprecated)]
                 AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
                 ApiRequestErased::new(out_point),
             )

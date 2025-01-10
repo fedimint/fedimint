@@ -25,6 +25,7 @@ use fedimint_core::core::{Decoder, ModuleKind, OperationId};
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
+#[allow(deprecated)]
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::module::{
     ApiRequestErased, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
@@ -336,6 +337,7 @@ impl DummyClientModule {
     pub async fn receive_money(&self, outpoint: OutPoint) -> anyhow::Result<()> {
         let mut dbtx = self.db.begin_transaction().await;
 
+        #[allow(deprecated)]
         let outcome = self
             .client_ctx
             .global_api()
