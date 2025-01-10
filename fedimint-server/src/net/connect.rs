@@ -17,7 +17,7 @@ use tokio_rustls::rustls::server::AllowAnyAuthenticatedClient;
 use tokio_rustls::rustls::RootCertStore;
 use tokio_rustls::{rustls, TlsAcceptor, TlsConnector};
 
-use crate::net::framed::{AnyFramedTransport, BidiFramed, FramedTransport};
+use crate::net::framed::{DynFramedTransport, FramedTlsTcpStream, FramedTransport};
 
 /// Shared [`Connector`] trait object
 pub type SharedAnyConnector<M> = Arc<dyn Connector<M> + Send + Sync + Unpin + 'static>;
@@ -26,7 +26,7 @@ pub type SharedAnyConnector<M> = Arc<dyn Connector<M> + Send + Sync + Unpin + 's
 pub type AnyConnector<M> = Box<dyn Connector<M> + Send + Sync + Unpin + 'static>;
 
 /// Result of a connection opening future
-pub type ConnectResult<M> = Result<(PeerId, AnyFramedTransport<M>), anyhow::Error>;
+pub type ConnectResult<M> = Result<(PeerId, DynFramedTransport<M>), anyhow::Error>;
 
 /// Owned trait object type for incoming connection listeners
 pub type ConnectionListener<M> =
@@ -134,7 +134,7 @@ impl PeerCertStore {
         &self,
         listener: &mut TcpListener,
         acceptor: &TlsAcceptor,
-    ) -> Result<(PeerId, AnyFramedTransport<M>), anyhow::Error>
+    ) -> Result<(PeerId, DynFramedTransport<M>), anyhow::Error>
     where
         M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + 'static,
     {
@@ -144,7 +144,7 @@ impl PeerCertStore {
         let (_, tls_session) = tls_conn.get_ref();
         let auth_peer = self.authenticate_peer(tls_session.peer_certificates())?;
 
-        let framed = BidiFramed::new(tokio_rustls::TlsStream::Server(tls_conn)).into_dyn();
+        let framed = FramedTlsTcpStream::new(tokio_rustls::TlsStream::Server(tls_conn)).into_dyn();
         Ok((auth_peer, framed))
     }
 }
@@ -185,7 +185,7 @@ where
             return Err(anyhow::anyhow!("Connected to unexpected peer"));
         }
 
-        let framed = BidiFramed::new(tokio_rustls::TlsStream::Client(tls_conn)).into_dyn();
+        let framed = FramedTlsTcpStream::new(tokio_rustls::TlsStream::Client(tls_conn)).into_dyn();
 
         Ok((peer, framed))
     }

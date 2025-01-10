@@ -21,7 +21,7 @@ use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
 use fedimint_core::PeerId;
 use fedimint_logging::{LOG_CONSENSUS, LOG_NET_PEER};
 use futures::future::select_all;
-use futures::{FutureExt, SinkExt, StreamExt};
+use futures::{FutureExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 use tokio::time::sleep;
@@ -29,7 +29,7 @@ use tracing::{info, info_span, warn, Instrument};
 
 use crate::metrics::{PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT};
 use crate::net::connect::{AnyConnector, SharedAnyConnector};
-use crate::net::framed::AnyFramedTransport;
+use crate::net::framed::DynFramedTransport;
 
 #[derive(Clone)]
 pub struct ReconnectP2PConnections<M> {
@@ -180,7 +180,7 @@ impl<M: Send + 'static> P2PConnection<M> {
         peer_id: PeerId,
         peer_address: SafeUrl,
         connector: SharedAnyConnector<P2PMessage<M>>,
-        incoming_connections: Receiver<AnyFramedTransport<P2PMessage<M>>>,
+        incoming_connections: Receiver<DynFramedTransport<P2PMessage<M>>>,
         status_channel: Option<watch::Sender<P2PConnectionStatus>>,
         task_group: &TaskGroup,
     ) -> P2PConnection<M> {
@@ -250,16 +250,16 @@ struct P2PConnectionSMCommon<M> {
     peer_id_str: String,
     peer_address: SafeUrl,
     connector: SharedAnyConnector<P2PMessage<M>>,
-    incoming_connections: Receiver<AnyFramedTransport<P2PMessage<M>>>,
+    incoming_connections: Receiver<DynFramedTransport<P2PMessage<M>>>,
     status_channel: Option<watch::Sender<P2PConnectionStatus>>,
 }
 
 enum P2PConnectionSMState<M> {
     Disconnected(FibonacciBackoff),
-    Connected(AnyFramedTransport<P2PMessage<M>>),
+    Connected(DynFramedTransport<P2PMessage<M>>),
 }
 
-impl<M> P2PConnectionStateMachine<M> {
+impl<M: Send + 'static> P2PConnectionStateMachine<M> {
     async fn state_transition(mut self) -> Option<Self> {
         match self.state {
             P2PConnectionSMState::Disconnected(disconnected) => {
@@ -284,10 +284,10 @@ impl<M> P2PConnectionStateMachine<M> {
     }
 }
 
-impl<M> P2PConnectionSMCommon<M> {
+impl<M: Send + 'static> P2PConnectionSMCommon<M> {
     async fn transition_connected(
         &mut self,
-        mut connection: AnyFramedTransport<P2PMessage<M>>,
+        mut connection: DynFramedTransport<P2PMessage<M>>,
     ) -> Option<P2PConnectionSMState<M>> {
         tokio::select! {
             message = self.outgoing_receiver.recv() => {
@@ -296,7 +296,7 @@ impl<M> P2PConnectionSMCommon<M> {
             connection = self.incoming_connections.recv() => {
                 Some(self.connect(connection.ok()?).await)
             },
-            Some(message) = connection.next() => {
+            message = connection.receive() => {
                 match message {
                     Ok(message) => {
                         if let P2PMessage::Message(message) = message {
@@ -319,7 +319,7 @@ impl<M> P2PConnectionSMCommon<M> {
 
     async fn connect(
         &mut self,
-        mut connection: AnyFramedTransport<P2PMessage<M>>,
+        mut connection: DynFramedTransport<P2PMessage<M>>,
     ) -> P2PConnectionSMState<M> {
         info!(target: LOG_NET_PEER, "Connected to peer");
 
@@ -341,7 +341,7 @@ impl<M> P2PConnectionSMCommon<M> {
 
     async fn send_message(
         &mut self,
-        mut connection: AnyFramedTransport<P2PMessage<M>>,
+        mut connection: DynFramedTransport<P2PMessage<M>>,
         peer_message: P2PMessage<M>,
     ) -> P2PConnectionSMState<M> {
         PEER_MESSAGES_COUNT
@@ -352,10 +352,7 @@ impl<M> P2PConnectionSMCommon<M> {
             return self.disconnect(e);
         }
 
-        match connection.flush().await {
-            Ok(()) => P2PConnectionSMState::Connected(connection),
-            Err(e) => self.disconnect(e),
-        }
+        P2PConnectionSMState::Connected(connection)
     }
 
     async fn transition_disconnected(
@@ -386,7 +383,7 @@ impl<M> P2PConnectionSMCommon<M> {
         }
     }
 
-    async fn try_reconnect(&self) -> Result<AnyFramedTransport<P2PMessage<M>>, anyhow::Error> {
+    async fn try_reconnect(&self) -> Result<DynFramedTransport<P2PMessage<M>>, anyhow::Error> {
         info!(target: LOG_NET_PEER, "Attempting to reconnect to peer");
 
         let (connected_peer, connection) = self
