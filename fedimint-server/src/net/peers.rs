@@ -28,7 +28,7 @@ use tokio::time::sleep;
 use tracing::{info, info_span, warn, Instrument};
 
 use crate::metrics::{PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT};
-use crate::net::connect::{AnyConnector, SharedAnyConnector};
+use crate::net::connect::DynConnector;
 use crate::net::framed::DynFramedTransport;
 
 #[derive(Clone)]
@@ -59,11 +59,10 @@ pub enum P2PMessage<M> {
 impl<M: Send + 'static> ReconnectP2PConnections<M> {
     pub(crate) async fn new(
         cfg: NetworkConfig,
-        connector: AnyConnector<P2PMessage<M>>,
+        connector: DynConnector<P2PMessage<M>>,
         task_group: &TaskGroup,
         mut status_channels: Option<BTreeMap<PeerId, watch::Sender<P2PConnectionStatus>>>,
     ) -> Self {
-        let connector: SharedAnyConnector<P2PMessage<M>> = connector.into();
         let mut connection_senders = BTreeMap::new();
         let mut connections = BTreeMap::new();
 
@@ -179,7 +178,7 @@ impl<M: Send + 'static> P2PConnection<M> {
         our_id: PeerId,
         peer_id: PeerId,
         peer_address: SafeUrl,
-        connector: SharedAnyConnector<P2PMessage<M>>,
+        connector: DynConnector<P2PMessage<M>>,
         incoming_connections: Receiver<DynFramedTransport<P2PMessage<M>>>,
         status_channel: Option<watch::Sender<P2PConnectionStatus>>,
         task_group: &TaskGroup,
@@ -249,7 +248,7 @@ struct P2PConnectionSMCommon<M> {
     peer_id: PeerId,
     peer_id_str: String,
     peer_address: SafeUrl,
-    connector: SharedAnyConnector<P2PMessage<M>>,
+    connector: DynConnector<P2PMessage<M>>,
     incoming_connections: Receiver<DynFramedTransport<P2PMessage<M>>>,
     status_channel: Option<watch::Sender<P2PConnectionStatus>>,
 }
@@ -388,7 +387,7 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
 
         let (connected_peer, connection) = self
             .connector
-            .connect_framed(self.peer_address.with_port_or_known_default(), self.peer_id)
+            .connect(self.peer_address.with_port_or_known_default(), self.peer_id)
             .await?;
 
         ensure!(

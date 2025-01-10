@@ -594,8 +594,8 @@ impl ServerConfig {
 
     pub fn tls_config(&self) -> TlsConfig {
         TlsConfig {
-            our_private_key: self.private.tls_key.clone(),
-            peer_certs: self.consensus.tls_certs.clone(),
+            private_key: self.private.tls_key.clone(),
+            certificates: self.consensus.tls_certs.clone(),
             peer_names: self
                 .local
                 .p2p_endpoints
@@ -629,8 +629,8 @@ impl ConfigGenParams {
 
     pub fn tls_config(&self) -> TlsConfig {
         TlsConfig {
-            our_private_key: self.local.our_private_key.clone(),
-            peer_certs: self.tls_certs(),
+            private_key: self.local.our_private_key.clone(),
+            certificates: self.tls_certs(),
             peer_names: self
                 .p2p_urls()
                 .into_iter()
