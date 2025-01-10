@@ -147,13 +147,16 @@
 <a href="#146" id="146">146</a>
 <a href="#147" id="147">147</a>
 <a href="#148" id="148">148</a>
-<a href="#149" id="149">149</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::Txid;
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::Txid;
 <span class="kw">use </span>fedimint_api_client::api::{deserialize_outcome, FederationApiExt};
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
+<span class="attr">#[allow(deprecated)]
+</span><span class="kw">use </span>fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::OutPoint;
 <span class="kw">use </span>fedimint_wallet_common::WalletOutputOutcome;
@@ -221,7 +224,8 @@
         .await_tx_accepted(created.fm_outpoint.txid)
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>outcome = global_context
+    <span class="attr">#[allow(deprecated)]
+    </span><span class="kw">let </span>outcome = global_context
         .api()
         .request_current_consensus_retry(
             AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),

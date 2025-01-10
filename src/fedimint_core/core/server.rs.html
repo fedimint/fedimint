@@ -276,12 +276,7 @@
 <a href="#275" id="275">275</a>
 <a href="#276" id="276">276</a>
 <a href="#277" id="277">277</a>
-<a href="#278" id="278">278</a>
-<a href="#279" id="279">279</a>
-<a href="#280" id="280">280</a>
-<a href="#281" id="281">281</a>
-<a href="#282" id="282">282</a>
-<a href="#283" id="283">283</a></pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint Core Server module interface
+<a href="#278" id="278">278</a></pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint Core Server module interface
 //!
 //! Fedimint supports externally implemented modules.
 //!
@@ -365,10 +360,8 @@
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, DynOutputError&gt;;
 
-    <span class="doccomment">/// Retrieve the current status of the output. Depending on the module this
-    /// might contain data needed by the client to access funds or give an
-    /// estimate of when funds will be available. Returns `None` if the
-    /// output is unknown, **NOT** if it is just not ready yet.
+    <span class="doccomment">/// See [`ServerModule::output_status`]
+    </span><span class="attr">#[deprecated(note = <span class="string">"https://github.com/fedimint/fedimint/issues/6671"</span>)]
     </span><span class="kw">async fn </span>output_status(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
@@ -515,17 +508,14 @@
         </span>.map_err(|v| DynOutputError::from_typed(output.module_instance_id(), v))
     }
 
-    <span class="doccomment">/// Retrieve the current status of the output. Depending on the module this
-    /// might contain data needed by the client to access funds or give an
-    /// estimate of when funds will be available. Returns `None` if the
-    /// output is unknown, **NOT** if it is just not ready yet.
-    </span><span class="kw">async fn </span>output_status(
+    <span class="kw">async fn </span>output_status(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;DynOutputOutcome&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::output_status(<span class="self">self</span>, dbtx, out_point)
+        <span class="attr">#[allow(deprecated)]
+        </span>&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::output_status(<span class="self">self</span>, dbtx, out_point)
             .<span class="kw">await
             </span>.map(|v| DynOutputOutcome::from_typed(module_instance_id, v))
     }

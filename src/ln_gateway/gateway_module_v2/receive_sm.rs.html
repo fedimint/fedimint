@@ -320,7 +320,11 @@
 <a href="#319" id="319">319</a>
 <a href="#320" id="320">320</a>
 <a href="#321" id="321">321</a>
-<a href="#322" id="322">322</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::future::pending;
 
@@ -332,7 +336,8 @@
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::{Decoder, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
+<span class="attr">#[allow(deprecated)]
+</span><span class="kw">use </span>fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::secp256k1::Keypair;
 <span class="kw">use </span>fedimint_core::{NumPeersExt, OutPoint, PeerId, TransactionId};
@@ -443,7 +448,8 @@
                         },
                     ),
                     StateTransition::new(
-                        <span class="self">Self</span>::await_outcome_ready(
+                        <span class="attr">#[allow(deprecated)]
+                        </span><span class="self">Self</span>::await_outcome_ready(
                             global_context.clone(),
                             context.decoder.clone(),
                             context.tpe_pks.clone(),
@@ -508,7 +514,8 @@
         old_state.update(ReceiveSMState::Rejected(error))
     }
 
-    <span class="kw">async fn </span>await_outcome_ready(
+    <span class="attr">#[deprecated(note = <span class="string">"https://github.com/fedimint/fedimint/issues/6671"</span>)]
+    </span><span class="kw">async fn </span>await_outcome_ready(
         global_context: DynGlobalClientContext,
         module_decoder: Decoder,
         tpe_pks: BTreeMap&lt;PeerId, PublicKeyShare&gt;,
@@ -543,7 +550,8 @@
                     },
                     global_context.api().all_peers().to_num_peers(),
                 ),
-                AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
+                <span class="attr">#[allow(deprecated)]
+                </span>AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
                 ApiRequestErased::new(out_point),
             )
             .<span class="kw">await
