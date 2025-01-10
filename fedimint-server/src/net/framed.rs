@@ -9,8 +9,9 @@ use std::task::{Context, Poll};
 use bytes::{Buf, BufMut, BytesMut};
 use fedimint_logging::LOG_NET_PEER;
 use futures::{Sink, Stream};
-use tokio::io::{AsyncRead, AsyncWrite, ReadHalf, WriteHalf};
-use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::io::{ReadHalf, WriteHalf};
+use tokio::net::TcpStream;
+use tokio_rustls::TlsStream;
 use tokio_util::codec::{FramedRead, FramedWrite};
 use tracing::{error, trace};
 
@@ -39,10 +40,6 @@ pub trait FramedTransport<T>:
     }
 }
 
-/// Special case for tokio [`TcpStream`](tokio::net::TcpStream) based
-/// [`BidiFramed`] instances
-pub type TcpBidiFramed<T> = BidiFramed<T, OwnedWriteHalf, OwnedReadHalf>;
-
 /// Sink (sending) half of [`BidiFramed`]
 pub type FramedSink<S, T> = FramedWrite<S, BincodeCodec<T>>;
 /// Stream (receiving) half of [`BidiFramed`]
@@ -55,9 +52,9 @@ pub type FramedStream<S, T> = FramedRead<S, BincodeCodec<T>>;
 /// stream prepended with a length field. `BidiFramed` implements `Sink<T>` and
 /// `Stream<Item=Result<T, _>>`.
 #[derive(Debug)]
-pub struct BidiFramed<T, WH, RH> {
-    sink: FramedSink<WH, T>,
-    stream: FramedStream<RH, T>,
+pub struct BidiFramed<T> {
+    sink: FramedSink<WriteHalf<TlsStream<TcpStream>>, T>,
+    stream: FramedStream<ReadHalf<TlsStream<TcpStream>>, T>,
 }
 
 /// Framed codec that uses [`bincode`] to encode structs with [`serde`] support
@@ -66,21 +63,13 @@ pub struct BincodeCodec<T> {
     _pd: PhantomData<T>,
 }
 
-impl<T, WH, RH> BidiFramed<T, WH, RH>
+impl<T> BidiFramed<T>
 where
-    WH: AsyncWrite,
-    RH: AsyncRead,
     T: serde::Serialize + serde::de::DeserializeOwned,
 {
-    /// Builds a new `BidiFramed` codec around a stream `stream`.
-    ///
-    /// See [`TcpBidiFramed::new_from_tcp`] for a more efficient version in case
-    /// the stream is a tokio TCP stream.
-    pub fn new<S>(stream: S) -> BidiFramed<T, WriteHalf<S>, ReadHalf<S>>
-    where
-        S: AsyncRead + AsyncWrite,
-    {
+    pub fn new(stream: TlsStream<tokio::net::TcpStream>) -> BidiFramed<T> {
         let (read, write) = tokio::io::split(stream);
+
         BidiFramed {
             sink: FramedSink::new(write, BincodeCodec::new()),
             stream: FramedStream::new(read, BincodeCodec::new()),
@@ -92,33 +81,18 @@ where
     /// This can be useful in cases where potentially simultaneous read and
     /// write operations are required. Otherwise a we would need a mutex to
     /// guard access.
-    pub fn borrow_parts(&mut self) -> (&mut FramedSink<WH, T>, &mut FramedStream<RH, T>) {
+    pub fn borrow_parts(
+        &mut self,
+    ) -> (
+        &mut FramedSink<WriteHalf<TlsStream<TcpStream>>, T>,
+        &mut FramedStream<ReadHalf<TlsStream<TcpStream>>, T>,
+    ) {
         (&mut self.sink, &mut self.stream)
     }
 }
 
-impl<T> TcpBidiFramed<T>
+impl<T> Sink<T> for BidiFramed<T>
 where
-    T: serde::Serialize + serde::de::DeserializeOwned,
-{
-    /// Special constructor for tokio TCP connections.
-    ///
-    /// Tokio [`TcpStream`](tokio::net::TcpStream) implements an efficient
-    /// method of splitting the stream into a read and a write half this
-    /// constructor takes advantage of.
-    pub fn new_from_tcp(stream: tokio::net::TcpStream) -> TcpBidiFramed<T> {
-        let (read, write) = stream.into_split();
-        BidiFramed {
-            sink: FramedSink::new(write, BincodeCodec::new()),
-            stream: FramedStream::new(read, BincodeCodec::new()),
-        }
-    }
-}
-
-impl<T, WH, RH> Sink<T> for BidiFramed<T, WH, RH>
-where
-    WH: tokio::io::AsyncWrite + Unpin,
-    RH: Unpin,
     T: Debug + serde::Serialize,
 {
     type Error = anyhow::Error;
@@ -140,11 +114,9 @@ where
     }
 }
 
-impl<T, WH, RH> Stream for BidiFramed<T, WH, RH>
+impl<T> Stream for BidiFramed<T>
 where
     T: serde::de::DeserializeOwned,
-    WH: Unpin,
-    RH: tokio::io::AsyncRead + Unpin,
 {
     type Item = Result<T, anyhow::Error>;
 
@@ -153,11 +125,9 @@ where
     }
 }
 
-impl<T, WH, RH> FramedTransport<T> for BidiFramed<T, WH, RH>
+impl<T> FramedTransport<T> for BidiFramed<T>
 where
     T: Debug + serde::Serialize + serde::de::DeserializeOwned + Send,
-    WH: tokio::io::AsyncWrite + Send + Unpin,
-    RH: tokio::io::AsyncRead + Send + Unpin,
 {
     fn borrow_split(
         &mut self,

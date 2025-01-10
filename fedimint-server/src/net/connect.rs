@@ -12,11 +12,10 @@ use async_trait::async_trait;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
 use futures::Stream;
-use tokio::io::{ReadHalf, WriteHalf};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::rustls::server::AllowAnyAuthenticatedClient;
 use tokio_rustls::rustls::RootCertStore;
-use tokio_rustls::{rustls, TlsAcceptor, TlsConnector, TlsStream};
+use tokio_rustls::{rustls, TlsAcceptor, TlsConnector};
 
 use crate::net::framed::{AnyFramedTransport, BidiFramed, FramedTransport};
 
@@ -145,11 +144,7 @@ impl PeerCertStore {
         let (_, tls_session) = tls_conn.get_ref();
         let auth_peer = self.authenticate_peer(tls_session.peer_certificates())?;
 
-        let framed =
-            BidiFramed::<_, WriteHalf<TlsStream<TcpStream>>, ReadHalf<TlsStream<TcpStream>>>::new(
-                tls_conn,
-            )
-            .into_dyn();
+        let framed = BidiFramed::new(tokio_rustls::TlsStream::Server(tls_conn)).into_dyn();
         Ok((auth_peer, framed))
     }
 }
@@ -190,11 +185,7 @@ where
             return Err(anyhow::anyhow!("Connected to unexpected peer"));
         }
 
-        let framed =
-            BidiFramed::<_, WriteHalf<TlsStream<TcpStream>>, ReadHalf<TlsStream<TcpStream>>>::new(
-                tls_conn,
-            )
-            .into_dyn();
+        let framed = BidiFramed::new(tokio_rustls::TlsStream::Client(tls_conn)).into_dyn();
 
         Ok((peer, framed))
     }
