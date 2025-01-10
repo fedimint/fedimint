@@ -1,4 +1,4 @@
-# Setting up a Federation + Lightning Gateway
+# Setting up a Fedimint federation and Lightning Gateway
 
 This is a guide for setting up a 3/4 federation + lightning gateway. You can run this same setup on a different test network or on mainnet with real bitcoin,
 
