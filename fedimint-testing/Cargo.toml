@@ -12,7 +12,6 @@ repository = "https://github.com/fedimint/fedimint"
 rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
-default = ["tor"]
 tor = ["ln-gateway/tor"]
 
 [lib]
@@ -38,7 +37,7 @@ fedimint-server = { workspace = true }
 fedimint-testing-core = { workspace = true }
 fs-lock = { workspace = true }
 lightning-invoice = { workspace = true }
-ln-gateway = { package = "fedimint-ln-gateway", path = "../gateway/ln-gateway", version = "=0.6.0-alpha", default-features = false }
+ln-gateway = { package = "fedimint-ln-gateway", path = "../gateway/ln-gateway", version = "=0.6.0-alpha" }
 rand = { workspace = true }
 tempfile = "3.15.0"
 tokio = { workspace = true }

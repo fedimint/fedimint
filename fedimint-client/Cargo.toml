@@ -17,7 +17,6 @@ normal = ["aquamarine"]
 rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
-default = ["tor"]
 tor = ["fedimint-api-client/tor"]
 
 [lib]
@@ -31,7 +30,7 @@ async-stream = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
 fedimint-aead = { workspace = true }
-fedimint-api-client = { path = "../fedimint-api-client", version = "=0.6.0-alpha", default-features = false }
+fedimint-api-client = { path = "../fedimint-api-client", version = "=0.6.0-alpha" }
 fedimint-core = { workspace = true }
 fedimint-derive-secret = { workspace = true }
 fedimint-eventlog = { workspace = true }
