@@ -1,0 +1,4 @@
+http://your.ip.add.ress:3000/
+http://your.ip.add.ress:3001/
+# some fake links in rustdoc-index.md
+file://.*/\b\w+(_\w+)*\b/index.html
