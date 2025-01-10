@@ -135,7 +135,7 @@ impl FederationTest {
         gw.handle_connect_federation(ConnectFedPayload {
             invite_code: self.invite_code().to_string(),
             #[cfg(feature = "tor")]
-            use_tor: Some(false), // TODO: (@leonardo) Should we get it from self.configs too ?
+            use_tor: Some(false),
             recover: Some(false),
         })
         .await
