@@ -719,24 +719,17 @@
 <a href="#718" id="718">718</a>
 <a href="#719" id="719">719</a>
 <a href="#720" id="720">720</a>
-<a href="#721" id="721">721</a>
-<a href="#722" id="722">722</a>
-<a href="#723" id="723">723</a>
-<a href="#724" id="724">724</a>
-<a href="#725" id="725">725</a>
-<a href="#726" id="726">726</a>
-<a href="#727" id="727">727</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
+<a href="#721" id="721">721</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::path::{Path, PathBuf};
-<span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>fedimint_aead::{encrypt, get_encryption_key, random_salt};
 <span class="kw">use </span>fedimint_api_client::api::{
-    FederationStatus, GuardianConfigBackup, PeerConnectionStatus, PeerStatus, StatusResponse,
+    FederationStatus, GuardianConfigBackup, P2PConnectionStatus, PeerStatus, StatusResponse,
 };
 <span class="kw">use </span>fedimint_core::admin_client::ServerStatus;
 <span class="kw">use </span>fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
@@ -777,7 +770,7 @@
 <span class="kw">use </span>fedimint_core::{secp256k1, OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_logging::LOG_NET_API;
 <span class="kw">use </span>futures::StreamExt;
-<span class="kw">use </span>tokio::sync::{watch, RwLock};
+<span class="kw">use </span>tokio::sync::watch::{Receiver, Sender};
 <span class="kw">use </span>tracing::{debug, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::config::io::{
@@ -806,10 +799,9 @@
     <span class="kw">pub </span>force_api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="doccomment">/// For sending API events to consensus such as transactions
     </span><span class="kw">pub </span>submission_sender: async_channel::Sender&lt;ConsensusItem&gt;,
-    <span class="kw">pub </span>shutdown_receiver: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;,
-    <span class="kw">pub </span>shutdown_sender: watch::Sender&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;,
-    <span class="kw">pub </span>connection_status_channels: Arc&lt;RwLock&lt;BTreeMap&lt;PeerId, PeerConnectionStatus&gt;&gt;&gt;,
-    <span class="kw">pub </span>last_ci_by_peer: Arc&lt;RwLock&lt;BTreeMap&lt;PeerId, u64&gt;&gt;&gt;,
+    <span class="kw">pub </span>shutdown_receiver: Receiver&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;,
+    <span class="kw">pub </span>shutdown_sender: Sender&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;,
+    <span class="kw">pub </span>status_receivers: BTreeMap&lt;PeerId, (Receiver&lt;P2PConnectionStatus&gt;, Receiver&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;)&gt;,
     <span class="kw">pub </span>supported_api_versions: SupportedApiVersionsSummary,
     <span class="kw">pub </span>code_version_str: String,
 }
@@ -940,24 +932,20 @@
     }
 
     <span class="kw">pub async fn </span>get_federation_status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;FederationStatus&gt; {
-        <span class="kw">let </span>peers_connection_status = <span class="self">self</span>.connection_status_channels.read().<span class="kw">await</span>.clone();
-        <span class="kw">let </span>last_ci_by_peer = <span class="self">self</span>.last_ci_by_peer.read().<span class="kw">await</span>.clone();
         <span class="kw">let </span>session_count = <span class="self">self</span>.session_count().<span class="kw">await</span>;
         <span class="kw">let </span>scheduled_shutdown = <span class="self">self</span>.shutdown_receiver.borrow().to_owned();
 
-        <span class="kw">let </span>status_by_peer = peers_connection_status
-            .into_iter()
-            .map(|(peer, connection_status)| {
-                <span class="kw">let </span>last_contribution = last_ci_by_peer.get(<span class="kw-2">&amp;</span>peer).copied();
-                <span class="kw">let </span>flagged = last_contribution.unwrap_or(<span class="number">0</span>) + <span class="number">1 </span>&lt; session_count;
-
+        <span class="kw">let </span>status_by_peer = <span class="self">self
+            </span>.status_receivers
+            .iter()
+            .map(|(peer, (p2p_receiver, ci_receiver))| {
                 <span class="kw">let </span>consensus_status = PeerStatus {
-                    last_contribution,
-                    connection_status,
-                    flagged,
+                    connection_status: <span class="kw-2">*</span>p2p_receiver.borrow(),
+                    last_contribution: <span class="kw-2">*</span>ci_receiver.borrow(),
+                    flagged: ci_receiver.borrow().unwrap_or(<span class="number">0</span>) + <span class="number">1 </span>&lt; session_count,
                 };
 
-                (peer, consensus_status)
+                (<span class="kw-2">*</span>peer, consensus_status)
             })
             .collect::&lt;HashMap&lt;PeerId, PeerStatus&gt;&gt;();
 
@@ -968,12 +956,12 @@
 
         <span class="kw">let </span>peers_online = status_by_peer
             .values()
-            .filter(|status| status.connection_status == PeerConnectionStatus::Connected)
+            .filter(|status| status.connection_status == P2PConnectionStatus::Connected)
             .count() <span class="kw">as </span>u64;
 
         <span class="kw">let </span>peers_offline = status_by_peer
             .values()
-            .filter(|status| status.connection_status == PeerConnectionStatus::Disconnected)
+            .filter(|status| status.connection_status == P2PConnectionStatus::Disconnected)
             .count() <span class="kw">as </span>u64;
 
         <span class="prelude-val">Ok</span>(FederationStatus {

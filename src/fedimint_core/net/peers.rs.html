@@ -81,25 +81,7 @@
 <a href="#80" id="80">80</a>
 <a href="#81" id="81">81</a>
 <a href="#82" id="82">82</a>
-<a href="#83" id="83">83</a>
-<a href="#84" id="84">84</a>
-<a href="#85" id="85">85</a>
-<a href="#86" id="86">86</a>
-<a href="#87" id="87">87</a>
-<a href="#88" id="88">88</a>
-<a href="#89" id="89">89</a>
-<a href="#90" id="90">90</a>
-<a href="#91" id="91">91</a>
-<a href="#92" id="92">92</a>
-<a href="#93" id="93">93</a>
-<a href="#94" id="94">94</a>
-<a href="#95" id="95">95</a>
-<a href="#96" id="96">96</a>
-<a href="#97" id="97">97</a>
-<a href="#98" id="98">98</a>
-<a href="#99" id="99">99</a>
-<a href="#100" id="100">100</a>
-<a href="#101" id="101">101</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::{Deref, DerefMut};
+<a href="#83" id="83">83</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::Deref;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>async_trait::async_trait;
@@ -112,44 +94,26 @@
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
 </span><span class="kw">pub mod </span>fake;
 
-<span class="doccomment">/// Owned [`PeerConnections`] trait object type
-</span><span class="kw">pub struct </span>PeerConnections&lt;Msg&gt;(Box&lt;<span class="kw">dyn </span>IPeerConnections&lt;Msg&gt; + Send + <span class="lifetime">'static</span>&gt;);
-
-<span class="kw">impl</span>&lt;Msg&gt; Deref <span class="kw">for </span>PeerConnections&lt;Msg&gt; {
-    <span class="kw">type </span>Target = <span class="kw">dyn </span>IPeerConnections&lt;Msg&gt; + Send + <span class="lifetime">'static</span>;
-
-    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
-        <span class="kw-2">&amp;*</span><span class="self">self</span>.<span class="number">0
-    </span>}
-}
-
-<span class="kw">impl</span>&lt;Msg&gt; DerefMut <span class="kw">for </span>PeerConnections&lt;Msg&gt; {
-    <span class="kw">fn </span>deref_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self</span>::Target {
-        <span class="kw-2">&amp;mut *</span><span class="self">self</span>.<span class="number">0
-    </span>}
-}
+<span class="kw">pub type </span>DynP2PConnections&lt;M&gt; = Arc&lt;<span class="kw">dyn </span>IP2PConnections&lt;M&gt;&gt;;
 
 <span class="doccomment">/// Connection manager that tries to keep connections open to all peers
 </span><span class="attr">#[async_trait]
-</span><span class="kw">pub trait </span>IPeerConnections&lt;M&gt;
-<span class="kw">where
-    </span>M: Serialize + DeserializeOwned + Unpin + Send,
-{
+</span><span class="kw">pub trait </span>IP2PConnections&lt;M&gt;: Send + Sync + <span class="lifetime">'static </span>{
     <span class="doccomment">/// Send message to recipient; block if channel is full.
-    </span><span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, recipient: Recipient, msg: M);
+    </span><span class="kw">async fn </span>send(<span class="kw-2">&amp;</span><span class="self">self</span>, recipient: Recipient, msg: M);
 
     <span class="doccomment">/// Try to send message to recipient; drop message if channel is full.
     </span><span class="kw">fn </span>try_send(<span class="kw-2">&amp;</span><span class="self">self</span>, recipient: Recipient, msg: M);
 
     <span class="doccomment">/// Await receipt of a message; return None if we are shutting down.
-    </span><span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;(PeerId, M)&gt;;
+    </span><span class="kw">async fn </span>receive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;(PeerId, M)&gt;;
 
-    <span class="doccomment">/// Converts the struct to a `PeerConnection` trait object
-    </span><span class="kw">fn </span>into_dyn(<span class="self">self</span>) -&gt; PeerConnections&lt;M&gt;
+    <span class="doccomment">/// Convert the struct to trait object.
+    </span><span class="kw">fn </span>into_dyn(<span class="self">self</span>) -&gt; DynP2PConnections&lt;M&gt;
     <span class="kw">where
-        </span><span class="self">Self</span>: Sized + Send + <span class="lifetime">'static</span>,
+        </span><span class="self">Self</span>: Sized,
     {
-        PeerConnections(Box::new(<span class="self">self</span>))
+        Arc::new(<span class="self">self</span>)
     }
 }
 
@@ -175,10 +139,10 @@
 }
 
 <span class="attr">#[async_trait]
-</span><span class="doccomment">/// Like [`IPeerConnections`] but with an ability to handle multiple
+</span><span class="doccomment">/// Like [`IP2PConnections`] but with an ability to handle multiple
 /// destinations (like modules) per each peer-connection.
 ///
-/// Notably, unlike [`IPeerConnections`] implementations need to be thread-safe,
+/// Notably, unlike [`IP2PConnections`] implementations need to be thread-safe,
 /// as the primary intended use should support multiple threads using
 /// multiplexed channel at the same time.
 </span><span class="kw">pub trait </span>IMuxPeerConnections&lt;MuxKey, Msg&gt;

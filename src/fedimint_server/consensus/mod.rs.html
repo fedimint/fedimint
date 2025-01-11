@@ -280,7 +280,17 @@
 <a href="#279" id="279">279</a>
 <a href="#280" id="280">280</a>
 <a href="#281" id="281">281</a>
-<a href="#282" id="282">282</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>aleph_bft;
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>aleph_bft;
 <span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>debug;
@@ -291,14 +301,13 @@
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
-<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>async_channel::Sender;
 <span class="kw">use </span>db::get_global_database_migrations;
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
-<span class="kw">use </span>fedimint_api_client::api::DynGlobalApi;
+<span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, P2PConnectionStatus};
 <span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::{apply_migrations, apply_migrations_server, Database};
@@ -310,7 +319,7 @@
 <span class="kw">use </span>fedimint_core::NumPeers;
 <span class="kw">use </span>fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
 <span class="kw">use </span>jsonrpsee::server::ServerHandle;
-<span class="kw">use </span>tokio::sync::{watch, RwLock};
+<span class="kw">use </span>tokio::sync::watch;
 <span class="kw">use </span>tracing::{info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::config::{ServerConfig, ServerConfigLocal};
@@ -383,8 +392,20 @@
 
     <span class="kw">let </span>(submission_sender, submission_receiver) = async_channel::bounded(TRANSACTION_BUFFER);
     <span class="kw">let </span>(shutdown_sender, shutdown_receiver) = watch::channel(<span class="prelude-val">None</span>);
-    <span class="kw">let </span>connection_status_channels = Arc::new(RwLock::new(BTreeMap::new()));
-    <span class="kw">let </span>last_ci_by_peer = Arc::new(RwLock::new(BTreeMap::new()));
+
+    <span class="kw">let </span><span class="kw-2">mut </span>p2p_status_senders = BTreeMap::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>ci_status_senders = BTreeMap::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>status_receivers = BTreeMap::new();
+
+    <span class="kw">for </span>peer <span class="kw">in </span>cfg.consensus.broadcast_public_keys.keys().copied() {
+        <span class="kw">let </span>(p2p_sender, p2p_receiver) = watch::channel(P2PConnectionStatus::Disconnected);
+        <span class="kw">let </span>(ci_sender, ci_receiver) = watch::channel(<span class="prelude-val">None</span>);
+
+        p2p_status_senders.insert(peer, p2p_sender);
+        ci_status_senders.insert(peer, ci_sender);
+
+        status_receivers.insert(peer, (p2p_receiver, ci_receiver));
+    }
 
     <span class="kw">let </span>consensus_api = ConsensusApi {
         cfg: cfg.clone(),
@@ -398,8 +419,7 @@
             <span class="kw-2">&amp;</span>cfg.consensus.modules,
             <span class="kw-2">&amp;</span>module_init_registry,
         ),
-        last_ci_by_peer: last_ci_by_peer.clone(),
-        connection_status_channels: connection_status_channels.clone(),
+        status_receivers,
         force_api_secret: force_api_secrets.get_active(),
         code_version_str,
     };
@@ -451,10 +471,10 @@
             .map(|x| x.to_string())
             .collect(),
         cfg: cfg.clone(),
-        connection_status_channels,
+        p2p_status_senders,
+        ci_status_senders,
         submission_receiver,
         shutdown_receiver,
-        last_ci_by_peer,
         modules: module_registry,
         task_group: task_group.clone(),
         data_dir,

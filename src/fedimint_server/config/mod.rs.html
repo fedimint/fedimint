@@ -792,15 +792,9 @@
 <a href="#791" id="791">791</a>
 <a href="#792" id="792">792</a>
 <a href="#793" id="793">793</a>
-<a href="#794" id="794">794</a>
-<a href="#795" id="795">795</a>
-<a href="#796" id="796">796</a>
-<a href="#797" id="797">797</a>
-<a href="#798" id="798">798</a>
-<a href="#799" id="799">799</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
+<a href="#794" id="794">794</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
-<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{bail, format_err};
@@ -817,7 +811,7 @@
     ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleInit, MultiApiVersion, PeerHandle,
     SupportedApiVersionsSummary, SupportedCoreApiVersions, CORE_CONSENSUS_VERSION,
 };
-<span class="kw">use </span>fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
+<span class="kw">use </span>fedimint_core::net::peers::{DynP2PConnections, IMuxPeerConnections, IP2PConnections};
 <span class="kw">use </span>fedimint_core::task::{timeout, Cancelled, Elapsed, TaskGroup};
 <span class="kw">use </span>fedimint_core::{secp256k1, timing, PeerId};
 <span class="kw">use </span>fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
@@ -826,7 +820,6 @@
 <span class="kw">use </span>secp256k1::{PublicKey, Secp256k1, SecretKey};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>tokio::sync::RwLock;
 <span class="kw">use </span>tokio_rustls::rustls;
 <span class="kw">use </span>tracing::{error, info};
 
@@ -837,7 +830,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::NumPeersExt;
 <span class="kw">use </span><span class="kw">crate</span>::multiplexed::PeerConnectionMultiplexer;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{dns_sanitize, Connector, TlsConfig};
-<span class="kw">use </span><span class="kw">crate</span>::net::peers::{NetworkConfig, ReconnectPeerConnections};
+<span class="kw">use </span><span class="kw">crate</span>::net::peers::{NetworkConfig, ReconnectP2PConnections};
 <span class="kw">use </span><span class="kw">crate</span>::TlsTcpConnector;
 
 <span class="kw">pub mod </span>api;
@@ -1493,16 +1486,13 @@
     network: NetworkConfig,
     certs: TlsConfig,
     task_group: <span class="kw-2">&amp;</span>TaskGroup,
-) -&gt; PeerConnections&lt;T&gt;
+) -&gt; DynP2PConnections&lt;T&gt;
 <span class="kw">where
     </span>T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + <span class="lifetime">'static</span>,
 {
     <span class="kw">let </span>connector = TlsTcpConnector::new(certs, network.identity).into_dyn();
 
-    <span class="kw">let </span>connection_status_channels = Arc::new(RwLock::new(BTreeMap::new()));
-    <span class="kw">let </span>connections =
-        ReconnectPeerConnections::new(network, connector, task_group, connection_status_channels)
-            .<span class="kw">await</span>;
+    <span class="kw">let </span>connections = ReconnectP2PConnections::new(network, connector, task_group, <span class="prelude-val">None</span>).<span class="kw">await</span>;
 
     connections.into_dyn()
 }

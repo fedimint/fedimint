@@ -268,7 +268,7 @@
 <span class="kw">use </span>std::hash::Hash;
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>fedimint_core::net::peers::{IMuxPeerConnections, PeerConnections, Recipient};
+<span class="kw">use </span>fedimint_core::net::peers::{DynP2PConnections, IMuxPeerConnections, Recipient};
 <span class="kw">use </span>fedimint_core::runtime::spawn;
 <span class="kw">use </span>fedimint_core::task::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_core::PeerId;
@@ -340,7 +340,7 @@
     </span>Msg: Serialize + DeserializeOwned + Unpin + Send + Debug + Clone + <span class="lifetime">'static</span>,
     MuxKey: Serialize + DeserializeOwned + Unpin + Send + Debug + Eq + Hash + Clone + <span class="lifetime">'static</span>,
 {
-    <span class="kw">pub fn </span>new(connections: PeerConnections&lt;ModuleMultiplexed&lt;MuxKey, Msg&gt;&gt;) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(connections: DynP2PConnections&lt;ModuleMultiplexed&lt;MuxKey, Msg&gt;&gt;) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>(send_requests_tx, send_requests_rx) = channel(<span class="number">1000</span>);
         <span class="kw">let </span>(receive_callbacks_tx, receive_callbacks_rx) = channel(<span class="number">1000</span>);
 
@@ -361,7 +361,7 @@
     }
 
     <span class="kw">async fn </span>run(
-        <span class="kw-2">mut </span>connections: PeerConnections&lt;ModuleMultiplexed&lt;MuxKey, Msg&gt;&gt;,
+        connections: DynP2PConnections&lt;ModuleMultiplexed&lt;MuxKey, Msg&gt;&gt;,
         <span class="kw-2">mut </span>out_of_order: ModuleMultiplexerOutOfOrder&lt;MuxKey, Msg&gt;,
         <span class="kw-2">mut </span>send_requests_rx: Receiver&lt;(Vec&lt;PeerId&gt;, MuxKey, Msg)&gt;,
         <span class="kw-2">mut </span>receive_callbacks_rx: Receiver&lt;Callback&lt;MuxKey, Msg&gt;&gt;,
@@ -481,7 +481,7 @@
             <span class="kw">let </span>peer1 = PeerId::from(<span class="number">0</span>);
             <span class="kw">let </span>peer2 = PeerId::from(<span class="number">1</span>);
 
-            <span class="kw">let </span>(conn1, conn2) = make_fake_peer_connection(peer1, peer2, <span class="number">1000</span>, task_handle.clone());
+            <span class="kw">let </span>(conn1, conn2) = make_fake_peer_connection(peer1, peer2, <span class="number">1000</span>);
             <span class="kw">let </span>(conn1, conn2) = (
                 PeerConnectionMultiplexer::new(conn1).into_dyn(),
                 PeerConnectionMultiplexer::new(conn2).into_dyn(),

@@ -64,19 +64,14 @@
 <a href="#63" id="63">63</a>
 <a href="#64" id="64">64</a>
 <a href="#65" id="65">65</a>
-<a href="#66" id="66">66</a>
-<a href="#67" id="67">67</a>
-<a href="#68" id="68">68</a>
-<a href="#69" id="69">69</a>
-<a href="#70" id="70">70</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
+<a href="#66" id="66">66</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
-<span class="kw">use </span>fedimint_core::net::peers::{IPeerConnections, Recipient};
+<span class="kw">use </span>fedimint_core::net::peers::{DynP2PConnections, Recipient};
 <span class="kw">use </span>parity_scale_codec::{Decode, Encode, IoReader};
 
 <span class="kw">use </span><span class="kw">super</span>::data_provider::UnitData;
 <span class="kw">use </span><span class="kw">super</span>::keychain::Keychain;
 <span class="kw">use </span><span class="kw">super</span>::Message;
-<span class="kw">use </span><span class="kw">crate</span>::net::peers::ReconnectPeerConnections;
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq)]
 </span><span class="kw">pub struct </span>Hasher;
@@ -97,11 +92,11 @@
 &gt;;
 
 <span class="kw">pub struct </span>Network {
-    connections: ReconnectPeerConnections&lt;Message&gt;,
+    connections: DynP2PConnections&lt;Message&gt;,
 }
 
 <span class="kw">impl </span>Network {
-    <span class="kw">pub fn </span>new(connections: ReconnectPeerConnections&lt;Message&gt;) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(connections: DynP2PConnections&lt;Message&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{ connections }
     }
 }
@@ -117,10 +112,7 @@
             aleph_bft::Recipient::Everyone =&gt; Recipient::Everyone,
         };
 
-        <span class="comment">// since NetworkData does not implement Encodable we use
-        // parity_scale_codec::Encode to serialize it such that Message can
-        // implement Encodable
-        </span><span class="self">self</span>.connections
+        <span class="self">self</span>.connections
             .try_send(recipient, Message(network_data.encode()));
     }
 

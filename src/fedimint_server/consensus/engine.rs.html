@@ -860,7 +860,11 @@
 <a href="#859" id="859">859</a>
 <a href="#860" id="860">860</a>
 <a href="#861" id="861">861</a>
-<a href="#862" id="862">862</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -870,7 +874,7 @@
 <span class="kw">use </span>aleph_bft::Keychain <span class="kw">as </span>KeychainTrait;
 <span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>async_channel::Receiver;
-<span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, FederationApiExt, PeerConnectionStatus};
+<span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, FederationApiExt, P2PConnectionStatus};
 <span class="kw">use </span>fedimint_api_client::query::FilterMap;
 <span class="kw">use </span>fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
@@ -881,6 +885,7 @@
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::registry::{ModuleDecoderRegistry, ServerModuleRegistry};
 <span class="kw">use </span>fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
+<span class="kw">use </span>fedimint_core::net::peers::{DynP2PConnections, IP2PConnections};
 <span class="kw">use </span>fedimint_core::runtime::spawn;
 <span class="kw">use </span>fedimint_core::session_outcome::{
     AcceptedItem, SchnorrSignature, SessionOutcome, SignedSessionOutcome,
@@ -891,7 +896,7 @@
 <span class="kw">use </span>fedimint_core::{timing, NumPeers, NumPeersExt, PeerId};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>rand::Rng;
-<span class="kw">use </span>tokio::sync::{watch, RwLock};
+<span class="kw">use </span>tokio::sync::watch;
 <span class="kw">use </span>tracing::{debug, info, instrument, warn, Level};
 
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
@@ -915,7 +920,7 @@
     CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX, CONSENSUS_SESSION_COUNT,
 };
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{Connector, TlsTcpConnector};
-<span class="kw">use </span><span class="kw">crate</span>::net::peers::ReconnectPeerConnections;
+<span class="kw">use </span><span class="kw">crate</span>::net::peers::ReconnectP2PConnections;
 <span class="kw">use </span><span class="kw">crate</span>::LOG_CONSENSUS;
 
 <span class="comment">// The name of the directory where the database checkpoints are stored.
@@ -929,12 +934,12 @@
     <span class="kw">pub </span>cfg: ServerConfig,
     <span class="kw">pub </span>submission_receiver: Receiver&lt;ConsensusItem&gt;,
     <span class="kw">pub </span>shutdown_receiver: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;,
-    <span class="kw">pub </span>last_ci_by_peer: Arc&lt;RwLock&lt;BTreeMap&lt;PeerId, u64&gt;&gt;&gt;,
+    <span class="kw">pub </span>p2p_status_senders: BTreeMap&lt;PeerId, watch::Sender&lt;P2PConnectionStatus&gt;&gt;,
+    <span class="kw">pub </span>ci_status_senders: BTreeMap&lt;PeerId, watch::Sender&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;&gt;,
     <span class="doccomment">/// Just a string version of `cfg.local.identity` for performance
     </span><span class="kw">pub </span>self_id_str: String,
     <span class="doccomment">/// Just a string version of peer ids for performance
     </span><span class="kw">pub </span>peer_id_str: Vec&lt;String&gt;,
-    <span class="kw">pub </span>connection_status_channels: Arc&lt;RwLock&lt;BTreeMap&lt;PeerId, PeerConnectionStatus&gt;&gt;&gt;,
     <span class="kw">pub </span>task_group: TaskGroup,
     <span class="kw">pub </span>data_dir: PathBuf,
     <span class="kw">pub </span>checkpoint_retention: u64,
@@ -1032,13 +1037,14 @@
         <span class="self">self</span>.confirm_server_config_consensus_hash().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// Build P2P connections for the atomic broadcast
-        </span><span class="kw">let </span>connections = ReconnectPeerConnections::new(
+        </span><span class="kw">let </span>connections = ReconnectP2PConnections::new(
             <span class="self">self</span>.cfg.network_config(p2p_bind_addr),
             TlsTcpConnector::new(<span class="self">self</span>.cfg.tls_config(), <span class="self">self</span>.identity()).into_dyn(),
             <span class="kw-2">&amp;</span><span class="self">self</span>.task_group,
-            Arc::clone(<span class="kw-2">&amp;</span><span class="self">self</span>.connection_status_channels),
+            <span class="prelude-val">Some</span>(<span class="self">self</span>.p2p_status_senders.clone()),
         )
-        .<span class="kw">await</span>;
+        .<span class="kw">await
+        </span>.into_dyn();
 
         <span class="self">self</span>.initialize_checkpoint_directory(<span class="self">self</span>.get_finished_session_count().<span class="kw">await</span>)<span class="question-mark">?</span>;
 
@@ -1094,7 +1100,7 @@
 
     <span class="kw">pub async fn </span>run_session(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        connections: ReconnectPeerConnections&lt;Message&gt;,
+        connections: DynP2PConnections&lt;Message&gt;,
         session_index: u64,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="comment">// In order to bound a sessions RAM consumption we need to bound its number of
@@ -1508,10 +1514,12 @@
             <span class="string">"Processing consensus item"
         </span>);
 
-        <span class="self">self</span>.last_ci_by_peer
-            .write()
-            .<span class="kw">await
-            </span>.insert(peer, session_index);
+        <span class="self">self</span>.ci_status_senders
+            .get(<span class="kw-2">&amp;</span>peer)
+            .expect(<span class="string">"No ci status sender for peer {peer}"</span>)
+            .send(<span class="prelude-val">Some</span>(session_index))
+            .inspect_err(|e| <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">"Failed to update ci status {e}"</span>))
+            .ok();
 
         CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX
             .with_label_values(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span><span class="self">self</span>.self_id_str, peer_id_str])

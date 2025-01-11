@@ -2241,7 +2241,7 @@
 <span class="attr">#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>PeerStatus {
     <span class="kw">pub </span>last_contribution: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-    <span class="kw">pub </span>connection_status: PeerConnectionStatus,
+    <span class="kw">pub </span>connection_status: P2PConnectionStatus,
     <span class="doccomment">/// Indicates that this peer needs attention from the operator since
     /// it has not contributed to the consensus in a long time
     </span><span class="kw">pub </span>flagged: bool,
@@ -2249,7 +2249,7 @@
 
 <span class="attr">#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = <span class="string">"snake_case"</span>)]
-</span><span class="kw">pub enum </span>PeerConnectionStatus {
+</span><span class="kw">pub enum </span>P2PConnectionStatus {
     <span class="attr">#[default]
     </span>Disconnected,
     Connected,

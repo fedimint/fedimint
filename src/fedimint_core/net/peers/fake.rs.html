@@ -62,51 +62,25 @@
 <a href="#61" id="61">61</a>
 <a href="#62" id="62">62</a>
 <a href="#63" id="63">63</a>
-<a href="#64" id="64">64</a>
-<a href="#65" id="65">65</a>
-<a href="#66" id="66">66</a>
-<a href="#67" id="67">67</a>
-<a href="#68" id="68">68</a>
-<a href="#69" id="69">69</a>
-<a href="#70" id="70">70</a>
-<a href="#71" id="71">71</a>
-<a href="#72" id="72">72</a>
-<a href="#73" id="73">73</a>
-<a href="#74" id="74">74</a>
-<a href="#75" id="75">75</a>
-<a href="#76" id="76">76</a>
-<a href="#77" id="77">77</a>
-<a href="#78" id="78">78</a>
-<a href="#79" id="79">79</a>
-<a href="#80" id="80">80</a>
-<a href="#81" id="81">81</a>
-<a href="#82" id="82">82</a>
-<a href="#83" id="83">83</a>
-<a href="#84" id="84">84</a></pre></div><pre class="rust"><code><span class="doccomment">/// Fake (channel-based) implementation of [`super::PeerConnections`].
+<a href="#64" id="64">64</a></pre></div><pre class="rust"><code><span class="kw">use </span>async_channel::bounded;
+<span class="doccomment">/// Fake (channel-based) implementation of [`super::DynP2PConnections`].
 </span><span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>fedimint_core::net::peers::{IPeerConnections, PeerConnections};
-<span class="kw">use </span>fedimint_core::task::TaskHandle;
+<span class="kw">use </span>fedimint_core::net::peers::{DynP2PConnections, IP2PConnections};
 <span class="kw">use </span>fedimint_core::PeerId;
-<span class="kw">use </span>serde::de::DeserializeOwned;
-<span class="kw">use </span>serde::Serialize;
-<span class="kw">use </span>tokio::sync::mpsc::{<span class="self">self</span>, Receiver, Sender};
 
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::Recipient;
 
-<span class="kw">struct </span>FakePeerConnections&lt;Msg&gt; {
-    tx: Sender&lt;Msg&gt;,
-    rx: Receiver&lt;Msg&gt;,
-    peer_id: PeerId,
-    task_handle: TaskHandle,
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">struct </span>FakePeerConnections&lt;M&gt; {
+    tx: async_channel::Sender&lt;M&gt;,
+    rx: async_channel::Receiver&lt;M&gt;,
+    peer: PeerId,
 }
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl</span>&lt;M&gt; IPeerConnections&lt;M&gt; <span class="kw">for </span>FakePeerConnections&lt;M&gt;
-<span class="kw">where
-    </span>M: Serialize + DeserializeOwned + Unpin + Send,
-{
-    <span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, recipient: Recipient, msg: M) {
-        <span class="macro">assert_eq!</span>(recipient, Recipient::Peer(<span class="self">self</span>.peer_id));
+</span><span class="kw">impl</span>&lt;M: Clone + Send + <span class="lifetime">'static</span>&gt; IP2PConnections&lt;M&gt; <span class="kw">for </span>FakePeerConnections&lt;M&gt; {
+    <span class="kw">async fn </span>send(<span class="kw-2">&amp;</span><span class="self">self</span>, recipient: Recipient, msg: M) {
+        <span class="macro">assert_eq!</span>(recipient, Recipient::Peer(<span class="self">self</span>.peer));
 
         <span class="comment">// If the peer is gone, just pretend we are going to resend
         // the msg eventually, even if it will never happen.
@@ -114,22 +88,15 @@
     }
 
     <span class="kw">fn </span>try_send(<span class="kw-2">&amp;</span><span class="self">self</span>, recipient: Recipient, msg: M) {
-        <span class="macro">assert_eq!</span>(recipient, Recipient::Peer(<span class="self">self</span>.peer_id));
+        <span class="macro">assert_eq!</span>(recipient, Recipient::Peer(<span class="self">self</span>.peer));
 
         <span class="comment">// If the peer is gone, just pretend we are going to resend
         // the msg eventually, even if it will never happen.
         </span><span class="self">self</span>.tx.try_send(msg).ok();
     }
 
-    <span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;(PeerId, M)&gt; {
-        <span class="macro">tokio::select!</span> {
-            message =  <span class="self">self</span>.rx.recv() =&gt; {
-                message.map(|msg| (<span class="self">self</span>.peer_id, msg))
-            }
-            () = <span class="self">self</span>.task_handle.make_shutdown_rx() =&gt; {
-                <span class="prelude-val">None
-            </span>},
-        }
+    <span class="kw">async fn </span>receive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;(PeerId, M)&gt; {
+        <span class="self">self</span>.rx.recv().<span class="kw">await</span>.map(|msg| (<span class="self">self</span>.peer, msg)).ok()
     }
 }
 
@@ -137,33 +104,26 @@
 ///
 /// `buf_size` controls the size of the `tokio::mpsc::channel` used
 /// under the hood (both ways).
-</span><span class="kw">pub fn </span>make_fake_peer_connection&lt;Msg&gt;(
-    peer1: PeerId,
-    peer2: PeerId,
+</span><span class="kw">pub fn </span>make_fake_peer_connection&lt;M: Clone + Send + <span class="lifetime">'static</span>&gt;(
+    peer_1: PeerId,
+    peer_2: PeerId,
     buf_size: usize,
-    task_handle: TaskHandle,
-) -&gt; (PeerConnections&lt;Msg&gt;, PeerConnections&lt;Msg&gt;)
-<span class="kw">where
-    </span>Msg: Serialize + DeserializeOwned + Unpin + Send + <span class="lifetime">'static</span>,
-{
-    <span class="kw">let </span>(tx1, rx1) = mpsc::channel(buf_size);
-    <span class="kw">let </span>(tx2, rx2) = mpsc::channel(buf_size);
+) -&gt; (DynP2PConnections&lt;M&gt;, DynP2PConnections&lt;M&gt;) {
+    <span class="kw">let </span>(tx1, rx1) = bounded(buf_size);
+    <span class="kw">let </span>(tx2, rx2) = bounded(buf_size);
 
-    (
-        FakePeerConnections {
-            tx: tx1,
-            rx: rx2,
-            peer_id: peer2,
-            task_handle: task_handle.clone(),
-        }
-        .into_dyn(),
-        FakePeerConnections {
-            tx: tx2,
-            rx: rx1,
-            peer_id: peer1,
-            task_handle,
-        }
-        .into_dyn(),
-    )
+    <span class="kw">let </span>c_1 = FakePeerConnections {
+        tx: tx1,
+        rx: rx2,
+        peer: peer_2,
+    };
+
+    <span class="kw">let </span>c_2 = FakePeerConnections {
+        tx: tx2,
+        rx: rx1,
+        peer: peer_1,
+    };
+
+    (c_1.into_dyn(), c_2.into_dyn())
 }
 </code></pre></div></section></main></body></html>
