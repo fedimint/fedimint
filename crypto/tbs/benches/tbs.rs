@@ -7,7 +7,7 @@ use group::ff::Field;
 use group::Curve;
 use rand::rngs::OsRng;
 use tbs::{
-    aggregate_signature_shares, blind_message, sign_blinded_msg, unblind_signature, verify,
+    aggregate_signature_shares, blind_message, sign_message, unblind_signature, verify,
     AggregatePublicKey, BlindedSignatureShare, BlindingKey, Message, PublicKeyShare,
     SecretKeyShare, Signature,
 };
@@ -58,7 +58,7 @@ fn bench_signing(c: &mut Criterion) {
     let bmsg = blind_message(msg, bkey);
     let (_pk, _pks, sks) = dealer_keygen(4, 5);
 
-    c.bench_function("signing", |b| b.iter(|| sign_blinded_msg(bmsg, sks[0])));
+    c.bench_function("signing", |b| b.iter(|| sign_message(bmsg, sks[0])));
 }
 
 fn bench_aggregate(c: &mut Criterion) {
@@ -66,8 +66,8 @@ fn bench_aggregate(c: &mut Criterion) {
     let bkey = BlindingKey::random();
     let bmsg = blind_message(msg, bkey);
     let (_pk, _pks, sks) = dealer_keygen(4, 5);
-    let shares: BTreeMap<u64, BlindedSignatureShare> = (1_u64..)
-        .zip(sks.iter().map(|sk| sign_blinded_msg(bmsg, *sk)))
+    let shares: BTreeMap<u64, BlindedSignatureShare> = (0_u64..)
+        .zip(sks.iter().map(|sk| sign_message(bmsg, *sk)))
         .take(4)
         .collect();
 
@@ -81,8 +81,8 @@ fn bench_unblind(c: &mut Criterion) {
     let bkey = BlindingKey::random();
     let bmsg = blind_message(msg, bkey);
     let (_pk, _pks, sks) = dealer_keygen(4, 5);
-    let shares = (1_u64..)
-        .zip(sks.iter().map(|sk| sign_blinded_msg(bmsg, *sk)))
+    let shares = (0_u64..)
+        .zip(sks.iter().map(|sk| sign_message(bmsg, *sk)))
         .take(4)
         .collect();
     let bsig = aggregate_signature_shares(&shares);
@@ -97,8 +97,8 @@ fn bench_verify(c: &mut Criterion) {
     let bkey = BlindingKey::random();
     let bmsg = blind_message(msg, bkey);
     let (pk, _pks, sks) = dealer_keygen(4, 5);
-    let shares = (1_u64..)
-        .zip(sks.iter().map(|sk| sign_blinded_msg(bmsg, *sk)))
+    let shares = (0_u64..)
+        .zip(sks.iter().map(|sk| sign_message(bmsg, *sk)))
         .take(4)
         .collect();
     let bsig = aggregate_signature_shares(&shares);
@@ -115,7 +115,7 @@ fn bench_decode_signature(c: &mut Criterion) {
     let bmsg = blind_message(msg, bkey);
     let (_pk, _pks, sks) = dealer_keygen(4, 5);
     let shares = (1_u64..)
-        .zip(sks.iter().map(|sk| sign_blinded_msg(bmsg, *sk)))
+        .zip(sks.iter().map(|sk| sign_message(bmsg, *sk)))
         .take(4)
         .collect();
     let bsig = aggregate_signature_shares(&shares);

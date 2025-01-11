@@ -76,10 +76,8 @@ point_hash_impl!(BlindedSignatureShare);
 point_hash_impl!(BlindedSignature);
 point_hash_impl!(Signature);
 
-impl SecretKeyShare {
-    pub fn to_pub_key_share(self) -> PublicKeyShare {
-        PublicKeyShare((G2Projective::generator() * self.0).to_affine())
-    }
+pub fn derive_pk_share(sk: &SecretKeyShare) -> PublicKeyShare {
+    PublicKeyShare((G2Projective::generator() * sk.0).to_affine())
 }
 
 impl BlindingKey {
@@ -125,12 +123,12 @@ pub fn blind_message(msg: Message, blinding_key: BlindingKey) -> BlindedMessage 
     BlindedMessage(blinded_msg.to_affine())
 }
 
-pub fn sign_blinded_msg(msg: BlindedMessage, sks: SecretKeyShare) -> BlindedSignatureShare {
+pub fn sign_message(msg: BlindedMessage, sks: SecretKeyShare) -> BlindedSignatureShare {
     let sig = msg.0 * sks.0;
     BlindedSignatureShare(sig.to_affine())
 }
 
-pub fn verify_blind_share(
+pub fn verify_signature_share(
     msg: BlindedMessage,
     sig: BlindedSignatureShare,
     pk: PublicKeyShare,
@@ -158,13 +156,19 @@ pub fn aggregate_signature_shares(
     }
 
     BlindedSignature(
-        lagrange_multipliers(shares.keys().cloned().map(Scalar::from).collect())
-            .into_iter()
-            .zip(shares.values())
-            .map(|(lagrange_multiplier, share)| lagrange_multiplier * share.0)
-            .reduce(|a, b| a + b)
-            .expect("We have at least one share")
-            .to_affine(),
+        lagrange_multipliers(
+            shares
+                .keys()
+                .cloned()
+                .map(|peer| Scalar::from(peer + 1))
+                .collect(),
+        )
+        .into_iter()
+        .zip(shares.values())
+        .map(|(lagrange_multiplier, share)| lagrange_multiplier * share.0)
+        .reduce(|a, b| a + b)
+        .expect("We have at least one share")
+        .to_affine(),
     )
 }
 
@@ -185,13 +189,19 @@ pub fn aggregate_public_key_shares(shares: &BTreeMap<u64, PublicKeyShare>) -> Ag
     }
 
     AggregatePublicKey(
-        lagrange_multipliers(shares.keys().cloned().map(Scalar::from).collect())
-            .into_iter()
-            .zip(shares.values())
-            .map(|(lagrange_multiplier, share)| lagrange_multiplier * share.0)
-            .reduce(|a, b| a + b)
-            .expect("We have at least one share")
-            .to_affine(),
+        lagrange_multipliers(
+            shares
+                .keys()
+                .cloned()
+                .map(|peer| Scalar::from(peer + 1))
+                .collect(),
+        )
+        .into_iter()
+        .zip(shares.values())
+        .map(|(lagrange_multiplier, share)| lagrange_multiplier * share.0)
+        .reduce(|a, b| a + b)
+        .expect("We have at least one share")
+        .to_affine(),
     )
 }
 
@@ -231,72 +241,75 @@ mod tests {
     use std::collections::BTreeMap;
 
     use bls12_381::{G2Projective, Scalar};
+    use fedimint_core::bitcoin::hashes::sha256;
+    use fedimint_core::BitcoinHash;
     use group::ff::Field;
     use group::Curve;
-    use rand::rngs::OsRng;
+    use rand::SeedableRng;
+    use rand_chacha::ChaChaRng;
 
     use crate::{
-        aggregate_signature_shares, blind_message, sign_blinded_msg, unblind_signature, verify,
-        verify_blind_share, AggregatePublicKey, BlindedSignatureShare, BlindingKey, Message,
-        PublicKeyShare, SecretKeyShare,
+        aggregate_signature_shares, blind_message, derive_pk_share, sign_message,
+        unblind_signature, verify, verify_signature_share, AggregatePublicKey,
+        BlindedSignatureShare, BlindingKey, Message, PublicKeyShare, SecretKeyShare,
     };
 
-    fn dealer_keygen(
-        threshold: usize,
-        keys: usize,
-    ) -> (AggregatePublicKey, Vec<PublicKeyShare>, Vec<SecretKeyShare>) {
-        let mut rng = OsRng;
-        let poly: Vec<Scalar> = (0..threshold).map(|_| Scalar::random(&mut rng)).collect();
-
-        let apk = (G2Projective::generator() * eval_polynomial(&poly, &Scalar::zero())).to_affine();
-
-        let sks: Vec<SecretKeyShare> = (0..keys)
-            .map(|idx| SecretKeyShare(eval_polynomial(&poly, &Scalar::from(idx as u64 + 1))))
-            .collect();
-
-        let pks = sks
-            .iter()
-            .map(|sk| PublicKeyShare((G2Projective::generator() * sk.0).to_affine()))
-            .collect();
-
-        (AggregatePublicKey(apk), pks, sks)
+    fn dealer_agg_pk() -> AggregatePublicKey {
+        AggregatePublicKey((G2Projective::generator() * coefficient(0)).to_affine())
     }
 
-    fn eval_polynomial(coefficients: &[Scalar], x: &Scalar) -> Scalar {
-        coefficients
-            .iter()
-            .cloned()
+    fn dealer_pk(threshold: u64, peer: u64) -> PublicKeyShare {
+        derive_pk_share(&dealer_sk(threshold, peer))
+    }
+
+    fn dealer_sk(threshold: u64, peer: u64) -> SecretKeyShare {
+        let x = Scalar::from(peer + 1);
+
+        // We evaluate the scalar polynomial of degree threshold - 1 at the point x
+        // using the Horner schema.
+
+        let y = (0..threshold)
+            .map(coefficient)
             .rev()
-            .reduce(|acc, coefficient| acc * x + coefficient)
-            .expect("We have at least one coefficient")
+            .reduce(|accumulator, c| accumulator * x + c)
+            .expect("We have at least one coefficient");
+
+        SecretKeyShare(y)
+    }
+
+    fn coefficient(index: u64) -> Scalar {
+        Scalar::random(&mut ChaChaRng::from_seed(
+            *sha256::Hash::hash(&index.to_be_bytes()).as_byte_array(),
+        ))
     }
 
     #[test]
     fn test_roundtrip() {
-        let (pk, pks, sks) = dealer_keygen(5, 15);
+        const PEERS: u64 = 4;
+        const THRESHOLD: u64 = 3;
 
-        let msg = Message::from_bytes(b"Hello World!");
-        let bkey = BlindingKey::random();
-        let bmsg = blind_message(msg, bkey);
+        let message = Message::from_bytes(b"Hello World!");
+        let blinding_key = BlindingKey::random();
 
-        let bsig_shares = sks
-            .iter()
-            .map(|sk| sign_blinded_msg(bmsg, *sk))
-            .collect::<Vec<BlindedSignatureShare>>();
+        let b_message = blind_message(message, blinding_key);
 
-        for (share, pk) in bsig_shares.iter().zip(pks) {
-            assert!(verify_blind_share(bmsg, *share, pk));
+        for peer in 0..PEERS {
+            assert!(verify_signature_share(
+                b_message,
+                sign_message(b_message, dealer_sk(THRESHOLD, peer)),
+                dealer_pk(THRESHOLD, peer)
+            ));
         }
 
-        let bsig_shares = (1_u64..)
-            .zip(bsig_shares)
-            .take(5)
+        let signature_shares = (0..THRESHOLD)
+            .map(|peer| (peer, sign_message(b_message, dealer_sk(THRESHOLD, peer))))
             .collect::<BTreeMap<u64, BlindedSignatureShare>>();
 
-        let bsig = aggregate_signature_shares(&bsig_shares);
-        let sig = unblind_signature(bkey, bsig);
+        let signature = aggregate_signature_shares(&signature_shares);
 
-        assert!(verify(msg, sig, pk));
+        let signature = unblind_signature(blinding_key, signature);
+
+        assert!(verify(message, signature, dealer_agg_pk()));
     }
 
     #[test]

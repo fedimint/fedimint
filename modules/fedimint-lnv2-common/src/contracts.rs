@@ -6,9 +6,9 @@ use secp256k1::schnorr::Signature;
 use secp256k1::{Message, PublicKey, SecretKey};
 use serde::{Deserialize, Serialize};
 use tpe::{
-    create_decryption_key_share, decrypt_preimage, encrypt_preimage, verify_agg_decryption_key,
-    verify_ciphertext, verify_decryption_key_share, AggregateDecryptionKey, AggregatePublicKey,
-    CipherText, DecryptionKeyShare, PublicKeyShare, SecretKeyShare,
+    create_dk_share, decrypt_preimage, encrypt_preimage, verify_agg_dk, verify_ciphertext,
+    verify_dk_share, AggregateDecryptionKey, AggregatePublicKey, CipherText, DecryptionKeyShare,
+    PublicKeyShare, SecretKeyShare,
 };
 
 use crate::ContractId;
@@ -83,7 +83,7 @@ impl IncomingContract {
         pk: &PublicKeyShare,
         dk_share: &DecryptionKeyShare,
     ) -> bool {
-        verify_decryption_key_share(
+        verify_dk_share(
             pk,
             dk_share,
             &self.ciphertext,
@@ -96,7 +96,7 @@ impl IncomingContract {
         agg_pk: &AggregatePublicKey,
         agg_decryption_key: &AggregateDecryptionKey,
     ) -> bool {
-        verify_agg_decryption_key(
+        verify_agg_dk(
             agg_pk,
             agg_decryption_key,
             &self.ciphertext,
@@ -122,7 +122,7 @@ impl IncomingContract {
     }
 
     pub fn create_decryption_key_share(&self, sk: &SecretKeyShare) -> DecryptionKeyShare {
-        create_decryption_key_share(sk, &self.ciphertext)
+        create_dk_share(sk, &self.ciphertext)
     }
 }
 

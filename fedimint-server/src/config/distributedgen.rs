@@ -612,6 +612,7 @@ mod tests {
 
     use fedimint_core::PeerId;
     use rand::rngs::OsRng;
+    use tbs::derive_pk_share;
     use threshold_crypto::{G1Projective, G2Projective};
 
     use crate::config::distributedgen::{
@@ -637,7 +638,7 @@ mod tests {
             assert_eq!(pk.len(), 3);
             assert_eq!(
                 evaluate_polynomial_g2(&pk, &scalar(&peer)),
-                sk.to_pub_key_share().0
+                derive_pk_share(&sk).0
             );
         }
     }

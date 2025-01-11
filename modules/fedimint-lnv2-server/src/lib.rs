@@ -10,12 +10,14 @@ use std::time::Duration;
 use anyhow::{anyhow, ensure, Context};
 use bls12_381::{G1Projective, Scalar};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+use fedimint_core::bitcoin::hashes::sha256;
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::encoding::Encodable;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
@@ -27,7 +29,8 @@ use fedimint_core::task::timeout;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, NumPeersExt, OutPoint, PeerId, ServerModule,
+    apply, async_trait_maybe_send, push_db_pair_items, BitcoinHash, NumPeers, NumPeersExt,
+    OutPoint, PeerId, ServerModule,
 };
 use fedimint_lnv2_common::config::{
     LightningClientConfig, LightningConfig, LightningConfigConsensus, LightningConfigLocal,
@@ -50,9 +53,10 @@ use fedimint_server::net::api::check_auth;
 use futures::StreamExt;
 use group::ff::Field;
 use group::Curve;
-use rand::rngs::OsRng;
+use rand::SeedableRng;
+use rand_chacha::ChaChaRng;
 use strum::IntoEnumIterator;
-use tpe::{AggregatePublicKey, PublicKeyShare, SecretKeyShare};
+use tpe::{derive_pk_share, AggregatePublicKey, PublicKeyShare, SecretKeyShare};
 
 use crate::db::{
     BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, GatewayKey, GatewayPrefix,
@@ -186,37 +190,36 @@ impl ServerModuleInit for LightningInit {
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        let params = self.parse_params(params).unwrap();
+        let params = self
+            .parse_params(params)
+            .expect("Failed tp parse lnv2 config gen params");
 
-        let (tpe_agg_pk, pks, sks) = dealer_keygen(peers.to_num_peers().threshold(), peers.len());
-
-        let tpe_pks: BTreeMap<PeerId, PublicKeyShare> = peers.iter().copied().zip(pks).collect();
-
-        let server_cfg = peers
+        let tpe_pks = peers
             .iter()
-            .map(|&peer| {
-                (
-                    peer,
-                    LightningConfig {
-                        local: LightningConfigLocal {
-                            bitcoin_rpc: params.local.bitcoin_rpc.clone(),
-                        },
-                        consensus: LightningConfigConsensus {
-                            tpe_agg_pk,
-                            tpe_pks: tpe_pks.clone(),
-                            fee_consensus: params.consensus.fee_consensus.clone(),
-                            network: params.consensus.network,
-                        },
-                        private: LightningConfigPrivate {
-                            sk: sks[peer.to_usize()],
-                        },
-                    }
-                    .to_erased(),
-                )
-            })
-            .collect();
+            .map(|peer| (*peer, dealer_pk(peers.to_num_peers(), *peer)))
+            .collect::<BTreeMap<PeerId, PublicKeyShare>>();
 
-        server_cfg
+        peers
+            .iter()
+            .map(|peer| {
+                let cfg = LightningConfig {
+                    local: LightningConfigLocal {
+                        bitcoin_rpc: params.local.bitcoin_rpc.clone(),
+                    },
+                    consensus: LightningConfigConsensus {
+                        tpe_agg_pk: dealer_agg_pk(),
+                        tpe_pks: tpe_pks.clone(),
+                        fee_consensus: params.consensus.fee_consensus.clone(),
+                        network: params.consensus.network,
+                    },
+                    private: LightningConfigPrivate {
+                        sk: dealer_sk(peers.to_num_peers(), *peer),
+                    },
+                };
+
+                (*peer, cfg.to_erased())
+            })
+            .collect()
     }
 
     async fn distributed_gen(
@@ -261,7 +264,7 @@ impl ServerModuleInit for LightningInit {
         let config = config.to_typed::<LightningConfig>()?;
 
         ensure!(
-            tpe::derive_public_key_share(&config.private.sk)
+            tpe::derive_pk_share(&config.private.sk)
                 == *config
                     .consensus
                     .tpe_pks
@@ -287,34 +290,33 @@ impl ServerModuleInit for LightningInit {
     }
 }
 
-fn dealer_keygen(
-    threshold: usize,
-    keys: usize,
-) -> (AggregatePublicKey, Vec<PublicKeyShare>, Vec<SecretKeyShare>) {
-    let mut rng = OsRng; // FIXME: pass rng
-    let poly: Vec<Scalar> = (0..threshold).map(|_| Scalar::random(&mut rng)).collect();
-
-    let apk = (G1Projective::generator() * eval_polynomial(&poly, &Scalar::zero())).to_affine();
-
-    let sks: Vec<SecretKeyShare> = (0..keys)
-        .map(|idx| SecretKeyShare(eval_polynomial(&poly, &Scalar::from(idx as u64 + 1))))
-        .collect();
-
-    let pks = sks
-        .iter()
-        .map(|sk| PublicKeyShare((G1Projective::generator() * sk.0).to_affine()))
-        .collect();
-
-    (AggregatePublicKey(apk), pks, sks)
+fn dealer_agg_pk() -> AggregatePublicKey {
+    AggregatePublicKey((G1Projective::generator() * coefficient(0)).to_affine())
 }
 
-fn eval_polynomial(coefficients: &[Scalar], x: &Scalar) -> Scalar {
-    coefficients
-        .iter()
-        .copied()
+fn dealer_pk(num_peers: NumPeers, peer: PeerId) -> PublicKeyShare {
+    derive_pk_share(&dealer_sk(num_peers, peer))
+}
+
+fn dealer_sk(num_peers: NumPeers, peer: PeerId) -> SecretKeyShare {
+    let x = Scalar::from(peer.to_usize() as u64 + 1);
+
+    // We evaluate the scalar polynomial of degree threshold - 1 at the point x
+    // using the Horner schema.
+
+    let y = (0..num_peers.threshold())
+        .map(|index| coefficient(index as u64))
         .rev()
-        .reduce(|acc, coefficient| acc * x + coefficient)
-        .expect("We have at least one coefficient")
+        .reduce(|accumulator, c| accumulator * x + c)
+        .expect("We have at least one coefficient");
+
+    SecretKeyShare(y)
+}
+
+fn coefficient(index: u64) -> Scalar {
+    Scalar::random(&mut ChaChaRng::from_seed(
+        *index.consensus_hash::<sha256::Hash>().as_byte_array(),
+    ))
 }
 
 #[derive(Debug)]

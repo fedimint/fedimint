@@ -42,7 +42,7 @@ pub struct CipherText {
     pub signature: EphemeralSignature,
 }
 
-pub fn derive_public_key_share(sk: &SecretKeyShare) -> PublicKeyShare {
+pub fn derive_pk_share(sk: &SecretKeyShare) -> PublicKeyShare {
     PublicKeyShare(G1Projective::generator().mul(sk.0).to_affine())
 }
 
@@ -52,7 +52,7 @@ pub fn encrypt_preimage(
     preimage: &[u8; 32],
     commitment: &sha256::Hash,
 ) -> CipherText {
-    let agg_dk = derive_agg_decryption_key(agg_pk, encryption_seed);
+    let agg_dk = derive_agg_dk(agg_pk, encryption_seed);
     let encrypted_preimage = xor_with_hash(*preimage, &agg_dk);
 
     let ephemeral_sk = derive_ephemeral_sk(encryption_seed);
@@ -68,7 +68,7 @@ pub fn encrypt_preimage(
     }
 }
 
-pub fn derive_agg_decryption_key(
+pub fn derive_agg_dk(
     agg_pk: &AggregatePublicKey,
     encryption_seed: &[u8; 32],
 ) -> AggregateDecryptionKey {
@@ -134,7 +134,7 @@ pub fn decrypt_preimage(ct: &CipherText, agg_dk: &AggregateDecryptionKey) -> [u8
 }
 
 /// The function asserts that the ciphertext is valid.
-pub fn verify_agg_decryption_key(
+pub fn verify_agg_dk(
     agg_pk: &AggregatePublicKey,
     agg_dk: &AggregateDecryptionKey,
     ct: &CipherText,
@@ -155,12 +155,12 @@ pub fn verify_agg_decryption_key(
     pairing(&agg_dk.0, &message) == pairing(&agg_pk.0, &ct.signature.0)
 }
 
-pub fn create_decryption_key_share(sks: &SecretKeyShare, ct: &CipherText) -> DecryptionKeyShare {
+pub fn create_dk_share(sks: &SecretKeyShare, ct: &CipherText) -> DecryptionKeyShare {
     DecryptionKeyShare(ct.pk.0.mul(sks.0).to_affine())
 }
 
 /// The function asserts that the ciphertext is valid.
-pub fn verify_decryption_key_share(
+pub fn verify_dk_share(
     pks: &PublicKeyShare,
     dks: &DecryptionKeyShare,
     ct: &CipherText,
@@ -181,17 +181,21 @@ pub fn verify_decryption_key_share(
     pairing(&dks.0, &message) == pairing(&pks.0, &ct.signature.0)
 }
 
-pub fn aggregate_decryption_shares(
-    shares: &BTreeMap<u64, DecryptionKeyShare>,
-) -> AggregateDecryptionKey {
+pub fn aggregate_dk_shares(shares: &BTreeMap<u64, DecryptionKeyShare>) -> AggregateDecryptionKey {
     AggregateDecryptionKey(
-        lagrange_multipliers(shares.keys().cloned().map(Scalar::from).collect())
-            .into_iter()
-            .zip(shares.values())
-            .map(|(lagrange_multiplier, share)| lagrange_multiplier * share.0)
-            .reduce(|a, b| a + b)
-            .expect("We have at least one share")
-            .to_affine(),
+        lagrange_multipliers(
+            shares
+                .keys()
+                .cloned()
+                .map(|peer| Scalar::from(peer + 1))
+                .collect(),
+        )
+        .into_iter()
+        .zip(shares.values())
+        .map(|(lagrange_multiplier, share)| lagrange_multiplier * share.0)
+        .reduce(|a, b| a + b)
+        .expect("We have at least one share")
+        .to_affine(),
     )
 }
 
@@ -228,90 +232,79 @@ impl_hash_with_serialized_compressed!(PublicKeyShare);
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
     use bitcoin_hashes::{sha256, Hash};
     use bls12_381::{G1Projective, Scalar};
     use group::ff::Field;
     use group::Curve;
-    use rand::rngs::OsRng;
+    use rand::SeedableRng;
+    use rand_chacha::ChaChaRng;
 
     use crate::{
-        aggregate_decryption_shares, create_decryption_key_share, decrypt_preimage,
-        derive_agg_decryption_key, encrypt_preimage, verify_agg_decryption_key, verify_ciphertext,
-        verify_decryption_key_share, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare,
-        SecretKeyShare,
+        aggregate_dk_shares, create_dk_share, decrypt_preimage, derive_agg_dk, derive_pk_share,
+        encrypt_preimage, verify_agg_dk, verify_ciphertext, verify_dk_share, AggregatePublicKey,
+        PublicKeyShare, SecretKeyShare,
     };
 
-    fn dealer_keygen(
-        threshold: usize,
-        keys: usize,
-    ) -> (AggregatePublicKey, Vec<PublicKeyShare>, Vec<SecretKeyShare>) {
-        let poly: Vec<Scalar> = (0..threshold).map(|_| Scalar::random(&mut OsRng)).collect();
-
-        let apk = (G1Projective::generator() * eval_polynomial(&poly, &Scalar::zero())).to_affine();
-
-        let sks: Vec<SecretKeyShare> = (0..keys)
-            .map(|idx| SecretKeyShare(eval_polynomial(&poly, &Scalar::from(idx as u64 + 1))))
-            .collect();
-
-        let pks = sks
-            .iter()
-            .map(|sk| PublicKeyShare((G1Projective::generator() * sk.0).to_affine()))
-            .collect();
-
-        (AggregatePublicKey(apk), pks, sks)
+    fn dealer_agg_pk() -> AggregatePublicKey {
+        AggregatePublicKey((G1Projective::generator() * coefficient(0)).to_affine())
     }
 
-    fn eval_polynomial(coefficients: &[Scalar], x: &Scalar) -> Scalar {
-        coefficients
-            .iter()
-            .cloned()
+    fn dealer_pk(threshold: u64, peer: u64) -> PublicKeyShare {
+        derive_pk_share(&dealer_sk(threshold, peer))
+    }
+
+    fn dealer_sk(threshold: u64, peer: u64) -> SecretKeyShare {
+        let x = Scalar::from(peer + 1);
+
+        // We evaluate the scalar polynomial of degree threshold - 1 at the point x
+        // using the Horner schema.
+
+        let y = (0..threshold)
+            .map(coefficient)
             .rev()
-            .reduce(|acc, coefficient| acc * x + coefficient)
-            .expect("We have at least one coefficient")
+            .reduce(|accumulator, c| accumulator * x + c)
+            .expect("We have at least one coefficient");
+
+        SecretKeyShare(y)
+    }
+
+    fn coefficient(index: u64) -> Scalar {
+        Scalar::random(&mut ChaChaRng::from_seed(
+            *sha256::Hash::hash(&index.to_be_bytes()).as_byte_array(),
+        ))
     }
 
     #[test]
     fn test_roundtrip() {
-        let (agg_pk, pks, sks) = dealer_keygen(3, 4);
+        const PEERS: u64 = 4;
+        const THRESHOLD: u64 = 3;
 
         let encryption_seed = [7_u8; 32];
         let preimage = [42_u8; 32];
         let commitment = sha256::Hash::hash(&[0_u8; 32]);
-        let ciphertext = encrypt_preimage(&agg_pk, &encryption_seed, &preimage, &commitment);
+        let ct = encrypt_preimage(&dealer_agg_pk(), &encryption_seed, &preimage, &commitment);
 
-        assert!(verify_ciphertext(&ciphertext, &commitment));
+        assert!(verify_ciphertext(&ct, &commitment));
 
-        let shares: Vec<DecryptionKeyShare> = sks
-            .iter()
-            .map(|sk| create_decryption_key_share(sk, &ciphertext))
-            .collect();
-
-        for (pk, share) in pks.iter().zip(shares.iter()) {
-            assert!(verify_decryption_key_share(
-                pk,
-                share,
-                &ciphertext,
+        for peer in 0..PEERS {
+            assert!(verify_dk_share(
+                &dealer_pk(THRESHOLD, peer),
+                &create_dk_share(&dealer_sk(THRESHOLD, peer), &ct),
+                &ct,
                 &commitment
             ));
         }
 
-        let selected_shares: BTreeMap<u64, DecryptionKeyShare> = (1_u64..4).zip(shares).collect();
+        let selected_shares = (0..THRESHOLD)
+            .map(|peer| (peer, create_dk_share(&dealer_sk(THRESHOLD, peer), &ct)))
+            .collect();
 
-        assert_eq!(selected_shares.len(), 3);
+        let agg_dk = aggregate_dk_shares(&selected_shares);
 
-        let agg_dk = aggregate_decryption_shares(&selected_shares);
+        assert_eq!(agg_dk, derive_agg_dk(&dealer_agg_pk(), &encryption_seed));
 
-        assert_eq!(agg_dk, derive_agg_decryption_key(&agg_pk, &encryption_seed));
+        assert!(verify_agg_dk(&dealer_agg_pk(), &agg_dk, &ct, &commitment));
 
-        assert!(verify_agg_decryption_key(
-            &agg_pk,
-            &agg_dk,
-            &ciphertext,
-            &commitment
-        ));
-
-        assert_eq!(preimage, decrypt_preimage(&ciphertext, &agg_dk));
+        assert_eq!(preimage, decrypt_preimage(&ct, &agg_dk));
     }
 }
