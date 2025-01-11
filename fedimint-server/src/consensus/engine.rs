@@ -171,9 +171,22 @@ impl ConsensusEngine {
         self.confirm_server_config_consensus_hash().await?;
 
         // Build P2P connections for the atomic broadcast
+        let connector = TlsTcpConnector::new(
+            self.cfg.tls_config(),
+            p2p_bind_addr,
+            self.cfg
+                .local
+                .p2p_endpoints
+                .iter()
+                .map(|(&id, endpoint)| (id, endpoint.url.clone()))
+                .collect(),
+            self.identity(),
+        )
+        .into_dyn();
+
         let connections = ReconnectP2PConnections::new(
-            self.cfg.network_config(p2p_bind_addr),
-            TlsTcpConnector::new(self.cfg.tls_config(), self.identity()).into_dyn(),
+            self.cfg.local.identity,
+            connector,
             &self.task_group,
             Some(self.p2p_status_senders.clone()),
         )
