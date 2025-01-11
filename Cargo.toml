@@ -163,6 +163,7 @@ hex = "0.4.3"
 hex-conservative = "0.3.0"
 hkdf = { package = "fedimint-hkdf", path = "./crypto/hkdf", version = "=0.6.0-alpha" }
 hyper = "1.5"
+iroh = "0.30.0"
 itertools = "0.13.0"
 jaq-core = "2.0.0"
 jaq-json = { version = "1.0.0", features = ["serde_json"] }
