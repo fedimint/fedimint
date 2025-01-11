@@ -756,43 +756,7 @@
 <a href="#755" id="755">755</a>
 <a href="#756" id="756">756</a>
 <a href="#757" id="757">757</a>
-<a href="#758" id="758">758</a>
-<a href="#759" id="759">759</a>
-<a href="#760" id="760">760</a>
-<a href="#761" id="761">761</a>
-<a href="#762" id="762">762</a>
-<a href="#763" id="763">763</a>
-<a href="#764" id="764">764</a>
-<a href="#765" id="765">765</a>
-<a href="#766" id="766">766</a>
-<a href="#767" id="767">767</a>
-<a href="#768" id="768">768</a>
-<a href="#769" id="769">769</a>
-<a href="#770" id="770">770</a>
-<a href="#771" id="771">771</a>
-<a href="#772" id="772">772</a>
-<a href="#773" id="773">773</a>
-<a href="#774" id="774">774</a>
-<a href="#775" id="775">775</a>
-<a href="#776" id="776">776</a>
-<a href="#777" id="777">777</a>
-<a href="#778" id="778">778</a>
-<a href="#779" id="779">779</a>
-<a href="#780" id="780">780</a>
-<a href="#781" id="781">781</a>
-<a href="#782" id="782">782</a>
-<a href="#783" id="783">783</a>
-<a href="#784" id="784">784</a>
-<a href="#785" id="785">785</a>
-<a href="#786" id="786">786</a>
-<a href="#787" id="787">787</a>
-<a href="#788" id="788">788</a>
-<a href="#789" id="789">789</a>
-<a href="#790" id="790">790</a>
-<a href="#791" id="791">791</a>
-<a href="#792" id="792">792</a>
-<a href="#793" id="793">793</a>
-<a href="#794" id="794">794</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
+<a href="#758" id="758">758</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::time::Duration;
@@ -811,14 +775,13 @@
     ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleInit, MultiApiVersion, PeerHandle,
     SupportedApiVersionsSummary, SupportedCoreApiVersions, CORE_CONSENSUS_VERSION,
 };
-<span class="kw">use </span>fedimint_core::net::peers::{DynP2PConnections, IMuxPeerConnections, IP2PConnections};
+<span class="kw">use </span>fedimint_core::net::peers::{IMuxPeerConnections, IP2PConnections};
 <span class="kw">use </span>fedimint_core::task::{timeout, Cancelled, Elapsed, TaskGroup};
 <span class="kw">use </span>fedimint_core::{secp256k1, timing, PeerId};
 <span class="kw">use </span>fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 <span class="kw">use </span>futures::future::join_all;
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>secp256k1::{PublicKey, Secp256k1, SecretKey};
-<span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tokio_rustls::rustls;
 <span class="kw">use </span>tracing::{error, info};
@@ -830,7 +793,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::NumPeersExt;
 <span class="kw">use </span><span class="kw">crate</span>::multiplexed::PeerConnectionMultiplexer;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{dns_sanitize, Connector, TlsConfig};
-<span class="kw">use </span><span class="kw">crate</span>::net::peers::{NetworkConfig, ReconnectP2PConnections};
+<span class="kw">use </span><span class="kw">crate</span>::net::peers::ReconnectP2PConnections;
 <span class="kw">use </span><span class="kw">crate</span>::TlsTcpConnector;
 
 <span class="kw">pub mod </span>api;
@@ -1229,27 +1192,33 @@
         code_version_str: String,
     ) -&gt; DkgResult&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">"distributed-gen"</span>).info();
-        <span class="kw">let </span>server_conn = connect(
-            params.p2p_network(p2p_bind_addr),
+
+        <span class="kw">let </span>conn = TlsTcpConnector::new(
             params.tls_config(),
-            task_group,
+            p2p_bind_addr,
+            params
+                .p2p_urls()
+                .into_iter()
+                .map(|(id, peer)| (id, peer.url))
+                .collect(),
+            params.local.our_id,
         )
-        .<span class="kw">await</span>;
-        <span class="kw">let </span>connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
+        .into_dyn();
+
+        <span class="kw">let </span>conn = ReconnectP2PConnections::new(params.local.our_id, conn, task_group, <span class="prelude-val">None</span>)
+            .<span class="kw">await
+            </span>.into_dyn();
+
+        <span class="kw">let </span>conn = PeerConnectionMultiplexer::new(conn).into_dyn();
 
         <span class="kw">let </span>peers = <span class="kw-2">&amp;</span>params.peer_ids();
         <span class="kw">let </span>our_id = <span class="kw-2">&amp;</span>params.local.our_id;
 
-        <span class="kw">let </span>broadcast_keys_exchange = PeerHandle::new(
-            <span class="kw-2">&amp;</span>connections,
-            MODULE_INSTANCE_ID_GLOBAL,
-            <span class="kw-2">*</span>our_id,
-            peers.clone(),
-        );
+        <span class="kw">let </span>exchange = PeerHandle::new(<span class="kw-2">&amp;</span>conn, MODULE_INSTANCE_ID_GLOBAL, <span class="kw-2">*</span>our_id, peers.clone());
 
         <span class="kw">let </span>(broadcast_sk, broadcast_pk) = secp256k1::generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
 
-        <span class="kw">let </span>broadcast_public_keys = broadcast_keys_exchange
+        <span class="kw">let </span>broadcast_public_keys = exchange
             .exchange_pubkeys(<span class="string">"broadcast"</span>.to_string(), broadcast_pk)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1281,7 +1250,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>module_cfgs: BTreeMap&lt;ModuleInstanceId, ServerModuleConfig&gt; = BTreeMap::new();
         <span class="kw">let </span>modules = params.consensus.modules.iter_modules();
         <span class="kw">let </span>modules_runner = modules.map(|(module_instance_id, kind, module_params)| {
-            <span class="kw">let </span>dkg = PeerHandle::new(<span class="kw-2">&amp;</span>connections, module_instance_id, <span class="kw-2">*</span>our_id, peers.clone());
+            <span class="kw">let </span>dkg = PeerHandle::new(<span class="kw-2">&amp;</span>conn, module_instance_id, <span class="kw-2">*</span>our_id, peers.clone());
             <span class="kw">let </span>registry = registry.clone();
 
             <span class="kw">async move </span>{
@@ -1309,13 +1278,12 @@
         // if other peers received our message, just because we received theirs.
         // That's why we need to do a one last best effort sync.
         </span><span class="kw">let </span>dkg_done = <span class="string">"DKG DONE"</span>.to_string();
-        connections
-            .send(
-                peers,
-                (MODULE_INSTANCE_ID_GLOBAL, dkg_done.clone()),
-                DkgPeerMsg::Done,
-            )
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        conn.send(
+            peers,
+            (MODULE_INSTANCE_ID_GLOBAL, dkg_done.clone()),
+            DkgPeerMsg::Done,
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="macro">info!</span>(
             target: LOG_NET_PEER_DKG,
@@ -1325,7 +1293,7 @@
             <span class="kw">let </span><span class="kw-2">mut </span>done_peers = BTreeSet::from([<span class="kw-2">*</span>our_id]);
 
             <span class="kw">while </span>done_peers.len() &lt; peers.len() {
-                <span class="kw">match </span>connections.receive((MODULE_INSTANCE_ID_GLOBAL, dkg_done.clone())).<span class="kw">await </span>{
+                <span class="kw">match </span>conn.receive((MODULE_INSTANCE_ID_GLOBAL, dkg_done.clone())).<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>((peer_id, DkgPeerMsg::Done)) =&gt; {
                         <span class="macro">info!</span>(
                             target: LOG_NET_PEER_DKG,
@@ -1373,23 +1341,10 @@
 }
 
 <span class="kw">impl </span>ServerConfig {
-    <span class="kw">pub fn </span>network_config(<span class="kw-2">&amp;</span><span class="self">self</span>, p2p_bind_addr: SocketAddr) -&gt; NetworkConfig {
-        NetworkConfig {
-            identity: <span class="self">self</span>.local.identity,
-            peers: <span class="self">self
-                </span>.local
-                .p2p_endpoints
-                .iter()
-                .map(|(<span class="kw-2">&amp;</span>id, endpoint)| (id, endpoint.url.clone()))
-                .collect(),
-            p2p_bind_addr,
-        }
-    }
-
     <span class="kw">pub fn </span>tls_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TlsConfig {
         TlsConfig {
-            our_private_key: <span class="self">self</span>.private.tls_key.clone(),
-            peer_certs: <span class="self">self</span>.consensus.tls_certs.clone(),
+            private_key: <span class="self">self</span>.private.tls_key.clone(),
+            certificates: <span class="self">self</span>.consensus.tls_certs.clone(),
             peer_names: <span class="self">self
                 </span>.local
                 .p2p_endpoints
@@ -1409,22 +1364,10 @@
         <span class="self">self</span>.consensus.peers.keys().copied().collect()
     }
 
-    <span class="kw">pub fn </span>p2p_network(<span class="kw-2">&amp;</span><span class="self">self</span>, p2p_bind_addr: SocketAddr) -&gt; NetworkConfig {
-        NetworkConfig {
-            identity: <span class="self">self</span>.local.our_id,
-            p2p_bind_addr,
-            peers: <span class="self">self
-                </span>.p2p_urls()
-                .into_iter()
-                .map(|(id, peer)| (id, peer.url))
-                .collect(),
-        }
-    }
-
     <span class="kw">pub fn </span>tls_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TlsConfig {
         TlsConfig {
-            our_private_key: <span class="self">self</span>.local.our_private_key.clone(),
-            peer_certs: <span class="self">self</span>.tls_certs(),
+            private_key: <span class="self">self</span>.local.our_private_key.clone(),
+            certificates: <span class="self">self</span>.tls_certs(),
             peer_names: <span class="self">self
                 </span>.p2p_urls()
                 .into_iter()
@@ -1480,21 +1423,6 @@
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(DEFAULT_MAX_CLIENT_CONNECTIONS)
-}
-
-<span class="kw">pub async fn </span>connect&lt;T&gt;(
-    network: NetworkConfig,
-    certs: TlsConfig,
-    task_group: <span class="kw-2">&amp;</span>TaskGroup,
-) -&gt; DynP2PConnections&lt;T&gt;
-<span class="kw">where
-    </span>T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + <span class="lifetime">'static</span>,
-{
-    <span class="kw">let </span>connector = TlsTcpConnector::new(certs, network.identity).into_dyn();
-
-    <span class="kw">let </span>connections = ReconnectP2PConnections::new(network, connector, task_group, <span class="prelude-val">None</span>).<span class="kw">await</span>;
-
-    connections.into_dyn()
 }
 
 <span class="kw">pub fn </span>gen_cert_and_key(

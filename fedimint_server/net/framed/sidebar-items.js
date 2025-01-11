@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["BidiFramed","BincodeCodec"],"trait":["FramedTransport"],"type":["AnyFramedTransport","FramedSink","FramedStream","TcpBidiFramed"]};
+window.SIDEBAR_ITEMS = {"struct":["FramedTlsTcpStream"],"trait":["FramedTransport"],"type":["DynFramedTransport"]};

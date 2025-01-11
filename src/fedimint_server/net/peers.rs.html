@@ -377,32 +377,7 @@
 <a href="#376" id="376">376</a>
 <a href="#377" id="377">377</a>
 <a href="#378" id="378">378</a>
-<a href="#379" id="379">379</a>
-<a href="#380" id="380">380</a>
-<a href="#381" id="381">381</a>
-<a href="#382" id="382">382</a>
-<a href="#383" id="383">383</a>
-<a href="#384" id="384">384</a>
-<a href="#385" id="385">385</a>
-<a href="#386" id="386">386</a>
-<a href="#387" id="387">387</a>
-<a href="#388" id="388">388</a>
-<a href="#389" id="389">389</a>
-<a href="#390" id="390">390</a>
-<a href="#391" id="391">391</a>
-<a href="#392" id="392">392</a>
-<a href="#393" id="393">393</a>
-<a href="#394" id="394">394</a>
-<a href="#395" id="395">395</a>
-<a href="#396" id="396">396</a>
-<a href="#397" id="397">397</a>
-<a href="#398" id="398">398</a>
-<a href="#399" id="399">399</a>
-<a href="#400" id="400">400</a>
-<a href="#401" id="401">401</a>
-<a href="#402" id="402">402</a>
-<a href="#403" id="403">403</a>
-<a href="#404" id="404">404</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
+<a href="#379" id="379">379</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
 //! members
 //!
 //! The main interface is [`fedimint_core::net::peers::IP2PConnections`] and
@@ -411,7 +386,6 @@
 
 </span><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
-<span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::ensure;
@@ -421,35 +395,23 @@
 <span class="kw">use </span>fedimint_core::net::peers::{IP2PConnections, Recipient};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::backoff_util::{api_networking_backoff, FibonacciBackoff};
-<span class="kw">use </span>fedimint_core::util::{FmtCompactAnyhow <span class="kw">as _</span>, SafeUrl};
+<span class="kw">use </span>fedimint_core::util::FmtCompactAnyhow;
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>fedimint_logging::{LOG_CONSENSUS, LOG_NET_PEER};
 <span class="kw">use </span>futures::future::select_all;
-<span class="kw">use </span>futures::{FutureExt, SinkExt, StreamExt};
+<span class="kw">use </span>futures::{FutureExt, StreamExt};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tokio::sync::watch;
 <span class="kw">use </span>tokio::time::sleep;
 <span class="kw">use </span>tracing::{info, info_span, warn, Instrument};
 
 <span class="kw">use </span><span class="kw">crate</span>::metrics::{PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT};
-<span class="kw">use </span><span class="kw">crate</span>::net::connect::{AnyConnector, SharedAnyConnector};
-<span class="kw">use </span><span class="kw">crate</span>::net::framed::AnyFramedTransport;
+<span class="kw">use </span><span class="kw">crate</span>::net::connect::DynConnector;
+<span class="kw">use </span><span class="kw">crate</span>::net::framed::DynFramedTransport;
 
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>ReconnectP2PConnections&lt;M&gt; {
     connections: BTreeMap&lt;PeerId, P2PConnection&lt;M&gt;&gt;,
-}
-
-<span class="doccomment">/// Specifies the network configuration for federation-internal communication
-</span><span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">pub struct </span>NetworkConfig {
-    <span class="doccomment">/// Our federation member's identity
-    </span><span class="kw">pub </span>identity: PeerId,
-    <span class="doccomment">/// Our listen address for incoming connections from other federation
-    /// members
-    </span><span class="kw">pub </span>p2p_bind_addr: SocketAddr,
-    <span class="doccomment">/// Map of all peers' connection information we want to be connected to
-    </span><span class="kw">pub </span>peers: BTreeMap&lt;PeerId, SafeUrl&gt;,
 }
 
 <span class="doccomment">/// Internal message type for [`ReconnectP2PConnections`], just public because
@@ -461,41 +423,38 @@
 }
 
 <span class="kw">impl</span>&lt;M: Send + <span class="lifetime">'static</span>&gt; ReconnectP2PConnections&lt;M&gt; {
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>new(
-        cfg: NetworkConfig,
-        connector: AnyConnector&lt;P2PMessage&lt;M&gt;&gt;,
+    <span class="kw">pub async fn </span>new(
+        identity: PeerId,
+        connector: DynConnector&lt;P2PMessage&lt;M&gt;&gt;,
         task_group: <span class="kw-2">&amp;</span>TaskGroup,
         <span class="kw-2">mut </span>status_channels: <span class="prelude-ty">Option</span>&lt;BTreeMap&lt;PeerId, watch::Sender&lt;P2PConnectionStatus&gt;&gt;&gt;,
     ) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span>connector: SharedAnyConnector&lt;P2PMessage&lt;M&gt;&gt; = connector.into();
         <span class="kw">let </span><span class="kw-2">mut </span>connection_senders = BTreeMap::new();
         <span class="kw">let </span><span class="kw-2">mut </span>connections = BTreeMap::new();
 
-        <span class="kw">for </span>(peer_id, address) <span class="kw">in </span>cfg.peers.iter().filter(|entry| <span class="kw-2">*</span>entry.<span class="number">0 </span>!= cfg.identity) {
+        <span class="kw">for </span>peer_id <span class="kw">in </span>connector.peers() {
+            <span class="macro">assert_ne!</span>(peer_id, identity);
+
             <span class="kw">let </span>(connection_sender, connection_receiver) = bounded(<span class="number">4</span>);
 
             <span class="kw">let </span>connection = P2PConnection::new(
-                cfg.identity,
-                <span class="kw-2">*</span>peer_id,
-                address.clone(),
+                identity,
+                peer_id,
                 connector.clone(),
                 connection_receiver,
                 status_channels.as_mut().map(|channels| {
                     channels
-                        .remove(peer_id)
+                        .remove(<span class="kw-2">&amp;</span>peer_id)
                         .expect(<span class="string">"No p2p status sender for peer {peer}"</span>)
                 }),
                 task_group,
             );
 
-            connection_senders.insert(<span class="kw-2">*</span>peer_id, connection_sender);
-            connections.insert(<span class="kw-2">*</span>peer_id, connection);
+            connection_senders.insert(peer_id, connection_sender);
+            connections.insert(peer_id, connection);
         }
 
-        <span class="kw">let </span><span class="kw-2">mut </span>listener = connector
-            .listen(cfg.p2p_bind_addr)
-            .<span class="kw">await
-            </span>.expect(<span class="string">"Could not bind to port"</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>listener = connector.listen().<span class="kw">await</span>.expect(<span class="string">"Could not bind to port"</span>);
 
         task_group.spawn_cancellable(<span class="string">"handle-incoming-p2p-connections"</span>, <span class="kw">async move </span>{
             <span class="macro">info!</span>(target: LOG_NET_PEER, <span class="string">"Shutting down listening task for p2p connections"</span>);
@@ -514,7 +473,7 @@
                         }
                     },
                     <span class="prelude-val">Err</span>(err) =&gt; {
-                        <span class="macro">warn!</span>(target: LOG_NET_PEER, our_id = %cfg.identity, err = %err.fmt_compact_anyhow(), <span class="string">"Error while opening incoming connection"</span>);
+                        <span class="macro">warn!</span>(target: LOG_NET_PEER, our_id = %identity, err = %err.fmt_compact_anyhow(), <span class="string">"Error while opening incoming connection"</span>);
                     }
                 }
             }
@@ -582,9 +541,8 @@
     </span><span class="kw">fn </span>new(
         our_id: PeerId,
         peer_id: PeerId,
-        peer_address: SafeUrl,
-        connector: SharedAnyConnector&lt;P2PMessage&lt;M&gt;&gt;,
-        incoming_connections: Receiver&lt;AnyFramedTransport&lt;P2PMessage&lt;M&gt;&gt;&gt;,
+        connector: DynConnector&lt;P2PMessage&lt;M&gt;&gt;,
+        incoming_connections: Receiver&lt;DynFramedTransport&lt;P2PMessage&lt;M&gt;&gt;&gt;,
         status_channel: <span class="prelude-ty">Option</span>&lt;watch::Sender&lt;P2PConnectionStatus&gt;&gt;,
         task_group: <span class="kw-2">&amp;</span>TaskGroup,
     ) -&gt; P2PConnection&lt;M&gt; {
@@ -604,7 +562,6 @@
                         our_id,
                         peer_id_str: peer_id.to_string(),
                         peer_id,
-                        peer_address,
                         connector,
                         incoming_connections,
                         status_channel,
@@ -652,18 +609,17 @@
     our_id_str: String,
     peer_id: PeerId,
     peer_id_str: String,
-    peer_address: SafeUrl,
-    connector: SharedAnyConnector&lt;P2PMessage&lt;M&gt;&gt;,
-    incoming_connections: Receiver&lt;AnyFramedTransport&lt;P2PMessage&lt;M&gt;&gt;&gt;,
+    connector: DynConnector&lt;P2PMessage&lt;M&gt;&gt;,
+    incoming_connections: Receiver&lt;DynFramedTransport&lt;P2PMessage&lt;M&gt;&gt;&gt;,
     status_channel: <span class="prelude-ty">Option</span>&lt;watch::Sender&lt;P2PConnectionStatus&gt;&gt;,
 }
 
 <span class="kw">enum </span>P2PConnectionSMState&lt;M&gt; {
     Disconnected(FibonacciBackoff),
-    Connected(AnyFramedTransport&lt;P2PMessage&lt;M&gt;&gt;),
+    Connected(DynFramedTransport&lt;P2PMessage&lt;M&gt;&gt;),
 }
 
-<span class="kw">impl</span>&lt;M&gt; P2PConnectionStateMachine&lt;M&gt; {
+<span class="kw">impl</span>&lt;M: Send + <span class="lifetime">'static</span>&gt; P2PConnectionStateMachine&lt;M&gt; {
     <span class="kw">async fn </span>state_transition(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">match </span><span class="self">self</span>.state {
             P2PConnectionSMState::Disconnected(disconnected) =&gt; {
@@ -688,10 +644,10 @@
     }
 }
 
-<span class="kw">impl</span>&lt;M&gt; P2PConnectionSMCommon&lt;M&gt; {
+<span class="kw">impl</span>&lt;M: Send + <span class="lifetime">'static</span>&gt; P2PConnectionSMCommon&lt;M&gt; {
     <span class="kw">async fn </span>transition_connected(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        <span class="kw-2">mut </span>connection: AnyFramedTransport&lt;P2PMessage&lt;M&gt;&gt;,
+        <span class="kw-2">mut </span>connection: DynFramedTransport&lt;P2PMessage&lt;M&gt;&gt;,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;P2PConnectionSMState&lt;M&gt;&gt; {
         <span class="macro">tokio::select!</span> {
             message = <span class="self">self</span>.outgoing_receiver.recv() =&gt; {
@@ -700,7 +656,7 @@
             connection = <span class="self">self</span>.incoming_connections.recv() =&gt; {
                 <span class="prelude-val">Some</span>(<span class="self">self</span>.connect(connection.ok()<span class="question-mark">?</span>).<span class="kw">await</span>)
             },
-            <span class="prelude-val">Some</span>(message) = connection.next() =&gt; {
+            message = connection.receive() =&gt; {
                 <span class="kw">match </span>message {
                     <span class="prelude-val">Ok</span>(message) =&gt; {
                         <span class="kw">if let </span>P2PMessage::Message(message) = message {
@@ -723,7 +679,7 @@
 
     <span class="kw">async fn </span>connect(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        <span class="kw-2">mut </span>connection: AnyFramedTransport&lt;P2PMessage&lt;M&gt;&gt;,
+        <span class="kw-2">mut </span>connection: DynFramedTransport&lt;P2PMessage&lt;M&gt;&gt;,
     ) -&gt; P2PConnectionSMState&lt;M&gt; {
         <span class="macro">info!</span>(target: LOG_NET_PEER, <span class="string">"Connected to peer"</span>);
 
@@ -745,7 +701,7 @@
 
     <span class="kw">async fn </span>send_message(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        <span class="kw-2">mut </span>connection: AnyFramedTransport&lt;P2PMessage&lt;M&gt;&gt;,
+        <span class="kw-2">mut </span>connection: DynFramedTransport&lt;P2PMessage&lt;M&gt;&gt;,
         peer_message: P2PMessage&lt;M&gt;,
     ) -&gt; P2PConnectionSMState&lt;M&gt; {
         PEER_MESSAGES_COUNT
@@ -756,10 +712,7 @@
             <span class="kw">return </span><span class="self">self</span>.disconnect(e);
         }
 
-        <span class="kw">match </span>connection.flush().<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>(()) =&gt; P2PConnectionSMState::Connected(connection),
-            <span class="prelude-val">Err</span>(e) =&gt; <span class="self">self</span>.disconnect(e),
-        }
+        P2PConnectionSMState::Connected(connection)
     }
 
     <span class="kw">async fn </span>transition_disconnected(
@@ -790,13 +743,10 @@
         }
     }
 
-    <span class="kw">async fn </span>try_reconnect(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AnyFramedTransport&lt;P2PMessage&lt;M&gt;&gt;, anyhow::Error&gt; {
+    <span class="kw">async fn </span>try_reconnect(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;DynFramedTransport&lt;P2PMessage&lt;M&gt;&gt;, anyhow::Error&gt; {
         <span class="macro">info!</span>(target: LOG_NET_PEER, <span class="string">"Attempting to reconnect to peer"</span>);
 
-        <span class="kw">let </span>(connected_peer, connection) = <span class="self">self
-            </span>.connector
-            .connect_framed(<span class="self">self</span>.peer_address.with_port_or_known_default(), <span class="self">self</span>.peer_id)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>(connected_peer, connection) = <span class="self">self</span>.connector.connect(<span class="self">self</span>.peer_id).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="macro">ensure!</span>(
             connected_peer == <span class="self">self</span>.peer_id,

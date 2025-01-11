@@ -864,7 +864,20 @@
 <a href="#863" id="863">863</a>
 <a href="#864" id="864">864</a>
 <a href="#865" id="865">865</a>
-<a href="#866" id="866">866</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -1037,9 +1050,22 @@
         <span class="self">self</span>.confirm_server_config_consensus_hash().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// Build P2P connections for the atomic broadcast
-        </span><span class="kw">let </span>connections = ReconnectP2PConnections::new(
-            <span class="self">self</span>.cfg.network_config(p2p_bind_addr),
-            TlsTcpConnector::new(<span class="self">self</span>.cfg.tls_config(), <span class="self">self</span>.identity()).into_dyn(),
+        </span><span class="kw">let </span>connector = TlsTcpConnector::new(
+            <span class="self">self</span>.cfg.tls_config(),
+            p2p_bind_addr,
+            <span class="self">self</span>.cfg
+                .local
+                .p2p_endpoints
+                .iter()
+                .map(|(<span class="kw-2">&amp;</span>id, endpoint)| (id, endpoint.url.clone()))
+                .collect(),
+            <span class="self">self</span>.identity(),
+        )
+        .into_dyn();
+
+        <span class="kw">let </span>connections = ReconnectP2PConnections::new(
+            <span class="self">self</span>.cfg.local.identity,
+            connector,
             <span class="kw-2">&amp;</span><span class="self">self</span>.task_group,
             <span class="prelude-val">Some</span>(<span class="self">self</span>.p2p_status_senders.clone()),
         )

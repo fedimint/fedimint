@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["dns_sanitize","parse_host_port"],"mod":["mock"],"struct":["PeerCertStore","TlsConfig","TlsTcpConnector"],"trait":["Connector"],"type":["AnyConnector","ConnectResult","ConnectionListener","SharedAnyConnector"]};
+window.SIDEBAR_ITEMS = {"fn":["dns_sanitize","parse_host_port"],"struct":["TlsConfig","TlsTcpConnector"],"trait":["Connector"],"type":["ConnectResult","ConnectionListener","DynConnector"]};
