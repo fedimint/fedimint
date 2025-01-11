@@ -2,7 +2,7 @@
 //! members
 //!
 //! The main interface is [`fedimint_core::net::peers::IP2PConnections`] and
-//! its main implementation is [`WebsocketP2PConnections`], see these for
+//! its main implementation is [`ReconnectP2PConnections`], see these for
 //! details.
 
 use std::collections::BTreeMap;
@@ -48,7 +48,7 @@ pub struct NetworkConfig {
     pub peers: BTreeMap<PeerId, SafeUrl>,
 }
 
-/// Internal message type for [`WebsocketP2PConnections`], just public because
+/// Internal message type for [`ReconnectP2PConnections`], just public because
 /// it appears in the public interface.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum P2PMessage<M> {
