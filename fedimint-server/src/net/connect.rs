@@ -56,27 +56,6 @@ pub struct TlsConfig {
     pub peer_names: BTreeMap<PeerId, String>,
 }
 
-impl TlsConfig {
-    fn authenticate_peer(
-        &self,
-        received: Option<&[rustls::Certificate]>,
-    ) -> anyhow::Result<PeerId> {
-        let cert_chain = received.context("Peer did not authenticate itself")?;
-
-        ensure!(
-            cert_chain.len() == 1,
-            "Received certificate chain of len > 1",
-        );
-
-        let certificate = cert_chain.first().expect("Checked above");
-
-        self.certificates
-            .iter()
-            .find_map(|(peer, c)| if c == certificate { Some(*peer) } else { None })
-            .context("Unknown certificate")
-    }
-}
-
 /// TCP connector with encryption and authentication
 #[derive(Debug)]
 pub struct TlsTcpConnector {
@@ -153,9 +132,20 @@ where
             )
             .await?;
 
+        let certificate = tls
+            .get_ref()
+            .1
+            .peer_certificates()
+            .context("Peer did not authenticate itself")?
+            .first()
+            .context("Received certificate chain of length zero")?;
+
         let auth_peer = self
             .cfg
-            .authenticate_peer(tls.get_ref().1.peer_certificates())?;
+            .certificates
+            .iter()
+            .find_map(|(peer, c)| if c == certificate { Some(*peer) } else { None })
+            .context("Unknown certificate")?;
 
         ensure!(auth_peer == peer, "Connected to unexpected peer");
 
@@ -202,11 +192,23 @@ where
                 async move {
                     let tls = acceptor.accept(connection?).await?;
 
-                    let auth = cfg.authenticate_peer(tls.get_ref().1.peer_certificates())?;
+                    let certificate = tls
+                        .get_ref()
+                        .1
+                        .peer_certificates()
+                        .context("Peer did not authenticate itself")?
+                        .first()
+                        .context("Received certificate chain of length zero")?;
+
+                    let auth_peer = cfg
+                        .certificates
+                        .iter()
+                        .find_map(|(peer, c)| if c == certificate { Some(*peer) } else { None })
+                        .context("Unknown certificate")?;
 
                     let framed = FramedTlsTcpStream::new(TlsStream::Server(tls)).into_dyn();
 
-                    Ok((auth, framed))
+                    Ok((auth_peer, framed))
                 }
             })
         });
