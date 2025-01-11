@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 use async_trait::async_trait;
-use fedimint_core::net::peers::{IMuxPeerConnections, PeerConnections, Recipient};
+use fedimint_core::net::peers::{DynP2PConnections, IMuxPeerConnections, Recipient};
 use fedimint_core::runtime::spawn;
 use fedimint_core::task::{Cancellable, Cancelled};
 use fedimint_core::PeerId;
@@ -75,7 +75,7 @@ where
     Msg: Serialize + DeserializeOwned + Unpin + Send + Debug + Clone + 'static,
     MuxKey: Serialize + DeserializeOwned + Unpin + Send + Debug + Eq + Hash + Clone + 'static,
 {
-    pub fn new(connections: PeerConnections<ModuleMultiplexed<MuxKey, Msg>>) -> Self {
+    pub fn new(connections: DynP2PConnections<ModuleMultiplexed<MuxKey, Msg>>) -> Self {
         let (send_requests_tx, send_requests_rx) = channel(1000);
         let (receive_callbacks_tx, receive_callbacks_rx) = channel(1000);
 
@@ -96,7 +96,7 @@ where
     }
 
     async fn run(
-        mut connections: PeerConnections<ModuleMultiplexed<MuxKey, Msg>>,
+        connections: DynP2PConnections<ModuleMultiplexed<MuxKey, Msg>>,
         mut out_of_order: ModuleMultiplexerOutOfOrder<MuxKey, Msg>,
         mut send_requests_rx: Receiver<(Vec<PeerId>, MuxKey, Msg)>,
         mut receive_callbacks_rx: Receiver<Callback<MuxKey, Msg>>,
@@ -216,7 +216,7 @@ pub mod test {
             let peer1 = PeerId::from(0);
             let peer2 = PeerId::from(1);
 
-            let (conn1, conn2) = make_fake_peer_connection(peer1, peer2, 1000, task_handle.clone());
+            let (conn1, conn2) = make_fake_peer_connection(peer1, peer2, 1000);
             let (conn1, conn2) = (
                 PeerConnectionMultiplexer::new(conn1).into_dyn(),
                 PeerConnectionMultiplexer::new(conn2).into_dyn(),

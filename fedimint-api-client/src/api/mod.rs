@@ -1048,7 +1048,7 @@ pub struct FederationStatus {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PeerStatus {
     pub last_contribution: Option<u64>,
-    pub connection_status: PeerConnectionStatus,
+    pub connection_status: P2PConnectionStatus,
     /// Indicates that this peer needs attention from the operator since
     /// it has not contributed to the consensus in a long time
     pub flagged: bool,
@@ -1056,7 +1056,7 @@ pub struct PeerStatus {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum PeerConnectionStatus {
+pub enum P2PConnectionStatus {
     #[default]
     Disconnected,
     Connected,

@@ -2306,6 +2306,7 @@ name = "fedimint-core"
 version = "0.6.0-alpha"
 dependencies = [
  "anyhow",
+ "async-channel 2.3.1",
  "async-lock",
  "async-recursion",
  "async-trait",
