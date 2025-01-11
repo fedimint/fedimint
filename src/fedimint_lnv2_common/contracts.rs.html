@@ -211,9 +211,9 @@
 <span class="kw">use </span>secp256k1::{Message, PublicKey, SecretKey};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tpe::{
-    create_decryption_key_share, decrypt_preimage, encrypt_preimage, verify_agg_decryption_key,
-    verify_ciphertext, verify_decryption_key_share, AggregateDecryptionKey, AggregatePublicKey,
-    CipherText, DecryptionKeyShare, PublicKeyShare, SecretKeyShare,
+    create_dk_share, decrypt_preimage, encrypt_preimage, verify_agg_dk, verify_ciphertext,
+    verify_dk_share, AggregateDecryptionKey, AggregatePublicKey, CipherText, DecryptionKeyShare,
+    PublicKeyShare, SecretKeyShare,
 };
 
 <span class="kw">use </span><span class="kw">crate</span>::ContractId;
@@ -288,7 +288,7 @@
         pk: <span class="kw-2">&amp;</span>PublicKeyShare,
         dk_share: <span class="kw-2">&amp;</span>DecryptionKeyShare,
     ) -&gt; bool {
-        verify_decryption_key_share(
+        verify_dk_share(
             pk,
             dk_share,
             <span class="kw-2">&amp;</span><span class="self">self</span>.ciphertext,
@@ -301,7 +301,7 @@
         agg_pk: <span class="kw-2">&amp;</span>AggregatePublicKey,
         agg_decryption_key: <span class="kw-2">&amp;</span>AggregateDecryptionKey,
     ) -&gt; bool {
-        verify_agg_decryption_key(
+        verify_agg_dk(
             agg_pk,
             agg_decryption_key,
             <span class="kw-2">&amp;</span><span class="self">self</span>.ciphertext,
@@ -327,7 +327,7 @@
     }
 
     <span class="kw">pub fn </span>create_decryption_key_share(<span class="kw-2">&amp;</span><span class="self">self</span>, sk: <span class="kw-2">&amp;</span>SecretKeyShare) -&gt; DecryptionKeyShare {
-        create_decryption_key_share(sk, <span class="kw-2">&amp;</span><span class="self">self</span>.ciphertext)
+        create_dk_share(sk, <span class="kw-2">&amp;</span><span class="self">self</span>.ciphertext)
     }
 }
 

@@ -984,7 +984,7 @@
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>tbs::{
-    aggregate_public_key_shares, sign_blinded_msg, AggregatePublicKey, PublicKeyShare,
+    aggregate_public_key_shares, derive_pk_share, sign_message, AggregatePublicKey, PublicKeyShare,
     SecretKeyShare,
 };
 <span class="kw">use </span>threshold_crypto::ff::Field;
@@ -1205,7 +1205,7 @@
             .private
             .tbs_sks
             .iter()
-            .map(|(amount, sk)| (amount, sk.to_pub_key_share()))
+            .map(|(amount, sk)| (amount, derive_pk_share(sk)))
             .collect();
         <span class="kw">let </span>pks: BTreeMap&lt;Amount, PublicKeyShare&gt; = config
             .consensus
@@ -1238,7 +1238,7 @@
             TieredMulti::new_aggregate_from_tiered_iter(config.peer_tbs_pks.values().cloned())
                 .into_iter()
                 .map(|(amt, keys)| {
-                    <span class="kw">let </span>keys = (<span class="number">1_u64</span>..)
+                    <span class="kw">let </span>keys = (<span class="number">0_u64</span>..)
                         .zip(keys)
                         .take(config.peer_tbs_pks.to_num_peers().threshold())
                         .collect();
@@ -1433,7 +1433,7 @@
 
         dbtx.insert_new_entry(
             <span class="kw-2">&amp;</span>MintOutputOutcomeKey(out_point),
-            <span class="kw-2">&amp;</span>MintOutputOutcome::new_v0(sign_blinded_msg(output.blind_nonce.<span class="number">0</span>, <span class="kw-2">*</span>amount_key)),
+            <span class="kw-2">&amp;</span>MintOutputOutcome::new_v0(sign_message(output.blind_nonce.<span class="number">0</span>, <span class="kw-2">*</span>amount_key)),
         )
         .<span class="kw">await</span>;
 
@@ -1665,7 +1665,7 @@
             .private
             .tbs_sks
             .iter()
-            .map(|(amt, key)| (amt, key.to_pub_key_share()))
+            .map(|(amount, sk)| (amount, derive_pk_share(sk)))
             .collect();
 
         <span class="comment">// Find our key index and make sure we know the private key for all our public
@@ -1682,7 +1682,7 @@
             cfg.private
                 .tbs_sks
                 .iter()
-                .map(|(amount, sk)| (amount, sk.to_pub_key_share()))
+                .map(|(amount, sk)| (amount, derive_pk_share(sk)))
                 .collect()
         );
 
@@ -1694,7 +1694,7 @@
         )
         .into_iter()
         .map(|(amt, keys)| {
-            <span class="kw">let </span>keys = (<span class="number">1_u64</span>..)
+            <span class="kw">let </span>keys = (<span class="number">0_u64</span>..)
                 .zip(keys)
                 .take(cfg.consensus.peer_tbs_pks.to_num_peers().threshold())
                 .collect();
@@ -1801,7 +1801,7 @@
         <span class="kw">let </span>blinding_key = tbs::BlindingKey::random();
         <span class="kw">let </span>blind_msg = blind_message(message, blinding_key);
 
-        <span class="kw">let </span>bsig_shares = (<span class="number">1_u64</span>..)
+        <span class="kw">let </span>bsig_shares = (<span class="number">0_u64</span>..)
             .zip(server_cfgs.iter().map(|cfg| {
                 <span class="kw">let </span>sks = <span class="kw-2">*</span>cfg
                     .to_typed::&lt;MintConfig&gt;()
@@ -1810,7 +1810,7 @@
                     .tbs_sks
                     .get(denomination)
                     .expect(<span class="string">"Mint cannot issue a note of this denomination"</span>);
-                tbs::sign_blinded_msg(blind_msg, sks)
+                tbs::sign_message(blind_msg, sks)
             }))
             .take(server_cfgs.len() - ((server_cfgs.len() - <span class="number">1</span>) / <span class="number">3</span>))
             .collect();

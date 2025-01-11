@@ -308,14 +308,7 @@
 <a href="#307" id="307">307</a>
 <a href="#308" id="308">308</a>
 <a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#310" id="310">310</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::Mul;
 
@@ -359,7 +352,7 @@
     <span class="kw">pub </span>signature: EphemeralSignature,
 }
 
-<span class="kw">pub fn </span>derive_public_key_share(sk: <span class="kw-2">&amp;</span>SecretKeyShare) -&gt; PublicKeyShare {
+<span class="kw">pub fn </span>derive_pk_share(sk: <span class="kw-2">&amp;</span>SecretKeyShare) -&gt; PublicKeyShare {
     PublicKeyShare(G1Projective::generator().mul(sk.<span class="number">0</span>).to_affine())
 }
 
@@ -369,7 +362,7 @@
     preimage: <span class="kw-2">&amp;</span>[u8; <span class="number">32</span>],
     commitment: <span class="kw-2">&amp;</span>sha256::Hash,
 ) -&gt; CipherText {
-    <span class="kw">let </span>agg_dk = derive_agg_decryption_key(agg_pk, encryption_seed);
+    <span class="kw">let </span>agg_dk = derive_agg_dk(agg_pk, encryption_seed);
     <span class="kw">let </span>encrypted_preimage = xor_with_hash(<span class="kw-2">*</span>preimage, <span class="kw-2">&amp;</span>agg_dk);
 
     <span class="kw">let </span>ephemeral_sk = derive_ephemeral_sk(encryption_seed);
@@ -385,7 +378,7 @@
     }
 }
 
-<span class="kw">pub fn </span>derive_agg_decryption_key(
+<span class="kw">pub fn </span>derive_agg_dk(
     agg_pk: <span class="kw-2">&amp;</span>AggregatePublicKey,
     encryption_seed: <span class="kw-2">&amp;</span>[u8; <span class="number">32</span>],
 ) -&gt; AggregateDecryptionKey {
@@ -451,7 +444,7 @@
 }
 
 <span class="doccomment">/// The function asserts that the ciphertext is valid.
-</span><span class="kw">pub fn </span>verify_agg_decryption_key(
+</span><span class="kw">pub fn </span>verify_agg_dk(
     agg_pk: <span class="kw-2">&amp;</span>AggregatePublicKey,
     agg_dk: <span class="kw-2">&amp;</span>AggregateDecryptionKey,
     ct: <span class="kw-2">&amp;</span>CipherText,
@@ -472,12 +465,12 @@
     </span>pairing(<span class="kw-2">&amp;</span>agg_dk.<span class="number">0</span>, <span class="kw-2">&amp;</span>message) == pairing(<span class="kw-2">&amp;</span>agg_pk.<span class="number">0</span>, <span class="kw-2">&amp;</span>ct.signature.<span class="number">0</span>)
 }
 
-<span class="kw">pub fn </span>create_decryption_key_share(sks: <span class="kw-2">&amp;</span>SecretKeyShare, ct: <span class="kw-2">&amp;</span>CipherText) -&gt; DecryptionKeyShare {
+<span class="kw">pub fn </span>create_dk_share(sks: <span class="kw-2">&amp;</span>SecretKeyShare, ct: <span class="kw-2">&amp;</span>CipherText) -&gt; DecryptionKeyShare {
     DecryptionKeyShare(ct.pk.<span class="number">0</span>.mul(sks.<span class="number">0</span>).to_affine())
 }
 
 <span class="doccomment">/// The function asserts that the ciphertext is valid.
-</span><span class="kw">pub fn </span>verify_decryption_key_share(
+</span><span class="kw">pub fn </span>verify_dk_share(
     pks: <span class="kw-2">&amp;</span>PublicKeyShare,
     dks: <span class="kw-2">&amp;</span>DecryptionKeyShare,
     ct: <span class="kw-2">&amp;</span>CipherText,
@@ -498,17 +491,21 @@
     </span>pairing(<span class="kw-2">&amp;</span>dks.<span class="number">0</span>, <span class="kw-2">&amp;</span>message) == pairing(<span class="kw-2">&amp;</span>pks.<span class="number">0</span>, <span class="kw-2">&amp;</span>ct.signature.<span class="number">0</span>)
 }
 
-<span class="kw">pub fn </span>aggregate_decryption_shares(
-    shares: <span class="kw-2">&amp;</span>BTreeMap&lt;u64, DecryptionKeyShare&gt;,
-) -&gt; AggregateDecryptionKey {
+<span class="kw">pub fn </span>aggregate_dk_shares(shares: <span class="kw-2">&amp;</span>BTreeMap&lt;u64, DecryptionKeyShare&gt;) -&gt; AggregateDecryptionKey {
     AggregateDecryptionKey(
-        lagrange_multipliers(shares.keys().cloned().map(Scalar::from).collect())
-            .into_iter()
-            .zip(shares.values())
-            .map(|(lagrange_multiplier, share)| lagrange_multiplier * share.<span class="number">0</span>)
-            .reduce(|a, b| a + b)
-            .expect(<span class="string">"We have at least one share"</span>)
-            .to_affine(),
+        lagrange_multipliers(
+            shares
+                .keys()
+                .cloned()
+                .map(|peer| Scalar::from(peer + <span class="number">1</span>))
+                .collect(),
+        )
+        .into_iter()
+        .zip(shares.values())
+        .map(|(lagrange_multiplier, share)| lagrange_multiplier * share.<span class="number">0</span>)
+        .reduce(|a, b| a + b)
+        .expect(<span class="string">"We have at least one share"</span>)
+        .to_affine(),
     )
 }
 
@@ -545,91 +542,80 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span>std::collections::BTreeMap;
-
     <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
     <span class="kw">use </span>bls12_381::{G1Projective, Scalar};
     <span class="kw">use </span>group::ff::Field;
     <span class="kw">use </span>group::Curve;
-    <span class="kw">use </span>rand::rngs::OsRng;
+    <span class="kw">use </span>rand::SeedableRng;
+    <span class="kw">use </span>rand_chacha::ChaChaRng;
 
     <span class="kw">use crate</span>::{
-        aggregate_decryption_shares, create_decryption_key_share, decrypt_preimage,
-        derive_agg_decryption_key, encrypt_preimage, verify_agg_decryption_key, verify_ciphertext,
-        verify_decryption_key_share, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare,
-        SecretKeyShare,
+        aggregate_dk_shares, create_dk_share, decrypt_preimage, derive_agg_dk, derive_pk_share,
+        encrypt_preimage, verify_agg_dk, verify_ciphertext, verify_dk_share, AggregatePublicKey,
+        PublicKeyShare, SecretKeyShare,
     };
 
-    <span class="kw">fn </span>dealer_keygen(
-        threshold: usize,
-        keys: usize,
-    ) -&gt; (AggregatePublicKey, Vec&lt;PublicKeyShare&gt;, Vec&lt;SecretKeyShare&gt;) {
-        <span class="kw">let </span>poly: Vec&lt;Scalar&gt; = (<span class="number">0</span>..threshold).map(|<span class="kw">_</span>| Scalar::random(<span class="kw-2">&amp;mut </span>OsRng)).collect();
-
-        <span class="kw">let </span>apk = (G1Projective::generator() * eval_polynomial(<span class="kw-2">&amp;</span>poly, <span class="kw-2">&amp;</span>Scalar::zero())).to_affine();
-
-        <span class="kw">let </span>sks: Vec&lt;SecretKeyShare&gt; = (<span class="number">0</span>..keys)
-            .map(|idx| SecretKeyShare(eval_polynomial(<span class="kw-2">&amp;</span>poly, <span class="kw-2">&amp;</span>Scalar::from(idx <span class="kw">as </span>u64 + <span class="number">1</span>))))
-            .collect();
-
-        <span class="kw">let </span>pks = sks
-            .iter()
-            .map(|sk| PublicKeyShare((G1Projective::generator() * sk.<span class="number">0</span>).to_affine()))
-            .collect();
-
-        (AggregatePublicKey(apk), pks, sks)
+    <span class="kw">fn </span>dealer_agg_pk() -&gt; AggregatePublicKey {
+        AggregatePublicKey((G1Projective::generator() * coefficient(<span class="number">0</span>)).to_affine())
     }
 
-    <span class="kw">fn </span>eval_polynomial(coefficients: <span class="kw-2">&amp;</span>[Scalar], x: <span class="kw-2">&amp;</span>Scalar) -&gt; Scalar {
-        coefficients
-            .iter()
-            .cloned()
+    <span class="kw">fn </span>dealer_pk(threshold: u64, peer: u64) -&gt; PublicKeyShare {
+        derive_pk_share(<span class="kw-2">&amp;</span>dealer_sk(threshold, peer))
+    }
+
+    <span class="kw">fn </span>dealer_sk(threshold: u64, peer: u64) -&gt; SecretKeyShare {
+        <span class="kw">let </span>x = Scalar::from(peer + <span class="number">1</span>);
+
+        <span class="comment">// We evaluate the scalar polynomial of degree threshold - 1 at the point x
+        // using the Horner schema.
+
+        </span><span class="kw">let </span>y = (<span class="number">0</span>..threshold)
+            .map(coefficient)
             .rev()
-            .reduce(|acc, coefficient| acc * x + coefficient)
-            .expect(<span class="string">"We have at least one coefficient"</span>)
+            .reduce(|accumulator, c| accumulator * x + c)
+            .expect(<span class="string">"We have at least one coefficient"</span>);
+
+        SecretKeyShare(y)
+    }
+
+    <span class="kw">fn </span>coefficient(index: u64) -&gt; Scalar {
+        Scalar::random(<span class="kw-2">&amp;mut </span>ChaChaRng::from_seed(
+            <span class="kw-2">*</span>sha256::Hash::hash(<span class="kw-2">&amp;</span>index.to_be_bytes()).as_byte_array(),
+        ))
     }
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_roundtrip() {
-        <span class="kw">let </span>(agg_pk, pks, sks) = dealer_keygen(<span class="number">3</span>, <span class="number">4</span>);
+        <span class="kw">const </span>PEERS: u64 = <span class="number">4</span>;
+        <span class="kw">const </span>THRESHOLD: u64 = <span class="number">3</span>;
 
         <span class="kw">let </span>encryption_seed = [<span class="number">7_u8</span>; <span class="number">32</span>];
         <span class="kw">let </span>preimage = [<span class="number">42_u8</span>; <span class="number">32</span>];
         <span class="kw">let </span>commitment = sha256::Hash::hash(<span class="kw-2">&amp;</span>[<span class="number">0_u8</span>; <span class="number">32</span>]);
-        <span class="kw">let </span>ciphertext = encrypt_preimage(<span class="kw-2">&amp;</span>agg_pk, <span class="kw-2">&amp;</span>encryption_seed, <span class="kw-2">&amp;</span>preimage, <span class="kw-2">&amp;</span>commitment);
+        <span class="kw">let </span>ct = encrypt_preimage(<span class="kw-2">&amp;</span>dealer_agg_pk(), <span class="kw-2">&amp;</span>encryption_seed, <span class="kw-2">&amp;</span>preimage, <span class="kw-2">&amp;</span>commitment);
 
-        <span class="macro">assert!</span>(verify_ciphertext(<span class="kw-2">&amp;</span>ciphertext, <span class="kw-2">&amp;</span>commitment));
+        <span class="macro">assert!</span>(verify_ciphertext(<span class="kw-2">&amp;</span>ct, <span class="kw-2">&amp;</span>commitment));
 
-        <span class="kw">let </span>shares: Vec&lt;DecryptionKeyShare&gt; = sks
-            .iter()
-            .map(|sk| create_decryption_key_share(sk, <span class="kw-2">&amp;</span>ciphertext))
-            .collect();
-
-        <span class="kw">for </span>(pk, share) <span class="kw">in </span>pks.iter().zip(shares.iter()) {
-            <span class="macro">assert!</span>(verify_decryption_key_share(
-                pk,
-                share,
-                <span class="kw-2">&amp;</span>ciphertext,
+        <span class="kw">for </span>peer <span class="kw">in </span><span class="number">0</span>..PEERS {
+            <span class="macro">assert!</span>(verify_dk_share(
+                <span class="kw-2">&amp;</span>dealer_pk(THRESHOLD, peer),
+                <span class="kw-2">&amp;</span>create_dk_share(<span class="kw-2">&amp;</span>dealer_sk(THRESHOLD, peer), <span class="kw-2">&amp;</span>ct),
+                <span class="kw-2">&amp;</span>ct,
                 <span class="kw-2">&amp;</span>commitment
             ));
         }
 
-        <span class="kw">let </span>selected_shares: BTreeMap&lt;u64, DecryptionKeyShare&gt; = (<span class="number">1_u64</span>..<span class="number">4</span>).zip(shares).collect();
+        <span class="kw">let </span>selected_shares = (<span class="number">0</span>..THRESHOLD)
+            .map(|peer| (peer, create_dk_share(<span class="kw-2">&amp;</span>dealer_sk(THRESHOLD, peer), <span class="kw-2">&amp;</span>ct)))
+            .collect();
 
-        <span class="macro">assert_eq!</span>(selected_shares.len(), <span class="number">3</span>);
+        <span class="kw">let </span>agg_dk = aggregate_dk_shares(<span class="kw-2">&amp;</span>selected_shares);
 
-        <span class="kw">let </span>agg_dk = aggregate_decryption_shares(<span class="kw-2">&amp;</span>selected_shares);
+        <span class="macro">assert_eq!</span>(agg_dk, derive_agg_dk(<span class="kw-2">&amp;</span>dealer_agg_pk(), <span class="kw-2">&amp;</span>encryption_seed));
 
-        <span class="macro">assert_eq!</span>(agg_dk, derive_agg_decryption_key(<span class="kw-2">&amp;</span>agg_pk, <span class="kw-2">&amp;</span>encryption_seed));
+        <span class="macro">assert!</span>(verify_agg_dk(<span class="kw-2">&amp;</span>dealer_agg_pk(), <span class="kw-2">&amp;</span>agg_dk, <span class="kw-2">&amp;</span>ct, <span class="kw-2">&amp;</span>commitment));
 
-        <span class="macro">assert!</span>(verify_agg_decryption_key(
-            <span class="kw-2">&amp;</span>agg_pk,
-            <span class="kw-2">&amp;</span>agg_dk,
-            <span class="kw-2">&amp;</span>ciphertext,
-            <span class="kw-2">&amp;</span>commitment
-        ));
-
-        <span class="macro">assert_eq!</span>(preimage, decrypt_preimage(<span class="kw-2">&amp;</span>ciphertext, <span class="kw-2">&amp;</span>agg_dk));
+        <span class="macro">assert_eq!</span>(preimage, decrypt_preimage(<span class="kw-2">&amp;</span>ct, <span class="kw-2">&amp;</span>agg_dk));
     }
 }
 </code></pre></div></section></main></body></html>

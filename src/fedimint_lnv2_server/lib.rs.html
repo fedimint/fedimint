@@ -780,7 +780,9 @@
 <a href="#779" id="779">779</a>
 <a href="#780" id="780">780</a>
 <a href="#781" id="781">781</a>
-<a href="#782" id="782">782</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 
@@ -792,12 +794,14 @@
 <span class="kw">use </span>anyhow::{anyhow, ensure, Context};
 <span class="kw">use </span>bls12_381::{G1Projective, Scalar};
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+<span class="kw">use </span>fedimint_core::bitcoin::hashes::sha256;
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+<span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
@@ -809,7 +813,8 @@
 <span class="kw">use </span>fedimint_core::time::duration_since_epoch;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, NumPeersExt, OutPoint, PeerId, ServerModule,
+    apply, async_trait_maybe_send, push_db_pair_items, BitcoinHash, NumPeers, NumPeersExt,
+    OutPoint, PeerId, ServerModule,
 };
 <span class="kw">use </span>fedimint_lnv2_common::config::{
     LightningClientConfig, LightningConfig, LightningConfigConsensus, LightningConfigLocal,
@@ -832,9 +837,10 @@
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>group::ff::Field;
 <span class="kw">use </span>group::Curve;
-<span class="kw">use </span>rand::rngs::OsRng;
+<span class="kw">use </span>rand::SeedableRng;
+<span class="kw">use </span>rand_chacha::ChaChaRng;
 <span class="kw">use </span>strum::IntoEnumIterator;
-<span class="kw">use </span>tpe::{AggregatePublicKey, PublicKeyShare, SecretKeyShare};
+<span class="kw">use </span>tpe::{derive_pk_share, AggregatePublicKey, PublicKeyShare, SecretKeyShare};
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, GatewayKey, GatewayPrefix,
@@ -968,37 +974,36 @@
         peers: <span class="kw-2">&amp;</span>[PeerId],
         params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; BTreeMap&lt;PeerId, ServerModuleConfig&gt; {
-        <span class="kw">let </span>params = <span class="self">self</span>.parse_params(params).unwrap();
+        <span class="kw">let </span>params = <span class="self">self
+            </span>.parse_params(params)
+            .expect(<span class="string">"Failed tp parse lnv2 config gen params"</span>);
 
-        <span class="kw">let </span>(tpe_agg_pk, pks, sks) = dealer_keygen(peers.to_num_peers().threshold(), peers.len());
-
-        <span class="kw">let </span>tpe_pks: BTreeMap&lt;PeerId, PublicKeyShare&gt; = peers.iter().copied().zip(pks).collect();
-
-        <span class="kw">let </span>server_cfg = peers
+        <span class="kw">let </span>tpe_pks = peers
             .iter()
-            .map(|<span class="kw-2">&amp;</span>peer| {
-                (
-                    peer,
-                    LightningConfig {
-                        local: LightningConfigLocal {
-                            bitcoin_rpc: params.local.bitcoin_rpc.clone(),
-                        },
-                        consensus: LightningConfigConsensus {
-                            tpe_agg_pk,
-                            tpe_pks: tpe_pks.clone(),
-                            fee_consensus: params.consensus.fee_consensus.clone(),
-                            network: params.consensus.network,
-                        },
-                        private: LightningConfigPrivate {
-                            sk: sks[peer.to_usize()],
-                        },
-                    }
-                    .to_erased(),
-                )
-            })
-            .collect();
+            .map(|peer| (<span class="kw-2">*</span>peer, dealer_pk(peers.to_num_peers(), <span class="kw-2">*</span>peer)))
+            .collect::&lt;BTreeMap&lt;PeerId, PublicKeyShare&gt;&gt;();
 
-        server_cfg
+        peers
+            .iter()
+            .map(|peer| {
+                <span class="kw">let </span>cfg = LightningConfig {
+                    local: LightningConfigLocal {
+                        bitcoin_rpc: params.local.bitcoin_rpc.clone(),
+                    },
+                    consensus: LightningConfigConsensus {
+                        tpe_agg_pk: dealer_agg_pk(),
+                        tpe_pks: tpe_pks.clone(),
+                        fee_consensus: params.consensus.fee_consensus.clone(),
+                        network: params.consensus.network,
+                    },
+                    private: LightningConfigPrivate {
+                        sk: dealer_sk(peers.to_num_peers(), <span class="kw-2">*</span>peer),
+                    },
+                };
+
+                (<span class="kw-2">*</span>peer, cfg.to_erased())
+            })
+            .collect()
     }
 
     <span class="kw">async fn </span>distributed_gen(
@@ -1043,7 +1048,7 @@
         <span class="kw">let </span>config = config.to_typed::&lt;LightningConfig&gt;()<span class="question-mark">?</span>;
 
         <span class="macro">ensure!</span>(
-            tpe::derive_public_key_share(<span class="kw-2">&amp;</span>config.private.sk)
+            tpe::derive_pk_share(<span class="kw-2">&amp;</span>config.private.sk)
                 == <span class="kw-2">*</span>config
                     .consensus
                     .tpe_pks
@@ -1069,34 +1074,33 @@
     }
 }
 
-<span class="kw">fn </span>dealer_keygen(
-    threshold: usize,
-    keys: usize,
-) -&gt; (AggregatePublicKey, Vec&lt;PublicKeyShare&gt;, Vec&lt;SecretKeyShare&gt;) {
-    <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng; <span class="comment">// FIXME: pass rng
-    </span><span class="kw">let </span>poly: Vec&lt;Scalar&gt; = (<span class="number">0</span>..threshold).map(|<span class="kw">_</span>| Scalar::random(<span class="kw-2">&amp;mut </span>rng)).collect();
-
-    <span class="kw">let </span>apk = (G1Projective::generator() * eval_polynomial(<span class="kw-2">&amp;</span>poly, <span class="kw-2">&amp;</span>Scalar::zero())).to_affine();
-
-    <span class="kw">let </span>sks: Vec&lt;SecretKeyShare&gt; = (<span class="number">0</span>..keys)
-        .map(|idx| SecretKeyShare(eval_polynomial(<span class="kw-2">&amp;</span>poly, <span class="kw-2">&amp;</span>Scalar::from(idx <span class="kw">as </span>u64 + <span class="number">1</span>))))
-        .collect();
-
-    <span class="kw">let </span>pks = sks
-        .iter()
-        .map(|sk| PublicKeyShare((G1Projective::generator() * sk.<span class="number">0</span>).to_affine()))
-        .collect();
-
-    (AggregatePublicKey(apk), pks, sks)
+<span class="kw">fn </span>dealer_agg_pk() -&gt; AggregatePublicKey {
+    AggregatePublicKey((G1Projective::generator() * coefficient(<span class="number">0</span>)).to_affine())
 }
 
-<span class="kw">fn </span>eval_polynomial(coefficients: <span class="kw-2">&amp;</span>[Scalar], x: <span class="kw-2">&amp;</span>Scalar) -&gt; Scalar {
-    coefficients
-        .iter()
-        .copied()
+<span class="kw">fn </span>dealer_pk(num_peers: NumPeers, peer: PeerId) -&gt; PublicKeyShare {
+    derive_pk_share(<span class="kw-2">&amp;</span>dealer_sk(num_peers, peer))
+}
+
+<span class="kw">fn </span>dealer_sk(num_peers: NumPeers, peer: PeerId) -&gt; SecretKeyShare {
+    <span class="kw">let </span>x = Scalar::from(peer.to_usize() <span class="kw">as </span>u64 + <span class="number">1</span>);
+
+    <span class="comment">// We evaluate the scalar polynomial of degree threshold - 1 at the point x
+    // using the Horner schema.
+
+    </span><span class="kw">let </span>y = (<span class="number">0</span>..num_peers.threshold())
+        .map(|index| coefficient(index <span class="kw">as </span>u64))
         .rev()
-        .reduce(|acc, coefficient| acc * x + coefficient)
-        .expect(<span class="string">"We have at least one coefficient"</span>)
+        .reduce(|accumulator, c| accumulator * x + c)
+        .expect(<span class="string">"We have at least one coefficient"</span>);
+
+    SecretKeyShare(y)
+}
+
+<span class="kw">fn </span>coefficient(index: u64) -&gt; Scalar {
+    Scalar::random(<span class="kw-2">&amp;mut </span>ChaChaRng::from_seed(
+        <span class="kw-2">*</span>index.consensus_hash::&lt;sha256::Hash&gt;().as_byte_array(),
+    ))
 }
 
 <span class="attr">#[derive(Debug)]

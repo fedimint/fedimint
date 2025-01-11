@@ -677,7 +677,8 @@
 <a href="#676" id="676">676</a>
 <a href="#677" id="677">677</a>
 <a href="#678" id="678">678</a>
-<a href="#679" id="679">679</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::io::Write;
@@ -1291,6 +1292,7 @@
 
     <span class="kw">use </span>fedimint_core::PeerId;
     <span class="kw">use </span>rand::rngs::OsRng;
+    <span class="kw">use </span>tbs::derive_pk_share;
     <span class="kw">use </span>threshold_crypto::{G1Projective, G2Projective};
 
     <span class="kw">use </span><span class="kw">crate</span>::config::distributedgen::{
@@ -1316,7 +1318,7 @@
             <span class="macro">assert_eq!</span>(pk.len(), <span class="number">3</span>);
             <span class="macro">assert_eq!</span>(
                 evaluate_polynomial_g2(<span class="kw-2">&amp;</span>pk, <span class="kw-2">&amp;</span>scalar(<span class="kw-2">&amp;</span>peer)),
-                sk.to_pub_key_share().<span class="number">0
+                derive_pk_share(<span class="kw-2">&amp;</span>sk).<span class="number">0
             </span>);
         }
     }

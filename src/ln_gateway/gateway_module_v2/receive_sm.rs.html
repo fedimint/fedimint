@@ -345,7 +345,7 @@
 <span class="kw">use </span>fedimint_lnv2_common::{
     LightningInput, LightningInputV0, LightningOutputOutcome, LightningOutputOutcomeV0,
 };
-<span class="kw">use </span>tpe::{aggregate_decryption_shares, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare};
+<span class="kw">use </span>tpe::{aggregate_dk_shares, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare};
 <span class="kw">use </span>tracing::error;
 
 <span class="kw">use </span><span class="kw">super</span>::events::{IncomingPaymentFailed, IncomingPaymentSucceeded};
@@ -567,10 +567,10 @@
     ) -&gt; ReceiveStateMachine {
         <span class="kw">let </span>decryption_shares = decryption_shares
             .into_iter()
-            .map(|(peer, share)| (peer.to_usize() <span class="kw">as </span>u64 + <span class="number">1</span>, share))
+            .map(|(peer, share)| (peer.to_usize() <span class="kw">as </span>u64, share))
             .collect();
 
-        <span class="kw">let </span>agg_decryption_key = aggregate_decryption_shares(<span class="kw-2">&amp;</span>decryption_shares);
+        <span class="kw">let </span>agg_decryption_key = aggregate_dk_shares(<span class="kw-2">&amp;</span>decryption_shares);
 
         <span class="kw">if </span>!old_state
             .common

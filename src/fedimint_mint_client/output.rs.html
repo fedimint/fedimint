@@ -896,7 +896,7 @@
         <span class="kw">let </span>agg_blind_signature = aggregate_signature_shares(
             <span class="kw-2">&amp;</span>blinded_signature_shares
                 .into_iter()
-                .map(|(peer, share)| (peer.to_usize() <span class="kw">as </span>u64 + <span class="number">1</span>, share))
+                .map(|(peer, share)| (peer.to_usize() <span class="kw">as </span>u64, share))
                 .collect(),
         );
 
@@ -1136,7 +1136,7 @@
                 <span class="kw">let </span>agg_blind_signature = aggregate_signature_shares(
                     <span class="kw-2">&amp;</span>blinded_signature_shares
                         .into_iter()
-                        .map(|(peer, share)| (peer.to_usize() <span class="kw">as </span>u64 + <span class="number">1</span>, share))
+                        .map(|(peer, share)| (peer.to_usize() <span class="kw">as </span>u64, share))
                         .collect(),
                 );
 
@@ -1213,7 +1213,7 @@
         </span>.tier(<span class="kw-2">&amp;</span>amount)
         .map_err(|<span class="kw">_</span>| <span class="macro">anyhow!</span>(<span class="string">"Invalid Amount Tier"</span>))<span class="question-mark">?</span>;
 
-    <span class="kw">if </span>!tbs::verify_blind_share(blinded_message, blinded_signature_share, <span class="kw-2">*</span>amount_key) {
+    <span class="kw">if </span>!tbs::verify_signature_share(blinded_message, blinded_signature_share, <span class="kw-2">*</span>amount_key) {
         <span class="macro">bail!</span>(<span class="string">"Invalid blind signature"</span>)
     }
 

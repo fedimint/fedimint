@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["dealer_keygen","eval_polynomial"],"mod":["db"],"struct":["Lightning","LightningInit"]};
+window.SIDEBAR_ITEMS = {"fn":["coefficient","dealer_agg_pk","dealer_pk","dealer_sk"],"mod":["db"],"struct":["Lightning","LightningInit"]};

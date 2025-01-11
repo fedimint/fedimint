@@ -1149,7 +1149,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::Value;
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tpe::{derive_agg_decryption_key, AggregateDecryptionKey};
+<span class="kw">use </span>tpe::{derive_agg_dk, AggregateDecryptionKey};
 <span class="kw">use </span>tracing::warn;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::LightningFederationApi;
@@ -2008,7 +2008,7 @@
             <span class="kw">return </span><span class="prelude-val">None</span>; <span class="comment">// The claim key is not derived from our pk
         </span>}
 
-        <span class="kw">let </span>agg_decryption_key = derive_agg_decryption_key(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.tpe_agg_pk, <span class="kw-2">&amp;</span>encryption_seed);
+        <span class="kw">let </span>agg_decryption_key = derive_agg_dk(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.tpe_agg_pk, <span class="kw-2">&amp;</span>encryption_seed);
 
         <span class="kw">if </span>!contract.verify_agg_decryption_key(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.tpe_agg_pk, <span class="kw-2">&amp;</span>agg_decryption_key) {
             <span class="kw">return </span><span class="prelude-val">None</span>; <span class="comment">// The decryption key is not derived from our pk
