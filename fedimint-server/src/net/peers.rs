@@ -9,7 +9,6 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::time::Duration;
 
-use anyhow::ensure;
 use async_channel::{bounded, Receiver, Sender};
 use async_trait::async_trait;
 use fedimint_api_client::api::P2PConnectionStatus;
@@ -348,7 +347,10 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
             },
             () = sleep(backoff.next().expect("Unlimited retries")), if self.our_id < self.peer_id => {
                 // to prevent "reconnection ping-pongs", only the side with lower PeerId is responsible for reconnecting
-                match self.try_reconnect().await {
+
+                info!(target: LOG_NET_PEER, "Attempting to reconnect to peer");
+
+                match  self.connector.connect(self.peer_id).await {
                     Ok(connection) => {
                         PEER_CONNECT_COUNT
                             .with_label_values(&[&self.our_id_str, &self.peer_id_str, "outgoing"])
@@ -362,18 +364,5 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
                 Some(P2PConnectionSMState::Disconnected(backoff))
             },
         }
-    }
-
-    async fn try_reconnect(&self) -> Result<DynFramedTransport<P2PMessage<M>>, anyhow::Error> {
-        info!(target: LOG_NET_PEER, "Attempting to reconnect to peer");
-
-        let (connected_peer, connection) = self.connector.connect(self.peer_id).await?;
-
-        ensure!(
-            connected_peer == self.peer_id,
-            "Peer incorrectly identified as: {connected_peer}",
-        );
-
-        Ok(connection)
     }
 }

@@ -13,9 +13,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
 use futures::Stream;
 use iroh::endpoint::Incoming;
-use iroh::Endpoint;
-use iroh::NodeId;
-use iroh::SecretKey;
+use iroh::{Endpoint, NodeId, SecretKey};
 use rustls::ServerName;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -26,9 +24,8 @@ use tokio_rustls::{rustls, TlsAcceptor, TlsConnector, TlsStream};
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_stream::StreamExt;
 
-use crate::net::framed::{DynFramedTransport, FramedTlsTcpStream, FramedTransport};
-
 use super::framed::IrohConnection;
+use crate::net::framed::{DynFramedTransport, FramedTlsTcpStream, FramedTransport};
 
 pub type DynConnector<M> = Arc<dyn Connector<M>>;
 
@@ -43,7 +40,7 @@ pub type ConnectionListener<M> = Pin<Box<dyn Stream<Item = ConnectResult<M>> + S
 pub trait Connector<M>: Send + Sync + 'static {
     fn peers(&self) -> Vec<PeerId>;
 
-    async fn connect(&self, peer: PeerId) -> ConnectResult<M>;
+    async fn connect(&self, peer: PeerId) -> anyhow::Result<DynFramedTransport<M>>;
 
     async fn listen(&self) -> anyhow::Result<ConnectionListener<M>>;
 
@@ -100,7 +97,7 @@ where
             .collect()
     }
 
-    async fn connect(&self, peer: PeerId) -> ConnectResult<M> {
+    async fn connect(&self, peer: PeerId) -> anyhow::Result<DynFramedTransport<M>> {
         let mut root_cert_store = RootCertStore::empty();
 
         for cert in self.cfg.certificates.values() {
@@ -155,9 +152,7 @@ where
 
         ensure!(auth_peer == peer, "Connected to unexpected peer");
 
-        let framed = FramedTlsTcpStream::new(TlsStream::Client(tls)).into_dyn();
-
-        Ok((peer, framed))
+        Ok(FramedTlsTcpStream::new(TlsStream::Client(tls)).into_dyn())
     }
 
     async fn listen(&self) -> anyhow::Result<ConnectionListener<M>> {
@@ -260,12 +255,11 @@ impl IrohConnector {
         secret_key: SecretKey,
         node_ids: BTreeMap<PeerId, NodeId>,
     ) -> anyhow::Result<Self> {
-        let identity = node_ids
+        let identity = *node_ids
             .iter()
             .find(|entry| entry.1 == &secret_key.public())
             .expect("Our public key is not part of the keyset")
-            .0
-            .clone();
+            .0;
 
         Ok(Self {
             identity,
@@ -293,20 +287,15 @@ where
         self.node_ids.keys().copied().collect()
     }
 
-    async fn connect(&self, peer: PeerId) -> ConnectResult<M> {
-        let node_id = self
+    async fn connect(&self, peer: PeerId) -> anyhow::Result<DynFramedTransport<M>> {
+        let node_id = *self
             .node_ids
             .get(&peer)
-            .expect("No node id found for peer {peer}")
-            .clone();
+            .expect("No node id found for peer {peer}");
 
-        let connection = self.endpoint.connect(node_id, &FEDIMINT_ALPN).await?;
+        let connection = self.endpoint.connect(node_id, FEDIMINT_ALPN).await?;
 
-        let framed = IrohConnection::new(connection).into_dyn();
-
-        // TODO: do not return the peer
-
-        Ok((peer, framed))
+        Ok(IrohConnection::new(connection).into_dyn())
     }
 
     async fn listen(&self) -> anyhow::Result<ConnectionListener<M>> {
