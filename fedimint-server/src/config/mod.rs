@@ -17,14 +17,13 @@ use fedimint_core::module::{
     ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleInit, MultiApiVersion, PeerHandle,
     SupportedApiVersionsSummary, SupportedCoreApiVersions, CORE_CONSENSUS_VERSION,
 };
-use fedimint_core::net::peers::{DynP2PConnections, IMuxPeerConnections, IP2PConnections};
+use fedimint_core::net::peers::{IMuxPeerConnections, IP2PConnections};
 use fedimint_core::task::{timeout, Cancelled, Elapsed, TaskGroup};
 use fedimint_core::{secp256k1, timing, PeerId};
 use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 use futures::future::join_all;
 use rand::rngs::OsRng;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
-use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio_rustls::rustls;
 use tracing::{error, info};
@@ -36,7 +35,7 @@ use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::NumPeersExt;
 use crate::multiplexed::PeerConnectionMultiplexer;
 use crate::net::connect::{dns_sanitize, Connector, TlsConfig};
-use crate::net::peers::{NetworkConfig, ReconnectP2PConnections};
+use crate::net::peers::ReconnectP2PConnections;
 use crate::TlsTcpConnector;
 
 pub mod api;
@@ -435,27 +434,33 @@ impl ServerConfig {
         code_version_str: String,
     ) -> DkgResult<Self> {
         let _timing /* logs on drop */ = timing::TimeReporter::new("distributed-gen").info();
-        let server_conn = connect(
-            params.p2p_network(p2p_bind_addr),
+
+        let conn = TlsTcpConnector::new(
             params.tls_config(),
-            task_group,
+            p2p_bind_addr,
+            params
+                .p2p_urls()
+                .into_iter()
+                .map(|(id, peer)| (id, peer.url))
+                .collect(),
+            params.local.our_id,
         )
-        .await;
-        let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
+        .into_dyn();
+
+        let conn = ReconnectP2PConnections::new(params.local.our_id, conn, task_group, None)
+            .await
+            .into_dyn();
+
+        let conn = PeerConnectionMultiplexer::new(conn).into_dyn();
 
         let peers = &params.peer_ids();
         let our_id = &params.local.our_id;
 
-        let broadcast_keys_exchange = PeerHandle::new(
-            &connections,
-            MODULE_INSTANCE_ID_GLOBAL,
-            *our_id,
-            peers.clone(),
-        );
+        let exchange = PeerHandle::new(&conn, MODULE_INSTANCE_ID_GLOBAL, *our_id, peers.clone());
 
         let (broadcast_sk, broadcast_pk) = secp256k1::generate_keypair(&mut OsRng);
 
-        let broadcast_public_keys = broadcast_keys_exchange
+        let broadcast_public_keys = exchange
             .exchange_pubkeys("broadcast".to_string(), broadcast_pk)
             .await?;
 
@@ -487,7 +492,7 @@ impl ServerConfig {
         let mut module_cfgs: BTreeMap<ModuleInstanceId, ServerModuleConfig> = BTreeMap::new();
         let modules = params.consensus.modules.iter_modules();
         let modules_runner = modules.map(|(module_instance_id, kind, module_params)| {
-            let dkg = PeerHandle::new(&connections, module_instance_id, *our_id, peers.clone());
+            let dkg = PeerHandle::new(&conn, module_instance_id, *our_id, peers.clone());
             let registry = registry.clone();
 
             async move {
@@ -515,13 +520,12 @@ impl ServerConfig {
         // if other peers received our message, just because we received theirs.
         // That's why we need to do a one last best effort sync.
         let dkg_done = "DKG DONE".to_string();
-        connections
-            .send(
-                peers,
-                (MODULE_INSTANCE_ID_GLOBAL, dkg_done.clone()),
-                DkgPeerMsg::Done,
-            )
-            .await?;
+        conn.send(
+            peers,
+            (MODULE_INSTANCE_ID_GLOBAL, dkg_done.clone()),
+            DkgPeerMsg::Done,
+        )
+        .await?;
 
         info!(
             target: LOG_NET_PEER_DKG,
@@ -531,7 +535,7 @@ impl ServerConfig {
             let mut done_peers = BTreeSet::from([*our_id]);
 
             while done_peers.len() < peers.len() {
-                match connections.receive((MODULE_INSTANCE_ID_GLOBAL, dkg_done.clone())).await {
+                match conn.receive((MODULE_INSTANCE_ID_GLOBAL, dkg_done.clone())).await {
                     Ok((peer_id, DkgPeerMsg::Done)) => {
                         info!(
                             target: LOG_NET_PEER_DKG,
@@ -579,19 +583,6 @@ pub enum KeyType {
 }
 
 impl ServerConfig {
-    pub fn network_config(&self, p2p_bind_addr: SocketAddr) -> NetworkConfig {
-        NetworkConfig {
-            identity: self.local.identity,
-            peers: self
-                .local
-                .p2p_endpoints
-                .iter()
-                .map(|(&id, endpoint)| (id, endpoint.url.clone()))
-                .collect(),
-            p2p_bind_addr,
-        }
-    }
-
     pub fn tls_config(&self) -> TlsConfig {
         TlsConfig {
             private_key: self.private.tls_key.clone(),
@@ -613,18 +604,6 @@ impl ServerConfig {
 impl ConfigGenParams {
     pub fn peer_ids(&self) -> Vec<PeerId> {
         self.consensus.peers.keys().copied().collect()
-    }
-
-    pub fn p2p_network(&self, p2p_bind_addr: SocketAddr) -> NetworkConfig {
-        NetworkConfig {
-            identity: self.local.our_id,
-            p2p_bind_addr,
-            peers: self
-                .p2p_urls()
-                .into_iter()
-                .map(|(id, peer)| (id, peer.url))
-                .collect(),
-        }
     }
 
     pub fn tls_config(&self) -> TlsConfig {
@@ -686,21 +665,6 @@ pub fn max_connections() -> u32 {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(DEFAULT_MAX_CLIENT_CONNECTIONS)
-}
-
-pub async fn connect<T>(
-    network: NetworkConfig,
-    certs: TlsConfig,
-    task_group: &TaskGroup,
-) -> DynP2PConnections<T>
-where
-    T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + 'static,
-{
-    let connector = TlsTcpConnector::new(certs, network.identity).into_dyn();
-
-    let connections = ReconnectP2PConnections::new(network, connector, task_group, None).await;
-
-    connections.into_dyn()
 }
 
 pub fn gen_cert_and_key(

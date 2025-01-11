@@ -35,9 +35,11 @@ pub type ConnectionListener<M> = Pin<Box<dyn Stream<Item = ConnectResult<M>> + S
 /// production deployments.
 #[async_trait]
 pub trait Connector<M>: Send + Sync + 'static {
-    async fn connect(&self, destination: SafeUrl, peer: PeerId) -> ConnectResult<M>;
+    fn peers(&self) -> Vec<PeerId>;
 
-    async fn listen(&self, bind_addr: SocketAddr) -> anyhow::Result<ConnectionListener<M>>;
+    async fn connect(&self, peer: PeerId) -> ConnectResult<M>;
+
+    async fn listen(&self) -> anyhow::Result<ConnectionListener<M>>;
 
     fn into_dyn(self) -> DynConnector<M>
     where
@@ -79,21 +81,41 @@ impl TlsConfig {
 #[derive(Debug)]
 pub struct TlsTcpConnector {
     cfg: TlsConfig,
-    peer_id: PeerId,
+    p2p_bind_addr: SocketAddr,
+    peers: BTreeMap<PeerId, SafeUrl>,
+    identity: PeerId,
 }
 
 impl TlsTcpConnector {
-    pub fn new(cfg: TlsConfig, peer_id: PeerId) -> TlsTcpConnector {
-        TlsTcpConnector { cfg, peer_id }
+    pub fn new(
+        cfg: TlsConfig,
+        p2p_bind_addr: SocketAddr,
+        peers: BTreeMap<PeerId, SafeUrl>,
+        identity: PeerId,
+    ) -> TlsTcpConnector {
+        TlsTcpConnector {
+            cfg,
+            p2p_bind_addr,
+            peers,
+            identity,
+        }
     }
 }
 
 #[async_trait]
 impl<M> Connector<M> for TlsTcpConnector
 where
-    M: Debug + Serialize + DeserializeOwned + Send + Unpin + 'static,
+    M: Serialize + DeserializeOwned + Send + 'static,
 {
-    async fn connect(&self, destination: SafeUrl, peer: PeerId) -> ConnectResult<M> {
+    fn peers(&self) -> Vec<PeerId> {
+        self.peers
+            .keys()
+            .filter(|peer| **peer != self.identity)
+            .copied()
+            .collect()
+    }
+
+    async fn connect(&self, peer: PeerId) -> ConnectResult<M> {
         let mut root_cert_store = RootCertStore::empty();
 
         for cert in self.cfg.certificates.values() {
@@ -105,7 +127,7 @@ where
         let certificate = self
             .cfg
             .certificates
-            .get(&self.peer_id)
+            .get(&self.identity)
             .expect("No certificate for ourself found")
             .clone();
 
@@ -117,6 +139,12 @@ where
 
         let domain = ServerName::try_from(dns_sanitize(&self.cfg.peer_names[&peer]).as_str())
             .expect("Always a valid DNS name");
+
+        let destination = self
+            .peers
+            .get(&peer)
+            .expect("No url for peer {peer}")
+            .with_port_or_known_default();
 
         let tls = TlsConnector::from(Arc::new(cfg))
             .connect(
@@ -136,7 +164,7 @@ where
         Ok((peer, framed))
     }
 
-    async fn listen(&self, bind_addr: SocketAddr) -> anyhow::Result<ConnectionListener<M>> {
+    async fn listen(&self) -> anyhow::Result<ConnectionListener<M>> {
         let mut root_cert_store = RootCertStore::empty();
 
         for cert in self.cfg.certificates.values() {
@@ -150,7 +178,7 @@ where
         let certificate = self
             .cfg
             .certificates
-            .get(&self.peer_id)
+            .get(&self.identity)
             .expect("No certificate for ourself found")
             .clone();
 
@@ -160,7 +188,7 @@ where
             .with_single_cert(vec![certificate], self.cfg.private_key.clone())
             .expect("Failed to create TLS config");
 
-        let listener = TcpListener::bind(bind_addr).await?;
+        let listener = TcpListener::bind(self.p2p_bind_addr).await?;
 
         let acceptor = TlsAcceptor::from(Arc::new(config.clone()));
 

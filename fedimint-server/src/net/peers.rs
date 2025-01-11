@@ -7,7 +7,6 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Debug;
-use std::net::SocketAddr;
 use std::time::Duration;
 
 use anyhow::ensure;
@@ -17,7 +16,7 @@ use fedimint_api_client::api::P2PConnectionStatus;
 use fedimint_core::net::peers::{IP2PConnections, Recipient};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::backoff_util::{api_networking_backoff, FibonacciBackoff};
-use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
+use fedimint_core::util::FmtCompactAnyhow;
 use fedimint_core::PeerId;
 use fedimint_logging::{LOG_CONSENSUS, LOG_NET_PEER};
 use futures::future::select_all;
@@ -36,18 +35,6 @@ pub struct ReconnectP2PConnections<M> {
     connections: BTreeMap<PeerId, P2PConnection<M>>,
 }
 
-/// Specifies the network configuration for federation-internal communication
-#[derive(Debug, Clone)]
-pub struct NetworkConfig {
-    /// Our federation member's identity
-    pub identity: PeerId,
-    /// Our listen address for incoming connections from other federation
-    /// members
-    pub p2p_bind_addr: SocketAddr,
-    /// Map of all peers' connection information we want to be connected to
-    pub peers: BTreeMap<PeerId, SafeUrl>,
-}
-
 /// Internal message type for [`ReconnectP2PConnections`], just public because
 /// it appears in the public interface.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,8 +44,8 @@ pub enum P2PMessage<M> {
 }
 
 impl<M: Send + 'static> ReconnectP2PConnections<M> {
-    pub(crate) async fn new(
-        cfg: NetworkConfig,
+    pub async fn new(
+        identity: PeerId,
         connector: DynConnector<P2PMessage<M>>,
         task_group: &TaskGroup,
         mut status_channels: Option<BTreeMap<PeerId, watch::Sender<P2PConnectionStatus>>>,
@@ -66,31 +53,29 @@ impl<M: Send + 'static> ReconnectP2PConnections<M> {
         let mut connection_senders = BTreeMap::new();
         let mut connections = BTreeMap::new();
 
-        for (peer_id, address) in cfg.peers.iter().filter(|entry| *entry.0 != cfg.identity) {
+        for peer_id in connector.peers() {
+            assert_ne!(peer_id, identity);
+
             let (connection_sender, connection_receiver) = bounded(4);
 
             let connection = P2PConnection::new(
-                cfg.identity,
-                *peer_id,
-                address.clone(),
+                identity,
+                peer_id,
                 connector.clone(),
                 connection_receiver,
                 status_channels.as_mut().map(|channels| {
                     channels
-                        .remove(peer_id)
+                        .remove(&peer_id)
                         .expect("No p2p status sender for peer {peer}")
                 }),
                 task_group,
             );
 
-            connection_senders.insert(*peer_id, connection_sender);
-            connections.insert(*peer_id, connection);
+            connection_senders.insert(peer_id, connection_sender);
+            connections.insert(peer_id, connection);
         }
 
-        let mut listener = connector
-            .listen(cfg.p2p_bind_addr)
-            .await
-            .expect("Could not bind to port");
+        let mut listener = connector.listen().await.expect("Could not bind to port");
 
         task_group.spawn_cancellable("handle-incoming-p2p-connections", async move {
             info!(target: LOG_NET_PEER, "Shutting down listening task for p2p connections");
@@ -109,7 +94,7 @@ impl<M: Send + 'static> ReconnectP2PConnections<M> {
                         }
                     },
                     Err(err) => {
-                        warn!(target: LOG_NET_PEER, our_id = %cfg.identity, err = %err.fmt_compact_anyhow(), "Error while opening incoming connection");
+                        warn!(target: LOG_NET_PEER, our_id = %identity, err = %err.fmt_compact_anyhow(), "Error while opening incoming connection");
                     }
                 }
             }
@@ -177,7 +162,6 @@ impl<M: Send + 'static> P2PConnection<M> {
     fn new(
         our_id: PeerId,
         peer_id: PeerId,
-        peer_address: SafeUrl,
         connector: DynConnector<P2PMessage<M>>,
         incoming_connections: Receiver<DynFramedTransport<P2PMessage<M>>>,
         status_channel: Option<watch::Sender<P2PConnectionStatus>>,
@@ -199,7 +183,6 @@ impl<M: Send + 'static> P2PConnection<M> {
                         our_id,
                         peer_id_str: peer_id.to_string(),
                         peer_id,
-                        peer_address,
                         connector,
                         incoming_connections,
                         status_channel,
@@ -247,7 +230,6 @@ struct P2PConnectionSMCommon<M> {
     our_id_str: String,
     peer_id: PeerId,
     peer_id_str: String,
-    peer_address: SafeUrl,
     connector: DynConnector<P2PMessage<M>>,
     incoming_connections: Receiver<DynFramedTransport<P2PMessage<M>>>,
     status_channel: Option<watch::Sender<P2PConnectionStatus>>,
@@ -385,10 +367,7 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
     async fn try_reconnect(&self) -> Result<DynFramedTransport<P2PMessage<M>>, anyhow::Error> {
         info!(target: LOG_NET_PEER, "Attempting to reconnect to peer");
 
-        let (connected_peer, connection) = self
-            .connector
-            .connect(self.peer_address.with_port_or_known_default(), self.peer_id)
-            .await?;
+        let (connected_peer, connection) = self.connector.connect(self.peer_id).await?;
 
         ensure!(
             connected_peer == self.peer_id,
