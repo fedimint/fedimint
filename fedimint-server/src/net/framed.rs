@@ -8,7 +8,7 @@ use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
 use iroh::endpoint::Connection;
 use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::net::TcpStream;
 use tokio_rustls::TlsStream;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
@@ -16,12 +16,12 @@ use tokio_util::codec::{Framed, LengthDelimitedCodec};
 pub type DynFramedTransport<M> = Box<dyn FramedTransport<M>>;
 
 #[async_trait]
-pub trait FramedTransport<T>: Send + 'static {
-    async fn send(&mut self, message: T) -> anyhow::Result<()>;
+pub trait FramedTransport<M>: Send + 'static {
+    async fn send(&mut self, message: M) -> anyhow::Result<()>;
 
-    async fn receive(&mut self) -> anyhow::Result<T>;
+    async fn receive(&mut self) -> anyhow::Result<M>;
 
-    fn into_dyn(self) -> DynFramedTransport<T>
+    fn into_dyn(self) -> DynFramedTransport<M>
     where
         Self: Sized,
     {
@@ -30,9 +30,9 @@ pub trait FramedTransport<T>: Send + 'static {
 }
 
 #[derive(Debug)]
-pub struct FramedTlsTcpStream<T> {
+pub struct FramedTlsTcpStream<M> {
     stream: Framed<TlsStream<TcpStream>, LengthDelimitedCodec>,
-    _pd: PhantomData<T>,
+    _pd: PhantomData<M>,
 }
 
 impl<T> FramedTlsTcpStream<T> {
@@ -46,29 +46,44 @@ impl<T> FramedTlsTcpStream<T> {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum LegacyMessage<M> {
+    Message(M),
+    Ping,
+}
+
 #[async_trait]
-impl<T> FramedTransport<T> for FramedTlsTcpStream<T>
+impl<M> FramedTransport<M> for FramedTlsTcpStream<M>
 where
-    T: Serialize + DeserializeOwned + Send + 'static,
+    M: Serialize + DeserializeOwned + Send + 'static,
 {
-    async fn send(&mut self, message: T) -> anyhow::Result<()> {
+    async fn send(&mut self, message: M) -> anyhow::Result<()> {
         let mut bytes = Vec::new();
 
-        bincode::serialize_into(&mut bytes, &message)?;
+        bincode::serialize_into(&mut bytes, &LegacyMessage::Message(message))?;
 
         self.stream.send(Bytes::from_owner(bytes)).await?;
 
         Ok(())
     }
 
-    async fn receive(&mut self) -> anyhow::Result<T> {
-        let bytes = self
-            .stream
-            .next()
-            .await
-            .context("Framed stream is closed")??;
+    async fn receive(&mut self) -> anyhow::Result<M> {
+        loop {
+            let bytes = self
+                .stream
+                .next()
+                .await
+                .context("Framed stream is closed")??;
 
-        Ok(bincode::deserialize_from(Cursor::new(&bytes))?)
+            if let Ok(legacy_message) = bincode::deserialize_from(Cursor::new(&bytes)) {
+                match legacy_message {
+                    LegacyMessage::Message(message) => return Ok(message),
+                    LegacyMessage::Ping => continue,
+                }
+            }
+
+            return Ok(bincode::deserialize_from(Cursor::new(&bytes))?);
+        }
     }
 }
 
