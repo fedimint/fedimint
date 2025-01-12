@@ -461,7 +461,7 @@ impl ServerConfig {
         let (broadcast_sk, broadcast_pk) = secp256k1::generate_keypair(&mut OsRng);
 
         let broadcast_public_keys = exchange
-            .exchange_pubkeys("broadcast".to_string(), broadcast_pk)
+            .exchange_encodable("broadcast".to_string(), broadcast_pk)
             .await?;
 
         // in case we are running by ourselves, avoid DKG

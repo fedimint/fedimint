@@ -28,7 +28,7 @@ use threshold_crypto::{G1Projective, G2Projective};
 use tracing::warn;
 
 use crate::core::DynClientConfig;
-use crate::encoding::Decodable;
+use crate::encoding::{Decodable, DecodeError};
 use crate::module::{
     CoreConsensusVersion, DynCommonModuleInit, DynServerModuleInit, IDynCommonModuleInit,
     ModuleConsensusVersion,
@@ -878,10 +878,8 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
 /// Things that a `distributed_gen` config can send between peers
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum DkgPeerMsg {
-    PublicKey(secp256k1::PublicKey),
     DistributedGen(SupportedDkgMessage),
-    Module(Vec<u8>),
-    // Dkg completed on our side
+    Encodable(Vec<u8>),
     Done,
 }
 
@@ -901,8 +899,8 @@ pub enum DkgError {
     ModuleNotFound(ModuleKind),
     #[error("Params for modules were not found {0:?}")]
     ParamsNotFound(BTreeSet<ModuleKind>),
-    #[error("Failed to decode module message {0:?}")]
-    ModuleDecodeError(ModuleKind),
+    #[error("Failed to decode encodable message {0:?}")]
+    ModuleDecodeError(DecodeError),
 }
 
 /// Supported (by Fedimint's code) `DkgMessage<T>` types

@@ -7,12 +7,11 @@ use anyhow::{ensure, format_err};
 use async_trait::async_trait;
 use bitcoin::hashes::sha256::{Hash as Sha256, HashEngine};
 use bitcoin::hashes::Hash as BitcoinHash;
-use bitcoin::secp256k1;
 use bls12_381::Scalar;
 use fedimint_core::config::{
     DkgError, DkgGroup, DkgMessage, DkgPeerMsg, DkgResult, ISupportedDkgMessage,
 };
-use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
+use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::PeerHandle;
@@ -481,25 +480,15 @@ pub trait PeerHandleOps {
     where
         T: Serialize + DeserializeOwned + Unpin + Send + Clone + Eq + Hash + Sync;
 
-    /// Exchanges a `DkgPeerMsg::PublicKey(key)` with all peers. Used by the
-    /// wallet module to setup the multisig wallet during DKG.
-    async fn exchange_pubkeys(
-        &self,
-        dkg_key: String,
-        key: secp256k1::PublicKey,
-    ) -> DkgResult<BTreeMap<PeerId, secp256k1::PublicKey>>;
-
     /// Exchanges a `DkgPeerMsg::Module(Vec<u8>)` with all peers. All peers are
     /// required to be online and submit a response for this to return
     /// properly. The caller's message will be included in the returned
     /// `BTreeMap` under the `PeerId` of this peer. This allows modules to
     /// exchange arbitrary data during distributed key generation.
-    async fn exchange_with_peers<T: Encodable + Decodable + Send + Sync>(
+    async fn exchange_encodable<T: Encodable + Decodable + Send + Sync>(
         &self,
         dkg_key: String,
         data: T,
-        kind: ModuleKind,
-        decoder: Decoder,
     ) -> DkgResult<BTreeMap<PeerId, T>>;
 }
 
@@ -532,72 +521,38 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
         dkg.run_g2(self.module_instance_id, self.connections).await
     }
 
-    async fn exchange_pubkeys(
+    async fn exchange_encodable<T: Encodable + Decodable + Send + Sync>(
         &self,
         dkg_key: String,
-        key: secp256k1::PublicKey,
-    ) -> DkgResult<BTreeMap<PeerId, secp256k1::PublicKey>> {
-        let mut peer_peg_in_keys: BTreeMap<PeerId, secp256k1::PublicKey> = BTreeMap::new();
+        data: T,
+    ) -> DkgResult<BTreeMap<PeerId, T>> {
+        let mut peer_data: BTreeMap<PeerId, T> = BTreeMap::new();
 
         self.connections
             .send(
                 &self.peers,
                 (self.module_instance_id, dkg_key.clone()),
-                DkgPeerMsg::PublicKey(key),
+                DkgPeerMsg::Encodable(data.consensus_encode_to_vec()),
             )
             .await?;
 
-        peer_peg_in_keys.insert(self.our_id, key);
-        while peer_peg_in_keys.len() < self.peers.len() {
-            match self
-                .connections
-                .receive((self.module_instance_id, dkg_key.clone()))
-                .await?
-            {
-                (peer, DkgPeerMsg::PublicKey(key)) => {
-                    peer_peg_in_keys.insert(peer, key);
-                }
-                (peer, msg) => {
-                    return Err(
-                        format_err!("Invalid message received from: {peer}: {msg:?}").into(),
-                    );
-                }
-            }
-        }
-
-        Ok(peer_peg_in_keys)
-    }
-
-    async fn exchange_with_peers<T: Encodable + Decodable + Send + Sync>(
-        &self,
-        dkg_key: String,
-        data: T,
-        kind: ModuleKind,
-        decoder: Decoder,
-    ) -> DkgResult<BTreeMap<PeerId, T>> {
-        let mut peer_data: BTreeMap<PeerId, T> = BTreeMap::new();
-        let msg = DkgPeerMsg::Module(data.consensus_encode_to_vec());
-
-        self.connections
-            .send(&self.peers, (self.module_instance_id, dkg_key.clone()), msg)
-            .await?;
         peer_data.insert(self.our_id, data);
 
-        let modules =
-            ModuleDecoderRegistry::new([(self.module_instance_id, kind.clone(), decoder)]);
         while peer_data.len() < self.peers.len() {
-            match self
+            let (peer, message) = self
                 .connections
                 .receive((self.module_instance_id, dkg_key.clone()))
-                .await?
-            {
-                (peer, DkgPeerMsg::Module(bytes)) => {
-                    let received_data: T = T::consensus_decode_whole(&bytes, &modules)
-                        .map_err(|_| DkgError::ModuleDecodeError(kind.clone()))?;
-                    peer_data.insert(peer, received_data);
+                .await?;
+
+            match message {
+                DkgPeerMsg::Encodable(bytes) => {
+                    let data = T::consensus_decode_whole(&bytes, &ModuleDecoderRegistry::default())
+                        .map_err(DkgError::ModuleDecodeError)?;
+
+                    peer_data.insert(peer, data);
                 }
-                (peer, msg) => {
-                    return Err(format_err!("Invalid message received from {peer}: {msg:?}").into());
+                message => {
+                    return Err(format_err!("Invalid message from {peer}: {message:?}").into());
                 }
             }
         }
