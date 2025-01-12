@@ -1,4 +1,4 @@
 pub mod api;
-pub mod connect;
-pub mod framed;
-pub mod peers;
+pub mod p2p;
+pub mod p2p_connection;
+pub mod p2p_connector;

@@ -24,27 +24,27 @@ use tokio_rustls::{rustls, TlsAcceptor, TlsConnector, TlsStream};
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_stream::StreamExt;
 
-use super::framed::IrohConnection;
-use crate::net::framed::{DynFramedTransport, FramedTlsTcpStream, FramedTransport};
+use super::p2p_connection::IrohConnection;
+use crate::net::p2p_connection::{DynP2PConnection, FramedTlsTcpStream, P2PConnection};
 
-pub type DynConnector<M> = Arc<dyn Connector<M>>;
+pub type DynP2PConnector<M> = Arc<dyn P2PConnector<M>>;
 
-pub type ConnectResult<M> = anyhow::Result<(PeerId, DynFramedTransport<M>)>;
+pub type P2PConnectionResult<M> = anyhow::Result<(PeerId, DynP2PConnection<M>)>;
 
-pub type ConnectionListener<M> = Pin<Box<dyn Stream<Item = ConnectResult<M>> + Send + 'static>>;
+pub type P2PConnectionListener<M> = Pin<Box<dyn Stream<Item = P2PConnectionResult<M>> + Send>>;
 
 /// Allows to connect to peers and to listen for incoming connections.
 /// Connections are message based and should be authenticated and encrypted for
 /// production deployments.
 #[async_trait]
-pub trait Connector<M>: Send + Sync + 'static {
+pub trait P2PConnector<M>: Send + Sync + 'static {
     fn peers(&self) -> Vec<PeerId>;
 
-    async fn connect(&self, peer: PeerId) -> anyhow::Result<DynFramedTransport<M>>;
+    async fn connect(&self, peer: PeerId) -> anyhow::Result<DynP2PConnection<M>>;
 
-    async fn listen(&self) -> anyhow::Result<ConnectionListener<M>>;
+    async fn listen(&self) -> anyhow::Result<P2PConnectionListener<M>>;
 
-    fn into_dyn(self) -> DynConnector<M>
+    fn into_dyn(self) -> DynP2PConnector<M>
     where
         Self: Sized,
     {
@@ -85,7 +85,7 @@ impl TlsTcpConnector {
 }
 
 #[async_trait]
-impl<M> Connector<M> for TlsTcpConnector
+impl<M> P2PConnector<M> for TlsTcpConnector
 where
     M: Serialize + DeserializeOwned + Send + 'static,
 {
@@ -97,7 +97,7 @@ where
             .collect()
     }
 
-    async fn connect(&self, peer: PeerId) -> anyhow::Result<DynFramedTransport<M>> {
+    async fn connect(&self, peer: PeerId) -> anyhow::Result<DynP2PConnection<M>> {
         let mut root_cert_store = RootCertStore::empty();
 
         for cert in self.cfg.certificates.values() {
@@ -155,7 +155,7 @@ where
         Ok(FramedTlsTcpStream::new(TlsStream::Client(tls)).into_dyn())
     }
 
-    async fn listen(&self) -> anyhow::Result<ConnectionListener<M>> {
+    async fn listen(&self) -> anyhow::Result<P2PConnectionListener<M>> {
         let mut root_cert_store = RootCertStore::empty();
 
         for cert in self.cfg.certificates.values() {
@@ -279,7 +279,7 @@ impl IrohConnector {
 }
 
 #[async_trait]
-impl<M> Connector<M> for IrohConnector
+impl<M> P2PConnector<M> for IrohConnector
 where
     M: Serialize + DeserializeOwned + Send + 'static,
 {
@@ -287,7 +287,7 @@ where
         self.node_ids.keys().copied().collect()
     }
 
-    async fn connect(&self, peer: PeerId) -> anyhow::Result<DynFramedTransport<M>> {
+    async fn connect(&self, peer: PeerId) -> anyhow::Result<DynP2PConnection<M>> {
         let node_id = *self
             .node_ids
             .get(&peer)
@@ -298,7 +298,7 @@ where
         Ok(IrohConnection::new(connection).into_dyn())
     }
 
-    async fn listen(&self) -> anyhow::Result<ConnectionListener<M>> {
+    async fn listen(&self) -> anyhow::Result<P2PConnectionListener<M>> {
         let stream = futures::stream::unfold(self.clone(), move |endpoint| async move {
             let stream = endpoint.endpoint.accept().await?;
 
@@ -314,7 +314,7 @@ where
 async fn accept_connection<M>(
     peers: &BTreeMap<PeerId, NodeId>,
     incoming: Incoming,
-) -> ConnectResult<M>
+) -> P2PConnectionResult<M>
 where
     M: Serialize + DeserializeOwned + Send + 'static,
 {

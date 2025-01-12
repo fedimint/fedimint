@@ -13,15 +13,15 @@ use tokio::net::TcpStream;
 use tokio_rustls::TlsStream;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
-pub type DynFramedTransport<M> = Box<dyn FramedTransport<M>>;
+pub type DynP2PConnection<M> = Box<dyn P2PConnection<M>>;
 
 #[async_trait]
-pub trait FramedTransport<M>: Send + 'static {
+pub trait P2PConnection<M>: Send + 'static {
     async fn send(&mut self, message: M) -> anyhow::Result<()>;
 
     async fn receive(&mut self) -> anyhow::Result<M>;
 
-    fn into_dyn(self) -> DynFramedTransport<M>
+    fn into_dyn(self) -> DynP2PConnection<M>
     where
         Self: Sized,
     {
@@ -53,7 +53,7 @@ pub enum LegacyMessage<M> {
 }
 
 #[async_trait]
-impl<M> FramedTransport<M> for FramedTlsTcpStream<M>
+impl<M> P2PConnection<M> for FramedTlsTcpStream<M>
 where
     M: Serialize + DeserializeOwned + Send + 'static,
 {
@@ -103,7 +103,7 @@ impl<M> IrohConnection<M> {
 }
 
 #[async_trait]
-impl<M> FramedTransport<M> for IrohConnection<M>
+impl<M> P2PConnection<M> for IrohConnection<M>
 where
     M: Serialize + DeserializeOwned + Send + 'static,
 {

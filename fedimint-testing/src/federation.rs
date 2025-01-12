@@ -25,7 +25,7 @@ use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::api::ConfigGenParamsLocal;
 use fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use fedimint_server::consensus;
-use fedimint_server::net::connect::parse_host_port;
+use fedimint_server::net::p2p_connector::parse_host_port;
 use ln_gateway::rpc::ConnectFedPayload;
 use ln_gateway::Gateway;
 use tokio_rustls::rustls;

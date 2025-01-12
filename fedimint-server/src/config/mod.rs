@@ -33,8 +33,8 @@ use crate::config::distributedgen::PeerHandleOps;
 use crate::envs::FM_MAX_CLIENT_CONNECTIONS_ENV;
 use crate::fedimint_core::encoding::Encodable;
 use crate::multiplexed::PeerConnectionMultiplexer;
-use crate::net::connect::{dns_sanitize, Connector, TlsConfig};
-use crate::net::peers::ReconnectP2PConnections;
+use crate::net::p2p::ReconnectP2PConnections;
+use crate::net::p2p_connector::{dns_sanitize, P2PConnector, TlsConfig};
 use crate::TlsTcpConnector;
 
 pub mod api;

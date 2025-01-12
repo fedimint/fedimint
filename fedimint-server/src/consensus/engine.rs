@@ -53,8 +53,8 @@ use crate::metrics::{
     CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS, CONSENSUS_ORDERING_LATENCY_SECONDS,
     CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX, CONSENSUS_SESSION_COUNT,
 };
-use crate::net::connect::{Connector, TlsTcpConnector};
-use crate::net::peers::ReconnectP2PConnections;
+use crate::net::p2p::ReconnectP2PConnections;
+use crate::net::p2p_connector::{P2PConnector, TlsTcpConnector};
 use crate::LOG_CONSENSUS;
 
 // The name of the directory where the database checkpoints are stored.

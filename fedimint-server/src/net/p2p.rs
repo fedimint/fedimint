@@ -23,8 +23,8 @@ use tokio::time::sleep;
 use tracing::{info, info_span, warn, Instrument};
 
 use crate::metrics::{PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT};
-use crate::net::connect::DynConnector;
-use crate::net::framed::DynFramedTransport;
+use crate::net::p2p_connection::DynP2PConnection;
+use crate::net::p2p_connector::DynP2PConnector;
 
 #[derive(Clone)]
 pub struct ReconnectP2PConnections<M> {
@@ -34,7 +34,7 @@ pub struct ReconnectP2PConnections<M> {
 impl<M: Send + 'static> ReconnectP2PConnections<M> {
     pub async fn new(
         identity: PeerId,
-        connector: DynConnector<M>,
+        connector: DynP2PConnector<M>,
         task_group: &TaskGroup,
         mut status_channels: Option<BTreeMap<PeerId, watch::Sender<P2PConnectionStatus>>>,
     ) -> Self {
@@ -150,8 +150,8 @@ impl<M: Send + 'static> P2PConnection<M> {
     fn new(
         our_id: PeerId,
         peer_id: PeerId,
-        connector: DynConnector<M>,
-        incoming_connections: Receiver<DynFramedTransport<M>>,
+        connector: DynP2PConnector<M>,
+        incoming_connections: Receiver<DynP2PConnection<M>>,
         status_channel: Option<watch::Sender<P2PConnectionStatus>>,
         task_group: &TaskGroup,
     ) -> P2PConnection<M> {
@@ -218,14 +218,14 @@ struct P2PConnectionSMCommon<M> {
     our_id_str: String,
     peer_id: PeerId,
     peer_id_str: String,
-    connector: DynConnector<M>,
-    incoming_connections: Receiver<DynFramedTransport<M>>,
+    connector: DynP2PConnector<M>,
+    incoming_connections: Receiver<DynP2PConnection<M>>,
     status_channel: Option<watch::Sender<P2PConnectionStatus>>,
 }
 
 enum P2PConnectionSMState<M> {
     Disconnected(FibonacciBackoff),
-    Connected(DynFramedTransport<M>),
+    Connected(DynP2PConnection<M>),
 }
 
 impl<M: Send + 'static> P2PConnectionStateMachine<M> {
@@ -256,7 +256,7 @@ impl<M: Send + 'static> P2PConnectionStateMachine<M> {
 impl<M: Send + 'static> P2PConnectionSMCommon<M> {
     async fn transition_connected(
         &mut self,
-        mut connection: DynFramedTransport<M>,
+        mut connection: DynP2PConnection<M>,
     ) -> Option<P2PConnectionSMState<M>> {
         tokio::select! {
             message = self.outgoing_receiver.recv() => {
@@ -296,7 +296,7 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
 
     async fn send_message(
         &mut self,
-        mut connection: DynFramedTransport<M>,
+        mut connection: DynP2PConnection<M>,
         peer_message: M,
     ) -> P2PConnectionSMState<M> {
         PEER_MESSAGES_COUNT

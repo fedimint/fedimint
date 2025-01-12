@@ -37,7 +37,7 @@ use crate::config::io::{write_server_config, SALT_FILE};
 use crate::metrics::initialize_gauge_metrics;
 use crate::net::api::announcement::start_api_announcement_service;
 use crate::net::api::RpcHandlerCtx;
-use crate::net::connect::TlsTcpConnector;
+use crate::net::p2p_connector::TlsTcpConnector;
 
 pub mod envs;
 pub mod metrics;
