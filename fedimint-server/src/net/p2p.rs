@@ -63,7 +63,7 @@ impl<M: Send + 'static> ReconnectP2PConnections<M> {
             connections.insert(peer_id, connection);
         }
 
-        let mut listener = connector.listen().await.expect("Could not bind to port");
+        let mut listener = connector.listen().await;
 
         task_group.spawn_cancellable("handle-incoming-p2p-connections", async move {
             info!(target: LOG_NET_PEER, "Shutting down listening task for p2p connections");

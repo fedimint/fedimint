@@ -42,7 +42,7 @@ pub trait P2PConnector<M>: Send + Sync + 'static {
 
     async fn connect(&self, peer: PeerId) -> anyhow::Result<DynP2PConnection<M>>;
 
-    async fn listen(&self) -> anyhow::Result<P2PConnectionListener<M>>;
+    async fn listen(&self) -> P2PConnectionListener<M>;
 
     fn into_dyn(self) -> DynP2PConnector<M>
     where
@@ -155,7 +155,7 @@ where
         Ok(FramedTlsTcpStream::new(TlsStream::Client(tls)).into_dyn())
     }
 
-    async fn listen(&self) -> anyhow::Result<P2PConnectionListener<M>> {
+    async fn listen(&self) -> P2PConnectionListener<M> {
         let mut root_cert_store = RootCertStore::empty();
 
         for cert in self.cfg.certificates.values() {
@@ -179,7 +179,9 @@ where
             .with_single_cert(vec![certificate], self.cfg.private_key.clone())
             .expect("Failed to create TLS config");
 
-        let listener = TcpListener::bind(self.p2p_bind_addr).await?;
+        let listener = TcpListener::bind(self.p2p_bind_addr)
+            .await
+            .expect("Could not bind to port");
 
         let acceptor = TlsAcceptor::from(Arc::new(config.clone()));
 
@@ -214,7 +216,7 @@ where
             })
         });
 
-        Ok(Box::pin(stream))
+        Box::pin(stream)
     }
 }
 
@@ -298,7 +300,7 @@ where
         Ok(IrohConnection::new(connection).into_dyn())
     }
 
-    async fn listen(&self) -> anyhow::Result<P2PConnectionListener<M>> {
+    async fn listen(&self) -> P2PConnectionListener<M> {
         let stream = futures::stream::unfold(self.clone(), move |endpoint| async move {
             let stream = endpoint.endpoint.accept().await?;
 
@@ -307,7 +309,7 @@ where
             Some((result, endpoint))
         });
 
-        Ok(Box::pin(stream))
+        Box::pin(stream)
     }
 }
 
