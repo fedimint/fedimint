@@ -5,6 +5,8 @@ use std::marker::PhantomData;
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use futures::{SinkExt, StreamExt};
 use iroh::endpoint::Connection;
 use serde::de::DeserializeOwned;
@@ -105,16 +107,12 @@ impl<M> IrohConnection<M> {
 #[async_trait]
 impl<M> P2PConnection<M> for IrohConnection<M>
 where
-    M: Serialize + DeserializeOwned + Send + 'static,
+    M: Encodable + Decodable + Send + 'static,
 {
     async fn send(&mut self, message: M) -> anyhow::Result<()> {
-        let mut bytes = Vec::new();
-
-        bincode::serialize_into(&mut bytes, &message)?;
-
         let mut sink = self.connection.open_uni().await?;
 
-        sink.write_all(&bytes).await?;
+        sink.write_all(&message.consensus_encode_to_vec()).await?;
 
         sink.finish()?;
 
@@ -126,9 +124,12 @@ where
             .connection
             .accept_uni()
             .await?
-            .read_to_end(100_000)
+            .read_to_end(1_000_000_000)
             .await?;
 
-        Ok(bincode::deserialize_from(Cursor::new(&bytes))?)
+        Ok(Decodable::consensus_decode_whole(
+            &bytes,
+            &ModuleDecoderRegistry::default(),
+        )?)
     }
 }
