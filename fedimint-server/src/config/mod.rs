@@ -29,10 +29,9 @@ use tokio_rustls::rustls;
 use tracing::{error, info};
 
 use crate::config::api::ConfigGenParamsLocal;
-use crate::config::distributedgen::{DkgRunner, PeerHandleOps};
+use crate::config::distributedgen::PeerHandleOps;
 use crate::envs::FM_MAX_CLIENT_CONNECTIONS_ENV;
 use crate::fedimint_core::encoding::Encodable;
-use crate::fedimint_core::NumPeersExt;
 use crate::multiplexed::PeerConnectionMultiplexer;
 use crate::net::connect::{dns_sanitize, Connector, TlsConfig};
 use crate::net::peers::ReconnectP2PConnections;
@@ -478,16 +477,6 @@ impl ServerConfig {
             "Peer {} running distributed key generation...", our_id
         );
 
-        // BFT uses a lower threshold of signing keys (f+1)
-        let mut dkg = DkgRunner::new(
-            KeyType::Bft,
-            peers.to_num_peers().one_honest(),
-            our_id,
-            peers,
-        );
-        dkg.add(KeyType::Auth, peers.to_num_peers().threshold());
-        dkg.add(KeyType::Epoch, peers.to_num_peers().threshold());
-
         let mut registered_modules = registry.kinds();
         let mut module_cfgs: BTreeMap<ModuleInstanceId, ServerModuleConfig> = BTreeMap::new();
         let modules = params.consensus.modules.iter_modules();
@@ -572,14 +561,6 @@ impl ServerConfig {
 
         Ok(server)
     }
-}
-
-/// The types of keys to run distributed key generation for
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
-pub enum KeyType {
-    Bft,
-    Epoch,
-    Auth,
 }
 
 impl ServerConfig {
