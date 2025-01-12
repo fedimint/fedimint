@@ -2649,6 +2649,7 @@ dependencies = [
  "hex",
  "hex-conservative 0.3.0",
  "imbl",
+ "iroh",
  "itertools 0.13.0",
  "js-sys",
  "jsonrpsee-core",
