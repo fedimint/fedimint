@@ -1257,7 +1257,8 @@ impl Wallet {
 
                 for transaction in block.txdata {
                     // We maintain the subset of unspent P2WSH transaction outputs created
-                    // since the federation was established in the database.
+                    // since the module was running on the new consensus version, which might be
+                    // the same time as the genesis session.
 
                     for tx_in in &transaction.input {
                         dbtx.remove_entry(&UnspentTxOutKey(tx_in.previous_output))
