@@ -10,17 +10,22 @@ use std::collections::BTreeMap;
 use std::env;
 use std::fmt::Debug;
 use std::sync::{Arc, LazyLock, Mutex};
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use bitcoin::{Block, BlockHash, ScriptBuf, Transaction, Txid};
 use fedimint_core::envs::{
-    BitcoinRpcConfig, FM_FORCE_BITCOIN_RPC_KIND_ENV, FM_FORCE_BITCOIN_RPC_URL_ENV,
+    is_running_in_test_env, BitcoinRpcConfig, FM_FORCE_BITCOIN_RPC_KIND_ENV,
+    FM_FORCE_BITCOIN_RPC_URL_ENV,
 };
+use fedimint_core::task::TaskGroup;
+use fedimint_core::time::now;
 use fedimint_core::txoproof::TxOutProof;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompactAnyhow, SafeUrl};
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, Feerate};
-use fedimint_logging::LOG_CORE;
-use tracing::debug;
+use fedimint_logging::{LOG_BITCOIND, LOG_CORE};
+use tokio::sync::watch;
+use tracing::{debug, warn};
 
 #[cfg(feature = "bitcoincore-rpc")]
 pub mod bitcoincore;
@@ -182,4 +187,51 @@ pub trait IBitcoindRpc: Debug {
 dyn_newtype_define! {
     #[derive(Clone)]
     pub DynBitcoindRpc(Arc<IBitcoindRpc>)
+}
+
+impl DynBitcoindRpc {
+    pub fn spawn_block_count_update_task(
+        self,
+        task_group: &TaskGroup,
+    ) -> anyhow::Result<watch::Receiver<Option<u64>>> {
+        let (block_count_tx, block_count_rx) = watch::channel(None);
+
+        let mut desired_interval = tokio::time::interval(if is_running_in_test_env() {
+            // In devimint, the setup is blocked by detecting block height changes,
+            // and polling more often is not an issue.
+            debug!(target: LOG_BITCOIND, "Running in devimint, using fast node polling");
+            Duration::from_millis(100)
+        } else {
+            Duration::from_secs(30)
+        });
+
+        task_group.spawn_cancellable("LNv2 module: background update", async move {
+            let update_block_count = || async {
+                let res = self
+                    .get_block_count()
+                    .await;
+
+                match res {
+                    Ok(c) => {
+                        let _ = block_count_tx.send(Some(c));
+                    },
+                    Err(err) => {
+                        warn!(target: LOG_BITCOIND, err = %err.fmt_compact_anyhow(), "Unable to get block count from the node");
+                    }
+                }
+            };
+
+            loop {
+                let start = now();
+                update_block_count().await;
+                let duration = now().duration_since(start).unwrap_or_default();
+                if Duration::from_secs(10) < duration {
+                    warn!(target: LOG_BITCOIND, duration_secs=duration.as_secs(), "Updating from bitcoind slow");
+                }
+                desired_interval.tick().await;
+            }
+        });
+
+        Ok(block_count_rx)
+    }
 }

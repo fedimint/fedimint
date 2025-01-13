@@ -28,4 +28,5 @@ fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 hex = { workspace = true }
 serde_json = { workspace = true }
+tokio = { workspace = true }
 tracing = { workspace = true }

@@ -18,6 +18,7 @@ erased-serde = { workspace = true }
 fedimint-bitcoind = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-lnv2-common = { workspace = true }
+fedimint-logging = { workspace = true }
 fedimint-server = { workspace = true }
 futures = { workspace = true }
 group = { workspace = true }
@@ -26,4 +27,6 @@ rand_chacha = { workspace = true }
 serde = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
+tokio = { workspace = true }
 tpe = { workspace = true }
+tracing = { workspace = true }

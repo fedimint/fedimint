@@ -7,9 +7,9 @@ mod db;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use anyhow::{anyhow, ensure, Context};
+use anyhow::{anyhow, ensure, format_err, Context};
 use bls12_381::{G1Projective, Scalar};
-use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+use fedimint_bitcoind::create_bitcoind;
 use fedimint_core::bitcoin::hashes::sha256;
 use fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -25,7 +25,7 @@ use fedimint_core::module::{
     TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
 use fedimint_core::server::DynServerModule;
-use fedimint_core::task::timeout;
+use fedimint_core::task::{timeout, TaskGroup};
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
@@ -48,6 +48,7 @@ use fedimint_lnv2_common::{
     LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0, OutgoingWitness,
     MODULE_CONSENSUS_VERSION,
 };
+use fedimint_logging::LOG_MODULE_LNV2;
 use fedimint_server::config::distributedgen::{eval_poly_g1, PeerHandleOps};
 use fedimint_server::net::api::check_auth;
 use futures::StreamExt;
@@ -56,7 +57,9 @@ use group::Curve;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use strum::IntoEnumIterator;
+use tokio::sync::watch;
 use tpe::{derive_pk_share, AggregatePublicKey, PublicKeyShare, SecretKeyShare};
+use tracing::debug;
 
 use crate::db::{
     BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, GatewayKey, GatewayPrefix,
@@ -182,7 +185,7 @@ impl ServerModuleInit for LightningInit {
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
-        Ok(Lightning::new(args.cfg().to_typed()?)?.into())
+        Ok(Lightning::new(args.cfg().to_typed()?, args.task_group())?.into())
     }
 
     fn trusted_dealer_gen(
@@ -314,7 +317,8 @@ fn coefficient(index: u64) -> Scalar {
 #[derive(Debug)]
 pub struct Lightning {
     cfg: LightningConfig,
-    btc_rpc: DynBitcoindRpc,
+    /// Block count updated periodically by a background task
+    block_count_rx: watch::Receiver<Option<u64>>,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -330,7 +334,8 @@ impl ServerModule for Lightning {
             duration_since_epoch().as_secs(),
         )];
 
-        if let Ok(block_count) = self.btc_rpc.get_block_count().await {
+        if let Ok(block_count) = self.get_block_count() {
+            debug!(target: LOG_MODULE_LNV2, ?block_count, "Proposing block count");
             items.push(LightningConsensusItem::BlockCountVote(block_count));
         }
 
@@ -622,10 +627,20 @@ impl ServerModule for Lightning {
 }
 
 impl Lightning {
-    fn new(cfg: LightningConfig) -> anyhow::Result<Self> {
+    fn new(cfg: LightningConfig, task_group: &TaskGroup) -> anyhow::Result<Self> {
         let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
+        let block_count_rx = btc_rpc.spawn_block_count_update_task(task_group)?;
 
-        Ok(Lightning { cfg, btc_rpc })
+        Ok(Lightning {
+            cfg,
+            block_count_rx,
+        })
+    }
+
+    fn get_block_count(&self) -> anyhow::Result<u64> {
+        self.block_count_rx
+            .borrow()
+            .ok_or_else(|| format_err!("Block count not available yet"))
     }
 
     async fn consensus_block_count(&self, dbtx: &mut DatabaseTransaction<'_>) -> u64 {

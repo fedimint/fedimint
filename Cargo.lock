@@ -2501,6 +2501,7 @@ dependencies = [
  "fedimint-logging",
  "hex",
  "serde_json",
+ "tokio",
  "tracing",
 ]
 
@@ -3125,6 +3126,7 @@ dependencies = [
  "fedimint-bitcoind",
  "fedimint-core",
  "fedimint-lnv2-common",
+ "fedimint-logging",
  "fedimint-server",
  "fedimint-tpe",
  "futures",
@@ -3134,6 +3136,8 @@ dependencies = [
  "serde",
  "strum 0.26.3",
  "strum_macros 0.26.4",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
