@@ -270,7 +270,7 @@ impl ServerModuleInit for WalletInit {
                 MODULE_CONSENSUS_VERSION.major,
                 MODULE_CONSENSUS_VERSION.minor,
             ),
-            &[(0, 1)],
+            &[(0, 2)],
         )
     }
 
