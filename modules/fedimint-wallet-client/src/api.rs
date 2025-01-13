@@ -43,10 +43,8 @@ where
             .await;
 
         if let Err(e) = &response {
-            for e in e.peer_errors.values() {
-                if e.to_string().contains("Method not found") {
-                    return Ok(ModuleConsensusVersion::new(2, 0));
-                }
+            if e.any_peer_error_method_not_found() {
+                return Ok(ModuleConsensusVersion::new(2, 0));
             }
         }
 
