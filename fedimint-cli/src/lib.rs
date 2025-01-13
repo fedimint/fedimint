@@ -1175,7 +1175,7 @@ impl FedimintCli {
 
                 let meta_fields = source
                     .fetch(
-                        &client.config().await,
+                        &client.config(),
                         &client.api_clone(),
                         FetchKind::Initial,
                         None,

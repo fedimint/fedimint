@@ -175,7 +175,7 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
         let mut current_revision = self
             .current_revision(&mut client.db().begin_transaction_nc().await)
             .await;
-        let client_config = client.config().await;
+        let client_config = client.config();
         let meta_values = self
             .source
             .fetch(

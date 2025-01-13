@@ -213,7 +213,7 @@ impl FederationManager {
 
                 Ok(FederationInfo {
                     federation_id,
-                    federation_name: self.federation_name(client).await,
+                    federation_name: Self::federation_name(client),
                     balance_msat,
                     config,
                 })
@@ -221,8 +221,8 @@ impl FederationManager {
             .await
     }
 
-    pub async fn federation_name(&self, client: &ClientHandleArc) -> Option<String> {
-        let client_config = client.config().await;
+    pub fn federation_name(client: &ClientHandleArc) -> Option<String> {
+        let client_config = client.config();
         let federation_name = client_config.global.federation_name();
         federation_name.map(String::from)
     }
@@ -239,7 +239,7 @@ impl FederationManager {
             if let Some(config) = config {
                 federation_infos.push(FederationInfo {
                     federation_id: *federation_id,
-                    federation_name: self.federation_name(client.value()).await,
+                    federation_name: Self::federation_name(client.value()),
                     balance_msat,
                     config,
                 });
@@ -248,7 +248,7 @@ impl FederationManager {
         federation_infos
     }
 
-    pub async fn get_federation_config(
+    pub fn get_federation_config(
         &self,
         federation_id: FederationId,
     ) -> AdminResult<JsonClientConfig> {
@@ -258,21 +258,15 @@ impl FederationManager {
             .ok_or(FederationNotConnected {
                 federation_id_prefix: federation_id.to_prefix(),
             })?;
-        Ok(client
-            .borrow()
-            .with(|client| client.get_config_json())
-            .await)
+        Ok(client.borrow().with_sync(|client| client.get_config_json()))
     }
 
-    pub async fn get_all_federation_configs(&self) -> BTreeMap<FederationId, JsonClientConfig> {
+    pub fn get_all_federation_configs(&self) -> BTreeMap<FederationId, JsonClientConfig> {
         let mut federations = BTreeMap::new();
         for (federation_id, client) in &self.clients {
             federations.insert(
                 *federation_id,
-                client
-                    .borrow()
-                    .with(|client| client.get_config_json())
-                    .await,
+                client.borrow().with_sync(|client| client.get_config_json()),
             );
         }
         federations

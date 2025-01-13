@@ -1174,7 +1174,6 @@ impl LightningClientModule {
                     gateway,
                     self.client_ctx
                         .get_config()
-                        .await
                         .global
                         .calculate_federation_id(),
                     rand::rngs::OsRng,
