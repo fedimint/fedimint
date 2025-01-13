@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::env;
 use std::net::SocketAddr;
-use std::time::Duration;
 
 use anyhow::{bail, format_err};
 use fedimint_core::admin_client::ConfigGenParamsConsensus;
@@ -18,14 +17,14 @@ use fedimint_core::module::{
     SupportedApiVersionsSummary, SupportedCoreApiVersions, CORE_CONSENSUS_VERSION,
 };
 use fedimint_core::net::peers::{IMuxPeerConnections, IP2PConnections};
-use fedimint_core::task::{timeout, Cancelled, Elapsed, TaskGroup};
+use fedimint_core::task::TaskGroup;
 use fedimint_core::{secp256k1, timing, PeerId};
 use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 use rand::rngs::OsRng;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
 use tokio_rustls::rustls;
-use tracing::{error, info};
+use tracing::info;
 
 use crate::config::api::ConfigGenParamsLocal;
 use crate::config::distributedgen::PeerHandleOps;
@@ -489,50 +488,6 @@ impl ServerConfig {
 
             module_cfgs.insert(module_instance_id, cfg);
         }
-
-        info!(
-            target: LOG_NET_PEER_DKG,
-            "Sending confirmations to other peers."
-        );
-        // Note: Since our outgoing buffers are asynchronous, we don't actually know
-        // if other peers received our message, just because we received theirs.
-        // That's why we need to do a one last best effort sync.
-        let dkg_done = "DKG DONE".to_string();
-        conn.send(
-            peers,
-            (MODULE_INSTANCE_ID_GLOBAL, dkg_done.clone()),
-            DkgPeerMsg::Done,
-        )
-        .await?;
-
-        info!(
-            target: LOG_NET_PEER_DKG,
-            "Waiting for confirmations from other peers."
-        );
-        if let Err(Elapsed) = timeout(Duration::from_secs(30), async {
-            let mut done_peers = BTreeSet::from([*our_id]);
-
-            while done_peers.len() < peers.len() {
-                match conn.receive((MODULE_INSTANCE_ID_GLOBAL, dkg_done.clone())).await {
-                    Ok((peer_id, DkgPeerMsg::Done)) => {
-                        info!(
-                            target: LOG_NET_PEER_DKG,
-                            peer_id = %peer_id,
-                            "Got completion confirmation"
-                        );
-                        done_peers.insert(peer_id);
-                    },
-                    Ok((peer_id, msg)) => {
-                        error!(target: LOG_NET_PEER_DKG, %peer_id, ?msg, "Received incorrect message after dkg was supposed to be finished. Probably dkg multiplexing bug.");
-                    },
-                    Err(Cancelled) => {/* ignore shutdown for time being, we'll timeout soon anyway */},
-                }
-            }
-        })
-        .await
-        {
-            error!(target: LOG_NET_PEER_DKG, "Timeout waiting for dkg completion confirmation from other peers");
-        };
 
         let server = ServerConfig::from(
             params.clone(),
