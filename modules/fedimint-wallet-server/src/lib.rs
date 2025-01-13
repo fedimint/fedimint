@@ -822,29 +822,6 @@ impl ServerModule for Wallet {
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
             api_endpoint! {
-                MODULE_CONSENSUS_VERSION_ENDPOINT,
-                ApiVersion::new(0, 0),
-                async |module: &Wallet, context, _params: ()| -> ModuleConsensusVersion {
-                    Ok(module.consensus_module_consensus_version(&mut context.dbtx().into_nc()).await)
-                }
-            },
-            api_endpoint! {
-                ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT,
-                ApiVersion::new(0, 0),
-                async |_module: &Wallet, context, _params: ()| -> () {
-                    check_auth(context)?;
-
-                    let mut dbtx = context.dbtx();
-
-                    dbtx.insert_entry(&ConsensusVersionVotingActivationKey, &()).await;
-
-                    dbtx.commit_tx_result().await.map_err(|e| ApiError::server_error(e.to_string()))?;
-
-                    Ok(())
-
-                }
-            },
-            api_endpoint! {
                 BLOCK_COUNT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, _params: ()| -> u32 {
@@ -921,6 +898,29 @@ impl ServerModule for Wallet {
                 ApiVersion::new(0, 1),
                 async |module: &Wallet, context, _params: ()| -> WalletSummary {
                     Ok(module.get_wallet_summary(&mut context.dbtx().into_nc()).await)
+                }
+            },
+            api_endpoint! {
+                MODULE_CONSENSUS_VERSION_ENDPOINT,
+                ApiVersion::new(0, 2),
+                async |module: &Wallet, context, _params: ()| -> ModuleConsensusVersion {
+                    Ok(module.consensus_module_consensus_version(&mut context.dbtx().into_nc()).await)
+                }
+            },
+            api_endpoint! {
+                ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT,
+                ApiVersion::new(0, 2),
+                async |_module: &Wallet, context, _params: ()| -> () {
+                    check_auth(context)?;
+
+                    let mut dbtx = context.dbtx();
+
+                    dbtx.insert_entry(&ConsensusVersionVotingActivationKey, &()).await;
+
+                    dbtx.commit_tx_result().await.map_err(|e| ApiError::server_error(e.to_string()))?;
+
+                    Ok(())
+
                 }
             },
         ]
