@@ -5,8 +5,8 @@ use bitcoin::Network;
 use fedimint_api_client::api::net::Connector;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{
-    CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-    MigrationContext,
+    CoreMigrationFn, Database, DatabaseTransaction, DatabaseVersion,
+    IDatabaseTransactionOpsCoreTyped, MigrationContext,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
@@ -23,6 +23,18 @@ use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 use crate::rpc::rpc_server::hash_password;
+
+pub trait GatewayDbExt {
+    fn get_client_database(&self, federation_id: &FederationId) -> Database;
+}
+
+impl GatewayDbExt for Database {
+    fn get_client_database(&self, federation_id: &FederationId) -> Database {
+        let mut prefix = vec![DbKeyPrefix::ClientDatabase as u8];
+        prefix.append(&mut federation_id.consensus_encode_to_vec());
+        self.with_prefix(prefix)
+    }
+}
 
 pub trait GatewayDbtxNcExt {
     async fn save_federation_config(&mut self, config: &FederationConfig);
@@ -244,6 +256,7 @@ enum DbKeyPrefix {
     GatewayConfiguration = 0x07,
     PreimageAuthentication = 0x08,
     RegisteredIncomingContract = 0x09,
+    ClientDatabase = 0x10,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -562,7 +575,8 @@ mod fedimint_migration_tests {
                             ensure!(gateway_configuration.is_some(), "validate_migrations was not able to read GatewayConfiguration");
                             info!("Validated GatewayConfiguration");
                         }
-                        DbKeyPrefix::RegisteredIncomingContract => {}
+                        DbKeyPrefix::RegisteredIncomingContract => {},
+                        DbKeyPrefix::ClientDatabase => {},
                     }
                 }
                 Ok(())
