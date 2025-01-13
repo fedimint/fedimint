@@ -241,10 +241,6 @@ pub fn parse_host_port(url: &SafeUrl) -> anyhow::Result<String> {
 
 #[derive(Debug, Clone)]
 pub struct IrohConnector {
-    /// Our federation member's identity
-    pub identity: PeerId,
-    /// The secret key for our own Iroh Endpoint
-    pub secret_key: SecretKey,
     /// Map of all peers' connection information we want to be connected to
     pub node_ids: BTreeMap<PeerId, NodeId>,
     /// The Iroh endpoint
@@ -265,8 +261,6 @@ impl IrohConnector {
             .0;
 
         Ok(Self {
-            identity,
-            secret_key: secret_key.clone(),
             node_ids: node_ids
                 .into_iter()
                 .filter(|entry| entry.0 != identity)
