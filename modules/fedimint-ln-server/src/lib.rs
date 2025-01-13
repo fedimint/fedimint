@@ -259,9 +259,8 @@ impl ServerModuleInit for LightningInit {
         params: &ConfigGenModuleParams,
     ) -> DkgResult<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
-        let g1 = peers.run_dkg_g1(()).await?;
 
-        let keys = g1[&()].threshold_crypto();
+        let keys = peers.run_dkg_g1().await?.threshold_crypto();
 
         let server = LightningConfig {
             local: LightningConfigLocal {

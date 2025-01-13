@@ -227,19 +227,16 @@ impl ServerModuleInit for MintInit {
     ) -> DkgResult<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
 
-        let g2 = peers
-            .run_dkg_multi_g2(params.consensus.gen_denominations())
-            .await?;
+        let mut amount_keys = HashMap::new();
 
-        let amounts_keys = g2
-            .into_iter()
-            .map(|(amount, keys)| (amount, keys.tbs()))
-            .collect::<HashMap<_, _>>();
+        for amount in params.consensus.gen_denominations() {
+            amount_keys.insert(amount, peers.run_dkg_g2().await?.tbs());
+        }
 
         let server = MintConfig {
             local: MintConfigLocal,
             private: MintConfigPrivate {
-                tbs_sks: amounts_keys
+                tbs_sks: amount_keys
                     .iter()
                     .map(|(amount, (_, sks))| (*amount, *sks))
                     .collect(),
@@ -249,7 +246,7 @@ impl ServerModuleInit for MintInit {
                     .peer_ids()
                     .iter()
                     .map(|peer| {
-                        let pks = amounts_keys
+                        let pks = amount_keys
                             .iter()
                             .map(|(amount, (pks, _))| {
                                 (

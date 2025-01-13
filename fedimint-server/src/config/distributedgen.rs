@@ -472,13 +472,9 @@ pub fn evaluate_polynomial_g2(coefficients: &[G2Projective], x: &Scalar) -> G2Af
 // from it's definition that is still in `fedimint-core`
 #[async_trait]
 pub trait PeerHandleOps {
-    async fn run_dkg_g1<T>(&self, v: T) -> DkgResult<HashMap<T, DkgKeys<G1Projective>>>
-    where
-        T: Serialize + DeserializeOwned + Unpin + Send + Clone + Eq + Hash + Sync;
+    async fn run_dkg_g1(&self) -> DkgResult<DkgKeys<G1Projective>>;
 
-    async fn run_dkg_multi_g2<T>(&self, v: Vec<T>) -> DkgResult<HashMap<T, DkgKeys<G2Projective>>>
-    where
-        T: Serialize + DeserializeOwned + Unpin + Send + Clone + Eq + Hash + Sync;
+    async fn run_dkg_g2(&self) -> DkgResult<DkgKeys<G2Projective>>;
 
     /// Exchanges a `DkgPeerMsg::Module(Vec<u8>)` with all peers. All peers are
     /// required to be online and submit a response for this to return
@@ -494,31 +490,36 @@ pub trait PeerHandleOps {
 
 #[async_trait]
 impl<'a> PeerHandleOps for PeerHandle<'a> {
-    async fn run_dkg_g1<T>(&self, v: T) -> DkgResult<HashMap<T, DkgKeys<G1Projective>>>
-    where
-        T: Serialize + DeserializeOwned + Unpin + Send + Clone + Eq + Hash + Sync,
-    {
+    async fn run_dkg_g1(&self) -> DkgResult<DkgKeys<G1Projective>> {
         let mut dkg = DkgRunner::new(
-            v,
+            (),
             self.peers.to_num_peers().threshold(),
             &self.our_id,
             &self.peers,
         );
-        dkg.run_g1(self.module_instance_id, self.connections).await
+
+        Ok(dkg
+            .run_g1(self.module_instance_id, self.connections)
+            .await?
+            .get(&())
+            .unwrap()
+            .clone())
     }
 
-    async fn run_dkg_multi_g2<T>(&self, v: Vec<T>) -> DkgResult<HashMap<T, DkgKeys<G2Projective>>>
-    where
-        T: Serialize + DeserializeOwned + Unpin + Send + Clone + Eq + Hash + Sync,
-    {
-        let mut dkg = DkgRunner::multi(
-            v,
+    async fn run_dkg_g2(&self) -> DkgResult<DkgKeys<G2Projective>> {
+        let mut dkg = DkgRunner::new(
+            (),
             self.peers.to_num_peers().threshold(),
             &self.our_id,
             &self.peers,
         );
 
-        dkg.run_g2(self.module_instance_id, self.connections).await
+        Ok(dkg
+            .run_g2(self.module_instance_id, self.connections)
+            .await?
+            .get(&())
+            .unwrap()
+            .clone())
     }
 
     async fn exchange_encodable<T: Encodable + Decodable + Send + Sync>(

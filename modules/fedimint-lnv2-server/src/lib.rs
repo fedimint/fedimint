@@ -228,8 +228,7 @@ impl ServerModuleInit for LightningInit {
         params: &ConfigGenModuleParams,
     ) -> DkgResult<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
-        let g1 = peers.run_dkg_g1(()).await?;
-        let (poly_g1, sk) = g1[&()].clone().tpe();
+        let (poly_g1, sk) = peers.run_dkg_g1().await?.tpe();
 
         let server = LightningConfig {
             local: LightningConfigLocal {
