@@ -1,12 +1,7 @@
-use std::ops::Deref;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use fedimint_core::PeerId;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-
-use crate::task::Cancellable;
 
 #[cfg(not(target_family = "wasm"))]
 pub mod fake;
@@ -22,8 +17,14 @@ pub trait IP2PConnections<M>: Send + Sync + 'static {
     /// Try to send message to recipient; drop message if channel is full.
     fn try_send(&self, recipient: Recipient, msg: M);
 
-    /// Await receipt of a message; return None if we are shutting down.
+    /// Await the next message; return None if we are shutting down.
     async fn receive(&self) -> Option<(PeerId, M)>;
+
+    /// Await the next message from peer; return None if we are shutting down.
+    async fn receive_from_peer(&self, peer: PeerId) -> Option<M>;
+
+    /// Await the outgoing message queues to be fully transmitted.
+    async fn await_empty_outgoing_message_queues(&self);
 
     /// Convert the struct to trait object.
     fn into_dyn(self) -> DynP2PConnections<M>
@@ -39,45 +40,4 @@ pub trait IP2PConnections<M>: Send + Sync + 'static {
 pub enum Recipient {
     Everyone,
     Peer(PeerId),
-}
-
-/// Owned [`MuxPeerConnections`] trait object type
-#[derive(Clone)]
-pub struct MuxPeerConnections<MuxKey, Msg>(
-    Arc<dyn IMuxPeerConnections<MuxKey, Msg> + Send + Sync + Unpin + 'static>,
-);
-
-impl<MuxKey, Msg> Deref for MuxPeerConnections<MuxKey, Msg> {
-    type Target = dyn IMuxPeerConnections<MuxKey, Msg> + Send + Sync + Unpin + 'static;
-
-    fn deref(&self) -> &Self::Target {
-        &*self.0
-    }
-}
-
-#[async_trait]
-/// Like [`IP2PConnections`] but with an ability to handle multiple
-/// destinations (like modules) per each peer-connection.
-///
-/// Notably, unlike [`IP2PConnections`] implementations need to be thread-safe,
-/// as the primary intended use should support multiple threads using
-/// multiplexed channel at the same time.
-pub trait IMuxPeerConnections<MuxKey, Msg>
-where
-    Msg: Serialize + DeserializeOwned + Unpin + Send,
-    MuxKey: Serialize + DeserializeOwned + Unpin + Send,
-{
-    /// Send a message to a specific destination at specific peer.
-    async fn send(&self, peers: &[PeerId], mux_key: MuxKey, msg: Msg) -> Cancellable<()>;
-
-    /// Await receipt of a message from any connected peer.
-    async fn receive(&self, mux_key: MuxKey) -> Cancellable<(PeerId, Msg)>;
-
-    /// Converts the struct to a `PeerConnection` trait object
-    fn into_dyn(self) -> MuxPeerConnections<MuxKey, Msg>
-    where
-        Self: Sized + Send + Sync + Unpin + 'static,
-    {
-        MuxPeerConnections(Arc::new(self))
-    }
 }

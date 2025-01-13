@@ -237,15 +237,15 @@ impl ServerModuleInit for LightningInit {
             consensus: LightningConfigConsensus {
                 tpe_agg_pk: tpe::AggregatePublicKey(poly_g1[0].to_affine()),
                 tpe_pks: peers
+                    .num_peers()
                     .peer_ids()
-                    .iter()
                     .map(|peer| {
                         let pk = evaluate_polynomial_g1(
                             &poly_g1,
                             &Scalar::from(peer.to_usize() as u64 + 1),
                         );
 
-                        (*peer, PublicKeyShare(pk))
+                        (peer, PublicKeyShare(pk))
                     })
                     .collect(),
                 fee_consensus: params.consensus.fee_consensus.clone(),

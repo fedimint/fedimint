@@ -1,9 +1,8 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fmt::Debug;
-use std::hash::Hash;
 use std::io::Write;
 
-use anyhow::{ensure, format_err};
+use anyhow::{ensure, format_err, Context};
 use async_trait::async_trait;
 use bitcoin::hashes::sha256::{Hash as Sha256, HashEngine};
 use bitcoin::hashes::Hash as BitcoinHash;
@@ -11,18 +10,14 @@ use bls12_381::Scalar;
 use fedimint_core::config::{
     DkgError, DkgGroup, DkgMessage, DkgPeerMsg, DkgResult, ISupportedDkgMessage,
 };
-use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::PeerHandle;
-use fedimint_core::net::peers::MuxPeerConnections;
-use fedimint_core::runtime::spawn;
-use fedimint_core::{NumPeersExt, PeerId};
+use fedimint_core::net::peers::{DynP2PConnections, Recipient};
+use fedimint_core::{NumPeers, PeerId};
 use rand::rngs::OsRng;
-use rand::{RngCore, SeedableRng};
+use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 use sha3::Digest;
 use threshold_crypto::ff::Field;
 use threshold_crypto::group::Curve;
@@ -33,10 +28,9 @@ use threshold_crypto::{
 };
 
 struct Dkg<G> {
-    gen_g: G,
-    peers: Vec<PeerId>,
-    our_id: PeerId,
-    threshold: usize,
+    num_peers: NumPeers,
+    identity: PeerId,
+    generator: G,
     f1_poly: Vec<Scalar>,
     f2_poly: Vec<Scalar>,
     hashed_commits: BTreeMap<PeerId, Sha256>,
@@ -53,21 +47,14 @@ struct Dkg<G> {
 /// non-cooperative peers
 impl<G: DkgGroup> Dkg<G> {
     /// Creates the DKG and the first step of the algorithm
-    pub fn new(
-        group: G,
-        our_id: PeerId,
-        peers: Vec<PeerId>,
-        threshold: usize,
-        rng: &mut impl rand::RngCore,
-    ) -> (Self, DkgStep<G>) {
-        let f1_poly = random_scalar_coefficients(threshold - 1, rng);
-        let f2_poly = random_scalar_coefficients(threshold - 1, rng);
+    pub fn new(num_peers: NumPeers, identity: PeerId, generator: G) -> (Self, DkgStep<G>) {
+        let f1_poly = random_scalar_coefficients(num_peers.threshold() - 1);
+        let f2_poly = random_scalar_coefficients(num_peers.threshold() - 1);
 
         let mut dkg = Dkg {
-            gen_g: group,
-            peers,
-            our_id,
-            threshold,
+            num_peers,
+            identity,
+            generator,
             f1_poly,
             f2_poly,
             hashed_commits: BTreeMap::new(),
@@ -80,14 +67,16 @@ impl<G: DkgGroup> Dkg<G> {
         let commit: Vec<G> = dkg
             .f1_poly
             .iter()
-            .map(|c| dkg.gen_g * *c)
+            .map(|c| dkg.generator * *c)
             .zip(dkg.f2_poly.iter().map(|c| dkg.gen_h() * *c))
             .map(|(g, h)| g + h)
             .collect();
 
         let hashed = Dkg::hash(&commit);
-        dkg.commitments.insert(our_id, commit);
-        dkg.hashed_commits.insert(our_id, hashed);
+
+        dkg.commitments.insert(identity, commit);
+        dkg.hashed_commits.insert(identity, hashed);
+
         let step = dkg.broadcast(&DkgMessage::HashedCommit(hashed));
 
         (dkg, step)
@@ -104,14 +93,17 @@ impl<G: DkgGroup> Dkg<G> {
                     _ => self.hashed_commits.insert(peer, hashed),
                 };
 
-                if self.hashed_commits.len() == self.peers.len() {
-                    let our_commit = self.commitments[&self.our_id].clone();
+                if self.hashed_commits.len() == self.num_peers.total() {
+                    let our_commit = self.commitments[&self.identity].clone();
                     return Ok(self.broadcast(&DkgMessage::Commit(our_commit)));
                 }
             }
             DkgMessage::Commit(commit) => {
                 let hash = Self::hash(&commit);
-                ensure!(self.threshold == commit.len(), "wrong degree from {peer}");
+                ensure!(
+                    self.num_peers.threshold() == commit.len(),
+                    "wrong degree from {peer}"
+                );
                 ensure!(hash == self.hashed_commits[&peer], "wrong hash from {peer}");
 
                 match self.commitments.get(&peer) {
@@ -122,16 +114,16 @@ impl<G: DkgGroup> Dkg<G> {
                 };
 
                 // once everyone has made commitments, send out shares
-                if self.commitments.len() == self.peers.len() {
+                if self.commitments.len() == self.num_peers.total() {
                     let mut messages = vec![];
-                    for peer in &self.peers {
-                        let s1 = evaluate_polynomial_scalar(&self.f1_poly, &scalar(peer));
-                        let s2 = evaluate_polynomial_scalar(&self.f2_poly, &scalar(peer));
+                    for peer in self.num_peers.peer_ids() {
+                        let s1 = evaluate_polynomial_scalar(&self.f1_poly, &scalar(&peer));
+                        let s2 = evaluate_polynomial_scalar(&self.f2_poly, &scalar(&peer));
 
-                        if *peer == self.our_id {
-                            self.sk_shares.insert(self.our_id, s1);
+                        if peer == self.identity {
+                            self.sk_shares.insert(self.identity, s1);
                         } else {
-                            messages.push((*peer, DkgMessage::Share(s1, s2)));
+                            messages.push((peer, DkgMessage::Share(s1, s2)));
                         }
                     }
                     return Ok(DkgStep::Messages(messages));
@@ -139,7 +131,7 @@ impl<G: DkgGroup> Dkg<G> {
             }
             // Pedersen-VSS verifies the shares match the commitments
             DkgMessage::Share(s1, s2) => {
-                let share_product = (self.gen_g * s1) + (self.gen_h() * s2);
+                let share_product = (self.generator * s1) + (self.gen_h() * s2);
                 let commitment = self
                     .commitments
                     .get(&peer)
@@ -147,7 +139,9 @@ impl<G: DkgGroup> Dkg<G> {
                 let commit_product: G = commitment
                     .iter()
                     .enumerate()
-                    .map(|(idx, commit)| *commit * scalar(&self.our_id).pow(&[idx as u64, 0, 0, 0]))
+                    .map(|(idx, commit)| {
+                        *commit * scalar(&self.identity).pow(&[idx as u64, 0, 0, 0])
+                    })
                     .reduce(|a, b| a + b)
                     .expect("sums");
 
@@ -159,10 +153,11 @@ impl<G: DkgGroup> Dkg<G> {
                     _ => self.sk_shares.insert(peer, s1),
                 };
 
-                if self.sk_shares.len() == self.peers.len() {
-                    let extract: Vec<G> = self.f1_poly.iter().map(|c| self.gen_g * *c).collect();
+                if self.sk_shares.len() == self.num_peers.total() {
+                    let extract: Vec<G> =
+                        self.f1_poly.iter().map(|c| self.generator * *c).collect();
 
-                    self.pk_shares.insert(self.our_id, extract.clone());
+                    self.pk_shares.insert(self.identity, extract.clone());
                     return Ok(self.broadcast(&DkgMessage::Extract(extract)));
                 }
             }
@@ -172,16 +167,21 @@ impl<G: DkgGroup> Dkg<G> {
                     .sk_shares
                     .get(&peer)
                     .ok_or_else(|| format_err!("{peer} sent extract before share"))?;
-                let share_product = self.gen_g * *share;
+                let share_product = self.generator * *share;
                 let extract_product: G = extract
                     .iter()
                     .enumerate()
-                    .map(|(idx, commit)| *commit * scalar(&self.our_id).pow(&[idx as u64, 0, 0, 0]))
+                    .map(|(idx, commit)| {
+                        *commit * scalar(&self.identity).pow(&[idx as u64, 0, 0, 0])
+                    })
                     .reduce(|a, b| a + b)
                     .expect("sums");
 
                 ensure!(share_product == extract_product, "bad extract from {peer}");
-                ensure!(self.threshold == extract.len(), "wrong degree from {peer}");
+                ensure!(
+                    self.num_peers.threshold() == extract.len(),
+                    "wrong degree from {peer}"
+                );
                 match self.pk_shares.get(&peer) {
                     Some(old) if *old != extract => {
                         return Err(format_err!("{peer} sent us two extracts!"))
@@ -189,10 +189,10 @@ impl<G: DkgGroup> Dkg<G> {
                     _ => self.pk_shares.insert(peer, extract),
                 };
 
-                if self.pk_shares.len() == self.peers.len() {
+                if self.pk_shares.len() == self.num_peers.total() {
                     let sks = self.sk_shares.values().sum();
 
-                    let pks: Vec<G> = (0..self.threshold)
+                    let pks: Vec<G> = (0..self.num_peers.threshold())
                         .map(|idx| {
                             self.pk_shares
                                 .values()
@@ -215,24 +215,31 @@ impl<G: DkgGroup> Dkg<G> {
 
     fn hash(poly: &[G]) -> Sha256 {
         let mut engine = HashEngine::default();
+
         for element in poly {
             engine
                 .write_all(element.to_bytes().as_ref())
                 .expect("hashes");
         }
+
         Sha256::from_engine(engine)
     }
 
-    fn broadcast(&self, msg: &DkgMessage<G>) -> DkgStep<G> {
-        let others = self.peers.iter().filter(|p| **p != self.our_id);
-        DkgStep::Messages(others.map(|peer| (*peer, msg.clone())).collect())
+    fn broadcast(&self, message: &DkgMessage<G>) -> DkgStep<G> {
+        DkgStep::Messages(
+            self.num_peers
+                .peer_ids()
+                .filter(|peer| *peer != self.identity)
+                .map(|peer| (peer, message.clone()))
+                .collect(),
+        )
     }
 
     /// Get a second generator by hashing the first one to the curve
     fn gen_h(&self) -> G {
         let mut hash_engine = sha3::Sha3_256::new();
 
-        hash_engine.update(self.gen_g.clone().to_bytes().as_ref());
+        hash_engine.update(self.generator.clone().to_bytes().as_ref());
 
         G::random(&mut ChaChaRng::from_seed(hash_engine.finalize().into()))
     }
@@ -243,125 +250,51 @@ pub fn scalar(peer: &PeerId) -> Scalar {
     Scalar::from(peer.to_usize() as u64 + 1)
 }
 
-pub struct DkgRunner<T> {
-    peers: Vec<PeerId>,
-    our_id: PeerId,
-    dkg_config: HashMap<T, usize>,
-}
-
-/// Helper for running multiple DKGs over the same peer connections
-///
-/// Messages are `(T, DkgMessage)` for creating a DKG for every `T`
-impl<T> DkgRunner<T>
+/// Runs the DKG algorithms with our peers. We do not handle any unexpected
+/// messages and all peers are expected to be cooperative.
+pub async fn run_dkg<G: DkgGroup>(
+    num_peers: NumPeers,
+    identity: PeerId,
+    generator: G,
+    connections: &DynP2PConnections<DkgPeerMsg>,
+) -> DkgResult<DkgKeys<G>>
 where
-    T: Serialize + DeserializeOwned + Unpin + Send + Clone + Eq + Hash,
+    DkgMessage<G>: ISupportedDkgMessage,
 {
-    /// Create multiple DKGs with the same `threshold` signatures required
-    pub fn multi(keys: Vec<T>, threshold: usize, our_id: &PeerId, peers: &[PeerId]) -> Self {
-        let dkg_config = keys.into_iter().map(|key| (key, threshold)).collect();
+    let (mut dkg, initial_step) = Dkg::new(num_peers, identity, generator);
 
-        Self {
-            our_id: *our_id,
-            peers: peers.to_vec(),
-            dkg_config,
+    if let DkgStep::Messages(messages) = initial_step {
+        for (peer, message) in messages {
+            connections
+                .send(
+                    Recipient::Peer(peer),
+                    DkgPeerMsg::DistributedGen(message.to_msg()),
+                )
+                .await;
         }
     }
 
-    /// Create a single DKG with `threshold` signatures required
-    pub fn new(key: T, threshold: usize, our_id: &PeerId, peers: &[PeerId]) -> Self {
-        Self::multi(vec![key], threshold, our_id, peers)
-    }
+    loop {
+        for peer in num_peers.peer_ids().filter(|p| *p != identity) {
+            let message = connections
+                .receive_from_peer(peer)
+                .await
+                .context("Unexpected shutdown of p2p connections")?;
 
-    /// Create another DKG with `threshold` signatures required
-    pub fn add(&mut self, key: T, threshold: usize) {
-        self.dkg_config.insert(key, threshold);
-    }
-
-    /// Create keys from G2 (96B keys, 48B messages) used in `tbs`
-    pub async fn run_g2(
-        &mut self,
-        connections: &MuxPeerConnections<(), DkgPeerMsg>,
-    ) -> DkgResult<HashMap<T, DkgKeys<G2Projective>>> {
-        self.run(G2Projective::generator(), connections).await
-    }
-
-    /// Create keys from G1 (48B keys, 96B messages) used in `threshold_crypto`
-    pub async fn run_g1(
-        &mut self,
-        connections: &MuxPeerConnections<(), DkgPeerMsg>,
-    ) -> DkgResult<HashMap<T, DkgKeys<G1Projective>>> {
-        self.run(G1Projective::generator(), connections).await
-    }
-
-    /// Runs the DKG algorithms with our peers
-    ///
-    /// WARNING: Currently we do not handle any unexpected messages, all peers
-    /// are expected to be cooperative
-    pub async fn run<G: DkgGroup>(
-        &mut self,
-        group: G,
-        connections: &MuxPeerConnections<(), DkgPeerMsg>,
-    ) -> DkgResult<HashMap<T, DkgKeys<G>>>
-    where
-        DkgMessage<G>: ISupportedDkgMessage,
-    {
-        // Collect every key, returning an error if any fails
-        let mut results: HashMap<T, DkgKeys<G>> = HashMap::new();
-
-        assert!(self.dkg_config.len() == 1);
-
-        // For every `key` we run DKG in a new tokio task
-        for (key, threshold) in self.dkg_config.clone().into_iter() {
-            let our_id = self.our_id;
-            let peers = self.peers.clone();
-            let connections = connections.clone();
-
-            let (dkg, step) = Dkg::new(group, our_id, peers, threshold, &mut OsRng);
-
-            let result = Self::run_dkg_key(String::new(), connections, dkg, step).await?;
-
-            results.insert(key, result);
-        }
-
-        Ok(results)
-    }
-
-    /// Runs the DKG algorithms for a given key and module id
-    async fn run_dkg_key<G: DkgGroup>(
-        key_id: String,
-        connections: MuxPeerConnections<(), DkgPeerMsg>,
-        mut dkg: Dkg<G>,
-        initial_step: DkgStep<G>,
-    ) -> DkgResult<DkgKeys<G>>
-    where
-        DkgMessage<G>: ISupportedDkgMessage,
-    {
-        if let DkgStep::Messages(messages) = initial_step {
-            for (peer, msg) in messages {
-                let send_msg = DkgPeerMsg::DistributedGen(msg.to_msg());
-                connections.send(&[peer], (), send_msg).await?;
-            }
-        }
-
-        // process steps for each key
-        loop {
-            let (peer, msg) = connections.receive(()).await?;
-
-            let message = match msg {
+            let message = match message {
                 DkgPeerMsg::DistributedGen(v) => Ok(v),
-                _ => Err(format_err!(
-                    "Key {key_id:?} wrong message received: {msg:?}"
-                )),
+                _ => Err(format_err!("Wrong message received: {message:?}")),
             }?;
 
-            let message = ISupportedDkgMessage::from_msg(message)?;
-            let step = dkg.step(peer, message)?;
-
-            match step {
+            match dkg.step(peer, ISupportedDkgMessage::from_msg(message)?)? {
                 DkgStep::Messages(messages) => {
-                    for (peer, msg) in messages {
-                        let send_msg = DkgPeerMsg::DistributedGen(msg.to_msg());
-                        connections.send(&[peer], (), send_msg).await?;
+                    for (peer, message) in messages {
+                        connections
+                            .send(
+                                Recipient::Peer(peer),
+                                DkgPeerMsg::DistributedGen(message.to_msg()),
+                            )
+                            .await;
                     }
                 }
                 DkgStep::Result(result) => {
@@ -372,12 +305,8 @@ where
     }
 }
 
-pub fn random_scalar_coefficients(degree: usize, rng: &mut impl RngCore) -> Vec<Scalar> {
-    (0..=degree).map(|_| random_scalar(rng)).collect()
-}
-
-fn random_scalar(rng: &mut impl RngCore) -> Scalar {
-    Scalar::random(rng)
+pub fn random_scalar_coefficients(degree: usize) -> Vec<Scalar> {
+    (0..=degree).map(|_| Scalar::random(&mut OsRng)).collect()
 }
 
 pub fn evaluate_polynomial_scalar(coefficients: &[Scalar], x: &Scalar) -> Scalar {
@@ -474,35 +403,23 @@ pub trait PeerHandleOps {
 #[async_trait]
 impl<'a> PeerHandleOps for PeerHandle<'a> {
     async fn run_dkg_g1(&self) -> DkgResult<DkgKeys<G1Projective>> {
-        let mut dkg = DkgRunner::new(
-            (),
-            self.peers.to_num_peers().threshold(),
-            &self.our_id,
-            &self.peers,
-        );
-
-        Ok(dkg
-            .run_g1(self.connections)
-            .await?
-            .get(&())
-            .unwrap()
-            .clone())
+        run_dkg(
+            self.num_peers,
+            self.identity,
+            G1Projective::generator(),
+            self.connections,
+        )
+        .await
     }
 
     async fn run_dkg_g2(&self) -> DkgResult<DkgKeys<G2Projective>> {
-        let mut dkg = DkgRunner::new(
-            (),
-            self.peers.to_num_peers().threshold(),
-            &self.our_id,
-            &self.peers,
-        );
-
-        Ok(dkg
-            .run_g2(self.connections)
-            .await?
-            .get(&())
-            .unwrap()
-            .clone())
+        run_dkg(
+            self.num_peers,
+            self.identity,
+            G2Projective::generator(),
+            self.connections,
+        )
+        .await
     }
 
     async fn exchange_encodable<T: Encodable + Decodable + Send + Sync>(
@@ -513,21 +430,19 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
 
         self.connections
             .send(
-                &self
-                    .peers
-                    .iter()
-                    .cloned()
-                    .filter(|p| p != &self.our_id)
-                    .collect::<Vec<PeerId>>(),
-                (),
+                Recipient::Everyone,
                 DkgPeerMsg::Encodable(data.consensus_encode_to_vec()),
             )
-            .await?;
+            .await;
 
-        peer_data.insert(self.our_id, data);
+        peer_data.insert(self.identity, data);
 
-        while peer_data.len() < self.peers.len() {
-            let (peer, message) = self.connections.receive(()).await?;
+        for peer in self.num_peers.peer_ids().filter(|p| *p != self.identity) {
+            let message = self
+                .connections
+                .receive_from_peer(peer)
+                .await
+                .context("Unexpected shutdown of p2p connections")?;
 
             match message {
                 DkgPeerMsg::Encodable(bytes) => {
@@ -537,7 +452,9 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
                     peer_data.insert(peer, data);
                 }
                 message => {
-                    return Err(format_err!("Invalid message from {peer}: {message:?}").into());
+                    return Err(DkgError::Failed(anyhow::anyhow!(
+                        "Invalid message from {peer}: {message:?}"
+                    )));
                 }
             }
         }
@@ -550,8 +467,7 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
 mod tests {
     use std::collections::{HashMap, VecDeque};
 
-    use fedimint_core::PeerId;
-    use rand::rngs::OsRng;
+    use fedimint_core::{NumPeersExt, PeerId};
     use tbs::derive_pk_share;
     use threshold_crypto::{G1Projective, G2Projective};
 
@@ -584,17 +500,14 @@ mod tests {
     }
 
     fn run<G: DkgGroup>(group: G) -> HashMap<PeerId, DkgKeys<G>> {
-        let mut rng = OsRng;
-        let num_peers = 4;
-        let threshold = 3;
-        let peers = (0..num_peers as u16).map(PeerId::from).collect::<Vec<_>>();
+        let peers = (0..4_u16).map(PeerId::from).collect::<Vec<_>>();
 
         let mut steps: VecDeque<(PeerId, DkgStep<G>)> = VecDeque::new();
         let mut dkgs: HashMap<PeerId, Dkg<G>> = HashMap::new();
         let mut keys: HashMap<PeerId, DkgKeys<G>> = HashMap::new();
 
         for peer in &peers {
-            let (dkg, step) = Dkg::new(group, *peer, peers.clone(), threshold, &mut rng);
+            let (dkg, step) = Dkg::new(peers.to_num_peers(), *peer, group);
             dkgs.insert(*peer, dkg);
             steps.push_back((*peer, step));
         }
@@ -614,6 +527,8 @@ mod tests {
                 _ => {}
             }
         }
+
+        assert!(steps.is_empty());
 
         keys
     }

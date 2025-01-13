@@ -6,12 +6,13 @@
 //! details.
 
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use async_channel::{bounded, Receiver, Sender};
 use async_trait::async_trait;
 use fedimint_api_client::api::P2PConnectionStatus;
 use fedimint_core::net::peers::{IP2PConnections, Recipient};
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::util::backoff_util::{api_networking_backoff, FibonacciBackoff};
 use fedimint_core::util::FmtCompactAnyhow;
 use fedimint_core::PeerId;
@@ -19,7 +20,6 @@ use fedimint_logging::{LOG_CONSENSUS, LOG_NET_PEER};
 use futures::future::select_all;
 use futures::{FutureExt, StreamExt};
 use tokio::sync::watch;
-use tokio::time::sleep;
 use tracing::{info, info_span, warn, Instrument};
 
 use crate::metrics::{PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT};
@@ -136,6 +136,22 @@ impl<M: Clone + Send + 'static> IP2PConnections<M> for ReconnectP2PConnections<M
         }))
         .await
         .0
+    }
+
+    async fn receive_from_peer(&self, peer: PeerId) -> Option<M> {
+        self.connections
+            .get(&peer)
+            .expect("No connection found for peer {peer}")
+            .receive()
+            .await
+    }
+
+    async fn await_empty_outgoing_message_queues(&self) {
+        for connection in self.connections.values() {
+            while !connection.outgoing.is_empty() {
+                sleep(Duration::from_millis(250)).await;
+            }
+        }
     }
 }
 

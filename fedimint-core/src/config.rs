@@ -880,7 +880,6 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
 pub enum DkgPeerMsg {
     DistributedGen(SupportedDkgMessage),
     Encodable(Vec<u8>),
-    Done,
 }
 
 /// Result of running DKG

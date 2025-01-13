@@ -46,7 +46,7 @@ use crate::db::{
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
 use crate::module::audit::Audit;
-use crate::net::peers::MuxPeerConnections;
+use crate::net::peers::DynP2PConnections;
 use crate::server::DynServerModule;
 use crate::task::{MaybeSend, TaskGroup};
 use crate::{
@@ -1021,27 +1021,27 @@ pub struct PeerHandle<'a> {
     // TODO: this whole type should be a part of a `fedimint-server` and fields here inaccessible
     // to outside crates, but until `ServerModule` is not in `fedimint-server` this is impossible
     #[doc(hidden)]
-    pub connections: &'a MuxPeerConnections<(), DkgPeerMsg>,
+    pub num_peers: NumPeers,
     #[doc(hidden)]
-    pub our_id: PeerId,
+    pub identity: PeerId,
     #[doc(hidden)]
-    pub peers: Vec<PeerId>,
+    pub connections: &'a DynP2PConnections<DkgPeerMsg>,
 }
 
 impl<'a> PeerHandle<'a> {
     pub fn new(
-        connections: &'a MuxPeerConnections<(), DkgPeerMsg>,
-        our_id: PeerId,
-        peers: Vec<PeerId>,
+        num_peers: NumPeers,
+        identity: PeerId,
+        connections: &'a DynP2PConnections<DkgPeerMsg>,
     ) -> Self {
         Self {
+            identity,
+            num_peers,
             connections,
-            our_id,
-            peers,
         }
     }
 
-    pub fn peer_ids(&self) -> &[PeerId] {
-        self.peers.as_slice()
+    pub fn num_peers(&self) -> NumPeers {
+        self.num_peers
     }
 }

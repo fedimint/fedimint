@@ -51,9 +51,6 @@ pub mod net;
 /// Fedimint toplevel config
 pub mod config;
 
-/// Implementation of multiplexed peer connections
-pub mod multiplexed;
-
 pub async fn run(
     data_dir: PathBuf,
     force_api_secrets: ApiSecrets,

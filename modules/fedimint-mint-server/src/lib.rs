@@ -243,20 +243,20 @@ impl ServerModuleInit for MintInit {
             },
             consensus: MintConfigConsensus {
                 peer_tbs_pks: peers
+                    .num_peers()
                     .peer_ids()
-                    .iter()
                     .map(|peer| {
                         let pks = amount_keys
                             .iter()
                             .map(|(amount, (pks, _))| {
                                 (
                                     *amount,
-                                    PublicKeyShare(evaluate_polynomial_g2(pks, &scalar(peer))),
+                                    PublicKeyShare(evaluate_polynomial_g2(pks, &scalar(&peer))),
                                 )
                             })
                             .collect::<Tiered<_>>();
 
-                        (*peer, pks)
+                        (peer, pks)
                     })
                     .collect(),
                 fee_consensus: params.consensus.fee_consensus(),
