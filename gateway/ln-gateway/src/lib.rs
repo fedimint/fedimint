@@ -1112,6 +1112,10 @@ impl Gateway {
 
         let federation_id = invite_code.federation_id();
 
+        if federation_id.to_prefix().to_bytes().starts_with(&[0x04]) {
+            return Err(AdminGatewayError::Unexpected(anyhow!("gatewayd v0.5 cannot join federation {federation_id}, please upgrade to gatewayd v0.6")));
+        }
+
         let mut federation_manager = self.federation_manager.write().await;
 
         // Check if this federation has already been registered
