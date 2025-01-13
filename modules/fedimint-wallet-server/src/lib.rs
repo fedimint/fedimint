@@ -1265,11 +1265,13 @@ impl Wallet {
                     }
 
                     for (vout, tx_out) in transaction.output.iter().enumerate() {
-                        if if self.cfg.consensus.peer_peg_in_keys.len() > 1 {
+                        let should_track_utxo = if self.cfg.consensus.peer_peg_in_keys.len() > 1 {
                             tx_out.script_pubkey.is_p2wsh()
                         } else {
                             tx_out.script_pubkey.is_p2wpkh()
-                        } {
+                        };
+
+                        if should_track_utxo {
                             let outpoint = bitcoin::OutPoint {
                                 txid: transaction.compute_txid(),
                                 vout: vout as u32,
