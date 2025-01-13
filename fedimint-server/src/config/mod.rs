@@ -21,7 +21,6 @@ use fedimint_core::net::peers::{IMuxPeerConnections, IP2PConnections};
 use fedimint_core::task::{timeout, Cancelled, Elapsed, TaskGroup};
 use fedimint_core::{secp256k1, timing, PeerId};
 use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
-use futures::future::join_all;
 use rand::rngs::OsRng;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
@@ -477,28 +476,18 @@ impl ServerConfig {
             "Peer {} running distributed key generation...", our_id
         );
 
-        let mut registered_modules = registry.kinds();
         let mut module_cfgs: BTreeMap<ModuleInstanceId, ServerModuleConfig> = BTreeMap::new();
-        let modules = params.consensus.modules.iter_modules();
-        let modules_runner = modules.map(|(module_instance_id, kind, module_params)| {
-            let dkg = PeerHandle::new(&conn, module_instance_id, *our_id, peers.clone());
-            let registry = registry.clone();
 
-            async move {
-                let result = match registry.get(kind) {
-                    None => Err(DkgError::ModuleNotFound(kind.clone())),
-                    Some(gen) => gen.distributed_gen(&dkg, module_params).await,
-                };
-                (module_instance_id, result)
-            }
-        });
-        for (module_instance_id, config) in join_all(modules_runner).await {
-            let config = config?;
-            registered_modules.remove(&config.consensus.kind);
-            module_cfgs.insert(module_instance_id, config);
-        }
-        if !registered_modules.is_empty() {
-            return Err(DkgError::ParamsNotFound(registered_modules));
+        for (module_instance_id, kind, module_params) in params.consensus.modules.iter_modules() {
+            let dkg = PeerHandle::new(&conn, module_instance_id, *our_id, peers.clone());
+
+            let cfg = registry
+                .get(kind)
+                .ok_or(DkgError::ModuleNotFound(kind.clone()))?
+                .distributed_gen(&dkg, module_params)
+                .await?;
+
+            module_cfgs.insert(module_instance_id, cfg);
         }
 
         info!(
