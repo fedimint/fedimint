@@ -29,8 +29,8 @@ use fedimint_core::secp256k1::{Message, PublicKey, SECP256K1};
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, Amount, NumPeersExt, OutPoint, PeerId,
-    ServerModule,
+    apply, async_trait_maybe_send, push_db_pair_items, Amount, Feerate, NumPeersExt, OutPoint,
+    PeerId, ServerModule,
 };
 pub use fedimint_ln_common as common;
 use fedimint_ln_common::config::{
@@ -946,7 +946,16 @@ impl Lightning {
         task_group: &TaskGroup,
     ) -> anyhow::Result<Self> {
         let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
-        let block_count_rx = btc_rpc.spawn_block_count_update_task(task_group)?;
+        // Lightning module does not use bitcoin fees, so the default feerate and
+        // confirmation target can be set to anything
+        let default_feerate = Feerate { sats_per_kvb: 1000 };
+        let confirmation_target = 1;
+        let (block_count_rx, _) = btc_rpc.spawn_bitcoin_update_task(
+            task_group,
+            default_feerate,
+            cfg.consensus.network.0,
+            confirmation_target,
+        )?;
         Ok(Lightning {
             cfg,
             our_peer_id,
