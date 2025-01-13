@@ -632,7 +632,7 @@ impl LightningClientModule {
         }
     }
 
-    async fn get_prev_payment_result(
+    pub async fn get_prev_payment_result(
         &self,
         payment_hash: &sha256::Hash,
         dbtx: &mut DatabaseTransaction<'_>,
