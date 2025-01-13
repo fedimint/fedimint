@@ -77,7 +77,7 @@ use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGen
 use fedimint_wallet_common::endpoint_constants::{
     ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT, BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT,
     BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT,
-    PEG_OUT_FEES_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
+    PEG_OUT_FEES_ENDPOINT, UTXO_CONFIRMED_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
 };
 use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
@@ -923,6 +923,13 @@ impl ServerModule for Wallet {
 
                 }
             },
+            api_endpoint! {
+                UTXO_CONFIRMED_ENDPOINT,
+                ApiVersion::new(0, 2),
+                async |module: &Wallet, context, outpoint: bitcoin::OutPoint| -> bool {
+                    Ok(module.is_utxo_confirmed(&mut context.dbtx().into_nc(), outpoint).await)
+                }
+            },
         ]
     }
 }
@@ -1539,6 +1546,14 @@ impl Wallet {
             unconfirmed_peg_out_txos,
             unconfirmed_change_utxos,
         }
+    }
+
+    async fn is_utxo_confirmed(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        outpoint: bitcoin::OutPoint,
+    ) -> bool {
+        dbtx.get_value(&UnspentTxOutKey(outpoint)).await.is_some()
     }
 
     fn offline_wallet(&self) -> StatelessWallet {
