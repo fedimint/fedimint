@@ -280,7 +280,7 @@ where
     /// Create keys from G2 (96B keys, 48B messages) used in `tbs`
     pub async fn run_g2(
         &mut self,
-        connections: &MuxPeerConnections<String, DkgPeerMsg>,
+        connections: &MuxPeerConnections<(), DkgPeerMsg>,
     ) -> DkgResult<HashMap<T, DkgKeys<G2Projective>>> {
         self.run(G2Projective::generator(), connections).await
     }
@@ -288,7 +288,7 @@ where
     /// Create keys from G1 (48B keys, 96B messages) used in `threshold_crypto`
     pub async fn run_g1(
         &mut self,
-        connections: &MuxPeerConnections<String, DkgPeerMsg>,
+        connections: &MuxPeerConnections<(), DkgPeerMsg>,
     ) -> DkgResult<HashMap<T, DkgKeys<G1Projective>>> {
         self.run(G1Projective::generator(), connections).await
     }
@@ -300,7 +300,7 @@ where
     pub async fn run<G: DkgGroup>(
         &mut self,
         group: G,
-        connections: &MuxPeerConnections<String, DkgPeerMsg>,
+        connections: &MuxPeerConnections<(), DkgPeerMsg>,
     ) -> DkgResult<HashMap<T, DkgKeys<G>>>
     where
         DkgMessage<G>: ISupportedDkgMessage,
@@ -329,7 +329,7 @@ where
     /// Runs the DKG algorithms for a given key and module id
     async fn run_dkg_key<G: DkgGroup>(
         key_id: String,
-        connections: MuxPeerConnections<String, DkgPeerMsg>,
+        connections: MuxPeerConnections<(), DkgPeerMsg>,
         mut dkg: Dkg<G>,
         initial_step: DkgStep<G>,
     ) -> DkgResult<DkgKeys<G>>
@@ -339,13 +339,13 @@ where
         if let DkgStep::Messages(messages) = initial_step {
             for (peer, msg) in messages {
                 let send_msg = DkgPeerMsg::DistributedGen(msg.to_msg());
-                connections.send(&[peer], key_id.clone(), send_msg).await?;
+                connections.send(&[peer], (), send_msg).await?;
             }
         }
 
         // process steps for each key
         loop {
-            let (peer, msg) = connections.receive(key_id.clone()).await?;
+            let (peer, msg) = connections.receive(()).await?;
 
             let message = match msg {
                 DkgPeerMsg::DistributedGen(v) => Ok(v),
@@ -361,7 +361,7 @@ where
                 DkgStep::Messages(messages) => {
                     for (peer, msg) in messages {
                         let send_msg = DkgPeerMsg::DistributedGen(msg.to_msg());
-                        connections.send(&[peer], key_id.clone(), send_msg).await?;
+                        connections.send(&[peer], (), send_msg).await?;
                     }
                 }
                 DkgStep::Result(result) => {
@@ -467,7 +467,6 @@ pub trait PeerHandleOps {
     /// exchange arbitrary data during distributed key generation.
     async fn exchange_encodable<T: Encodable + Decodable + Send + Sync>(
         &self,
-        dkg_key: String,
         data: T,
     ) -> DkgResult<BTreeMap<PeerId, T>>;
 }
@@ -508,15 +507,19 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
 
     async fn exchange_encodable<T: Encodable + Decodable + Send + Sync>(
         &self,
-        dkg_key: String,
         data: T,
     ) -> DkgResult<BTreeMap<PeerId, T>> {
         let mut peer_data: BTreeMap<PeerId, T> = BTreeMap::new();
 
         self.connections
             .send(
-                &self.peers,
-                dkg_key.clone(),
+                &self
+                    .peers
+                    .iter()
+                    .cloned()
+                    .filter(|p| p != &self.our_id)
+                    .collect::<Vec<PeerId>>(),
+                (),
                 DkgPeerMsg::Encodable(data.consensus_encode_to_vec()),
             )
             .await?;
@@ -524,7 +527,7 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
         peer_data.insert(self.our_id, data);
 
         while peer_data.len() < self.peers.len() {
-            let (peer, message) = self.connections.receive(dkg_key.clone()).await?;
+            let (peer, message) = self.connections.receive(()).await?;
 
             match message {
                 DkgPeerMsg::Encodable(bytes) => {

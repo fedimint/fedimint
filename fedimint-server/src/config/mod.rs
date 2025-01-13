@@ -453,14 +453,6 @@ impl ServerConfig {
         let peers = &params.peer_ids();
         let our_id = &params.local.our_id;
 
-        let exchange = PeerHandle::new(&conn, *our_id, peers.clone());
-
-        let (broadcast_sk, broadcast_pk) = secp256k1::generate_keypair(&mut OsRng);
-
-        let broadcast_public_keys = exchange
-            .exchange_encodable("braodcast".to_string(), broadcast_pk)
-            .await?;
-
         // in case we are running by ourselves, avoid DKG
         if peers.len() == 1 {
             let server = Self::trusted_dealer_gen(
@@ -488,6 +480,12 @@ impl ServerConfig {
 
             module_cfgs.insert(module_instance_id, cfg);
         }
+
+        let exchange = PeerHandle::new(&conn, *our_id, peers.clone());
+
+        let (broadcast_sk, broadcast_pk) = secp256k1::generate_keypair(&mut OsRng);
+
+        let broadcast_public_keys = exchange.exchange_encodable(broadcast_pk).await?;
 
         let server = ServerConfig::from(
             params.clone(),

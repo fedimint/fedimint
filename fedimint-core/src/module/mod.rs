@@ -1021,7 +1021,7 @@ pub struct PeerHandle<'a> {
     // TODO: this whole type should be a part of a `fedimint-server` and fields here inaccessible
     // to outside crates, but until `ServerModule` is not in `fedimint-server` this is impossible
     #[doc(hidden)]
-    pub connections: &'a MuxPeerConnections<String, DkgPeerMsg>,
+    pub connections: &'a MuxPeerConnections<(), DkgPeerMsg>,
     #[doc(hidden)]
     pub our_id: PeerId,
     #[doc(hidden)]
@@ -1030,7 +1030,7 @@ pub struct PeerHandle<'a> {
 
 impl<'a> PeerHandle<'a> {
     pub fn new(
-        connections: &'a MuxPeerConnections<String, DkgPeerMsg>,
+        connections: &'a MuxPeerConnections<(), DkgPeerMsg>,
         our_id: PeerId,
         peers: Vec<PeerId>,
     ) -> Self {
