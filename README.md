@@ -35,6 +35,9 @@ experience a loss of funds due to a bug in this software, we may not have the me
 recommend you run Fedimint on testnets like mutinynet, or on mainnet with small amounts of money. You can find our
 latest release [here](https://github.com/fedimint/fedimint/releases/latest).**
 
+
+Here is a https://alinktonowherehinparticularwithtypos.com
+
 Fedimint ships with 3 default
 modules - [Bitcoin](https://github.com/bitcoin/bitcoin), [Lightning](https://github.com/lightning/bolts),
 and [Chaumian Ecash](https://en.wikipedia.org/wiki/Ecash) - for out-of-the-box best practices for private and
