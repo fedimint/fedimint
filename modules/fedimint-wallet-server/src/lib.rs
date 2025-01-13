@@ -1246,12 +1246,11 @@ impl Wallet {
 
             // TODO: use batching for mainnet syncing
             trace!(block = height, "Fetching block hash");
-            let block_hash =
-                retry("get_block_hash", backoff_util::background_backoff(), || {
-                    self.btc_rpc.get_block_hash(u64::from(height)) // TODO: use u64 for height everywhere
-                })
-                .await
-                .expect("bitcoind rpc to get block hash");
+            let block_hash = retry("get_block_hash", backoff_util::background_backoff(), || {
+                self.btc_rpc.get_block_hash(u64::from(height)) // TODO: use u64 for height everywhere
+            })
+            .await
+            .expect("bitcoind rpc to get block hash");
 
             if self.consensus_module_consensus_version(dbtx).await
                 >= ModuleConsensusVersion::new(2, 2)

@@ -280,21 +280,17 @@ where
     /// Create keys from G2 (96B keys, 48B messages) used in `tbs`
     pub async fn run_g2(
         &mut self,
-        module_id: ModuleInstanceId,
-        connections: &MuxPeerConnections<(ModuleInstanceId, String), DkgPeerMsg>,
+        connections: &MuxPeerConnections<String, DkgPeerMsg>,
     ) -> DkgResult<HashMap<T, DkgKeys<G2Projective>>> {
-        self.run(module_id, G2Projective::generator(), connections)
-            .await
+        self.run(G2Projective::generator(), connections).await
     }
 
     /// Create keys from G1 (48B keys, 96B messages) used in `threshold_crypto`
     pub async fn run_g1(
         &mut self,
-        module_id: ModuleInstanceId,
-        connections: &MuxPeerConnections<(ModuleInstanceId, String), DkgPeerMsg>,
+        connections: &MuxPeerConnections<String, DkgPeerMsg>,
     ) -> DkgResult<HashMap<T, DkgKeys<G1Projective>>> {
-        self.run(module_id, G1Projective::generator(), connections)
-            .await
+        self.run(G1Projective::generator(), connections).await
     }
 
     /// Runs the DKG algorithms with our peers
@@ -303,49 +299,37 @@ where
     /// are expected to be cooperative
     pub async fn run<G: DkgGroup>(
         &mut self,
-        module_id: ModuleInstanceId,
         group: G,
-        connections: &MuxPeerConnections<(ModuleInstanceId, String), DkgPeerMsg>,
+        connections: &MuxPeerConnections<String, DkgPeerMsg>,
     ) -> DkgResult<HashMap<T, DkgKeys<G>>>
     where
         DkgMessage<G>: ISupportedDkgMessage,
     {
-        // Use tokio channel to await on `recv` or we might block
-        let (send, mut receive) = tokio::sync::mpsc::channel(10_000);
-
-        // For every `key` we run DKG in a new tokio task
-        self.dkg_config
-            .clone()
-            .into_iter()
-            .for_each(|(key, threshold)| {
-                let our_id = self.our_id;
-                let peers = self.peers.clone();
-                let connections = connections.clone();
-                let key = serde_json::to_string(&key).expect("serialization can't fail");
-                let send = send.clone();
-
-                spawn("dkg runner", async move {
-                    let (dkg, step) = Dkg::new(group, our_id, peers, threshold, &mut OsRng);
-                    let result =
-                        Self::run_dkg_key((module_id, key.clone()), connections, dkg, step).await;
-                    send.send((key, result)).await.expect("channel open");
-                });
-            });
-
         // Collect every key, returning an error if any fails
         let mut results: HashMap<T, DkgKeys<G>> = HashMap::new();
-        while results.len() < self.dkg_config.len() {
-            let (key, result) = receive.recv().await.expect("channel open");
-            let key = serde_json::from_str(&key).expect("serialization can't fail");
-            results.insert(key, result?);
+
+        assert!(self.dkg_config.len() == 1);
+
+        // For every `key` we run DKG in a new tokio task
+        for (key, threshold) in self.dkg_config.clone().into_iter() {
+            let our_id = self.our_id;
+            let peers = self.peers.clone();
+            let connections = connections.clone();
+
+            let (dkg, step) = Dkg::new(group, our_id, peers, threshold, &mut OsRng);
+
+            let result = Self::run_dkg_key(String::new(), connections, dkg, step).await?;
+
+            results.insert(key, result);
         }
+
         Ok(results)
     }
 
     /// Runs the DKG algorithms for a given key and module id
     async fn run_dkg_key<G: DkgGroup>(
-        key_id: (ModuleInstanceId, String),
-        connections: MuxPeerConnections<(ModuleInstanceId, String), DkgPeerMsg>,
+        key_id: String,
+        connections: MuxPeerConnections<String, DkgPeerMsg>,
         mut dkg: Dkg<G>,
         initial_step: DkgStep<G>,
     ) -> DkgResult<DkgKeys<G>>
@@ -499,7 +483,7 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
         );
 
         Ok(dkg
-            .run_g1(self.module_instance_id, self.connections)
+            .run_g1(self.connections)
             .await?
             .get(&())
             .unwrap()
@@ -515,7 +499,7 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
         );
 
         Ok(dkg
-            .run_g2(self.module_instance_id, self.connections)
+            .run_g2(self.connections)
             .await?
             .get(&())
             .unwrap()
@@ -532,7 +516,7 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
         self.connections
             .send(
                 &self.peers,
-                (self.module_instance_id, dkg_key.clone()),
+                dkg_key.clone(),
                 DkgPeerMsg::Encodable(data.consensus_encode_to_vec()),
             )
             .await?;
@@ -540,10 +524,7 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
         peer_data.insert(self.our_id, data);
 
         while peer_data.len() < self.peers.len() {
-            let (peer, message) = self
-                .connections
-                .receive((self.module_instance_id, dkg_key.clone()))
-                .await?;
+            let (peer, message) = self.connections.receive(dkg_key.clone()).await?;
 
             match message {
                 DkgPeerMsg::Encodable(bytes) => {

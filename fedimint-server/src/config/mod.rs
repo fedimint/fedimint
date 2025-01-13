@@ -453,12 +453,12 @@ impl ServerConfig {
         let peers = &params.peer_ids();
         let our_id = &params.local.our_id;
 
-        let exchange = PeerHandle::new(&conn, MODULE_INSTANCE_ID_GLOBAL, *our_id, peers.clone());
+        let exchange = PeerHandle::new(&conn, *our_id, peers.clone());
 
         let (broadcast_sk, broadcast_pk) = secp256k1::generate_keypair(&mut OsRng);
 
         let broadcast_public_keys = exchange
-            .exchange_encodable("broadcast".to_string(), broadcast_pk)
+            .exchange_encodable("braodcast".to_string(), broadcast_pk)
             .await?;
 
         // in case we are running by ourselves, avoid DKG
@@ -478,7 +478,7 @@ impl ServerConfig {
         let mut module_cfgs: BTreeMap<ModuleInstanceId, ServerModuleConfig> = BTreeMap::new();
 
         for (module_instance_id, kind, module_params) in params.consensus.modules.iter_modules() {
-            let dkg = PeerHandle::new(&conn, module_instance_id, *our_id, peers.clone());
+            let dkg = PeerHandle::new(&conn, *our_id, peers.clone());
 
             let cfg = registry
                 .get(kind)
