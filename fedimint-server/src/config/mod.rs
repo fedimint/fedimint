@@ -1,8 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::env;
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use anyhow::{bail, format_err, Context};
+use fedimint_api_client::api::P2PConnectionStatus;
 use fedimint_core::admin_client::ConfigGenParamsConsensus;
 pub use fedimint_core::config::{
     serde_binary_human_readable, ClientConfig, DkgPeerMsg, FederationId, GlobalClientConfig,
@@ -17,12 +19,13 @@ use fedimint_core::module::{
     SupportedApiVersionsSummary, SupportedCoreApiVersions, CORE_CONSENSUS_VERSION,
 };
 use fedimint_core::net::peers::IP2PConnections;
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::{secp256k1, timing, NumPeersExt, PeerId};
 use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 use rand::rngs::OsRng;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
+use tokio::sync::watch;
 use tokio_rustls::rustls;
 use tracing::info;
 
@@ -441,7 +444,7 @@ impl ServerConfig {
             return Ok(server[&params.local.our_id].clone());
         }
 
-        let conn = TlsTcpConnector::new(
+        let connector = TlsTcpConnector::new(
             params.tls_config(),
             p2p_bind_addr,
             params
@@ -453,16 +456,47 @@ impl ServerConfig {
         )
         .into_dyn();
 
-        let conn = ReconnectP2PConnections::new(params.local.our_id, conn, task_group, None)
-            .await
-            .into_dyn();
+        let mut p2p_status_senders = BTreeMap::new();
+        let mut p2p_status_receivers = BTreeMap::new();
+
+        for peer in connector.peers() {
+            let (p2p_sender, p2p_receiver) = watch::channel(P2PConnectionStatus::Disconnected);
+
+            p2p_status_senders.insert(peer, p2p_sender);
+            p2p_status_receivers.insert(peer, p2p_receiver);
+        }
+
+        let connections = ReconnectP2PConnections::new(
+            params.local.our_id,
+            connector,
+            task_group,
+            Some(p2p_status_senders),
+        )
+        .await
+        .into_dyn();
+
+        while p2p_status_receivers
+            .values()
+            .any(|r| *r.borrow() == P2PConnectionStatus::Disconnected)
+        {
+            info!(
+                target: LOG_NET_PEER_DKG,
+                "Waiting for all p2p connections to open..."
+            );
+
+            sleep(Duration::from_secs(1)).await;
+        }
 
         info!(
             target: LOG_NET_PEER_DKG,
             "Running distributed key generation..."
         );
 
-        let handle = PeerHandle::new(params.peer_ids().to_num_peers(), params.local.our_id, &conn);
+        let handle = PeerHandle::new(
+            params.peer_ids().to_num_peers(),
+            params.local.our_id,
+            &connections,
+        );
 
         let (broadcast_sk, broadcast_pk) = secp256k1::generate_keypair(&mut OsRng);
 
@@ -488,7 +522,7 @@ impl ServerConfig {
         // We need to wait for out outgoing message queues to be fully transmitted
         // before we move on in order for our peers to be able to complete the dkg.
 
-        conn.await_empty_outgoing_message_queues().await;
+        connections.await_empty_outgoing_message_queues().await;
 
         info!(
             target: LOG_NET_PEER,

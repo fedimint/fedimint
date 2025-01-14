@@ -476,7 +476,7 @@ mod tests {
             match steps.pop_front() {
                 Some((peer, DkgStep::Broadcast(message))) => {
                     for receive_peer in peers.iter().filter(|p| **p != peer) {
-                        let receive_dkg = dkgs.get_mut(&receive_peer).unwrap();
+                        let receive_dkg = dkgs.get_mut(receive_peer).unwrap();
                         let step = receive_dkg.step(peer, message.clone());
                         steps.push_back((*receive_peer, step.unwrap()));
                     }

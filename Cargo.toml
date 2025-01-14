@@ -199,7 +199,7 @@ threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
 tokio = "1.43.0"
 tikv-jemallocator = "0.5"
 tokio-rustls = "0.24.1"
-tokio-stream = { version = "0.1.17", features = ["net"] }
+tokio-stream =  "0.1.17"
 tonic_lnd = { version = "0.2.0", package = "fedimint-tonic-lnd", features = [
     "lightningrpc",
     "routerrpc",

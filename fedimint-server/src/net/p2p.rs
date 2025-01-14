@@ -249,14 +249,14 @@ impl<M: Send + 'static> P2PConnectionStateMachine<M> {
         match self.state {
             P2PConnectionSMState::Disconnected(disconnected) => {
                 if let Some(channel) = &self.common.status_channel {
-                    channel.send(P2PConnectionStatus::Connected).ok();
+                    channel.send(P2PConnectionStatus::Disconnected).ok();
                 }
 
                 self.common.transition_disconnected(disconnected).await
             }
             P2PConnectionSMState::Connected(connected) => {
                 if let Some(channel) = &self.common.status_channel {
-                    channel.send(P2PConnectionStatus::Disconnected).ok();
+                    channel.send(P2PConnectionStatus::Connected).ok();
                 }
 
                 self.common.transition_connected(connected).await
