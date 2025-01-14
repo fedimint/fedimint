@@ -21,11 +21,7 @@ use rand_chacha::ChaChaRng;
 use sha3::Digest;
 use threshold_crypto::ff::Field;
 use threshold_crypto::group::Curve;
-use threshold_crypto::poly::Commitment;
-use threshold_crypto::serde_impl::SerdeSecret;
-use threshold_crypto::{
-    G1Affine, G1Projective, G2Affine, G2Projective, PublicKeySet, SecretKeyShare,
-};
+use threshold_crypto::{G1Affine, G1Projective, G2Affine, G2Projective};
 
 struct Dkg<G> {
     num_peers: NumPeers,
@@ -48,8 +44,8 @@ struct Dkg<G> {
 impl<G: DkgGroup> Dkg<G> {
     /// Creates the DKG and the first step of the algorithm
     pub fn new(num_peers: NumPeers, identity: PeerId, generator: G) -> (Self, DkgStep<G>) {
-        let f1_poly = random_scalar_coefficients(num_peers.threshold() - 1);
-        let f2_poly = random_scalar_coefficients(num_peers.threshold() - 1);
+        let f1_poly = random_coefficients(num_peers.threshold() - 1);
+        let f2_poly = random_coefficients(num_peers.threshold() - 1);
 
         let mut dkg = Dkg {
             num_peers,
@@ -117,8 +113,8 @@ impl<G: DkgGroup> Dkg<G> {
                 if self.commitments.len() == self.num_peers.total() {
                     let mut messages = vec![];
                     for peer in self.num_peers.peer_ids() {
-                        let s1 = evaluate_polynomial_scalar(&self.f1_poly, &scalar(&peer));
-                        let s2 = evaluate_polynomial_scalar(&self.f2_poly, &scalar(&peer));
+                        let s1 = eval_poly_scalar(&self.f1_poly, &scalar(&peer));
+                        let s2 = eval_poly_scalar(&self.f2_poly, &scalar(&peer));
 
                         if peer == self.identity {
                             self.sk_shares.insert(self.identity, s1);
@@ -202,10 +198,7 @@ impl<G: DkgGroup> Dkg<G> {
                         })
                         .collect();
 
-                    return Ok(DkgStep::Result(DkgKeys {
-                        public_key_set: pks,
-                        secret_key_share: sks,
-                    }));
+                    return Ok(DkgStep::Result((pks, sks)));
                 }
             }
         }
@@ -245,8 +238,8 @@ impl<G: DkgGroup> Dkg<G> {
     }
 }
 
-/// `PeerId`s are offset by 1, since evaluating a poly at 0 reveals the secret
-pub fn scalar(peer: &PeerId) -> Scalar {
+// `PeerId`s are offset by 1, since evaluating a poly at 0 reveals the secret
+fn scalar(peer: &PeerId) -> Scalar {
     Scalar::from(peer.to_usize() as u64 + 1)
 }
 
@@ -257,7 +250,7 @@ pub async fn run_dkg<G: DkgGroup>(
     identity: PeerId,
     generator: G,
     connections: &DynP2PConnections<DkgPeerMsg>,
-) -> DkgResult<DkgKeys<G>>
+) -> DkgResult<(Vec<G>, Scalar)>
 where
     DkgMessage<G>: ISupportedDkgMessage,
 {
@@ -305,11 +298,11 @@ where
     }
 }
 
-pub fn random_scalar_coefficients(degree: usize) -> Vec<Scalar> {
+fn random_coefficients(degree: usize) -> Vec<Scalar> {
     (0..=degree).map(|_| Scalar::random(&mut OsRng)).collect()
 }
 
-pub fn evaluate_polynomial_scalar(coefficients: &[Scalar], x: &Scalar) -> Scalar {
+fn eval_poly_scalar(coefficients: &[Scalar], x: &Scalar) -> Scalar {
     coefficients
         .iter()
         .copied()
@@ -321,62 +314,25 @@ pub fn evaluate_polynomial_scalar(coefficients: &[Scalar], x: &Scalar) -> Scalar
 #[derive(Debug, Clone)]
 pub enum DkgStep<G: DkgGroup> {
     Messages(Vec<(PeerId, DkgMessage<G>)>),
-    Result(DkgKeys<G>),
+    Result((Vec<G>, Scalar)),
 }
 
-#[derive(Debug, Clone)]
-pub struct DkgKeys<G> {
-    pub public_key_set: Vec<G>,
-    pub secret_key_share: Scalar,
-}
-
-/// Our secret key share of a threshold key
-#[derive(Debug, Clone)]
-pub struct ThresholdKeys {
-    pub public_key_set: PublicKeySet,
-    pub secret_key_share: SerdeSecret<SecretKeyShare>,
-}
-
-impl DkgKeys<G2Projective> {
-    pub fn tbs(self) -> (Vec<G2Projective>, tbs::SecretKeyShare) {
-        (
-            self.public_key_set,
-            tbs::SecretKeyShare(self.secret_key_share),
-        )
-    }
-}
-
-impl DkgKeys<G1Projective> {
-    pub fn threshold_crypto(&self) -> ThresholdKeys {
-        ThresholdKeys {
-            public_key_set: PublicKeySet::from(Commitment::from(self.public_key_set.clone())),
-            secret_key_share: SerdeSecret(SecretKeyShare::from_mut(
-                &mut self.secret_key_share.clone(),
-            )),
-        }
-    }
-
-    pub fn tpe(self) -> (Vec<G1Projective>, Scalar) {
-        (self.public_key_set, self.secret_key_share)
-    }
-}
-
-pub fn evaluate_polynomial_g1(coefficients: &[G1Projective], x: &Scalar) -> G1Affine {
+pub fn eval_poly_g1(coefficients: &[G1Projective], peer: &PeerId) -> G1Affine {
     coefficients
         .iter()
         .copied()
         .rev()
-        .reduce(|acc, coefficient| acc * x + coefficient)
+        .reduce(|acc, coefficient| acc * scalar(peer) + coefficient)
         .expect("We have at least one coefficient")
         .to_affine()
 }
 
-pub fn evaluate_polynomial_g2(coefficients: &[G2Projective], x: &Scalar) -> G2Affine {
+pub fn eval_poly_g2(coefficients: &[G2Projective], peer: &PeerId) -> G2Affine {
     coefficients
         .iter()
         .copied()
         .rev()
-        .reduce(|acc, coefficient| acc * x + coefficient)
+        .reduce(|acc, coefficient| acc * scalar(peer) + coefficient)
         .expect("We have at least one coefficient")
         .to_affine()
 }
@@ -385,9 +341,9 @@ pub fn evaluate_polynomial_g2(coefficients: &[G2Projective], x: &Scalar) -> G2Af
 // from it's definition that is still in `fedimint-core`
 #[async_trait]
 pub trait PeerHandleOps {
-    async fn run_dkg_g1(&self) -> DkgResult<DkgKeys<G1Projective>>;
+    async fn run_dkg_g1(&self) -> DkgResult<(Vec<G1Projective>, Scalar)>;
 
-    async fn run_dkg_g2(&self) -> DkgResult<DkgKeys<G2Projective>>;
+    async fn run_dkg_g2(&self) -> DkgResult<(Vec<G2Projective>, Scalar)>;
 
     /// Exchanges a `DkgPeerMsg::Module(Vec<u8>)` with all peers. All peers are
     /// required to be online and submit a response for this to return
@@ -402,7 +358,7 @@ pub trait PeerHandleOps {
 
 #[async_trait]
 impl<'a> PeerHandleOps for PeerHandle<'a> {
-    async fn run_dkg_g1(&self) -> DkgResult<DkgKeys<G1Projective>> {
+    async fn run_dkg_g1(&self) -> DkgResult<(Vec<G1Projective>, Scalar)> {
         run_dkg(
             self.num_peers,
             self.identity,
@@ -412,7 +368,7 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
         .await
     }
 
-    async fn run_dkg_g2(&self) -> DkgResult<DkgKeys<G2Projective>> {
+    async fn run_dkg_g2(&self) -> DkgResult<(Vec<G2Projective>, Scalar)> {
         run_dkg(
             self.num_peers,
             self.identity,
@@ -467,21 +423,21 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
 mod tests {
     use std::collections::{HashMap, VecDeque};
 
+    use bls12_381::Scalar;
     use fedimint_core::{NumPeersExt, PeerId};
     use tbs::derive_pk_share;
-    use threshold_crypto::{G1Projective, G2Projective};
+    use threshold_crypto::poly::Commitment;
+    use threshold_crypto::serde_impl::SerdeSecret;
+    use threshold_crypto::{G1Projective, G2Projective, PublicKeySet, SecretKeyShare};
 
-    use crate::config::distributedgen::{
-        evaluate_polynomial_g2, scalar, Dkg, DkgGroup, DkgKeys, DkgStep, ThresholdKeys,
-    };
+    use crate::config::distributedgen::{eval_poly_g2, Dkg, DkgGroup, DkgStep};
 
     #[test_log::test]
     fn test_dkg() {
-        for (peer, keys) in run(G1Projective::generator()) {
-            let ThresholdKeys {
-                public_key_set,
-                secret_key_share,
-            } = keys.threshold_crypto();
+        for (peer, (polynomial, mut sks)) in run(G1Projective::generator()) {
+            let public_key_set = PublicKeySet::from(Commitment::from(polynomial));
+            let secret_key_share = SerdeSecret(SecretKeyShare::from_mut(&mut sks));
+
             assert_eq!(public_key_set.threshold(), 2);
             assert_eq!(
                 public_key_set.public_key_share(peer.to_usize()),
@@ -489,22 +445,21 @@ mod tests {
             );
         }
 
-        for (peer, keys) in run(G2Projective::generator()) {
-            let (pk, sk) = keys.tbs();
-            assert_eq!(pk.len(), 3);
+        for (peer, (polynomial, sks)) in run(G2Projective::generator()) {
+            assert_eq!(polynomial.len(), 3);
             assert_eq!(
-                evaluate_polynomial_g2(&pk, &scalar(&peer)),
-                derive_pk_share(&sk).0
+                eval_poly_g2(&polynomial, &peer),
+                derive_pk_share(&tbs::SecretKeyShare(sks)).0
             );
         }
     }
 
-    fn run<G: DkgGroup>(group: G) -> HashMap<PeerId, DkgKeys<G>> {
+    fn run<G: DkgGroup>(group: G) -> HashMap<PeerId, (Vec<G>, Scalar)> {
         let peers = (0..4_u16).map(PeerId::from).collect::<Vec<_>>();
 
         let mut steps: VecDeque<(PeerId, DkgStep<G>)> = VecDeque::new();
         let mut dkgs: HashMap<PeerId, Dkg<G>> = HashMap::new();
-        let mut keys: HashMap<PeerId, DkgKeys<G>> = HashMap::new();
+        let mut keys: HashMap<PeerId, (Vec<G>, Scalar)> = HashMap::new();
 
         for peer in &peers {
             let (dkg, step) = Dkg::new(peers.to_num_peers(), *peer, group);

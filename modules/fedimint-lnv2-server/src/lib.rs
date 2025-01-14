@@ -48,7 +48,7 @@ use fedimint_lnv2_common::{
     LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0, OutgoingWitness,
     MODULE_CONSENSUS_VERSION,
 };
-use fedimint_server::config::distributedgen::{evaluate_polynomial_g1, PeerHandleOps};
+use fedimint_server::config::distributedgen::{eval_poly_g1, PeerHandleOps};
 use fedimint_server::net::api::check_auth;
 use futures::StreamExt;
 use group::ff::Field;
@@ -228,31 +228,24 @@ impl ServerModuleInit for LightningInit {
         params: &ConfigGenModuleParams,
     ) -> DkgResult<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
-        let (poly_g1, sk) = peers.run_dkg_g1().await?.tpe();
+        let (polynomial, sks) = peers.run_dkg_g1().await?;
 
         let server = LightningConfig {
             local: LightningConfigLocal {
                 bitcoin_rpc: params.local.bitcoin_rpc.clone(),
             },
             consensus: LightningConfigConsensus {
-                tpe_agg_pk: tpe::AggregatePublicKey(poly_g1[0].to_affine()),
+                tpe_agg_pk: tpe::AggregatePublicKey(polynomial[0].to_affine()),
                 tpe_pks: peers
                     .num_peers()
                     .peer_ids()
-                    .map(|peer| {
-                        let pk = evaluate_polynomial_g1(
-                            &poly_g1,
-                            &Scalar::from(peer.to_usize() as u64 + 1),
-                        );
-
-                        (peer, PublicKeyShare(pk))
-                    })
+                    .map(|peer| (peer, PublicKeyShare(eval_poly_g1(&polynomial, &peer))))
                     .collect(),
                 fee_consensus: params.consensus.fee_consensus.clone(),
                 network: params.consensus.network,
             },
             private: LightningConfigPrivate {
-                sk: SecretKeyShare(sk),
+                sk: SecretKeyShare(sks),
             },
         };
 

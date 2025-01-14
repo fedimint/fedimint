@@ -44,7 +44,7 @@ use fedimint_mint_common::{
     MintOutputError, MintOutputOutcome, DEFAULT_MAX_NOTES_PER_DENOMINATION,
     MODULE_CONSENSUS_VERSION,
 };
-use fedimint_server::config::distributedgen::{evaluate_polynomial_g2, scalar, PeerHandleOps};
+use fedimint_server::config::distributedgen::{eval_poly_g2, PeerHandleOps};
 use fedimint_server::consensus::db::{MigrationContextExt, TypedModuleHistoryItem};
 use futures::StreamExt;
 use itertools::Itertools;
@@ -230,7 +230,7 @@ impl ServerModuleInit for MintInit {
         let mut amount_keys = HashMap::new();
 
         for amount in params.consensus.gen_denominations() {
-            amount_keys.insert(amount, peers.run_dkg_g2().await?.tbs());
+            amount_keys.insert(amount, peers.run_dkg_g2().await?);
         }
 
         let server = MintConfig {
@@ -238,7 +238,7 @@ impl ServerModuleInit for MintInit {
             private: MintConfigPrivate {
                 tbs_sks: amount_keys
                     .iter()
-                    .map(|(amount, (_, sks))| (*amount, *sks))
+                    .map(|(amount, (_, sks))| (*amount, tbs::SecretKeyShare(*sks)))
                     .collect(),
             },
             consensus: MintConfigConsensus {
@@ -249,10 +249,7 @@ impl ServerModuleInit for MintInit {
                         let pks = amount_keys
                             .iter()
                             .map(|(amount, (pks, _))| {
-                                (
-                                    *amount,
-                                    PublicKeyShare(evaluate_polynomial_g2(pks, &scalar(&peer))),
-                                )
+                                (*amount, PublicKeyShare(eval_poly_g2(pks, &peer)))
                             })
                             .collect::<Tiered<_>>();
 
