@@ -214,7 +214,17 @@
 <a href="#213" id="213">213</a>
 <a href="#214" id="214">214</a>
 <a href="#215" id="215">215</a>
-<a href="#216" id="216">216</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display};
 <span class="kw">use </span>std::time::Duration;
 
@@ -223,6 +233,7 @@
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_NET_API;
 <span class="kw">use </span>jsonrpsee_core::client::Error <span class="kw">as </span>JsonRpcClientError;
+<span class="kw">use </span>jsonrpsee_types::error::METHOD_NOT_FOUND_CODE;
 <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
 </span><span class="kw">use </span>jsonrpsee_wasm_client::{Client <span class="kw">as </span>WsClient, WasmClientBuilder <span class="kw">as </span>WsClientBuilder};
 <span class="kw">use </span>serde::Serialize;
@@ -383,6 +394,15 @@
     <span class="doccomment">/// Get errors from different peers.
     </span><span class="kw">pub fn </span>get_peer_errors(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (PeerId, <span class="kw-2">&amp;</span>PeerError)&gt; {
         <span class="self">self</span>.peer_errors.iter().map(|(peer, error)| (<span class="kw-2">*</span>peer, error))
+    }
+
+    <span class="kw">pub fn </span>any_peer_error_method_not_found(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="self">self</span>.peer_errors.values().any(|peer_err| {
+            <span class="macro">matches!</span>(
+                peer_err,
+                PeerError::Rpc(JsonRpcClientError::Call(err)) <span class="kw">if </span>err.code() == METHOD_NOT_FOUND_CODE
+            )
+        })
     }
 }
 

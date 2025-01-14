@@ -2300,7 +2300,25 @@
 <a href="#2299" id="2299">2299</a>
 <a href="#2300" id="2300">2300</a>
 <a href="#2301" id="2301">2301</a>
-<a href="#2302" id="2302">2302</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2302" id="2302">2302</a>
+<a href="#2303" id="2303">2303</a>
+<a href="#2304" id="2304">2304</a>
+<a href="#2305" id="2305">2305</a>
+<a href="#2306" id="2306">2306</a>
+<a href="#2307" id="2307">2307</a>
+<a href="#2308" id="2308">2308</a>
+<a href="#2309" id="2309">2309</a>
+<a href="#2310" id="2310">2310</a>
+<a href="#2311" id="2311">2311</a>
+<a href="#2312" id="2312">2312</a>
+<a href="#2313" id="2313">2313</a>
+<a href="#2314" id="2314">2314</a>
+<a href="#2315" id="2315">2315</a>
+<a href="#2316" id="2316">2316</a>
+<a href="#2317" id="2317">2317</a>
+<a href="#2318" id="2318">2318</a>
+<a href="#2319" id="2319">2319</a>
+<a href="#2320" id="2320">2320</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -2379,7 +2397,7 @@
 <span class="kw">use </span>fedimint_wallet_common::endpoint_constants::{
     ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT, BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT,
     BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT,
-    PEG_OUT_FEES_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
+    PEG_OUT_FEES_ENDPOINT, UTXO_CONFIRMED_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_wallet_common::keys::CompressedPublicKey;
 <span class="kw">use </span>fedimint_wallet_common::tweakable::Tweakable;
@@ -2572,7 +2590,7 @@
                 MODULE_CONSENSUS_VERSION.major,
                 MODULE_CONSENSUS_VERSION.minor,
             ),
-            <span class="kw-2">&amp;</span>[(<span class="number">0</span>, <span class="number">1</span>)],
+            <span class="kw-2">&amp;</span>[(<span class="number">0</span>, <span class="number">2</span>)],
         )
     }
 
@@ -3124,29 +3142,6 @@
     <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="macro">vec!</span>[
             <span class="macro">api_endpoint!</span> {
-                MODULE_CONSENSUS_VERSION_ENDPOINT,
-                ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
-                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, context, _params: ()| -&gt; ModuleConsensusVersion {
-                    <span class="prelude-val">Ok</span>(module.consensus_module_consensus_version(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc()).<span class="kw">await</span>)
-                }
-            },
-            <span class="macro">api_endpoint!</span> {
-                ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT,
-                ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
-                <span class="kw">async </span>|_module: <span class="kw-2">&amp;</span>Wallet, context, _params: ()| -&gt; () {
-                    check_auth(context)<span class="question-mark">?</span>;
-
-                    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = context.dbtx();
-
-                    dbtx.insert_entry(<span class="kw-2">&amp;</span>ConsensusVersionVotingActivationKey, <span class="kw-2">&amp;</span>()).<span class="kw">await</span>;
-
-                    dbtx.commit_tx_result().<span class="kw">await</span>.map_err(|e| ApiError::server_error(e.to_string()))<span class="question-mark">?</span>;
-
-                    <span class="prelude-val">Ok</span>(())
-
-                }
-            },
-            <span class="macro">api_endpoint!</span> {
                 BLOCK_COUNT_ENDPOINT,
                 ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, context, _params: ()| -&gt; u32 {
@@ -3223,6 +3218,36 @@
                 ApiVersion::new(<span class="number">0</span>, <span class="number">1</span>),
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, context, _params: ()| -&gt; WalletSummary {
                     <span class="prelude-val">Ok</span>(module.get_wallet_summary(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc()).<span class="kw">await</span>)
+                }
+            },
+            <span class="macro">api_endpoint!</span> {
+                MODULE_CONSENSUS_VERSION_ENDPOINT,
+                ApiVersion::new(<span class="number">0</span>, <span class="number">2</span>),
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, context, _params: ()| -&gt; ModuleConsensusVersion {
+                    <span class="prelude-val">Ok</span>(module.consensus_module_consensus_version(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc()).<span class="kw">await</span>)
+                }
+            },
+            <span class="macro">api_endpoint!</span> {
+                ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT,
+                ApiVersion::new(<span class="number">0</span>, <span class="number">2</span>),
+                <span class="kw">async </span>|_module: <span class="kw-2">&amp;</span>Wallet, context, _params: ()| -&gt; () {
+                    check_auth(context)<span class="question-mark">?</span>;
+
+                    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = context.dbtx();
+
+                    dbtx.insert_entry(<span class="kw-2">&amp;</span>ConsensusVersionVotingActivationKey, <span class="kw-2">&amp;</span>()).<span class="kw">await</span>;
+
+                    dbtx.commit_tx_result().<span class="kw">await</span>.map_err(|e| ApiError::server_error(e.to_string()))<span class="question-mark">?</span>;
+
+                    <span class="prelude-val">Ok</span>(())
+
+                }
+            },
+            <span class="macro">api_endpoint!</span> {
+                UTXO_CONFIRMED_ENDPOINT,
+                ApiVersion::new(<span class="number">0</span>, <span class="number">2</span>),
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, context, outpoint: bitcoin::OutPoint| -&gt; bool {
+                    <span class="prelude-val">Ok</span>(module.is_utxo_confirmed(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc(), outpoint).<span class="kw">await</span>)
                 }
             },
         ]
@@ -3559,7 +3584,8 @@
 
                 <span class="kw">for </span>transaction <span class="kw">in </span>block.txdata {
                     <span class="comment">// We maintain the subset of unspent P2WSH transaction outputs created
-                    // since the federation was established in the database.
+                    // since the module was running on the new consensus version, which might be
+                    // the same time as the genesis session.
 
                     </span><span class="kw">for </span>tx_in <span class="kw">in </span><span class="kw-2">&amp;</span>transaction.input {
                         dbtx.remove_entry(<span class="kw-2">&amp;</span>UnspentTxOutKey(tx_in.previous_output))
@@ -3567,11 +3593,13 @@
                     }
 
                     <span class="kw">for </span>(vout, tx_out) <span class="kw">in </span>transaction.output.iter().enumerate() {
-                        <span class="kw">if if </span><span class="self">self</span>.cfg.consensus.peer_peg_in_keys.len() &gt; <span class="number">1 </span>{
+                        <span class="kw">let </span>should_track_utxo = <span class="kw">if </span><span class="self">self</span>.cfg.consensus.peer_peg_in_keys.len() &gt; <span class="number">1 </span>{
                             tx_out.script_pubkey.is_p2wsh()
                         } <span class="kw">else </span>{
                             tx_out.script_pubkey.is_p2wpkh()
-                        } {
+                        };
+
+                        <span class="kw">if </span>should_track_utxo {
                             <span class="kw">let </span>outpoint = bitcoin::OutPoint {
                                 txid: transaction.compute_txid(),
                                 vout: vout <span class="kw">as </span>u32,
@@ -3838,6 +3866,14 @@
             unconfirmed_peg_out_txos,
             unconfirmed_change_utxos,
         }
+    }
+
+    <span class="kw">async fn </span>is_utxo_confirmed(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
+        outpoint: bitcoin::OutPoint,
+    ) -&gt; bool {
+        dbtx.get_value(<span class="kw-2">&amp;</span>UnspentTxOutKey(outpoint)).<span class="kw">await</span>.is_some()
     }
 
     <span class="kw">fn </span>offline_wallet(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StatelessWallet {

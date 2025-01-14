@@ -528,10 +528,7 @@
 <a href="#527" id="527">527</a>
 <a href="#528" id="528">528</a>
 <a href="#529" id="529">529</a>
-<a href="#530" id="530">530</a>
-<a href="#531" id="531">531</a>
-<a href="#532" id="532">532</a>
-<a href="#533" id="533">533</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
+<a href="#530" id="530">530</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>bitcoin::ScriptBuf;
@@ -544,7 +541,6 @@
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped <span class="kw">as _</span>,
 };
 <span class="kw">use </span>fedimint_core::envs::is_running_in_test_env;
-<span class="kw">use </span>fedimint_core::module::ModuleConsensusVersion;
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::util::FmtCompactAnyhow <span class="kw">as _</span>;
@@ -913,8 +909,7 @@
         <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_WALLET, %txid, %out_idx, %finality_delay, %tx_block_count, %current_consensus_block_count, <span class="string">"Ready to claim"</span>);
 
         <span class="kw">let </span>tx_out_proof = btc_rpc.get_txout_proof(txid).<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">let </span>consensus_version = module_rpc.module_consensus_version().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>federation_knows_utxo = module_rpc.is_utxo_confirmed(outpoint).<span class="kw">await</span><span class="question-mark">?</span>;
 
         claim_peg_in(
             client_ctx,
@@ -924,7 +919,7 @@
             operation_id,
             outpoint,
             tx_out_proof,
-            consensus_version,
+            federation_knows_utxo,
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
         outcomes.push(CheckOutcome::Claimed { outpoint });
@@ -941,7 +936,7 @@
     operation_id: OperationId,
     out_point: bitcoin::OutPoint,
     tx_out_proof: TxOutProof,
-    consensus_version: ModuleConsensusVersion,
+    federation_knows_utxo: bool,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">async fn </span>claim_peg_in_inner(
         client_ctx: <span class="kw-2">&amp;</span>ClientContext&lt;WalletClientModule&gt;,
@@ -951,7 +946,7 @@
         tweak_key: Keypair,
         txout_proof: TxOutProof,
         operation_id: OperationId,
-        consensus_version: ModuleConsensusVersion,
+        federation_knows_utxo: bool,
     ) -&gt; OutPointRange {
         <span class="kw">let </span>pegin_proof = PegInProof::new(
             txout_proof,
@@ -962,8 +957,7 @@
         .expect(<span class="string">"TODO: handle API returning faulty proofs"</span>);
 
         <span class="kw">let </span>amount = pegin_proof.tx_output().value.into();
-
-        <span class="kw">let </span>wallet_input = <span class="kw">if </span>consensus_version &gt;= ModuleConsensusVersion::new(<span class="number">2</span>, <span class="number">2</span>) {
+        <span class="kw">let </span>wallet_input = <span class="kw">if </span>federation_knows_utxo {
             WalletInput::new_v1(<span class="kw-2">&amp;</span>pegin_proof)
         } <span class="kw">else </span>{
             WalletInput::new_v0(pegin_proof)
@@ -1013,7 +1007,7 @@
                         tweak_key,
                         tx_out_proof.clone(),
                         operation_id,
-                        consensus_version,
+                        federation_knows_utxo,
                     )
                     .<span class="kw">await</span>;
 

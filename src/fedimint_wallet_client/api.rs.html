@@ -99,7 +99,25 @@
 <a href="#98" id="98">98</a>
 <a href="#99" id="99">99</a>
 <a href="#100" id="100">100</a>
-<a href="#101" id="101">101</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::{Address, Amount};
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::{Address, Amount};
 <span class="kw">use </span>fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased, ModuleConsensusVersion};
@@ -107,7 +125,8 @@
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, PeerId};
 <span class="kw">use </span>fedimint_wallet_common::endpoint_constants::{
     BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT, BLOCK_COUNT_ENDPOINT,
-    MODULE_CONSENSUS_VERSION_ENDPOINT, PEG_OUT_FEES_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
+    MODULE_CONSENSUS_VERSION_ENDPOINT, PEG_OUT_FEES_ENDPOINT, UTXO_CONFIRMED_ENDPOINT,
+    WALLET_SUMMARY_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_wallet_common::{PegOutFees, WalletSummary};
 
@@ -128,6 +147,8 @@
     <span class="kw">async fn </span>fetch_bitcoin_rpc_config(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;BitcoinRpcConfig&gt;;
 
     <span class="kw">async fn </span>fetch_wallet_summary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;WalletSummary&gt;;
+
+    <span class="kw">async fn </span>is_utxo_confirmed(<span class="kw-2">&amp;</span><span class="self">self</span>, outpoint: bitcoin::OutPoint) -&gt; FederationResult&lt;bool&gt;;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -144,14 +165,29 @@
             .<span class="kw">await</span>;
 
         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="kw-2">&amp;</span>response {
-            <span class="kw">for </span>e <span class="kw">in </span>e.peer_errors.values() {
-                <span class="kw">if </span>e.to_string().contains(<span class="string">"Method not found"</span>) {
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(ModuleConsensusVersion::new(<span class="number">2</span>, <span class="number">0</span>));
-                }
+            <span class="kw">if </span>e.any_peer_error_method_not_found() {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(ModuleConsensusVersion::new(<span class="number">2</span>, <span class="number">0</span>));
             }
         }
 
         response
+    }
+
+    <span class="kw">async fn </span>is_utxo_confirmed(<span class="kw-2">&amp;</span><span class="self">self</span>, outpoint: bitcoin::OutPoint) -&gt; FederationResult&lt;bool&gt; {
+        <span class="kw">let </span>res = <span class="self">self
+            </span>.request_current_consensus(
+                UTXO_CONFIRMED_ENDPOINT.to_string(),
+                ApiRequestErased::new(outpoint),
+            )
+            .<span class="kw">await</span>;
+
+        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="kw-2">&amp;</span>res {
+            <span class="kw">if </span>e.any_peer_error_method_not_found() {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="bool-val">false</span>);
+            }
+        }
+
+        res
     }
 
     <span class="kw">async fn </span>fetch_consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt; {
