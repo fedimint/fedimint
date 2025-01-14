@@ -12,7 +12,6 @@ use bls12_381::Scalar;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{DynRawFallback, Encodable};
 use fedimint_core::module::registry::ModuleRegistry;
-use fedimint_core::task::Cancelled;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{format_hex, ModuleDecoderRegistry};
 use fedimint_logging::LOG_CORE;
@@ -22,13 +21,12 @@ use serde::de::DeserializeOwned;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::json;
-use thiserror::Error;
 use threshold_crypto::group::{Curve, Group, GroupEncoding};
 use threshold_crypto::{G1Projective, G2Projective};
 use tracing::warn;
 
 use crate::core::DynClientConfig;
-use crate::encoding::{Decodable, DecodeError};
+use crate::encoding::Decodable;
 use crate::module::{
     CoreConsensusVersion, DynCommonModuleInit, DynServerModuleInit, IDynCommonModuleInit,
     ModuleConsensusVersion,
@@ -880,27 +878,6 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
 pub enum DkgPeerMsg {
     DistributedGen(SupportedDkgMessage),
     Encodable(Vec<u8>),
-    Done,
-}
-
-/// Result of running DKG
-pub type DkgResult<T> = Result<T, DkgError>;
-
-#[derive(Error, Debug)]
-/// Captures an error occurring in DKG
-pub enum DkgError {
-    /// User has cancelled the DKG task
-    #[error("Operation cancelled")]
-    Cancelled(#[from] Cancelled),
-    /// Error running DKG
-    #[error("Running DKG failed due to {0}")]
-    Failed(#[from] anyhow::Error),
-    #[error("The module was not found {0}")]
-    ModuleNotFound(ModuleKind),
-    #[error("Params for modules were not found {0:?}")]
-    ParamsNotFound(BTreeSet<ModuleKind>),
-    #[error("Failed to decode encodable message {0:?}")]
-    ModuleDecodeError(DecodeError),
 }
 
 /// Supported (by Fedimint's code) `DkgMessage<T>` types

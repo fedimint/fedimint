@@ -12,7 +12,7 @@ use anyhow::{bail, Context};
 use bitcoin_hashes::{sha256, Hash as BitcoinHash};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
-    ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
+    ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
@@ -62,6 +62,9 @@ use futures::StreamExt;
 use metrics::{LN_CANCEL_OUTGOING_CONTRACTS, LN_FUNDED_CONTRACT_SATS, LN_INCOMING_OFFER};
 use rand::rngs::OsRng;
 use strum::IntoEnumIterator;
+use threshold_crypto::poly::Commitment;
+use threshold_crypto::serde_impl::SerdeSecret;
+use threshold_crypto::{PublicKeySet, SecretKeyShare};
 use tracing::{debug, error, info, info_span, trace, warn};
 
 use crate::db::{
@@ -257,23 +260,22 @@ impl ServerModuleInit for LightningInit {
         &self,
         peers: &PeerHandle,
         params: &ConfigGenModuleParams,
-    ) -> DkgResult<ServerModuleConfig> {
+    ) -> anyhow::Result<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
-        let g1 = peers.run_dkg_g1(()).await?;
 
-        let keys = g1[&()].threshold_crypto();
+        let (polynomial, mut sks) = peers.run_dkg_g1().await?;
 
         let server = LightningConfig {
             local: LightningConfigLocal {
                 bitcoin_rpc: params.local.bitcoin_rpc.clone(),
             },
             consensus: LightningConfigConsensus {
-                threshold_pub_keys: keys.public_key_set,
+                threshold_pub_keys: PublicKeySet::from(Commitment::from(polynomial)),
                 fee_consensus: FeeConsensus::default(),
                 network: NetworkLegacyEncodingWrapper(params.consensus.network),
             },
             private: LightningConfigPrivate {
-                threshold_sec_key: keys.secret_key_share,
+                threshold_sec_key: SerdeSecret(SecretKeyShare::from_mut(&mut sks)),
             },
         };
 

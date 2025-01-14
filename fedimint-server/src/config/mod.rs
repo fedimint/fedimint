@@ -3,36 +3,36 @@ use std::env;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use anyhow::{bail, format_err};
+use anyhow::{bail, format_err, Context};
+use fedimint_api_client::api::P2PConnectionStatus;
 use fedimint_core::admin_client::ConfigGenParamsConsensus;
 pub use fedimint_core::config::{
-    serde_binary_human_readable, ClientConfig, DkgError, DkgPeerMsg, DkgResult, FederationId,
-    GlobalClientConfig, JsonWithKind, ModuleInitRegistry, PeerUrl, ServerModuleConfig,
-    ServerModuleConsensusConfig, ServerModuleInitRegistry, TypedServerModuleConfig,
+    serde_binary_human_readable, ClientConfig, DkgPeerMsg, FederationId, GlobalClientConfig,
+    JsonWithKind, ModuleInitRegistry, PeerUrl, ServerModuleConfig, ServerModuleConsensusConfig,
+    ServerModuleInitRegistry, TypedServerModuleConfig,
 };
-use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
+use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{
     ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleInit, MultiApiVersion, PeerHandle,
     SupportedApiVersionsSummary, SupportedCoreApiVersions, CORE_CONSENSUS_VERSION,
 };
-use fedimint_core::net::peers::{IMuxPeerConnections, IP2PConnections};
-use fedimint_core::task::{timeout, Cancelled, Elapsed, TaskGroup};
-use fedimint_core::{secp256k1, timing, PeerId};
+use fedimint_core::net::peers::IP2PConnections;
+use fedimint_core::task::{sleep, TaskGroup};
+use fedimint_core::{secp256k1, timing, NumPeersExt, PeerId};
 use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
-use futures::future::join_all;
 use rand::rngs::OsRng;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
+use tokio::sync::watch;
 use tokio_rustls::rustls;
-use tracing::{error, info};
+use tracing::info;
 
 use crate::config::api::ConfigGenParamsLocal;
 use crate::config::distributedgen::PeerHandleOps;
 use crate::envs::FM_MAX_CLIENT_CONNECTIONS_ENV;
 use crate::fedimint_core::encoding::Encodable;
-use crate::multiplexed::PeerConnectionMultiplexer;
 use crate::net::p2p::ReconnectP2PConnections;
 use crate::net::p2p_connector::{dns_sanitize, P2PConnector, TlsConfig};
 use crate::TlsTcpConnector;
@@ -431,10 +431,20 @@ impl ServerConfig {
         registry: ServerModuleInitRegistry,
         task_group: &TaskGroup,
         code_version_str: String,
-    ) -> DkgResult<Self> {
+    ) -> anyhow::Result<Self> {
         let _timing /* logs on drop */ = timing::TimeReporter::new("distributed-gen").info();
 
-        let conn = TlsTcpConnector::new(
+        // in case we are running by ourselves, avoid DKG
+        if params.peer_ids().len() == 1 {
+            let server = Self::trusted_dealer_gen(
+                &HashMap::from([(params.local.our_id, params.clone())]),
+                &registry,
+                &code_version_str,
+            );
+            return Ok(server[&params.local.our_id].clone());
+        }
+
+        let connector = TlsTcpConnector::new(
             params.tls_config(),
             p2p_bind_addr,
             params
@@ -446,117 +456,86 @@ impl ServerConfig {
         )
         .into_dyn();
 
-        let conn = ReconnectP2PConnections::new(params.local.our_id, conn, task_group, None)
-            .await
-            .into_dyn();
+        let mut p2p_status_senders = BTreeMap::new();
+        let mut p2p_status_receivers = BTreeMap::new();
 
-        let conn = PeerConnectionMultiplexer::new(conn).into_dyn();
+        for peer in connector.peers() {
+            let (p2p_sender, p2p_receiver) = watch::channel(P2PConnectionStatus::Disconnected);
 
-        let peers = &params.peer_ids();
-        let our_id = &params.local.our_id;
+            p2p_status_senders.insert(peer, p2p_sender);
+            p2p_status_receivers.insert(peer, p2p_receiver);
+        }
 
-        let exchange = PeerHandle::new(&conn, MODULE_INSTANCE_ID_GLOBAL, *our_id, peers.clone());
+        let connections = ReconnectP2PConnections::new(
+            params.local.our_id,
+            connector,
+            task_group,
+            Some(p2p_status_senders),
+        )
+        .await
+        .into_dyn();
+
+        while p2p_status_receivers
+            .values()
+            .any(|r| *r.borrow() == P2PConnectionStatus::Disconnected)
+        {
+            info!(
+                target: LOG_NET_PEER_DKG,
+                "Waiting for all p2p connections to open..."
+            );
+
+            sleep(Duration::from_secs(1)).await;
+        }
+
+        info!(
+            target: LOG_NET_PEER_DKG,
+            "Running distributed key generation..."
+        );
+
+        let handle = PeerHandle::new(
+            params.peer_ids().to_num_peers(),
+            params.local.our_id,
+            &connections,
+        );
 
         let (broadcast_sk, broadcast_pk) = secp256k1::generate_keypair(&mut OsRng);
 
-        let broadcast_public_keys = exchange
-            .exchange_encodable("broadcast".to_string(), broadcast_pk)
-            .await?;
+        let broadcast_public_keys = handle.exchange_encodable(broadcast_pk).await?;
 
-        // in case we are running by ourselves, avoid DKG
-        if peers.len() == 1 {
-            let server = Self::trusted_dealer_gen(
-                &HashMap::from([(*our_id, params.clone())]),
-                &registry,
-                &code_version_str,
+        let mut module_cfgs = BTreeMap::new();
+
+        for (module_id, kind, module_params) in params.consensus.modules.iter_modules() {
+            info!(
+                target: LOG_NET_PEER_DKG,
+                "Running distributed key generation for module of kind {kind}..."
             );
-            return Ok(server[our_id].clone());
-        }
-        info!(
-            target: LOG_NET_PEER_DKG,
-            "Peer {} running distributed key generation...", our_id
-        );
 
-        let mut registered_modules = registry.kinds();
-        let mut module_cfgs: BTreeMap<ModuleInstanceId, ServerModuleConfig> = BTreeMap::new();
-        let modules = params.consensus.modules.iter_modules();
-        let modules_runner = modules.map(|(module_instance_id, kind, module_params)| {
-            let dkg = PeerHandle::new(&conn, module_instance_id, *our_id, peers.clone());
-            let registry = registry.clone();
+            let cfg = registry
+                .get(kind)
+                .context("Module of kind {kind} not found")?
+                .distributed_gen(&handle, module_params)
+                .await?;
 
-            async move {
-                let result = match registry.get(kind) {
-                    None => Err(DkgError::ModuleNotFound(kind.clone())),
-                    Some(gen) => gen.distributed_gen(&dkg, module_params).await,
-                };
-                (module_instance_id, result)
-            }
-        });
-        for (module_instance_id, config) in join_all(modules_runner).await {
-            let config = config?;
-            registered_modules.remove(&config.consensus.kind);
-            module_cfgs.insert(module_instance_id, config);
-        }
-        if !registered_modules.is_empty() {
-            return Err(DkgError::ParamsNotFound(registered_modules));
+            module_cfgs.insert(module_id, cfg);
         }
 
-        info!(
-            target: LOG_NET_PEER_DKG,
-            "Sending confirmations to other peers."
-        );
-        // Note: Since our outgoing buffers are asynchronous, we don't actually know
-        // if other peers received our message, just because we received theirs.
-        // That's why we need to do a one last best effort sync.
-        let dkg_done = "DKG DONE".to_string();
-        conn.send(
-            peers,
-            (MODULE_INSTANCE_ID_GLOBAL, dkg_done.clone()),
-            DkgPeerMsg::Done,
-        )
-        .await?;
+        // We need to wait for out outgoing message queues to be fully transmitted
+        // before we move on in order for our peers to be able to complete the dkg.
 
-        info!(
-            target: LOG_NET_PEER_DKG,
-            "Waiting for confirmations from other peers."
-        );
-        if let Err(Elapsed) = timeout(Duration::from_secs(30), async {
-            let mut done_peers = BTreeSet::from([*our_id]);
-
-            while done_peers.len() < peers.len() {
-                match conn.receive((MODULE_INSTANCE_ID_GLOBAL, dkg_done.clone())).await {
-                    Ok((peer_id, DkgPeerMsg::Done)) => {
-                        info!(
-                            target: LOG_NET_PEER_DKG,
-                            peer_id = %peer_id,
-                            "Got completion confirmation"
-                        );
-                        done_peers.insert(peer_id);
-                    },
-                    Ok((peer_id, msg)) => {
-                        error!(target: LOG_NET_PEER_DKG, %peer_id, ?msg, "Received incorrect message after dkg was supposed to be finished. Probably dkg multiplexing bug.");
-                    },
-                    Err(Cancelled) => {/* ignore shutdown for time being, we'll timeout soon anyway */},
-                }
-            }
-        })
-        .await
-        {
-            error!(target: LOG_NET_PEER_DKG, "Timeout waiting for dkg completion confirmation from other peers");
-        };
-
-        let server = ServerConfig::from(
-            params.clone(),
-            *our_id,
-            broadcast_public_keys,
-            broadcast_sk,
-            module_cfgs,
-            code_version_str,
-        );
+        connections.await_empty_outgoing_message_queues().await;
 
         info!(
             target: LOG_NET_PEER,
             "Distributed key generation has completed successfully!"
+        );
+
+        let server = ServerConfig::from(
+            params.clone(),
+            params.local.our_id,
+            broadcast_public_keys,
+            broadcast_sk,
+            module_cfgs,
+            code_version_str,
         );
 
         Ok(server)

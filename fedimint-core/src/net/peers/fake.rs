@@ -34,6 +34,14 @@ impl<M: Clone + Send + 'static> IP2PConnections<M> for FakePeerConnections<M> {
     async fn receive(&self) -> Option<(PeerId, M)> {
         self.rx.recv().await.map(|msg| (self.peer, msg)).ok()
     }
+
+    async fn receive_from_peer(&self, _peer: PeerId) -> Option<M> {
+        self.rx.recv().await.ok()
+    }
+
+    async fn await_empty_outgoing_message_queues(&self) {
+        unimplemented!()
+    }
 }
 
 /// Create a fake link between `peer1` and `peer2` for test purposes

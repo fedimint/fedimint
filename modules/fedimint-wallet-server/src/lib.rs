@@ -39,7 +39,7 @@ use common::{
 };
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
-    ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
+    ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
@@ -342,13 +342,13 @@ impl ServerModuleInit for WalletInit {
         &self,
         peers: &PeerHandle,
         params: &ConfigGenModuleParams,
-    ) -> DkgResult<ServerModuleConfig> {
+    ) -> anyhow::Result<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
         let secp = secp256k1::Secp256k1::new();
         let (sk, pk) = secp.generate_keypair(&mut OsRng);
         let our_key = CompressedPublicKey { key: pk };
         let peer_peg_in_keys: BTreeMap<PeerId, CompressedPublicKey> = peers
-            .exchange_encodable("wallet".to_string(), our_key.key)
+            .exchange_encodable(our_key.key)
             .await?
             .into_iter()
             .map(|(k, key)| (k, CompressedPublicKey { key }))
@@ -357,7 +357,7 @@ impl ServerModuleInit for WalletInit {
         let wallet_cfg = WalletConfig::new(
             peer_peg_in_keys,
             sk,
-            peers.peer_ids().to_num_peers().threshold(),
+            peers.num_peers().threshold(),
             params.consensus.network,
             params.consensus.finality_delay,
             params.local.bitcoin_rpc.clone(),

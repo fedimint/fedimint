@@ -46,7 +46,7 @@ use crate::db::{
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
 use crate::module::audit::Audit;
-use crate::net::peers::MuxPeerConnections;
+use crate::net::peers::DynP2PConnections;
 use crate::server::DynServerModule;
 use crate::task::{MaybeSend, TaskGroup};
 use crate::{
@@ -330,7 +330,6 @@ macro_rules! __api_endpoint {
 }
 
 pub use __api_endpoint as api_endpoint;
-use fedimint_core::config::DkgResult;
 
 use self::registry::ModuleDecoderRegistry;
 
@@ -515,7 +514,7 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
         &self,
         peers: &PeerHandle,
         params: &ConfigGenModuleParams,
-    ) -> DkgResult<ServerModuleConfig>;
+    ) -> anyhow::Result<ServerModuleConfig>;
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
 
@@ -657,7 +656,7 @@ pub trait ServerModuleInit: ModuleInit + Sized {
         &self,
         peer: &PeerHandle,
         params: &ConfigGenModuleParams,
-    ) -> DkgResult<ServerModuleConfig>;
+    ) -> anyhow::Result<ServerModuleConfig>;
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
 
@@ -727,7 +726,7 @@ where
         &self,
         peers: &PeerHandle,
         params: &ConfigGenModuleParams,
-    ) -> DkgResult<ServerModuleConfig> {
+    ) -> anyhow::Result<ServerModuleConfig> {
         <Self as ServerModuleInit>::distributed_gen(self, peers, params).await
     }
 
@@ -1021,31 +1020,27 @@ pub struct PeerHandle<'a> {
     // TODO: this whole type should be a part of a `fedimint-server` and fields here inaccessible
     // to outside crates, but until `ServerModule` is not in `fedimint-server` this is impossible
     #[doc(hidden)]
-    pub connections: &'a MuxPeerConnections<(ModuleInstanceId, String), DkgPeerMsg>,
+    pub num_peers: NumPeers,
     #[doc(hidden)]
-    pub module_instance_id: ModuleInstanceId,
+    pub identity: PeerId,
     #[doc(hidden)]
-    pub our_id: PeerId,
-    #[doc(hidden)]
-    pub peers: Vec<PeerId>,
+    pub connections: &'a DynP2PConnections<DkgPeerMsg>,
 }
 
 impl<'a> PeerHandle<'a> {
     pub fn new(
-        connections: &'a MuxPeerConnections<(ModuleInstanceId, String), DkgPeerMsg>,
-        module_instance_id: ModuleInstanceId,
-        our_id: PeerId,
-        peers: Vec<PeerId>,
+        num_peers: NumPeers,
+        identity: PeerId,
+        connections: &'a DynP2PConnections<DkgPeerMsg>,
     ) -> Self {
         Self {
+            num_peers,
+            identity,
             connections,
-            module_instance_id,
-            our_id,
-            peers,
         }
     }
 
-    pub fn peer_ids(&self) -> &[PeerId] {
-        self.peers.as_slice()
+    pub fn num_peers(&self) -> NumPeers {
+        self.num_peers
     }
 }

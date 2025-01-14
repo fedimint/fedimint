@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use anyhow::bail;
 use fedimint_core::config::{
-    ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
+    ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
@@ -44,7 +44,7 @@ use fedimint_mint_common::{
     MintOutputError, MintOutputOutcome, DEFAULT_MAX_NOTES_PER_DENOMINATION,
     MODULE_CONSENSUS_VERSION,
 };
-use fedimint_server::config::distributedgen::{evaluate_polynomial_g2, scalar, PeerHandleOps};
+use fedimint_server::config::distributedgen::{eval_poly_g2, PeerHandleOps};
 use fedimint_server::consensus::db::{MigrationContextExt, TypedModuleHistoryItem};
 use futures::StreamExt;
 use itertools::Itertools;
@@ -224,42 +224,36 @@ impl ServerModuleInit for MintInit {
         &self,
         peers: &PeerHandle,
         params: &ConfigGenModuleParams,
-    ) -> DkgResult<ServerModuleConfig> {
+    ) -> anyhow::Result<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
 
-        let g2 = peers
-            .run_dkg_multi_g2(params.consensus.gen_denominations())
-            .await?;
+        let mut amount_keys = HashMap::new();
 
-        let amounts_keys = g2
-            .into_iter()
-            .map(|(amount, keys)| (amount, keys.tbs()))
-            .collect::<HashMap<_, _>>();
+        for amount in params.consensus.gen_denominations() {
+            amount_keys.insert(amount, peers.run_dkg_g2().await?);
+        }
 
         let server = MintConfig {
             local: MintConfigLocal,
             private: MintConfigPrivate {
-                tbs_sks: amounts_keys
+                tbs_sks: amount_keys
                     .iter()
-                    .map(|(amount, (_, sks))| (*amount, *sks))
+                    .map(|(amount, (_, sks))| (*amount, tbs::SecretKeyShare(*sks)))
                     .collect(),
             },
             consensus: MintConfigConsensus {
                 peer_tbs_pks: peers
+                    .num_peers()
                     .peer_ids()
-                    .iter()
                     .map(|peer| {
-                        let pks = amounts_keys
+                        let pks = amount_keys
                             .iter()
                             .map(|(amount, (pks, _))| {
-                                (
-                                    *amount,
-                                    PublicKeyShare(evaluate_polynomial_g2(pks, &scalar(peer))),
-                                )
+                                (*amount, PublicKeyShare(eval_poly_g2(pks, &peer)))
                             })
                             .collect::<Tiered<_>>();
 
-                        (*peer, pks)
+                        (peer, pks)
                     })
                     .collect(),
                 fee_consensus: params.consensus.fee_consensus(),

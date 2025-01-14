@@ -14,6 +14,9 @@
 #![allow(clippy::similar_names)]
 #![allow(clippy::too_many_lines)]
 #![allow(clippy::needless_pass_by_value)]
+#![allow(clippy::manual_let_else)]
+#![allow(clippy::match_wildcard_for_single_variants)]
+#![allow(clippy::trivially_copy_pass_by_ref)]
 
 extern crate fedimint_core;
 
@@ -50,9 +53,6 @@ pub mod net;
 
 /// Fedimint toplevel config
 pub mod config;
-
-/// Implementation of multiplexed peer connections
-pub mod multiplexed;
 
 pub async fn run(
     data_dir: PathBuf,
