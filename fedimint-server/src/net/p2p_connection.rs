@@ -32,7 +32,7 @@ pub trait IP2PConnection<M>: Send + 'static {
 #[async_trait]
 impl<M> IP2PConnection<M> for Framed<TlsStream<TcpStream>, LengthDelimitedCodec>
 where
-    M: Serialize + DeserializeOwned + Send + 'static,
+    M: Encodable + Decodable + Serialize + DeserializeOwned + Send + 'static,
 {
     async fn send(&mut self, message: M) -> anyhow::Result<()> {
         let mut bytes = Vec::new();
