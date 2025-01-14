@@ -6,6 +6,7 @@ The current implementation allows users to make private and low-cost payments th
 All e-cash is backed by bitcoin with deposits and withdrawals that can occur on-chain or via Lightning.
 
 ## Crate organization
+
 The [Fedimint federation](#Federation-Nodes) consists of nodes that are primarily built from the following crates:
 * `fedimint` - the main consensus code for processing transactions and REST API
 * `fedimint-derive` - helper macros for serialization
@@ -27,6 +28,7 @@ The [LN gateway](#LN-Gateway):
 * `gateway/cli` - provides cli access and control of a running gatewayd instance
 
 ## Federation Nodes
+
 Each of the nodes spawns three long-running tasks in parallel: an API task, an [AlephBFT protocol](https://docs.rs/aleph-bft/latest/aleph_bft/) task, and a Fedimint consensus task.
 
 The API task in `net:api:run_server` allows clients to submit a `Transaction` and retrieve its `TransactionStatus`.
@@ -40,6 +42,7 @@ The `FedimintConsensus` task processes each `ConsensusOutcome` by validating the
 For instance, the consensus thread may receive a peg-out proposal, validate the PSBT signature and transaction balances, then sign and submit the transaction to the Bitcoin network.
 
 ## Modules
+
 There currently are three `FederationModule`s used in `FedimintConsensus` that exist in the [crates](#Crate-organization) previously described:
 * [Wallet module](wallet_module.md) - handles bitcoin on-chain `PegInProof` inputs and `PegOut` outputs
 * `Mint` module - verifies `Note` input signatures and issues `BlindNote` outputs of different denominations

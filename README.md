@@ -22,7 +22,6 @@
   <a href="https://app.radicle.xyz/nodes/radicle.fedimint.org/rad:z2eeB9LF8fDNJQaEcvAWxQmU7h2PG">
     <img src="https://img.shields.io/badge/Radicle-explore-blue" alt="View on Radicle">
   </a>
-  <img alt="Lines of code" src="https://tokei.rs/b1/github/fedimint/fedimint">
 </p>
 
 [Fedimint](https://fedimint.org) is a module based system for building federated applications. It is designed to be a
