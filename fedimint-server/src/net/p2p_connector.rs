@@ -10,6 +10,7 @@ use anyhow::{Context, ensure};
 use async_trait::async_trait;
 use fedimint_core::PeerId;
 use fedimint_core::config::PeerUrl;
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{FM_IROH_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env};
 use fedimint_core::net::STANDARD_FEDIMINT_P2P_PORT;
 use fedimint_core::util::SafeUrl;
@@ -113,7 +114,7 @@ impl TlsTcpConnector {
 #[async_trait]
 impl<M> IP2PConnector<M> for TlsTcpConnector
 where
-    M: Serialize + DeserializeOwned + Send + 'static,
+    M: Encodable + Decodable + Serialize + DeserializeOwned + Send + 'static,
 {
     fn peers(&self) -> Vec<PeerId> {
         self.peers
@@ -306,7 +307,7 @@ impl IrohConnector {
 #[async_trait]
 impl<M> IP2PConnector<M> for IrohConnector
 where
-    M: Serialize + DeserializeOwned + Send + 'static,
+    M: Encodable + Decodable + Serialize + DeserializeOwned + Send + 'static,
 {
     fn peers(&self) -> Vec<PeerId> {
         self.node_ids.keys().copied().collect()
