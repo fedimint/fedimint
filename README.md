@@ -61,10 +61,10 @@ a [Lightning Gateway](https://github.com/fedimint/fedimint/blob/master/docs/gate
 is willing to swap ecash in exchange for sending/receiving lightning payments. The Lightning Gateway is not a guardian
 and acts as an untrusted economic actor serving the federation.
 
-### Running Fedimint on Mutinynet
+### Setting up Federations
 
-See the [Fedimint Mutinynet Setup Guide](./docs/setup-docs.md). You can modify the configuration options to deploy it
-with.
+If you are interested in setting up a Fedimint federation, refer to [Setting up Fedimint federation](./docs/deploying.md)
+documentation.
 
 ## For Developers
 
