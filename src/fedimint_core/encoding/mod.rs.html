@@ -1039,7 +1039,9 @@
 <a href="#1038" id="1038">1038</a>
 <a href="#1039" id="1039">1039</a>
 <a href="#1040" id="1040">1040</a>
-<a href="#1041" id="1041">1041</a></pre></div><pre class="rust"><code><span class="doccomment">//! Binary encoding interface suitable for
+<a href="#1041" id="1041">1041</a>
+<a href="#1042" id="1042">1042</a>
+<a href="#1043" id="1043">1043</a></pre></div><pre class="rust"><code><span class="doccomment">//! Binary encoding interface suitable for
 //! consensus critical encoding.
 //!
 //! Over time all structs that ! need to be encoded to binary will be migrated
@@ -1056,6 +1058,8 @@
 <span class="kw">mod </span>secp256k1;
 <span class="kw">mod </span>threshold_crypto;
 
+<span class="attr">#[cfg(all(feature = <span class="string">"enable_iroh"</span>, not(target_family = <span class="string">"wasm"</span>)))]
+</span><span class="kw">mod </span>iroh;
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
 </span><span class="kw">mod </span>tls;
 

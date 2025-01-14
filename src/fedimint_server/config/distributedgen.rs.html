@@ -633,52 +633,7 @@
 <a href="#632" id="632">632</a>
 <a href="#633" id="633">633</a>
 <a href="#634" id="634">634</a>
-<a href="#635" id="635">635</a>
-<a href="#636" id="636">636</a>
-<a href="#637" id="637">637</a>
-<a href="#638" id="638">638</a>
-<a href="#639" id="639">639</a>
-<a href="#640" id="640">640</a>
-<a href="#641" id="641">641</a>
-<a href="#642" id="642">642</a>
-<a href="#643" id="643">643</a>
-<a href="#644" id="644">644</a>
-<a href="#645" id="645">645</a>
-<a href="#646" id="646">646</a>
-<a href="#647" id="647">647</a>
-<a href="#648" id="648">648</a>
-<a href="#649" id="649">649</a>
-<a href="#650" id="650">650</a>
-<a href="#651" id="651">651</a>
-<a href="#652" id="652">652</a>
-<a href="#653" id="653">653</a>
-<a href="#654" id="654">654</a>
-<a href="#655" id="655">655</a>
-<a href="#656" id="656">656</a>
-<a href="#657" id="657">657</a>
-<a href="#658" id="658">658</a>
-<a href="#659" id="659">659</a>
-<a href="#660" id="660">660</a>
-<a href="#661" id="661">661</a>
-<a href="#662" id="662">662</a>
-<a href="#663" id="663">663</a>
-<a href="#664" id="664">664</a>
-<a href="#665" id="665">665</a>
-<a href="#666" id="666">666</a>
-<a href="#667" id="667">667</a>
-<a href="#668" id="668">668</a>
-<a href="#669" id="669">669</a>
-<a href="#670" id="670">670</a>
-<a href="#671" id="671">671</a>
-<a href="#672" id="672">672</a>
-<a href="#673" id="673">673</a>
-<a href="#674" id="674">674</a>
-<a href="#675" id="675">675</a>
-<a href="#676" id="676">676</a>
-<a href="#677" id="677">677</a>
-<a href="#678" id="678">678</a>
-<a href="#679" id="679">679</a>
-<a href="#680" id="680">680</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<a href="#635" id="635">635</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::io::Write;
@@ -687,12 +642,11 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::hashes::sha256::{Hash <span class="kw">as </span>Sha256, HashEngine};
 <span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
-<span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>bls12_381::Scalar;
 <span class="kw">use </span>fedimint_core::config::{
     DkgError, DkgGroup, DkgMessage, DkgPeerMsg, DkgResult, ISupportedDkgMessage,
 };
-<span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
+<span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::PeerHandle;
@@ -1161,25 +1115,15 @@
     <span class="kw">where
         </span>T: Serialize + DeserializeOwned + Unpin + Send + Clone + Eq + Hash + Sync;
 
-    <span class="doccomment">/// Exchanges a `DkgPeerMsg::PublicKey(key)` with all peers. Used by the
-    /// wallet module to setup the multisig wallet during DKG.
-    </span><span class="kw">async fn </span>exchange_pubkeys(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dkg_key: String,
-        key: secp256k1::PublicKey,
-    ) -&gt; DkgResult&lt;BTreeMap&lt;PeerId, secp256k1::PublicKey&gt;&gt;;
-
     <span class="doccomment">/// Exchanges a `DkgPeerMsg::Module(Vec&lt;u8&gt;)` with all peers. All peers are
     /// required to be online and submit a response for this to return
     /// properly. The caller's message will be included in the returned
     /// `BTreeMap` under the `PeerId` of this peer. This allows modules to
     /// exchange arbitrary data during distributed key generation.
-    </span><span class="kw">async fn </span>exchange_with_peers&lt;T: Encodable + Decodable + Send + Sync&gt;(
+    </span><span class="kw">async fn </span>exchange_encodable&lt;T: Encodable + Decodable + Send + Sync&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dkg_key: String,
         data: T,
-        kind: ModuleKind,
-        decoder: Decoder,
     ) -&gt; DkgResult&lt;BTreeMap&lt;PeerId, T&gt;&gt;;
 }
 
@@ -1212,72 +1156,38 @@
         dkg.run_g2(<span class="self">self</span>.module_instance_id, <span class="self">self</span>.connections).<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>exchange_pubkeys(
+    <span class="kw">async fn </span>exchange_encodable&lt;T: Encodable + Decodable + Send + Sync&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dkg_key: String,
-        key: secp256k1::PublicKey,
-    ) -&gt; DkgResult&lt;BTreeMap&lt;PeerId, secp256k1::PublicKey&gt;&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>peer_peg_in_keys: BTreeMap&lt;PeerId, secp256k1::PublicKey&gt; = BTreeMap::new();
+        data: T,
+    ) -&gt; DkgResult&lt;BTreeMap&lt;PeerId, T&gt;&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>peer_data: BTreeMap&lt;PeerId, T&gt; = BTreeMap::new();
 
         <span class="self">self</span>.connections
             .send(
                 <span class="kw-2">&amp;</span><span class="self">self</span>.peers,
                 (<span class="self">self</span>.module_instance_id, dkg_key.clone()),
-                DkgPeerMsg::PublicKey(key),
+                DkgPeerMsg::Encodable(data.consensus_encode_to_vec()),
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        peer_peg_in_keys.insert(<span class="self">self</span>.our_id, key);
-        <span class="kw">while </span>peer_peg_in_keys.len() &lt; <span class="self">self</span>.peers.len() {
-            <span class="kw">match </span><span class="self">self
-                </span>.connections
-                .receive((<span class="self">self</span>.module_instance_id, dkg_key.clone()))
-                .<span class="kw">await</span><span class="question-mark">?
-            </span>{
-                (peer, DkgPeerMsg::PublicKey(key)) =&gt; {
-                    peer_peg_in_keys.insert(peer, key);
-                }
-                (peer, msg) =&gt; {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(
-                        <span class="macro">format_err!</span>(<span class="string">"Invalid message received from: {peer}: {msg:?}"</span>).into(),
-                    );
-                }
-            }
-        }
-
-        <span class="prelude-val">Ok</span>(peer_peg_in_keys)
-    }
-
-    <span class="kw">async fn </span>exchange_with_peers&lt;T: Encodable + Decodable + Send + Sync&gt;(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dkg_key: String,
-        data: T,
-        kind: ModuleKind,
-        decoder: Decoder,
-    ) -&gt; DkgResult&lt;BTreeMap&lt;PeerId, T&gt;&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>peer_data: BTreeMap&lt;PeerId, T&gt; = BTreeMap::new();
-        <span class="kw">let </span>msg = DkgPeerMsg::Module(data.consensus_encode_to_vec());
-
-        <span class="self">self</span>.connections
-            .send(<span class="kw-2">&amp;</span><span class="self">self</span>.peers, (<span class="self">self</span>.module_instance_id, dkg_key.clone()), msg)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
         peer_data.insert(<span class="self">self</span>.our_id, data);
 
-        <span class="kw">let </span>modules =
-            ModuleDecoderRegistry::new([(<span class="self">self</span>.module_instance_id, kind.clone(), decoder)]);
         <span class="kw">while </span>peer_data.len() &lt; <span class="self">self</span>.peers.len() {
-            <span class="kw">match </span><span class="self">self
+            <span class="kw">let </span>(peer, message) = <span class="self">self
                 </span>.connections
                 .receive((<span class="self">self</span>.module_instance_id, dkg_key.clone()))
-                .<span class="kw">await</span><span class="question-mark">?
-            </span>{
-                (peer, DkgPeerMsg::Module(bytes)) =&gt; {
-                    <span class="kw">let </span>received_data: T = T::consensus_decode_whole(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;</span>modules)
-                        .map_err(|<span class="kw">_</span>| DkgError::ModuleDecodeError(kind.clone()))<span class="question-mark">?</span>;
-                    peer_data.insert(peer, received_data);
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="kw">match </span>message {
+                DkgPeerMsg::Encodable(bytes) =&gt; {
+                    <span class="kw">let </span>data = T::consensus_decode_whole(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())
+                        .map_err(DkgError::ModuleDecodeError)<span class="question-mark">?</span>;
+
+                    peer_data.insert(peer, data);
                 }
-                (peer, msg) =&gt; {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">"Invalid message received from {peer}: {msg:?}"</span>).into());
+                message =&gt; {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">"Invalid message from {peer}: {message:?}"</span>).into());
                 }
             }
         }

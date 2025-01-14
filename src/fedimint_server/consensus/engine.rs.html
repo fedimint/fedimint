@@ -924,8 +924,8 @@
     CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS, CONSENSUS_ORDERING_LATENCY_SECONDS,
     CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX, CONSENSUS_SESSION_COUNT,
 };
-<span class="kw">use </span><span class="kw">crate</span>::net::connect::{Connector, TlsTcpConnector};
-<span class="kw">use </span><span class="kw">crate</span>::net::peers::ReconnectP2PConnections;
+<span class="kw">use </span><span class="kw">crate</span>::net::p2p::ReconnectP2PConnections;
+<span class="kw">use </span><span class="kw">crate</span>::net::p2p_connector::{P2PConnector, TlsTcpConnector};
 <span class="kw">use </span><span class="kw">crate</span>::LOG_CONSENSUS;
 
 <span class="comment">// The name of the directory where the database checkpoints are stored.

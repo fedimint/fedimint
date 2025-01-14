@@ -1113,9 +1113,7 @@
 <a href="#1112" id="1112">1112</a>
 <a href="#1113" id="1113">1113</a>
 <a href="#1114" id="1114">1114</a>
-<a href="#1115" id="1115">1115</a>
-<a href="#1116" id="1116">1116</a>
-<a href="#1117" id="1117">1117</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
+<a href="#1115" id="1115">1115</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::ops::Mul;
@@ -1145,7 +1143,7 @@
 <span class="kw">use </span>tracing::warn;
 
 <span class="kw">use </span><span class="kw">crate</span>::core::DynClientConfig;
-<span class="kw">use </span><span class="kw">crate</span>::encoding::Decodable;
+<span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError};
 <span class="kw">use </span><span class="kw">crate</span>::module::{
     CoreConsensusVersion, DynCommonModuleInit, DynServerModuleInit, IDynCommonModuleInit,
     ModuleConsensusVersion,
@@ -1995,11 +1993,9 @@
 <span class="doccomment">/// Things that a `distributed_gen` config can send between peers
 </span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone)]
 </span><span class="kw">pub enum </span>DkgPeerMsg {
-    PublicKey(secp256k1::PublicKey),
     DistributedGen(SupportedDkgMessage),
-    Module(Vec&lt;u8&gt;),
-    <span class="comment">// Dkg completed on our side
-    </span>Done,
+    Encodable(Vec&lt;u8&gt;),
+    Done,
 }
 
 <span class="doccomment">/// Result of running DKG
@@ -2018,8 +2014,8 @@
     </span>ModuleNotFound(ModuleKind),
     <span class="attr">#[error(<span class="string">"Params for modules were not found {0:?}"</span>)]
     </span>ParamsNotFound(BTreeSet&lt;ModuleKind&gt;),
-    <span class="attr">#[error(<span class="string">"Failed to decode module message {0:?}"</span>)]
-    </span>ModuleDecodeError(ModuleKind),
+    <span class="attr">#[error(<span class="string">"Failed to decode encodable message {0:?}"</span>)]
+    </span>ModuleDecodeError(DecodeError),
 }
 
 <span class="doccomment">/// Supported (by Fedimint's code) `DkgMessage&lt;T&gt;` types

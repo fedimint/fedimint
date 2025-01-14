@@ -737,26 +737,7 @@
 <a href="#736" id="736">736</a>
 <a href="#737" id="737">737</a>
 <a href="#738" id="738">738</a>
-<a href="#739" id="739">739</a>
-<a href="#740" id="740">740</a>
-<a href="#741" id="741">741</a>
-<a href="#742" id="742">742</a>
-<a href="#743" id="743">743</a>
-<a href="#744" id="744">744</a>
-<a href="#745" id="745">745</a>
-<a href="#746" id="746">746</a>
-<a href="#747" id="747">747</a>
-<a href="#748" id="748">748</a>
-<a href="#749" id="749">749</a>
-<a href="#750" id="750">750</a>
-<a href="#751" id="751">751</a>
-<a href="#752" id="752">752</a>
-<a href="#753" id="753">753</a>
-<a href="#754" id="754">754</a>
-<a href="#755" id="755">755</a>
-<a href="#756" id="756">756</a>
-<a href="#757" id="757">757</a>
-<a href="#758" id="758">758</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
+<a href="#739" id="739">739</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::time::Duration;
@@ -787,13 +768,12 @@
 <span class="kw">use </span>tracing::{error, info};
 
 <span class="kw">use </span><span class="kw">crate</span>::config::api::ConfigGenParamsLocal;
-<span class="kw">use </span><span class="kw">crate</span>::config::distributedgen::{DkgRunner, PeerHandleOps};
+<span class="kw">use </span><span class="kw">crate</span>::config::distributedgen::PeerHandleOps;
 <span class="kw">use </span><span class="kw">crate</span>::envs::FM_MAX_CLIENT_CONNECTIONS_ENV;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
-<span class="kw">use </span><span class="kw">crate</span>::fedimint_core::NumPeersExt;
 <span class="kw">use </span><span class="kw">crate</span>::multiplexed::PeerConnectionMultiplexer;
-<span class="kw">use </span><span class="kw">crate</span>::net::connect::{dns_sanitize, Connector, TlsConfig};
-<span class="kw">use </span><span class="kw">crate</span>::net::peers::ReconnectP2PConnections;
+<span class="kw">use </span><span class="kw">crate</span>::net::p2p::ReconnectP2PConnections;
+<span class="kw">use </span><span class="kw">crate</span>::net::p2p_connector::{dns_sanitize, P2PConnector, TlsConfig};
 <span class="kw">use </span><span class="kw">crate</span>::TlsTcpConnector;
 
 <span class="kw">pub mod </span>api;
@@ -1219,7 +1199,7 @@
         <span class="kw">let </span>(broadcast_sk, broadcast_pk) = secp256k1::generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
 
         <span class="kw">let </span>broadcast_public_keys = exchange
-            .exchange_pubkeys(<span class="string">"broadcast"</span>.to_string(), broadcast_pk)
+            .exchange_encodable(<span class="string">"broadcast"</span>.to_string(), broadcast_pk)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// in case we are running by ourselves, avoid DKG
@@ -1235,16 +1215,6 @@
             target: LOG_NET_PEER_DKG,
             <span class="string">"Peer {} running distributed key generation..."</span>, our_id
         );
-
-        <span class="comment">// BFT uses a lower threshold of signing keys (f+1)
-        </span><span class="kw">let </span><span class="kw-2">mut </span>dkg = DkgRunner::new(
-            KeyType::Bft,
-            peers.to_num_peers().one_honest(),
-            our_id,
-            peers,
-        );
-        dkg.add(KeyType::Auth, peers.to_num_peers().threshold());
-        dkg.add(KeyType::Epoch, peers.to_num_peers().threshold());
 
         <span class="kw">let </span><span class="kw-2">mut </span>registered_modules = registry.kinds();
         <span class="kw">let </span><span class="kw-2">mut </span>module_cfgs: BTreeMap&lt;ModuleInstanceId, ServerModuleConfig&gt; = BTreeMap::new();
@@ -1330,14 +1300,6 @@
 
         <span class="prelude-val">Ok</span>(server)
     }
-}
-
-<span class="doccomment">/// The types of keys to run distributed key generation for
-</span><span class="attr">#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
-</span><span class="kw">pub enum </span>KeyType {
-    Bft,
-    Epoch,
-    Auth,
 }
 
 <span class="kw">impl </span>ServerConfig {
