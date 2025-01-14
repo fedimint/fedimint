@@ -6,10 +6,7 @@
 //! details.
 
 use std::collections::BTreeMap;
-use std::fmt::Debug;
-use std::time::Duration;
 
-use anyhow::ensure;
 use async_channel::{bounded, Receiver, Sender};
 use async_trait::async_trait;
 use fedimint_api_client::api::P2PConnectionStatus;
@@ -21,32 +18,23 @@ use fedimint_core::PeerId;
 use fedimint_logging::{LOG_CONSENSUS, LOG_NET_PEER};
 use futures::future::select_all;
 use futures::{FutureExt, StreamExt};
-use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 use tokio::time::sleep;
 use tracing::{info, info_span, warn, Instrument};
 
 use crate::metrics::{PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT};
-use crate::net::connect::DynConnector;
-use crate::net::framed::DynFramedTransport;
+use crate::net::p2p_connection::DynP2PConnection;
+use crate::net::p2p_connector::DynP2PConnector;
 
 #[derive(Clone)]
 pub struct ReconnectP2PConnections<M> {
     connections: BTreeMap<PeerId, P2PConnection<M>>,
 }
 
-/// Internal message type for [`ReconnectP2PConnections`], just public because
-/// it appears in the public interface.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum P2PMessage<M> {
-    Message(M),
-    Ping,
-}
-
 impl<M: Send + 'static> ReconnectP2PConnections<M> {
     pub async fn new(
         identity: PeerId,
-        connector: DynConnector<P2PMessage<M>>,
+        connector: DynP2PConnector<M>,
         task_group: &TaskGroup,
         mut status_channels: Option<BTreeMap<PeerId, watch::Sender<P2PConnectionStatus>>>,
     ) -> Self {
@@ -75,7 +63,7 @@ impl<M: Send + 'static> ReconnectP2PConnections<M> {
             connections.insert(peer_id, connection);
         }
 
-        let mut listener = connector.listen().await.expect("Could not bind to port");
+        let mut listener = connector.listen().await;
 
         task_group.spawn_cancellable("handle-incoming-p2p-connections", async move {
             info!(target: LOG_NET_PEER, "Shutting down listening task for p2p connections");
@@ -162,8 +150,8 @@ impl<M: Send + 'static> P2PConnection<M> {
     fn new(
         our_id: PeerId,
         peer_id: PeerId,
-        connector: DynConnector<P2PMessage<M>>,
-        incoming_connections: Receiver<DynFramedTransport<P2PMessage<M>>>,
+        connector: DynP2PConnector<M>,
+        incoming_connections: Receiver<DynP2PConnection<M>>,
         status_channel: Option<watch::Sender<P2PConnectionStatus>>,
         task_group: &TaskGroup,
     ) -> P2PConnection<M> {
@@ -230,14 +218,14 @@ struct P2PConnectionSMCommon<M> {
     our_id_str: String,
     peer_id: PeerId,
     peer_id_str: String,
-    connector: DynConnector<P2PMessage<M>>,
-    incoming_connections: Receiver<DynFramedTransport<P2PMessage<M>>>,
+    connector: DynP2PConnector<M>,
+    incoming_connections: Receiver<DynP2PConnection<M>>,
     status_channel: Option<watch::Sender<P2PConnectionStatus>>,
 }
 
 enum P2PConnectionSMState<M> {
     Disconnected(FibonacciBackoff),
-    Connected(DynFramedTransport<P2PMessage<M>>),
+    Connected(DynP2PConnection<M>),
 }
 
 impl<M: Send + 'static> P2PConnectionStateMachine<M> {
@@ -268,45 +256,31 @@ impl<M: Send + 'static> P2PConnectionStateMachine<M> {
 impl<M: Send + 'static> P2PConnectionSMCommon<M> {
     async fn transition_connected(
         &mut self,
-        mut connection: DynFramedTransport<P2PMessage<M>>,
+        mut connection: DynP2PConnection<M>,
     ) -> Option<P2PConnectionSMState<M>> {
         tokio::select! {
             message = self.outgoing_receiver.recv() => {
-                Some(self.send_message(connection, P2PMessage::Message(message.ok()?)).await)
+                Some(self.send_message(connection, message.ok()?).await)
             },
             connection = self.incoming_connections.recv() => {
-                Some(self.connect(connection.ok()?).await)
+                info!(target: LOG_NET_PEER, "Connected to peer");
+
+                Some(P2PConnectionSMState::Connected(connection.ok()?))
             },
             message = connection.receive() => {
                 match message {
                     Ok(message) => {
-                        if let P2PMessage::Message(message) = message {
-                            PEER_MESSAGES_COUNT.with_label_values(&[&self.our_id_str, &self.peer_id_str, "incoming"]).inc();
+                        PEER_MESSAGES_COUNT
+                            .with_label_values(&[&self.our_id_str, &self.peer_id_str, "incoming"])
+                            .inc();
 
-                            self.incoming_sender.send(message).await.ok()?;
-                        }
-
+                         self.incoming_sender.send(message).await.ok()?;
                     },
                     Err(e) => return Some(self.disconnect(e)),
                 };
 
                 Some(P2PConnectionSMState::Connected(connection))
             },
-            () = sleep(Duration::from_secs(10)) => {
-                Some(self.send_message(connection, P2PMessage::Ping).await)
-            },
-        }
-    }
-
-    async fn connect(
-        &mut self,
-        mut connection: DynFramedTransport<P2PMessage<M>>,
-    ) -> P2PConnectionSMState<M> {
-        info!(target: LOG_NET_PEER, "Connected to peer");
-
-        match connection.send(P2PMessage::Ping).await {
-            Ok(()) => P2PConnectionSMState::Connected(connection),
-            Err(e) => self.disconnect(e),
         }
     }
 
@@ -322,8 +296,8 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
 
     async fn send_message(
         &mut self,
-        mut connection: DynFramedTransport<P2PMessage<M>>,
-        peer_message: P2PMessage<M>,
+        mut connection: DynP2PConnection<M>,
+        peer_message: M,
     ) -> P2PConnectionSMState<M> {
         PEER_MESSAGES_COUNT
             .with_label_values(&[&self.our_id_str, &self.peer_id_str, "outgoing"])
@@ -342,19 +316,28 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
     ) -> Option<P2PConnectionSMState<M>> {
         tokio::select! {
             connection = self.incoming_connections.recv() => {
-                PEER_CONNECT_COUNT.with_label_values(&[&self.our_id_str, &self.peer_id_str, "incoming"]).inc();
+                PEER_CONNECT_COUNT
+                    .with_label_values(&[&self.our_id_str, &self.peer_id_str, "incoming"])
+                    .inc();
 
-                Some(self.connect(connection.ok()?).await)
+                info!(target: LOG_NET_PEER, "Connected to peer");
+
+                Some(P2PConnectionSMState::Connected(connection.ok()?))
             },
             () = sleep(backoff.next().expect("Unlimited retries")), if self.our_id < self.peer_id => {
                 // to prevent "reconnection ping-pongs", only the side with lower PeerId is responsible for reconnecting
-                match self.try_reconnect().await {
+
+                info!(target: LOG_NET_PEER, "Attempting to reconnect to peer");
+
+                match  self.connector.connect(self.peer_id).await {
                     Ok(connection) => {
                         PEER_CONNECT_COUNT
                             .with_label_values(&[&self.our_id_str, &self.peer_id_str, "outgoing"])
                             .inc();
 
-                        return Some(self.connect(connection).await);
+                        info!(target: LOG_NET_PEER, "Connected to peer");
+
+                        return Some(P2PConnectionSMState::Connected(connection));
                     }
                     Err(e) => warn!(target: LOG_CONSENSUS, "Failed to connect to peer: {e}")
                 }
@@ -362,18 +345,5 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
                 Some(P2PConnectionSMState::Disconnected(backoff))
             },
         }
-    }
-
-    async fn try_reconnect(&self) -> Result<DynFramedTransport<P2PMessage<M>>, anyhow::Error> {
-        info!(target: LOG_NET_PEER, "Attempting to reconnect to peer");
-
-        let (connected_peer, connection) = self.connector.connect(self.peer_id).await?;
-
-        ensure!(
-            connected_peer == self.peer_id,
-            "Peer incorrectly identified as: {connected_peer}",
-        );
-
-        Ok(connection)
     }
 }

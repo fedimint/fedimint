@@ -22,26 +22,26 @@ use tokio_rustls::{rustls, TlsAcceptor, TlsConnector, TlsStream};
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_stream::StreamExt;
 
-use crate::net::framed::{DynFramedTransport, FramedTlsTcpStream, FramedTransport};
+use crate::net::p2p_connection::{DynP2PConnection, FramedTlsTcpStream, P2PConnection};
 
-pub type DynConnector<M> = Arc<dyn Connector<M>>;
+pub type DynP2PConnector<M> = Arc<dyn P2PConnector<M>>;
 
-pub type ConnectResult<M> = anyhow::Result<(PeerId, DynFramedTransport<M>)>;
+pub type P2PConnectionResult<M> = anyhow::Result<(PeerId, DynP2PConnection<M>)>;
 
-pub type ConnectionListener<M> = Pin<Box<dyn Stream<Item = ConnectResult<M>> + Send + 'static>>;
+pub type P2PConnectionListener<M> = Pin<Box<dyn Stream<Item = P2PConnectionResult<M>> + Send>>;
 
 /// Allows to connect to peers and to listen for incoming connections.
 /// Connections are message based and should be authenticated and encrypted for
 /// production deployments.
 #[async_trait]
-pub trait Connector<M>: Send + Sync + 'static {
+pub trait P2PConnector<M>: Send + Sync + 'static {
     fn peers(&self) -> Vec<PeerId>;
 
-    async fn connect(&self, peer: PeerId) -> ConnectResult<M>;
+    async fn connect(&self, peer: PeerId) -> anyhow::Result<DynP2PConnection<M>>;
 
-    async fn listen(&self) -> anyhow::Result<ConnectionListener<M>>;
+    async fn listen(&self) -> P2PConnectionListener<M>;
 
-    fn into_dyn(self) -> DynConnector<M>
+    fn into_dyn(self) -> DynP2PConnector<M>
     where
         Self: Sized,
     {
@@ -82,7 +82,7 @@ impl TlsTcpConnector {
 }
 
 #[async_trait]
-impl<M> Connector<M> for TlsTcpConnector
+impl<M> P2PConnector<M> for TlsTcpConnector
 where
     M: Serialize + DeserializeOwned + Send + 'static,
 {
@@ -94,7 +94,7 @@ where
             .collect()
     }
 
-    async fn connect(&self, peer: PeerId) -> ConnectResult<M> {
+    async fn connect(&self, peer: PeerId) -> anyhow::Result<DynP2PConnection<M>> {
         let mut root_cert_store = RootCertStore::empty();
 
         for cert in self.cfg.certificates.values() {
@@ -149,12 +149,10 @@ where
 
         ensure!(auth_peer == peer, "Connected to unexpected peer");
 
-        let framed = FramedTlsTcpStream::new(TlsStream::Client(tls)).into_dyn();
-
-        Ok((peer, framed))
+        Ok(FramedTlsTcpStream::new(TlsStream::Client(tls)).into_dyn())
     }
 
-    async fn listen(&self) -> anyhow::Result<ConnectionListener<M>> {
+    async fn listen(&self) -> P2PConnectionListener<M> {
         let mut root_cert_store = RootCertStore::empty();
 
         for cert in self.cfg.certificates.values() {
@@ -178,7 +176,9 @@ where
             .with_single_cert(vec![certificate], self.cfg.private_key.clone())
             .expect("Failed to create TLS config");
 
-        let listener = TcpListener::bind(self.p2p_bind_addr).await?;
+        let listener = TcpListener::bind(self.p2p_bind_addr)
+            .await
+            .expect("Could not bind to port");
 
         let acceptor = TlsAcceptor::from(Arc::new(config.clone()));
 
@@ -213,7 +213,7 @@ where
             })
         });
 
-        Ok(Box::pin(stream))
+        Box::pin(stream)
     }
 }
 
@@ -233,4 +233,113 @@ pub fn parse_host_port(url: &SafeUrl) -> anyhow::Result<String> {
         .ok_or_else(|| format_err!("Missing port in {url}"))?;
 
     Ok(format!("{host}:{port}"))
+}
+
+#[cfg(all(feature = "enable_iroh", not(target_family = "wasm")))]
+pub mod iroh {
+    use std::collections::BTreeMap;
+
+    use anyhow::Context;
+    use async_trait::async_trait;
+    use fedimint_core::encoding::{Decodable, Encodable};
+    use fedimint_core::PeerId;
+    use iroh::endpoint::Incoming;
+    use iroh::{Endpoint, NodeId, SecretKey};
+
+    use crate::net::p2p_connection::iroh::IrohConnection;
+    use crate::net::p2p_connection::P2PConnection;
+    use crate::net::p2p_connector::{
+        DynP2PConnection, P2PConnectionListener, P2PConnectionResult, P2PConnector,
+    };
+
+    #[derive(Debug, Clone)]
+    pub struct IrohConnector {
+        /// Map of all peers' connection information we want to be connected to
+        pub node_ids: BTreeMap<PeerId, NodeId>,
+        /// The Iroh endpoint
+        pub endpoint: Endpoint,
+    }
+
+    const FEDIMINT_ALPN: &[u8] = "FEDIMINT_ALPN".as_bytes();
+
+    impl IrohConnector {
+        pub async fn new(
+            secret_key: SecretKey,
+            node_ids: BTreeMap<PeerId, NodeId>,
+        ) -> anyhow::Result<Self> {
+            let identity = *node_ids
+                .iter()
+                .find(|entry| entry.1 == &secret_key.public())
+                .expect("Our public key is not part of the keyset")
+                .0;
+
+            Ok(Self {
+                node_ids: node_ids
+                    .into_iter()
+                    .filter(|entry| entry.0 != identity)
+                    .collect(),
+                endpoint: Endpoint::builder()
+                    .discovery_n0()
+                    .secret_key(secret_key)
+                    .alpns(vec![FEDIMINT_ALPN.to_vec()])
+                    .bind()
+                    .await?,
+            })
+        }
+    }
+
+    #[async_trait]
+    impl<M> P2PConnector<M> for IrohConnector
+    where
+        M: Encodable + Decodable + Send + 'static,
+    {
+        fn peers(&self) -> Vec<PeerId> {
+            self.node_ids.keys().copied().collect()
+        }
+
+        async fn connect(&self, peer: PeerId) -> anyhow::Result<DynP2PConnection<M>> {
+            let node_id = *self
+                .node_ids
+                .get(&peer)
+                .expect("No node id found for peer {peer}");
+
+            let connection = self.endpoint.connect(node_id, FEDIMINT_ALPN).await?;
+
+            Ok(IrohConnection::new(connection).into_dyn())
+        }
+
+        async fn listen(&self) -> P2PConnectionListener<M> {
+            let stream = futures::stream::unfold(self.clone(), move |endpoint| async move {
+                let stream = endpoint.endpoint.accept().await?;
+
+                let result = accept_connection(&endpoint.node_ids, stream).await;
+
+                Some((result, endpoint))
+            });
+
+            Box::pin(stream)
+        }
+    }
+
+    async fn accept_connection<M>(
+        peers: &BTreeMap<PeerId, NodeId>,
+        incoming: Incoming,
+    ) -> P2PConnectionResult<M>
+    where
+        M: Encodable + Decodable + Send + 'static,
+    {
+        let connection = incoming.accept()?.await?;
+
+        let node_id = iroh::endpoint::get_remote_node_id(&connection)?;
+
+        let peer_id = peers
+            .iter()
+            .find(|entry| entry.1 == &node_id)
+            .context("Node id {node_id} is unknown")?
+            .0;
+
+        let framed = IrohConnection::new(connection).into_dyn();
+
+        Ok((*peer_id, framed))
+    }
 }
