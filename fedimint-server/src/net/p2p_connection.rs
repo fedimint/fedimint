@@ -5,10 +5,7 @@ use std::marker::PhantomData;
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
-use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::registry::ModuleDecoderRegistry;
 use futures::{SinkExt, StreamExt};
-use iroh::endpoint::Connection;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpStream;
@@ -89,47 +86,60 @@ where
     }
 }
 
-#[derive(Debug)]
-pub struct IrohConnection<M> {
-    connection: Connection,
-    _pd: PhantomData<M>,
-}
+#[cfg(all(feature = "enable_iroh", not(target_family = "wasm")))]
+pub mod iroh {
+    use std::fmt::Debug;
+    use std::marker::PhantomData;
 
-impl<M> IrohConnection<M> {
-    pub fn new(connection: Connection) -> IrohConnection<M> {
-        IrohConnection {
-            connection,
-            _pd: PhantomData,
+    use async_trait::async_trait;
+    use fedimint_core::encoding::{Decodable, Encodable};
+    use fedimint_core::module::registry::ModuleDecoderRegistry;
+    use iroh::endpoint::Connection;
+
+    use crate::net::p2p_connection::P2PConnection;
+
+    #[derive(Debug)]
+    pub struct IrohConnection<M> {
+        connection: Connection,
+        _pd: PhantomData<M>,
+    }
+
+    impl<M> IrohConnection<M> {
+        pub fn new(connection: Connection) -> IrohConnection<M> {
+            IrohConnection {
+                connection,
+                _pd: PhantomData,
+            }
         }
     }
-}
 
-#[async_trait]
-impl<M> P2PConnection<M> for IrohConnection<M>
-where
-    M: Encodable + Decodable + Send + 'static,
-{
-    async fn send(&mut self, message: M) -> anyhow::Result<()> {
-        let mut sink = self.connection.open_uni().await?;
+    #[async_trait]
+    impl<M> P2PConnection<M> for IrohConnection<M>
+    where
+        M: Encodable + Decodable + Send + 'static,
+    {
+        async fn send(&mut self, message: M) -> anyhow::Result<()> {
+            let mut sink = self.connection.open_uni().await?;
 
-        sink.write_all(&message.consensus_encode_to_vec()).await?;
+            sink.write_all(&message.consensus_encode_to_vec()).await?;
 
-        sink.finish()?;
+            sink.finish()?;
 
-        Ok(())
-    }
+            Ok(())
+        }
 
-    async fn receive(&mut self) -> anyhow::Result<M> {
-        let bytes = self
-            .connection
-            .accept_uni()
-            .await?
-            .read_to_end(1_000_000_000)
-            .await?;
+        async fn receive(&mut self) -> anyhow::Result<M> {
+            let bytes = self
+                .connection
+                .accept_uni()
+                .await?
+                .read_to_end(1_000_000_000)
+                .await?;
 
-        Ok(Decodable::consensus_decode_whole(
-            &bytes,
-            &ModuleDecoderRegistry::default(),
-        )?)
+            Ok(Decodable::consensus_decode_whole(
+                &bytes,
+                &ModuleDecoderRegistry::default(),
+            )?)
+        }
     }
 }
