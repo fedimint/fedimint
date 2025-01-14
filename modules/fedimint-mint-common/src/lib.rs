@@ -269,4 +269,6 @@ pub enum MintOutputError {
     InvalidAmountTier(Amount),
     #[error("The mint output version is not supported by this federation")]
     UnknownOutputVariant(#[from] UnknownMintOutputVariantError),
+    #[error("The mint output blind nonce was already used before")]
+    BlindNonceAlreadyUsed,
 }

@@ -46,7 +46,7 @@ use crate::consensus::db::{
     SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
 };
 use crate::consensus::debug::{DebugConsensusItem, DebugConsensusItemCompact};
-use crate::consensus::transaction::process_transaction_with_dbtx;
+use crate::consensus::transaction::{process_transaction_with_dbtx, TxProcessingMode};
 use crate::fedimint_core::encoding::Encodable;
 use crate::metrics::{
     CONSENSUS_ITEMS_PROCESSED_TOTAL, CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS,
@@ -791,6 +791,7 @@ impl ConsensusEngine {
                     dbtx,
                     &transaction,
                     self.cfg.consensus.version,
+                    TxProcessingMode::Consensus,
                 )
                 .await
                 .map_err(|error| anyhow!(error.to_string()))?;
