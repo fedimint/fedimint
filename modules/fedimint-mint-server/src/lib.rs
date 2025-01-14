@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use anyhow::bail;
 use fedimint_core::config::{
-    ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
+    ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
@@ -224,7 +224,7 @@ impl ServerModuleInit for MintInit {
         &self,
         peers: &PeerHandle,
         params: &ConfigGenModuleParams,
-    ) -> DkgResult<ServerModuleConfig> {
+    ) -> anyhow::Result<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
 
         let mut amount_keys = HashMap::new();

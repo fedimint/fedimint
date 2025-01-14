@@ -330,7 +330,6 @@ macro_rules! __api_endpoint {
 }
 
 pub use __api_endpoint as api_endpoint;
-use fedimint_core::config::DkgResult;
 
 use self::registry::ModuleDecoderRegistry;
 
@@ -515,7 +514,7 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
         &self,
         peers: &PeerHandle,
         params: &ConfigGenModuleParams,
-    ) -> DkgResult<ServerModuleConfig>;
+    ) -> anyhow::Result<ServerModuleConfig>;
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
 
@@ -657,7 +656,7 @@ pub trait ServerModuleInit: ModuleInit + Sized {
         &self,
         peer: &PeerHandle,
         params: &ConfigGenModuleParams,
-    ) -> DkgResult<ServerModuleConfig>;
+    ) -> anyhow::Result<ServerModuleConfig>;
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
 
@@ -727,7 +726,7 @@ where
         &self,
         peers: &PeerHandle,
         params: &ConfigGenModuleParams,
-    ) -> DkgResult<ServerModuleConfig> {
+    ) -> anyhow::Result<ServerModuleConfig> {
         <Self as ServerModuleInit>::distributed_gen(self, peers, params).await
     }
 
@@ -1035,8 +1034,8 @@ impl<'a> PeerHandle<'a> {
         connections: &'a DynP2PConnections<DkgPeerMsg>,
     ) -> Self {
         Self {
-            identity,
             num_peers,
+            identity,
             connections,
         }
     }

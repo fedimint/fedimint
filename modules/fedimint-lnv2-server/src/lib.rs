@@ -12,7 +12,7 @@ use bls12_381::{G1Projective, Scalar};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::bitcoin::hashes::sha256;
 use fedimint_core::config::{
-    ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
+    ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
@@ -226,7 +226,7 @@ impl ServerModuleInit for LightningInit {
         &self,
         peers: &PeerHandle,
         params: &ConfigGenModuleParams,
-    ) -> DkgResult<ServerModuleConfig> {
+    ) -> anyhow::Result<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
         let (polynomial, sks) = peers.run_dkg_g1().await?;
 

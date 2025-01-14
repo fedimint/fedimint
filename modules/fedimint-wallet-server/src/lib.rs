@@ -39,7 +39,7 @@ use common::{
 };
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
-    ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
+    ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
@@ -342,7 +342,7 @@ impl ServerModuleInit for WalletInit {
         &self,
         peers: &PeerHandle,
         params: &ConfigGenModuleParams,
-    ) -> DkgResult<ServerModuleConfig> {
+    ) -> anyhow::Result<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
         let secp = secp256k1::Secp256k1::new();
         let (sk, pk) = secp.generate_keypair(&mut OsRng);

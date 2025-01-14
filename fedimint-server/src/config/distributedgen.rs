@@ -7,9 +7,7 @@ use async_trait::async_trait;
 use bitcoin::hashes::sha256::{Hash as Sha256, HashEngine};
 use bitcoin::hashes::Hash as BitcoinHash;
 use bls12_381::Scalar;
-use fedimint_core::config::{
-    DkgError, DkgGroup, DkgMessage, DkgPeerMsg, DkgResult, ISupportedDkgMessage,
-};
+use fedimint_core::config::{DkgGroup, DkgMessage, DkgPeerMsg, ISupportedDkgMessage};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::PeerHandle;
@@ -250,7 +248,7 @@ pub async fn run_dkg<G: DkgGroup>(
     identity: PeerId,
     generator: G,
     connections: &DynP2PConnections<DkgPeerMsg>,
-) -> DkgResult<(Vec<G>, Scalar)>
+) -> anyhow::Result<(Vec<G>, Scalar)>
 where
     DkgMessage<G>: ISupportedDkgMessage,
 {
@@ -275,9 +273,9 @@ where
                 .context("Unexpected shutdown of p2p connections")?;
 
             let message = match message {
-                DkgPeerMsg::DistributedGen(v) => Ok(v),
-                _ => Err(format_err!("Wrong message received: {message:?}")),
-            }?;
+                DkgPeerMsg::DistributedGen(message) => message,
+                _ => anyhow::bail!("Wrong message received: {message:?}"),
+            };
 
             match dkg.step(peer, ISupportedDkgMessage::from_msg(message)?)? {
                 DkgStep::Messages(messages) => {
@@ -341,9 +339,9 @@ pub fn eval_poly_g2(coefficients: &[G2Projective], peer: &PeerId) -> G2Affine {
 // from it's definition that is still in `fedimint-core`
 #[async_trait]
 pub trait PeerHandleOps {
-    async fn run_dkg_g1(&self) -> DkgResult<(Vec<G1Projective>, Scalar)>;
+    async fn run_dkg_g1(&self) -> anyhow::Result<(Vec<G1Projective>, Scalar)>;
 
-    async fn run_dkg_g2(&self) -> DkgResult<(Vec<G2Projective>, Scalar)>;
+    async fn run_dkg_g2(&self) -> anyhow::Result<(Vec<G2Projective>, Scalar)>;
 
     /// Exchanges a `DkgPeerMsg::Module(Vec<u8>)` with all peers. All peers are
     /// required to be online and submit a response for this to return
@@ -353,12 +351,12 @@ pub trait PeerHandleOps {
     async fn exchange_encodable<T: Encodable + Decodable + Send + Sync>(
         &self,
         data: T,
-    ) -> DkgResult<BTreeMap<PeerId, T>>;
+    ) -> anyhow::Result<BTreeMap<PeerId, T>>;
 }
 
 #[async_trait]
 impl<'a> PeerHandleOps for PeerHandle<'a> {
-    async fn run_dkg_g1(&self) -> DkgResult<(Vec<G1Projective>, Scalar)> {
+    async fn run_dkg_g1(&self) -> anyhow::Result<(Vec<G1Projective>, Scalar)> {
         run_dkg(
             self.num_peers,
             self.identity,
@@ -368,7 +366,7 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
         .await
     }
 
-    async fn run_dkg_g2(&self) -> DkgResult<(Vec<G2Projective>, Scalar)> {
+    async fn run_dkg_g2(&self) -> anyhow::Result<(Vec<G2Projective>, Scalar)> {
         run_dkg(
             self.num_peers,
             self.identity,
@@ -381,7 +379,7 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
     async fn exchange_encodable<T: Encodable + Decodable + Send + Sync>(
         &self,
         data: T,
-    ) -> DkgResult<BTreeMap<PeerId, T>> {
+    ) -> anyhow::Result<BTreeMap<PeerId, T>> {
         let mut peer_data: BTreeMap<PeerId, T> = BTreeMap::new();
 
         self.connections
@@ -402,15 +400,13 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
 
             match message {
                 DkgPeerMsg::Encodable(bytes) => {
-                    let data = T::consensus_decode_whole(&bytes, &ModuleDecoderRegistry::default())
-                        .map_err(DkgError::ModuleDecodeError)?;
-
-                    peer_data.insert(peer, data);
+                    peer_data.insert(
+                        peer,
+                        T::consensus_decode_whole(&bytes, &ModuleDecoderRegistry::default())?,
+                    );
                 }
                 message => {
-                    return Err(DkgError::Failed(anyhow::anyhow!(
-                        "Invalid message from {peer}: {message:?}"
-                    )));
+                    anyhow::bail!("Invalid message from {peer}: {message:?}");
                 }
             }
         }

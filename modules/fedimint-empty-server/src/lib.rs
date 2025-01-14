@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use anyhow::bail;
 use async_trait::async_trait;
 use fedimint_core::config::{
-    ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
+    ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
@@ -126,7 +126,7 @@ impl ServerModuleInit for EmptyInit {
         &self,
         _peers: &PeerHandle,
         params: &ConfigGenModuleParams,
-    ) -> DkgResult<ServerModuleConfig> {
+    ) -> anyhow::Result<ServerModuleConfig> {
         let _params = self.parse_params(params).unwrap();
 
         Ok(EmptyConfig {

@@ -2,12 +2,12 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::env;
 use std::net::SocketAddr;
 
-use anyhow::{bail, format_err};
+use anyhow::{bail, format_err, Context};
 use fedimint_core::admin_client::ConfigGenParamsConsensus;
 pub use fedimint_core::config::{
-    serde_binary_human_readable, ClientConfig, DkgError, DkgPeerMsg, DkgResult, FederationId,
-    GlobalClientConfig, JsonWithKind, ModuleInitRegistry, PeerUrl, ServerModuleConfig,
-    ServerModuleConsensusConfig, ServerModuleInitRegistry, TypedServerModuleConfig,
+    serde_binary_human_readable, ClientConfig, DkgPeerMsg, FederationId, GlobalClientConfig,
+    JsonWithKind, ModuleInitRegistry, PeerUrl, ServerModuleConfig, ServerModuleConsensusConfig,
+    ServerModuleInitRegistry, TypedServerModuleConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::envs::is_running_in_test_env;
@@ -428,7 +428,7 @@ impl ServerConfig {
         registry: ServerModuleInitRegistry,
         task_group: &TaskGroup,
         code_version_str: String,
-    ) -> DkgResult<Self> {
+    ) -> anyhow::Result<Self> {
         let _timing /* logs on drop */ = timing::TimeReporter::new("distributed-gen").info();
 
         // in case we are running by ourselves, avoid DKG
@@ -478,7 +478,7 @@ impl ServerConfig {
 
             let cfg = registry
                 .get(kind)
-                .ok_or(DkgError::ModuleNotFound(kind.clone()))?
+                .context("Module of kind {kind} not found")?
                 .distributed_gen(&handle, module_params)
                 .await?;
 
