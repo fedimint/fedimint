@@ -11,7 +11,6 @@ use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
 };
 use fedimint_core::envs::is_running_in_test_env;
-use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::FmtCompactAnyhow as _;
@@ -380,8 +379,7 @@ async fn check_idx_pegins(
         debug!(target: LOG_CLIENT_MODULE_WALLET, %txid, %out_idx, %finality_delay, %tx_block_count, %current_consensus_block_count, "Ready to claim");
 
         let tx_out_proof = btc_rpc.get_txout_proof(txid).await?;
-
-        let consensus_version = module_rpc.module_consensus_version().await?;
+        let federation_knows_utxo = module_rpc.is_utxo_confirmed(outpoint).await?;
 
         claim_peg_in(
             client_ctx,
@@ -391,7 +389,7 @@ async fn check_idx_pegins(
             operation_id,
             outpoint,
             tx_out_proof,
-            consensus_version,
+            federation_knows_utxo,
         )
         .await?;
         outcomes.push(CheckOutcome::Claimed { outpoint });
@@ -408,7 +406,7 @@ async fn claim_peg_in(
     operation_id: OperationId,
     out_point: bitcoin::OutPoint,
     tx_out_proof: TxOutProof,
-    consensus_version: ModuleConsensusVersion,
+    federation_knows_utxo: bool,
 ) -> anyhow::Result<()> {
     async fn claim_peg_in_inner(
         client_ctx: &ClientContext<WalletClientModule>,
@@ -418,7 +416,7 @@ async fn claim_peg_in(
         tweak_key: Keypair,
         txout_proof: TxOutProof,
         operation_id: OperationId,
-        consensus_version: ModuleConsensusVersion,
+        federation_knows_utxo: bool,
     ) -> OutPointRange {
         let pegin_proof = PegInProof::new(
             txout_proof,
@@ -429,8 +427,7 @@ async fn claim_peg_in(
         .expect("TODO: handle API returning faulty proofs");
 
         let amount = pegin_proof.tx_output().value.into();
-
-        let wallet_input = if consensus_version >= ModuleConsensusVersion::new(2, 2) {
+        let wallet_input = if federation_knows_utxo {
             WalletInput::new_v1(&pegin_proof)
         } else {
             WalletInput::new_v0(pegin_proof)
@@ -480,7 +477,7 @@ async fn claim_peg_in(
                         tweak_key,
                         tx_out_proof.clone(),
                         operation_id,
-                        consensus_version,
+                        federation_knows_utxo,
                     )
                     .await;
 

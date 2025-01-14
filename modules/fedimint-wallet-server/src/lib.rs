@@ -77,7 +77,7 @@ use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGen
 use fedimint_wallet_common::endpoint_constants::{
     ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT, BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT,
     BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT,
-    PEG_OUT_FEES_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
+    PEG_OUT_FEES_ENDPOINT, UTXO_CONFIRMED_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
 };
 use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
@@ -270,7 +270,7 @@ impl ServerModuleInit for WalletInit {
                 MODULE_CONSENSUS_VERSION.major,
                 MODULE_CONSENSUS_VERSION.minor,
             ),
-            &[(0, 1)],
+            &[(0, 2)],
         )
     }
 
@@ -822,29 +822,6 @@ impl ServerModule for Wallet {
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
             api_endpoint! {
-                MODULE_CONSENSUS_VERSION_ENDPOINT,
-                ApiVersion::new(0, 0),
-                async |module: &Wallet, context, _params: ()| -> ModuleConsensusVersion {
-                    Ok(module.consensus_module_consensus_version(&mut context.dbtx().into_nc()).await)
-                }
-            },
-            api_endpoint! {
-                ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT,
-                ApiVersion::new(0, 0),
-                async |_module: &Wallet, context, _params: ()| -> () {
-                    check_auth(context)?;
-
-                    let mut dbtx = context.dbtx();
-
-                    dbtx.insert_entry(&ConsensusVersionVotingActivationKey, &()).await;
-
-                    dbtx.commit_tx_result().await.map_err(|e| ApiError::server_error(e.to_string()))?;
-
-                    Ok(())
-
-                }
-            },
-            api_endpoint! {
                 BLOCK_COUNT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, _params: ()| -> u32 {
@@ -921,6 +898,36 @@ impl ServerModule for Wallet {
                 ApiVersion::new(0, 1),
                 async |module: &Wallet, context, _params: ()| -> WalletSummary {
                     Ok(module.get_wallet_summary(&mut context.dbtx().into_nc()).await)
+                }
+            },
+            api_endpoint! {
+                MODULE_CONSENSUS_VERSION_ENDPOINT,
+                ApiVersion::new(0, 2),
+                async |module: &Wallet, context, _params: ()| -> ModuleConsensusVersion {
+                    Ok(module.consensus_module_consensus_version(&mut context.dbtx().into_nc()).await)
+                }
+            },
+            api_endpoint! {
+                ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT,
+                ApiVersion::new(0, 2),
+                async |_module: &Wallet, context, _params: ()| -> () {
+                    check_auth(context)?;
+
+                    let mut dbtx = context.dbtx();
+
+                    dbtx.insert_entry(&ConsensusVersionVotingActivationKey, &()).await;
+
+                    dbtx.commit_tx_result().await.map_err(|e| ApiError::server_error(e.to_string()))?;
+
+                    Ok(())
+
+                }
+            },
+            api_endpoint! {
+                UTXO_CONFIRMED_ENDPOINT,
+                ApiVersion::new(0, 2),
+                async |module: &Wallet, context, outpoint: bitcoin::OutPoint| -> bool {
+                    Ok(module.is_utxo_confirmed(&mut context.dbtx().into_nc(), outpoint).await)
                 }
             },
         ]
@@ -1257,7 +1264,8 @@ impl Wallet {
 
                 for transaction in block.txdata {
                     // We maintain the subset of unspent P2WSH transaction outputs created
-                    // since the federation was established in the database.
+                    // since the module was running on the new consensus version, which might be
+                    // the same time as the genesis session.
 
                     for tx_in in &transaction.input {
                         dbtx.remove_entry(&UnspentTxOutKey(tx_in.previous_output))
@@ -1265,11 +1273,13 @@ impl Wallet {
                     }
 
                     for (vout, tx_out) in transaction.output.iter().enumerate() {
-                        if if self.cfg.consensus.peer_peg_in_keys.len() > 1 {
+                        let should_track_utxo = if self.cfg.consensus.peer_peg_in_keys.len() > 1 {
                             tx_out.script_pubkey.is_p2wsh()
                         } else {
                             tx_out.script_pubkey.is_p2wpkh()
-                        } {
+                        };
+
+                        if should_track_utxo {
                             let outpoint = bitcoin::OutPoint {
                                 txid: transaction.compute_txid(),
                                 vout: vout as u32,
@@ -1536,6 +1546,14 @@ impl Wallet {
             unconfirmed_peg_out_txos,
             unconfirmed_change_utxos,
         }
+    }
+
+    async fn is_utxo_confirmed(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        outpoint: bitcoin::OutPoint,
+    ) -> bool {
+        dbtx.get_value(&UnspentTxOutKey(outpoint)).await.is_some()
     }
 
     fn offline_wallet(&self) -> StatelessWallet {
