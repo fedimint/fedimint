@@ -6,7 +6,7 @@ This is a guide for setting up a 3/4 federation + lightning gateway. You can run
 > Fedimint 0.2 is alpha software released under an MIT License. It is ready for reckless use.
 
 <p align="center">
-<img src="setup-docs-assets/guardian_dashboard.png" alt="Guardian Dashboard" width="500">
+<img src="../setup-docs-assets/guardian_dashboard.png" alt="Guardian Dashboard" width="500">
 </p>
 
 ## Step 0: What is Fedimint and how does it work?
@@ -46,41 +46,41 @@ Digital Ocean setup instructions
 - Create a new droplet, use the default parameters for a "Regular" CPU option ($12 2GB RAM/1 CPU machine).
 
 <p align="center">
-<img src="setup-docs-assets/create_droplet.png" width="500">
+<img src="../setup-docs-assets/create_droplet.png" width="500">
 </p>
 
 - Default Ubuntu image
 
 <p align="center">
-<img src="setup-docs-assets/linux.png" width="500">
+<img src="../setup-docs-assets/linux.png" width="500">
 </p>
 
 - `fedimintd` CAN run on the $6 1GB RAM/1 CPU machine, but for a longer running federation or one you want to be highly performant with > a couple dozen users we recommend the 2GB RAM at least.
 
 <p align="center">
-<img src="setup-docs-assets/boxSize.png" width="500">
+<img src="../setup-docs-assets/boxSize.png" width="500">
 </p>
 
 - Auth with SSH keys (recommended) or password. Digital Ocean has an excellent guide on how to set up SSH keys if you click "New SSH Key" in the "Authentication" section. It also has a great browser based console that you can use to access the box directly from the dashboard.
 
 <p align="center">
-<img src="setup-docs-assets/ssh.png" width="500">
+<img src="../setup-docs-assets/ssh.png" width="500">
 </p>
 
 - Finalize and create the droplet. You can create multiple droplets with the same configuration, so if you want just create your 5 droplets now for the 3/4 federation + lightning gateway and skip to section 2 to install the software. Otherwise continue to the next step to create the other machines.
 
 <p align="center">
-<img src="setup-docs-assets/finalize.png" width="500">
+<img src="../setup-docs-assets/finalize.png" width="500">
 </p>
 
 - You can SSH into the machine from your terminal by copying the ssh command for key or root user/password. Or just use the droplet terminal from the digital ocean console.
 
 <p align="center">
-<img src="setup-docs-assets/access.png" width="500">
+<img src="../setup-docs-assets/access.png" width="500">
 </p>
 
 <p align="center">
-<img src="setup-docs-assets/droplet_console.png" width="500">
+<img src="../setup-docs-assets/droplet_console.png" width="500">
 </p>
 
 </details>
@@ -93,29 +93,29 @@ Digital Ocean setup instructions
 For the Linode Setup we'll use the same $12 2GB/1CPU machine as Digital Ocean, if you're also running the lightning gateway off of this machine you'll want to use the 4GB/2CPU machine. We'll use the same ubuntu 22 image.
 
 <p align="center">
-<img src="setup-docs-assets/linode1.png" width="500">
+<img src="../setup-docs-assets/linode1.png" width="500">
 </p>
 
 - Set up the root password (and SSH keys recommended)
 
 <p align="center">
-<img src="setup-docs-assets/linode2.png" width="500">
+<img src="../setup-docs-assets/linode2.png" width="500">
 </p>
 
 - Then create the machine.
 
 <p align="center">
-<img src="setup-docs-assets/linode3.png" width="500">
+<img src="../setup-docs-assets/linode3.png" width="500">
 </p>
 
 - You can SSH into the machine from your terminal by copying the ssh command for key or root user/password:
 
 <p align="center">
-<img src="setup-docs-assets/linode4.png" width="500">
+<img src="../setup-docs-assets/linode4.png" width="500">
 </p>
 
 <p align="center">
-<img src="setup-docs-assets/linode5.png" width="500">
+<img src="../setup-docs-assets/linode5.png" width="500">
 </p>
 
 </details>
@@ -130,19 +130,19 @@ For the AWS EC2 Setup we'll use the free tier t2.micro machine, which is 1GB RAM
 - Use your ssh keys (you'll have to import them for EC2 in the console beforehand), set a security group, and free tier EC2 lets you have up to 30GB of storage.
 
 <p align="center">
-<img src="setup-docs-assets/ec2.png" width="500">
+<img src="../setup-docs-assets/ec2.png" width="500">
 </p>
 
 - Then in your EC2 management console select "Connect your instance", adjust the key visibility, and you'll be able to ssh into the machine
 
 <p align="center">
-<img src="setup-docs-assets/ec2_connect.png" width="500">
+<img src="../setup-docs-assets/ec2_connect.png" width="500">
 </p>
 
 - Then you're good to connect to the machine from a terminal:
 
 <p align="center">
-<img src="setup-docs-assets/ec2_ssh.png" width="500">
+<img src="../setup-docs-assets/ec2_ssh.png" width="500">
 </p>
 
 </details>
@@ -155,13 +155,13 @@ For the AWS EC2 Setup we'll use the free tier t2.micro machine, which is 1GB RAM
 For the google cloud machine we'll use something a little bigger because we'll also run the lightning gateway on it. Google VMs generate new ssh keys for you so make sure you copy those down into your local to ssh into the machine.
 
 <p align="center">
-<img src="setup-docs-assets/google.png" width="500">
+<img src="../setup-docs-assets/google.png" width="500">
 </p>
 
 - Then google VMs have a nice SSH button in the console that pops open a bash terminal connect to the machine.
 
 <p align="center">
-<img src="setup-docs-assets/google_ssh.png" width="500">
+<img src="../setup-docs-assets/google_ssh.png" width="500">
 </p>
 
 </details>
@@ -211,17 +211,17 @@ and it'll start the services on the following ports:
 <!-- markdown-link-check-enable -->
 
 <p align="center">
-<img src="setup-docs-assets/install_scripts.png" alt="Install Scripts" width="500">
+<img src="../setup-docs-assets/install_scripts.png" alt="Install Scripts" width="500">
 </p>
 
 <p align="center">
-<img src="setup-docs-assets/fedimint_startup.png" alt="Fedimint Startup" width="500">
+<img src="../setup-docs-assets/fedimint_startup.png" alt="Fedimint Startup" width="500">
 </p>
 
 > If you see this pink screen, just hit TAB + ENTER to get past it.
 
 <p align="center">
-<img src="setup-docs-assets/pinkScreen.png" alt="Pink Screen" width="500">
+<img src="../setup-docs-assets/pinkScreen.png" alt="Pink Screen" width="500">
 </p>
 
 You've now got the fedimint processes running on each machine. Congratulations! However, they're not connected into a federation yet. We'll do that in the next step.
@@ -276,7 +276,7 @@ On the homescreen you'll see a selection to lead or follow. This does not refer 
 
 The "Leader" is simply the guardian who will input the configuration settings for the federation and the "Followers" will agree to and validate those settings. This distinction is made simply for UX purposes so each guardian doesn't have to repeatedly input the same things, and when there's a typo blow up the key generation.
 
-<img src="setup-docs-assets/guardian_select.png" alt="Guardian Select" width="500">
+<img src="../setup-docs-assets/guardian_select.png" alt="Guardian Select" width="500">
 
 ## Setup Leader
 
@@ -289,13 +289,13 @@ The setup leader inputs an additional couple parameters beyond his name and pass
 - Meta Fields: these are arbitrary key/value pairs that can be used to store any information you want about your federation. Client apps can use this information to attach chat servers, a federation icon, a welcome message, or anything else you want to display to the user when they first connect to the federation. See https://github.com/fedimint/fedimint/tree/master/docs/meta_fields for supported fields.
 
 <p align="center">
-<img src="setup-docs-assets/leader.png" alt="Leader" width="500">
+<img src="../setup-docs-assets/leader.png" alt="Leader" width="500">
 </p>
 
 Once you confirm your settings you'll see a guardian confirmation page with a "Invite Followers" websocket link. That's the link you'll send to each of the followers. Once they copy it over they'll be presented with a page to confirm the federation specifications set by the leader.
 
 <p align="center">
-<img src="setup-docs-assets/leader_confirm.png" alt="Leader Confirm" width="500">
+<img src="../setup-docs-assets/leader_confirm.png" alt="Leader Confirm" width="500">
 </p>
 
 ## Follower
@@ -303,15 +303,15 @@ Once you confirm your settings you'll see a guardian confirmation page with a "I
 The followers simply set their names and passwords then paste the websocket link from the leader to connect. Once connected, they'll be prompted to confirm the federation info set by the leader. All the guardians have to connect and approve. Once that's done, they'll go through the distributed key generation to set up the fedimint.
 
 <p align="center">
-<img src="setup-docs-assets/follower_confirm.png" alt="Follower Confirm" width="500">
+<img src="../setup-docs-assets/follower_confirm.png" alt="Follower Confirm" width="500">
 </p>
 
 <p align="center">
-<img src="setup-docs-assets/leader_pending.png" alt="Leader Pending" width="500">
+<img src="../setup-docs-assets/leader_pending.png" alt="Leader Pending" width="500">
 </p>
 
 <p align="center">
-<img src="setup-docs-assets/boom_sharing.png" alt="Boom Sharing" width="500">
+<img src="../setup-docs-assets/boom_sharing.png" alt="Boom Sharing" width="500">
 </p>
 
 ### Distributed Key Generation
@@ -328,19 +328,19 @@ The "numbers" the guardians are running mostly involved a Distributed Key Genera
    Here, Dealer Dave will generate the key and then distribute shares of this key to the participants. This is the simplest way to generate a shared key, but it has a major drawback: if Dealer Dave is compromised, the key is compromised. This is the same as a single guardian setup in fedimint: if the guardian is compromised, the mint is compromised.
 
 <p align="center">
-<img src="setup-docs-assets/centralized_keygen.png" alt="Boom Sharing" width="500">
+<img src="../setup-docs-assets/centralized_keygen.png" alt="Boom Sharing" width="500">
 </p>
 
 2. Distributed Key Generation with No Centralized Dealer:
    To perform a distributed key generation where noone knows the complete key, four players each act as a dealer, generating their own polynomials and sharing points based on those polynomials. These points are then aggregated to form a new polynomial that no single player knows entirely.
 
 <p align="center">
-<img src="setup-docs-assets/distributed_keygen.png" alt="Boom Sharing" width="500">
+<img src="../setup-docs-assets/distributed_keygen.png" alt="Boom Sharing" width="500">
 </p>
 
 </details>
 <p align="center">
-<img src="setup-docs-assets/dkg.png" alt="DKG" width="500">
+<img src="../setup-docs-assets/dkg.png" alt="DKG" width="500">
 </p>
 
 ## Guardian Verification
@@ -348,15 +348,15 @@ The "numbers" the guardians are running mostly involved a Distributed Key Genera
 Once the distributed key generation is complete, the guardians will be prompted to verify the key generation. This is a critical step to ensure that the key generation was performed correctly and that the guardians are all in agreement on the key. If any guardian disagrees, you'll have to start over and perform the key generation again after wiping the docker containers.
 
 <p align="center">
-<img src="setup-docs-assets/verify1.png" alt="Verify 1" width="500">
+<img src="../setup-docs-assets/verify1.png" alt="Verify 1" width="500">
 </p>
 
 <p align="center">
-<img src="setup-docs-assets/verify2.png" alt="Verify 2" width="500">
+<img src="../setup-docs-assets/verify2.png" alt="Verify 2" width="500">
 </p>
 
 <p align="center">
-<img src="setup-docs-assets/congrats.png" alt="Congrats" width="500">
+<img src="../setup-docs-assets/congrats.png" alt="Congrats" width="500">
 </p>
 
 ## Guardian Dashboard
@@ -364,7 +364,7 @@ Once the distributed key generation is complete, the guardians will be prompted 
 - Your Federation is now set up!
 
 <p align="center">
-<img src="setup-docs-assets/guardian_dashboard.png" alt="Guardian Dashboard" width="500">
+<img src="../setup-docs-assets/guardian_dashboard.png" alt="Guardian Dashboard" width="500">
 </p>
 
 # Connecting and Setting up the Lightning Gateway
@@ -392,11 +392,11 @@ docker-compose -f gateway/docker-compose.yaml exec gatewayd gateway-cli address 
 ```
 
 <p align="center">
-<img src="setup-docs-assets/gateway_address.png" alt="Gateway Address" width="500">
+<img src="../setup-docs-assets/gateway_address.png" alt="Gateway Address" width="500">
 </p>
 
 <p align="center">
-<img src="setup-docs-assets/gateway_balance.png" alt="Gateway Balance" width="500">
+<img src="../setup-docs-assets/gateway_balance.png" alt="Gateway Balance" width="500">
 </p>
 
 ```bash
@@ -412,23 +412,23 @@ Now that you're connected, you can go to the lightning gateway dashboard at http
 <!-- markdown-link-check-enable -->
 
 <p align="center">
-<img src="setup-docs-assets/fed_deposit_addr.png" alt="Fed Deposit Address" width="500">
+<img src="../setup-docs-assets/fed_deposit_addr.png" alt="Fed Deposit Address" width="500">
 </p>
 
 deposit to it using the mutinynet faucet at https://faucet.mutinynet.com
 
 <p align="center">
-<img src="setup-docs-assets/mutiny_faucet.png" alt="Mutiny Faucet" width="500">
+<img src="../setup-docs-assets/mutiny_faucet.png" alt="Mutiny Faucet" width="500">
 </p>
 
 You'll also need to open a lightning channel from the gateway node, so get a deposit address from RTL and deposit to it using the mutinynet faucet at https://faucet.mutinynet.com:
 
 <p align="center">
-<img src="setup-docs-assets/rtl_deposit.png" alt="RTL Deposit" width="500">
+<img src="../setup-docs-assets/rtl_deposit.png" alt="RTL Deposit" width="500">
 </p>
 
 <p align="center">
-<img src="setup-docs-assets/mutiny_sent.png" alt="Mutiny Sent" width="500">
+<img src="../setup-docs-assets/mutiny_sent.png" alt="Mutiny Sent" width="500">
 </p>
 
 Opening a channel to the fedi alpha gateway:
@@ -438,11 +438,11 @@ Opening a channel to the fedi alpha gateway:
 ```
 
 <p align="center">
-<img src="setup-docs-assets/channel_open1.png" alt="Channel Open 1" width="500">
+<img src="../setup-docs-assets/channel_open1.png" alt="Channel Open 1" width="500">
 </p>
 
 <p align="center">
-<img src="setup-docs-assets/channel_open1.png" alt="Channel Open 1" width="500">
+<img src="../setup-docs-assets/channel_open1.png" alt="Channel Open 1" width="500">
 </p>
 
 ### Getting Inbound Liquidity
@@ -450,19 +450,19 @@ Opening a channel to the fedi alpha gateway:
 Send some sats through your channel to the fedi alpha signet faucet. We'll be integrating in a LSP soon to make this easier.
 
 <p align="center">
-<img src="setup-docs-assets/inbound.png" alt="Inbound" width="500">
+<img src="../setup-docs-assets/inbound.png" alt="Inbound" width="500">
 </p>
 
 <p align="center">
-<img src="setup-docs-assets/send_sats.png" alt="Send Sats" width="500">
+<img src="../setup-docs-assets/send_sats.png" alt="Send Sats" width="500">
 </p>
 
 <p align="center">
-<img src="setup-docs-assets/send_invoice.png" alt="Send Invoice" width="500">
+<img src="../setup-docs-assets/send_invoice.png" alt="Send Invoice" width="500">
 </p>
 
 <p align="center">
-<img src="setup-docs-assets/received.png" alt="Received" width="500">
+<img src="../setup-docs-assets/received.png" alt="Received" width="500">
 </p>
 
 Your federation gateway is now ready to provide lightning services to the federation! You should be able to send and receive lightning payments to users of the federation via the gateway, give it a try using a compatible client like the fedimint-cli.
