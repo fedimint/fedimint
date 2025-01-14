@@ -2359,7 +2359,7 @@
 };
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_core::config::{
-    ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
+    ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
@@ -2662,13 +2662,13 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>PeerHandle,
         params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
-    ) -&gt; DkgResult&lt;ServerModuleConfig&gt; {
+    ) -&gt; anyhow::Result&lt;ServerModuleConfig&gt; {
         <span class="kw">let </span>params = <span class="self">self</span>.parse_params(params).unwrap();
         <span class="kw">let </span>secp = secp256k1::Secp256k1::new();
         <span class="kw">let </span>(sk, pk) = secp.generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>our_key = CompressedPublicKey { key: pk };
         <span class="kw">let </span>peer_peg_in_keys: BTreeMap&lt;PeerId, CompressedPublicKey&gt; = peers
-            .exchange_encodable(<span class="string">"wallet"</span>.to_string(), our_key.key)
+            .exchange_encodable(our_key.key)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.into_iter()
             .map(|(k, key)| (k, CompressedPublicKey { key }))
@@ -2677,7 +2677,7 @@
         <span class="kw">let </span>wallet_cfg = WalletConfig::new(
             peer_peg_in_keys,
             sk,
-            peers.peer_ids().to_num_peers().threshold(),
+            peers.num_peers().threshold(),
             params.consensus.network,
             params.consensus.finality_delay,
             params.local.bitcoin_rpc.clone(),

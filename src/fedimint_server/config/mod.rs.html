@@ -716,62 +716,41 @@
 <a href="#715" id="715">715</a>
 <a href="#716" id="716">716</a>
 <a href="#717" id="717">717</a>
-<a href="#718" id="718">718</a>
-<a href="#719" id="719">719</a>
-<a href="#720" id="720">720</a>
-<a href="#721" id="721">721</a>
-<a href="#722" id="722">722</a>
-<a href="#723" id="723">723</a>
-<a href="#724" id="724">724</a>
-<a href="#725" id="725">725</a>
-<a href="#726" id="726">726</a>
-<a href="#727" id="727">727</a>
-<a href="#728" id="728">728</a>
-<a href="#729" id="729">729</a>
-<a href="#730" id="730">730</a>
-<a href="#731" id="731">731</a>
-<a href="#732" id="732">732</a>
-<a href="#733" id="733">733</a>
-<a href="#734" id="734">734</a>
-<a href="#735" id="735">735</a>
-<a href="#736" id="736">736</a>
-<a href="#737" id="737">737</a>
-<a href="#738" id="738">738</a>
-<a href="#739" id="739">739</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
+<a href="#718" id="718">718</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::{bail, format_err};
+<span class="kw">use </span>anyhow::{bail, format_err, Context};
+<span class="kw">use </span>fedimint_api_client::api::P2PConnectionStatus;
 <span class="kw">use </span>fedimint_core::admin_client::ConfigGenParamsConsensus;
 <span class="kw">pub use </span>fedimint_core::config::{
-    serde_binary_human_readable, ClientConfig, DkgError, DkgPeerMsg, DkgResult, FederationId,
-    GlobalClientConfig, JsonWithKind, ModuleInitRegistry, PeerUrl, ServerModuleConfig,
-    ServerModuleConsensusConfig, ServerModuleInitRegistry, TypedServerModuleConfig,
+    serde_binary_human_readable, ClientConfig, DkgPeerMsg, FederationId, GlobalClientConfig,
+    JsonWithKind, ModuleInitRegistry, PeerUrl, ServerModuleConfig, ServerModuleConsensusConfig,
+    ServerModuleInitRegistry, TypedServerModuleConfig,
 };
-<span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
+<span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::envs::is_running_in_test_env;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::{
     ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleInit, MultiApiVersion, PeerHandle,
     SupportedApiVersionsSummary, SupportedCoreApiVersions, CORE_CONSENSUS_VERSION,
 };
-<span class="kw">use </span>fedimint_core::net::peers::{IMuxPeerConnections, IP2PConnections};
-<span class="kw">use </span>fedimint_core::task::{timeout, Cancelled, Elapsed, TaskGroup};
-<span class="kw">use </span>fedimint_core::{secp256k1, timing, PeerId};
+<span class="kw">use </span>fedimint_core::net::peers::IP2PConnections;
+<span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
+<span class="kw">use </span>fedimint_core::{secp256k1, timing, NumPeersExt, PeerId};
 <span class="kw">use </span>fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
-<span class="kw">use </span>futures::future::join_all;
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>secp256k1::{PublicKey, Secp256k1, SecretKey};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>tokio::sync::watch;
 <span class="kw">use </span>tokio_rustls::rustls;
-<span class="kw">use </span>tracing::{error, info};
+<span class="kw">use </span>tracing::info;
 
 <span class="kw">use </span><span class="kw">crate</span>::config::api::ConfigGenParamsLocal;
 <span class="kw">use </span><span class="kw">crate</span>::config::distributedgen::PeerHandleOps;
 <span class="kw">use </span><span class="kw">crate</span>::envs::FM_MAX_CLIENT_CONNECTIONS_ENV;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
-<span class="kw">use </span><span class="kw">crate</span>::multiplexed::PeerConnectionMultiplexer;
 <span class="kw">use </span><span class="kw">crate</span>::net::p2p::ReconnectP2PConnections;
 <span class="kw">use </span><span class="kw">crate</span>::net::p2p_connector::{dns_sanitize, P2PConnector, TlsConfig};
 <span class="kw">use </span><span class="kw">crate</span>::TlsTcpConnector;
@@ -1170,10 +1149,20 @@
         registry: ServerModuleInitRegistry,
         task_group: <span class="kw-2">&amp;</span>TaskGroup,
         code_version_str: String,
-    ) -&gt; DkgResult&lt;<span class="self">Self</span>&gt; {
+    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">"distributed-gen"</span>).info();
 
-        <span class="kw">let </span>conn = TlsTcpConnector::new(
+        <span class="comment">// in case we are running by ourselves, avoid DKG
+        </span><span class="kw">if </span>params.peer_ids().len() == <span class="number">1 </span>{
+            <span class="kw">let </span>server = <span class="self">Self</span>::trusted_dealer_gen(
+                <span class="kw-2">&amp;</span>HashMap::from([(params.local.our_id, params.clone())]),
+                <span class="kw-2">&amp;</span>registry,
+                <span class="kw-2">&amp;</span>code_version_str,
+            );
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(server[<span class="kw-2">&amp;</span>params.local.our_id].clone());
+        }
+
+        <span class="kw">let </span>connector = TlsTcpConnector::new(
             params.tls_config(),
             p2p_bind_addr,
             params
@@ -1185,118 +1174,87 @@
         )
         .into_dyn();
 
-        <span class="kw">let </span>conn = ReconnectP2PConnections::new(params.local.our_id, conn, task_group, <span class="prelude-val">None</span>)
-            .<span class="kw">await
-            </span>.into_dyn();
+        <span class="kw">let </span><span class="kw-2">mut </span>p2p_status_senders = BTreeMap::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>p2p_status_receivers = BTreeMap::new();
 
-        <span class="kw">let </span>conn = PeerConnectionMultiplexer::new(conn).into_dyn();
+        <span class="kw">for </span>peer <span class="kw">in </span>connector.peers() {
+            <span class="kw">let </span>(p2p_sender, p2p_receiver) = watch::channel(P2PConnectionStatus::Disconnected);
 
-        <span class="kw">let </span>peers = <span class="kw-2">&amp;</span>params.peer_ids();
-        <span class="kw">let </span>our_id = <span class="kw-2">&amp;</span>params.local.our_id;
+            p2p_status_senders.insert(peer, p2p_sender);
+            p2p_status_receivers.insert(peer, p2p_receiver);
+        }
 
-        <span class="kw">let </span>exchange = PeerHandle::new(<span class="kw-2">&amp;</span>conn, MODULE_INSTANCE_ID_GLOBAL, <span class="kw-2">*</span>our_id, peers.clone());
+        <span class="kw">let </span>connections = ReconnectP2PConnections::new(
+            params.local.our_id,
+            connector,
+            task_group,
+            <span class="prelude-val">Some</span>(p2p_status_senders),
+        )
+        .<span class="kw">await
+        </span>.into_dyn();
+
+        <span class="kw">while </span>p2p_status_receivers
+            .values()
+            .any(|r| <span class="kw-2">*</span>r.borrow() == P2PConnectionStatus::Disconnected)
+        {
+            <span class="macro">info!</span>(
+                target: LOG_NET_PEER_DKG,
+                <span class="string">"Waiting for all p2p connections to open..."
+            </span>);
+
+            sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+        }
+
+        <span class="macro">info!</span>(
+            target: LOG_NET_PEER_DKG,
+            <span class="string">"Running distributed key generation..."
+        </span>);
+
+        <span class="kw">let </span>handle = PeerHandle::new(
+            params.peer_ids().to_num_peers(),
+            params.local.our_id,
+            <span class="kw-2">&amp;</span>connections,
+        );
 
         <span class="kw">let </span>(broadcast_sk, broadcast_pk) = secp256k1::generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
 
-        <span class="kw">let </span>broadcast_public_keys = exchange
-            .exchange_encodable(<span class="string">"broadcast"</span>.to_string(), broadcast_pk)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>broadcast_public_keys = handle.exchange_encodable(broadcast_pk).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="comment">// in case we are running by ourselves, avoid DKG
-        </span><span class="kw">if </span>peers.len() == <span class="number">1 </span>{
-            <span class="kw">let </span>server = <span class="self">Self</span>::trusted_dealer_gen(
-                <span class="kw-2">&amp;</span>HashMap::from([(<span class="kw-2">*</span>our_id, params.clone())]),
-                <span class="kw-2">&amp;</span>registry,
-                <span class="kw-2">&amp;</span>code_version_str,
-            );
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(server[our_id].clone());
-        }
-        <span class="macro">info!</span>(
-            target: LOG_NET_PEER_DKG,
-            <span class="string">"Peer {} running distributed key generation..."</span>, our_id
-        );
+        <span class="kw">let </span><span class="kw-2">mut </span>module_cfgs = BTreeMap::new();
 
-        <span class="kw">let </span><span class="kw-2">mut </span>registered_modules = registry.kinds();
-        <span class="kw">let </span><span class="kw-2">mut </span>module_cfgs: BTreeMap&lt;ModuleInstanceId, ServerModuleConfig&gt; = BTreeMap::new();
-        <span class="kw">let </span>modules = params.consensus.modules.iter_modules();
-        <span class="kw">let </span>modules_runner = modules.map(|(module_instance_id, kind, module_params)| {
-            <span class="kw">let </span>dkg = PeerHandle::new(<span class="kw-2">&amp;</span>conn, module_instance_id, <span class="kw-2">*</span>our_id, peers.clone());
-            <span class="kw">let </span>registry = registry.clone();
+        <span class="kw">for </span>(module_id, kind, module_params) <span class="kw">in </span>params.consensus.modules.iter_modules() {
+            <span class="macro">info!</span>(
+                target: LOG_NET_PEER_DKG,
+                <span class="string">"Running distributed key generation for module of kind {kind}..."
+            </span>);
 
-            <span class="kw">async move </span>{
-                <span class="kw">let </span>result = <span class="kw">match </span>registry.get(kind) {
-                    <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Err</span>(DkgError::ModuleNotFound(kind.clone())),
-                    <span class="prelude-val">Some</span>(gen) =&gt; gen.distributed_gen(<span class="kw-2">&amp;</span>dkg, module_params).<span class="kw">await</span>,
-                };
-                (module_instance_id, result)
-            }
-        });
-        <span class="kw">for </span>(module_instance_id, config) <span class="kw">in </span>join_all(modules_runner).<span class="kw">await </span>{
-            <span class="kw">let </span>config = config<span class="question-mark">?</span>;
-            registered_modules.remove(<span class="kw-2">&amp;</span>config.consensus.kind);
-            module_cfgs.insert(module_instance_id, config);
-        }
-        <span class="kw">if </span>!registered_modules.is_empty() {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(DkgError::ParamsNotFound(registered_modules));
+            <span class="kw">let </span>cfg = registry
+                .get(kind)
+                .context(<span class="string">"Module of kind {kind} not found"</span>)<span class="question-mark">?
+                </span>.distributed_gen(<span class="kw-2">&amp;</span>handle, module_params)
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+
+            module_cfgs.insert(module_id, cfg);
         }
 
-        <span class="macro">info!</span>(
-            target: LOG_NET_PEER_DKG,
-            <span class="string">"Sending confirmations to other peers."
-        </span>);
-        <span class="comment">// Note: Since our outgoing buffers are asynchronous, we don't actually know
-        // if other peers received our message, just because we received theirs.
-        // That's why we need to do a one last best effort sync.
-        </span><span class="kw">let </span>dkg_done = <span class="string">"DKG DONE"</span>.to_string();
-        conn.send(
-            peers,
-            (MODULE_INSTANCE_ID_GLOBAL, dkg_done.clone()),
-            DkgPeerMsg::Done,
-        )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="comment">// We need to wait for out outgoing message queues to be fully transmitted
+        // before we move on in order for our peers to be able to complete the dkg.
 
-        <span class="macro">info!</span>(
-            target: LOG_NET_PEER_DKG,
-            <span class="string">"Waiting for confirmations from other peers."
-        </span>);
-        <span class="kw">if let </span><span class="prelude-val">Err</span>(Elapsed) = timeout(Duration::from_secs(<span class="number">30</span>), <span class="kw">async </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>done_peers = BTreeSet::from([<span class="kw-2">*</span>our_id]);
-
-            <span class="kw">while </span>done_peers.len() &lt; peers.len() {
-                <span class="kw">match </span>conn.receive((MODULE_INSTANCE_ID_GLOBAL, dkg_done.clone())).<span class="kw">await </span>{
-                    <span class="prelude-val">Ok</span>((peer_id, DkgPeerMsg::Done)) =&gt; {
-                        <span class="macro">info!</span>(
-                            target: LOG_NET_PEER_DKG,
-                            peer_id = %peer_id,
-                            <span class="string">"Got completion confirmation"
-                        </span>);
-                        done_peers.insert(peer_id);
-                    },
-                    <span class="prelude-val">Ok</span>((peer_id, msg)) =&gt; {
-                        <span class="macro">error!</span>(target: LOG_NET_PEER_DKG, %peer_id, <span class="question-mark">?</span>msg, <span class="string">"Received incorrect message after dkg was supposed to be finished. Probably dkg multiplexing bug."</span>);
-                    },
-                    <span class="prelude-val">Err</span>(Cancelled) =&gt; {<span class="comment">/* ignore shutdown for time being, we'll timeout soon anyway */</span>},
-                }
-            }
-        })
-        .<span class="kw">await
-        </span>{
-            <span class="macro">error!</span>(target: LOG_NET_PEER_DKG, <span class="string">"Timeout waiting for dkg completion confirmation from other peers"</span>);
-        };
-
-        <span class="kw">let </span>server = ServerConfig::from(
-            params.clone(),
-            <span class="kw-2">*</span>our_id,
-            broadcast_public_keys,
-            broadcast_sk,
-            module_cfgs,
-            code_version_str,
-        );
+        </span>connections.await_empty_outgoing_message_queues().<span class="kw">await</span>;
 
         <span class="macro">info!</span>(
             target: LOG_NET_PEER,
             <span class="string">"Distributed key generation has completed successfully!"
         </span>);
+
+        <span class="kw">let </span>server = ServerConfig::from(
+            params.clone(),
+            params.local.our_id,
+            broadcast_public_keys,
+            broadcast_sk,
+            module_cfgs,
+            code_version_str,
+        );
 
         <span class="prelude-val">Ok</span>(server)
     }

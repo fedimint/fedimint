@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["get_config","run","run_config_gen"],"mod":["config","consensus","envs","metrics","multiplexed","net"]};
+window.SIDEBAR_ITEMS = {"fn":["get_config","run","run_config_gen"],"mod":["config","consensus","envs","metrics","net"]};

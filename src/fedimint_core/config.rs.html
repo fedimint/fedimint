@@ -1090,30 +1090,7 @@
 <a href="#1089" id="1089">1089</a>
 <a href="#1090" id="1090">1090</a>
 <a href="#1091" id="1091">1091</a>
-<a href="#1092" id="1092">1092</a>
-<a href="#1093" id="1093">1093</a>
-<a href="#1094" id="1094">1094</a>
-<a href="#1095" id="1095">1095</a>
-<a href="#1096" id="1096">1096</a>
-<a href="#1097" id="1097">1097</a>
-<a href="#1098" id="1098">1098</a>
-<a href="#1099" id="1099">1099</a>
-<a href="#1100" id="1100">1100</a>
-<a href="#1101" id="1101">1101</a>
-<a href="#1102" id="1102">1102</a>
-<a href="#1103" id="1103">1103</a>
-<a href="#1104" id="1104">1104</a>
-<a href="#1105" id="1105">1105</a>
-<a href="#1106" id="1106">1106</a>
-<a href="#1107" id="1107">1107</a>
-<a href="#1108" id="1108">1108</a>
-<a href="#1109" id="1109">1109</a>
-<a href="#1110" id="1110">1110</a>
-<a href="#1111" id="1111">1111</a>
-<a href="#1112" id="1112">1112</a>
-<a href="#1113" id="1113">1113</a>
-<a href="#1114" id="1114">1114</a>
-<a href="#1115" id="1115">1115</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
+<a href="#1092" id="1092">1092</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::ops::Mul;
@@ -1127,7 +1104,6 @@
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::encoding::{DynRawFallback, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
-<span class="kw">use </span>fedimint_core::task::Cancelled;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{format_hex, ModuleDecoderRegistry};
 <span class="kw">use </span>fedimint_logging::LOG_CORE;
@@ -1137,13 +1113,12 @@
 <span class="kw">use </span>serde::ser::SerializeMap;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
 <span class="kw">use </span>serde_json::json;
-<span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>threshold_crypto::group::{Curve, Group, GroupEncoding};
 <span class="kw">use </span>threshold_crypto::{G1Projective, G2Projective};
 <span class="kw">use </span>tracing::warn;
 
 <span class="kw">use </span><span class="kw">crate</span>::core::DynClientConfig;
-<span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError};
+<span class="kw">use </span><span class="kw">crate</span>::encoding::Decodable;
 <span class="kw">use </span><span class="kw">crate</span>::module::{
     CoreConsensusVersion, DynCommonModuleInit, DynServerModuleInit, IDynCommonModuleInit,
     ModuleConsensusVersion,
@@ -1995,27 +1970,6 @@
 </span><span class="kw">pub enum </span>DkgPeerMsg {
     DistributedGen(SupportedDkgMessage),
     Encodable(Vec&lt;u8&gt;),
-    Done,
-}
-
-<span class="doccomment">/// Result of running DKG
-</span><span class="kw">pub type </span>DkgResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, DkgError&gt;;
-
-<span class="attr">#[derive(Error, Debug)]
-</span><span class="doccomment">/// Captures an error occurring in DKG
-</span><span class="kw">pub enum </span>DkgError {
-    <span class="doccomment">/// User has cancelled the DKG task
-    </span><span class="attr">#[error(<span class="string">"Operation cancelled"</span>)]
-    </span>Cancelled(<span class="attr">#[from] </span>Cancelled),
-    <span class="doccomment">/// Error running DKG
-    </span><span class="attr">#[error(<span class="string">"Running DKG failed due to {0}"</span>)]
-    </span>Failed(<span class="attr">#[from] </span>anyhow::Error),
-    <span class="attr">#[error(<span class="string">"The module was not found {0}"</span>)]
-    </span>ModuleNotFound(ModuleKind),
-    <span class="attr">#[error(<span class="string">"Params for modules were not found {0:?}"</span>)]
-    </span>ParamsNotFound(BTreeSet&lt;ModuleKind&gt;),
-    <span class="attr">#[error(<span class="string">"Failed to decode encodable message {0:?}"</span>)]
-    </span>ModuleDecodeError(DecodeError),
 }
 
 <span class="doccomment">/// Supported (by Fedimint's code) `DkgMessage&lt;T&gt;` types

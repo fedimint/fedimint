@@ -1044,12 +1044,7 @@
 <a href="#1043" id="1043">1043</a>
 <a href="#1044" id="1044">1044</a>
 <a href="#1045" id="1045">1045</a>
-<a href="#1046" id="1046">1046</a>
-<a href="#1047" id="1047">1047</a>
-<a href="#1048" id="1048">1048</a>
-<a href="#1049" id="1049">1049</a>
-<a href="#1050" id="1050">1050</a>
-<a href="#1051" id="1051">1051</a></pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint supports modules to allow extending it's functionality.
+<a href="#1046" id="1046">1046</a></pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint supports modules to allow extending it's functionality.
 //! Some of the standard functionality is implemented in form of modules as
 //! well.
 //!
@@ -1097,7 +1092,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::fmt_utils::AbbreviateHexBytes;
 <span class="kw">use </span><span class="kw">crate</span>::module::audit::Audit;
-<span class="kw">use </span><span class="kw">crate</span>::net::peers::MuxPeerConnections;
+<span class="kw">use </span><span class="kw">crate</span>::net::peers::DynP2PConnections;
 <span class="kw">use </span><span class="kw">crate</span>::server::DynServerModule;
 <span class="kw">use </span><span class="kw">crate</span>::task::{MaybeSend, TaskGroup};
 <span class="kw">use crate</span>::{
@@ -1381,7 +1376,6 @@
 }
 
 <span class="kw">pub use </span>__api_endpoint <span class="kw">as </span>api_endpoint;
-<span class="kw">use </span>fedimint_core::config::DkgResult;
 
 <span class="kw">use </span><span class="self">self</span>::registry::ModuleDecoderRegistry;
 
@@ -1566,7 +1560,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>PeerHandle,
         params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
-    ) -&gt; DkgResult&lt;ServerModuleConfig&gt;;
+    ) -&gt; anyhow::Result&lt;ServerModuleConfig&gt;;
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt;;
 
@@ -1708,7 +1702,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peer: <span class="kw-2">&amp;</span>PeerHandle,
         params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
-    ) -&gt; DkgResult&lt;ServerModuleConfig&gt;;
+    ) -&gt; anyhow::Result&lt;ServerModuleConfig&gt;;
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt;;
 
@@ -1778,7 +1772,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>PeerHandle,
         params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
-    ) -&gt; DkgResult&lt;ServerModuleConfig&gt; {
+    ) -&gt; anyhow::Result&lt;ServerModuleConfig&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleInit&gt;::distributed_gen(<span class="self">self</span>, peers, params).<span class="kw">await
     </span>}
 
@@ -2072,32 +2066,28 @@
     <span class="comment">// TODO: this whole type should be a part of a `fedimint-server` and fields here inaccessible
     // to outside crates, but until `ServerModule` is not in `fedimint-server` this is impossible
     </span><span class="attr">#[doc(hidden)]
-    </span><span class="kw">pub </span>connections: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>MuxPeerConnections&lt;(ModuleInstanceId, String), DkgPeerMsg&gt;,
+    </span><span class="kw">pub </span>num_peers: NumPeers,
     <span class="attr">#[doc(hidden)]
-    </span><span class="kw">pub </span>module_instance_id: ModuleInstanceId,
+    </span><span class="kw">pub </span>identity: PeerId,
     <span class="attr">#[doc(hidden)]
-    </span><span class="kw">pub </span>our_id: PeerId,
-    <span class="attr">#[doc(hidden)]
-    </span><span class="kw">pub </span>peers: Vec&lt;PeerId&gt;,
+    </span><span class="kw">pub </span>connections: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>DynP2PConnections&lt;DkgPeerMsg&gt;,
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; PeerHandle&lt;<span class="lifetime">'a</span>&gt; {
     <span class="kw">pub fn </span>new(
-        connections: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>MuxPeerConnections&lt;(ModuleInstanceId, String), DkgPeerMsg&gt;,
-        module_instance_id: ModuleInstanceId,
-        our_id: PeerId,
-        peers: Vec&lt;PeerId&gt;,
+        num_peers: NumPeers,
+        identity: PeerId,
+        connections: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>DynP2PConnections&lt;DkgPeerMsg&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
+            num_peers,
+            identity,
             connections,
-            module_instance_id,
-            our_id,
-            peers,
         }
     }
 
-    <span class="kw">pub fn </span>peer_ids(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[PeerId] {
-        <span class="self">self</span>.peers.as_slice()
+    <span class="kw">pub fn </span>num_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; NumPeers {
+        <span class="self">self</span>.num_peers
     }
 }
 </code></pre></div></section></main></body></html>

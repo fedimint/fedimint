@@ -774,15 +774,7 @@
 <a href="#773" id="773">773</a>
 <a href="#774" id="774">774</a>
 <a href="#775" id="775">775</a>
-<a href="#776" id="776">776</a>
-<a href="#777" id="777">777</a>
-<a href="#778" id="778">778</a>
-<a href="#779" id="779">779</a>
-<a href="#780" id="780">780</a>
-<a href="#781" id="781">781</a>
-<a href="#782" id="782">782</a>
-<a href="#783" id="783">783</a>
-<a href="#784" id="784">784</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#776" id="776">776</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 
@@ -796,7 +788,7 @@
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_core::bitcoin::hashes::sha256;
 <span class="kw">use </span>fedimint_core::config::{
-    ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
+    ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
@@ -832,7 +824,7 @@
     LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0, OutgoingWitness,
     MODULE_CONSENSUS_VERSION,
 };
-<span class="kw">use </span>fedimint_server::config::distributedgen::{evaluate_polynomial_g1, PeerHandleOps};
+<span class="kw">use </span>fedimint_server::config::distributedgen::{eval_poly_g1, PeerHandleOps};
 <span class="kw">use </span>fedimint_server::net::api::check_auth;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>group::ff::Field;
@@ -1010,34 +1002,26 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>PeerHandle,
         params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
-    ) -&gt; DkgResult&lt;ServerModuleConfig&gt; {
+    ) -&gt; anyhow::Result&lt;ServerModuleConfig&gt; {
         <span class="kw">let </span>params = <span class="self">self</span>.parse_params(params).unwrap();
-        <span class="kw">let </span>g1 = peers.run_dkg_g1(()).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>(poly_g1, sk) = g1[<span class="kw-2">&amp;</span>()].clone().tpe();
+        <span class="kw">let </span>(polynomial, sks) = peers.run_dkg_g1().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>server = LightningConfig {
             local: LightningConfigLocal {
                 bitcoin_rpc: params.local.bitcoin_rpc.clone(),
             },
             consensus: LightningConfigConsensus {
-                tpe_agg_pk: tpe::AggregatePublicKey(poly_g1[<span class="number">0</span>].to_affine()),
+                tpe_agg_pk: tpe::AggregatePublicKey(polynomial[<span class="number">0</span>].to_affine()),
                 tpe_pks: peers
+                    .num_peers()
                     .peer_ids()
-                    .iter()
-                    .map(|peer| {
-                        <span class="kw">let </span>pk = evaluate_polynomial_g1(
-                            <span class="kw-2">&amp;</span>poly_g1,
-                            <span class="kw-2">&amp;</span>Scalar::from(peer.to_usize() <span class="kw">as </span>u64 + <span class="number">1</span>),
-                        );
-
-                        (<span class="kw-2">*</span>peer, PublicKeyShare(pk))
-                    })
+                    .map(|peer| (peer, PublicKeyShare(eval_poly_g1(<span class="kw-2">&amp;</span>polynomial, <span class="kw-2">&amp;</span>peer))))
                     .collect(),
                 fee_consensus: params.consensus.fee_consensus.clone(),
                 network: params.consensus.network,
             },
             private: LightningConfigPrivate {
-                sk: SecretKeyShare(sk),
+                sk: SecretKeyShare(sks),
             },
         };
 

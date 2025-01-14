@@ -226,7 +226,7 @@
 <span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::config::{
-    ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
+    ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
@@ -320,7 +320,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _peers: <span class="kw-2">&amp;</span>PeerHandle,
         params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
-    ) -&gt; DkgResult&lt;ServerModuleConfig&gt; {
+    ) -&gt; anyhow::Result&lt;ServerModuleConfig&gt; {
         <span class="kw">let </span>_params = <span class="self">self</span>.parse_params(params).unwrap();
 
         <span class="prelude-val">Ok</span>(UnknownConfig {

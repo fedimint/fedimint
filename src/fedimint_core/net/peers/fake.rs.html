@@ -62,7 +62,15 @@
 <a href="#61" id="61">61</a>
 <a href="#62" id="62">62</a>
 <a href="#63" id="63">63</a>
-<a href="#64" id="64">64</a></pre></div><pre class="rust"><code><span class="kw">use </span>async_channel::bounded;
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a></pre></div><pre class="rust"><code><span class="kw">use </span>async_channel::bounded;
 <span class="doccomment">/// Fake (channel-based) implementation of [`super::DynP2PConnections`].
 </span><span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::net::peers::{DynP2PConnections, IP2PConnections};
@@ -97,6 +105,14 @@
 
     <span class="kw">async fn </span>receive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;(PeerId, M)&gt; {
         <span class="self">self</span>.rx.recv().<span class="kw">await</span>.map(|msg| (<span class="self">self</span>.peer, msg)).ok()
+    }
+
+    <span class="kw">async fn </span>receive_from_peer(<span class="kw-2">&amp;</span><span class="self">self</span>, _peer: PeerId) -&gt; <span class="prelude-ty">Option</span>&lt;M&gt; {
+        <span class="self">self</span>.rx.recv().<span class="kw">await</span>.ok()
+    }
+
+    <span class="kw">async fn </span>await_empty_outgoing_message_queues(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="macro">unimplemented!</span>()
     }
 }
 
