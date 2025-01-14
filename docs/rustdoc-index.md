@@ -1,8 +1,6 @@
 # Fedimint Technical Reference Documentation
 
 <!-- this page is used a landing page for https://docs.fedimint.org/ -->
-<!-- lots of links in this document are relative to the generated document, so disabling linkcheck altogether: -->
-<!-- markdown-link-check-disable -->
 
 ## Target audience
 

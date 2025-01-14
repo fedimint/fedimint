@@ -25,11 +25,7 @@ Here are the recommended steps for new developers:
 
 Small PRs fixing typos, TODOs, or broken links are always welcome. Please discuss larger changes on Discord or GitHub before proceeding.
 
-<!-- markdown-link-check-disable -->
-
 For commit messages, please use the [imperative mood](https://stackoverflow.com/questions/3580013/should-i-use-past-or-present-tense-in-git-commit-messages/3580764#3580764).
-
-<!-- markdown-link-check-enable -->
 
 **Note:** Contributing to the core Fedimint repo requires expertise in Rust and distributed systems. If you're new to coding, Bitcoin, or Rust, consider starting with our more approachable projects like UIs, clients, or other services to familiarize yourself with Fedimint before tackling the core repo. Finding a good issue that matches your skillset is crucial—please reach out to @kodylow to ensure a smooth start.
 
