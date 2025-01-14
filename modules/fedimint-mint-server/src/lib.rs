@@ -16,19 +16,19 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
-    CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-    MigrationContext,
+    CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCore,
+    IDatabaseTransactionOpsCoreTyped, MigrationContext,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
-    TransactionItemAmount, CORE_CONSENSUS_VERSION,
+    api_endpoint, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
+    ModuleInit, PeerHandle, SupportedModuleApiVersions, TransactionItemAmount,
+    CORE_CONSENSUS_VERSION,
 };
 use fedimint_core::util::BoxFuture;
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, secp256k1, Amount,
-    NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti,
+    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, NumPeersExt,
+    OutPoint, PeerId, Tiered, TieredMulti,
 };
 use fedimint_logging::LOG_MODULE_MINT;
 pub use fedimint_mint_common as common;
@@ -36,7 +36,6 @@ use fedimint_mint_common::config::{
     MintClientConfig, MintConfig, MintConfigConsensus, MintConfigLocal, MintConfigPrivate,
     MintGenParams,
 };
-use fedimint_mint_common::endpoint_constants::{BACKUP_ENDPOINT, RECOVER_ENDPOINT};
 pub use fedimint_mint_common::{BackupRequest, SignedBackupRequest};
 use fedimint_mint_common::{
     MintCommonInit, MintConsensusItem, MintInput, MintInputError, MintModuleTypes, MintOutput,
@@ -68,9 +67,8 @@ use tracing::{debug, info, warn};
 use crate::common::endpoint_constants::{BLIND_NONCE_USED_ENDPOINT, NOTE_SPENT_ENDPOINT};
 use crate::common::{BlindNonce, Nonce};
 use crate::db::{
-    BlindNonceKey, BlindNonceKeyPrefix, DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey,
-    EcashBackupKeyPrefix, MintAuditItemKey, MintAuditItemKeyPrefix, MintOutputOutcomeKey,
-    MintOutputOutcomePrefix, NonceKey, NonceKeyPrefix,
+    BlindNonceKey, BlindNonceKeyPrefix, DbKeyPrefix, MintAuditItemKey, MintAuditItemKeyPrefix,
+    MintOutputOutcomeKey, MintOutputOutcomePrefix, NonceKey, NonceKeyPrefix,
 };
 
 #[derive(Debug, Clone)]
@@ -111,16 +109,6 @@ impl ModuleInit for MintInit {
                         MintOutputOutcome,
                         mint,
                         "Output Outcomes"
-                    );
-                }
-                DbKeyPrefix::EcashBackup => {
-                    push_db_pair_items!(
-                        dbtx,
-                        EcashBackupKeyPrefix,
-                        EcashBackupKey,
-                        ECashUserBackupSnapshot,
-                        mint,
-                        "User Ecash Backup"
                     );
                 }
                 DbKeyPrefix::BlindNonce => {
@@ -325,6 +313,7 @@ impl ServerModuleInit for MintInit {
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
         let mut migrations = BTreeMap::new();
         migrations.insert(DatabaseVersion(0), migrate_db_v0 as CoreMigrationFn);
+        migrations.insert(DatabaseVersion(1), migrate_db_v1 as CoreMigrationFn);
         migrations
     }
 }
@@ -374,6 +363,18 @@ fn migrate_db_v0(mut migration_context: MigrationContext<'_>) -> BoxFuture<anyho
             warn!(target: LOG_MODULE_MINT, "{double_issuances} blind nonces were reused, money was burned by faulty user clients!");
         }
 
+        Ok(())
+    })
+}
+
+// Remove now unused ECash backups from DB. Backup functionality moved to core.
+fn migrate_db_v1(mut migration_context: MigrationContext<'_>) -> BoxFuture<anyhow::Result<()>> {
+    Box::pin(async move {
+        migration_context
+            .dbtx()
+            .raw_remove_by_prefix(&[0x15])
+            .await
+            .expect("DB error");
         Ok(())
     })
 }
@@ -611,23 +612,6 @@ impl ServerModule for Mint {
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
             api_endpoint! {
-                BACKUP_ENDPOINT,
-                ApiVersion::new(0, 0),
-                async |module: &Mint, context, request: SignedBackupRequest| -> () {
-                    module
-                        .handle_backup_request(&mut context.dbtx().into_nc(), request).await?;
-                    Ok(())
-                }
-            },
-            api_endpoint! {
-                RECOVER_ENDPOINT,
-                ApiVersion::new(0, 0),
-                async |module: &Mint, context, id: secp256k1::PublicKey| -> Option<ECashUserBackupSnapshot> {
-                    Ok(module
-                        .handle_recover_request(&mut context.dbtx().into_nc(), id).await)
-                }
-            },
-            api_endpoint! {
                 NOTE_SPENT_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Mint, context, nonce: Nonce| -> bool {
@@ -642,56 +626,6 @@ impl ServerModule for Mint {
                 }
             },
         ]
-    }
-}
-
-impl Mint {
-    async fn handle_backup_request(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        request: SignedBackupRequest,
-    ) -> Result<(), ApiError> {
-        let request = request
-            .verify_valid(secp256k1::SECP256K1)
-            .map_err(|_| ApiError::bad_request("invalid request".into()))?;
-
-        debug!(
-            target: LOG_MODULE_MINT,
-            id = %request.id,
-            len = request.payload.len(),
-            "Received user e-cash backup request"
-        );
-        if let Some(prev) = dbtx.get_value(&EcashBackupKey(request.id)).await {
-            if request.timestamp <= prev.timestamp {
-                debug!(
-                    target: LOG_MODULE_MINT,
-                    id = %request.id,
-                    len = request.payload.len(),
-                    "Received user e-cash backup request with old timestamp - ignoring"
-                );
-                return Err(ApiError::bad_request("timestamp too small".into()));
-            }
-        }
-
-        info!(target: LOG_MODULE_MINT, id = %request.id, len = request.payload.len(), "Storing new user e-cash backup");
-        dbtx.insert_entry(
-            &EcashBackupKey(request.id),
-            &ECashUserBackupSnapshot {
-                timestamp: request.timestamp,
-                data: request.payload.clone(),
-            },
-        )
-        .await;
-
-        Ok(())
-    }
-
-    async fn handle_recover_request(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        id: secp256k1::PublicKey,
-    ) -> Option<ECashUserBackupSnapshot> {
-        dbtx.get_value(&EcashBackupKey(id)).await
     }
 }
 

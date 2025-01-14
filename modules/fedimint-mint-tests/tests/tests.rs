@@ -513,7 +513,6 @@ mod fedimint_migration_tests {
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
-    use fedimint_core::time::now;
     use fedimint_core::{
         secp256k1, Amount, BitcoinHash, OutPoint, Tiered, TieredMulti, TransactionId,
     };
@@ -531,9 +530,8 @@ mod fedimint_migration_tests {
     use fedimint_mint_client::{MintClientInit, MintClientModule, NoteIndex, SpendableNote};
     use fedimint_mint_common::{MintCommonInit, MintOutputOutcome, Nonce};
     use fedimint_mint_server::db::{
-        DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix,
-        MintAuditItemKey, MintAuditItemKeyPrefix, MintOutputOutcomeKey, MintOutputOutcomePrefix,
-        NonceKey, NonceKeyPrefix,
+        DbKeyPrefix, MintAuditItemKey, MintAuditItemKeyPrefix, MintOutputOutcomeKey,
+        MintOutputOutcomePrefix, NonceKey, NonceKeyPrefix,
     };
     use fedimint_server::core::DynServerModuleInit;
     use fedimint_testing::db::{
@@ -600,13 +598,6 @@ mod fedimint_migration_tests {
             .await;
         dbtx.insert_new_entry(&mint_audit_redemption_total, &Amount::from_sats(15000))
             .await;
-
-        let backup_key = EcashBackupKey(pk);
-        let ecash_backup = ECashUserBackupSnapshot {
-            timestamp: now(),
-            data: BYTE_32.to_vec(),
-        };
-        dbtx.insert_new_entry(&backup_key, &ecash_backup).await;
 
         dbtx.commit_tx().await;
     }
@@ -763,19 +754,6 @@ mod fedimint_migration_tests {
                             "validate_migrations was not able to read any MintAuditItems"
                         );
                         info!("Validated MintAuditItem");
-                    }
-                    DbKeyPrefix::EcashBackup => {
-                        let backups = dbtx
-                            .find_by_prefix(&EcashBackupKeyPrefix)
-                            .await
-                            .collect::<Vec<_>>()
-                            .await;
-                        let num_backups = backups.len();
-                        ensure!(
-                            num_backups > 0,
-                            "validate_migrations was not able to read any EcashBackups"
-                        );
-                        info!("Validated EcashBackup");
                     }
                     DbKeyPrefix::BlindNonce => {
                         // Would require an entire re-design of the way we test
