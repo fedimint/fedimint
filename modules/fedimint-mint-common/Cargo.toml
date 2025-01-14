@@ -17,7 +17,6 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-bincode = { workspace = true }
 bitcoin_hashes = { workspace = true }
 fedimint-core = { workspace = true }
 serde = { workspace = true }
