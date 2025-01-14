@@ -48,18 +48,18 @@ areas of Bitcoin development, so there is something for everyone. See below for 
 
 ## Running your own Fedimint
 
-It's easy to set up and run your own federations. Fedimint is designed to
-be [Byzantine Fault Tolerant](https://en.wikipedia.org/wiki/Byzantine_fault) so is resilient to `m` malicious nodes in a
-federation of `3m + 1` nodes. If you run a federation of 4 guardians you are resilient to 1 malicious guardian, if you
-run a federation of 7 guardians you are resilient to 2 guardians, etc.
+The preferred way to run Fedimint is with multiple **guardian servers** working together in a federation. Fedimint is
+built to be **Byzantine Fault Tolerant**, meaning it can continue functioning even if some guardians act maliciously.
+Specifically, a federation with `3m + 1` guardians can tolerate up to m malicious guardians. For example:
+	•	A federation with 4 guardians can handle 1 malicious guardian.
+	•	A federation with 7 guardians can handle 2 malicious guardians.
 
-Fedimint can also be run in "solo mode" with a single guardian. This is useful for testing and development, but is not
-recommended for production use.
+You can also run Fedimint in **solo mode** with just one guardian. While this is useful for testing or development, it
+is not recommended for real-world use since it lacks the resilience of a federation with multiple guardians.
 
-To do lightning payments, Fedimint requires
-a [Lightning Gateway](https://github.com/fedimint/fedimint/blob/master/docs/gateway.md): a user of the federation that
-is willing to swap ecash in exchange for sending/receiving lightning payments. The Lightning Gateway is not a guardian
-and acts as an untrusted economic actor serving the federation.
+To support **Lightning payments**, Fedimint requires a **Lightning Gateway**. This is a participant in the federation
+that swaps ecash for sending and receiving Lightning payments. Note that the Lightning Gateway is not a guardian—it’s an
+untrusted economic actor that interacts with the federation.
 
 ### Setting up Federations
 
@@ -107,7 +107,7 @@ the [Contributing Guidelines](CONTRIBUTING.md).
   Bitcoin, Lightning, and Chaumian Ecash. You can write custom modules that define further consensus items and
   transaction types leveraging the payments modules to build your own federated applications. We are always looking for
   developers to help build custom modules and to help improve the module system.
-- [Fedimint Web SDK](https://github.com/fedimint/fedimint-web-sdk): The Fedimint Web SDK is a Typescript library for 
+- [Fedimint Web SDK](https://github.com/fedimint/fedimint-web-sdk): The Fedimint Web SDK is a Typescript library for
   building Fedimint applications. We are looking for developers to help improve the SDK and add support for more features.
 
 ## Spinning up the Fedimint Developer Environment
@@ -154,9 +154,9 @@ If you want to run with UIs, see the [UI](https://github.com/fedimint/ui) repo f
 
 | Area              | Lead-Maintainer    | Co-Maintainers               | Status                                |
 |-------------------|--------------------|------------------------------|---------------------------------------|
-| Project Lead      | @elsirion          | @dpc @joschisan              | X                                     | 
-| Core Server       | @joschisan         | X                            | mostly well factored, no known issues | 
-| Core Consensus    | @joschisan         | @bradleystachurski           | polished and documented               | 
+| Project Lead      | @elsirion          | @dpc @joschisan              | X                                     |
+| Core Server       | @joschisan         | X                            | mostly well factored, no known issues |
+| Core Consensus    | @joschisan         | @bradleystachurski           | polished and documented               |
 | Lightning Module  | @joschisan         | @m1sterc001guy               | active development, known issues      |
 | Mint Module       | @joschisan         | X                            | active development, known issues      |
 | Wallet Module     | @bradleystachurski | @dpc @joschisan              | active development, critical issues   |
