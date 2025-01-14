@@ -1,6 +1,6 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::{Error, Read, Write};
+use std::io::{Cursor, Error, Read, Write};
 
 use anyhow::{bail, ensure, Context, Result};
 use bitcoin::secp256k1::{Keypair, PublicKey, Secp256k1, SignOnly};
@@ -102,7 +102,11 @@ impl ClientBackup {
 
     /// Encrypt with a key and turn into [`EncryptedClientBackup`]
     pub fn encrypt_to(&self, key: &fedimint_aead::LessSafeKey) -> Result<EncryptedClientBackup> {
-        let encoded = Encodable::consensus_encode_to_vec(self);
+        let mut encoded = Encodable::consensus_encode_to_vec(self);
+
+        let alignment_size = Self::get_alignment_size(encoded.len());
+        let padding_size = alignment_size - encoded.len();
+        encoded.write_all(&vec![0u8; padding_size])?;
 
         let encrypted = fedimint_aead::encrypt(encoded, key)?;
         Ok(EncryptedClientBackup(encrypted))
@@ -175,14 +179,18 @@ impl Encodable for ClientBackup {
         len += self.metadata.consensus_encode(writer)?;
         len += self.modules.consensus_encode(writer)?;
 
-        // FIXME: this still leaks some information about the backup size if the padding
-        // is so short that its length is encoded as 1 byte instead of 3.
-        let estimated_len = len + 3;
-
-        // Hide small changes in backup size for privacy
-        let alignment_size = Self::get_alignment_size(estimated_len); // +3 for most likely padding len len
-        let padding = vec![0u8; alignment_size - estimated_len];
-        len += padding.consensus_encode(writer)?;
+        // Old-style padding.
+        //
+        // Older version of the client used a custom zero-filled vec to
+        // pad `ClientBackup` to alignment-size here. This has a problem
+        // that the size of encoding of the padding can have different sizes
+        // (due to var-ints).
+        //
+        // Conceptually serialization is also a the wrong place to do padding
+        // anyway, so we moved padding to encrypt/decryption. But for abundance of
+        // caution, we'll keep the old padding around, and always fill it
+        // with an empty Vec.
+        len += Vec::<u8>::new().consensus_encode(writer)?;
 
         Ok(len)
     }
@@ -219,7 +227,16 @@ impl EncryptedClientBackup {
         decoders: &ModuleDecoderRegistry,
     ) -> Result<ClientBackup> {
         let decrypted = fedimint_aead::decrypt(&mut self.0, key)?;
-        Ok(ClientBackup::consensus_decode_whole(decrypted, decoders)?)
+        let mut cursor = Cursor::new(decrypted);
+        // We specifically want to ignore the padding in the backup here.
+        let client_backup = ClientBackup::consensus_decode_partial(&mut cursor, decoders)?;
+        debug!(
+            target: LOG_CLIENT_BACKUP,
+            len = decrypted.len(),
+            padding = u64::try_from(decrypted.len()).expect("Can't fail") - cursor.position(),
+            "Decrypted client backup"
+        );
+        Ok(client_backup)
     }
 
     pub fn into_backup_request(self, keypair: &Keypair) -> Result<SignedBackupRequest> {
@@ -457,7 +474,6 @@ mod tests {
         };
 
         let encoded = orig.consensus_encode_to_vec();
-        assert_eq!(encoded.len(), ClientBackup::PADDING_ALIGNMENT);
         assert_eq!(
             orig,
             ClientBackup::consensus_decode_whole(&encoded, &ModuleRegistry::default())?
@@ -468,6 +484,8 @@ mod tests {
 
     #[test]
     fn sanity_ecash_backup_encrypt_decrypt() -> Result<()> {
+        const ENCRYPTION_HEADER_LEN: usize = 28;
+
         let orig = ClientBackup {
             modules: BTreeMap::new(),
             session_count: 1,
@@ -477,7 +495,14 @@ mod tests {
         let secret = DerivableSecret::new_root(&[1; 32], &[1, 32]);
         let key = Client::get_derived_backup_encryption_key_static(&secret);
 
+        let empty_encrypted = fedimint_aead::encrypt(vec![], &key)?;
+        assert_eq!(empty_encrypted.len(), ENCRYPTION_HEADER_LEN);
+
         let encrypted = orig.encrypt_to(&key)?;
+        assert_eq!(
+            encrypted.len(),
+            ClientBackup::PADDING_ALIGNMENT + ENCRYPTION_HEADER_LEN
+        );
 
         let decrypted = encrypted.decrypt_with(&key, &ModuleRegistry::default())?;
 
