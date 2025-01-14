@@ -868,7 +868,8 @@
 <a href="#867" id="867">867</a>
 <a href="#868" id="868">868</a>
 <a href="#869" id="869">869</a>
-<a href="#870" id="870">870</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -916,7 +917,7 @@
     SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
 };
 <span class="kw">use </span><span class="kw">crate</span>::consensus::debug::{DebugConsensusItem, DebugConsensusItemCompact};
-<span class="kw">use </span><span class="kw">crate</span>::consensus::transaction::process_transaction_with_dbtx;
+<span class="kw">use </span><span class="kw">crate</span>::consensus::transaction::{process_transaction_with_dbtx, TxProcessingMode};
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::metrics::{
     CONSENSUS_ITEMS_PROCESSED_TOTAL, CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS,
@@ -1661,6 +1662,7 @@
                     dbtx,
                     <span class="kw-2">&amp;</span>transaction,
                     <span class="self">self</span>.cfg.consensus.version,
+                    TxProcessingMode::Consensus,
                 )
                 .<span class="kw">await
                 </span>.map_err(|error| <span class="macro">anyhow!</span>(error.to_string()))<span class="question-mark">?</span>;

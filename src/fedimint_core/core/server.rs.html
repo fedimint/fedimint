@@ -276,7 +276,61 @@
 <a href="#275" id="275">275</a>
 <a href="#276" id="276">276</a>
 <a href="#277" id="277">277</a>
-<a href="#278" id="278">278</a></pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint Core Server module interface
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a></pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint Core Server module interface
 //!
 //! Fedimint supports externally implemented modules.
 //!
@@ -359,6 +413,23 @@
         output: <span class="kw-2">&amp;</span>DynOutput,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, DynOutputError&gt;;
+
+    <span class="doccomment">/// See [`ServerModule::verify_input_submission`]
+    </span><span class="attr">#[doc(hidden)]
+    </span><span class="kw">async fn </span>verify_input_submission&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>, <span class="lifetime">'c</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'c</span>&gt;,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">'b </span>DynInput,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), DynInputError&gt;;
+
+    <span class="doccomment">/// See [`ServerModule::verify_output_submission`]
+    </span><span class="attr">#[doc(hidden)]
+    </span><span class="kw">async fn </span>verify_output_submission&lt;<span class="lifetime">'a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'a</span>&gt;,
+        _output: <span class="kw-2">&amp;</span>DynOutput,
+        _out_point: OutPoint,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), DynOutputError&gt;;
 
     <span class="doccomment">/// See [`ServerModule::output_status`]
     </span><span class="attr">#[deprecated(note = <span class="string">"https://github.com/fedimint/fedimint/issues/6671"</span>)]
@@ -496,6 +567,43 @@
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, DynOutputError&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::process_output(
+            <span class="self">self</span>,
+            dbtx,
+            output
+                .as_any()
+                .downcast_ref::&lt;&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::Common <span class="kw">as </span>ModuleCommon&gt;::Output&gt;()
+                .expect(<span class="string">"incorrect output type passed to module plugin"</span>),
+            out_point,
+        )
+        .<span class="kw">await
+        </span>.map_err(|v| DynOutputError::from_typed(output.module_instance_id(), v))
+    }
+
+    <span class="kw">async fn </span>verify_input_submission&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>, <span class="lifetime">'c</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'c</span>&gt;,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">'b </span>DynInput,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), DynInputError&gt; {
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::verify_input_submission(
+            <span class="self">self</span>,
+            dbtx,
+            input
+                .as_any()
+                .downcast_ref::&lt;&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::Common <span class="kw">as </span>ModuleCommon&gt;::Input&gt;()
+                .expect(<span class="string">"incorrect input type passed to module plugin"</span>),
+        )
+        .<span class="kw">await
+        </span>.map(Into::into)
+        .map_err(|v| DynInputError::from_typed(input.module_instance_id(), v))
+    }
+
+    <span class="kw">async fn </span>verify_output_submission&lt;<span class="lifetime">'a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'a</span>&gt;,
+        output: <span class="kw-2">&amp;</span>DynOutput,
+        out_point: OutPoint,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), DynOutputError&gt; {
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::verify_output_submission(
             <span class="self">self</span>,
             dbtx,
             output

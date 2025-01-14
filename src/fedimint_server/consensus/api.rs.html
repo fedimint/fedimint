@@ -719,7 +719,8 @@
 <a href="#718" id="718">718</a>
 <a href="#719" id="719">719</a>
 <a href="#720" id="720">720</a>
-<a href="#721" id="721">721</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
+<a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -779,7 +780,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
 <span class="kw">use </span><span class="kw">crate</span>::consensus::engine::get_finished_session_count_static;
-<span class="kw">use </span><span class="kw">crate</span>::consensus::transaction::process_transaction_with_dbtx;
+<span class="kw">use </span><span class="kw">crate</span>::consensus::transaction::{process_transaction_with_dbtx, TxProcessingMode};
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
 <span class="kw">use </span><span class="kw">crate</span>::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix};
@@ -847,6 +848,7 @@
             <span class="kw-2">&amp;mut </span>dbtx,
             <span class="kw-2">&amp;</span>transaction,
             <span class="self">self</span>.cfg.consensus.version,
+            TxProcessingMode::Submission,
         )
         .<span class="kw">await
         </span>.inspect_err(|err| {

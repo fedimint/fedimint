@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["process_transaction_with_dbtx"],"struct":["FundingVerifier"]};
+window.SIDEBAR_ITEMS = {"enum":["TxProcessingMode"],"fn":["process_transaction_with_dbtx"],"struct":["FundingVerifier"]};
