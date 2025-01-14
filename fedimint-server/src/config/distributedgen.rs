@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::io::Write;
 
-use anyhow::{ensure, format_err, Context};
+use anyhow::{ensure, Context};
 use async_trait::async_trait;
 use bitcoin::hashes::sha256::{Hash as Sha256, HashEngine};
 use bitcoin::hashes::Hash as BitcoinHash;
@@ -16,7 +16,6 @@ use fedimint_core::{NumPeers, PeerId};
 use rand::rngs::OsRng;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use sha3::Digest;
 use threshold_crypto::ff::Field;
 use threshold_crypto::group::Curve;
 use threshold_crypto::{G1Affine, G1Projective, G2Affine, G2Projective};
@@ -41,7 +40,7 @@ struct Dkg<G> {
 /// non-cooperative peers
 impl<G: DkgGroup> Dkg<G> {
     /// Creates the DKG and the first step of the algorithm
-    pub fn new(num_peers: NumPeers, identity: PeerId, generator: G) -> (Self, DkgStep<G>) {
+    pub fn new(num_peers: NumPeers, identity: PeerId, generator: G) -> (Self, DkgMessage<G>) {
         let f1_poly = random_coefficients(num_peers.threshold() - 1);
         let f2_poly = random_coefficients(num_peers.threshold() - 1);
 
@@ -62,7 +61,7 @@ impl<G: DkgGroup> Dkg<G> {
             .f1_poly
             .iter()
             .map(|c| dkg.generator * *c)
-            .zip(dkg.f2_poly.iter().map(|c| dkg.gen_h() * *c))
+            .zip(dkg.f2_poly.iter().map(|c| gen_h::<G>() * *c))
             .map(|(g, h)| g + h)
             .collect();
 
@@ -71,45 +70,53 @@ impl<G: DkgGroup> Dkg<G> {
         dkg.commitments.insert(identity, commit);
         dkg.hashed_commits.insert(identity, hashed);
 
-        let step = dkg.broadcast(&DkgMessage::HashedCommit(hashed));
-
-        (dkg, step)
+        (dkg, DkgMessage::HashedCommit(hashed))
     }
 
     /// Runs a single step of the DKG algorithm, processing a `msg` from `peer`
     pub fn step(&mut self, peer: PeerId, msg: DkgMessage<G>) -> anyhow::Result<DkgStep<G>> {
         match msg {
             DkgMessage::HashedCommit(hashed) => {
-                match self.hashed_commits.get(&peer) {
-                    Some(old) if *old != hashed => {
-                        return Err(format_err!("{peer} sent us two hashes!"))
-                    }
-                    _ => self.hashed_commits.insert(peer, hashed),
-                };
+                ensure!(
+                    self.hashed_commits.insert(peer, hashed).is_none(),
+                    "DKG: peer {peer} sent us two hash commitments."
+                );
 
                 if self.hashed_commits.len() == self.num_peers.total() {
-                    let our_commit = self.commitments[&self.identity].clone();
-                    return Ok(self.broadcast(&DkgMessage::Commit(our_commit)));
+                    let commit = self
+                        .commitments
+                        .get(&self.identity)
+                        .expect("DKG hash commitment not found for identity.")
+                        .clone();
+
+                    return Ok(DkgStep::Broadcast(DkgMessage::Commit(commit)));
                 }
             }
             DkgMessage::Commit(commit) => {
-                let hash = Self::hash(&commit);
                 ensure!(
                     self.num_peers.threshold() == commit.len(),
-                    "wrong degree from {peer}"
+                    "DKG: polynomial commitment from peer {peer} is of wrong degree."
                 );
-                ensure!(hash == self.hashed_commits[&peer], "wrong hash from {peer}");
 
-                match self.commitments.get(&peer) {
-                    Some(old) if *old != commit => {
-                        return Err(format_err!("{peer} sent us two commitments!"))
-                    }
-                    _ => self.commitments.insert(peer, commit),
-                };
+                let hash_commitment = *self
+                    .hashed_commits
+                    .get(&peer)
+                    .context("DKG: hash commitment not found for peer {peer}")?;
+
+                ensure!(
+                    Self::hash(&commit) == hash_commitment,
+                    "DKG: polynomial commitment from peer {peer} has invalid hash."
+                );
+
+                ensure!(
+                    self.commitments.insert(peer, commit).is_none(),
+                    "DKG: peer {peer} sent us two commitments."
+                );
 
                 // once everyone has made commitments, send out shares
                 if self.commitments.len() == self.num_peers.total() {
                     let mut messages = vec![];
+
                     for peer in self.num_peers.peer_ids() {
                         let s1 = eval_poly_scalar(&self.f1_poly, &scalar(&peer));
                         let s2 = eval_poly_scalar(&self.f2_poly, &scalar(&peer));
@@ -120,16 +127,19 @@ impl<G: DkgGroup> Dkg<G> {
                             messages.push((peer, DkgMessage::Share(s1, s2)));
                         }
                     }
+
                     return Ok(DkgStep::Messages(messages));
                 }
             }
             // Pedersen-VSS verifies the shares match the commitments
             DkgMessage::Share(s1, s2) => {
-                let share_product = (self.generator * s1) + (self.gen_h() * s2);
+                let share_product: G = (self.generator * s1) + (gen_h::<G>() * s2);
+
                 let commitment = self
                     .commitments
                     .get(&peer)
-                    .ok_or_else(|| format_err!("{peer} sent share before commit"))?;
+                    .context("DKG: polynomial commitment not found for peer {peer}.")?;
+
                 let commit_product: G = commitment
                     .iter()
                     .enumerate()
@@ -137,22 +147,28 @@ impl<G: DkgGroup> Dkg<G> {
                         *commit * scalar(&self.identity).pow(&[idx as u64, 0, 0, 0])
                     })
                     .reduce(|a, b| a + b)
-                    .expect("sums");
+                    .expect("DKG: polynomial commitment from peer {peer} is empty.");
 
-                ensure!(share_product == commit_product, "bad commit from {peer}");
-                match self.sk_shares.get(&peer) {
-                    Some(old) if *old != s1 => {
-                        return Err(format_err!("{peer} sent us two shares!"))
-                    }
-                    _ => self.sk_shares.insert(peer, s1),
-                };
+                ensure!(
+                    share_product == commit_product,
+                    "DKG: share from {peer} is invalid."
+                );
+
+                ensure!(
+                    self.sk_shares.insert(peer, s1).is_none(),
+                    "Peer {peer} sent us two shares."
+                );
 
                 if self.sk_shares.len() == self.num_peers.total() {
-                    let extract: Vec<G> =
-                        self.f1_poly.iter().map(|c| self.generator * *c).collect();
+                    let extract = self
+                        .f1_poly
+                        .iter()
+                        .map(|c| self.generator * *c)
+                        .collect::<Vec<G>>();
 
                     self.pk_shares.insert(self.identity, extract.clone());
-                    return Ok(self.broadcast(&DkgMessage::Extract(extract)));
+
+                    return Ok(DkgStep::Broadcast(DkgMessage::Extract(extract)));
                 }
             }
             // Feldman-VSS exposes the public key shares
@@ -160,8 +176,8 @@ impl<G: DkgGroup> Dkg<G> {
                 let share = self
                     .sk_shares
                     .get(&peer)
-                    .ok_or_else(|| format_err!("{peer} sent extract before share"))?;
-                let share_product = self.generator * *share;
+                    .context("DKG share not found for peer {peer}.")?;
+
                 let extract_product: G = extract
                     .iter()
                     .enumerate()
@@ -171,28 +187,31 @@ impl<G: DkgGroup> Dkg<G> {
                     .reduce(|a, b| a + b)
                     .expect("sums");
 
-                ensure!(share_product == extract_product, "bad extract from {peer}");
+                ensure!(
+                    self.generator * *share == extract_product,
+                    "DKG: extract from {peer} is invalid."
+                );
+
                 ensure!(
                     self.num_peers.threshold() == extract.len(),
-                    "wrong degree from {peer}"
+                    "wrong degree from {peer}."
                 );
-                match self.pk_shares.get(&peer) {
-                    Some(old) if *old != extract => {
-                        return Err(format_err!("{peer} sent us two extracts!"))
-                    }
-                    _ => self.pk_shares.insert(peer, extract),
-                };
+
+                ensure!(
+                    self.pk_shares.insert(peer, extract).is_none(),
+                    "DKG: peer {peer} sent us two extracts."
+                );
 
                 if self.pk_shares.len() == self.num_peers.total() {
                     let sks = self.sk_shares.values().sum();
 
                     let pks: Vec<G> = (0..self.num_peers.threshold())
-                        .map(|idx| {
+                        .map(|i| {
                             self.pk_shares
                                 .values()
-                                .map(|shares| *shares.get(idx).unwrap())
+                                .map(|shares| shares[i])
                                 .reduce(|a, b| a + b)
-                                .expect("sums")
+                                .expect("DKG: pk shares are empty.")
                         })
                         .collect();
 
@@ -210,30 +229,15 @@ impl<G: DkgGroup> Dkg<G> {
         for element in poly {
             engine
                 .write_all(element.to_bytes().as_ref())
-                .expect("hashes");
+                .expect("Writing to a hash engine cannot fail.");
         }
 
         Sha256::from_engine(engine)
     }
+}
 
-    fn broadcast(&self, message: &DkgMessage<G>) -> DkgStep<G> {
-        DkgStep::Messages(
-            self.num_peers
-                .peer_ids()
-                .filter(|peer| *peer != self.identity)
-                .map(|peer| (peer, message.clone()))
-                .collect(),
-        )
-    }
-
-    /// Get a second generator by hashing the first one to the curve
-    fn gen_h(&self) -> G {
-        let mut hash_engine = sha3::Sha3_256::new();
-
-        hash_engine.update(self.generator.clone().to_bytes().as_ref());
-
-        G::random(&mut ChaChaRng::from_seed(hash_engine.finalize().into()))
-    }
+fn gen_h<G: DkgGroup>() -> G {
+    G::random(&mut ChaChaRng::from_seed([42; 32]))
 }
 
 // `PeerId`s are offset by 1, since evaluating a poly at 0 reveals the secret
@@ -252,18 +256,14 @@ pub async fn run_dkg<G: DkgGroup>(
 where
     DkgMessage<G>: ISupportedDkgMessage,
 {
-    let (mut dkg, initial_step) = Dkg::new(num_peers, identity, generator);
+    let (mut dkg, initial_message) = Dkg::new(num_peers, identity, generator);
 
-    if let DkgStep::Messages(messages) = initial_step {
-        for (peer, message) in messages {
-            connections
-                .send(
-                    Recipient::Peer(peer),
-                    DkgPeerMsg::DistributedGen(message.to_msg()),
-                )
-                .await;
-        }
-    }
+    connections
+        .send(
+            Recipient::Everyone,
+            DkgPeerMsg::DistributedGen(initial_message.to_msg()),
+        )
+        .await;
 
     loop {
         for peer in num_peers.peer_ids().filter(|p| *p != identity) {
@@ -278,6 +278,14 @@ where
             };
 
             match dkg.step(peer, ISupportedDkgMessage::from_msg(message)?)? {
+                DkgStep::Broadcast(message) => {
+                    connections
+                        .send(
+                            Recipient::Everyone,
+                            DkgPeerMsg::DistributedGen(message.to_msg()),
+                        )
+                        .await;
+                }
                 DkgStep::Messages(messages) => {
                     for (peer, message) in messages {
                         connections
@@ -311,6 +319,7 @@ fn eval_poly_scalar(coefficients: &[Scalar], x: &Scalar) -> Scalar {
 
 #[derive(Debug, Clone)]
 pub enum DkgStep<G: DkgGroup> {
+    Broadcast(DkgMessage<G>),
     Messages(Vec<(PeerId, DkgMessage<G>)>),
     Result((Vec<G>, Scalar)),
 }
@@ -458,17 +467,24 @@ mod tests {
         let mut keys: HashMap<PeerId, (Vec<G>, Scalar)> = HashMap::new();
 
         for peer in &peers {
-            let (dkg, step) = Dkg::new(peers.to_num_peers(), *peer, group);
+            let (dkg, initial_message) = Dkg::new(peers.to_num_peers(), *peer, group);
             dkgs.insert(*peer, dkg);
-            steps.push_back((*peer, step));
+            steps.push_back((*peer, DkgStep::Broadcast(initial_message)));
         }
 
         while keys.len() < peers.len() {
             match steps.pop_front() {
-                Some((peer, DkgStep::Messages(messages))) => {
-                    for (receive_peer, msg) in messages {
+                Some((peer, DkgStep::Broadcast(message))) => {
+                    for receive_peer in peers.iter().filter(|p| **p != peer) {
                         let receive_dkg = dkgs.get_mut(&receive_peer).unwrap();
-                        let step = receive_dkg.step(peer, msg);
+                        let step = receive_dkg.step(peer, message.clone());
+                        steps.push_back((*receive_peer, step.unwrap()));
+                    }
+                }
+                Some((peer, DkgStep::Messages(messages))) => {
+                    for (receive_peer, messages) in messages {
+                        let receive_dkg = dkgs.get_mut(&receive_peer).unwrap();
+                        let step = receive_dkg.step(peer, messages);
                         steps.push_back((receive_peer, step.unwrap()));
                     }
                 }
