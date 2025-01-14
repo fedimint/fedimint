@@ -202,13 +202,9 @@ The install script lets you install one or all of:
 
 and it'll start the services on the following ports:
 
-<!-- markdown-link-check-disable -->
-
 - Fedimintd Guardian Dashboard: http://your.ip.add.ress:3000
 - Lightning Gateway Dashboard: http://your.ip.add.ress:3001
 - RTL Lightning Node Management: http://your.ip.add.ress.198:3003
-
-<!-- markdown-link-check-enable -->
 
 <p align="center">
 <img src="../setup-docs-assets/install_scripts.png" alt="Install Scripts" width="500">
@@ -405,11 +401,7 @@ docker-compose -f fedimintd/docker-compose.yaml exec fedimintd fedimint-cli help
 
 ### Lightning Gateway Dashboard
 
-<!-- markdown-link-check-disable -->
-
 Now that you're connected, you can go to the lightning gateway dashboard at http://your.ip.add.ress:3001 and see the gateway status.
-
-<!-- markdown-link-check-enable -->
 
 <p align="center">
 <img src="../setup-docs-assets/fed_deposit_addr.png" alt="Fed Deposit Address" width="500">
