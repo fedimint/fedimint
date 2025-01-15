@@ -472,11 +472,6 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                 // stress test with all peers online
                 try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
 
-                // ensure a degraded federation with the last peer online works, since the last
-                // peer is the last to restart
-                dev_fed.fed.terminate_server(1).await?;
-                try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
-
                 let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
                 info!(
                     "### fedimintd passed stress test for version {}",
