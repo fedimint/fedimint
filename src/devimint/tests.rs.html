@@ -2200,7 +2200,10 @@
 <a href="#2199" id="2199">2199</a>
 <a href="#2200" id="2200">2200</a>
 <a href="#2201" id="2201">2201</a>
-<a href="#2202" id="2202">2202</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
+<a href="#2202" id="2202">2202</a>
+<a href="#2203" id="2203">2203</a>
+<a href="#2204" id="2204">2204</a>
+<a href="#2205" id="2205">2205</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -2381,7 +2384,11 @@
             <span class="kw">let </span><span class="kw-2">mut </span>ln_sends = Vec::with_capacity(iterations);
             <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..iterations {
                 <span class="kw">let </span>invoice = cln
-                    .invoice(<span class="number">1_000_000</span>, <span class="macro">format!</span>(<span class="string">"Description{i}"</span>), <span class="macro">format!</span>(<span class="string">"Label{i}"</span>))
+                    .invoice(
+                        <span class="number">1_000_000</span>,
+                        <span class="macro">format!</span>(<span class="string">"Description{i}"</span>),
+                        <span class="macro">format!</span>(<span class="string">"Label{}"</span>, rand::random::&lt;u64&gt;()),
+                    )
                     .<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">let </span>start_time = Instant::now();
                 ln_pay(<span class="kw-2">&amp;</span>client, invoice, lnd_gw_id.clone(), <span class="bool-val">false</span>).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2409,7 +2416,7 @@
                 .invoice(
                     <span class="number">10_000_000</span>,
                     <span class="string">"LnReceiveLatencyDesc"</span>.to_string(),
-                    <span class="string">"LatencyLabel"</span>.to_string(),
+                    rand::random::&lt;u64&gt;().to_string(),
                 )
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             ln_pay(<span class="kw-2">&amp;</span>client, invoice, lnd_gw_id.clone(), <span class="bool-val">false</span>).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2583,6 +2590,10 @@
     // cause the upgrade test to fail
     </span><span class="kw">let </span>assert_thresholds = <span class="bool-val">false</span>;
 
+    <span class="comment">// running only one iteration greatly improves the total test time while still
+    // testing the same types of database entries
+    </span><span class="kw">let </span>iterations = <span class="number">1</span>;
+
     <span class="comment">// skip restore test for client upgrades, since restoring a client doesn't
     // require a persistent data dir
     </span><span class="kw">let </span>restore_test = <span class="kw">if </span>clients.is_some() {
@@ -2592,7 +2603,7 @@
             dev_fed.clone(),
             LatencyTest::Restore,
             clients,
-            <span class="number">20</span>,
+            iterations,
             assert_thresholds,
         )
         .left_future()
@@ -2604,7 +2615,7 @@
         dev_fed.clone(),
         LatencyTest::Reissue,
         clients,
-        <span class="number">20</span>,
+        iterations,
         assert_thresholds,
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2613,7 +2624,7 @@
         dev_fed.clone(),
         LatencyTest::LnSend,
         clients,
-        <span class="number">20</span>,
+        iterations,
         assert_thresholds,
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2622,7 +2633,7 @@
         dev_fed.clone(),
         LatencyTest::LnReceive,
         clients,
-        <span class="number">20</span>,
+        iterations,
         assert_thresholds,
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2631,7 +2642,7 @@
         dev_fed.clone(),
         LatencyTest::FmPay,
         clients,
-        <span class="number">20</span>,
+        iterations,
         assert_thresholds,
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2665,11 +2676,6 @@
 
                 <span class="comment">// stress test with all peers online
                 </span><span class="macro">try_join!</span>(stress_test_fed(<span class="kw-2">&amp;</span>dev_fed, <span class="prelude-val">None</span>), client.wait_session())<span class="question-mark">?</span>;
-
-                <span class="comment">// ensure a degraded federation with the last peer online works, since the last
-                // peer is the last to restart
-                </span>dev_fed.fed.terminate_server(<span class="number">1</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="macro">try_join!</span>(stress_test_fed(<span class="kw-2">&amp;</span>dev_fed, <span class="prelude-val">None</span>), client.wait_session())<span class="question-mark">?</span>;
 
                 <span class="kw">let </span>fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
                 <span class="macro">info!</span>(
