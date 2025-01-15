@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use anyhow::{ensure, format_err, Context};
 use async_trait::async_trait;
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
 use futures::Stream;
@@ -85,7 +86,7 @@ impl TlsTcpConnector {
 #[async_trait]
 impl<M> IP2PConnector<M> for TlsTcpConnector
 where
-    M: Serialize + DeserializeOwned + Send + 'static,
+    M: Encodable + Decodable + Serialize + DeserializeOwned + Send + 'static,
 {
     fn peers(&self) -> Vec<PeerId> {
         self.peers
