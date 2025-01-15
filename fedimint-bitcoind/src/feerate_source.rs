@@ -1,15 +1,16 @@
 use std::str::FromStr;
 
 use anyhow::{anyhow, bail, Result};
-use fedimint_bitcoind::DynBitcoindRpc;
+use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Feerate};
 use fedimint_logging::LOG_MODULE_WALLET;
-use fedimint_wallet_common::CONFIRMATION_TARGET;
 use jaq_core::load::{Arena, File, Loader};
 use jaq_core::{Ctx, Native, RcIter};
 use jaq_json::Val;
 use tracing::{debug, trace};
+
+use crate::DynBitcoindRpc;
 
 /// A feerate that we don't expect to ever happen in practice, that we are
 /// going to reject from a source to help catching mistakes and
@@ -20,9 +21,9 @@ const FEERATE_SOURCE_MAX_FEERATE_SATS_PER_VB: f64 = 10_000.0;
 const FEERATE_SOURCE_MIN_FEERATE_SATS_PER_VB: f64 = 1.0;
 
 #[apply(async_trait_maybe_send!)]
-pub trait FeeRateSource: Send + Sync {
+pub trait FeeRateSource: MaybeSend + MaybeSync {
     fn name(&self) -> String;
-    async fn fetch(&self) -> Result<Feerate>;
+    async fn fetch(&self, confirmation_target: u16) -> Result<Feerate>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -31,8 +32,8 @@ impl FeeRateSource for DynBitcoindRpc {
         self.get_bitcoin_rpc_config().kind
     }
 
-    async fn fetch(&self) -> Result<Feerate> {
-        self.get_fee_rate(CONFIRMATION_TARGET)
+    async fn fetch(&self, confirmation_target: u16) -> Result<Feerate> {
+        self.get_fee_rate(confirmation_target)
             .await?
             .ok_or_else(|| anyhow!("bitcoind did not return any feerate"))
     }
@@ -95,7 +96,7 @@ impl FeeRateSource for FetchJson {
             .map_or_else(|| "host-not-available".to_string(), |h| h.to_string())
     }
 
-    async fn fetch(&self) -> Result<Feerate> {
+    async fn fetch(&self, _confirmation_target: u16) -> Result<Feerate> {
         let json_resp: serde_json::Value = reqwest::get(self.source_url.clone().to_unsafe())
             .await?
             .json()

@@ -26,6 +26,11 @@ bitcoincore-rpc = { workspace = true, optional = true }
 esplora-client = { workspace = true, optional = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
+futures = { workspace = true }
 hex = { workspace = true }
+jaq-core = { workspace = true }
+jaq-json = { workspace = true }
+reqwest = { workspace = true }
 serde_json = { workspace = true }
+tokio = { workspace = true }
 tracing = { workspace = true }

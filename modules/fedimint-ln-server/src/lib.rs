@@ -8,9 +8,9 @@ pub mod db;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use anyhow::{bail, Context};
+use anyhow::{bail, format_err, Context};
 use bitcoin_hashes::{sha256, Hash as BitcoinHash};
-use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+use fedimint_bitcoind::create_bitcoind;
 use fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -27,7 +27,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::secp256k1::{Message, PublicKey, SECP256K1};
 use fedimint_core::server::DynServerModule;
-use fedimint_core::task::sleep;
+use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, NumPeersExt, OutPoint, PeerId,
     ServerModule,
@@ -65,6 +65,7 @@ use strum::IntoEnumIterator;
 use threshold_crypto::poly::Commitment;
 use threshold_crypto::serde_impl::SerdeSecret;
 use threshold_crypto::{PublicKeySet, SecretKeyShare};
+use tokio::sync::watch;
 use tracing::{debug, error, info, info_span, trace, warn};
 
 use crate::db::{
@@ -216,7 +217,12 @@ impl ServerModuleInit for LightningInit {
         // Eagerly initialize metrics that trigger infrequently
         LN_CANCEL_OUTGOING_CONTRACTS.get();
 
-        Ok(Lightning::new(args.cfg().to_typed()?, args.our_peer_id())?.into())
+        Ok(Lightning::new(
+            args.cfg().to_typed()?,
+            args.our_peer_id(),
+            args.task_group(),
+        )?
+        .into())
     }
 
     fn trusted_dealer_gen(
@@ -331,8 +337,9 @@ impl ServerModuleInit for LightningInit {
 #[derive(Debug)]
 pub struct Lightning {
     cfg: LightningConfig,
-    btc_rpc: DynBitcoindRpc,
     our_peer_id: PeerId,
+    /// Block count updated periodically by a background task
+    block_count_rx: watch::Receiver<Option<u64>>,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -353,7 +360,8 @@ impl ServerModule for Lightning {
             .collect()
             .await;
 
-        if let Ok(block_count_vote) = self.block_count().await {
+        if let Ok(block_count_vote) = self.get_block_count() {
+            debug!(target: LOG_MODULE_LN, ?block_count_vote, "Proposing block count");
             items.push(LightningConsensusItem::BlockCount(block_count_vote));
         }
 
@@ -932,21 +940,24 @@ impl ServerModule for Lightning {
 }
 
 impl Lightning {
-    fn new(cfg: LightningConfig, our_peer_id: PeerId) -> anyhow::Result<Self> {
+    fn new(
+        cfg: LightningConfig,
+        our_peer_id: PeerId,
+        task_group: &TaskGroup,
+    ) -> anyhow::Result<Self> {
         let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
+        let block_count_rx = btc_rpc.spawn_block_count_update_task(task_group)?;
         Ok(Lightning {
             cfg,
-            btc_rpc,
             our_peer_id,
+            block_count_rx,
         })
     }
 
-    async fn block_count(&self) -> anyhow::Result<u64> {
-        let res = self.btc_rpc.get_block_count().await;
-        if let Err(ref err) = res {
-            error!(target: LOG_MODULE_LN, "Error while calling get_block_count: {:?}", err);
-        }
-        res
+    fn get_block_count(&self) -> anyhow::Result<u64> {
+        self.block_count_rx
+            .borrow()
+            .ok_or_else(|| format_err!("Block count not available yet"))
     }
 
     async fn consensus_block_count(&self, dbtx: &mut DatabaseTransaction<'_>) -> u64 {
@@ -1241,6 +1252,7 @@ mod tests {
     use fedimint_core::module::registry::ModuleRegistry;
     use fedimint_core::module::{InputMeta, ServerModuleInit, TransactionItemAmount};
     use fedimint_core::secp256k1::{generate_keypair, PublicKey};
+    use fedimint_core::task::TaskGroup;
     use fedimint_core::{Amount, OutPoint, PeerId, ServerModule, TransactionId};
     use fedimint_ln_common::config::{
         LightningClientConfig, LightningConfig, LightningGenParams, LightningGenParamsConsensus,
@@ -1305,8 +1317,9 @@ mod tests {
 
     #[test_log::test(tokio::test)]
     async fn encrypted_preimage_only_usable_once() {
+        let task_group = TaskGroup::new();
         let (server_cfg, client_cfg) = build_configs();
-        let server = Lightning::new(server_cfg[0].clone(), 0.into()).unwrap();
+        let server = Lightning::new(server_cfg[0].clone(), 0.into(), &task_group).unwrap();
 
         let preimage = [42u8; 32];
         let encrypted_preimage = EncryptedPreimage(client_cfg.threshold_pub_key.encrypt([42; 32]));
@@ -1363,11 +1376,12 @@ mod tests {
 
     #[test_log::test(tokio::test)]
     async fn process_input_for_valid_incoming_contracts() {
+        let task_group = TaskGroup::new();
         let (server_cfg, client_cfg) = build_configs();
         let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         let mut dbtx = db.begin_transaction_nc().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
-        let server = Lightning::new(server_cfg[0].clone(), 0.into()).unwrap();
+        let server = Lightning::new(server_cfg[0].clone(), 0.into(), &task_group).unwrap();
 
         let preimage = PreimageKey(generate_keypair(&mut OsRng).1.serialize());
         let funded_incoming_contract = FundedContract::Incoming(FundedIncomingContract {
@@ -1423,11 +1437,12 @@ mod tests {
 
     #[test_log::test(tokio::test)]
     async fn process_input_for_valid_outgoing_contracts() {
+        let task_group = TaskGroup::new();
         let (server_cfg, _) = build_configs();
         let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         let mut dbtx = db.begin_transaction_nc().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
-        let server = Lightning::new(server_cfg[0].clone(), 0.into()).unwrap();
+        let server = Lightning::new(server_cfg[0].clone(), 0.into(), &task_group).unwrap();
 
         let preimage = Preimage([42u8; 32]);
         let gateway_key = random_pub_key();
