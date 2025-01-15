@@ -3,6 +3,7 @@ use std::iter::once;
 
 use anyhow::{ensure, Context};
 use async_trait::async_trait;
+use bitcoin::hashes::sha256;
 use bls12_381::{G1Affine, G1Projective, G2Affine, G2Projective, Scalar};
 use fedimint_core::config::{DkgMessage, DkgPeerMessage};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -20,6 +21,7 @@ struct Dkg {
     num_peers: NumPeers,
     identity: PeerId,
     polynomial: Vec<Scalar>,
+    hash_commitments: BTreeMap<PeerId, sha256::Hash>,
     commitments: BTreeMap<PeerId, Vec<(G1Projective, G2Projective)>>,
     sk_shares: BTreeMap<PeerId, Scalar>,
 }
@@ -39,19 +41,45 @@ impl Dkg {
             num_peers,
             identity,
             polynomial: polynomial.clone(),
+            hash_commitments: once((identity, commitment.consensus_hash_sha256())).collect(),
             commitments: once((identity, commitment)).collect(),
             sk_shares: BTreeMap::new(),
         }
     }
 
+    fn commitment(&self) -> Vec<(G1Projective, G2Projective)> {
+        self.polynomial.iter().map(|f| (g1(f), g2(f))).collect()
+    }
+
     fn initial_message(&self) -> DkgMessage {
-        DkgMessage::Commitment(self.polynomial.iter().map(|f| (g1(f), g2(f))).collect())
+        DkgMessage::Hash(self.commitment().consensus_hash_sha256())
     }
 
     /// Runs a single step of the DKG algorithm
     fn step(&mut self, peer: PeerId, msg: DkgMessage) -> anyhow::Result<DkgStep> {
         match msg {
+            DkgMessage::Hash(hash) => {
+                ensure!(
+                    self.hash_commitments.insert(peer, hash).is_none(),
+                    "DKG: peer {peer} sent us two hash commitments."
+                );
+
+                if self.hash_commitments.len() == self.num_peers.total() {
+                    return Ok(DkgStep::Broadcast(DkgMessage::Commitment(
+                        self.commitment(),
+                    )));
+                }
+            }
             DkgMessage::Commitment(polynomial) => {
+                ensure!(
+                    *self
+                        .hash_commitments
+                        .get(&peer)
+                        .context("DKG: hash commitment not found for peer {peer}")?
+                        == polynomial.consensus_hash_sha256(),
+                    "DKG: polynomial commitment from peer {peer} is of wrong degree."
+                );
+
                 ensure!(
                     self.num_peers.threshold() == polynomial.len(),
                     "DKG: polynomial commitment from peer {peer} is of wrong degree."
@@ -62,7 +90,7 @@ impl Dkg {
                     "DKG: peer {peer} sent us two commitments."
                 );
 
-                // Once everyone has made commitments, send out the key shares...
+                // Once everyone has send their commitments, send out the key shares...
 
                 if self.commitments.len() == self.num_peers.total() {
                     let mut messages = vec![];
@@ -167,6 +195,11 @@ pub async fn run_dkg(
             };
 
             match dkg.step(peer, message)? {
+                DkgStep::Broadcast(message) => {
+                    connections
+                        .send(Recipient::Everyone, DkgPeerMessage::DistributedGen(message))
+                        .await;
+                }
                 DkgStep::Messages(messages) => {
                     for (peer, msg) in messages {
                         connections
@@ -192,6 +225,7 @@ fn eval_poly_scalar(coefficients: &[Scalar], x: &Scalar) -> Scalar {
 }
 
 enum DkgStep {
+    Broadcast(DkgMessage),
     Messages(Vec<(PeerId, DkgMessage)>),
     Result((Vec<(G1Projective, G2Projective)>, Scalar)),
 }
@@ -293,7 +327,6 @@ mod tests {
     use std::collections::{BTreeMap, VecDeque};
 
     use bls12_381::{G1Projective, G2Projective};
-    use fedimint_core::config::DkgMessage;
     use fedimint_core::{NumPeersExt, PeerId};
     use group::Curve;
 
@@ -308,28 +341,25 @@ mod tests {
             .map(|peer| (*peer, Dkg::new(peers.to_num_peers(), *peer)))
             .collect::<BTreeMap<PeerId, Dkg>>();
 
-        let mut steps = VecDeque::new();
-
-        let messages = dkgs
+        let mut steps = dkgs
             .iter()
-            .map(|(peer, dkg)| (*peer, dkg.initial_message()))
-            .collect::<BTreeMap<PeerId, DkgMessage>>();
-
-        for (send_peer, initial_message) in messages {
-            for receive_peer in peers.iter().filter(|p| **p != send_peer) {
-                let step = dkgs
-                    .get_mut(receive_peer)
-                    .unwrap()
-                    .step(send_peer, initial_message.clone());
-
-                steps.push_back((*receive_peer, step.unwrap()));
-            }
-        }
+            .map(|(peer, dkg)| (*peer, DkgStep::Broadcast(dkg.initial_message())))
+            .collect::<VecDeque<(PeerId, DkgStep)>>();
 
         let mut keys = BTreeMap::new();
 
         while keys.len() < peers.len() {
             match steps.pop_front().unwrap() {
+                (send_peer, DkgStep::Broadcast(message)) => {
+                    for receive_peer in peers.iter().filter(|p| **p != send_peer) {
+                        let step = dkgs
+                            .get_mut(receive_peer)
+                            .unwrap()
+                            .step(send_peer, message.clone());
+
+                        steps.push_back((*receive_peer, step.unwrap()));
+                    }
+                }
                 (send_peer, DkgStep::Messages(messages)) => {
                     for (receive_peer, messages) in messages {
                         let step = dkgs
