@@ -179,7 +179,11 @@ pub async fn latency_tests(
             let mut ln_sends = Vec::with_capacity(iterations);
             for i in 0..iterations {
                 let invoice = cln
-                    .invoice(1_000_000, format!("Description{i}"), format!("Label{i}"))
+                    .invoice(
+                        1_000_000,
+                        format!("Description{i}"),
+                        format!("Label{}", rand::random::<u64>()),
+                    )
                     .await?;
                 let start_time = Instant::now();
                 ln_pay(&client, invoice, lnd_gw_id.clone(), false).await?;
@@ -207,7 +211,7 @@ pub async fn latency_tests(
                 .invoice(
                     10_000_000,
                     "LnReceiveLatencyDesc".to_string(),
-                    "LatencyLabel".to_string(),
+                    rand::random::<u64>().to_string(),
                 )
                 .await?;
             ln_pay(&client, invoice, lnd_gw_id.clone(), false).await?;
