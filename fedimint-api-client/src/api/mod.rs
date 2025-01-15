@@ -110,7 +110,7 @@ pub trait IRawFederationApi: Debug + MaybeSend + MaybeSync {
         &self,
         peer_id: PeerId,
         method: &str,
-        params: &[Value],
+        params: &ApiRequestErased,
     ) -> result::Result<Value, JsonRpcClientError>;
 }
 
@@ -127,7 +127,7 @@ pub trait FederationApiExt: IRawFederationApi {
     where
         Ret: DeserializeOwned,
     {
-        self.request_raw(peer, &method, &[params.to_json()])
+        self.request_raw(peer, &method, &params)
             .await
             .map_err(PeerError::Rpc)
             .and_then(|v| {
@@ -144,7 +144,7 @@ pub trait FederationApiExt: IRawFederationApi {
     where
         FedRet: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
-        self.request_raw(peer_id, &method, &[params.to_json()])
+        self.request_raw(peer_id, &method, &params)
             .await
             .map_err(PeerError::Rpc)
             .and_then(|v| {
@@ -681,7 +681,7 @@ impl<C: JsonRpcClient + Debug + 'static> IRawFederationApi for WsFederationApi<C
         &self,
         peer_id: PeerId,
         method: &str,
-        params: &[Value],
+        params: &ApiRequestErased,
     ) -> JsonRpcResult<Value> {
         let peer = self
             .peers
@@ -693,7 +693,7 @@ impl<C: JsonRpcClient + Debug + 'static> IRawFederationApi for WsFederationApi<C
             None => method.to_string(),
             Some(id) => format!("module_{id}_{method}"),
         };
-        peer.request(&method, params).await
+        peer.request(&method, &[params.to_json()]).await
     }
 }
 

@@ -5,6 +5,7 @@ use std::string::ToString;
 use fedimint_api_client::api::{DynModuleApi, IRawFederationApi, JsonRpcClientError};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction};
+use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, PeerId};
 use serde::{Deserialize, Serialize};
@@ -137,7 +138,7 @@ where
         &self,
         peer_id: PeerId,
         method: &str,
-        params: &[Value],
+        params: &ApiRequestErased,
     ) -> result::Result<Value, JsonRpcClientError> {
         self.log_event(ApiCallStarted {
             method: method.to_string(),
