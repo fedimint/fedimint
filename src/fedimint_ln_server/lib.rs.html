@@ -1473,7 +1473,22 @@
 <a href="#1472" id="1472">1472</a>
 <a href="#1473" id="1473">1473</a>
 <a href="#1474" id="1474">1474</a>
-<a href="#1475" id="1475">1475</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1475" id="1475">1475</a>
+<a href="#1476" id="1476">1476</a>
+<a href="#1477" id="1477">1477</a>
+<a href="#1478" id="1478">1478</a>
+<a href="#1479" id="1479">1479</a>
+<a href="#1480" id="1480">1480</a>
+<a href="#1481" id="1481">1481</a>
+<a href="#1482" id="1482">1482</a>
+<a href="#1483" id="1483">1483</a>
+<a href="#1484" id="1484">1484</a>
+<a href="#1485" id="1485">1485</a>
+<a href="#1486" id="1486">1486</a>
+<a href="#1487" id="1487">1487</a>
+<a href="#1488" id="1488">1488</a>
+<a href="#1489" id="1489">1489</a>
+<a href="#1490" id="1490">1490</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -1483,9 +1498,9 @@
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::{bail, Context};
+<span class="kw">use </span>anyhow::{bail, format_err, Context};
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash};
-<span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+<span class="kw">use </span>fedimint_bitcoind::create_bitcoind;
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -1502,7 +1517,7 @@
 };
 <span class="kw">use </span>fedimint_core::secp256k1::{Message, PublicKey, SECP256K1};
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
-<span class="kw">use </span>fedimint_core::task::sleep;
+<span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, NumPeersExt, OutPoint, PeerId,
     ServerModule,
@@ -1540,6 +1555,7 @@
 <span class="kw">use </span>threshold_crypto::poly::Commitment;
 <span class="kw">use </span>threshold_crypto::serde_impl::SerdeSecret;
 <span class="kw">use </span>threshold_crypto::{PublicKeySet, SecretKeyShare};
+<span class="kw">use </span>tokio::sync::watch;
 <span class="kw">use </span>tracing::{debug, error, info, info_span, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{
@@ -1691,7 +1707,12 @@
         <span class="comment">// Eagerly initialize metrics that trigger infrequently
         </span>LN_CANCEL_OUTGOING_CONTRACTS.get();
 
-        <span class="prelude-val">Ok</span>(Lightning::new(args.cfg().to_typed()<span class="question-mark">?</span>, args.our_peer_id())<span class="question-mark">?</span>.into())
+        <span class="prelude-val">Ok</span>(Lightning::new(
+            args.cfg().to_typed()<span class="question-mark">?</span>,
+            args.our_peer_id(),
+            args.task_group(),
+        )<span class="question-mark">?
+        </span>.into())
     }
 
     <span class="kw">fn </span>trusted_dealer_gen(
@@ -1806,8 +1827,9 @@
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>Lightning {
     cfg: LightningConfig,
-    btc_rpc: DynBitcoindRpc,
     our_peer_id: PeerId,
+    <span class="doccomment">/// Block count updated periodically by a background task
+    </span>block_count_rx: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;,
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -1828,7 +1850,8 @@
             .collect()
             .<span class="kw">await</span>;
 
-        <span class="kw">if let </span><span class="prelude-val">Ok</span>(block_count_vote) = <span class="self">self</span>.block_count().<span class="kw">await </span>{
+        <span class="kw">if let </span><span class="prelude-val">Ok</span>(block_count_vote) = <span class="self">self</span>.get_block_count() {
+            <span class="macro">debug!</span>(target: LOG_MODULE_LN, <span class="question-mark">?</span>block_count_vote, <span class="string">"Proposing block count"</span>);
             items.push(LightningConsensusItem::BlockCount(block_count_vote));
         }
 
@@ -2407,21 +2430,24 @@
 }
 
 <span class="kw">impl </span>Lightning {
-    <span class="kw">fn </span>new(cfg: LightningConfig, our_peer_id: PeerId) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+    <span class="kw">fn </span>new(
+        cfg: LightningConfig,
+        our_peer_id: PeerId,
+        task_group: <span class="kw-2">&amp;</span>TaskGroup,
+    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>cfg.local.bitcoin_rpc)<span class="question-mark">?</span>;
+        <span class="kw">let </span>block_count_rx = btc_rpc.spawn_block_count_update_task(task_group)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(Lightning {
             cfg,
-            btc_rpc,
             our_peer_id,
+            block_count_rx,
         })
     }
 
-    <span class="kw">async fn </span>block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;u64&gt; {
-        <span class="kw">let </span>res = <span class="self">self</span>.btc_rpc.get_block_count().<span class="kw">await</span>;
-        <span class="kw">if let </span><span class="prelude-val">Err</span>(<span class="kw-2">ref </span>err) = res {
-            <span class="macro">error!</span>(target: LOG_MODULE_LN, <span class="string">"Error while calling get_block_count: {:?}"</span>, err);
-        }
-        res
+    <span class="kw">fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;u64&gt; {
+        <span class="self">self</span>.block_count_rx
+            .borrow()
+            .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Block count not available yet"</span>))
     }
 
     <span class="kw">async fn </span>consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; u64 {
@@ -2716,6 +2742,7 @@
     <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
     <span class="kw">use </span>fedimint_core::module::{InputMeta, ServerModuleInit, TransactionItemAmount};
     <span class="kw">use </span>fedimint_core::secp256k1::{generate_keypair, PublicKey};
+    <span class="kw">use </span>fedimint_core::task::TaskGroup;
     <span class="kw">use </span>fedimint_core::{Amount, OutPoint, PeerId, ServerModule, TransactionId};
     <span class="kw">use </span>fedimint_ln_common::config::{
         LightningClientConfig, LightningConfig, LightningGenParams, LightningGenParamsConsensus,
@@ -2780,8 +2807,9 @@
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>encrypted_preimage_only_usable_once() {
+        <span class="kw">let </span>task_group = TaskGroup::new();
         <span class="kw">let </span>(server_cfg, client_cfg) = build_configs();
-        <span class="kw">let </span>server = Lightning::new(server_cfg[<span class="number">0</span>].clone(), <span class="number">0</span>.into()).unwrap();
+        <span class="kw">let </span>server = Lightning::new(server_cfg[<span class="number">0</span>].clone(), <span class="number">0</span>.into(), <span class="kw-2">&amp;</span>task_group).unwrap();
 
         <span class="kw">let </span>preimage = [<span class="number">42u8</span>; <span class="number">32</span>];
         <span class="kw">let </span>encrypted_preimage = EncryptedPreimage(client_cfg.threshold_pub_key.encrypt([<span class="number">42</span>; <span class="number">32</span>]));
@@ -2838,11 +2866,12 @@
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>process_input_for_valid_incoming_contracts() {
+        <span class="kw">let </span>task_group = TaskGroup::new();
         <span class="kw">let </span>(server_cfg, client_cfg) = build_configs();
         <span class="kw">let </span>db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>).<span class="number">0</span>;
-        <span class="kw">let </span>server = Lightning::new(server_cfg[<span class="number">0</span>].clone(), <span class="number">0</span>.into()).unwrap();
+        <span class="kw">let </span>server = Lightning::new(server_cfg[<span class="number">0</span>].clone(), <span class="number">0</span>.into(), <span class="kw-2">&amp;</span>task_group).unwrap();
 
         <span class="kw">let </span>preimage = PreimageKey(generate_keypair(<span class="kw-2">&amp;mut </span>OsRng).<span class="number">1</span>.serialize());
         <span class="kw">let </span>funded_incoming_contract = FundedContract::Incoming(FundedIncomingContract {
@@ -2898,11 +2927,12 @@
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>process_input_for_valid_outgoing_contracts() {
+        <span class="kw">let </span>task_group = TaskGroup::new();
         <span class="kw">let </span>(server_cfg, <span class="kw">_</span>) = build_configs();
         <span class="kw">let </span>db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>).<span class="number">0</span>;
-        <span class="kw">let </span>server = Lightning::new(server_cfg[<span class="number">0</span>].clone(), <span class="number">0</span>.into()).unwrap();
+        <span class="kw">let </span>server = Lightning::new(server_cfg[<span class="number">0</span>].clone(), <span class="number">0</span>.into(), <span class="kw-2">&amp;</span>task_group).unwrap();
 
         <span class="kw">let </span>preimage = Preimage([<span class="number">42u8</span>; <span class="number">32</span>]);
         <span class="kw">let </span>gateway_key = random_pub_key();

@@ -774,7 +774,22 @@
 <a href="#773" id="773">773</a>
 <a href="#774" id="774">774</a>
 <a href="#775" id="775">775</a>
-<a href="#776" id="776">776</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 
@@ -783,9 +798,9 @@
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::{anyhow, ensure, Context};
+<span class="kw">use </span>anyhow::{anyhow, ensure, format_err, Context};
 <span class="kw">use </span>bls12_381::{G1Projective, Scalar};
-<span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+<span class="kw">use </span>fedimint_bitcoind::create_bitcoind;
 <span class="kw">use </span>fedimint_core::bitcoin::hashes::sha256;
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -801,7 +816,7 @@
     TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
-<span class="kw">use </span>fedimint_core::task::timeout;
+<span class="kw">use </span>fedimint_core::task::{timeout, TaskGroup};
 <span class="kw">use </span>fedimint_core::time::duration_since_epoch;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{
@@ -824,6 +839,7 @@
     LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0, OutgoingWitness,
     MODULE_CONSENSUS_VERSION,
 };
+<span class="kw">use </span>fedimint_logging::LOG_MODULE_LNV2;
 <span class="kw">use </span>fedimint_server::config::distributedgen::{eval_poly_g1, PeerHandleOps};
 <span class="kw">use </span>fedimint_server::net::api::check_auth;
 <span class="kw">use </span>futures::StreamExt;
@@ -832,7 +848,9 @@
 <span class="kw">use </span>rand::SeedableRng;
 <span class="kw">use </span>rand_chacha::ChaChaRng;
 <span class="kw">use </span>strum::IntoEnumIterator;
+<span class="kw">use </span>tokio::sync::watch;
 <span class="kw">use </span>tpe::{derive_pk_share, AggregatePublicKey, PublicKeyShare, SecretKeyShare};
+<span class="kw">use </span>tracing::debug;
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, GatewayKey, GatewayPrefix,
@@ -958,7 +976,7 @@
     }
 
     <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ServerModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;DynServerModule&gt; {
-        <span class="prelude-val">Ok</span>(Lightning::new(args.cfg().to_typed()<span class="question-mark">?</span>)<span class="question-mark">?</span>.into())
+        <span class="prelude-val">Ok</span>(Lightning::new(args.cfg().to_typed()<span class="question-mark">?</span>, args.task_group())<span class="question-mark">?</span>.into())
     }
 
     <span class="kw">fn </span>trusted_dealer_gen(
@@ -1090,7 +1108,8 @@
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>Lightning {
     cfg: LightningConfig,
-    btc_rpc: DynBitcoindRpc,
+    <span class="doccomment">/// Block count updated periodically by a background task
+    </span>block_count_rx: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;,
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -1106,7 +1125,8 @@
             duration_since_epoch().as_secs(),
         )];
 
-        <span class="kw">if let </span><span class="prelude-val">Ok</span>(block_count) = <span class="self">self</span>.btc_rpc.get_block_count().<span class="kw">await </span>{
+        <span class="kw">if let </span><span class="prelude-val">Ok</span>(block_count) = <span class="self">self</span>.get_block_count() {
+            <span class="macro">debug!</span>(target: LOG_MODULE_LNV2, <span class="question-mark">?</span>block_count, <span class="string">"Proposing block count"</span>);
             items.push(LightningConsensusItem::BlockCountVote(block_count));
         }
 
@@ -1398,10 +1418,20 @@
 }
 
 <span class="kw">impl </span>Lightning {
-    <span class="kw">fn </span>new(cfg: LightningConfig) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+    <span class="kw">fn </span>new(cfg: LightningConfig, task_group: <span class="kw-2">&amp;</span>TaskGroup) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>cfg.local.bitcoin_rpc)<span class="question-mark">?</span>;
+        <span class="kw">let </span>block_count_rx = btc_rpc.spawn_block_count_update_task(task_group)<span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(Lightning { cfg, btc_rpc })
+        <span class="prelude-val">Ok</span>(Lightning {
+            cfg,
+            block_count_rx,
+        })
+    }
+
+    <span class="kw">fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;u64&gt; {
+        <span class="self">self</span>.block_count_rx
+            .borrow()
+            .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Block count not available yet"</span>))
     }
 
     <span class="kw">async fn </span>consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; u64 {

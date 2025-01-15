@@ -554,7 +554,9 @@
 <a href="#553" id="553">553</a>
 <a href="#554" id="554">554</a>
 <a href="#555" id="555">555</a>
-<a href="#556" id="556">556</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#556" id="556">556</a>
+<a href="#557" id="557">557</a>
+<a href="#558" id="558">558</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -1045,6 +1047,8 @@
     </span>RpcError(String),
     <span class="attr">#[error(<span class="string">"Feerate source error: {0}"</span>)]
     </span>FeerateSourceError(String),
+    <span class="attr">#[error(<span class="string">"Block count source error: {0}"</span>)]
+    </span>BlockCountSourceError(String),
 }
 
 <span class="attr">#[derive(Debug, Error, Encodable, Decodable, Hash, Clone, Eq, PartialEq)]
