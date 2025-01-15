@@ -10,6 +10,14 @@ on:
   schedule:
     # run daily during low usage hours
     - cron:  '30 4 * * *'
+  push:
+    branches: [ "main", "master", "devel", "releases/v*" ]
+    tags:
+      - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+  pull_request:
+    branches: [ "main", "master", "devel", "releases/v*" ]
+  merge_group:
+    branches: [ "main", "master", "devel", "releases/v*" ]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -53,7 +61,7 @@ jobs:
           # read versions from manually triggered workflows
           # default needed for cron or manual workflow without params
           VERSIONS="${{ github.event.inputs.versions }}"
-          VERSIONS=${VERSIONS:="v0.3.3 v0.4.0 current"}
+          VERSIONS=${VERSIONS:="v0.3.4-rc.1 current, v0.4.4 current, v0.5.0 current"}
 
           # if empty, defaults to all test kinds within script
           TEST_KINDS="${{ github.event.inputs.test_kinds }}"
@@ -76,6 +84,7 @@ jobs:
             scripts/ci/run-in-fs-dir-cache.sh upgrade-tests \
             env -u RUSTC_WRAPPER \
             env TEST_KINDS="$TEST_KINDS" \
+            env FM_DEVIMINT_DISABLE_MODULE_LNV2=1 \
             runLowPrio ./scripts/tests/upgrade-test.sh "$VERSIONS"
 
   notifications:

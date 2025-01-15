@@ -28,7 +28,7 @@ test-compatibility *VERSIONS="v0.3.4-rc.1 v0.4.4 v0.5.0":
 test-full-compatibility *VERSIONS="v0.2.1":
   env FM_FULL_VERSION_MATRIX=1 ./scripts/tests/test-ci-all-backcompat.sh {{VERSIONS}}
 
-test-upgrades *VERSIONS="v0.3.3 v0.4.0 current":
+test-upgrades *VERSIONS="v0.3.4-rc.1 current, v0.4.4 current, v0.5.0 current":
   ./scripts/tests/upgrade-test.sh {{VERSIONS}}
 
 # `cargo udeps` check

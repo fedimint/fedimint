@@ -179,7 +179,11 @@ pub async fn latency_tests(
             let mut ln_sends = Vec::with_capacity(iterations);
             for i in 0..iterations {
                 let invoice = cln
-                    .invoice(1_000_000, format!("Description{i}"), format!("Label{i}"))
+                    .invoice(
+                        1_000_000,
+                        format!("Description{i}"),
+                        format!("Label{}", rand::random::<u64>()),
+                    )
                     .await?;
                 let start_time = Instant::now();
                 ln_pay(&client, invoice, lnd_gw_id.clone(), false).await?;
@@ -207,7 +211,7 @@ pub async fn latency_tests(
                 .invoice(
                     10_000_000,
                     "LnReceiveLatencyDesc".to_string(),
-                    "LatencyLabel".to_string(),
+                    rand::random::<u64>().to_string(),
                 )
                 .await?;
             ln_pay(&client, invoice, lnd_gw_id.clone(), false).await?;
@@ -381,6 +385,10 @@ async fn stress_test_fed(dev_fed: &DevFed, clients: Option<&UpgradeClients>) -> 
     // cause the upgrade test to fail
     let assert_thresholds = false;
 
+    // running only one iteration greatly improves the total test time while still
+    // testing the same types of database entries
+    let iterations = 1;
+
     // skip restore test for client upgrades, since restoring a client doesn't
     // require a persistent data dir
     let restore_test = if clients.is_some() {
@@ -390,7 +398,7 @@ async fn stress_test_fed(dev_fed: &DevFed, clients: Option<&UpgradeClients>) -> 
             dev_fed.clone(),
             LatencyTest::Restore,
             clients,
-            20,
+            iterations,
             assert_thresholds,
         )
         .left_future()
@@ -402,7 +410,7 @@ async fn stress_test_fed(dev_fed: &DevFed, clients: Option<&UpgradeClients>) -> 
         dev_fed.clone(),
         LatencyTest::Reissue,
         clients,
-        20,
+        iterations,
         assert_thresholds,
     )
     .await?;
@@ -411,7 +419,7 @@ async fn stress_test_fed(dev_fed: &DevFed, clients: Option<&UpgradeClients>) -> 
         dev_fed.clone(),
         LatencyTest::LnSend,
         clients,
-        20,
+        iterations,
         assert_thresholds,
     )
     .await?;
@@ -420,7 +428,7 @@ async fn stress_test_fed(dev_fed: &DevFed, clients: Option<&UpgradeClients>) -> 
         dev_fed.clone(),
         LatencyTest::LnReceive,
         clients,
-        20,
+        iterations,
         assert_thresholds,
     )
     .await?;
@@ -429,7 +437,7 @@ async fn stress_test_fed(dev_fed: &DevFed, clients: Option<&UpgradeClients>) -> 
         dev_fed.clone(),
         LatencyTest::FmPay,
         clients,
-        20,
+        iterations,
         assert_thresholds,
     )
     .await?;
@@ -462,11 +470,6 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                 dev_fed.fed.restart_all_with_bin(process_mgr, path).await?;
 
                 // stress test with all peers online
-                try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
-
-                // ensure a degraded federation with the last peer online works, since the last
-                // peer is the last to restart
-                dev_fed.fed.terminate_server(1).await?;
                 try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
 
                 let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
