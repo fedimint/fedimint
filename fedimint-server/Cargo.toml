@@ -20,9 +20,8 @@ path = "src/lib.rs"
 
 [dependencies]
 aleph-bft = { package = "fedimint-aleph-bft", version = "0.36.0", default-features = false }
-# aleph-bft-types = "0.13.0"
 anyhow = { workspace = true }
-async-channel = "2.3.1"
+async-channel = { workspace = true } 
 async-trait = { workspace = true }
 base64 = { workspace = true }
 bincode = { workspace = true }

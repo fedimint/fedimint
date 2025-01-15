@@ -133,7 +133,7 @@ impl Debug for ApiAuth {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiError {
     pub code: i32,
     pub message: String,

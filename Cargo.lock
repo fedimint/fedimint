@@ -2410,6 +2410,7 @@ name = "fedimint-api-client"
 version = "0.6.0-alpha"
 dependencies = [
  "anyhow",
+ "async-channel 2.3.1",
  "async-trait",
  "base64 0.22.1",
  "bitcoin",
@@ -2418,6 +2419,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-logging",
  "futures",
+ "iroh",
  "itertools 0.13.0",
  "jsonrpsee-core",
  "jsonrpsee-types",
