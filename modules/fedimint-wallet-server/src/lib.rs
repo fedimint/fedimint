@@ -992,15 +992,19 @@ impl Wallet {
     ) -> Result<Wallet, WalletCreationError> {
         Self::spawn_broadcast_pending_task(task_group, &bitcoind, db);
 
-        let (block_count_rx, fee_rate_rx) = bitcoind
+        let fee_rate_rx = bitcoind
             .clone()
-            .spawn_bitcoin_update_task(
+            .spawn_fee_rate_update_task(
                 task_group,
                 cfg.consensus.default_fee,
                 cfg.consensus.network.0,
                 CONFIRMATION_TARGET,
             )
             .map_err(|e| WalletCreationError::FeerateSourceError(e.to_string()))?;
+        let block_count_rx = bitcoind
+            .clone()
+            .spawn_block_count_update_task(task_group)
+            .map_err(|e| WalletCreationError::BlockCountSourceError(e.to_string()))?;
 
         let bitcoind_rpc = bitcoind;
 

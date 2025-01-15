@@ -29,7 +29,7 @@ use fedimint_core::task::{timeout, TaskGroup};
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, BitcoinHash, Feerate, NumPeers, NumPeersExt,
+    apply, async_trait_maybe_send, push_db_pair_items, BitcoinHash, NumPeers, NumPeersExt,
     OutPoint, PeerId, ServerModule,
 };
 use fedimint_lnv2_common::config::{
@@ -629,16 +629,7 @@ impl ServerModule for Lightning {
 impl Lightning {
     fn new(cfg: LightningConfig, task_group: &TaskGroup) -> anyhow::Result<Self> {
         let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
-        // Lightning module does not use bitcoin fees, so the default feerate and
-        // confirmation target can be set to anything
-        let default_feerate = Feerate { sats_per_kvb: 1000 };
-        let confirmation_target = 1;
-        let (block_count_rx, _) = btc_rpc.spawn_bitcoin_update_task(
-            task_group,
-            default_feerate,
-            cfg.consensus.network,
-            confirmation_target,
-        )?;
+        let block_count_rx = btc_rpc.spawn_block_count_update_task(task_group)?;
 
         Ok(Lightning {
             cfg,

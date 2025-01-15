@@ -489,6 +489,8 @@ pub enum WalletCreationError {
     RpcError(String),
     #[error("Feerate source error: {0}")]
     FeerateSourceError(String),
+    #[error("Block count source error: {0}")]
+    BlockCountSourceError(String),
 }
 
 #[derive(Debug, Error, Encodable, Decodable, Hash, Clone, Eq, PartialEq)]

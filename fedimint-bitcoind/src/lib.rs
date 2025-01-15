@@ -26,6 +26,7 @@ use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, Feerate};
 use fedimint_logging::{LOG_BITCOIND, LOG_CORE};
 use feerate_source::{FeeRateSource, FetchJson};
 use tokio::sync::watch;
+use tokio::time::Interval;
 use tracing::{debug, trace, warn};
 
 #[cfg(feature = "bitcoincore-rpc")]
@@ -192,42 +193,16 @@ dyn_newtype_define! {
 }
 
 impl DynBitcoindRpc {
-    /// Spawns a background task that queries the block count and feerate
-    /// periodically and sends over the channels.
-    pub fn spawn_bitcoin_update_task(
+    /// Spawns a background task that queries the block count
+    /// periodically and sends over the returned channel.
+    pub fn spawn_block_count_update_task(
         self,
         task_group: &TaskGroup,
-        default_fee: Feerate,
-        network: Network,
-        confirmation_target: u16,
-    ) -> anyhow::Result<(watch::Receiver<Option<u64>>, watch::Receiver<Feerate>)> {
+    ) -> anyhow::Result<watch::Receiver<Option<u64>>> {
         let (block_count_tx, block_count_rx) = watch::channel(None);
-        let (fee_rate_tx, fee_rate_rx) = watch::channel(default_fee);
+        let mut desired_interval = get_bitcoin_polling_interval();
 
-        let sources = std::env::var(FM_WALLET_FEERATE_SOURCES_ENV)
-            .unwrap_or_else(|_| match network {
-                Network::Bitcoin => "https://mempool.space/api/v1/fees/recommended#.;https://blockstream.info/api/fee-estimates#.\"1\"".to_owned(),
-                _ => String::new(),
-            })
-            .split(';')
-            .filter(|s| !s.is_empty())
-            .map(|s| Ok(Box::new(FetchJson::from_str(s)?) as Box<dyn FeeRateSource>))
-            .chain(iter::once(Ok(
-                Box::new(self.clone()) as Box<dyn FeeRateSource>
-            )))
-            .collect::<anyhow::Result<Vec<Box<dyn FeeRateSource>>>>()?;
-        let feerates = Arc::new(std::sync::Mutex::new(vec![None; sources.len()]));
-
-        let mut desired_interval = tokio::time::interval(if is_running_in_test_env() {
-            // In devimint, the setup is blocked by detecting block height changes,
-            // and polling more often is not an issue.
-            debug!(target: LOG_BITCOIND, "Running in devimint, using fast node polling");
-            Duration::from_millis(100)
-        } else {
-            Duration::from_secs(30)
-        });
-
-        task_group.spawn_cancellable("bitcoin background task", {
+        task_group.spawn_cancellable("block count background task", {
             async move {
                 debug!(target: LOG_BITCOIND, "Updating bitcoin block count");
 
@@ -246,53 +221,107 @@ impl DynBitcoindRpc {
                     }
                 };
 
-                let update_fee_rate = || async {
-                    trace!(target: LOG_BITCOIND, "Updating bitcoin fee rate");
-
-                    let feerates_new = futures::future::join_all(sources.iter().map(|s| async { (s.name(), s.fetch(confirmation_target).await) } )).await;
-
-                    let mut feerates = feerates.lock().expect("lock poisoned");
-                    for (i, (name, res)) in feerates_new.into_iter().enumerate() {
-                        match res {
-                            Ok(ok) => feerates[i] = Some(ok),
-                            Err(err) => {
-                                // Regtest node never returns fee rate, so no point spamming about it
-                                if !is_running_in_test_env() {
-                                    warn!(target: LOG_BITCOIND, err = %err.fmt_compact_anyhow(), %name, "Error getting feerate from source");
-                                }
-                            },
-                        }
-                    }
-
-                    let mut available_feerates : Vec<_> = feerates.iter().filter_map(Clone::clone).map(|r| r.sats_per_kvb).collect();
-
-                    available_feerates.sort_unstable();
-
-                    if let Some(r) = get_median(&available_feerates) {
-                        let feerate = Feerate { sats_per_kvb: r };
-                        let _ = fee_rate_tx.send(feerate);
-                    } else {
-                        // During tests (regtest) we never get any real feerate, so no point spamming about it
-                        if !is_running_in_test_env() {
-                            warn!(target: LOG_BITCOIND, "Unable to calculate any fee rate");
-                        }
-                    }
-                };
-
                 loop {
                     let start = now();
                     update_block_count().await;
-                    update_fee_rate().await;
                     let duration = now().duration_since(start).unwrap_or_default();
                     if Duration::from_secs(10) < duration {
-                        warn!(target: LOG_BITCOIND, duration_secs=duration.as_secs(), "Updating from bitcoind slow");
+                        warn!(target: LOG_BITCOIND, duration_secs=duration.as_secs(), "Updating block count from bitcoind slow");
                     }
                     desired_interval.tick().await;
                 }
             }
         });
-        Ok((block_count_rx, fee_rate_rx))
+        Ok(block_count_rx)
     }
+
+    /// Spawns a background task that queries the feerate periodically and sends
+    /// over the returned channel.
+    pub fn spawn_fee_rate_update_task(
+        self,
+        task_group: &TaskGroup,
+        default_fee: Feerate,
+        network: Network,
+        confirmation_target: u16,
+    ) -> anyhow::Result<watch::Receiver<Feerate>> {
+        let (fee_rate_tx, fee_rate_rx) = watch::channel(default_fee);
+
+        let sources = std::env::var(FM_WALLET_FEERATE_SOURCES_ENV)
+            .unwrap_or_else(|_| match network {
+                Network::Bitcoin => "https://mempool.space/api/v1/fees/recommended#.;https://blockstream.info/api/fee-estimates#.\"1\"".to_owned(),
+                _ => String::new(),
+            })
+            .split(';')
+            .filter(|s| !s.is_empty())
+            .map(|s| Ok(Box::new(FetchJson::from_str(s)?) as Box<dyn FeeRateSource>))
+            .chain(iter::once(Ok(
+                Box::new(self.clone()) as Box<dyn FeeRateSource>
+            )))
+            .collect::<anyhow::Result<Vec<Box<dyn FeeRateSource>>>>()?;
+        let feerates = Arc::new(std::sync::Mutex::new(vec![None; sources.len()]));
+
+        let mut desired_interval = get_bitcoin_polling_interval();
+
+        task_group.spawn_cancellable("feerate background task", async move {
+            debug!(target: LOG_BITCOIND, "Updating feerate");
+
+            let update_fee_rate = || async {
+                trace!(target: LOG_BITCOIND, "Updating bitcoin fee rate");
+
+                let feerates_new = futures::future::join_all(sources.iter().map(|s| async { (s.name(), s.fetch(confirmation_target).await) } )).await;
+
+                let mut feerates = feerates.lock().expect("lock poisoned");
+                for (i, (name, res)) in feerates_new.into_iter().enumerate() {
+                    match res {
+                        Ok(ok) => feerates[i] = Some(ok),
+                        Err(err) => {
+                            // Regtest node never returns fee rate, so no point spamming about it
+                            if !is_running_in_test_env() {
+                                warn!(target: LOG_BITCOIND, err = %err.fmt_compact_anyhow(), %name, "Error getting feerate from source");
+                            }
+                        },
+                    }
+                }
+
+                let mut available_feerates : Vec<_> = feerates.iter().filter_map(Clone::clone).map(|r| r.sats_per_kvb).collect();
+
+                available_feerates.sort_unstable();
+
+                if let Some(r) = get_median(&available_feerates) {
+                    let feerate = Feerate { sats_per_kvb: r };
+                    let _ = fee_rate_tx.send(feerate);
+                } else {
+                    // During tests (regtest) we never get any real feerate, so no point spamming about it
+                    if !is_running_in_test_env() {
+                        warn!(target: LOG_BITCOIND, "Unable to calculate any fee rate");
+                    }
+                }
+            };
+
+            loop {
+                let start = now();
+                update_fee_rate().await;
+                let duration = now().duration_since(start).unwrap_or_default();
+                if Duration::from_secs(10) < duration {
+                    warn!(target: LOG_BITCOIND, duration_secs=duration.as_secs(), "Updating feerate from bitcoind slow");
+                }
+                desired_interval.tick().await;
+            }
+        });
+
+        Ok(fee_rate_rx)
+    }
+}
+
+fn get_bitcoin_polling_interval() -> Interval {
+    tokio::time::interval(if is_running_in_test_env() {
+        // In devimint, the setup is blocked by detecting block height changes,
+        // and polling more often is not an issue.
+        debug!(target: LOG_BITCOIND, "Running in devimint, using fast node polling");
+        Duration::from_millis(100)
+    } else {
+        Duration::from_secs(30)
+    })
 }
 
 /// Computes the median from a slice of `u64`s
