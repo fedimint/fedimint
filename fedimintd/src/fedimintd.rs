@@ -9,7 +9,7 @@ use anyhow::{bail, format_err, Context};
 use clap::{Parser, Subcommand};
 use fedimint_core::admin_client::ConfigGenParamsRequest;
 use fedimint_core::config::{
-    EmptyGenParams, ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
+    EmptyGenParams, ModuleInitParams, ServerModuleConfigGenParamsRegistry,
 };
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::{get_current_database_version, Database};
@@ -17,7 +17,7 @@ use fedimint_core::envs::{
     is_env_var_set, BitcoinRpcConfig, FM_ENABLE_MODULE_LNV2_ENV, FM_USE_UNKNOWN_MODULE_ENV,
 };
 use fedimint_core::module::registry::ModuleRegistry;
-use fedimint_core::module::{ServerApiVersionsSummary, ServerDbVersionsSummary, ServerModuleInit};
+use fedimint_core::module::{ServerApiVersionsSummary, ServerDbVersionsSummary};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::timing;
 use fedimint_core::util::{handle_version_hash_command, write_overwrite, SafeUrl};
@@ -32,6 +32,7 @@ use fedimint_mint_server::MintInit;
 use fedimint_server::config::api::ConfigGenSettings;
 use fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
 use fedimint_server::config::ServerConfig;
+use fedimint_server::core::{ServerModuleInit, ServerModuleInitRegistry};
 use fedimint_server::net::api::ApiSecrets;
 use fedimint_unknown_common::config::UnknownGenParams;
 use fedimint_unknown_server::UnknownInit;

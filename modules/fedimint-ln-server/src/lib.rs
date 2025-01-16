@@ -22,15 +22,13 @@ use fedimint_core::encoding::Encodable;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
-    SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
+    ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
+    TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
 use fedimint_core::secp256k1::{Message, PublicKey, SECP256K1};
-use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, NumPeersExt, OutPoint, PeerId,
-    ServerModule,
 };
 pub use fedimint_ln_common as common;
 use fedimint_ln_common::config::{
@@ -58,6 +56,9 @@ use fedimint_ln_common::{
 };
 use fedimint_logging::LOG_MODULE_LN;
 use fedimint_server::config::distributedgen::PeerHandleOps;
+use fedimint_server::core::{
+    DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs,
+};
 use futures::StreamExt;
 use metrics::{LN_CANCEL_OUTGOING_CONTRACTS, LN_FUNDED_CONTRACT_SATS, LN_INCOMING_OFFER};
 use rand::rngs::OsRng;
@@ -1250,10 +1251,10 @@ mod tests {
     use fedimint_core::encoding::Encodable;
     use fedimint_core::envs::BitcoinRpcConfig;
     use fedimint_core::module::registry::ModuleRegistry;
-    use fedimint_core::module::{InputMeta, ServerModuleInit, TransactionItemAmount};
+    use fedimint_core::module::{InputMeta, TransactionItemAmount};
     use fedimint_core::secp256k1::{generate_keypair, PublicKey};
     use fedimint_core::task::TaskGroup;
-    use fedimint_core::{Amount, OutPoint, PeerId, ServerModule, TransactionId};
+    use fedimint_core::{Amount, OutPoint, PeerId, TransactionId};
     use fedimint_ln_common::config::{
         LightningClientConfig, LightningConfig, LightningGenParams, LightningGenParamsConsensus,
         LightningGenParamsLocal, Network,
@@ -1267,6 +1268,7 @@ mod tests {
         PreimageKey,
     };
     use fedimint_ln_common::{ContractAccount, LightningInput, LightningOutput};
+    use fedimint_server::core::{ServerModule, ServerModuleInit};
     use rand::rngs::OsRng;
 
     use crate::db::{ContractKey, LightningAuditItemKey};

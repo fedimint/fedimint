@@ -18,6 +18,8 @@
 #![allow(clippy::match_wildcard_for_single_variants)]
 #![allow(clippy::trivially_copy_pass_by_ref)]
 
+//! Server side fedimint module traits
+
 extern crate fedimint_core;
 
 use std::fs;
@@ -26,12 +28,13 @@ use std::path::{Path, PathBuf};
 use config::io::{read_server_config, PLAINTEXT_PASSWORD};
 use config::ServerConfig;
 use fedimint_aead::random_salt;
-use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::db::Database;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::write_new;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
+pub use fedimint_server_core as core;
+use fedimint_server_core::ServerModuleInitRegistry;
 use net::api::ApiSecrets;
 use tracing::{info, warn};
 
@@ -40,7 +43,6 @@ use crate::config::io::{write_server_config, SALT_FILE};
 use crate::metrics::initialize_gauge_metrics;
 use crate::net::api::announcement::start_api_announcement_service;
 use crate::net::api::RpcHandlerCtx;
-use crate::net::p2p_connector::TlsTcpConnector;
 
 pub mod envs;
 pub mod metrics;

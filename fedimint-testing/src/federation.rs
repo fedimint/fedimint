@@ -9,8 +9,7 @@ use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::{AdminCreds, Client, ClientHandleArc};
 use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 use fedimint_core::config::{
-    ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
-    META_FEDERATION_NAME_KEY,
+    ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry, META_FEDERATION_NAME_KEY,
 };
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::mem_impl::MemDatabase;
@@ -25,6 +24,7 @@ use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::api::ConfigGenParamsLocal;
 use fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use fedimint_server::consensus;
+use fedimint_server::core::ServerModuleInitRegistry;
 use fedimint_server::net::p2p_connector::parse_host_port;
 use ln_gateway::rpc::ConnectFedPayload;
 use ln_gateway::Gateway;

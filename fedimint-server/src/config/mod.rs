@@ -9,19 +9,20 @@ use fedimint_core::admin_client::ConfigGenParamsConsensus;
 pub use fedimint_core::config::{
     serde_binary_human_readable, ClientConfig, DkgPeerMsg, FederationId, GlobalClientConfig,
     JsonWithKind, ModuleInitRegistry, PeerUrl, ServerModuleConfig, ServerModuleConsensusConfig,
-    ServerModuleInitRegistry, TypedServerModuleConfig,
+    TypedServerModuleConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{
-    ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleInit, MultiApiVersion, PeerHandle,
+    ApiAuth, ApiVersion, CoreConsensusVersion, MultiApiVersion, PeerHandle,
     SupportedApiVersionsSummary, SupportedCoreApiVersions, CORE_CONSENSUS_VERSION,
 };
 use fedimint_core::net::peers::IP2PConnections;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::{secp256k1, timing, NumPeersExt, PeerId};
 use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
+use fedimint_server_core::{DynServerModuleInit, ServerModuleInitRegistry};
 use rand::rngs::OsRng;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
@@ -34,15 +35,14 @@ use crate::config::distributedgen::PeerHandleOps;
 use crate::envs::FM_MAX_CLIENT_CONNECTIONS_ENV;
 use crate::fedimint_core::encoding::Encodable;
 use crate::net::p2p::ReconnectP2PConnections;
-use crate::net::p2p_connector::{dns_sanitize, P2PConnector, TlsConfig};
-use crate::TlsTcpConnector;
+use crate::net::p2p_connector::{dns_sanitize, P2PConnector, TlsConfig, TlsTcpConnector};
 
 pub mod api;
 pub mod distributedgen;
 pub mod io;
 
 /// The default maximum open connections the API can handle
-const DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = 1000;
+pub const DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = 1000;
 
 /// Consensus broadcast settings that result in 3 minutes session time
 const DEFAULT_BROADCAST_ROUND_DELAY_MS: u16 = 50;

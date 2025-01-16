@@ -2783,6 +2783,7 @@ dependencies = [
  "erased-serde 0.4.5",
  "fedimint-core",
  "fedimint-dummy-common",
+ "fedimint-server-core",
  "futures",
  "serde",
  "strum 0.26.3",
@@ -2800,6 +2801,7 @@ dependencies = [
  "fedimint-dummy-common",
  "fedimint-dummy-server",
  "fedimint-logging",
+ "fedimint-server",
  "fedimint-testing",
  "futures",
  "rand",
@@ -2844,6 +2846,7 @@ dependencies = [
  "erased-serde 0.4.5",
  "fedimint-core",
  "fedimint-empty-common",
+ "fedimint-server-core",
  "futures",
  "serde",
  "strum 0.26.3",
@@ -3063,6 +3066,7 @@ dependencies = [
  "fedimint-ln-common",
  "fedimint-ln-server",
  "fedimint-logging",
+ "fedimint-server",
  "fedimint-testing",
  "fedimint-threshold-crypto",
  "futures",
@@ -3256,6 +3260,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-logging",
  "fedimint-meta-common",
+ "fedimint-server",
  "futures",
  "rand",
  "serde",
@@ -3386,6 +3391,7 @@ dependencies = [
  "fedimint-mint-client",
  "fedimint-mint-common",
  "fedimint-mint-server",
+ "fedimint-server",
  "fedimint-tbs",
  "fedimint-testing",
  "fedimint-threshold-crypto",
@@ -3468,13 +3474,10 @@ dependencies = [
  "fedimint-bitcoind",
  "fedimint-build",
  "fedimint-core",
- "fedimint-dummy-common",
- "fedimint-dummy-server",
  "fedimint-logging",
  "fedimint-metrics",
- "fedimint-portalloc",
+ "fedimint-server-core",
  "fedimint-tbs",
- "fedimint-testing-core",
  "fedimint-threshold-crypto",
  "futures",
  "hex",
@@ -3501,6 +3504,36 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tower 0.4.13",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-server-core"
+version = "0.6.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fedimint-core",
+]
+
+[[package]]
+name = "fedimint-server-tests"
+version = "0.6.0-alpha"
+dependencies = [
+ "bitcoin",
+ "fedimint-api-client",
+ "fedimint-core",
+ "fedimint-dummy-common",
+ "fedimint-dummy-server",
+ "fedimint-logging",
+ "fedimint-portalloc",
+ "fedimint-server",
+ "fedimint-testing-core",
+ "futures",
+ "itertools 0.13.0",
+ "rand",
+ "strum 0.26.3",
+ "tokio",
  "tracing",
 ]
 
@@ -3558,6 +3591,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-logging",
  "fedimint-rocksdb",
+ "fedimint-server",
  "futures",
  "rand",
  "tempfile",
@@ -3690,6 +3724,7 @@ dependencies = [
  "async-trait",
  "erased-serde 0.4.5",
  "fedimint-core",
+ "fedimint-server-core",
  "fedimint-unknown-common",
  "strum 0.26.3",
  "strum_macros 0.26.4",
@@ -3780,6 +3815,7 @@ dependencies = [
  "fedimint-dummy-common",
  "fedimint-dummy-server",
  "fedimint-logging",
+ "fedimint-server",
  "fedimint-testing",
  "fedimint-wallet-client",
  "fedimint-wallet-common",

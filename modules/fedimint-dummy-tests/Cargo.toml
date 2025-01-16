@@ -19,6 +19,7 @@ fedimint-dummy-client = { workspace = true }
 fedimint-dummy-common = { workspace = true }
 fedimint-dummy-server = { workspace = true }
 fedimint-logging = { workspace = true }
+fedimint-server = { workspace = true }
 fedimint-testing = { workspace = true }
 futures = { workspace = true }
 rand = { workspace = true }

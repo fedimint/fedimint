@@ -36,6 +36,7 @@ fedimint-bitcoind = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-metrics = { workspace = true }
+fedimint-server-core = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 hyper = { workspace = true }
@@ -65,10 +66,6 @@ tower = { version = "0.4.13", default-features = false }
 tracing = { workspace = true }
 
 [dev-dependencies]
-fedimint-dummy-common = { workspace = true }
-fedimint-dummy-server = { workspace = true }
-fedimint-portalloc = { workspace = true }
-fedimint-testing-core = { workspace = true }
 test-log = { workspace = true }
 
 [build-dependencies]

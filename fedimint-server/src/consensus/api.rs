@@ -32,7 +32,6 @@ use fedimint_core::endpoint_constants::{
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
-use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
     SerdeModuleEncoding, SerdeModuleEncodingBase64, SupportedApiVersionsSummary,
@@ -41,7 +40,6 @@ use fedimint_core::net::api_announcement::{
     ApiAnnouncement, SignedApiAnnouncement, SignedApiAnnouncementSubmission,
 };
 use fedimint_core::secp256k1::{PublicKey, SECP256K1};
-use fedimint_core::server::DynServerModule;
 use fedimint_core::session_outcome::{
     SessionOutcome, SessionStatus, SessionStatusV2, SignedSessionOutcome,
 };
@@ -51,6 +49,7 @@ use fedimint_core::transaction::{
 use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{secp256k1, OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
+use fedimint_server_core::{DynServerModule, ServerModuleRegistry, ServerModuleRegistryExt};
 use futures::StreamExt;
 use tokio::sync::watch::{Receiver, Sender};
 use tracing::{debug, info, warn};

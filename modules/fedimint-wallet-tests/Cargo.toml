@@ -23,6 +23,7 @@ devimint = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
+fedimint-server = { workspace = true }
 fedimint-testing = { workspace = true }
 fedimint-wallet-client = { workspace = true }
 fedimint-wallet-common = { workspace = true }

@@ -19,9 +19,10 @@ use fedimint_core::db::{
     IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
+use fedimint_core::module::CommonModuleInit;
 use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;
+use fedimint_server::core::DynServerModuleInit;
 use futures::future::BoxFuture;
 use futures::{FutureExt, StreamExt};
 use rand::rngs::OsRng;

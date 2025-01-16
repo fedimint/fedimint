@@ -49,20 +49,22 @@ use fedimint_core::envs::{is_rbf_withdrawal_enabled, is_running_in_test_env, Bit
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
-    SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
+    ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
+    TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
-use fedimint_core::server::DynServerModule;
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::task::sleep;
 use fedimint_core::task::{TaskGroup, TaskHandle};
 use fedimint_core::util::{backoff_util, retry, FmtCompactAnyhow as _};
 use fedimint_core::{
     apply, async_trait_maybe_send, get_network_for_address, push_db_key_items, push_db_pair_items,
-    Feerate, NumPeersExt, OutPoint, PeerId, ServerModule,
+    Feerate, NumPeersExt, OutPoint, PeerId,
 };
 use fedimint_logging::LOG_MODULE_WALLET;
 use fedimint_server::config::distributedgen::PeerHandleOps;
+use fedimint_server::core::{
+    DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs,
+};
 use fedimint_server::net::api::check_auth;
 pub use fedimint_wallet_common as common;
 use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};

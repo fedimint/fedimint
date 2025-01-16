@@ -13,10 +13,11 @@ use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::serde_json;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::{BoxStream, NextOrPending};
-use fedimint_core::{sats, Amount, Feerate, PeerId, ServerModule};
+use fedimint_core::{sats, Amount, Feerate, PeerId};
 use fedimint_dummy_client::DummyClientInit;
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
+use fedimint_server::core::ServerModule;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::envs::{FM_TEST_BACKEND_BITCOIN_RPC_KIND_ENV, FM_TEST_USE_REAL_DAEMONS_ENV};
 use fedimint_testing::fixtures::Fixtures;
@@ -973,7 +974,7 @@ fn build_wallet_server_configs(
     fedimint_core::config::ClientModuleConfig,
 )> {
     let peers = (0..MINTS as u16).map(PeerId::from).collect::<Vec<_>>();
-    let wallet_cfg = fedimint_core::module::ServerModuleInit::trusted_dealer_gen(
+    let wallet_cfg = fedimint_server::core::ServerModuleInit::trusted_dealer_gen(
         &WalletInit,
         &peers,
         &fedimint_core::config::ConfigGenModuleParams::from_typed(WalletGenParams {
@@ -990,9 +991,9 @@ fn build_wallet_server_configs(
     );
     let client_cfg = fedimint_core::config::ClientModuleConfig::from_typed(
         0,
-        <WalletInit as fedimint_core::module::ServerModuleInit>::kind(),
+        <WalletInit as fedimint_server::core::ServerModuleInit>::kind(),
         fedimint_core::module::ModuleConsensusVersion::new(0, 0),
-        fedimint_core::module::ServerModuleInit::get_client_config(
+        fedimint_server::core::ServerModuleInit::get_client_config(
             &WalletInit,
             &wallet_cfg[&PeerId::from(0)].consensus,
         )?,
@@ -1016,9 +1017,10 @@ mod fedimint_migration_tests {
         Database, DatabaseVersion, DatabaseVersionKey, DatabaseVersionKeyV0,
         IDatabaseTransactionOpsCoreTyped,
     };
-    use fedimint_core::module::{DynServerModuleInit, ModuleConsensusVersion};
+    use fedimint_core::module::ModuleConsensusVersion;
     use fedimint_core::{Feerate, OutPoint, PeerId, TransactionId};
     use fedimint_logging::TracingSetup;
+    use fedimint_server::core::DynServerModuleInit;
     use fedimint_testing::db::{
         snapshot_db_migrations, snapshot_db_migrations_client, validate_migrations_client,
         validate_migrations_server, BYTE_20, BYTE_32, BYTE_33,

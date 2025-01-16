@@ -21,16 +21,15 @@ use fedimint_core::encoding::Encodable;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
-    SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
+    ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
+    TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
-use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{timeout, TaskGroup};
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, BitcoinHash, NumPeers, NumPeersExt,
-    OutPoint, PeerId, ServerModule,
+    OutPoint, PeerId,
 };
 use fedimint_lnv2_common::config::{
     LightningClientConfig, LightningConfig, LightningConfigConsensus, LightningConfigLocal,
@@ -49,6 +48,9 @@ use fedimint_lnv2_common::{
 };
 use fedimint_logging::LOG_MODULE_LNV2;
 use fedimint_server::config::distributedgen::{eval_poly_g1, PeerHandleOps};
+use fedimint_server::core::{
+    DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs,
+};
 use fedimint_server::net::api::check_auth;
 use futures::StreamExt;
 use group::ff::Field;

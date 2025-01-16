@@ -24,6 +24,8 @@ members = [
     "fedimint-recoverytool",
     "fedimint-rocksdb",
     "fedimint-server",
+    "fedimint-server-core",
+    "fedimint-server-tests",
     "fedimint-testing",
     "fedimint-testing-core",
     "fedimint-wasm-tests",
@@ -148,6 +150,7 @@ fedimint-mint-server = { path = "./modules/fedimint-mint-server", version = "=0.
 fedimint-portalloc = { path = "utils/portalloc", version = "=0.6.0-alpha" }
 fedimint-rocksdb = { path = "./fedimint-rocksdb", version = "=0.6.0-alpha" }
 fedimint-server = { path = "./fedimint-server", version = "=0.6.0-alpha" }
+fedimint-server-core = { path = "./fedimint-server-core", version = "=0.6.0-alpha" }
 fedimint-testing = { path = "./fedimint-testing", version = "=0.6.0-alpha" }
 fedimint-testing-core = { path = "./fedimint-testing-core", version = "=0.6.0-alpha" }
 fedimint-unknown-common = { path = "./modules/fedimint-unknown-common", version = "=0.6.0-alpha" }

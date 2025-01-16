@@ -513,7 +513,6 @@ mod fedimint_migration_tests {
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
-    use fedimint_core::module::DynServerModuleInit;
     use fedimint_core::time::now;
     use fedimint_core::{
         secp256k1, Amount, BitcoinHash, OutPoint, Tiered, TieredMulti, TransactionId,
@@ -536,6 +535,7 @@ mod fedimint_migration_tests {
         MintAuditItemKey, MintAuditItemKeyPrefix, MintOutputOutcomeKey, MintOutputOutcomePrefix,
         NonceKey, NonceKeyPrefix,
     };
+    use fedimint_server::core::DynServerModuleInit;
     use fedimint_testing::db::{
         snapshot_db_migrations, snapshot_db_migrations_client, validate_migrations_client,
         validate_migrations_server, BYTE_32, BYTE_8,
