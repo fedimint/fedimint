@@ -958,7 +958,7 @@ pub struct SerdeModuleEncoding<T: Encodable + Decodable>(
 /// Same as [`SerdeModuleEncoding`] but uses base64 instead of hex encoding.
 #[derive(Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct SerdeModuleEncodingBase64<T: Encodable + Decodable>(
-    #[serde(with = "::fedimint_core::encoding::Base64UrlSafe")] Vec<u8>,
+    #[serde(with = "::fedimint_core::encoding::as_base64")] Vec<u8>,
     #[serde(skip)] PhantomData<T>,
 );
 
