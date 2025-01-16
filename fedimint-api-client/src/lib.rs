@@ -13,6 +13,7 @@ use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::util::backoff_util;
+use fedimint_logging::LOG_CLIENT;
 use query::FilterMap;
 use tracing::debug;
 
@@ -28,7 +29,7 @@ impl Connector {
         &self,
         invite_code: &InviteCode,
     ) -> anyhow::Result<ClientConfig> {
-        debug!("Downloading client config from {:?}", invite_code);
+        debug!(target: LOG_CLIENT, %invite_code, "Downloading client config via invite code");
 
         let federation_id = invite_code.federation_id();
         let api = DynGlobalApi::from_invite_code(self, invite_code);
@@ -50,6 +51,7 @@ impl Connector {
         federation_id: FederationId,
         api_secret: Option<String>,
     ) -> anyhow::Result<ClientConfig> {
+        debug!(target: LOG_CLIENT, "Downloading client config from peer");
         // TODO: use new download approach based on guardian PKs
         let query_strategy = FilterMap::new(move |cfg: ClientConfig| {
             if federation_id != cfg.global.calculate_federation_id() {
@@ -70,6 +72,7 @@ impl Connector {
         // now we can build an api for all guardians and download the client config
         let api_endpoints = api_endpoints.into_iter().map(|(peer, url)| (peer, url.url));
 
+        debug!(target: LOG_CLIENT, "Verifying client config with all peers");
         let client_config = WsFederationApi::new(self, api_endpoints, &api_secret)
             .request_current_consensus::<ClientConfig>(
                 CLIENT_CONFIG_ENDPOINT.to_owned(),
