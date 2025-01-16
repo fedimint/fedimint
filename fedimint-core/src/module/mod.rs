@@ -881,11 +881,8 @@ pub trait ServerModule: Debug + Sized {
     /// Depending on the module this might contain data needed by the client to
     /// access funds or give an estimate of when funds will be available.
     ///
-    /// Returns `None` if the output is unknown, **NOT** if it is just not ready
-    /// yet.
-    ///
-    /// In other words: after module has processed a given output it **MUST
-    /// NOT** return `None` for it, as it will lead to the panic.
+    /// Since this has become deprecated you may return None even if the output
+    /// is known as long as the output outcome is not used inside the module.
     #[deprecated(note = "https://github.com/fedimint/fedimint/issues/6671")]
     async fn output_status(
         &self,

@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use bitcoin::hashes::sha256;
 use fedimint_aead::{encrypt, get_encryption_key, random_salt};
@@ -165,7 +165,7 @@ impl ConsensusApi {
         let module_id = module_ids
             .into_iter()
             .nth(outpoint.out_idx as usize)
-            .ok_or(anyhow!("Outpoint index out of bounds {:?}", outpoint))?;
+            .context("Outpoint index out of bounds {outpoint:?}")?;
 
         #[allow(deprecated)]
         let outcome = self
@@ -177,7 +177,7 @@ impl ConsensusApi {
                 module_id,
             )
             .await
-            .expect("The transaction is accepted");
+            .context("No output outcome for outpoint")?;
 
         Ok((&outcome).into())
     }
