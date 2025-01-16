@@ -261,7 +261,9 @@ where
             futures::stream::iter(epoch_range.clone())
                 .map(move |session_idx| {
                     let api = api.clone();
-                    let decoders = decoders.clone();
+                    // When decoding we're only interested in items we can understand, so we don't
+                    // want to fail on a missing decoder of some unrelated module.
+                    let decoders = decoders.clone().with_fallback();
                     let task_group = task_group.clone();
                     let broadcast_public_keys = broadcast_public_keys.clone();
 
