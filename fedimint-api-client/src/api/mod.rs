@@ -64,6 +64,11 @@ mod peer;
 pub use global_api::{GlobalFederationApiWithCache, GlobalFederationApiWithCacheExt};
 use peer::FederationPeer;
 
+pub const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2: ApiVersion = ApiVersion::new(0, 5);
+
+pub const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS: ApiVersion =
+    ApiVersion { major: 0, minor: 1 };
+
 pub type PeerResult<T> = Result<T, PeerError>;
 pub type JsonRpcResult<T> = Result<T, JsonRpcClientError>;
 pub type FederationResult<T> = Result<T, FederationError>;

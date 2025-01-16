@@ -216,6 +216,10 @@ pub trait ClientModuleInit: ModuleInit + Sized {
     /// that this client module implementation can use.
     fn supported_api_versions(&self) -> MultiApiVersion;
 
+    fn kind() -> ModuleKind {
+        <Self::Module as ClientModule>::kind()
+    }
+
     /// Recover the state of the client module, optionally from an existing
     /// snapshot.
     ///

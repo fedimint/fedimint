@@ -54,6 +54,7 @@ use super::{
     DynModuleApi, FederationApiExt, FederationError, FederationResult, GuardianConfigBackup,
     IGlobalFederationApi, IRawFederationApi, PeerResult, StatusResponse,
 };
+use crate::api::VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2;
 use crate::query::FilterMapThreshold;
 
 /// Convenience extension trait used for wrapping [`IRawFederationApi`] in
@@ -148,7 +149,7 @@ where
         broadcast_public_keys: &BTreeMap<PeerId, secp256k1::PublicKey>,
         decoders: &ModuleDecoderRegistry,
     ) -> anyhow::Result<SessionStatus> {
-        debug!(target: LOG_CLIENT_NET_API, block_index, "Fetching block's outcome from Federation");
+        debug!(target: LOG_CLIENT_NET_API, block_index, "Get session status raw v2");
         let params = ApiRequestErased::new(block_index);
         let mut last_error = None;
         // fetch serially
@@ -191,6 +192,7 @@ where
         block_index: u64,
         decoders: &ModuleDecoderRegistry,
     ) -> anyhow::Result<SessionStatus> {
+        debug!(target: LOG_CLIENT_NET_API, block_index, "Get session status raw v1");
         self.request_current_consensus::<SerdeModuleEncoding<SessionStatus>>(
             SESSION_STATUS_ENDPOINT.to_string(),
             ApiRequestErased::new(block_index),
@@ -261,7 +263,6 @@ where
         core_api_version: ApiVersion,
         broadcast_public_keys: Option<&BTreeMap<PeerId, secp256k1::PublicKey>>,
     ) -> anyhow::Result<SessionStatus> {
-        const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2: ApiVersion = ApiVersion::new(0, 5);
         let mut lru_lock = self.get_session_status_lru.lock().await;
 
         let entry_arc = lru_lock

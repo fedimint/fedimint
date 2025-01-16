@@ -1951,7 +1951,6 @@ impl Client {
                 info!(
                     target: LOG_CLIENT,
                     module_instance_id,
-                    prev_progress = format!("{}/{}", prev_progress.complete, prev_progress.total),
                     progress = format!("{}/{}", progress.complete, progress.total),
                     "Recovery complete"
                 );
@@ -1967,7 +1966,6 @@ impl Client {
                 info!(
                     target: LOG_CLIENT,
                     module_instance_id,
-                    prev_progress = format!("{}/{}", prev_progress.complete, prev_progress.total),
                     progress = format!("{}/{}", progress.complete, progress.total),
                     "Recovery progress"
                 );
