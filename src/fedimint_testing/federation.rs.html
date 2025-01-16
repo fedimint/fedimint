@@ -361,8 +361,7 @@
 <span class="kw">use </span>fedimint_client::{AdminCreds, Client, ClientHandleArc};
 <span class="kw">use </span>fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 <span class="kw">use </span>fedimint_core::config::{
-    ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
-    META_FEDERATION_NAME_KEY,
+    ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry, META_FEDERATION_NAME_KEY,
 };
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
@@ -377,6 +376,7 @@
 <span class="kw">use </span>fedimint_server::config::api::ConfigGenParamsLocal;
 <span class="kw">use </span>fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 <span class="kw">use </span>fedimint_server::consensus;
+<span class="kw">use </span>fedimint_server::core::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_server::net::p2p_connector::parse_host_port;
 <span class="kw">use </span>ln_gateway::rpc::ConnectFedPayload;
 <span class="kw">use </span>ln_gateway::Gateway;

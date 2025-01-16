@@ -329,8 +329,7 @@
 <a href="#328" id="328">328</a>
 <a href="#329" id="329">329</a>
 <a href="#330" id="330">330</a>
-<a href="#331" id="331">331</a>
-<a href="#332" id="332">332</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#331" id="331">331</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -351,11 +350,9 @@
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
     ApiEndpoint, CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle,
-    ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
-    CORE_CONSENSUS_VERSION,
+    SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
-<span class="kw">use </span>fedimint_core::server::DynServerModule;
-<span class="kw">use </span>fedimint_core::{push_db_pair_items, Amount, OutPoint, PeerId, ServerModule};
+<span class="kw">use </span>fedimint_core::{push_db_pair_items, Amount, OutPoint, PeerId};
 <span class="kw">use </span>fedimint_dummy_common::config::{
     DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigLocal, DummyConfigPrivate,
     DummyGenParams,
@@ -365,6 +362,7 @@
     DummyInputError, DummyModuleTypes, DummyOutput, DummyOutputError, DummyOutputOutcome,
     MODULE_CONSENSUS_VERSION,
 };
+<span class="kw">use </span>fedimint_server_core::{DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs};
 <span class="kw">use </span>futures::{FutureExt, StreamExt};
 <span class="kw">use </span>strum::IntoEnumIterator;
 

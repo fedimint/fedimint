@@ -941,7 +941,10 @@
 <a href="#940" id="940">940</a>
 <a href="#941" id="941">941</a>
 <a href="#942" id="942">942</a>
-<a href="#943" id="943">943</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#943" id="943">943</a>
+<a href="#944" id="944">944</a>
+<a href="#945" id="945">945</a>
+<a href="#946" id="946">946</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -965,14 +968,13 @@
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
-    SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
+    ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
+    TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
-<span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::util::BoxFuture;
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, secp256k1, Amount,
-    NumPeersExt, OutPoint, PeerId, ServerModule, Tiered, TieredMulti,
+    NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti,
 };
 <span class="kw">use </span>fedimint_logging::LOG_MODULE_MINT;
 <span class="kw">pub use </span>fedimint_mint_common <span class="kw">as </span>common;
@@ -989,6 +991,9 @@
 };
 <span class="kw">use </span>fedimint_server::config::distributedgen::{eval_poly_g2, PeerHandleOps};
 <span class="kw">use </span>fedimint_server::consensus::db::{MigrationContextExt, TypedModuleHistoryItem};
+<span class="kw">use </span>fedimint_server::core::{
+    DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs,
+};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>metrics::{
@@ -1752,10 +1757,11 @@
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::Database;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
-    <span class="kw">use </span>fedimint_core::module::{ModuleConsensusVersion, ServerModuleInit};
-    <span class="kw">use </span>fedimint_core::{secp256k1, Amount, PeerId, ServerModule};
+    <span class="kw">use </span>fedimint_core::module::ModuleConsensusVersion;
+    <span class="kw">use </span>fedimint_core::{secp256k1, Amount, PeerId};
     <span class="kw">use </span>fedimint_mint_common::config::FeeConsensus;
     <span class="kw">use </span>fedimint_mint_common::{MintInput, Nonce, Note};
+    <span class="kw">use </span>fedimint_server::core::{ServerModule, ServerModuleInit};
     <span class="kw">use </span>tbs::blind_message;
 
     <span class="kw">use </span><span class="kw">crate</span>::common::config::MintGenParamsConsensus;

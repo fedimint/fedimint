@@ -788,7 +788,9 @@
 <a href="#787" id="787">787</a>
 <a href="#788" id="788">788</a>
 <a href="#789" id="789">789</a>
-<a href="#790" id="790">790</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 
@@ -811,16 +813,15 @@
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
-    SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
+    ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
+    TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
-<span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::task::{timeout, TaskGroup};
 <span class="kw">use </span>fedimint_core::time::duration_since_epoch;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, BitcoinHash, NumPeers, NumPeersExt,
-    OutPoint, PeerId, ServerModule,
+    OutPoint, PeerId,
 };
 <span class="kw">use </span>fedimint_lnv2_common::config::{
     LightningClientConfig, LightningConfig, LightningConfigConsensus, LightningConfigLocal,
@@ -839,6 +840,9 @@
 };
 <span class="kw">use </span>fedimint_logging::LOG_MODULE_LNV2;
 <span class="kw">use </span>fedimint_server::config::distributedgen::{eval_poly_g1, PeerHandleOps};
+<span class="kw">use </span>fedimint_server::core::{
+    DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs,
+};
 <span class="kw">use </span>fedimint_server::net::api::check_auth;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>group::ff::Field;

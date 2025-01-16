@@ -531,7 +531,8 @@
 <a href="#530" id="530">530</a>
 <a href="#531" id="531">531</a>
 <a href="#532" id="532">532</a>
-<a href="#533" id="533">533</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::ErrorKind;
 <span class="kw">use </span>std::path::{Path, PathBuf};
 <span class="kw">use </span>std::{env, fs, io};
@@ -552,9 +553,10 @@
     IDatabaseTransactionOpsCoreTyped,
 };
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
+<span class="kw">use </span>fedimint_core::module::CommonModuleInit;
 <span class="kw">use </span>fedimint_logging::LOG_TEST;
 <span class="kw">use </span>fedimint_rocksdb::RocksDb;
+<span class="kw">use </span>fedimint_server::core::DynServerModuleInit;
 <span class="kw">use </span>futures::future::BoxFuture;
 <span class="kw">use </span>futures::{FutureExt, StreamExt};
 <span class="kw">use </span>rand::rngs::OsRng;

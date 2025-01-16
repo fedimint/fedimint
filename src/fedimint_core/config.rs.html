@@ -1082,15 +1082,7 @@
 <a href="#1081" id="1081">1081</a>
 <a href="#1082" id="1082">1082</a>
 <a href="#1083" id="1083">1083</a>
-<a href="#1084" id="1084">1084</a>
-<a href="#1085" id="1085">1085</a>
-<a href="#1086" id="1086">1086</a>
-<a href="#1087" id="1087">1087</a>
-<a href="#1088" id="1088">1088</a>
-<a href="#1089" id="1089">1089</a>
-<a href="#1090" id="1090">1090</a>
-<a href="#1091" id="1091">1091</a>
-<a href="#1092" id="1092">1092</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
+<a href="#1084" id="1084">1084</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::ops::Mul;
@@ -1120,8 +1112,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::core::DynClientConfig;
 <span class="kw">use </span><span class="kw">crate</span>::encoding::Decodable;
 <span class="kw">use </span><span class="kw">crate</span>::module::{
-    CoreConsensusVersion, DynCommonModuleInit, DynServerModuleInit, IDynCommonModuleInit,
-    ModuleConsensusVersion,
+    CoreConsensusVersion, DynCommonModuleInit, IDynCommonModuleInit, ModuleConsensusVersion,
 };
 <span class="kw">use crate</span>::{bls12_381_serde, maybe_add_send_sync, PeerId};
 
@@ -1565,6 +1556,12 @@
 <span class="attr">#[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>ModuleInitRegistry&lt;M&gt;(BTreeMap&lt;ModuleKind, M&gt;);
 
+<span class="kw">impl</span>&lt;M&gt; ModuleInitRegistry&lt;M&gt; {
+    <span class="kw">pub fn </span>iter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (<span class="kw-2">&amp;</span>ModuleKind, <span class="kw-2">&amp;</span>M)&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.iter()
+    }
+}
+
 <span class="kw">impl</span>&lt;M&gt; Default <span class="kw">for </span>ModuleInitRegistry&lt;M&gt; {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(BTreeMap::new())
@@ -1578,8 +1575,6 @@
     <span class="kw">pub </span>local: serde_json::Value,
     <span class="kw">pub </span>consensus: serde_json::Value,
 }
-
-<span class="kw">pub type </span>ServerModuleInitRegistry = ModuleInitRegistry&lt;DynServerModuleInit&gt;;
 
 <span class="kw">impl </span>ConfigGenModuleParams {
     <span class="kw">pub fn </span>new(local: serde_json::Value, consensus: serde_json::Value) -&gt; <span class="self">Self </span>{
@@ -1726,17 +1721,6 @@
         <span class="self">self</span>.append_module(kind, params);
         <span class="self">self
     </span>}
-}
-
-<span class="kw">impl </span>ServerModuleInitRegistry {
-    <span class="kw">pub fn </span>to_common(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CommonModuleInitRegistry {
-        ModuleInitRegistry(
-            <span class="self">self</span>.<span class="number">0
-                </span>.iter()
-                .map(|(k, v)| (k.clone(), v.to_dyn_common()))
-                .collect(),
-        )
-    }
 }
 
 <span class="kw">impl</span>&lt;M&gt; ModuleInitRegistry&lt;M&gt;

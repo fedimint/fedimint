@@ -341,7 +341,8 @@
 <a href="#340" id="340">340</a>
 <a href="#341" id="341">341</a>
 <a href="#342" id="342">342</a>
-<a href="#343" id="343">343</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>anyhow::Context;
@@ -349,7 +350,7 @@
 <span class="kw">use </span>fedimint_client::db::{ClientConfigKey, OperationLogKeyPrefix};
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::oplog::OperationLogEntry;
-<span class="kw">use </span>fedimint_core::config::{ClientConfig, CommonModuleInitRegistry, ServerModuleInitRegistry};
+<span class="kw">use </span>fedimint_core::config::{ClientConfig, CommonModuleInitRegistry};
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersionKey, IDatabaseTransactionOpsCore,
@@ -362,6 +363,7 @@
 <span class="kw">use </span>fedimint_server::config::io::read_server_config;
 <span class="kw">use </span>fedimint_server::config::ServerConfig;
 <span class="kw">use </span>fedimint_server::consensus::db <span class="kw">as </span>ConsensusRange;
+<span class="kw">use </span>fedimint_server::core::{ServerModuleInitRegistry, ServerModuleInitRegistryExt};
 <span class="kw">use </span>fedimint_server::net::api::announcement::ApiAnnouncementPrefix;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>ln_gateway::Gateway;

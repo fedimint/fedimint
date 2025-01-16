@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["DecodingMode"],"struct":["ModuleRegistry"],"type":["ModuleDecoderRegistry","ServerModuleRegistry"]};
+window.SIDEBAR_ITEMS = {"enum":["DecodingMode"],"struct":["ModuleRegistry"],"type":["ModuleDecoderRegistry"]};

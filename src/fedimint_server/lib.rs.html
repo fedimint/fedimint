@@ -192,7 +192,9 @@
 <a href="#191" id="191">191</a>
 <a href="#192" id="192">192</a>
 <a href="#193" id="193">193</a>
-<a href="#194" id="194">194</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_precision_loss)]
@@ -212,6 +214,8 @@
 #![allow(clippy::match_wildcard_for_single_variants)]
 #![allow(clippy::trivially_copy_pass_by_ref)]
 
+</span><span class="doccomment">//! Server side fedimint module traits
+
 </span><span class="kw">extern crate </span>fedimint_core;
 
 <span class="kw">use </span>std::fs;
@@ -220,12 +224,13 @@
 <span class="kw">use </span>config::io::{read_server_config, PLAINTEXT_PASSWORD};
 <span class="kw">use </span>config::ServerConfig;
 <span class="kw">use </span>fedimint_aead::random_salt;
-<span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::write_new;
 <span class="kw">use </span>fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
+<span class="kw">pub use </span>fedimint_server_core <span class="kw">as </span>core;
+<span class="kw">use </span>fedimint_server_core::ServerModuleInitRegistry;
 <span class="kw">use </span>net::api::ApiSecrets;
 <span class="kw">use </span>tracing::{info, warn};
 
@@ -234,7 +239,6 @@
 <span class="kw">use </span><span class="kw">crate</span>::metrics::initialize_gauge_metrics;
 <span class="kw">use </span><span class="kw">crate</span>::net::api::announcement::start_api_announcement_service;
 <span class="kw">use </span><span class="kw">crate</span>::net::api::RpcHandlerCtx;
-<span class="kw">use </span><span class="kw">crate</span>::net::p2p_connector::TlsTcpConnector;
 
 <span class="kw">pub mod </span>envs;
 <span class="kw">pub mod </span>metrics;

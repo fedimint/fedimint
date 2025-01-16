@@ -190,10 +190,10 @@
 <a href="#189" id="189">189</a>
 <a href="#190" id="190">190</a>
 <a href="#191" id="191">191</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
-<span class="kw">use </span>fedimint_core::module::registry::ServerModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::{CoreConsensusVersion, TransactionItemAmount};
 <span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionError, TRANSACTION_OVERFLOW_ERROR};
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint};
+<span class="kw">use </span>fedimint_server_core::ServerModuleRegistry;
 <span class="kw">use </span>rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 <span class="kw">use </span><span class="kw">crate</span>::metrics::{CONSENSUS_TX_PROCESSED_INPUTS, CONSENSUS_TX_PROCESSED_OUTPUTS};

@@ -171,7 +171,6 @@
     is_env_var_set, BitcoinRpcConfig, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV,
     FM_USE_UNKNOWN_MODULE_ENV,
 };
-<span class="kw">use </span>fedimint_core::module::ServerModuleInit <span class="kw">as _</span>;
 <span class="kw">use </span>fedimint_ln_server::common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
 };
@@ -179,6 +178,7 @@
 <span class="kw">use </span>fedimint_meta_server::{MetaGenParams, MetaInit};
 <span class="kw">use </span>fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
 <span class="kw">use </span>fedimint_mint_server::MintInit;
+<span class="kw">use </span>fedimint_server::core::ServerModuleInit <span class="kw">as _</span>;
 <span class="kw">use </span>fedimint_unknown_server::common::config::UnknownGenParams;
 <span class="kw">use </span>fedimint_unknown_server::UnknownInit;
 <span class="kw">use </span>fedimint_wallet_client::config::{

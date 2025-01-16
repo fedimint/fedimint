@@ -727,19 +727,20 @@
 <span class="kw">pub use </span>fedimint_core::config::{
     serde_binary_human_readable, ClientConfig, DkgPeerMsg, FederationId, GlobalClientConfig,
     JsonWithKind, ModuleInitRegistry, PeerUrl, ServerModuleConfig, ServerModuleConsensusConfig,
-    ServerModuleInitRegistry, TypedServerModuleConfig,
+    TypedServerModuleConfig,
 };
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::envs::is_running_in_test_env;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::{
-    ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleInit, MultiApiVersion, PeerHandle,
+    ApiAuth, ApiVersion, CoreConsensusVersion, MultiApiVersion, PeerHandle,
     SupportedApiVersionsSummary, SupportedCoreApiVersions, CORE_CONSENSUS_VERSION,
 };
 <span class="kw">use </span>fedimint_core::net::peers::IP2PConnections;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::{secp256k1, timing, NumPeersExt, PeerId};
 <span class="kw">use </span>fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
+<span class="kw">use </span>fedimint_server_core::{DynServerModuleInit, ServerModuleInitRegistry};
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>secp256k1::{PublicKey, Secp256k1, SecretKey};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -752,15 +753,14 @@
 <span class="kw">use </span><span class="kw">crate</span>::envs::FM_MAX_CLIENT_CONNECTIONS_ENV;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::net::p2p::ReconnectP2PConnections;
-<span class="kw">use </span><span class="kw">crate</span>::net::p2p_connector::{dns_sanitize, P2PConnector, TlsConfig};
-<span class="kw">use </span><span class="kw">crate</span>::TlsTcpConnector;
+<span class="kw">use </span><span class="kw">crate</span>::net::p2p_connector::{dns_sanitize, P2PConnector, TlsConfig, TlsTcpConnector};
 
 <span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>distributedgen;
 <span class="kw">pub mod </span>io;
 
 <span class="doccomment">/// The default maximum open connections the API can handle
-</span><span class="kw">const </span>DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = <span class="number">1000</span>;
+</span><span class="kw">pub const </span>DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = <span class="number">1000</span>;
 
 <span class="doccomment">/// Consensus broadcast settings that result in 3 minutes session time
 </span><span class="kw">const </span>DEFAULT_BROADCAST_ROUND_DELAY_MS: u16 = <span class="number">50</span>;

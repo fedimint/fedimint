@@ -289,8 +289,7 @@
 <a href="#288" id="288">288</a>
 <a href="#289" id="289">289</a>
 <a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a>
-<a href="#292" id="292">292</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>aleph_bft;
+<a href="#291" id="291">291</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>aleph_bft;
 <span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>debug;
@@ -308,16 +307,15 @@
 <span class="kw">use </span>db::get_global_database_migrations;
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
 <span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, P2PConnectionStatus};
-<span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::{apply_migrations, apply_migrations_server, Database};
 <span class="kw">use </span>fedimint_core::envs::is_running_in_test_env;
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
-<span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::NumPeers;
 <span class="kw">use </span>fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
+<span class="kw">use </span>fedimint_server_core::{DynServerModule, ServerModuleInitRegistry};
 <span class="kw">use </span>jsonrpsee::server::ServerHandle;
 <span class="kw">use </span>tokio::sync::watch;
 <span class="kw">use </span>tracing::{info, warn};

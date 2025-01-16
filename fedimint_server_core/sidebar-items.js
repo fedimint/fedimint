@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["init"],"struct":["DynServerModule","DynServerModuleInit","ServerModuleInitArgs"],"trait":["IServerModule","IServerModuleInit","ServerModule","ServerModuleInit","ServerModuleInitRegistryExt","ServerModuleRegistryExt"],"type":["ServerModuleInitRegistry","ServerModuleRegistry"]};

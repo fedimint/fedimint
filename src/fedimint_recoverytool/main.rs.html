@@ -379,7 +379,8 @@
 <a href="#378" id="378">378</a>
 <a href="#379" id="379">379</a>
 <a href="#380" id="380">380</a>
-<a href="#381" id="381">381</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 
 </span><span class="kw">mod </span>envs;
 <span class="kw">mod </span>key;
@@ -395,16 +396,17 @@
 <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
+<span class="kw">use </span>fedimint_core::fedimint_build_code_version_env;
 <span class="kw">use </span>fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
 <span class="kw">use </span>fedimint_core::session_outcome::SignedSessionOutcome;
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">use </span>fedimint_core::util::handle_version_hash_command;
-<span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, ServerModule};
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>fedimint_rocksdb::RocksDbReadOnly;
 <span class="kw">use </span>fedimint_server::config::io::read_server_config;
 <span class="kw">use </span>fedimint_server::consensus::db::SignedSessionOutcomePrefix;
+<span class="kw">use </span>fedimint_server::core::ServerModule;
 <span class="kw">use </span>fedimint_wallet_server::common::config::WalletConfig;
 <span class="kw">use </span>fedimint_wallet_server::common::keys::CompressedPublicKey;
 <span class="kw">use </span>fedimint_wallet_server::common::tweakable::Tweakable;

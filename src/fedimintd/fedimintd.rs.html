@@ -587,7 +587,8 @@
 <a href="#586" id="586">586</a>
 <a href="#587" id="587">587</a>
 <a href="#588" id="588">588</a>
-<a href="#589" id="589">589</a></pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
+<a href="#589" id="589">589</a>
+<a href="#590" id="590">590</a></pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -598,7 +599,7 @@
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::admin_client::ConfigGenParamsRequest;
 <span class="kw">use </span>fedimint_core::config::{
-    EmptyGenParams, ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
+    EmptyGenParams, ModuleInitParams, ServerModuleConfigGenParamsRegistry,
 };
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::db::{get_current_database_version, Database};
@@ -606,7 +607,7 @@
     is_env_var_set, BitcoinRpcConfig, FM_ENABLE_MODULE_LNV2_ENV, FM_USE_UNKNOWN_MODULE_ENV,
 };
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
-<span class="kw">use </span>fedimint_core::module::{ServerApiVersionsSummary, ServerDbVersionsSummary, ServerModuleInit};
+<span class="kw">use </span>fedimint_core::module::{ServerApiVersionsSummary, ServerDbVersionsSummary};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::timing;
 <span class="kw">use </span>fedimint_core::util::{handle_version_hash_command, write_overwrite, SafeUrl};
@@ -621,6 +622,7 @@
 <span class="kw">use </span>fedimint_server::config::api::ConfigGenSettings;
 <span class="kw">use </span>fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
 <span class="kw">use </span>fedimint_server::config::ServerConfig;
+<span class="kw">use </span>fedimint_server::core::{ServerModuleInit, ServerModuleInitRegistry};
 <span class="kw">use </span>fedimint_server::net::api::ApiSecrets;
 <span class="kw">use </span>fedimint_unknown_common::config::UnknownGenParams;
 <span class="kw">use </span>fedimint_unknown_server::UnknownInit;

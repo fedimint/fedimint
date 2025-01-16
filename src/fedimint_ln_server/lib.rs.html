@@ -1488,7 +1488,9 @@
 <a href="#1487" id="1487">1487</a>
 <a href="#1488" id="1488">1488</a>
 <a href="#1489" id="1489">1489</a>
-<a href="#1490" id="1490">1490</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1490" id="1490">1490</a>
+<a href="#1491" id="1491">1491</a>
+<a href="#1492" id="1492">1492</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -1512,15 +1514,13 @@
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
-    SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
+    ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
+    TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
 <span class="kw">use </span>fedimint_core::secp256k1::{Message, PublicKey, SECP256K1};
-<span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, NumPeersExt, OutPoint, PeerId,
-    ServerModule,
 };
 <span class="kw">pub use </span>fedimint_ln_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_ln_common::config::{
@@ -1548,6 +1548,9 @@
 };
 <span class="kw">use </span>fedimint_logging::LOG_MODULE_LN;
 <span class="kw">use </span>fedimint_server::config::distributedgen::PeerHandleOps;
+<span class="kw">use </span>fedimint_server::core::{
+    DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs,
+};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>metrics::{LN_CANCEL_OUTGOING_CONTRACTS, LN_FUNDED_CONTRACT_SATS, LN_INCOMING_OFFER};
 <span class="kw">use </span>rand::rngs::OsRng;
@@ -2740,10 +2743,10 @@
     <span class="kw">use </span>fedimint_core::encoding::Encodable;
     <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
-    <span class="kw">use </span>fedimint_core::module::{InputMeta, ServerModuleInit, TransactionItemAmount};
+    <span class="kw">use </span>fedimint_core::module::{InputMeta, TransactionItemAmount};
     <span class="kw">use </span>fedimint_core::secp256k1::{generate_keypair, PublicKey};
     <span class="kw">use </span>fedimint_core::task::TaskGroup;
-    <span class="kw">use </span>fedimint_core::{Amount, OutPoint, PeerId, ServerModule, TransactionId};
+    <span class="kw">use </span>fedimint_core::{Amount, OutPoint, PeerId, TransactionId};
     <span class="kw">use </span>fedimint_ln_common::config::{
         LightningClientConfig, LightningConfig, LightningGenParams, LightningGenParamsConsensus,
         LightningGenParamsLocal, Network,
@@ -2757,6 +2760,7 @@
         PreimageKey,
     };
     <span class="kw">use </span>fedimint_ln_common::{ContractAccount, LightningInput, LightningOutput};
+    <span class="kw">use </span>fedimint_server::core::{ServerModule, ServerModuleInit};
     <span class="kw">use </span>rand::rngs::OsRng;
 
     <span class="kw">use </span><span class="kw">crate</span>::db::{ContractKey, LightningAuditItemKey};

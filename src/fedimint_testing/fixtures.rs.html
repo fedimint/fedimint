@@ -256,9 +256,7 @@
 <a href="#255" id="255">255</a>
 <a href="#256" id="256">256</a>
 <a href="#257" id="257">257</a>
-<a href="#258" id="258">258</a>
-<a href="#259" id="259">259</a>
-<a href="#260" id="260">260</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
+<a href="#258" id="258">258</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -268,18 +266,16 @@
 <span class="kw">use </span>fedimint_client::module::init::{
     ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
-<span class="kw">use </span>fedimint_core::config::{
-    ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
-};
+<span class="kw">use </span>fedimint_core::config::{ModuleInitParams, ServerModuleConfigGenParamsRegistry};
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
-<span class="kw">use </span>fedimint_core::module::{DynServerModuleInit, IServerModuleInit};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
+<span class="kw">use </span>fedimint_server::core::{DynServerModuleInit, IServerModuleInit, ServerModuleInitRegistry};
 <span class="kw">use </span>fedimint_testing_core::test_dir;
 <span class="kw">use </span>ln_gateway::client::GatewayClientBuilder;
 <span class="kw">use </span>ln_gateway::config::LightningModuleMode;

@@ -349,9 +349,7 @@
 <a href="#348" id="348">348</a>
 <a href="#349" id="349">349</a>
 <a href="#350" id="350">350</a>
-<a href="#351" id="351">351</a>
-<a href="#352" id="352">352</a>
-<a href="#353" id="353">353</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic, clippy::nursery)]
+<a href="#351" id="351">351</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_precision_loss)]
@@ -404,7 +402,6 @@
 <span class="kw">use </span>lightning::util::ser::Writeable;
 <span class="kw">use </span>lightning_types::features::Bolt11InvoiceFeatures;
 <span class="kw">pub use </span>macro_rules_attribute::apply;
-<span class="kw">pub use </span>module::ServerModule;
 <span class="kw">pub use </span>peer_id::<span class="kw-2">*</span>;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
@@ -412,7 +409,6 @@
 <span class="kw">pub use </span>tiered_multi::<span class="kw-2">*</span>;
 <span class="kw">pub use </span>{bitcoin, hex, secp256k1};
 
-<span class="kw">pub use </span><span class="kw">crate</span>::core::server;
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
 
@@ -443,7 +439,7 @@
 <span class="doccomment">/// Common macros
 </span><span class="attr">#[macro_use]
 </span><span class="kw">pub mod </span>macros;
-<span class="doccomment">/// Extenable module sysystem
+<span class="doccomment">/// Extendable module sysystem
 </span><span class="kw">pub mod </span>module;
 <span class="doccomment">/// Peer networking
 </span><span class="kw">pub mod </span>net;
