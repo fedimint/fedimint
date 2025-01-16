@@ -734,7 +734,7 @@
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::path::{Path, PathBuf};
 
-<span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>fedimint_aead::{encrypt, get_encryption_key, random_salt};
@@ -896,7 +896,7 @@
         <span class="kw">let </span>module_id = module_ids
             .into_iter()
             .nth(outpoint.out_idx <span class="kw">as </span>usize)
-            .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Outpoint index out of bounds {:?}"</span>, outpoint))<span class="question-mark">?</span>;
+            .context(<span class="string">"Outpoint index out of bounds {outpoint:?}"</span>)<span class="question-mark">?</span>;
 
         <span class="attr">#[allow(deprecated)]
         </span><span class="kw">let </span>outcome = <span class="self">self
@@ -908,7 +908,7 @@
                 module_id,
             )
             .<span class="kw">await
-            </span>.expect(<span class="string">"The transaction is accepted"</span>);
+            </span>.context(<span class="string">"No output outcome for outpoint"</span>)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>outcome).into())
     }

@@ -284,67 +284,23 @@
 <a href="#283" id="283">283</a>
 <a href="#284" id="284">284</a>
 <a href="#285" id="285">285</a>
-<a href="#286" id="286">286</a>
-<a href="#287" id="287">287</a>
-<a href="#288" id="288">288</a>
-<a href="#289" id="289">289</a>
-<a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a>
-<a href="#292" id="292">292</a>
-<a href="#293" id="293">293</a>
-<a href="#294" id="294">294</a>
-<a href="#295" id="295">295</a>
-<a href="#296" id="296">296</a>
-<a href="#297" id="297">297</a>
-<a href="#298" id="298">298</a>
-<a href="#299" id="299">299</a>
-<a href="#300" id="300">300</a>
-<a href="#301" id="301">301</a>
-<a href="#302" id="302">302</a>
-<a href="#303" id="303">303</a>
-<a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
-<a href="#318" id="318">318</a>
-<a href="#319" id="319">319</a>
-<a href="#320" id="320">320</a>
-<a href="#321" id="321">321</a>
-<a href="#322" id="322">322</a>
-<a href="#323" id="323">323</a>
-<a href="#324" id="324">324</a>
-<a href="#325" id="325">325</a>
-<a href="#326" id="326">326</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
+<a href="#286" id="286">286</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
-<span class="kw">use </span>std::future::pending;
 
-<span class="kw">use </span>anyhow::{anyhow, bail};
-<span class="kw">use </span>fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
+<span class="kw">use </span>anyhow::{anyhow, ensure};
+<span class="kw">use </span>fedimint_api_client::api::FederationApiExt;
 <span class="kw">use </span>fedimint_api_client::query::FilterMapThreshold;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::core::{Decoder, OperationId};
+<span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="attr">#[allow(deprecated)]
-</span><span class="kw">use </span>fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::secp256k1::Keypair;
-<span class="kw">use </span>fedimint_core::{NumPeersExt, OutPoint, PeerId, TransactionId};
+<span class="kw">use </span>fedimint_core::{NumPeersExt, OutPoint, PeerId};
 <span class="kw">use </span>fedimint_lnv2_common::contracts::IncomingContract;
-<span class="kw">use </span>fedimint_lnv2_common::{
-    LightningInput, LightningInputV0, LightningOutputOutcome, LightningOutputOutcomeV0,
-};
+<span class="kw">use </span>fedimint_lnv2_common::endpoint_constants::DECRYPTION_KEY_SHARE_ENDPOINT;
+<span class="kw">use </span>fedimint_lnv2_common::{ContractId, LightningInput, LightningInputV0};
 <span class="kw">use </span>tpe::{aggregate_dk_shares, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare};
 <span class="kw">use </span>tracing::error;
 
@@ -427,47 +383,29 @@
     ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">let </span>gc = global_context.clone();
         <span class="kw">let </span>tpe_agg_pk = context.tpe_agg_pk;
-        <span class="kw">let </span>gateway_context_rejected = context.clone();
         <span class="kw">let </span>gateway_context_ready = context.clone();
 
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.state {
             ReceiveSMState::Funding =&gt; {
-                <span class="macro">vec!</span>[
-                    StateTransition::new(
-                        <span class="self">Self</span>::await_funding_rejected(
-                            global_context.clone(),
-                            <span class="self">self</span>.common.out_point.txid,
-                        ),
-                        <span class="kw">move </span>|dbtx, error, old_state| {
-                            Box::pin(<span class="self">Self</span>::transition_funding_rejected(
-                                error,
-                                old_state,
-                                dbtx,
-                                gateway_context_rejected.clone(),
-                            ))
-                        },
+                <span class="macro">vec!</span>[StateTransition::new(
+                    <span class="self">Self</span>::await_decryption_shares(
+                        global_context.clone(),
+                        context.tpe_pks.clone(),
+                        <span class="self">self</span>.common.out_point,
+                        <span class="self">self</span>.common.contract.contract_id(),
+                        <span class="self">self</span>.common.contract.clone(),
                     ),
-                    StateTransition::new(
-                        <span class="attr">#[allow(deprecated)]
-                        </span><span class="self">Self</span>::await_outcome_ready(
-                            global_context.clone(),
-                            context.decoder.clone(),
-                            context.tpe_pks.clone(),
-                            <span class="self">self</span>.common.out_point,
-                            <span class="self">self</span>.common.contract.clone(),
-                        ),
-                        <span class="kw">move </span>|dbtx, output_outcomes, old_state| {
-                            Box::pin(<span class="self">Self</span>::transition_outcome_ready(
-                                dbtx,
-                                output_outcomes,
-                                old_state,
-                                gc.clone(),
-                                tpe_agg_pk,
-                                gateway_context_ready.clone(),
-                            ))
-                        },
-                    ),
-                ]
+                    <span class="kw">move </span>|dbtx, output_outcomes, old_state| {
+                        Box::pin(<span class="self">Self</span>::transition_decryption_shares(
+                            dbtx,
+                            output_outcomes,
+                            old_state,
+                            gc.clone(),
+                            tpe_agg_pk,
+                            gateway_context_ready.clone(),
+                        ))
+                    },
+                )]
             }
             ReceiveSMState::Success(..)
             | ReceiveSMState::Rejected(..)
@@ -484,91 +422,72 @@
 }
 
 <span class="kw">impl </span>ReceiveStateMachine {
-    <span class="kw">async fn </span>await_funding_rejected(
+    <span class="kw">async fn </span>await_decryption_shares(
         global_context: DynGlobalClientContext,
-        txid: TransactionId,
-    ) -&gt; String {
-        <span class="kw">match </span>global_context.await_tx_accepted(txid).<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>(()) =&gt; pending().<span class="kw">await</span>,
-            <span class="prelude-val">Err</span>(error) =&gt; error,
-        }
-    }
-
-    <span class="kw">async fn </span>transition_funding_rejected(
-        error: String,
-        old_state: ReceiveStateMachine,
-        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-        client_ctx: GatewayClientContextV2,
-    ) -&gt; ReceiveStateMachine {
-        client_ctx
-            .module
-            .client_ctx
-            .log_event(
-                <span class="kw-2">&amp;mut </span>dbtx.module_tx(),
-                IncomingPaymentFailed {
-                    payment_image: old_state.common.contract.commitment.payment_image.clone(),
-                    error: error.clone(),
-                },
-            )
-            .<span class="kw">await</span>;
-        old_state.update(ReceiveSMState::Rejected(error))
-    }
-
-    <span class="attr">#[deprecated(note = <span class="string">"https://github.com/fedimint/fedimint/issues/6671"</span>)]
-    </span><span class="kw">async fn </span>await_outcome_ready(
-        global_context: DynGlobalClientContext,
-        module_decoder: Decoder,
         tpe_pks: BTreeMap&lt;PeerId, PublicKeyShare&gt;,
-        out_point: OutPoint,
-        decryption_contract: IncomingContract,
-    ) -&gt; BTreeMap&lt;PeerId, DecryptionKeyShare&gt; {
-        global_context
-            .api()
+        outpoint: OutPoint,
+        contract_id: ContractId,
+        contract: IncomingContract,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;BTreeMap&lt;PeerId, DecryptionKeyShare&gt;, String&gt; {
+        global_context.await_tx_accepted(outpoint.txid).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(global_context
+            .module_api()
             .request_with_strategy_retry(
                 FilterMapThreshold::new(
-                    <span class="kw">move </span>|peer, outcome: SerdeOutputOutcome| {
-                        <span class="kw">let </span>outcome = deserialize_outcome::&lt;LightningOutputOutcome&gt;(
-                            <span class="kw-2">&amp;</span>outcome,
-                            <span class="kw-2">&amp;</span>module_decoder,
-                        )<span class="question-mark">?</span>;
+                    <span class="kw">move </span>|peer, share: DecryptionKeyShare| {
+                        <span class="macro">ensure!</span>(
+                            contract.verify_decryption_share(
+                                tpe_pks.get(<span class="kw-2">&amp;</span>peer).ok_or(<span class="macro">anyhow!</span>(<span class="string">"Unknown peer pk"</span>))<span class="question-mark">?</span>,
+                                <span class="kw-2">&amp;</span>share,
+                            ),
+                            <span class="string">"Invalid decryption share"
+                        </span>);
 
-                        <span class="kw">match </span>outcome.ensure_v0_ref()<span class="question-mark">? </span>{
-                            LightningOutputOutcomeV0::Incoming(share) =&gt; {
-                                <span class="kw">if </span>!decryption_contract.verify_decryption_share(
-                                    tpe_pks.get(<span class="kw-2">&amp;</span>peer).ok_or(<span class="macro">anyhow!</span>(<span class="string">"Unknown peer pk"</span>))<span class="question-mark">?</span>,
-                                    share,
-                                ) {
-                                    <span class="macro">bail!</span>(<span class="string">"Invalid decryption share"</span>);
-                                }
-
-                                <span class="prelude-val">Ok</span>(<span class="kw-2">*</span>share)
-                            }
-                            LightningOutputOutcomeV0::Outgoing =&gt; {
-                                <span class="macro">bail!</span>(<span class="string">"Unexpected outcome variant"</span>);
-                            }
-                        }
+                        <span class="prelude-val">Ok</span>(share)
                     },
                     global_context.api().all_peers().to_num_peers(),
                 ),
-                <span class="attr">#[allow(deprecated)]
-                </span>AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
-                ApiRequestErased::new(out_point),
+                DECRYPTION_KEY_SHARE_ENDPOINT.to_owned(),
+                ApiRequestErased::new(contract_id),
             )
-            .<span class="kw">await
-    </span>}
+            .<span class="kw">await</span>)
+    }
 
-    <span class="kw">async fn </span>transition_outcome_ready(
+    <span class="kw">async fn </span>transition_decryption_shares(
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-        decryption_shares: BTreeMap&lt;PeerId, DecryptionKeyShare&gt;,
+        decryption_shares: <span class="prelude-ty">Result</span>&lt;BTreeMap&lt;PeerId, DecryptionKeyShare&gt;, String&gt;,
         old_state: ReceiveStateMachine,
         global_context: DynGlobalClientContext,
         tpe_agg_pk: AggregatePublicKey,
         client_ctx: GatewayClientContextV2,
     ) -&gt; ReceiveStateMachine {
-        <span class="kw">let </span>decryption_shares = decryption_shares
-            .into_iter()
-            .map(|(peer, share)| (peer.to_usize() <span class="kw">as </span>u64, share))
-            .collect();
+        <span class="kw">let </span>decryption_shares = <span class="kw">match </span>decryption_shares {
+            <span class="prelude-val">Ok</span>(decryption_shares) =&gt; decryption_shares
+                .into_iter()
+                .map(|(peer, share)| (peer.to_usize() <span class="kw">as </span>u64, share))
+                .collect(),
+            <span class="prelude-val">Err</span>(error) =&gt; {
+                client_ctx
+                    .module
+                    .client_ctx
+                    .log_event(
+                        <span class="kw-2">&amp;mut </span>dbtx.module_tx(),
+                        IncomingPaymentFailed {
+                            payment_image: old_state
+                                .common
+                                .contract
+                                .commitment
+                                .payment_image
+                                .clone(),
+                            error: error.clone(),
+                        },
+                    )
+                    .<span class="kw">await</span>;
+
+                <span class="kw">return </span>old_state.update(ReceiveSMState::Rejected(error));
+            }
+        };
 
         <span class="kw">let </span>agg_decryption_key = aggregate_dk_shares(<span class="kw-2">&amp;</span>decryption_shares);
 
@@ -612,6 +531,7 @@
                     },
                 )
                 .<span class="kw">await</span>;
+
             <span class="kw">return </span>old_state.update(ReceiveSMState::Success(preimage));
         }
 

@@ -133,13 +133,16 @@
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
-<span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, OutPoint, PeerId};
+<span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
-<span class="kw">use </span>fedimint_lnv2_common::{ContractId, LightningOutputOutcome};
+<span class="kw">use </span>fedimint_lnv2_common::ContractId;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum_macros::EnumIter;
+<span class="kw">use </span>tpe::DecryptionKeyShare;
 
 <span class="attr">#[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -148,7 +151,7 @@
     UnixTimeVote = <span class="number">0x42</span>,
     IncomingContract = <span class="number">0x43</span>,
     OutgoingContract = <span class="number">0x44</span>,
-    OutputOutcome = <span class="number">0x45</span>,
+    DecryptionKeyShare = <span class="number">0x45</span>,
     Preimage = <span class="number">0x46</span>,
     Gateway = <span class="number">0x47</span>,
 }
@@ -224,20 +227,21 @@
 );
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
-</span><span class="kw">pub struct </span>OutputOutcomeKey(<span class="kw">pub </span>OutPoint);
+</span><span class="kw">pub struct </span>DecryptionKeyShareKey(<span class="kw">pub </span>ContractId);
 
 <span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>LightningOutputOutcomePrefix;
+</span><span class="kw">pub struct </span>DecryptionKeySharePrefix;
 
 <span class="macro">impl_db_record!</span>(
-    key = OutputOutcomeKey,
-    value = LightningOutputOutcome,
-    db_prefix = DbKeyPrefix::OutputOutcome
-);
+    key = DecryptionKeyShareKey,
+    value = DecryptionKeyShare,
+    db_prefix = DbKeyPrefix::DecryptionKeyShare,
+    notify_on_modify = <span class="bool-val">true
+</span>);
 
 <span class="macro">impl_db_lookup!</span>(
-    key = OutputOutcomeKey,
-    query_prefix = LightningOutputOutcomePrefix
+    key = DecryptionKeyShareKey,
+    query_prefix = DecryptionKeySharePrefix
 );
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]

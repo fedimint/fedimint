@@ -1103,10 +1103,7 @@
 <a href="#1102" id="1102">1102</a>
 <a href="#1103" id="1103">1103</a>
 <a href="#1104" id="1104">1104</a>
-<a href="#1105" id="1105">1105</a>
-<a href="#1106" id="1106">1106</a>
-<a href="#1107" id="1107">1107</a>
-<a href="#1108" id="1108">1108</a></pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint supports modules to allow extending it's functionality.
+<a href="#1105" id="1105">1105</a></pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint supports modules to allow extending it's functionality.
 //! Some of the standard functionality is implemented in form of modules as
 //! well.
 //!
@@ -1989,11 +1986,8 @@
     /// Depending on the module this might contain data needed by the client to
     /// access funds or give an estimate of when funds will be available.
     ///
-    /// Returns `None` if the output is unknown, **NOT** if it is just not ready
-    /// yet.
-    ///
-    /// In other words: after module has processed a given output it **MUST
-    /// NOT** return `None` for it, as it will lead to the panic.
+    /// Since this has become deprecated you may return None even if the output
+    /// is known as long as the output outcome is not used inside the module.
     </span><span class="attr">#[deprecated(note = <span class="string">"https://github.com/fedimint/fedimint/issues/6671"</span>)]
     </span><span class="kw">async fn </span>output_status(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
