@@ -36,6 +36,7 @@ itertools = { workspace = true }
 jsonrpsee-core = { version = "0.24.7" }
 jsonrpsee-types = { version = "0.24.7" }
 lru = "0.12.5"
+rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

@@ -30,7 +30,7 @@ where
     D: serde::de::Deserializer<'de>,
 {
     Decodable::consensus_decode_hex(&String::deserialize(de)?, &ModuleRegistry::default())
-        .map_err(|e| serde::de::Error::custom(format!("decodable deserialization failed: {e:?}")))
+        .map_err(|e| serde::de::Error::custom(format!("decodable deserialization failed: {e:#}")))
 }
 
 #[macro_export]
@@ -43,7 +43,7 @@ macro_rules! serialize_as_encodable_hex {
             {
                 use $crate::Encodable;
                 serializer.serialize_str(&self.consensus_encode_to_hex().map_err(|e| {
-                    serde::ser::Error::custom(format!("encodable serialization failed: {e:?}"))
+                    serde::ser::Error::custom(format!("encodable serialization failed: {e:#}"))
                 })?)
             }
         }
@@ -63,7 +63,7 @@ macro_rules! deserialize_as_encodable_hex {
                     &Default::default(),
                 )
                 .map_err(|e| {
-                    serde::de::Error::custom(format!("decodable deserialization failed: {e:?}"))
+                    serde::de::Error::custom(format!("decodable deserialization failed: {e:#}"))
                 })
             }
         }

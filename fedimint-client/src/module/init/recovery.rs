@@ -1,7 +1,12 @@
+use std::collections::BTreeMap;
 use std::time::Duration;
 use std::{cmp, ops};
 
-use fedimint_api_client::api::DynGlobalApi;
+use bitcoin::secp256k1::PublicKey;
+use fedimint_api_client::api::{
+    DynGlobalApi, VERSION_THAT_INTRODUCED_GET_SESSION_STATUS,
+    VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2,
+};
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;
@@ -11,12 +16,12 @@ use fedimint_core::session_outcome::{AcceptedItem, SessionStatus};
 use fedimint_core::task::{MaybeSend, MaybeSync, ShuttingDownError, TaskGroup};
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::FmtCompactAnyhow as _;
-use fedimint_core::{apply, async_trait_maybe_send, OutPoint};
+use fedimint_core::{apply, async_trait_maybe_send, OutPoint, PeerId};
 use fedimint_logging::LOG_CLIENT_RECOVERY;
 use futures::{Stream, StreamExt as _};
 use rand::{thread_rng, Rng as _};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, trace, warn};
 
 use super::{ClientModuleInit, ClientModuleRecoverArgs};
 use crate::module::recovery::RecoveryProgress;
@@ -247,30 +252,32 @@ where
             core_api_version: ApiVersion,
             decoders: ModuleDecoderRegistry,
             epoch_range: ops::Range<u64>,
+            broadcast_public_keys: Option<BTreeMap<PeerId, PublicKey>>,
             task_group: TaskGroup,
         ) -> impl futures::Stream<Item = Result<(u64, Vec<AcceptedItem>), ShuttingDownError>> + 'a
         {
             // How many request for blocks to run in parallel (streaming).
-            const PARALLELISM_LEVEL: usize = 64;
-            const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS: ApiVersion =
-                ApiVersion { major: 0, minor: 1 };
+            let parallelism_level =
+                if core_api_version < VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2 {
+                    64
+                } else {
+                    128
+                };
 
             futures::stream::iter(epoch_range.clone())
                 .map(move |session_idx| {
                     let api = api.clone();
-                    let decoders = decoders.clone();
+                    // When decoding we're only interested in items we can understand, so we don't
+                    // want to fail on a missing decoder of some unrelated module.
+                    let decoders = decoders.clone().with_fallback();
                     let task_group = task_group.clone();
+                    let broadcast_public_keys = broadcast_public_keys.clone();
 
                     Box::pin(async move {
                         // NOTE: Each block is fetched in a spawned task. This avoids a footgun
                         // of stuff in streams not making any progress when the stream itself
                         // is not being polled, and possibly can increase the fetching performance.
                         task_group.spawn_cancellable("recovery fetch block", async move {
-
-                            info!(
-                                target: LOG_CLIENT_RECOVERY,
-                                session_idx, "Fetching epoch"
-                            );
 
                             let mut retry_sleep = Duration::from_millis(10);
                             let block = loop {
@@ -279,7 +286,7 @@ where
                                 let items_res = if core_api_version < VERSION_THAT_INTRODUCED_GET_SESSION_STATUS {
                                     api.await_block(session_idx, &decoders).await.map(|s| s.items)
                                 } else {
-                                    api.get_session_status(session_idx, &decoders).await.map(|s| match s {
+                                    api.get_session_status(session_idx, &decoders, core_api_version, broadcast_public_keys.as_ref()).await.map(|s| match s {
                                         SessionStatus::Initial => panic!("Federation missing session that existed when we started recovery"),
                                         SessionStatus::Pending(items) => items,
                                         SessionStatus::Complete(s) => s.items,
@@ -288,7 +295,7 @@ where
 
                                 match items_res {
                                     Ok(block) => {
-                                        debug!(target: LOG_CLIENT_RECOVERY, session_idx, "Got signed session");
+                                        trace!(target: LOG_CLIENT_RECOVERY, session_idx, "Got signed session");
                                         break block
                                     },
                                     Err(err) => {
@@ -311,7 +318,7 @@ where
                         }).await.expect("Can't fail")
                     })
                 })
-                .buffered(PARALLELISM_LEVEL)
+                .buffered(parallelism_level)
         }
 
         /// Make enough progress to justify saving a state snapshot
@@ -325,14 +332,13 @@ where
         where
             Init: ClientModuleInit,
         {
-            /// the amount of blocks after which we save progress in the
-            /// database (return from this function)
+            /// the amount of blocks after which we unconditionally save
+            /// progress in the database (return from this function)
             ///
-            /// TODO: Instead of a fixed range of session
-            /// indexes, make the loop time-based, so the amount of
-            /// progress we can loose on termination is time-bound,
-            /// and thus more adaptive.
-            const PROGRESS_SNAPSHOT_BLOCKS: u64 = 10;
+            /// We are also bound by time inside the loop, below
+            const PROGRESS_SNAPSHOT_BLOCKS: u64 = 5000;
+
+            let start = fedimint_core::time::now();
 
             let block_range = common_state.next_session
                 ..cmp::min(
@@ -341,12 +347,6 @@ where
                         .wrapping_add(PROGRESS_SNAPSHOT_BLOCKS),
                     common_state.end_session,
                 );
-
-            debug!(
-                target: LOG_CLIENT_RECOVERY,
-                ?block_range,
-                "Processing blocks"
-            );
 
             for _ in block_range {
                 let Some(res) = block_stream.next().await else {
@@ -361,6 +361,14 @@ where
                     .await?;
 
                 common_state.next_session += 1;
+
+                if Duration::from_secs(10)
+                    < fedimint_core::time::now()
+                        .duration_since(start)
+                        .unwrap_or_default()
+                {
+                    break;
+                }
             }
 
             Ok(())
@@ -427,6 +435,12 @@ where
             *self.core_api_version(),
             client_ctx.decoders(),
             block_stream_session_range,
+            client_ctx
+                .get_config()
+                .await
+                .global
+                .broadcast_public_keys
+                .clone(),
             self.task_group().clone(),
         );
         let client_ctx = self.context();

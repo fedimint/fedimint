@@ -1,9 +1,13 @@
+use std::collections::BTreeMap;
+use std::io::Write as _;
+
 use bitcoin::hashes::{sha256, Hash};
 use parity_scale_codec::{Decode, Encode};
+use secp256k1::{schnorr, Message, PublicKey, SECP256K1};
 
 use crate::encoding::{Decodable, Encodable};
 use crate::epoch::ConsensusItem;
-use crate::PeerId;
+use crate::{NumPeersExt as _, PeerId};
 
 /// A consensus item accepted in the consensus
 ///
@@ -73,9 +77,64 @@ pub struct SignedSessionOutcome {
     pub signatures: std::collections::BTreeMap<PeerId, SchnorrSignature>,
 }
 
+impl SignedSessionOutcome {
+    pub fn verify(
+        &self,
+        broadcast_public_keys: &BTreeMap<PeerId, PublicKey>,
+        block_index: u64,
+    ) -> bool {
+        let message = {
+            let mut engine = sha256::HashEngine::default();
+            engine
+                .write_all(broadcast_public_keys.consensus_hash_sha256().as_ref())
+                .expect("Writing to a hash engine can not fail");
+            engine
+                .write_all(&self.session_outcome.header(block_index))
+                .expect("Writing to a hash engine can not fail");
+            Message::from_digest(sha256::Hash::from_engine(engine).to_byte_array())
+        };
+
+        let threshold = broadcast_public_keys.to_num_peers().threshold();
+        if self.signatures.len() < threshold {
+            return false;
+        }
+
+        self.signatures.iter().all(|(peer_id, signature)| {
+            let Some(pub_key) = broadcast_public_keys.get(peer_id) else {
+                return false;
+            };
+            let Ok(signature) = schnorr::Signature::from_slice(&signature.0) else {
+                return false;
+            };
+            SECP256K1
+                .verify_schnorr(&signature, &message, &pub_key.x_only_public_key().0)
+                .is_ok()
+        })
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
 pub enum SessionStatus {
     Initial,
     Pending(Vec<AcceptedItem>),
     Complete(SessionOutcome),
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
+pub enum SessionStatusV2 {
+    Initial,
+    Pending(Vec<AcceptedItem>),
+    Complete(SignedSessionOutcome),
+}
+
+impl From<SessionStatusV2> for SessionStatus {
+    fn from(value: SessionStatusV2) -> Self {
+        match value {
+            SessionStatusV2::Initial => Self::Initial,
+            SessionStatusV2::Pending(items) => Self::Pending(items),
+            SessionStatusV2::Complete(signed_session_outcome) => {
+                Self::Complete(signed_session_outcome.session_outcome)
+            }
+        }
+    }
 }

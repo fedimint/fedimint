@@ -153,6 +153,8 @@ where
     pub fn global_api(&self) -> DynGlobalApi {
         self.client.get().api_clone()
     }
+
+    /// A set of all decoders of all modules of the client
     pub fn decoders(&self) -> ModuleDecoderRegistry {
         self.client.get().decoders().clone()
     }
@@ -165,7 +167,9 @@ where
             input
                 .as_any()
                 .downcast_ref::<<M::Common as ModuleCommon>::Input>()
-                .expect("instance_id just checked")
+                .unwrap_or_else(|| {
+                    panic!("instance_id {} just checked", input.module_instance_id())
+                })
         })
     }
 
@@ -177,7 +181,9 @@ where
             output
                 .as_any()
                 .downcast_ref::<<M::Common as ModuleCommon>::Output>()
-                .expect("instance_id just checked")
+                .unwrap_or_else(|| {
+                    panic!("instance_id {} just checked", output.module_instance_id())
+                })
         })
     }
 

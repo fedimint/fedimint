@@ -26,22 +26,25 @@ use fedimint_core::endpoint_constants::{
     CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT, FEDERATION_ID_ENDPOINT,
     FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT,
     RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT,
-    SESSION_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT,
-    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SHUTDOWN_ENDPOINT,
+    SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
-    SerdeModuleEncoding, SupportedApiVersionsSummary,
+    SerdeModuleEncoding, SerdeModuleEncodingBase64, SupportedApiVersionsSummary,
 };
 use fedimint_core::net::api_announcement::{
     ApiAnnouncement, SignedApiAnnouncement, SignedApiAnnouncementSubmission,
 };
 use fedimint_core::secp256k1::{PublicKey, SECP256K1};
 use fedimint_core::server::DynServerModule;
-use fedimint_core::session_outcome::{SessionOutcome, SessionStatus, SignedSessionOutcome};
+use fedimint_core::session_outcome::{
+    SessionOutcome, SessionStatus, SessionStatusV2, SignedSessionOutcome,
+};
 use fedimint_core::transaction::{
     SerdeTransaction, Transaction, TransactionError, TransactionSubmissionOutcome,
 };
@@ -190,23 +193,22 @@ impl ConsensusApi {
             .0
     }
 
-    pub async fn session_status(&self, session_index: u64) -> SessionStatus {
+    pub async fn session_status(&self, session_index: u64) -> SessionStatusV2 {
         let mut dbtx = self.db.begin_transaction_nc().await;
 
         match session_index.cmp(&get_finished_session_count_static(&mut dbtx).await) {
-            Ordering::Greater => SessionStatus::Initial,
-            Ordering::Equal => SessionStatus::Pending(
+            Ordering::Greater => SessionStatusV2::Initial,
+            Ordering::Equal => SessionStatusV2::Pending(
                 dbtx.find_by_prefix(&AcceptedItemPrefix)
                     .await
                     .map(|entry| entry.1)
                     .collect()
                     .await,
             ),
-            Ordering::Less => SessionStatus::Complete(
+            Ordering::Less => SessionStatusV2::Complete(
                 dbtx.get_value(&SignedSessionOutcomeKey(session_index))
                     .await
-                    .expect("There are no gaps in session outcomes")
-                    .session_outcome,
+                    .expect("There are no gaps in session outcomes"),
             ),
         }
     }
@@ -634,6 +636,13 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             SESSION_STATUS_ENDPOINT,
             ApiVersion::new(0, 1),
             async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<SessionStatus> {
+                Ok((&SessionStatus::from(fedimint.session_status(index).await)).into())
+            }
+        },
+        api_endpoint! {
+            SESSION_STATUS_V2_ENDPOINT,
+            ApiVersion::new(0, 5),
+            async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncodingBase64<SessionStatusV2> {
                 Ok((&fedimint.session_status(index).await).into())
             }
         },

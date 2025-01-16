@@ -467,7 +467,7 @@ where
                 } else {
                     warn!(
                         target: LOG_CORE,
-                        ?err,
+                        err = %err.fmt_compact_anyhow(),
                         %attempts,
                         "{} failed",
                         op_name,
