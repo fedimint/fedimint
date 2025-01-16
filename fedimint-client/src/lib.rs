@@ -86,7 +86,7 @@ use std::future::pending;
 use std::ops::{self, Range};
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, bail, ensure, format_err, Context};
 use api::ClientRawFederationApiExt as _;
@@ -1147,6 +1147,16 @@ impl Client {
     /// Get the meta manager to read meta fields.
     pub fn meta_service(&self) -> &Arc<MetaService> {
         &self.meta_service
+    }
+
+    /// Get the meta manager to read meta fields.
+    pub async fn get_meta_expiration_timestamp(&self) -> Option<SystemTime> {
+        let meta_service = self.meta_service();
+        let ts = meta_service
+            .get_field::<u64>(self.db(), "federation_expiry_timestamp")
+            .await
+            .and_then(|v| v.value)?;
+        Some(UNIX_EPOCH + Duration::from_secs(ts))
     }
 
     /// Adds funding to a transaction or removes over-funding via change.

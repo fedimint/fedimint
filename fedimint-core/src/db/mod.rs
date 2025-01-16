@@ -2348,7 +2348,7 @@ pub async fn create_database_version(
         };
 
         // Write the previous `DatabaseVersion` to the new `DatabaseVersionKey`
-        info!(target: LOG_DB, ?kind, ?current_version_in_module, ?target_db_version, ?is_new_db, "Creating DatabaseVersionKey...");
+        debug!(target: LOG_DB, ?kind, ?current_version_in_module, ?target_db_version, ?is_new_db, "Creating DatabaseVersionKey...");
         global_dbtx
             .insert_new_entry(
                 &DatabaseVersionKey(key_module_instance_id),

@@ -64,7 +64,7 @@ use rand::thread_rng;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use thiserror::Error;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 use utils::parse_peer_id;
 
 use crate::client::ClientCmd;
@@ -311,7 +311,7 @@ async fn load_or_generate_mnemonic(db: &Database) -> Result<Mnemonic, CliError> 
         if let Ok(entropy) = Client::load_decodable_client_secret::<Vec<u8>>(db).await {
             Mnemonic::from_entropy(&entropy).map_err_cli()?
         } else {
-            info!(
+            debug!(
                 target: LOG_CLIENT,
                 "Generating mnemonic and writing entropy to client storage"
             );
@@ -694,7 +694,7 @@ impl FedimintCli {
 
         let mnemonic = load_or_generate_mnemonic(client_builder.db_no_decoders()).await?;
 
-        client_builder
+        let client = client_builder
             .join(
                 get_default_client_secret(
                     &Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
@@ -705,7 +705,12 @@ impl FedimintCli {
             )
             .await
             .map(Arc::new)
-            .map_err_cli()
+            .map_err_cli()?;
+
+        print_welcome_message(&client).await;
+        log_expiration_notice(&client).await;
+
+        Ok(client)
     }
 
     async fn client_open(&self, cli: &Opts) -> CliResult<ClientHandleArc> {
@@ -729,14 +734,18 @@ impl FedimintCli {
 
         let federation_id = config.calculate_federation_id();
 
-        client_builder
+        let client = client_builder
             .open(get_default_client_secret(
                 &Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
                 &federation_id,
             ))
             .await
             .map(Arc::new)
-            .map_err_cli()
+            .map_err_cli()?;
+
+        log_expiration_notice(&client).await;
+
+        Ok(client)
     }
 
     async fn client_recover(
@@ -780,7 +789,7 @@ impl FedimintCli {
             .download_backup_from_federation(&root_secret, &client_config, invite_code.api_secret())
             .await
             .map_err_cli()?;
-        builder
+        let client = builder
             .recover(
                 root_secret,
                 client_config.clone(),
@@ -789,7 +798,12 @@ impl FedimintCli {
             )
             .await
             .map(Arc::new)
-            .map_err_cli()
+            .map_err_cli()?;
+
+        print_welcome_message(&client).await;
+        log_expiration_notice(&client).await;
+
+        Ok(client)
     }
 
     async fn handle_command(&mut self, cli: Opts) -> CliOutputResult {
@@ -1305,6 +1319,38 @@ impl FedimintCli {
                 Ok(CliOutput::Raw(Value::Null))
             }
         }
+    }
+}
+
+async fn log_expiration_notice(client: &Client) {
+    client.get_meta_expiration_timestamp().await;
+    if let Some(expiration_time) = client.get_meta_expiration_timestamp().await {
+        match expiration_time.duration_since(fedimint_core::time::now()) {
+            Ok(until_expiration) => {
+                let days = until_expiration.as_secs() / (60 * 60 * 24);
+
+                if 90 < days {
+                    debug!(target: LOG_CLIENT, %days, "This federation will expire");
+                } else if 30 < days {
+                    info!(target: LOG_CLIENT, %days, "This federation will expire");
+                } else {
+                    warn!(target: LOG_CLIENT, %days, "This federation will expire soon");
+                }
+            }
+            Err(_) => {
+                tracing::error!(target: LOG_CLIENT, "This federation has expired and might not be safe to use");
+            }
+        }
+    }
+}
+async fn print_welcome_message(client: &Client) {
+    if let Some(welcome_message) = client
+        .meta_service()
+        .get_field::<String>(client.db(), "welcome_message")
+        .await
+        .and_then(|v| v.value)
+    {
+        eprintln!("{welcome_message}");
     }
 }
 

@@ -13,7 +13,7 @@ use fedimint_core::util::{backoff_util, retry, SafeUrl};
 use fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
 use fedimint_logging::LOG_CLIENT;
 use futures::future::join_all;
-use tracing::{info, warn};
+use tracing::{debug, warn};
 
 use crate::db::DbKeyPrefix;
 use crate::Client;
@@ -86,7 +86,7 @@ pub async fn run_api_announcement_sync(client_inner: Arc<Client>) {
                                             < new_announcement.api_announcement.nonce
                                     });
                                 if replace_current_announcement {
-                                    info!(target: LOG_CLIENT, ?peer, %new_announcement.api_announcement.api_url, "Updating API announcement");
+                                    debug!(target: LOG_CLIENT, ?peer, %new_announcement.api_announcement.api_url, "Updating API announcement");
                                     dbtx.insert_entry(&ApiAnnouncementKey(peer), &new_announcement)
                                         .await;
                                 }
