@@ -336,7 +336,7 @@ where
             /// indexes, make the loop time-based, so the amount of
             /// progress we can loose on termination is time-bound,
             /// and thus more adaptive.
-            const PROGRESS_SNAPSHOT_BLOCKS: u64 = 10;
+            const PROGRESS_SNAPSHOT_BLOCKS: u64 = 100;
 
             let block_range = common_state.next_session
                 ..cmp::min(

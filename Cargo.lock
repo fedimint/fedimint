@@ -736,12 +736,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
-name = "base64-serde"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77c6d128af408d8ebd08331f0331cf2cf20d19e6c44a7aec58791641ecc8c0b5"
-
-[[package]]
 name = "base64-url"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2643,7 +2637,7 @@ dependencies = [
  "async-trait",
  "backon",
  "backtrace",
- "base64-serde",
+ "base64 0.22.1",
  "base64-url",
  "bech32 0.11.0",
  "bincode",
