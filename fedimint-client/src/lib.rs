@@ -881,7 +881,7 @@ pub struct Client {
     decoders: ModuleDecoderRegistry,
     db: Database,
     federation_id: FederationId,
-    federation_meta: BTreeMap<String, String>,
+    federation_config_meta: BTreeMap<String, String>,
     primary_module_instance: ModuleInstanceId,
     modules: ClientModuleRegistry,
     module_inits: ClientModuleInitRegistry,
@@ -1105,8 +1105,9 @@ impl Client {
         Ok((self.federation_id().to_fake_ln_pub_key(&self.secp_ctx)?, 0))
     }
 
-    pub fn get_meta(&self, key: &str) -> Option<String> {
-        self.federation_meta.get(key).cloned()
+    /// Get metadata value from the federation config itself
+    pub fn get_config_meta(&self, key: &str) -> Option<String> {
+        self.federation_config_meta.get(key).cloned()
     }
 
     fn root_secret(&self) -> DerivableSecret {
@@ -3005,7 +3006,7 @@ impl ClientBuilder {
             decoders,
             db: db.clone(),
             federation_id: fed_id,
-            federation_meta: config.global.meta,
+            federation_config_meta: config.global.meta,
             primary_module_instance,
             modules,
             module_inits: self.module_inits.clone(),
