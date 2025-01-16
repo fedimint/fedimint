@@ -40,6 +40,10 @@ impl GatewayClientBuilder {
         }
     }
 
+    pub fn data_dir(&self) -> PathBuf {
+        self.work_dir.clone()
+    }
+
     /// Reads a plain root secret from a database to construct a database.
     /// Only used for "legacy" federations before v0.5.0
     async fn client_plainrootsecret(&self, db: &Database) -> AdminResult<DerivableSecret> {

@@ -20,7 +20,7 @@ use fedimint_core::envs::{is_env_var_set, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV};
 use fedimint_core::util::backoff_util::aggressive_backoff_long;
 use fedimint_core::util::retry;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
-use fedimint_testing::gateway::LightningNodeType;
+use fedimint_testing::ln::LightningNodeType;
 use itertools::Itertools;
 use ln_gateway::rpc::{GatewayBalances, GatewayFedConfig, GatewayInfo};
 use tracing::{info, warn};

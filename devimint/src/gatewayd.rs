@@ -13,7 +13,7 @@ use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_lightning::ChannelInfo;
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
-use fedimint_testing::gateway::LightningNodeType;
+use fedimint_testing::ln::LightningNodeType;
 use ln_gateway::envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV;
 use ln_gateway::rpc::{GatewayBalances, MnemonicResponse, V1_API_ENDPOINT};
 use tracing::info;

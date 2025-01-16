@@ -134,7 +134,7 @@ pub struct GatewayInfo {
     #[serde(default)]
     pub synced_to_chain: bool,
     pub api: SafeUrl,
-    pub lightning_mode: Option<LightningMode>,
+    pub lightning_mode: LightningMode,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]

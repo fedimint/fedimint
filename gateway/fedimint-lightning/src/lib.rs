@@ -17,6 +17,7 @@ use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::PrunedInvoice;
+use fedimint_lnv2_common::contracts::PaymentImage;
 use futures::stream::BoxStream;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
@@ -397,4 +398,10 @@ pub struct SendOnchainRequest {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CloseChannelsWithPeerRequest {
     pub pubkey: secp256k1::PublicKey,
+}
+
+// Trait that specifies how to interact with the gateway's lightning node.
+#[async_trait]
+pub trait LightningV2Manager: Debug + Send + Sync {
+    async fn contains_incoming_contract(&self, payment_image: PaymentImage) -> bool;
 }

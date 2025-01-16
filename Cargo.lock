@@ -1963,6 +1963,7 @@ dependencies = [
  "fedimint-client",
  "fedimint-cln-rpc",
  "fedimint-core",
+ "fedimint-lightning",
  "fedimint-ln-client",
  "fedimint-ln-gateway",
  "fedimint-ln-server",
@@ -2891,6 +2892,7 @@ dependencies = [
  "fedimint-build",
  "fedimint-core",
  "fedimint-eventlog",
+ "fedimint-lightning",
  "fedimint-ln-gateway",
  "fedimint-logging",
  "fedimint-mint-client",
@@ -2905,6 +2907,32 @@ name = "fedimint-hkdf"
 version = "0.6.0-alpha"
 dependencies = [
  "bitcoin_hashes 0.14.0",
+]
+
+[[package]]
+name = "fedimint-lightning"
+version = "0.6.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bitcoin",
+ "fedimint-bip39",
+ "fedimint-bitcoind",
+ "fedimint-core",
+ "fedimint-ln-common",
+ "fedimint-lnv2-common",
+ "fedimint-tonic-lnd",
+ "futures",
+ "hex",
+ "ldk-node",
+ "lightning",
+ "lightning-invoice",
+ "lockable",
+ "serde",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-stream",
+ "tracing",
 ]
 
 [[package]]
@@ -2972,7 +3000,6 @@ dependencies = [
  "esplora-client 0.10.0",
  "fedimint-api-client",
  "fedimint-bip39",
- "fedimint-bitcoind",
  "fedimint-build",
  "fedimint-client",
  "fedimint-core",
@@ -2980,6 +3007,7 @@ dependencies = [
  "fedimint-dummy-common",
  "fedimint-dummy-server",
  "fedimint-eventlog",
+ "fedimint-lightning",
  "fedimint-ln-client",
  "fedimint-ln-common",
  "fedimint-ln-server",
@@ -2999,8 +3027,6 @@ dependencies = [
  "futures-util",
  "hex",
  "itertools 0.13.0",
- "ldk-node",
- "lightning",
  "lightning-invoice",
  "lockable",
  "prost 0.13.4",
@@ -3533,6 +3559,7 @@ dependencies = [
  "fedimint-bitcoind",
  "fedimint-client",
  "fedimint-core",
+ "fedimint-lightning",
  "fedimint-ln-common",
  "fedimint-ln-gateway",
  "fedimint-logging",

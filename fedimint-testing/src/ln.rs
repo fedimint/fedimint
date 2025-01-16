@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -294,5 +296,32 @@ impl ILnRpcClient for FakeLightningTest {
             lightning_balance_msats: 0,
             inbound_lightning_liquidity_msats: 0,
         })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub enum LightningNodeType {
+    Lnd,
+    Ldk,
+}
+
+impl Display for LightningNodeType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        match self {
+            LightningNodeType::Lnd => write!(f, "lnd"),
+            LightningNodeType::Ldk => write!(f, "ldk"),
+        }
+    }
+}
+
+impl FromStr for LightningNodeType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "lnd" => Ok(LightningNodeType::Lnd),
+            "ldk" => Ok(LightningNodeType::Ldk),
+            _ => Err(format!("Invalid value for LightningNodeType: {s}")),
+        }
     }
 }

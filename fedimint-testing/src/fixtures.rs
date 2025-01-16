@@ -23,7 +23,7 @@ use fedimint_lightning::{ILnRpcClient, LightningContext};
 use fedimint_logging::TracingSetup;
 use fedimint_testing_core::test_dir;
 use ln_gateway::client::GatewayClientBuilder;
-use ln_gateway::config::{LightningBuilder, LightningModuleMode};
+use ln_gateway::config::{LightningMode, LightningModuleMode};
 use ln_gateway::Gateway;
 
 use crate::btc::mock::FakeBitcoinFactory;
@@ -34,10 +34,12 @@ use crate::envs::{
     FM_TEST_BITCOIND_RPC_ENV, FM_TEST_USE_REAL_DAEMONS_ENV,
 };
 use crate::federation::{FederationTest, FederationTestBuilder};
-use crate::gateway::{FakeLightningBuilder, DEFAULT_GATEWAY_PASSWORD};
+use crate::ln::FakeLightningTest;
 
 /// A default timeout for things happening in tests
 pub const TIMEOUT: Duration = Duration::from_secs(10);
+
+pub const DEFAULT_GATEWAY_PASSWORD: &str = "thereisnosecondbest";
 
 /// A tool for easily writing fedimint integration tests
 pub struct Fixtures {
@@ -182,12 +184,7 @@ impl Fixtures {
         let client_builder: GatewayClientBuilder =
             GatewayClientBuilder::new(path.clone(), registry, ModuleKind::from_static_str("dummy"));
 
-        let lightning_builder: Arc<dyn LightningBuilder + Send + Sync> =
-            Arc::new(FakeLightningBuilder);
-        // Note: This runtime isn't used by `FakeLightningBuilder`. It is immediately
-        // dropped.
-        let runtime = Arc::new(tokio::runtime::Runtime::new().unwrap());
-        let ln_client: Arc<dyn ILnRpcClient> = lightning_builder.build(runtime).await.into();
+        let ln_client: Arc<dyn ILnRpcClient> = Arc::new(FakeLightningTest::new());
 
         let (lightning_public_key, lightning_alias, lightning_network, _, _) = ln_client
             .parsed_node_info()
@@ -205,7 +202,13 @@ impl Fixtures {
         let address: SafeUrl = format!("http://{listen}").parse().unwrap();
 
         Gateway::new_with_custom_registry(
-            lightning_builder,
+            // Fixtures does not use real lightning connection, so just fake the connection
+            // parameters
+            LightningMode::Lnd {
+                lnd_rpc_addr: "FakeRpcAddr".to_string(),
+                lnd_tls_cert: "FakeTlsCert".to_string(),
+                lnd_macaroon: "FakeMacaroon".to_string(),
+            },
             client_builder,
             listen,
             address.clone(),

@@ -2,17 +2,10 @@ use std::fmt::Display;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::Arc;
 
-use async_trait::async_trait;
 use bitcoin::Network;
 use clap::{Parser, Subcommand};
-use fedimint_bip39::Mnemonic;
-use fedimint_core::db::Database;
 use fedimint_core::util::SafeUrl;
-use fedimint_lightning::ldk::{self, GatewayLdkChainSourceConfig};
-use fedimint_lightning::lnd::GatewayLndClient;
-use fedimint_lightning::ILnRpcClient;
 use serde::{Deserialize, Serialize};
 
 use super::envs;
@@ -56,82 +49,6 @@ pub enum LightningMode {
         #[arg(long = "ldk-lightning-port", env = FM_PORT_LDK)]
         lightning_port: u16,
     },
-}
-
-// TODO: Move this to fedimint-lightning
-#[async_trait]
-pub trait LightningBuilder {
-    async fn build(&self, runtime: Arc<tokio::runtime::Runtime>) -> Box<dyn ILnRpcClient>;
-
-    fn lightning_mode(&self) -> Option<LightningMode> {
-        None
-    }
-}
-
-#[derive(Clone)]
-pub struct GatewayLightningBuilder {
-    pub lightning_mode: LightningMode,
-    pub gateway_db: Database,
-    pub ldk_data_dir: PathBuf,
-    pub mnemonic: Mnemonic,
-}
-
-#[async_trait]
-impl LightningBuilder for GatewayLightningBuilder {
-    async fn build(&self, runtime: Arc<tokio::runtime::Runtime>) -> Box<dyn ILnRpcClient> {
-        match self.lightning_mode.clone() {
-            LightningMode::Lnd {
-                lnd_rpc_addr,
-                lnd_tls_cert,
-                lnd_macaroon,
-            } => Box::new(GatewayLndClient::new(
-                lnd_rpc_addr,
-                lnd_tls_cert,
-                lnd_macaroon,
-                None,
-                self.gateway_db.clone(),
-            )),
-            LightningMode::Ldk {
-                esplora_server_url,
-                bitcoind_rpc_url,
-                network,
-                lightning_port,
-            } => {
-                let chain_source_config = {
-                    match (esplora_server_url, bitcoind_rpc_url) {
-                        (Some(esplora_server_url), None) => GatewayLdkChainSourceConfig::Esplora {
-                            server_url: SafeUrl::parse(&esplora_server_url.clone()).unwrap(),
-                        },
-                        (None, Some(bitcoind_rpc_url)) => GatewayLdkChainSourceConfig::Bitcoind {
-                            server_url: SafeUrl::parse(&bitcoind_rpc_url.clone()).unwrap(),
-                        },
-                        (None, None) => {
-                            panic!("Either esplora or bitcoind chain info source must be provided")
-                        }
-                        (Some(_), Some(_)) => {
-                            panic!("Either esplora or bitcoind chain info source must be provided, but not both")
-                        }
-                    }
-                };
-
-                Box::new(
-                    ldk::GatewayLdkClient::new(
-                        &self.ldk_data_dir,
-                        chain_source_config,
-                        network,
-                        lightning_port,
-                        self.mnemonic.clone(),
-                        runtime,
-                    )
-                    .expect("Failed to create LDK client"),
-                )
-            }
-        }
-    }
-
-    fn lightning_mode(&self) -> Option<LightningMode> {
-        Some(self.lightning_mode.clone())
-    }
 }
 
 /// Command line parameters for starting the gateway. `mode`, `data_dir`,

@@ -8,6 +8,10 @@ license = "MIT"
 readme = "../../README.md"
 repository = "https://github.com/fedimint/fedimint"
 
+[lib]
+name = "fedimint_lightning"
+path = "src/lib.rs"
+
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
