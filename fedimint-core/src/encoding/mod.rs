@@ -591,7 +591,7 @@ impl DecodeError {
 
 impl std::fmt::Display for DecodeError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(&self.0, f)
+        f.write_fmt(format_args!("{:#}", self.0))
     }
 }
 

@@ -350,7 +350,7 @@ macro_rules! module_plugin_dyn_newtype_encode_decode {
                         $crate::module::registry::DecodingMode::Reject => {
                             return Err(fedimint_core::encoding::DecodeError::new_custom(
                                 anyhow::anyhow!(
-                                    "Module decoder not available: {module_instance_id} when decoding {}", std::any::type_name::<Self>()
+                                    "Module decoder not available for module instance: {module_instance_id} when decoding {}", std::any::type_name::<Self>()
                                 ),
                             ));
                         }
