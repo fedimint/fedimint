@@ -2194,15 +2194,49 @@ pub fn get_current_database_version<F>(
         .map_or(DatabaseVersion(0), DatabaseVersion::increment)
 }
 
-/// Applies the database migrations to a non-isolated database.
+/// See [`apply_migrations_server_dbtx`]
 pub async fn apply_migrations_server(
     db: &Database,
     kind: String,
     migrations: BTreeMap<DatabaseVersion, CoreMigrationFn>,
 ) -> Result<(), anyhow::Error> {
-    apply_migrations(db, kind, migrations, None, None).await
+    let mut global_dbtx = db.begin_transaction().await;
+    global_dbtx.ensure_global()?;
+    apply_migrations_server_dbtx(&mut global_dbtx.to_ref_nc(), kind, migrations).await?;
+    global_dbtx.commit_tx_result().await
 }
 
+/// Applies the database migrations to a non-isolated database.
+pub async fn apply_migrations_server_dbtx(
+    global_dbtx: &mut DatabaseTransaction<'_>,
+    kind: String,
+    migrations: BTreeMap<DatabaseVersion, CoreMigrationFn>,
+) -> Result<(), anyhow::Error> {
+    global_dbtx.ensure_global()?;
+    apply_migrations_dbtx(global_dbtx, kind, migrations, None, None).await
+}
+
+pub async fn apply_migrations(
+    db: &Database,
+    kind: String,
+    migrations: BTreeMap<DatabaseVersion, CoreMigrationFn>,
+    module_instance_id: Option<ModuleInstanceId>,
+    // When used in client side context, we can/should ignore keys that external app
+    // is allowed to use, and but since this function is shared, we make it optional argument
+    external_prefixes_above: Option<u8>,
+) -> Result<(), anyhow::Error> {
+    let mut dbtx = db.begin_transaction().await;
+    apply_migrations_dbtx(
+        &mut dbtx.to_ref_nc(),
+        kind,
+        migrations,
+        module_instance_id,
+        external_prefixes_above,
+    )
+    .await?;
+
+    dbtx.commit_tx_result().await
+}
 /// `apply_migrations` iterates from the on disk database version for the
 /// module.
 ///
@@ -2214,8 +2248,8 @@ pub async fn apply_migrations_server(
 /// happen atomically). This function is called before the module is initialized
 /// and as long as the correct migrations are supplied in the migrations map,
 /// the module will be able to read and write from the database successfully.
-pub async fn apply_migrations(
-    db: &Database,
+pub async fn apply_migrations_dbtx(
+    global_dbtx: &mut DatabaseTransaction<'_>,
     kind: String,
     migrations: BTreeMap<DatabaseVersion, CoreMigrationFn>,
     module_instance_id: Option<ModuleInstanceId>,
@@ -2225,8 +2259,7 @@ pub async fn apply_migrations(
 ) -> Result<(), anyhow::Error> {
     // Newly created databases will not have any data since they have just been
     // instantiated.
-    let mut dbtx = db.begin_transaction_nc().await;
-    let is_new_db = dbtx
+    let is_new_db = global_dbtx
         .raw_find_by_prefix(&[])
         .await?
         .filter(|(key, _v)| {
@@ -2243,8 +2276,8 @@ pub async fn apply_migrations(
     let target_db_version = get_current_database_version(&migrations);
 
     // First write the database version to disk if it does not exist.
-    create_database_version(
-        db,
+    create_database_version_dbtx(
+        global_dbtx,
         target_db_version,
         module_instance_id,
         kind.clone(),
@@ -2252,7 +2285,6 @@ pub async fn apply_migrations(
     )
     .await?;
 
-    let mut global_dbtx = db.begin_transaction().await;
     let module_instance_id_key = module_instance_id_or_global(module_instance_id);
 
     let disk_version = global_dbtx
@@ -2294,16 +2326,37 @@ pub async fn apply_migrations(
         target_db_version
     };
 
-    global_dbtx.commit_tx_result().await?;
     debug!(target: LOG_DB, ?kind, ?db_version, "DB Version");
+    Ok(())
+}
+
+pub async fn create_database_version(
+    db: &Database,
+    target_db_version: DatabaseVersion,
+    module_instance_id: Option<ModuleInstanceId>,
+    kind: String,
+    is_new_db: bool,
+) -> Result<(), anyhow::Error> {
+    let mut dbtx = db.begin_transaction().await;
+
+    create_database_version_dbtx(
+        &mut dbtx.to_ref_nc(),
+        target_db_version,
+        module_instance_id,
+        kind,
+        is_new_db,
+    )
+    .await?;
+
+    dbtx.commit_tx_result().await?;
     Ok(())
 }
 
 /// Creates the `DatabaseVersion` inside the database if it does not exist. If
 /// necessary, this function will migrate the legacy database version to the
 /// expected `DatabaseVersionKey`.
-pub async fn create_database_version(
-    db: &Database,
+pub async fn create_database_version_dbtx(
+    global_dbtx: &mut DatabaseTransaction<'_>,
     target_db_version: DatabaseVersion,
     module_instance_id: Option<ModuleInstanceId>,
     kind: String,
@@ -2314,7 +2367,6 @@ pub async fn create_database_version(
     // First check if the module has a `DatabaseVersion` written to
     // `DatabaseVersionKey`. If `DatabaseVersion` already exists, there is
     // nothing to do.
-    let mut global_dbtx = db.begin_transaction().await;
     if global_dbtx
         .get_value(&DatabaseVersionKey(key_module_instance_id))
         .await
@@ -2355,7 +2407,6 @@ pub async fn create_database_version(
                 &current_version_in_module,
             )
             .await;
-        global_dbtx.commit_tx_result().await?;
     }
 
     Ok(())
