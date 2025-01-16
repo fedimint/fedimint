@@ -1077,7 +1077,7 @@
                 } <span class="kw">else </span>{
                     <span class="macro">warn!</span>(
                         target: LOG_CORE,
-                        <span class="question-mark">?</span>err,
+                        err = %err.fmt_compact_anyhow(),
                         %attempts,
                         <span class="string">"{} failed"</span>,
                         op_name,

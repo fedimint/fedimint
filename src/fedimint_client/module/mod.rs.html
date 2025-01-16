@@ -1074,7 +1074,13 @@
 <a href="#1073" id="1073">1073</a>
 <a href="#1074" id="1074">1074</a>
 <a href="#1075" id="1075">1075</a>
-<a href="#1076" id="1076">1076</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
+<a href="#1076" id="1076">1076</a>
+<a href="#1077" id="1077">1077</a>
+<a href="#1078" id="1078">1078</a>
+<a href="#1079" id="1079">1079</a>
+<a href="#1080" id="1080">1080</a>
+<a href="#1081" id="1081">1081</a>
+<a href="#1082" id="1082">1082</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::ops::Range;
@@ -1229,7 +1235,9 @@
     </span><span class="kw">pub fn </span>global_api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynGlobalApi {
         <span class="self">self</span>.client.get().api_clone()
     }
-    <span class="kw">pub fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleDecoderRegistry {
+
+    <span class="doccomment">/// A set of all decoders of all modules of the client
+    </span><span class="kw">pub fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleDecoderRegistry {
         <span class="self">self</span>.client.get().decoders().clone()
     }
 
@@ -1241,7 +1249,9 @@
             input
                 .as_any()
                 .downcast_ref::&lt;&lt;M::Common <span class="kw">as </span>ModuleCommon&gt;::Input&gt;()
-                .expect(<span class="string">"instance_id just checked"</span>)
+                .unwrap_or_else(|| {
+                    <span class="macro">panic!</span>(<span class="string">"instance_id {} just checked"</span>, input.module_instance_id())
+                })
         })
     }
 
@@ -1253,7 +1263,9 @@
             output
                 .as_any()
                 .downcast_ref::&lt;&lt;M::Common <span class="kw">as </span>ModuleCommon&gt;::Output&gt;()
-                .expect(<span class="string">"instance_id just checked"</span>)
+                .unwrap_or_else(|| {
+                    <span class="macro">panic!</span>(<span class="string">"instance_id {} just checked"</span>, output.module_instance_id())
+                })
         })
     }
 

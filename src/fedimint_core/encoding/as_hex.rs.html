@@ -109,7 +109,7 @@
     </span>D: serde::de::Deserializer&lt;<span class="lifetime">'de</span>&gt;,
 {
     Decodable::consensus_decode_hex(<span class="kw-2">&amp;</span>String::deserialize(de)<span class="question-mark">?</span>, <span class="kw-2">&amp;</span>ModuleRegistry::default())
-        .map_err(|e| serde::de::Error::custom(<span class="macro">format!</span>(<span class="string">"decodable deserialization failed: {e:?}"</span>)))
+        .map_err(|e| serde::de::Error::custom(<span class="macro">format!</span>(<span class="string">"decodable deserialization failed: {e:#}"</span>)))
 }
 
 <span class="attr">#[macro_export]
@@ -122,7 +122,7 @@
             {
                 <span class="kw">use </span><span class="macro-nonterminal">$crate::Encodable</span>;
                 serializer.serialize_str(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus_encode_to_hex().map_err(|e| {
-                    serde::ser::Error::custom(<span class="macro">format!</span>(<span class="string">"encodable serialization failed: {e:?}"</span>))
+                    serde::ser::Error::custom(<span class="macro">format!</span>(<span class="string">"encodable serialization failed: {e:#}"</span>))
                 })<span class="question-mark">?</span>)
             }
         }
@@ -142,7 +142,7 @@
                     <span class="kw-2">&amp;</span>Default::default(),
                 )
                 .map_err(|e| {
-                    serde::de::Error::custom(<span class="macro">format!</span>(<span class="string">"decodable deserialization failed: {e:?}"</span>))
+                    serde::de::Error::custom(<span class="macro">format!</span>(<span class="string">"decodable deserialization failed: {e:#}"</span>))
                 })
             }
         }

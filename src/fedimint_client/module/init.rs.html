@@ -441,7 +441,11 @@
 <a href="#440" id="440">440</a>
 <a href="#441" id="441">441</a>
 <a href="#442" id="442">442</a>
-<a href="#443" id="443">443</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>recovery;
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>recovery;
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
@@ -658,6 +662,10 @@
     <span class="doccomment">/// Api versions of the corresponding server side module's API
     /// that this client module implementation can use.
     </span><span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MultiApiVersion;
+
+    <span class="kw">fn </span>kind() -&gt; ModuleKind {
+        &lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::kind()
+    }
 
     <span class="doccomment">/// Recover the state of the client module, optionally from an existing
     /// snapshot.

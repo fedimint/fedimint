@@ -1191,7 +1191,14 @@
 <a href="#1190" id="1190">1190</a>
 <a href="#1191" id="1191">1191</a>
 <a href="#1192" id="1192">1192</a>
-<a href="#1193" id="1193">1193</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
+<a href="#1193" id="1193">1193</a>
+<a href="#1194" id="1194">1194</a>
+<a href="#1195" id="1195">1195</a>
+<a href="#1196" id="1196">1196</a>
+<a href="#1197" id="1197">1197</a>
+<a href="#1198" id="1198">1198</a>
+<a href="#1199" id="1199">1199</a>
+<a href="#1200" id="1200">1200</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::result;
@@ -1256,6 +1263,11 @@
 
 <span class="kw">pub use </span>global_api::{GlobalFederationApiWithCache, GlobalFederationApiWithCacheExt};
 <span class="kw">use </span>peer::FederationPeer;
+
+<span class="kw">pub const </span>VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2: ApiVersion = ApiVersion::new(<span class="number">0</span>, <span class="number">5</span>);
+
+<span class="kw">pub const </span>VERSION_THAT_INTRODUCED_GET_SESSION_STATUS: ApiVersion =
+    ApiVersion { major: <span class="number">0</span>, minor: <span class="number">1 </span>};
 
 <span class="kw">pub type </span>PeerResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, PeerError&gt;;
 <span class="kw">pub type </span>JsonRpcResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, JsonRpcClientError&gt;;
@@ -1674,6 +1686,8 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         block_index: u64,
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+        core_api_version: ApiVersion,
+        broadcast_public_keys: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, secp256k1::PublicKey&gt;&gt;,
     ) -&gt; anyhow::Result&lt;SessionStatus&gt;;
 
     <span class="kw">async fn </span>session_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt;;

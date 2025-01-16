@@ -720,7 +720,16 @@
 <a href="#719" id="719">719</a>
 <a href="#720" id="720">720</a>
 <a href="#721" id="721">721</a>
-<a href="#722" id="722">722</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
+<a href="#722" id="722">722</a>
+<a href="#723" id="723">723</a>
+<a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -748,22 +757,25 @@
     CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT, FEDERATION_ID_ENDPOINT,
     FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT,
     RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT,
-    SESSION_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT,
-    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SHUTDOWN_ENDPOINT,
+    SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::module::audit::{Audit, AuditSummary};
 <span class="kw">use </span>fedimint_core::module::registry::ServerModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
-    SerdeModuleEncoding, SupportedApiVersionsSummary,
+    SerdeModuleEncoding, SerdeModuleEncodingBase64, SupportedApiVersionsSummary,
 };
 <span class="kw">use </span>fedimint_core::net::api_announcement::{
     ApiAnnouncement, SignedApiAnnouncement, SignedApiAnnouncementSubmission,
 };
 <span class="kw">use </span>fedimint_core::secp256k1::{PublicKey, SECP256K1};
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
-<span class="kw">use </span>fedimint_core::session_outcome::{SessionOutcome, SessionStatus, SignedSessionOutcome};
+<span class="kw">use </span>fedimint_core::session_outcome::{
+    SessionOutcome, SessionStatus, SessionStatusV2, SignedSessionOutcome,
+};
 <span class="kw">use </span>fedimint_core::transaction::{
     SerdeTransaction, Transaction, TransactionError, TransactionSubmissionOutcome,
 };
@@ -912,23 +924,22 @@
             </span>.<span class="number">0
     </span>}
 
-    <span class="kw">pub async fn </span>session_status(<span class="kw-2">&amp;</span><span class="self">self</span>, session_index: u64) -&gt; SessionStatus {
+    <span class="kw">pub async fn </span>session_status(<span class="kw-2">&amp;</span><span class="self">self</span>, session_index: u64) -&gt; SessionStatusV2 {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>;
 
         <span class="kw">match </span>session_index.cmp(<span class="kw-2">&amp;</span>get_finished_session_count_static(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>) {
-            Ordering::Greater =&gt; SessionStatus::Initial,
-            Ordering::Equal =&gt; SessionStatus::Pending(
+            Ordering::Greater =&gt; SessionStatusV2::Initial,
+            Ordering::Equal =&gt; SessionStatusV2::Pending(
                 dbtx.find_by_prefix(<span class="kw-2">&amp;</span>AcceptedItemPrefix)
                     .<span class="kw">await
                     </span>.map(|entry| entry.<span class="number">1</span>)
                     .collect()
                     .<span class="kw">await</span>,
             ),
-            Ordering::Less =&gt; SessionStatus::Complete(
+            Ordering::Less =&gt; SessionStatusV2::Complete(
                 dbtx.get_value(<span class="kw-2">&amp;</span>SignedSessionOutcomeKey(session_index))
                     .<span class="kw">await
-                    </span>.expect(<span class="string">"There are no gaps in session outcomes"</span>)
-                    .session_outcome,
+                    </span>.expect(<span class="string">"There are no gaps in session outcomes"</span>),
             ),
         }
     }
@@ -1356,6 +1367,13 @@
             SESSION_STATUS_ENDPOINT,
             ApiVersion::new(<span class="number">0</span>, <span class="number">1</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, index: u64| -&gt; SerdeModuleEncoding&lt;SessionStatus&gt; {
+                <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>SessionStatus::from(fedimint.session_status(index).<span class="kw">await</span>)).into())
+            }
+        },
+        <span class="macro">api_endpoint!</span> {
+            SESSION_STATUS_V2_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">5</span>),
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, index: u64| -&gt; SerdeModuleEncodingBase64&lt;SessionStatusV2&gt; {
                 <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>fedimint.session_status(index).<span class="kw">await</span>).into())
             }
         },

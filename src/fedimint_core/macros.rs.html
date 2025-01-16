@@ -1180,7 +1180,7 @@
                         <span class="macro-nonterminal">$crate::module::registry::DecodingMode::Reject </span>=&gt; {
                             <span class="kw">return </span><span class="prelude-val">Err</span>(fedimint_core::encoding::DecodeError::new_custom(
                                 <span class="macro">anyhow::anyhow!</span>(
-                                    <span class="string">"Module decoder not available: {module_instance_id} when decoding {}"</span>, std::any::type_name::&lt;<span class="self">Self</span>&gt;()
+                                    <span class="string">"Module decoder not available for module instance: {module_instance_id} when decoding {}"</span>, std::any::type_name::&lt;<span class="self">Self</span>&gt;()
                                 ),
                             ));
                         }

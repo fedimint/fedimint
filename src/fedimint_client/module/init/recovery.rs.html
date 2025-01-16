@@ -486,10 +486,29 @@
 <a href="#485" id="485">485</a>
 <a href="#486" id="486">486</a>
 <a href="#487" id="487">487</a>
-<a href="#488" id="488">488</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
+<a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
+<a href="#501" id="501">501</a>
+<a href="#502" id="502">502</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::{cmp, ops};
 
-<span class="kw">use </span>fedimint_api_client::api::DynGlobalApi;
+<span class="kw">use </span>bitcoin::secp256k1::PublicKey;
+<span class="kw">use </span>fedimint_api_client::api::{
+    DynGlobalApi, VERSION_THAT_INTRODUCED_GET_SESSION_STATUS,
+    VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2,
+};
 <span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
@@ -499,12 +518,12 @@
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, ShuttingDownError, TaskGroup};
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">use </span>fedimint_core::util::FmtCompactAnyhow <span class="kw">as _</span>;
-<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, OutPoint};
+<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, OutPoint, PeerId};
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_RECOVERY;
 <span class="kw">use </span>futures::{Stream, StreamExt <span class="kw">as _</span>};
 <span class="kw">use </span>rand::{thread_rng, Rng <span class="kw">as _</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>tracing::{debug, info, trace, warn};
+<span class="kw">use </span>tracing::{debug, trace, warn};
 
 <span class="kw">use super</span>::{ClientModuleInit, ClientModuleRecoverArgs};
 <span class="kw">use </span><span class="kw">crate</span>::module::recovery::RecoveryProgress;
@@ -735,30 +754,32 @@
             core_api_version: ApiVersion,
             decoders: ModuleDecoderRegistry,
             epoch_range: ops::Range&lt;u64&gt;,
+            broadcast_public_keys: <span class="prelude-ty">Option</span>&lt;BTreeMap&lt;PeerId, PublicKey&gt;&gt;,
             task_group: TaskGroup,
         ) -&gt; <span class="kw">impl </span>futures::Stream&lt;Item = <span class="prelude-ty">Result</span>&lt;(u64, Vec&lt;AcceptedItem&gt;), ShuttingDownError&gt;&gt; + <span class="lifetime">'a
         </span>{
             <span class="comment">// How many request for blocks to run in parallel (streaming).
-            </span><span class="kw">const </span>PARALLELISM_LEVEL: usize = <span class="number">64</span>;
-            <span class="kw">const </span>VERSION_THAT_INTRODUCED_GET_SESSION_STATUS: ApiVersion =
-                ApiVersion { major: <span class="number">0</span>, minor: <span class="number">1 </span>};
+            </span><span class="kw">let </span>parallelism_level =
+                <span class="kw">if </span>core_api_version &lt; VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2 {
+                    <span class="number">64
+                </span>} <span class="kw">else </span>{
+                    <span class="number">128
+                </span>};
 
             futures::stream::iter(epoch_range.clone())
                 .map(<span class="kw">move </span>|session_idx| {
                     <span class="kw">let </span>api = api.clone();
-                    <span class="kw">let </span>decoders = decoders.clone();
+                    <span class="comment">// When decoding we're only interested in items we can understand, so we don't
+                    // want to fail on a missing decoder of some unrelated module.
+                    </span><span class="kw">let </span>decoders = decoders.clone().with_fallback();
                     <span class="kw">let </span>task_group = task_group.clone();
+                    <span class="kw">let </span>broadcast_public_keys = broadcast_public_keys.clone();
 
                     Box::pin(<span class="kw">async move </span>{
                         <span class="comment">// NOTE: Each block is fetched in a spawned task. This avoids a footgun
                         // of stuff in streams not making any progress when the stream itself
                         // is not being polled, and possibly can increase the fetching performance.
                         </span>task_group.spawn_cancellable(<span class="string">"recovery fetch block"</span>, <span class="kw">async move </span>{
-
-                            <span class="macro">info!</span>(
-                                target: LOG_CLIENT_RECOVERY,
-                                session_idx, <span class="string">"Fetching epoch"
-                            </span>);
 
                             <span class="kw">let </span><span class="kw-2">mut </span>retry_sleep = Duration::from_millis(<span class="number">10</span>);
                             <span class="kw">let </span>block = <span class="kw">loop </span>{
@@ -767,7 +788,7 @@
                                 <span class="kw">let </span>items_res = <span class="kw">if </span>core_api_version &lt; VERSION_THAT_INTRODUCED_GET_SESSION_STATUS {
                                     api.await_block(session_idx, <span class="kw-2">&amp;</span>decoders).<span class="kw">await</span>.map(|s| s.items)
                                 } <span class="kw">else </span>{
-                                    api.get_session_status(session_idx, <span class="kw-2">&amp;</span>decoders).<span class="kw">await</span>.map(|s| <span class="kw">match </span>s {
+                                    api.get_session_status(session_idx, <span class="kw-2">&amp;</span>decoders, core_api_version, broadcast_public_keys.as_ref()).<span class="kw">await</span>.map(|s| <span class="kw">match </span>s {
                                         SessionStatus::Initial =&gt; <span class="macro">panic!</span>(<span class="string">"Federation missing session that existed when we started recovery"</span>),
                                         SessionStatus::Pending(items) =&gt; items,
                                         SessionStatus::Complete(s) =&gt; s.items,
@@ -776,7 +797,7 @@
 
                                 <span class="kw">match </span>items_res {
                                     <span class="prelude-val">Ok</span>(block) =&gt; {
-                                        <span class="macro">debug!</span>(target: LOG_CLIENT_RECOVERY, session_idx, <span class="string">"Got signed session"</span>);
+                                        <span class="macro">trace!</span>(target: LOG_CLIENT_RECOVERY, session_idx, <span class="string">"Got signed session"</span>);
                                         <span class="kw">break </span>block
                                     },
                                     <span class="prelude-val">Err</span>(err) =&gt; {
@@ -799,7 +820,7 @@
                         }).<span class="kw">await</span>.expect(<span class="string">"Can't fail"</span>)
                     })
                 })
-                .buffered(PARALLELISM_LEVEL)
+                .buffered(parallelism_level)
         }
 
         <span class="doccomment">/// Make enough progress to justify saving a state snapshot
@@ -813,14 +834,13 @@
         <span class="kw">where
             </span>Init: ClientModuleInit,
         {
-            <span class="doccomment">/// the amount of blocks after which we save progress in the
-            /// database (return from this function)
+            <span class="doccomment">/// the amount of blocks after which we unconditionally save
+            /// progress in the database (return from this function)
             ///
-            /// TODO: Instead of a fixed range of session
-            /// indexes, make the loop time-based, so the amount of
-            /// progress we can loose on termination is time-bound,
-            /// and thus more adaptive.
-            </span><span class="kw">const </span>PROGRESS_SNAPSHOT_BLOCKS: u64 = <span class="number">10</span>;
+            /// We are also bound by time inside the loop, below
+            </span><span class="kw">const </span>PROGRESS_SNAPSHOT_BLOCKS: u64 = <span class="number">5000</span>;
+
+            <span class="kw">let </span>start = fedimint_core::time::now();
 
             <span class="kw">let </span>block_range = common_state.next_session
                 ..cmp::min(
@@ -829,12 +849,6 @@
                         .wrapping_add(PROGRESS_SNAPSHOT_BLOCKS),
                     common_state.end_session,
                 );
-
-            <span class="macro">debug!</span>(
-                target: LOG_CLIENT_RECOVERY,
-                <span class="question-mark">?</span>block_range,
-                <span class="string">"Processing blocks"
-            </span>);
 
             <span class="kw">for _ in </span>block_range {
                 <span class="kw">let </span><span class="prelude-val">Some</span>(res) = block_stream.next().<span class="kw">await else </span>{
@@ -849,6 +863,14 @@
                     .<span class="kw">await</span><span class="question-mark">?</span>;
 
                 common_state.next_session += <span class="number">1</span>;
+
+                <span class="kw">if </span>Duration::from_secs(<span class="number">10</span>)
+                    &lt; fedimint_core::time::now()
+                        .duration_since(start)
+                        .unwrap_or_default()
+                {
+                    <span class="kw">break</span>;
+                }
             }
 
             <span class="prelude-val">Ok</span>(())
@@ -915,6 +937,12 @@
             <span class="kw-2">*</span><span class="self">self</span>.core_api_version(),
             client_ctx.decoders(),
             block_stream_session_range,
+            client_ctx
+                .get_config()
+                .<span class="kw">await
+                </span>.global
+                .broadcast_public_keys
+                .clone(),
             <span class="self">self</span>.task_group().clone(),
         );
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.context();
