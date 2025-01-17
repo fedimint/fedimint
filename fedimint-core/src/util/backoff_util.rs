@@ -3,7 +3,6 @@ use std::time::Duration;
 pub use backon::{Backoff, FibonacciBackoff};
 use backon::{BackoffBuilder, FibonacciBuilder};
 
-use crate::envs::is_running_in_test_env;
 /// Backoff strategy for background tasks.
 ///
 /// Starts at 1s and increases to 60s, never giving up.
@@ -69,16 +68,6 @@ pub fn fibonacci_max_one_hour() -> FibonacciBackoff {
     )
 }
 
-pub fn api_networking_backoff() -> fedimint_core::util::backoff_util::FibonacciBackoff {
-    fedimint_core::util::backoff_util::custom_backoff(
-        Duration::from_millis(250),
-        if is_running_in_test_env() {
-            // In our testing env we often run under very high load, and with tight limits,
-            // so we want to force the retries to be relatively fast
-            Duration::from_secs(5)
-        } else {
-            Duration::from_secs(600)
-        },
-        None,
-    )
+pub fn api_networking_backoff() -> FibonacciBackoff {
+    custom_backoff(Duration::from_millis(250), Duration::from_secs(10), None)
 }
