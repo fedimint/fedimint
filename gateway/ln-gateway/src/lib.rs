@@ -1678,7 +1678,7 @@ impl Gateway {
                         },
                     )?
                 } else {
-                    info!("Generating mnemonic and writing entropy to client storage");
+                    debug!("Generating mnemonic and writing entropy to client storage");
                     Bip39RootSecretStrategy::<12>::random(&mut thread_rng())
                 };
 

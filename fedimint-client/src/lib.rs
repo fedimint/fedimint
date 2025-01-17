@@ -86,7 +86,7 @@ use std::future::pending;
 use std::ops::{self, Range};
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, bail, ensure, format_err, Context};
 use api::ClientRawFederationApiExt as _;
@@ -881,7 +881,7 @@ pub struct Client {
     decoders: ModuleDecoderRegistry,
     db: Database,
     federation_id: FederationId,
-    federation_meta: BTreeMap<String, String>,
+    federation_config_meta: BTreeMap<String, String>,
     primary_module_instance: ModuleInstanceId,
     modules: ClientModuleRegistry,
     module_inits: ClientModuleInitRegistry,
@@ -1105,8 +1105,9 @@ impl Client {
         Ok((self.federation_id().to_fake_ln_pub_key(&self.secp_ctx)?, 0))
     }
 
-    pub fn get_meta(&self, key: &str) -> Option<String> {
-        self.federation_meta.get(key).cloned()
+    /// Get metadata value from the federation config itself
+    pub fn get_config_meta(&self, key: &str) -> Option<String> {
+        self.federation_config_meta.get(key).cloned()
     }
 
     fn root_secret(&self) -> DerivableSecret {
@@ -1146,6 +1147,16 @@ impl Client {
     /// Get the meta manager to read meta fields.
     pub fn meta_service(&self) -> &Arc<MetaService> {
         &self.meta_service
+    }
+
+    /// Get the meta manager to read meta fields.
+    pub async fn get_meta_expiration_timestamp(&self) -> Option<SystemTime> {
+        let meta_service = self.meta_service();
+        let ts = meta_service
+            .get_field::<u64>(self.db(), "federation_expiry_timestamp")
+            .await
+            .and_then(|v| v.value)?;
+        Some(UNIX_EPOCH + Duration::from_secs(ts))
     }
 
     /// Adds funding to a transaction or removes over-funding via change.
@@ -3005,7 +3016,7 @@ impl ClientBuilder {
             decoders,
             db: db.clone(),
             federation_id: fed_id,
-            federation_meta: config.global.meta,
+            federation_config_meta: config.global.meta,
             primary_module_instance,
             modules,
             module_inits: self.module_inits.clone(),

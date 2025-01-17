@@ -28,6 +28,7 @@ use fedimint_core::module::{ApiAuth, ApiVersion, ModuleCommon, ModuleInit, Multi
 use fedimint_core::util::backoff_util::FibonacciBackoff;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, PeerId};
+use fedimint_logging::LOG_CLIENT_MODULE_META;
 pub use fedimint_meta_common as common;
 use fedimint_meta_common::{MetaCommonInit, MetaModuleTypes, DEFAULT_META_KEY};
 use states::MetaStateMachine;
@@ -271,11 +272,11 @@ async fn get_meta_module_value(
         match overrides_res {
             Ok(Some(consensus)) => Some(consensus),
             Ok(None) => {
-                debug!("Meta module returned no consensus value");
+                debug!(target: LOG_CLIENT_MODULE_META, "Meta module returned no consensus value");
                 None
             }
             Err(e) => {
-                warn!("Failed to fetch meta module consensus value: {}", e);
+                warn!(target: LOG_CLIENT_MODULE_META, "Failed to fetch meta module consensus value: {}", e);
                 None
             }
         }
