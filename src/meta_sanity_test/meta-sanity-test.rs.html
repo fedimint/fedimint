@@ -207,7 +207,13 @@
 <a href="#206" id="206">206</a>
 <a href="#207" id="207">207</a>
 <a href="#208" id="208">208</a>
-<a href="#209" id="209">209</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::future::Future;
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::future::Future;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>devimint::federation::Client;
@@ -234,6 +240,12 @@
         <span class="comment">// TODO(support:v0.2): remove
         </span><span class="kw">if </span>fedimintd_version &lt; Version::parse(<span class="string">"0.3.0-rc.2"</span>).unwrap() {
             <span class="macro">info!</span>(%fedimintd_version, <span class="string">"Version did not support meta module, skipping"</span>);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+        }
+
+        <span class="comment">// TODO:(support:v0.3): remove
+        </span><span class="kw">if </span>fedimintd_version &lt;= Version::parse(<span class="string">"0.3.4-rc.1"</span>).unwrap() {
+            <span class="macro">info!</span>(%fedimintd_version, <span class="string">"Version causes extreme flakiness, skipping"</span>);
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
 
