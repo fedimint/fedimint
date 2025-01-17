@@ -14,8 +14,8 @@ use fedimint_wallet_client::PegOutFees;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 
+use crate::config::LightningMode;
 use crate::db::FederationConfig;
-use crate::lightning::LightningMode;
 use crate::SafeUrl;
 
 pub const V1_API_ENDPOINT: &str = "v1";
@@ -134,7 +134,7 @@ pub struct GatewayInfo {
     #[serde(default)]
     pub synced_to_chain: bool,
     pub api: SafeUrl,
-    pub lightning_mode: Option<LightningMode>,
+    pub lightning_mode: LightningMode,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -161,26 +161,6 @@ pub struct CreateInvoiceForOperatorPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PayInvoiceForOperatorPayload {
     pub invoice: Bolt11Invoice,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct OpenChannelPayload {
-    pub pubkey: secp256k1::PublicKey,
-    pub host: String,
-    pub channel_size_sats: u64,
-    pub push_amount_sats: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct CloseChannelsWithPeerPayload {
-    pub pubkey: secp256k1::PublicKey,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct SendOnchainPayload {
-    pub address: Address<NetworkUnchecked>,
-    pub amount: BitcoinAmountOrAll,
-    pub fee_rate_sats_per_vbyte: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

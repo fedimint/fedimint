@@ -6,6 +6,7 @@ use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
+use fedimint_lightning::{InterceptPaymentResponse, PaymentAction};
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_lnv2_common::contracts::PaymentImage;
 use tracing::warn;
@@ -13,7 +14,6 @@ use tracing::warn;
 use super::events::CompleteLightningPaymentSucceeded;
 use super::FinalReceiveState;
 use crate::gateway_module_v2::GatewayClientContextV2;
-use crate::lightning::{InterceptPaymentResponse, PaymentAction};
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that completes the incoming payment by contacting the

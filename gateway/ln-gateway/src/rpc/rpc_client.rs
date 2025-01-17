@@ -1,6 +1,10 @@
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Txid};
 use fedimint_core::util::SafeUrl;
+use fedimint_lightning::{
+    ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, OpenChannelRequest,
+    SendOnchainRequest,
+};
 use lightning_invoice::Bolt11Invoice;
 use reqwest::{Method, StatusCode};
 use serde::de::DeserializeOwned;
@@ -8,11 +12,10 @@ use serde::Serialize;
 use thiserror::Error;
 
 use super::{
-    BackupPayload, CloseChannelsWithPeerPayload, ConfigPayload, ConnectFedPayload,
-    CreateInvoiceForOperatorPayload, DepositAddressPayload, DepositAddressRecheckPayload,
-    FederationInfo, GatewayBalances, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
-    MnemonicResponse, OpenChannelPayload, PayInvoiceForOperatorPayload, PaymentLogPayload,
-    PaymentLogResponse, ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainPayload,
+    BackupPayload, ConfigPayload, ConnectFedPayload, CreateInvoiceForOperatorPayload,
+    DepositAddressPayload, DepositAddressRecheckPayload, FederationInfo, GatewayBalances,
+    GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, PayInvoiceForOperatorPayload,
+    PaymentLogPayload, PaymentLogResponse, ReceiveEcashPayload, ReceiveEcashResponse,
     SetFeesPayload, SpendEcashPayload, SpendEcashResponse, WithdrawPayload, WithdrawResponse,
     ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
     CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
@@ -22,7 +25,6 @@ use super::{
     PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT, SEND_ONCHAIN_ENDPOINT,
     SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, WITHDRAW_ENDPOINT,
 };
-use crate::lightning::{ChannelInfo, CloseChannelsWithPeerResponse};
 
 pub struct GatewayRpcClient {
     /// Base URL to gateway web server
@@ -159,7 +161,7 @@ impl GatewayRpcClient {
         self.call_get(url).await
     }
 
-    pub async fn open_channel(&self, payload: OpenChannelPayload) -> GatewayRpcResult<Txid> {
+    pub async fn open_channel(&self, payload: OpenChannelRequest) -> GatewayRpcResult<Txid> {
         let url = self
             .base_url
             .join(OPEN_CHANNEL_ENDPOINT)
@@ -169,7 +171,7 @@ impl GatewayRpcClient {
 
     pub async fn close_channels_with_peer(
         &self,
-        payload: CloseChannelsWithPeerPayload,
+        payload: CloseChannelsWithPeerRequest,
     ) -> GatewayRpcResult<CloseChannelsWithPeerResponse> {
         let url = self
             .base_url
@@ -186,7 +188,7 @@ impl GatewayRpcClient {
         self.call_get(url).await
     }
 
-    pub async fn send_onchain(&self, payload: SendOnchainPayload) -> GatewayRpcResult<Txid> {
+    pub async fn send_onchain(&self, payload: SendOnchainRequest) -> GatewayRpcResult<Txid> {
         let url = self
             .base_url
             .join(SEND_ONCHAIN_ENDPOINT)

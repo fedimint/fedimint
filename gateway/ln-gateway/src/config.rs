@@ -4,12 +4,52 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use bitcoin::Network;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use fedimint_core::util::SafeUrl;
+use serde::{Deserialize, Serialize};
 
 use super::envs;
-use super::lightning::LightningMode;
 use super::rpc::V1_API_ENDPOINT;
+use crate::envs::{
+    FM_LDK_BITCOIND_RPC_URL, FM_LDK_ESPLORA_SERVER_URL, FM_LDK_NETWORK, FM_LND_MACAROON_ENV,
+    FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
+};
+
+#[derive(Debug, Clone, Subcommand, Serialize, Deserialize, Eq, PartialEq)]
+pub enum LightningMode {
+    #[clap(name = "lnd")]
+    Lnd {
+        /// LND RPC address
+        #[arg(long = "lnd-rpc-host", env = FM_LND_RPC_ADDR_ENV)]
+        lnd_rpc_addr: String,
+
+        /// LND TLS cert file path
+        #[arg(long = "lnd-tls-cert", env = FM_LND_TLS_CERT_ENV)]
+        lnd_tls_cert: String,
+
+        /// LND macaroon file path
+        #[arg(long = "lnd-macaroon", env = FM_LND_MACAROON_ENV)]
+        lnd_macaroon: String,
+    },
+    #[clap(name = "ldk")]
+    Ldk {
+        /// LDK esplora server URL
+        #[arg(long = "ldk-esplora-server-url", env = FM_LDK_ESPLORA_SERVER_URL)]
+        esplora_server_url: Option<String>,
+
+        /// LDK bitcoind server URL
+        #[arg(long = "ldk-bitcoind-rpc-url", env = FM_LDK_BITCOIND_RPC_URL)]
+        bitcoind_rpc_url: Option<String>,
+
+        /// LDK network (defaults to regtest if not provided)
+        #[arg(long = "ldk-network", env = FM_LDK_NETWORK, default_value = "regtest")]
+        network: Network,
+
+        /// LDK lightning server port
+        #[arg(long = "ldk-lightning-port", env = FM_PORT_LDK)]
+        lightning_port: u16,
+    },
+}
 
 /// Command line parameters for starting the gateway. `mode`, `data_dir`,
 /// `listen`, and `api_addr` are all required.

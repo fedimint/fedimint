@@ -27,7 +27,7 @@ use fedimint_logging::LOG_DEVIMINT;
 use fedimint_portalloc::port_alloc;
 use fedimint_server::config::ConfigGenParams;
 use fedimint_testing::federation::local_config_gen_params;
-use fedimint_testing::gateway::LightningNodeType;
+use fedimint_testing::ln::LightningNodeType;
 use fedimint_wallet_client::config::WalletClientConfig;
 use fedimint_wallet_client::WalletClientModule;
 use fedimintd::envs::FM_EXTRA_DKG_META_ENV;

@@ -20,7 +20,6 @@ mod error;
 mod events;
 mod federation_manager;
 pub mod gateway_module_v2;
-pub mod lightning;
 pub mod rpc;
 pub mod state_machine;
 mod types;
@@ -34,13 +33,15 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context};
+use async_trait::async_trait;
 use bitcoin::hashes::sha256;
 use bitcoin::{Address, Network, Txid};
 use clap::Parser;
 use client::GatewayClientBuilder;
-use config::GatewayOpts;
 pub use config::GatewayParameters;
+use config::{GatewayOpts, LightningMode};
 use db::GatewayDbtxNcExt;
+use envs::FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV;
 use error::FederationNotConnected;
 use events::ALL_GATEWAY_EVENTS;
 use federation_manager::FederationManager;
@@ -55,6 +56,7 @@ use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::db::{apply_migrations_server, Database, DatabaseTransaction};
+use fedimint_core::envs::is_env_var_set;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::secp256k1::schnorr::Signature;
@@ -66,6 +68,14 @@ use fedimint_core::{
     fedimint_build_code_version_env, get_network_for_address, Amount, BitcoinAmountOrAll,
 };
 use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId};
+use fedimint_lightning::ldk::{self, GatewayLdkChainSourceConfig};
+use fedimint_lightning::lnd::GatewayLndClient;
+use fedimint_lightning::{
+    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
+    ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
+    LightningContext, LightningRpcError, LightningV2Manager, OpenChannelRequest, PaymentAction,
+    RouteHtlcStream, SendOnchainRequest,
+};
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::LightningCommonInit;
@@ -82,19 +92,13 @@ use fedimint_wallet_client::{
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
 };
 use futures::stream::StreamExt;
-use lightning::{
-    CloseChannelsWithPeerResponse, CreateInvoiceRequest, ILnRpcClient, InterceptPaymentRequest,
-    InterceptPaymentResponse, InvoiceDescription, LightningBuilder, LightningRpcError,
-    PaymentAction,
-};
 use lightning_invoice::Bolt11Invoice;
 use rand::thread_rng;
 use rpc::{
-    CloseChannelsWithPeerPayload, CreateInvoiceForOperatorPayload, DepositAddressRecheckPayload,
-    FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse,
-    OpenChannelPayload, PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentLogResponse,
-    ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainPayload, SetFeesPayload,
-    SpendEcashPayload, SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
+    CreateInvoiceForOperatorPayload, DepositAddressRecheckPayload, FederationInfo,
+    GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, PayInvoiceForOperatorPayload,
+    PaymentLogPayload, PaymentLogResponse, ReceiveEcashPayload, ReceiveEcashResponse,
+    SetFeesPayload, SpendEcashPayload, SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
 };
 use state_machine::{GatewayClientModule, GatewayExtPayStates};
 use tokio::sync::RwLock;
@@ -105,7 +109,6 @@ use crate::db::{get_gatewayd_database_migrations, FederationConfig};
 use crate::envs::FM_GATEWAY_MNEMONIC_ENV;
 use crate::error::{AdminGatewayError, LNv1Error, LNv2Error, PublicGatewayError};
 use crate::gateway_module_v2::GatewayClientModuleV2;
-use crate::lightning::{GatewayLightningBuilder, LightningContext, LightningMode, RouteHtlcStream};
 use crate::rpc::rpc_server::run_webserver;
 use crate::rpc::{
     BackupPayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
@@ -187,9 +190,11 @@ pub struct Gateway {
     /// The gateway's federation manager.
     federation_manager: Arc<RwLock<FederationManager>>,
 
-    /// Builder struct that allows the gateway to build a `ILnRpcClient`, which
-    /// represents a connection to a lightning node.
-    lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
+    // The mnemonic for the gateway
+    mnemonic: Mnemonic,
+
+    /// The mode that specifies the lightning connection parameters
+    lightning_mode: LightningMode,
 
     /// The current state of the Gateway.
     state: Arc<RwLock<GatewayState>>,
@@ -247,7 +252,7 @@ impl Gateway {
     /// `client_builder`. Currently only used for testing.
     #[allow(clippy::too_many_arguments)]
     pub async fn new_with_custom_registry(
-        lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
+        lightning_mode: LightningMode,
         client_builder: GatewayClientBuilder,
         listen: SocketAddr,
         api_addr: SafeUrl,
@@ -262,7 +267,7 @@ impl Gateway {
             .join(V1_API_ENDPOINT)
             .expect("Failed to version gateway API address");
         Gateway::new(
-            lightning_builder,
+            lightning_mode,
             GatewayParameters {
                 listen,
                 versioned_api,
@@ -313,14 +318,8 @@ impl Gateway {
             gateway_parameters.lightning_module_mode = LightningModuleMode::LNv2;
         }
 
-        let mnemonic = Self::load_or_generate_mnemonic(&gateway_db).await?;
         Gateway::new(
-            Arc::new(GatewayLightningBuilder {
-                lightning_mode: opts.mode,
-                gateway_db: gateway_db.clone(),
-                ldk_data_dir: opts.data_dir.join(LDK_NODE_DB_FOLDER),
-                mnemonic,
-            }),
+            opts.mode,
             gateway_parameters,
             gateway_db,
             client_builder,
@@ -332,7 +331,7 @@ impl Gateway {
     /// Helper function for creating a gateway from either
     /// `new_with_default_modules` or `new_with_custom_registry`.
     async fn new(
-        lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
+        lightning_mode: LightningMode,
         gateway_parameters: GatewayParameters,
         gateway_db: Database,
         client_builder: GatewayClientBuilder,
@@ -355,7 +354,8 @@ impl Gateway {
 
         Ok(Self {
             federation_manager: Arc::new(RwLock::new(FederationManager::new())),
-            lightning_builder,
+            mnemonic: Self::load_or_generate_mnemonic(&gateway_db).await?,
+            lightning_mode,
             state: Arc::new(RwLock::new(gateway_state)),
             client_builder,
             gateway_id: Self::load_or_create_gateway_id(&gateway_db).await,
@@ -435,7 +435,7 @@ impl Gateway {
                     }
 
                     let payment_stream_task_group = tg.make_subgroup();
-                    let lnrpc_route = self_copy.lightning_builder.build(runtime.clone()).await;
+                    let lnrpc_route = self_copy.create_lightning_client(runtime.clone());
 
                     debug!("Establishing lightning payment stream...");
                     let (stream, ln_client) = match lnrpc_route.route_htlcs(&payment_stream_task_group).await
@@ -502,7 +502,7 @@ impl Gateway {
 
         assert!(self.network == lightning_network, "Lightning node network does not match Gateway's network. LN: {lightning_network} Gateway: {}", self.network);
 
-        if synced_to_chain {
+        if synced_to_chain || is_env_var_set(FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV) {
             info!("Gateway is already synced to chain");
         } else {
             self.set_gateway_state(GatewayState::Syncing).await;
@@ -747,7 +747,7 @@ impl Gateway {
                 block_height: None,
                 synced_to_chain: false,
                 api: self.versioned_api.clone(),
-                lightning_mode: None,
+                lightning_mode: self.lightning_mode.clone(),
             });
         };
 
@@ -783,7 +783,7 @@ impl Gateway {
             block_height: Some(node_info.3),
             synced_to_chain: node_info.4,
             api: self.versioned_api.clone(),
-            lightning_mode: self.lightning_builder.lightning_mode(),
+            lightning_mode: self.lightning_mode.clone(),
         })
     }
 
@@ -1090,17 +1090,24 @@ impl Gateway {
             connector,
         };
 
-        let mnemonic = Self::load_or_generate_mnemonic(&self.gateway_db).await?;
         let recover = payload.recover.unwrap_or(false);
         if recover {
             self.client_builder
-                .recover(federation_config.clone(), Arc::new(self.clone()), &mnemonic)
+                .recover(
+                    federation_config.clone(),
+                    Arc::new(self.clone()),
+                    &self.mnemonic,
+                )
                 .await?;
         }
 
         let client = self
             .client_builder
-            .build(federation_config.clone(), Arc::new(self.clone()), &mnemonic)
+            .build(
+                federation_config.clone(),
+                Arc::new(self.clone()),
+                &self.mnemonic,
+            )
             .await?;
 
         if recover {
@@ -1200,8 +1207,8 @@ impl Gateway {
     /// returns a vector of federations that are not using the mnemonic
     /// backup strategy.
     pub async fn handle_mnemonic_msg(&self) -> AdminResult<MnemonicResponse> {
-        let mnemonic = Self::load_or_generate_mnemonic(&self.gateway_db).await?;
-        let words = mnemonic
+        let words = self
+            .mnemonic
             .words()
             .map(std::string::ToString::to_string)
             .collect::<Vec<_>>();
@@ -1318,7 +1325,7 @@ impl Gateway {
 
     /// Instructs the Gateway's Lightning node to open a channel to a peer
     /// specified by `pubkey`.
-    pub async fn handle_open_channel_msg(&self, payload: OpenChannelPayload) -> AdminResult<Txid> {
+    pub async fn handle_open_channel_msg(&self, payload: OpenChannelRequest) -> AdminResult<Txid> {
         let context = self.get_lightning_context().await?;
         let res = context.lnrpc.open_channel(payload).await?;
         Txid::from_str(&res.funding_txid).map_err(|e| {
@@ -1332,7 +1339,7 @@ impl Gateway {
     /// specified by `pubkey`.
     pub async fn handle_close_channels_with_peer_msg(
         &self,
-        payload: CloseChannelsWithPeerPayload,
+        payload: CloseChannelsWithPeerRequest,
     ) -> AdminResult<CloseChannelsWithPeerResponse> {
         let context = self.get_lightning_context().await?;
         let response = context.lnrpc.close_channels_with_peer(payload).await?;
@@ -1343,14 +1350,14 @@ impl Gateway {
     /// Lightning node.
     pub async fn handle_list_active_channels_msg(
         &self,
-    ) -> AdminResult<Vec<lightning::ChannelInfo>> {
+    ) -> AdminResult<Vec<fedimint_lightning::ChannelInfo>> {
         let context = self.get_lightning_context().await?;
         let response = context.lnrpc.list_active_channels().await?;
         Ok(response.channels)
     }
 
     /// Send funds from the gateway's lightning node on-chain wallet.
-    pub async fn handle_send_onchain_msg(&self, payload: SendOnchainPayload) -> AdminResult<Txid> {
+    pub async fn handle_send_onchain_msg(&self, payload: SendOnchainRequest) -> AdminResult<Txid> {
         let context = self.get_lightning_context().await?;
         let response = context.lnrpc.send_onchain(payload).await?;
         Txid::from_str(&response.txid).map_err(|e| AdminGatewayError::WithdrawError {
@@ -1698,14 +1705,12 @@ impl Gateway {
             federation_manager.set_next_index(max_federation_index + 1);
         }
 
-        let mnemonic = Self::load_or_generate_mnemonic(&self.gateway_db).await?;
-
         for (federation_id, config) in configs {
             let federation_index = config.federation_index;
             if let Ok(client) = Box::pin(Spanned::try_new(
                 info_span!("client", federation_id  = %federation_id.clone()),
                 self.client_builder
-                    .build(config, Arc::new(self.clone()), &mnemonic),
+                    .build(config, Arc::new(self.clone()), &self.mnemonic),
             ))
             .await
             {
@@ -1839,6 +1844,60 @@ impl Gateway {
             .await
             .unannounce_from_all_federations(gateway_keypair)
             .await;
+    }
+
+    fn create_lightning_client(
+        &self,
+        runtime: Arc<tokio::runtime::Runtime>,
+    ) -> Box<dyn ILnRpcClient> {
+        match self.lightning_mode.clone() {
+            LightningMode::Lnd {
+                lnd_rpc_addr,
+                lnd_tls_cert,
+                lnd_macaroon,
+            } => Box::new(GatewayLndClient::new(
+                lnd_rpc_addr,
+                lnd_tls_cert,
+                lnd_macaroon,
+                None,
+                Arc::new(self.clone()),
+            )),
+            LightningMode::Ldk {
+                esplora_server_url,
+                bitcoind_rpc_url,
+                network,
+                lightning_port,
+            } => {
+                let chain_source_config = {
+                    match (esplora_server_url, bitcoind_rpc_url) {
+                        (Some(esplora_server_url), None) => GatewayLdkChainSourceConfig::Esplora {
+                            server_url: SafeUrl::parse(&esplora_server_url.clone()).unwrap(),
+                        },
+                        (None, Some(bitcoind_rpc_url)) => GatewayLdkChainSourceConfig::Bitcoind {
+                            server_url: SafeUrl::parse(&bitcoind_rpc_url.clone()).unwrap(),
+                        },
+                        (None, None) => {
+                            panic!("Either esplora or bitcoind chain info source must be provided")
+                        }
+                        (Some(_), Some(_)) => {
+                            panic!("Either esplora or bitcoind chain info source must be provided, but not both")
+                        }
+                    }
+                };
+
+                Box::new(
+                    ldk::GatewayLdkClient::new(
+                        &self.client_builder.data_dir().join(LDK_NODE_DB_FOLDER),
+                        chain_source_config,
+                        network,
+                        lightning_port,
+                        self.mnemonic.clone(),
+                        runtime,
+                    )
+                    .expect("Failed to create LDK client"),
+                )
+            }
+        }
     }
 }
 
@@ -2090,5 +2149,17 @@ impl Gateway {
     fn is_running_lnv1(&self) -> bool {
         self.lightning_module_mode == LightningModuleMode::LNv1
             || self.lightning_module_mode == LightningModuleMode::All
+    }
+}
+
+#[async_trait]
+impl LightningV2Manager for Gateway {
+    async fn contains_incoming_contract(&self, payment_image: PaymentImage) -> bool {
+        self.gateway_db
+            .begin_transaction_nc()
+            .await
+            .load_registered_incoming_contract(payment_image)
+            .await
+            .is_some()
     }
 }

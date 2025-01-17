@@ -32,6 +32,7 @@ members = [
     "fedimintd",
     "fuzz",
     "gateway/cli",
+    "gateway/fedimint-lightning",
     "gateway/integration_tests",
     "gateway/ln-gateway",
     "modules/fedimint-dummy-client",
@@ -133,6 +134,7 @@ fedimint-dummy-common = { path = "./modules/fedimint-dummy-common", version = "=
 fedimint-dummy-server = { path = "./modules/fedimint-dummy-server", version = "=0.6.0-alpha" }
 fedimint-empty-common = { path = "./modules/fedimint-empty-common", version = "=0.6.0-alpha" }
 fedimint-eventlog = { path = "./fedimint-eventlog", version = "=0.6.0-alpha" }
+fedimint-lightning = { package = "fedimint-lightning", path = "./gateway/fedimint-lightning", version = "=0.6.0-alpha" }
 fedimint-lnv2-client = { path = "./modules/fedimint-lnv2-client", version = "=0.6.0-alpha" }
 fedimint-lnv2-common = { path = "./modules/fedimint-lnv2-common", version = "=0.6.0-alpha" }
 fedimint-lnv2-server = { path = "./modules/fedimint-lnv2-server", version = "=0.6.0-alpha" }

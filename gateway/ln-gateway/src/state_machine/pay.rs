@@ -11,6 +11,7 @@ use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::Spanned;
 use fedimint_core::{secp256k1, Amount, OutPoint, TransactionId};
+use fedimint_lightning::{LightningRpcError, PayInvoiceResponse};
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_common::config::FeeToAmount;
@@ -26,7 +27,6 @@ use tracing::{debug, error, info, warn, Instrument};
 
 use super::{GatewayClientContext, GatewayExtReceiveStates};
 use crate::db::GatewayDbtxNcExt;
-use crate::lightning::{LightningRpcError, PayInvoiceResponse};
 use crate::state_machine::events::{OutgoingPaymentFailed, OutgoingPaymentSucceeded};
 use crate::state_machine::GatewayClientModule;
 use crate::GatewayState;

@@ -1,0 +1,35 @@
+[package]
+name = "fedimint-lightning"
+version = { workspace = true }
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "fedimint-lightning handle the gateway's interaction with the lightning node"
+license = "MIT"
+readme = "../../README.md"
+repository = "https://github.com/fedimint/fedimint"
+
+[lib]
+name = "fedimint_lightning"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+bitcoin = { workspace = true }
+fedimint-bip39 = { version = "=0.6.0-alpha", path = "../../fedimint-bip39" }
+fedimint-bitcoind = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-ln-common = { workspace = true }
+fedimint-lnv2-common = { workspace = true }
+futures = { workspace = true }
+hex = { workspace = true }
+ldk-node = "0.4.2"
+lightning = { workspace = true }
+lightning-invoice = { workspace = true }
+lockable = "0.1.1"
+serde = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+tonic_lnd = { workspace = true }
+tracing = { workspace = true, features = ["log"] }

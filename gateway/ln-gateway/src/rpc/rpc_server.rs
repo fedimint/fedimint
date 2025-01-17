@@ -8,6 +8,7 @@ use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use fedimint_core::config::FederationId;
 use fedimint_core::task::TaskGroup;
+use fedimint_lightning::{CloseChannelsWithPeerRequest, OpenChannelRequest, SendOnchainRequest};
 use fedimint_ln_common::gateway_endpoint_constants::{
     GET_GATEWAY_ID_ENDPOINT, PAY_INVOICE_ENDPOINT,
 };
@@ -23,15 +24,14 @@ use tower_http::cors::CorsLayer;
 use tracing::{error, info, instrument};
 
 use super::{
-    BackupPayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
-    CreateInvoiceForOperatorPayload, DepositAddressPayload, DepositAddressRecheckPayload,
-    InfoPayload, LeaveFedPayload, OpenChannelPayload, PayInvoiceForOperatorPayload,
-    PaymentLogPayload, ReceiveEcashPayload, SendOnchainPayload, SetFeesPayload, SpendEcashPayload,
-    WithdrawPayload, ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT,
-    CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
-    CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT,
-    GET_BALANCES_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT,
-    LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAYMENT_LOG_ENDPOINT,
+    BackupPayload, ConnectFedPayload, CreateInvoiceForOperatorPayload, DepositAddressPayload,
+    DepositAddressRecheckPayload, InfoPayload, LeaveFedPayload, PayInvoiceForOperatorPayload,
+    PaymentLogPayload, ReceiveEcashPayload, SetFeesPayload, SpendEcashPayload, WithdrawPayload,
+    ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
+    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
+    GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
+    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
+    MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAYMENT_LOG_ENDPOINT,
     PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT, SEND_ONCHAIN_ENDPOINT,
     SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, V1_API_ENDPOINT, WITHDRAW_ENDPOINT,
 };
@@ -315,7 +315,7 @@ async fn get_ln_onchain_address(
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn open_channel(
     Extension(gateway): Extension<Arc<Gateway>>,
-    Json(payload): Json<OpenChannelPayload>,
+    Json(payload): Json<OpenChannelRequest>,
 ) -> Result<impl IntoResponse, AdminGatewayError> {
     let funding_txid = gateway.handle_open_channel_msg(payload).await?;
     Ok(Json(json!(funding_txid)))
@@ -324,7 +324,7 @@ async fn open_channel(
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn close_channels_with_peer(
     Extension(gateway): Extension<Arc<Gateway>>,
-    Json(payload): Json<CloseChannelsWithPeerPayload>,
+    Json(payload): Json<CloseChannelsWithPeerRequest>,
 ) -> Result<impl IntoResponse, AdminGatewayError> {
     let response = gateway.handle_close_channels_with_peer_msg(payload).await?;
     Ok(Json(json!(response)))
@@ -341,7 +341,7 @@ async fn list_active_channels(
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn send_onchain(
     Extension(gateway): Extension<Arc<Gateway>>,
-    Json(payload): Json<SendOnchainPayload>,
+    Json(payload): Json<SendOnchainRequest>,
 ) -> Result<impl IntoResponse, AdminGatewayError> {
     let txid = gateway.handle_send_onchain_msg(payload).await?;
     Ok(Json(json!(txid)))

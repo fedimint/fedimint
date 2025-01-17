@@ -1,7 +1,7 @@
 use clap::Subcommand;
+use fedimint_lightning::{CloseChannelsWithPeerRequest, OpenChannelRequest};
 use lightning_invoice::Bolt11Invoice;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
-use ln_gateway::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload};
 
 use crate::print_response;
 
@@ -84,7 +84,7 @@ impl LightningCommands {
                 push_amount_sats,
             } => {
                 let funding_txid = create_client()
-                    .open_channel(OpenChannelPayload {
+                    .open_channel(OpenChannelRequest {
                         pubkey,
                         host,
                         channel_size_sats,
@@ -95,7 +95,7 @@ impl LightningCommands {
             }
             Self::CloseChannelsWithPeer { pubkey } => {
                 let response = create_client()
-                    .close_channels_with_peer(CloseChannelsWithPeerPayload { pubkey })
+                    .close_channels_with_peer(CloseChannelsWithPeerRequest { pubkey })
                     .await?;
                 print_response(response);
             }
