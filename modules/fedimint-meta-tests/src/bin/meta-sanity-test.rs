@@ -28,6 +28,12 @@ async fn main() -> anyhow::Result<()> {
             return Ok(());
         }
 
+        // TODO:(support:v0.3): remove
+        if fedimintd_version <= Version::parse("0.3.4-rc.1").unwrap() {
+            info!(%fedimintd_version, "Version causes extreme flakiness, skipping");
+            return Ok(());
+        }
+
         let client = dev_fed
             .fed()
             .await?
