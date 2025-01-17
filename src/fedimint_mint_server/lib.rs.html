@@ -878,73 +878,7 @@
 <a href="#877" id="877">877</a>
 <a href="#878" id="878">878</a>
 <a href="#879" id="879">879</a>
-<a href="#880" id="880">880</a>
-<a href="#881" id="881">881</a>
-<a href="#882" id="882">882</a>
-<a href="#883" id="883">883</a>
-<a href="#884" id="884">884</a>
-<a href="#885" id="885">885</a>
-<a href="#886" id="886">886</a>
-<a href="#887" id="887">887</a>
-<a href="#888" id="888">888</a>
-<a href="#889" id="889">889</a>
-<a href="#890" id="890">890</a>
-<a href="#891" id="891">891</a>
-<a href="#892" id="892">892</a>
-<a href="#893" id="893">893</a>
-<a href="#894" id="894">894</a>
-<a href="#895" id="895">895</a>
-<a href="#896" id="896">896</a>
-<a href="#897" id="897">897</a>
-<a href="#898" id="898">898</a>
-<a href="#899" id="899">899</a>
-<a href="#900" id="900">900</a>
-<a href="#901" id="901">901</a>
-<a href="#902" id="902">902</a>
-<a href="#903" id="903">903</a>
-<a href="#904" id="904">904</a>
-<a href="#905" id="905">905</a>
-<a href="#906" id="906">906</a>
-<a href="#907" id="907">907</a>
-<a href="#908" id="908">908</a>
-<a href="#909" id="909">909</a>
-<a href="#910" id="910">910</a>
-<a href="#911" id="911">911</a>
-<a href="#912" id="912">912</a>
-<a href="#913" id="913">913</a>
-<a href="#914" id="914">914</a>
-<a href="#915" id="915">915</a>
-<a href="#916" id="916">916</a>
-<a href="#917" id="917">917</a>
-<a href="#918" id="918">918</a>
-<a href="#919" id="919">919</a>
-<a href="#920" id="920">920</a>
-<a href="#921" id="921">921</a>
-<a href="#922" id="922">922</a>
-<a href="#923" id="923">923</a>
-<a href="#924" id="924">924</a>
-<a href="#925" id="925">925</a>
-<a href="#926" id="926">926</a>
-<a href="#927" id="927">927</a>
-<a href="#928" id="928">928</a>
-<a href="#929" id="929">929</a>
-<a href="#930" id="930">930</a>
-<a href="#931" id="931">931</a>
-<a href="#932" id="932">932</a>
-<a href="#933" id="933">933</a>
-<a href="#934" id="934">934</a>
-<a href="#935" id="935">935</a>
-<a href="#936" id="936">936</a>
-<a href="#937" id="937">937</a>
-<a href="#938" id="938">938</a>
-<a href="#939" id="939">939</a>
-<a href="#940" id="940">940</a>
-<a href="#941" id="941">941</a>
-<a href="#942" id="942">942</a>
-<a href="#943" id="943">943</a>
-<a href="#944" id="944">944</a>
-<a href="#945" id="945">945</a>
-<a href="#946" id="946">946</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#880" id="880">880</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -962,19 +896,19 @@
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{
-    CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-    MigrationContext,
+    CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCore,
+    IDatabaseTransactionOpsCoreTyped, MigrationContext,
 };
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
-    TransactionItemAmount, CORE_CONSENSUS_VERSION,
+    api_endpoint, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
+    ModuleInit, PeerHandle, SupportedModuleApiVersions, TransactionItemAmount,
+    CORE_CONSENSUS_VERSION,
 };
 <span class="kw">use </span>fedimint_core::util::BoxFuture;
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, secp256k1, Amount,
-    NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti,
+    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, NumPeersExt,
+    OutPoint, PeerId, Tiered, TieredMulti,
 };
 <span class="kw">use </span>fedimint_logging::LOG_MODULE_MINT;
 <span class="kw">pub use </span>fedimint_mint_common <span class="kw">as </span>common;
@@ -982,7 +916,6 @@
     MintClientConfig, MintConfig, MintConfigConsensus, MintConfigLocal, MintConfigPrivate,
     MintGenParams,
 };
-<span class="kw">use </span>fedimint_mint_common::endpoint_constants::{BACKUP_ENDPOINT, RECOVER_ENDPOINT};
 <span class="kw">pub use </span>fedimint_mint_common::{BackupRequest, SignedBackupRequest};
 <span class="kw">use </span>fedimint_mint_common::{
     MintCommonInit, MintConsensusItem, MintInput, MintInputError, MintModuleTypes, MintOutput,
@@ -1014,9 +947,8 @@
 <span class="kw">use </span><span class="kw">crate</span>::common::endpoint_constants::{BLIND_NONCE_USED_ENDPOINT, NOTE_SPENT_ENDPOINT};
 <span class="kw">use </span><span class="kw">crate</span>::common::{BlindNonce, Nonce};
 <span class="kw">use </span><span class="kw">crate</span>::db::{
-    BlindNonceKey, BlindNonceKeyPrefix, DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey,
-    EcashBackupKeyPrefix, MintAuditItemKey, MintAuditItemKeyPrefix, MintOutputOutcomeKey,
-    MintOutputOutcomePrefix, NonceKey, NonceKeyPrefix,
+    BlindNonceKey, BlindNonceKeyPrefix, DbKeyPrefix, MintAuditItemKey, MintAuditItemKeyPrefix,
+    MintOutputOutcomeKey, MintOutputOutcomePrefix, NonceKey, NonceKeyPrefix,
 };
 
 <span class="attr">#[derive(Debug, Clone)]
@@ -1057,16 +989,6 @@
                         MintOutputOutcome,
                         mint,
                         <span class="string">"Output Outcomes"
-                    </span>);
-                }
-                DbKeyPrefix::EcashBackup =&gt; {
-                    <span class="macro">push_db_pair_items!</span>(
-                        dbtx,
-                        EcashBackupKeyPrefix,
-                        EcashBackupKey,
-                        ECashUserBackupSnapshot,
-                        mint,
-                        <span class="string">"User Ecash Backup"
                     </span>);
                 }
                 DbKeyPrefix::BlindNonce =&gt; {
@@ -1271,6 +1193,7 @@
     <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>migrations = BTreeMap::new();
         migrations.insert(DatabaseVersion(<span class="number">0</span>), migrate_db_v0 <span class="kw">as </span>CoreMigrationFn);
+        migrations.insert(DatabaseVersion(<span class="number">1</span>), migrate_db_v1 <span class="kw">as </span>CoreMigrationFn);
         migrations
     }
 }
@@ -1320,6 +1243,18 @@
             <span class="macro">warn!</span>(target: LOG_MODULE_MINT, <span class="string">"{double_issuances} blind nonces were reused, money was burned by faulty user clients!"</span>);
         }
 
+        <span class="prelude-val">Ok</span>(())
+    })
+}
+
+<span class="comment">// Remove now unused ECash backups from DB. Backup functionality moved to core.
+</span><span class="kw">fn </span>migrate_db_v1(<span class="kw-2">mut </span>migration_context: MigrationContext&lt;<span class="lifetime">'_</span>&gt;) -&gt; BoxFuture&lt;anyhow::Result&lt;()&gt;&gt; {
+    Box::pin(<span class="kw">async move </span>{
+        migration_context
+            .dbtx()
+            .raw_remove_by_prefix(<span class="kw-2">&amp;</span>[<span class="number">0x15</span>])
+            .<span class="kw">await
+            </span>.expect(<span class="string">"DB error"</span>);
         <span class="prelude-val">Ok</span>(())
     })
 }
@@ -1557,23 +1492,6 @@
     <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="macro">vec!</span>[
             <span class="macro">api_endpoint!</span> {
-                BACKUP_ENDPOINT,
-                ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
-                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Mint, context, request: SignedBackupRequest| -&gt; () {
-                    module
-                        .handle_backup_request(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc(), request).<span class="kw">await</span><span class="question-mark">?</span>;
-                    <span class="prelude-val">Ok</span>(())
-                }
-            },
-            <span class="macro">api_endpoint!</span> {
-                RECOVER_ENDPOINT,
-                ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
-                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Mint, context, id: secp256k1::PublicKey| -&gt; <span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt; {
-                    <span class="prelude-val">Ok</span>(module
-                        .handle_recover_request(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc(), id).<span class="kw">await</span>)
-                }
-            },
-            <span class="macro">api_endpoint!</span> {
                 NOTE_SPENT_ENDPOINT,
                 ApiVersion::new(<span class="number">0</span>, <span class="number">1</span>),
                 <span class="kw">async </span>|_module: <span class="kw-2">&amp;</span>Mint, context, nonce: Nonce| -&gt; bool {
@@ -1589,56 +1507,6 @@
             },
         ]
     }
-}
-
-<span class="kw">impl </span>Mint {
-    <span class="kw">async fn </span>handle_backup_request(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-        request: SignedBackupRequest,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ApiError&gt; {
-        <span class="kw">let </span>request = request
-            .verify_valid(secp256k1::SECP256K1)
-            .map_err(|<span class="kw">_</span>| ApiError::bad_request(<span class="string">"invalid request"</span>.into()))<span class="question-mark">?</span>;
-
-        <span class="macro">debug!</span>(
-            target: LOG_MODULE_MINT,
-            id = %request.id,
-            len = request.payload.len(),
-            <span class="string">"Received user e-cash backup request"
-        </span>);
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(prev) = dbtx.get_value(<span class="kw-2">&amp;</span>EcashBackupKey(request.id)).<span class="kw">await </span>{
-            <span class="kw">if </span>request.timestamp &lt;= prev.timestamp {
-                <span class="macro">debug!</span>(
-                    target: LOG_MODULE_MINT,
-                    id = %request.id,
-                    len = request.payload.len(),
-                    <span class="string">"Received user e-cash backup request with old timestamp - ignoring"
-                </span>);
-                <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::bad_request(<span class="string">"timestamp too small"</span>.into()));
-            }
-        }
-
-        <span class="macro">info!</span>(target: LOG_MODULE_MINT, id = %request.id, len = request.payload.len(), <span class="string">"Storing new user e-cash backup"</span>);
-        dbtx.insert_entry(
-            <span class="kw-2">&amp;</span>EcashBackupKey(request.id),
-            <span class="kw-2">&amp;</span>ECashUserBackupSnapshot {
-                timestamp: request.timestamp,
-                data: request.payload.clone(),
-            },
-        )
-        .<span class="kw">await</span>;
-
-        <span class="prelude-val">Ok</span>(())
-    }
-
-    <span class="kw">async fn </span>handle_recover_request(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-        id: secp256k1::PublicKey,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt; {
-        dbtx.get_value(<span class="kw-2">&amp;</span>EcashBackupKey(id)).<span class="kw">await
-    </span>}
 }
 
 <span class="kw">fn </span>calculate_mint_issued_ecash_metrics(

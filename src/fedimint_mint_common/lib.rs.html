@@ -261,18 +261,7 @@
 <a href="#260" id="260">260</a>
 <a href="#261" id="261">261</a>
 <a href="#262" id="262">262</a>
-<a href="#263" id="263">263</a>
-<a href="#264" id="264">264</a>
-<a href="#265" id="265">265</a>
-<a href="#266" id="266">266</a>
-<a href="#267" id="267">267</a>
-<a href="#268" id="268">268</a>
-<a href="#269" id="269">269</a>
-<a href="#270" id="270">270</a>
-<a href="#271" id="271">271</a>
-<a href="#272" id="272">272</a>
-<a href="#273" id="273">273</a>
-<a href="#274" id="274">274</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#263" id="263">263</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -497,17 +486,6 @@
 }
 
 <span class="kw">impl </span>Nonce {
-    <span class="kw">pub fn </span>to_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="macro">vec!</span>[];
-        bincode::serialize_into(<span class="kw-2">&amp;mut </span>bytes, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>).unwrap();
-        bytes
-    }
-
-    <span class="kw">pub fn </span>from_bytes(bytes: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="self">Self </span>{
-        <span class="comment">// FIXME: handle errors or the client can be crashed
-        </span>bincode::deserialize(bytes).unwrap()
-    }
-
     <span class="kw">pub fn </span>to_message(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; tbs::Message {
         tbs::Message::from_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>.serialize()[..])
     }
