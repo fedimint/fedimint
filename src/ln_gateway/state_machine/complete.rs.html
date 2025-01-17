@@ -309,6 +309,7 @@
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
+<span class="kw">use </span>fedimint_lightning::{InterceptPaymentResponse, PaymentAction};
 <span class="kw">use </span>fedimint_ln_client::incoming::IncomingSmStates;
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
 <span class="kw">use </span>futures::StreamExt;
@@ -320,7 +321,6 @@
     CompleteLightningPaymentSucceeded, IncomingPaymentFailed, IncomingPaymentSucceeded,
 };
 <span class="kw">use super</span>::{GatewayClientContext, GatewayClientStateMachines};
-<span class="kw">use </span><span class="kw">crate</span>::lightning::{InterceptPaymentResponse, PaymentAction};
 
 <span class="attr">#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
 </span><span class="kw">enum </span>CompleteHtlcError {

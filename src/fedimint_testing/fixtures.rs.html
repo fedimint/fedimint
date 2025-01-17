@@ -256,7 +256,10 @@
 <a href="#255" id="255">255</a>
 <a href="#256" id="256">256</a>
 <a href="#257" id="257">257</a>
-<a href="#258" id="258">258</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -274,12 +277,12 @@
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
+<span class="kw">use </span>fedimint_lightning::{ILnRpcClient, LightningContext};
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>fedimint_server::core::{DynServerModuleInit, IServerModuleInit, ServerModuleInitRegistry};
 <span class="kw">use </span>fedimint_testing_core::test_dir;
 <span class="kw">use </span>ln_gateway::client::GatewayClientBuilder;
-<span class="kw">use </span>ln_gateway::config::LightningModuleMode;
-<span class="kw">use </span>ln_gateway::lightning::{ILnRpcClient, LightningBuilder, LightningContext};
+<span class="kw">use </span>ln_gateway::config::{LightningMode, LightningModuleMode};
 <span class="kw">use </span>ln_gateway::Gateway;
 
 <span class="kw">use </span><span class="kw">crate</span>::btc::mock::FakeBitcoinFactory;
@@ -290,10 +293,12 @@
     FM_TEST_BITCOIND_RPC_ENV, FM_TEST_USE_REAL_DAEMONS_ENV,
 };
 <span class="kw">use </span><span class="kw">crate</span>::federation::{FederationTest, FederationTestBuilder};
-<span class="kw">use </span><span class="kw">crate</span>::gateway::{FakeLightningBuilder, DEFAULT_GATEWAY_PASSWORD};
+<span class="kw">use </span><span class="kw">crate</span>::ln::FakeLightningTest;
 
 <span class="doccomment">/// A default timeout for things happening in tests
 </span><span class="kw">pub const </span>TIMEOUT: Duration = Duration::from_secs(<span class="number">10</span>);
+
+<span class="kw">pub const </span>DEFAULT_GATEWAY_PASSWORD: <span class="kw-2">&amp;</span>str = <span class="string">"thereisnosecondbest"</span>;
 
 <span class="doccomment">/// A tool for easily writing fedimint integration tests
 </span><span class="kw">pub struct </span>Fixtures {
@@ -438,12 +443,7 @@
         </span><span class="kw">let </span>client_builder: GatewayClientBuilder =
             GatewayClientBuilder::new(path.clone(), registry, ModuleKind::from_static_str(<span class="string">"dummy"</span>));
 
-        <span class="kw">let </span>lightning_builder: Arc&lt;<span class="kw">dyn </span>LightningBuilder + Send + Sync&gt; =
-            Arc::new(FakeLightningBuilder);
-        <span class="comment">// Note: This runtime isn't used by `FakeLightningBuilder`. It is immediately
-        // dropped.
-        </span><span class="kw">let </span>runtime = Arc::new(tokio::runtime::Runtime::new().unwrap());
-        <span class="kw">let </span>ln_client: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt; = lightning_builder.build(runtime).<span class="kw">await</span>.into();
+        <span class="kw">let </span>ln_client: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt; = Arc::new(FakeLightningTest::new());
 
         <span class="kw">let </span>(lightning_public_key, lightning_alias, lightning_network, <span class="kw">_</span>, <span class="kw">_</span>) = ln_client
             .parsed_node_info()
@@ -461,7 +461,13 @@
         <span class="kw">let </span>address: SafeUrl = <span class="macro">format!</span>(<span class="string">"http://{listen}"</span>).parse().unwrap();
 
         Gateway::new_with_custom_registry(
-            lightning_builder,
+            <span class="comment">// Fixtures does not use real lightning connection, so just fake the connection
+            // parameters
+            </span>LightningMode::Lnd {
+                lnd_rpc_addr: <span class="string">"FakeRpcAddr"</span>.to_string(),
+                lnd_tls_cert: <span class="string">"FakeTlsCert"</span>.to_string(),
+                lnd_macaroon: <span class="string">"FakeMacaroon"</span>.to_string(),
+            },
             client_builder,
             listen,
             address.clone(),

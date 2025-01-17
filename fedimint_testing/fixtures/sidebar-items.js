@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["TIMEOUT"],"struct":["Fixtures"]};
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_GATEWAY_PASSWORD","TIMEOUT"],"struct":["Fixtures"]};

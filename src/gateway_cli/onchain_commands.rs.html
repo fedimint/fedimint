@@ -66,8 +66,8 @@
 <a href="#65" id="65">65</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>fedimint_core::BitcoinAmountOrAll;
+<span class="kw">use </span>fedimint_lightning::SendOnchainRequest;
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
-<span class="kw">use </span>ln_gateway::rpc::SendOnchainPayload;
 
 <span class="kw">use </span><span class="kw">crate</span>::print_response;
 
@@ -115,7 +115,7 @@
                 fee_rate_sats_per_vbyte,
             } =&gt; {
                 <span class="kw">let </span>response = create_client()
-                    .send_onchain(SendOnchainPayload {
+                    .send_onchain(SendOnchainRequest {
                         address,
                         amount,
                         fee_rate_sats_per_vbyte,

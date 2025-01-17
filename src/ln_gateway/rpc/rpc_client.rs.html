@@ -305,9 +305,15 @@
 <a href="#304" id="304">304</a>
 <a href="#305" id="305">305</a>
 <a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::{Address, Txid};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
+<span class="kw">use </span>fedimint_lightning::{
+    ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, OpenChannelRequest,
+    SendOnchainRequest,
+};
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>reqwest::{Method, StatusCode};
 <span class="kw">use </span>serde::de::DeserializeOwned;
@@ -315,11 +321,10 @@
 <span class="kw">use </span>thiserror::Error;
 
 <span class="kw">use super</span>::{
-    BackupPayload, CloseChannelsWithPeerPayload, ConfigPayload, ConnectFedPayload,
-    CreateInvoiceForOperatorPayload, DepositAddressPayload, DepositAddressRecheckPayload,
-    FederationInfo, GatewayBalances, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
-    MnemonicResponse, OpenChannelPayload, PayInvoiceForOperatorPayload, PaymentLogPayload,
-    PaymentLogResponse, ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainPayload,
+    BackupPayload, ConfigPayload, ConnectFedPayload, CreateInvoiceForOperatorPayload,
+    DepositAddressPayload, DepositAddressRecheckPayload, FederationInfo, GatewayBalances,
+    GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, PayInvoiceForOperatorPayload,
+    PaymentLogPayload, PaymentLogResponse, ReceiveEcashPayload, ReceiveEcashResponse,
     SetFeesPayload, SpendEcashPayload, SpendEcashResponse, WithdrawPayload, WithdrawResponse,
     ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
     CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
@@ -329,7 +334,6 @@
     PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT, SEND_ONCHAIN_ENDPOINT,
     SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, WITHDRAW_ENDPOINT,
 };
-<span class="kw">use </span><span class="kw">crate</span>::lightning::{ChannelInfo, CloseChannelsWithPeerResponse};
 
 <span class="kw">pub struct </span>GatewayRpcClient {
     <span class="doccomment">/// Base URL to gateway web server
@@ -466,7 +470,7 @@
         <span class="self">self</span>.call_get(url).<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>open_channel(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: OpenChannelPayload) -&gt; GatewayRpcResult&lt;Txid&gt; {
+    <span class="kw">pub async fn </span>open_channel(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: OpenChannelRequest) -&gt; GatewayRpcResult&lt;Txid&gt; {
         <span class="kw">let </span>url = <span class="self">self
             </span>.base_url
             .join(OPEN_CHANNEL_ENDPOINT)
@@ -476,7 +480,7 @@
 
     <span class="kw">pub async fn </span>close_channels_with_peer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        payload: CloseChannelsWithPeerPayload,
+        payload: CloseChannelsWithPeerRequest,
     ) -&gt; GatewayRpcResult&lt;CloseChannelsWithPeerResponse&gt; {
         <span class="kw">let </span>url = <span class="self">self
             </span>.base_url
@@ -493,7 +497,7 @@
         <span class="self">self</span>.call_get(url).<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>send_onchain(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: SendOnchainPayload) -&gt; GatewayRpcResult&lt;Txid&gt; {
+    <span class="kw">pub async fn </span>send_onchain(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: SendOnchainRequest) -&gt; GatewayRpcResult&lt;Txid&gt; {
         <span class="kw">let </span>url = <span class="self">self
             </span>.base_url
             .join(SEND_ONCHAIN_ENDPOINT)

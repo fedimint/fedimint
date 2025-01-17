@@ -23,14 +23,12 @@
 <a href="#22" id="22">22</a>
 <a href="#23" id="23">23</a>
 <a href="#24" id="24">24</a>
-<a href="#25" id="25">25</a>
-<a href="#26" id="26">26</a></pre></div><pre class="rust"><code><span class="doccomment">//! Map `gateway_lnrpc` protobuf types to rust types
+<a href="#25" id="25">25</a></pre></div><pre class="rust"><code><span class="doccomment">//! Map `gateway_lnrpc` protobuf types to rust types
 
 </span><span class="kw">use </span>std::fmt::Display;
 
+<span class="kw">use </span>fedimint_lightning::InterceptPaymentRequest;
 <span class="kw">use </span>hex::ToHex;
-
-<span class="kw">use </span><span class="kw">crate</span>::lightning::InterceptPaymentRequest;
 
 <span class="doccomment">/// Utility struct for formatting an intercepted HTLC. Useful for debugging.
 </span><span class="kw">pub struct </span>PrettyInterceptPaymentRequest&lt;<span class="lifetime">'a</span>&gt;(<span class="kw">pub </span><span class="kw-2">&amp;</span><span class="lifetime">'a </span>InterceptPaymentRequest);

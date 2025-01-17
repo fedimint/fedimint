@@ -109,9 +109,9 @@
 <a href="#108" id="108">108</a>
 <a href="#109" id="109">109</a>
 <a href="#110" id="110">110</a></pre></div><pre class="rust"><code><span class="kw">use </span>clap::Subcommand;
+<span class="kw">use </span>fedimint_lightning::{CloseChannelsWithPeerRequest, OpenChannelRequest};
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
-<span class="kw">use </span>ln_gateway::rpc::{CloseChannelsWithPeerPayload, OpenChannelPayload};
 
 <span class="kw">use </span><span class="kw">crate</span>::print_response;
 
@@ -194,7 +194,7 @@
                 push_amount_sats,
             } =&gt; {
                 <span class="kw">let </span>funding_txid = create_client()
-                    .open_channel(OpenChannelPayload {
+                    .open_channel(OpenChannelRequest {
                         pubkey,
                         host,
                         channel_size_sats,
@@ -205,7 +205,7 @@
             }
             <span class="self">Self</span>::CloseChannelsWithPeer { pubkey } =&gt; {
                 <span class="kw">let </span>response = create_client()
-                    .close_channels_with_peer(CloseChannelsWithPeerPayload { pubkey })
+                    .close_channels_with_peer(CloseChannelsWithPeerRequest { pubkey })
                     .<span class="kw">await</span><span class="question-mark">?</span>;
                 print_response(response);
             }

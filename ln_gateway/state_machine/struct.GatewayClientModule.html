@@ -14,7 +14,7 @@ see <a href="../../fedimint_ln_client/struct.LightningClientModule.html" title="
     route_hints: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../../fedimint_ln_common/route_hints/struct.RouteHint.html" title="struct fedimint_ln_common::route_hints::RouteHint">RouteHint</a>&gt;,
     ttl: <a class="struct" href="https://doc.rust-lang.org/nightly/core/time/struct.Duration.html" title="struct core::time::Duration">Duration</a>,
     fees: RoutingFees,
-    lightning_context: <a class="struct" href="../lightning/struct.LightningContext.html" title="struct ln_gateway::lightning::LightningContext">LightningContext</a>,
+    lightning_context: <a class="struct" href="../../fedimint_lightning/struct.LightningContext.html" title="struct fedimint_lightning::LightningContext">LightningContext</a>,
 ) -&gt; <a class="struct" href="../../fedimint_ln_common/struct.LightningGatewayAnnouncement.html" title="struct fedimint_ln_common::LightningGatewayAnnouncement">LightningGatewayAnnouncement</a></h4></section><section id="method.create_funding_incoming_contract_output_from_htlc" class="method"><a class="src rightside" href="../../src/ln_gateway/state_machine/mod.rs.html#263-322">Source</a><h4 class="code-header">async fn <a href="#method.create_funding_incoming_contract_output_from_htlc" class="fn">create_funding_incoming_contract_output_from_htlc</a>(
     &amp;self,
     htlc: <a class="struct" href="struct.Htlc.html" title="struct ln_gateway::state_machine::Htlc">Htlc</a>,
@@ -26,7 +26,7 @@ see <a href="../../fedimint_ln_client/struct.LightningClientModule.html" title="
     route_hints: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../../fedimint_ln_common/route_hints/struct.RouteHint.html" title="struct fedimint_ln_common::route_hints::RouteHint">RouteHint</a>&gt;,
     time_to_live: <a class="struct" href="https://doc.rust-lang.org/nightly/core/time/struct.Duration.html" title="struct core::time::Duration">Duration</a>,
     fees: RoutingFees,
-    lightning_context: <a class="struct" href="../lightning/struct.LightningContext.html" title="struct ln_gateway::lightning::LightningContext">LightningContext</a>,
+    lightning_context: <a class="struct" href="../../fedimint_lightning/struct.LightningContext.html" title="struct fedimint_lightning::LightningContext">LightningContext</a>,
 )</h4></section></summary><div class="docblock"><p>Register gateway with federation</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.remove_from_federation" class="method"><a class="src rightside" href="../../src/ln_gateway/state_machine/mod.rs.html#399-412">Source</a><h4 class="code-header">pub async fn <a href="#method.remove_from_federation" class="fn">remove_from_federation</a>(&amp;self, gateway_keypair: Keypair)</h4></section></summary><div class="docblock"><p>Attempts to remove a gateway’s registration from the federation. Since
 removing gateway registrations is best effort, this does not return

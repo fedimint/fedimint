@@ -981,6 +981,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::util::Spanned;
 <span class="kw">use </span>fedimint_core::{secp256k1, Amount, OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_lightning::{LightningRpcError, PayInvoiceResponse};
 <span class="kw">use </span>fedimint_ln_client::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 <span class="kw">use </span>fedimint_ln_common::config::FeeToAmount;
@@ -996,7 +997,6 @@
 
 <span class="kw">use super</span>::{GatewayClientContext, GatewayExtReceiveStates};
 <span class="kw">use </span><span class="kw">crate</span>::db::GatewayDbtxNcExt;
-<span class="kw">use </span><span class="kw">crate</span>::lightning::{LightningRpcError, PayInvoiceResponse};
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::events::{OutgoingPaymentFailed, OutgoingPaymentSucceeded};
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayClientModule;
 <span class="kw">use </span><span class="kw">crate</span>::GatewayState;

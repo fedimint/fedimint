@@ -894,6 +894,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint};
+<span class="kw">use </span>fedimint_lightning::{InterceptPaymentRequest, LightningContext};
 <span class="kw">use </span>fedimint_ln_client::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_client::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
@@ -922,7 +923,6 @@
     GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates,
     OutgoingPaymentError,
 };
-<span class="kw">use </span><span class="kw">crate</span>::lightning::{InterceptPaymentRequest, LightningContext};
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::complete::{
     GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState,
 };

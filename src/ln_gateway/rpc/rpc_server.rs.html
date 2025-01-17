@@ -451,6 +451,7 @@
 <span class="kw">use </span>axum::{Extension, Json, Router};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_lightning::{CloseChannelsWithPeerRequest, OpenChannelRequest, SendOnchainRequest};
 <span class="kw">use </span>fedimint_ln_common::gateway_endpoint_constants::{
     GET_GATEWAY_ID_ENDPOINT, PAY_INVOICE_ENDPOINT,
 };
@@ -466,15 +467,14 @@
 <span class="kw">use </span>tracing::{error, info, instrument};
 
 <span class="kw">use super</span>::{
-    BackupPayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
-    CreateInvoiceForOperatorPayload, DepositAddressPayload, DepositAddressRecheckPayload,
-    InfoPayload, LeaveFedPayload, OpenChannelPayload, PayInvoiceForOperatorPayload,
-    PaymentLogPayload, ReceiveEcashPayload, SendOnchainPayload, SetFeesPayload, SpendEcashPayload,
-    WithdrawPayload, ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT,
-    CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
-    CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT,
-    GET_BALANCES_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT,
-    LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAYMENT_LOG_ENDPOINT,
+    BackupPayload, ConnectFedPayload, CreateInvoiceForOperatorPayload, DepositAddressPayload,
+    DepositAddressRecheckPayload, InfoPayload, LeaveFedPayload, PayInvoiceForOperatorPayload,
+    PaymentLogPayload, ReceiveEcashPayload, SetFeesPayload, SpendEcashPayload, WithdrawPayload,
+    ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
+    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
+    GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
+    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
+    MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAYMENT_LOG_ENDPOINT,
     PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT, SEND_ONCHAIN_ENDPOINT,
     SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, V1_API_ENDPOINT, WITHDRAW_ENDPOINT,
 };
@@ -758,7 +758,7 @@
 <span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>open_channel(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
-    Json(payload): Json&lt;OpenChannelPayload&gt;,
+    Json(payload): Json&lt;OpenChannelRequest&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, AdminGatewayError&gt; {
     <span class="kw">let </span>funding_txid = gateway.handle_open_channel_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(funding_txid)))
@@ -767,7 +767,7 @@
 <span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>close_channels_with_peer(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
-    Json(payload): Json&lt;CloseChannelsWithPeerPayload&gt;,
+    Json(payload): Json&lt;CloseChannelsWithPeerRequest&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, AdminGatewayError&gt; {
     <span class="kw">let </span>response = gateway.handle_close_channels_with_peer_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(response)))
@@ -784,7 +784,7 @@
 <span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err)]
 </span><span class="kw">async fn </span>send_onchain(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
-    Json(payload): Json&lt;SendOnchainPayload&gt;,
+    Json(payload): Json&lt;SendOnchainRequest&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, AdminGatewayError&gt; {
     <span class="kw">let </span>txid = gateway.handle_send_onchain_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(txid)))

@@ -629,11 +629,11 @@
 <span class="kw">use </span>fedimint_core::secp256k1::PublicKey;
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
 <span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll};
+<span class="kw">use </span>fedimint_lightning::ChannelInfo;
 <span class="kw">use </span>fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>fedimint_lnv2_common::gateway_api::PaymentFee;
-<span class="kw">use </span>fedimint_testing::gateway::LightningNodeType;
+<span class="kw">use </span>fedimint_testing::ln::LightningNodeType;
 <span class="kw">use </span>ln_gateway::envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV;
-<span class="kw">use </span>ln_gateway::lightning::ChannelInfo;
 <span class="kw">use </span>ln_gateway::rpc::{GatewayBalances, MnemonicResponse, V1_API_ENDPOINT};
 <span class="kw">use </span>tracing::info;
 
