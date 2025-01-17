@@ -32,7 +32,18 @@ function add_target_dir_to_path() {
 
 function build_workspace() {
   if [ -z "${SKIP_CARGO_BUILD:-}" ]; then
-    cargo build --workspace --all-targets ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}}
+    runLowPrio cargo build --workspace --all-targets ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}}
+      else
+    >&2 echo "SKIP_CARGO_BUILD set, skipping building workspace"
+  fi
+}
+
+function build_workspace_tests() {
+  if [ -z "${SKIP_CARGO_BUILD:-}" ]; then
+    runLowPrio cargo nextest run --no-run ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targets
+
+  else
+    >&2 echo "SKIP_CARGO_BUILD set, skipping building workspace tests"
   fi
 }
 

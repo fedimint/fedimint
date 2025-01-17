@@ -22,6 +22,7 @@ trap on_exit EXIT
 
 mkdir -p "${CARGO_BUILD_TARGET_DIR}"
 
+>&2 echo "Extracting target build dir from Nix build..."
 for target_zstd in result/target.tar.zst.prev result/target.tar.zst ; do
   nix run nixpkgs#zstd -- -d "$(realpath "$target_zstd")" --stdout | \
       nix run nixpkgs#gnutar -- -x -C "${CARGO_BUILD_TARGET_DIR}"
@@ -31,5 +32,6 @@ done
 # is using slightly different paths etc, but we know for a fact
 # that we've already built everything in this version
 env \
-  SKIP_BUILD_WORKSPACE=1 \
-  scripts/tests/upgrade-test.sh "$@"
+  SKIP_CARGO_BUILD=1 \
+  CARGO_DENY_COMPILATION=1 \
+  "$@"
