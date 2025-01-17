@@ -31,7 +31,7 @@ use fedimint_core::session_outcome::{SessionOutcome, SessionStatus};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::backoff_util::api_networking_backoff;
-use fedimint_core::util::{FmtCompact as _, SafeUrl};
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, util, NumPeersExt, PeerId, TransactionId,
 };
@@ -56,16 +56,14 @@ use serde_json::Value;
 use tokio_rustls::rustls::RootCertStore;
 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
 use tokio_rustls::{rustls::ClientConfig as TlsClientConfig, TlsConnector};
-use tracing::{debug, info, info_span, instrument, trace, warn, Instrument};
+use tracing::{debug, info, info_span, instrument, warn, Instrument};
 
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 mod error;
 mod global_api;
 pub mod net;
-mod peer;
 
 pub use global_api::{GlobalFederationApiWithCache, GlobalFederationApiWithCacheExt};
-use peer::FederationPeer;
 
 pub const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2: ApiVersion = ApiVersion::new(0, 5);
 
@@ -647,369 +645,6 @@ where
     })
 }
 
-/// Mint API client that will try to run queries against all `peers` expecting
-/// equal results from at least `min_eq_results` of them. Peers that return
-/// differing results are returned as a peer faults list.
-#[derive(Debug, Clone)]
-pub struct WsFederationApi<C = WsClient> {
-    peer_ids: BTreeSet<PeerId>,
-    self_peer_id: Option<PeerId>,
-    peers: Arc<Vec<FederationPeer<C>>>,
-    module_id: Option<ModuleInstanceId>,
-}
-
-impl<C: JsonRpcClient + Debug + 'static> IModuleFederationApi for WsFederationApi<C> {}
-
-/// Implementation of API calls over WebSockets
-///
-/// Can function as either the global or module API
-#[apply(async_trait_maybe_send!)]
-impl<C: JsonRpcClient + Debug + 'static> IRawFederationApi for WsFederationApi<C> {
-    fn all_peers(&self) -> &BTreeSet<PeerId> {
-        &self.peer_ids
-    }
-
-    fn self_peer(&self) -> Option<PeerId> {
-        self.self_peer_id
-    }
-
-    fn with_module(&self, id: ModuleInstanceId) -> DynModuleApi {
-        WsFederationApi {
-            peer_ids: self.peer_ids.clone(),
-            peers: self.peers.clone(),
-            module_id: Some(id),
-            self_peer_id: self.self_peer_id,
-        }
-        .into()
-    }
-
-    async fn request_raw(
-        &self,
-        peer_id: PeerId,
-        method: &str,
-        params: &ApiRequestErased,
-    ) -> JsonRpcResult<Value> {
-        let peer = self
-            .peers
-            .iter()
-            .find(|m| m.peer_id == peer_id)
-            .ok_or_else(|| JsonRpcClientError::Custom(format!("Invalid peer_id: {peer_id}")))?;
-
-        let method = match self.module_id {
-            None => method.to_string(),
-            Some(id) => format!("module_{id}_{method}"),
-        };
-        peer.request(&method, &[params.to_json()]).await
-    }
-}
-
-#[apply(async_trait_maybe_send!)]
-pub trait JsonRpcClient: ClientT + Sized + MaybeSend + MaybeSync {
-    async fn connect(
-        url: &SafeUrl,
-        api_secret: Option<String>,
-    ) -> result::Result<Self, JsonRpcClientError>;
-
-    #[cfg(all(feature = "tor", not(target_family = "wasm")))]
-    async fn connect_with_tor(
-        url: &SafeUrl,
-        api_secret: Option<String>,
-    ) -> result::Result<Self, JsonRpcClientError>;
-
-    fn is_connected(&self) -> bool;
-}
-
-#[apply(async_trait_maybe_send!)]
-impl JsonRpcClient for WsClient {
-    async fn connect(
-        url: &SafeUrl,
-        api_secret: Option<String>,
-    ) -> result::Result<Self, JsonRpcClientError> {
-        #[cfg(not(target_family = "wasm"))]
-        let mut client = {
-            let webpki_roots = webpki_roots::TLS_SERVER_ROOTS.iter().cloned();
-            let mut root_certs = RootCertStore::empty();
-            root_certs.extend(webpki_roots);
-
-            let tls_cfg = CustomCertStore::builder()
-                .with_root_certificates(root_certs)
-                .with_no_client_auth();
-
-            WsClientBuilder::default()
-                .max_concurrent_requests(u16::MAX as usize)
-                .with_custom_cert_store(tls_cfg)
-        };
-
-        #[cfg(target_family = "wasm")]
-        let client = WsClientBuilder::default().max_concurrent_requests(u16::MAX as usize);
-
-        if let Some(api_secret) = api_secret {
-            #[cfg(not(target_family = "wasm"))]
-            {
-                // on native platforms, jsonrpsee-client ignores `user:pass@...` in the Url,
-                // but we can set up the headers manually
-                let mut headers = HeaderMap::new();
-
-                let auth = base64::engine::general_purpose::STANDARD
-                    .encode(format!("fedimint:{api_secret}"));
-
-                headers.insert(
-                    "Authorization",
-                    HeaderValue::from_str(&format!("Basic {auth}")).expect("Can't fail"),
-                );
-
-                client = client.set_headers(headers);
-            }
-            #[cfg(target_family = "wasm")]
-            {
-                // on wasm, url will be handled by the browser, which should take care of
-                // `user:pass@...`
-                let mut url = url.clone();
-                url.set_username("fedimint").map_err(|_| {
-                    JsonRpcClientError::Transport(anyhow::format_err!("invalid username").into())
-                })?;
-                url.set_password(Some(&api_secret)).map_err(|_| {
-                    JsonRpcClientError::Transport(anyhow::format_err!("invalid secret").into())
-                })?;
-                return client.build(url.as_str()).await;
-            }
-        }
-        client.build(url.as_str()).await
-    }
-
-    #[cfg(all(feature = "tor", not(target_family = "wasm")))]
-    async fn connect_with_tor(
-        url: &SafeUrl,
-        api_secret: Option<String>,
-    ) -> result::Result<Self, JsonRpcClientError> {
-        let tor_config = TorClientConfig::default();
-        let tor_client = TorClient::create_bootstrapped(tor_config)
-            .await
-            .map_err(|e| JsonRpcClientError::Transport(e.into()))?
-            .isolated_client();
-
-        debug!("Successfully created and bootstrapped the `TorClient`, for given `TorConfig`.");
-
-        // TODO: (@leonardo) should we implement our `IntoTorAddr` for `SafeUrl`
-        // instead?
-        let addr = (
-            url.host_str()
-                .expect("It should've asserted for `host` on construction"),
-            url.port_or_known_default()
-                .expect("It should've asserted for `port`, or used a default one, on construction"),
-        );
-        let tor_addr = TorAddr::from(addr).map_err(|e| JsonRpcClientError::Transport(e.into()))?;
-        let tor_addr_clone = tor_addr.clone();
-
-        debug!(
-            ?tor_addr,
-            ?addr,
-            "Successfully created `TorAddr` for given address (i.e. host and port)"
-        );
-
-        // TODO: It can be updated to use `is_onion_address()` implementation,
-        // once https://gitlab.torproject.org/tpo/core/arti/-/merge_requests/2214 lands.
-        let anonymized_stream = if url.is_onion_address() {
-            let mut stream_prefs = arti_client::StreamPrefs::default();
-            stream_prefs.connect_to_onion_services(arti_client::config::BoolOrAuto::Explicit(true));
-
-            let anonymized_stream = tor_client
-                .connect_with_prefs(tor_addr, &stream_prefs)
-                .await
-                .map_err(|e| JsonRpcClientError::Transport(e.into()))?;
-
-            debug!(
-                ?tor_addr_clone,
-                "Successfully connected to onion address `TorAddr`, and established an anonymized `DataStream`"
-            );
-            anonymized_stream
-        } else {
-            let anonymized_stream = tor_client
-                .connect(tor_addr)
-                .await
-                .map_err(|e| JsonRpcClientError::Transport(e.into()))?;
-
-            debug!(?tor_addr_clone, "Successfully connected to `Hostname`or `Ip` `TorAddr`, and established an anonymized `DataStream`");
-            anonymized_stream
-        };
-
-        let is_tls = match url.scheme() {
-            "wss" => true,
-            "ws" => false,
-            unexpected_scheme => {
-                let error =
-                    format!("`{unexpected_scheme}` not supported, it's expected `ws` or `wss`!");
-                return Err(JsonRpcClientError::Transport(anyhow!(error).into()));
-            }
-        };
-
-        let tls_connector = if is_tls {
-            let webpki_roots = webpki_roots::TLS_SERVER_ROOTS.iter().cloned();
-            let mut root_certs = RootCertStore::empty();
-            root_certs.extend(webpki_roots);
-
-            let tls_config = TlsClientConfig::builder()
-                .with_root_certificates(root_certs)
-                .with_no_client_auth();
-            let tls_connector = TlsConnector::from(Arc::new(tls_config));
-            Some(tls_connector)
-        } else {
-            None
-        };
-
-        let mut ws_client_builder =
-            WsClientBuilder::default().max_concurrent_requests(u16::MAX as usize);
-
-        if let Some(api_secret) = api_secret {
-            // on native platforms, jsonrpsee-client ignores `user:pass@...` in the Url,
-            // but we can set up the headers manually
-            let mut headers = HeaderMap::new();
-
-            let auth =
-                base64::engine::general_purpose::STANDARD.encode(format!("fedimint:{api_secret}"));
-
-            headers.insert(
-                "Authorization",
-                HeaderValue::from_str(&format!("Basic {auth}")).expect("Can't fail"),
-            );
-
-            ws_client_builder = ws_client_builder.set_headers(headers);
-        }
-
-        match tls_connector {
-            None => {
-                return ws_client_builder
-                    .build_with_stream(url.as_str(), anonymized_stream)
-                    .await;
-            }
-            Some(tls_connector) => {
-                let host = url.host_str().map(ToOwned::to_owned).ok_or_else(|| {
-                    JsonRpcClientError::Transport(anyhow!("Invalid host!").into())
-                })?;
-
-                // FIXME: (@leonardo) Is this leaking any data ? Should investigate it further
-                // if it's really needed.
-                let server_name = rustls_pki_types::ServerName::try_from(host)
-                    .map_err(|e| JsonRpcClientError::Transport(e.into()))?;
-
-                let anonymized_tls_stream = tls_connector
-                    .connect(server_name, anonymized_stream)
-                    .await
-                    .map_err(|e| JsonRpcClientError::Transport(e.into()))?;
-
-                return ws_client_builder
-                    .build_with_stream(url.as_str(), anonymized_tls_stream)
-                    .await;
-            }
-        }
-    }
-
-    fn is_connected(&self) -> bool {
-        self.is_connected()
-    }
-}
-
-impl<C> WsFederationApi<C>
-where
-    C: JsonRpcClient + 'static,
-{
-    /// Returns the [`PeerId`]'s for the current [`WsFederationApi`]
-    pub fn peers(&self) -> Vec<PeerId> {
-        self.peers.iter().map(|peer| peer.peer_id).collect()
-    }
-
-    /// Creates a new [`WsFederationApi`] client, for given [`Connector`].
-    pub fn new_with_client(
-        connector: &Connector,
-        peers: impl IntoIterator<Item = (PeerId, SafeUrl)>,
-        self_peer_id: Option<PeerId>,
-        api_secret: &Option<String>,
-    ) -> Self {
-        let (peer_connections, peer_ids) = peers
-            .into_iter()
-            .map(|(peer_id, url)| {
-                assert!(
-                    url.port_or_known_default().is_some(),
-                    "API client requires a port"
-                );
-                assert!(url.host().is_some(), "API client requires a target host");
-
-                (
-                    FederationPeer::new(*connector, url, peer_id, api_secret.clone()),
-                    peer_id,
-                )
-            })
-            .unzip();
-
-        WsFederationApi {
-            peer_ids,
-            self_peer_id,
-            peers: Arc::new(peer_connections),
-            module_id: None,
-        }
-    }
-}
-
-impl<C> FederationPeer<C>
-where
-    C: JsonRpcClient + 'static,
-{
-    #[instrument(target = LOG_CLIENT_NET_API, level = "trace", fields(peer = %self.peer_id, %method), skip_all)]
-    pub async fn request(&self, method: &str, params: &[Value]) -> JsonRpcResult<Value> {
-        // Strategies using timeouts often depend on failing requests returning quickly,
-        // so every request gets only one reconnection attempt.
-        const RETRIES: usize = 1;
-
-        for attempts in 0.. {
-            // The `match` statement below should always return if `RETRIES <= attempts`, so
-            // if we're looping again and `attempts` is greater than `RETRIES`, we have a
-            // bug.
-            debug_assert!(attempts <= RETRIES);
-
-            let rclient = self.client.read().await;
-            match rclient.client.get_try().await {
-                Ok(client) if client.is_connected() => {
-                    return client.request::<_, _>(method, params).await;
-                }
-                Err(err) => {
-                    if RETRIES <= attempts {
-                        return Err(JsonRpcClientError::Transport(err.into()));
-                    }
-                    debug!(target: LOG_CLIENT_NET_API, err=%err.fmt_compact(), "Triggering reconnection after connection error");
-                }
-                Ok(_client) => {
-                    if RETRIES <= attempts {
-                        return Err(JsonRpcClientError::Transport(
-                            anyhow::format_err!("Disconnected").into(),
-                        ));
-                    }
-                    debug!(target: LOG_CLIENT_NET_API, "Triggering reconnection after disconnection");
-                }
-            };
-
-            // Drop read lock so we can take the write lock, which is needed to reconnect.
-            drop(rclient);
-            let mut wclient = self.client.write().await;
-            match wclient.client.get_try().await {
-                Ok(client) if client.is_connected() => {
-                    // someone else connected, just loop again
-                    trace!(target: LOG_CLIENT_NET_API, "Some other request reconnected client, retrying");
-                }
-                _ => {
-                    wclient.reconnect(
-                        self.connector,
-                        self.peer_id,
-                        self.url.clone(),
-                        self.api_secret.clone(),
-                    );
-                }
-            }
-        }
-
-        unreachable!();
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct WebsocketConnector {
     peers: BTreeMap<PeerId, SafeUrl>,
@@ -1093,12 +728,14 @@ impl IClientConnector for WebsocketConnector {
     }
 }
 
+#[cfg(all(feature = "tor", not(target_family = "wasm")))]
 #[derive(Debug, Clone)]
 pub struct TorConnector {
     peers: BTreeMap<PeerId, SafeUrl>,
     api_secret: Option<String>,
 }
 
+#[cfg(all(feature = "tor", not(target_family = "wasm")))]
 impl TorConnector {
     pub fn new(peers: BTreeMap<PeerId, SafeUrl>, api_secret: Option<String>) -> Self {
         Self { peers, api_secret }
@@ -1639,79 +1276,11 @@ pub struct GuardianConfigBackup {
 
 #[cfg(test)]
 mod tests {
-    use std::fmt;
     use std::str::FromStr as _;
 
     use fedimint_core::config::FederationId;
-    use jsonrpsee_core::client::BatchResponse;
-    use jsonrpsee_core::params::BatchRequestBuilder;
-    use jsonrpsee_core::traits::ToRpcParams;
 
     use super::*;
-
-    type Result<T = ()> = std::result::Result<T, JsonRpcClientError>;
-
-    #[apply(async_trait_maybe_send!)]
-    trait SimpleClient: Sized {
-        async fn connect() -> Result<Self>;
-
-        #[cfg(all(feature = "tor", not(target_family = "wasm")))]
-        async fn connect_with_tor() -> Result<Self>;
-
-        fn is_connected(&self) -> bool {
-            true
-        }
-
-        // reply with json
-        async fn request(&self, method: &str) -> Result<String>;
-    }
-
-    struct Client<C: SimpleClient>(C);
-
-    #[apply(async_trait_maybe_send!)]
-    impl<C: SimpleClient + MaybeSend + MaybeSync> JsonRpcClient for Client<C> {
-        async fn connect(_url: &SafeUrl, _api_secret: Option<String>) -> Result<Self> {
-            Ok(Self(C::connect().await?))
-        }
-
-        #[cfg(all(feature = "tor", not(target_family = "wasm")))]
-        async fn connect_with_tor(_url: &SafeUrl, _api_secret: Option<String>) -> Result<Self> {
-            Ok(Self(C::connect_with_tor().await?))
-        }
-
-        fn is_connected(&self) -> bool {
-            self.0.is_connected()
-        }
-    }
-
-    #[apply(async_trait_maybe_send!)]
-    impl<C: SimpleClient + MaybeSend + MaybeSync> ClientT for Client<C> {
-        async fn request<R, P>(&self, method: &str, _params: P) -> Result<R>
-        where
-            R: jsonrpsee_core::DeserializeOwned,
-            P: ToRpcParams + MaybeSend,
-        {
-            let json = self.0.request(method).await?;
-            Ok(serde_json::from_str(&json).unwrap())
-        }
-
-        async fn notification<P>(&self, _method: &str, _params: P) -> Result<()>
-        where
-            P: ToRpcParams + MaybeSend,
-        {
-            unimplemented!()
-        }
-
-        async fn batch_request<'a, R>(
-            &self,
-            _batch: BatchRequestBuilder<'a>,
-        ) -> std::result::Result<BatchResponse<'a, R>, jsonrpsee_core::client::Error>
-        where
-            R: DeserializeOwned + fmt::Debug + 'a,
-        {
-            unimplemented!()
-        }
-    }
 
     #[test]
     fn converts_invite_code() {
