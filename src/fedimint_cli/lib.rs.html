@@ -1973,7 +1973,7 @@ Examples:
         handle_version_hash_command(version_hash);
 
         <span class="kw">let </span>cli_args = Opts::parse();
-        <span class="kw">let </span>base_level = <span class="kw">if </span>cli_args.verbose { <span class="string">"info" </span>} <span class="kw">else </span>{ <span class="string">"warn" </span>};
+        <span class="kw">let </span>base_level = <span class="kw">if </span>cli_args.verbose { <span class="string">"debug" </span>} <span class="kw">else </span>{ <span class="string">"info" </span>};
         TracingSetup::default()
             .with_base_level(base_level)
             .init()
