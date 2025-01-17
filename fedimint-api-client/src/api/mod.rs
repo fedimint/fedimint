@@ -1060,7 +1060,7 @@ impl ReconnectClientConnections {
             .expect("Could not find client connection for peer {peer}")
             .connection()
             .await
-            .context("Peer is disconnected")?
+            .context("Failed to connect to peer")?
             .request(method, request)
             .await
     }
@@ -1073,21 +1073,15 @@ struct ClientConnection {
 
 impl ClientConnection {
     fn new(peer: PeerId, connector: DynClientConnector) -> ClientConnection {
-        let (sender, receiver) = bounded::<oneshot::Sender<DynClientConnection>>(128);
+        let (sender, receiver) = bounded::<oneshot::Sender<DynClientConnection>>(1024);
 
         fedimint_core::task::spawn(
             "peer-api-connection",
             async move {
-                let mut reconnect_backoff = api_networking_backoff();
-                let mut reconnect_at = fedimint_core::time::now();
+                let mut backoff = api_networking_backoff();
 
                 while let Ok(sender) = receiver.recv().await {
-                    // While we are disconnected we need to drain the channel in
-                    // order for the api requests to fail quickly.
-
-                    if fedimint_core::time::now() < reconnect_at {
-                        continue;
-                    }
+                    let n_request = receiver.len();
 
                     match connector.connect(peer).await {
                         Ok(connection) => {
@@ -1109,15 +1103,21 @@ impl ClientConnection {
 
                             info!(target: LOG_CLIENT_NET_API, "Disconnected from peer api");
 
-                            reconnect_backoff = api_networking_backoff();
+                            backoff = api_networking_backoff();
                         }
                         Err(e) => {
                             info!(target: LOG_CLIENT_NET_API, "Failed to connect to peer api {e}");
 
-                            reconnect_at = fedimint_core::time::now()
-                                + reconnect_backoff
-                                    .next()
-                                    .expect("No limit to the number of retries");
+                            // We need to drain the channel for the pending requests to fail.
+
+                            for _ in 0..n_request {
+                                receiver.try_recv().expect("Items exist");
+                            }
+
+                            fedimint_core::task::sleep(
+                                backoff.next().expect("No limit to the number of retries"),
+                            )
+                            .await;
                         }
                     }
                 }
