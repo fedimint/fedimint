@@ -467,21 +467,26 @@ impl ServerModule for Wallet {
         let manual_vote = dbtx
             .get_value(&ConsensusVersionVotingActivationKey)
             .await
-            .is_some();
+            .map(|()| {
+                // TODO: allow voting on any version between the currently active and max
+                // supported one in case we support a too high one already
+                MODULE_CONSENSUS_VERSION
+            });
 
         let active_consensus_version = self.consensus_module_consensus_version(dbtx).await;
-        let automatic_vote = self
-            .peer_supported_consensus_version
-            .borrow()
-            .map(|supported_consensus_version| {
-                active_consensus_version < supported_consensus_version
-            })
-            .unwrap_or_default();
+        let automatic_vote = self.peer_supported_consensus_version.borrow().and_then(
+            |supported_consensus_version| {
+                // Only automatically vote if the commonly supported version is higher than the
+                // currently active one
+                (active_consensus_version < supported_consensus_version)
+                    .then_some(supported_consensus_version)
+            },
+        );
 
-        if manual_vote || automatic_vote {
-            items.push(WalletConsensusItem::ModuleConsensusVersion(
-                MODULE_CONSENSUS_VERSION,
-            ));
+        // Prioritizing automatic vote for now since the manual vote never resets. Once
+        // that is fixed this should be switched around.
+        if let Some(vote_version) = automatic_vote.or(manual_vote) {
+            items.push(WalletConsensusItem::ModuleConsensusVersion(vote_version));
         }
 
         items
