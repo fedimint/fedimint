@@ -31,7 +31,9 @@ else
   done
 fi
 
-build_workspace
+if [ -z "${SKIP_BUILD_WORKSPACE:-}" ]; then
+  build_workspace
+fi
 add_target_dir_to_path
 
 export FM_BACKWARDS_COMPATIBILITY_TEST=1
