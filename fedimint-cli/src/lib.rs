@@ -33,9 +33,7 @@ use envs::FM_USE_TOR_ENV;
 use envs::{FM_API_SECRET_ENV, SALT_FILE};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_api_client::api::net::Connector;
-use fedimint_api_client::api::{
-    DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, WsFederationApi,
-};
+use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, FederationError};
 use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::meta::{FetchKind, LegacyMetaSource, MetaSource};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
@@ -960,10 +958,11 @@ impl FedimintCli {
                 }
                 let client = self.client_open(&cli).await?;
 
-                let ws_api: Arc<_> = WsFederationApi::new(
-                    &cli.connector(),
+                let ws_api: Arc<_> = DynGlobalApi::from_endpoints(
                     client.get_peer_urls().await,
                     client.api_secret(),
+                    &cli.connector(),
+                    None,
                 )
                 .into();
 
