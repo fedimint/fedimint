@@ -84,7 +84,10 @@
 <a href="#83" id="83">83</a>
 <a href="#84" id="84">84</a>
 <a href="#85" id="85">85</a>
-<a href="#86" id="86">86</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -99,6 +102,7 @@
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::util::backoff_util;
+<span class="kw">use </span>fedimint_logging::LOG_CLIENT;
 <span class="kw">use </span>query::FilterMap;
 <span class="kw">use </span>tracing::debug;
 
@@ -114,7 +118,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         invite_code: <span class="kw-2">&amp;</span>InviteCode,
     ) -&gt; anyhow::Result&lt;ClientConfig&gt; {
-        <span class="macro">debug!</span>(<span class="string">"Downloading client config from {:?}"</span>, invite_code);
+        <span class="macro">debug!</span>(target: LOG_CLIENT, %invite_code, <span class="string">"Downloading client config via invite code"</span>);
 
         <span class="kw">let </span>federation_id = invite_code.federation_id();
         <span class="kw">let </span>api = DynGlobalApi::from_invite_code(<span class="self">self</span>, invite_code);
@@ -136,6 +140,7 @@
         federation_id: FederationId,
         api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
     ) -&gt; anyhow::Result&lt;ClientConfig&gt; {
+        <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Downloading client config from peer"</span>);
         <span class="comment">// TODO: use new download approach based on guardian PKs
         </span><span class="kw">let </span>query_strategy = FilterMap::new(<span class="kw">move </span>|cfg: ClientConfig| {
             <span class="kw">if </span>federation_id != cfg.global.calculate_federation_id() {
@@ -156,6 +161,7 @@
         <span class="comment">// now we can build an api for all guardians and download the client config
         </span><span class="kw">let </span>api_endpoints = api_endpoints.into_iter().map(|(peer, url)| (peer, url.url));
 
+        <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Verifying client config with all peers"</span>);
         <span class="kw">let </span>client_config = WsFederationApi::new(<span class="self">self</span>, api_endpoints, <span class="kw-2">&amp;</span>api_secret)
             .request_current_consensus::&lt;ClientConfig&gt;(
                 CLIENT_CONFIG_ENDPOINT.to_owned(),

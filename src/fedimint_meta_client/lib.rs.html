@@ -283,7 +283,8 @@
 <a href="#282" id="282">282</a>
 <a href="#283" id="283">283</a>
 <a href="#284" id="284">284</a>
-<a href="#285" id="285">285</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::module_name_repetitions)]
 
@@ -313,6 +314,7 @@
 <span class="kw">use </span>fedimint_core::util::backoff_util::FibonacciBackoff;
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, PeerId};
+<span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_META;
 <span class="kw">pub use </span>fedimint_meta_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_meta_common::{MetaCommonInit, MetaModuleTypes, DEFAULT_META_KEY};
 <span class="kw">use </span>states::MetaStateMachine;
@@ -556,11 +558,11 @@
         <span class="kw">match </span>overrides_res {
             <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(consensus)) =&gt; <span class="prelude-val">Some</span>(consensus),
             <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; {
-                <span class="macro">debug!</span>(<span class="string">"Meta module returned no consensus value"</span>);
+                <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_META, <span class="string">"Meta module returned no consensus value"</span>);
                 <span class="prelude-val">None
             </span>}
             <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">warn!</span>(<span class="string">"Failed to fetch meta module consensus value: {}"</span>, e);
+                <span class="macro">warn!</span>(target: LOG_CLIENT_MODULE_META, <span class="string">"Failed to fetch meta module consensus value: {}"</span>, e);
                 <span class="prelude-val">None
             </span>}
         }

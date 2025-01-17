@@ -5936,7 +5936,7 @@
         </span>};
 
         <span class="comment">// Write the previous `DatabaseVersion` to the new `DatabaseVersionKey`
-        </span><span class="macro">info!</span>(target: LOG_DB, <span class="question-mark">?</span>kind, <span class="question-mark">?</span>current_version_in_module, <span class="question-mark">?</span>target_db_version, <span class="question-mark">?</span>is_new_db, <span class="string">"Creating DatabaseVersionKey..."</span>);
+        </span><span class="macro">debug!</span>(target: LOG_DB, <span class="question-mark">?</span>kind, <span class="question-mark">?</span>current_version_in_module, <span class="question-mark">?</span>target_db_version, <span class="question-mark">?</span>is_new_db, <span class="string">"Creating DatabaseVersionKey..."</span>);
         global_dbtx
             .insert_new_entry(
                 <span class="kw-2">&amp;</span>DatabaseVersionKey(key_module_instance_id),

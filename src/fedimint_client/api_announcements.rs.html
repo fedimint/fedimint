@@ -143,7 +143,7 @@
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT;
 <span class="kw">use </span>futures::future::join_all;
-<span class="kw">use </span>tracing::{info, warn};
+<span class="kw">use </span>tracing::{debug, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::db::DbKeyPrefix;
 <span class="kw">use </span><span class="kw">crate</span>::Client;
@@ -216,7 +216,7 @@
                                             &lt; new_announcement.api_announcement.nonce
                                     });
                                 <span class="kw">if </span>replace_current_announcement {
-                                    <span class="macro">info!</span>(target: LOG_CLIENT, <span class="question-mark">?</span>peer, %new_announcement.api_announcement.api_url, <span class="string">"Updating API announcement"</span>);
+                                    <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="question-mark">?</span>peer, %new_announcement.api_announcement.api_url, <span class="string">"Updating API announcement"</span>);
                                     dbtx.insert_entry(<span class="kw-2">&amp;</span>ApiAnnouncementKey(peer), <span class="kw-2">&amp;</span>new_announcement)
                                         .<span class="kw">await</span>;
                                 }

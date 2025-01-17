@@ -3160,7 +3160,18 @@
 <a href="#3159" id="3159">3159</a>
 <a href="#3160" id="3160">3160</a>
 <a href="#3161" id="3161">3161</a>
-<a href="#3162" id="3162">3162</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#3162" id="3162">3162</a>
+<a href="#3163" id="3163">3163</a>
+<a href="#3164" id="3164">3164</a>
+<a href="#3165" id="3165">3165</a>
+<a href="#3166" id="3166">3166</a>
+<a href="#3167" id="3167">3167</a>
+<a href="#3168" id="3168">3168</a>
+<a href="#3169" id="3169">3169</a>
+<a href="#3170" id="3170">3170</a>
+<a href="#3171" id="3171">3171</a>
+<a href="#3172" id="3172">3172</a>
+<a href="#3173" id="3173">3173</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
@@ -3248,7 +3259,7 @@
 <span class="kw">use </span>std::ops::{<span class="self">self</span>, Range};
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::{Arc, Weak};
-<span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 <span class="kw">use </span>anyhow::{anyhow, bail, ensure, format_err, Context};
 <span class="kw">use </span>api::ClientRawFederationApiExt <span class="kw">as _</span>;
@@ -4043,7 +4054,7 @@
     decoders: ModuleDecoderRegistry,
     db: Database,
     federation_id: FederationId,
-    federation_meta: BTreeMap&lt;String, String&gt;,
+    federation_config_meta: BTreeMap&lt;String, String&gt;,
     primary_module_instance: ModuleInstanceId,
     modules: ClientModuleRegistry,
     module_inits: ClientModuleInitRegistry,
@@ -4267,8 +4278,9 @@
         <span class="prelude-val">Ok</span>((<span class="self">self</span>.federation_id().to_fake_ln_pub_key(<span class="kw-2">&amp;</span><span class="self">self</span>.secp_ctx)<span class="question-mark">?</span>, <span class="number">0</span>))
     }
 
-    <span class="kw">pub fn </span>get_meta(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
-        <span class="self">self</span>.federation_meta.get(key).cloned()
+    <span class="doccomment">/// Get metadata value from the federation config itself
+    </span><span class="kw">pub fn </span>get_config_meta(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+        <span class="self">self</span>.federation_config_meta.get(key).cloned()
     }
 
     <span class="kw">fn </span>root_secret(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DerivableSecret {
@@ -4308,6 +4320,16 @@
     <span class="doccomment">/// Get the meta manager to read meta fields.
     </span><span class="kw">pub fn </span>meta_service(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Arc&lt;MetaService&gt; {
         <span class="kw-2">&amp;</span><span class="self">self</span>.meta_service
+    }
+
+    <span class="doccomment">/// Get the meta manager to read meta fields.
+    </span><span class="kw">pub async fn </span>get_meta_expiration_timestamp(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;SystemTime&gt; {
+        <span class="kw">let </span>meta_service = <span class="self">self</span>.meta_service();
+        <span class="kw">let </span>ts = meta_service
+            .get_field::&lt;u64&gt;(<span class="self">self</span>.db(), <span class="string">"federation_expiry_timestamp"</span>)
+            .<span class="kw">await
+            </span>.and_then(|v| v.value)<span class="question-mark">?</span>;
+        <span class="prelude-val">Some</span>(UNIX_EPOCH + Duration::from_secs(ts))
     }
 
     <span class="doccomment">/// Adds funding to a transaction or removes over-funding via change.
@@ -6167,7 +6189,7 @@
             decoders,
             db: db.clone(),
             federation_id: fed_id,
-            federation_meta: config.global.meta,
+            federation_config_meta: config.global.meta,
             primary_module_instance,
             modules,
             module_inits: <span class="self">self</span>.module_inits.clone(),
