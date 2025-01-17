@@ -658,41 +658,6 @@ pub struct WsFederationApi<C = WsClient> {
     module_id: Option<ModuleInstanceId>,
 }
 
-impl WsFederationApi<WsClient> {
-    /// Creates a new API client
-    pub fn new(
-        connector: &Connector,
-        peers: impl IntoIterator<Item = (PeerId, SafeUrl)>,
-        api_secret: &Option<String>,
-    ) -> Self {
-        Self::new_with_client(connector, peers, None, api_secret)
-    }
-
-    pub fn new_admin(
-        peer: PeerId,
-        url: SafeUrl,
-        api_secret: &Option<String>,
-        connector: &Connector,
-    ) -> Self {
-        WsFederationApi::new(connector, vec![(peer, url)], api_secret).with_self_peer_id(peer)
-    }
-
-    pub fn from_endpoints(
-        peers: impl IntoIterator<Item = (PeerId, SafeUrl)>,
-        api_secret: &Option<String>,
-        connector: &Connector,
-    ) -> Self {
-        WsFederationApi::new(connector, peers, api_secret)
-    }
-
-    pub fn with_self_peer_id(self, self_peer_id: PeerId) -> Self {
-        Self {
-            self_peer_id: Some(self_peer_id),
-            ..self
-        }
-    }
-}
-
 impl<C: JsonRpcClient + Debug + 'static> IModuleFederationApi for WsFederationApi<C> {}
 
 /// Implementation of API calls over WebSockets
@@ -1351,7 +1316,7 @@ pub struct ReconnectFederationApi {
 }
 
 impl ReconnectFederationApi {
-    pub fn new(connector: &DynClientConnector, admin_id: Option<PeerId>) -> Self {
+    fn new(connector: &DynClientConnector, admin_id: Option<PeerId>) -> Self {
         Self {
             peers: connector.peers(),
             admin_id,
@@ -1427,7 +1392,7 @@ impl IRawFederationApi for ReconnectFederationApi {
         self.connections
             .request(peer_id, method, params.clone())
             .await
-            .map_err(|e| JsonRpcClientError::Custom(e.to_string()))
+            .map_err(|e| JsonRpcClientError::Transport(e.into()))
     }
 }
 

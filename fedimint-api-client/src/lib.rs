@@ -7,7 +7,7 @@
 
 use anyhow::{bail, Context as _};
 use api::net::Connector;
-use api::{DynGlobalApi, FederationApiExt as _, WsFederationApi};
+use api::{DynGlobalApi, FederationApiExt as _};
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
@@ -73,7 +73,8 @@ impl Connector {
         let api_endpoints = api_endpoints.into_iter().map(|(peer, url)| (peer, url.url));
 
         debug!(target: LOG_CLIENT, "Verifying client config with all peers");
-        let client_config = WsFederationApi::new(self, api_endpoints, &api_secret)
+
+        let client_config = DynGlobalApi::from_endpoints(api_endpoints, &api_secret, self, None)
             .request_current_consensus::<ClientConfig>(
                 CLIENT_CONFIG_ENDPOINT.to_owned(),
                 ApiRequestErased::default(),

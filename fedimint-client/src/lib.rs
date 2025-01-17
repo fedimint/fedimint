@@ -102,7 +102,7 @@ use db::{
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, GlobalFederationApiWithCacheExt,
-    IGlobalFederationApi, WsFederationApi,
+    IGlobalFederationApi, ReconnectFederationApi,
 };
 use fedimint_core::config::{
     ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig, ModuleInitRegistry,
@@ -2742,7 +2742,7 @@ impl ClientBuilder {
         let connector = self.connector;
         let peer_urls = get_api_urls(&db, &config).await;
         let api = if let Some(admin_creds) = self.admin_creds.as_ref() {
-            WsFederationApi::new_admin(
+            ReconnectFederationApi::new_admin(
                 admin_creds.peer_id,
                 peer_urls
                     .into_iter()
@@ -2755,7 +2755,7 @@ impl ClientBuilder {
             .with_cache()
             .into()
         } else {
-            WsFederationApi::from_endpoints(peer_urls, &api_secret, &connector)
+            ReconnectFederationApi::from_endpoints(peer_urls, &api_secret, &connector, None)
                 .with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
                 .with_cache()
                 .into()
