@@ -85,7 +85,7 @@ jobs:
             env -u RUSTC_WRAPPER \
             env TEST_KINDS="$TEST_KINDS" \
             env FM_DEVIMINT_DISABLE_MODULE_LNV2=1 \
-            runLowPrio ./scripts/tests/upgrade-test.sh "$VERSIONS"
+            ./scripts/tests/upgrade-test.sh "$VERSIONS"
 
   notifications:
     if: always() && github.repository == 'fedimint/fedimint'
