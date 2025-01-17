@@ -1069,14 +1069,17 @@ impl WalletClientModule {
                 .finalize_and_submit_transaction(
                     operation_id,
                     WalletCommonInit::KIND.as_str(),
-                    |change_range: OutPointRange| WalletOperationMeta {
-                        variant: WalletOperationMetaVariant::Withdraw {
-                            address: address.clone().into_unchecked(),
-                            amount,
-                            fee,
-                            change: change_range.into_iter().collect(),
-                        },
-                        extra_meta: extra_meta.clone(),
+                    {
+                        let address = address.clone();
+                        move |change_range: OutPointRange| WalletOperationMeta {
+                            variant: WalletOperationMetaVariant::Withdraw {
+                                address: address.clone().into_unchecked(),
+                                amount,
+                                fee,
+                                change: change_range.into_iter().collect(),
+                            },
+                            extra_meta: extra_meta.clone(),
+                        }
                     },
                     tx_builder,
                 )
@@ -1110,7 +1113,7 @@ impl WalletClientModule {
             .finalize_and_submit_transaction(
                 operation_id,
                 WalletCommonInit::KIND.as_str(),
-                |change_range: OutPointRange| WalletOperationMeta {
+                move |change_range: OutPointRange| WalletOperationMeta {
                     variant: WalletOperationMetaVariant::RbfWithdraw {
                         rbf: rbf.clone(),
                         change: change_range.into_iter().collect(),

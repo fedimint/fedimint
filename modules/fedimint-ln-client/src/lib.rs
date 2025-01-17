@@ -1224,7 +1224,7 @@ impl LightningClientModule {
         let tx = TransactionBuilder::new().with_outputs(output);
         let extra_meta =
             serde_json::to_value(extra_meta).context("Failed to serialize extra meta")?;
-        let operation_meta_gen = |change_range: OutPointRange| LightningOperationMeta {
+        let operation_meta_gen = move |change_range: OutPointRange| LightningOperationMeta {
             variant: LightningOperationMetaVariant::Pay(LightningOperationMetaPay {
                 out_point: OutPoint {
                     txid: change_range.txid(),
@@ -1512,7 +1512,7 @@ impl LightningClientModule {
                 .make_client_inputs(ClientInputBundle::new_no_sm(vec![client_input])),
         );
         let extra_meta = serde_json::to_value(extra_meta).expect("extra_meta is serializable");
-        let operation_meta_gen = |change_range: OutPointRange| LightningOperationMeta {
+        let operation_meta_gen = move |change_range: OutPointRange| LightningOperationMeta {
             variant: LightningOperationMetaVariant::Claim {
                 out_points: change_range.into_iter().collect(),
             },
@@ -1639,16 +1639,19 @@ impl LightningClientModule {
         let tx =
             TransactionBuilder::new().with_outputs(self.client_ctx.make_client_outputs(output));
         let extra_meta = serde_json::to_value(extra_meta).expect("extra_meta is serializable");
-        let operation_meta_gen = |change_range: OutPointRange| LightningOperationMeta {
-            variant: LightningOperationMetaVariant::Receive {
-                out_point: OutPoint {
-                    txid: change_range.txid(),
-                    out_idx: 0,
+        let operation_meta_gen = {
+            let invoice = invoice.clone();
+            move |change_range: OutPointRange| LightningOperationMeta {
+                variant: LightningOperationMetaVariant::Receive {
+                    out_point: OutPoint {
+                        txid: change_range.txid(),
+                        out_idx: 0,
+                    },
+                    invoice: invoice.clone(),
+                    gateway_id,
                 },
-                invoice: invoice.clone(),
-                gateway_id,
-            },
-            extra_meta: extra_meta.clone(),
+                extra_meta: extra_meta.clone(),
+            }
         };
         let change_range = self
             .client_ctx

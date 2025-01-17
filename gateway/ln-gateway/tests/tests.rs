@@ -1237,7 +1237,10 @@ async fn gateway_read_payment_log() -> anyhow::Result<()> {
             if transactions.0.len() == 20 {
                 Ok(())
             } else {
-                Err(anyhow::anyhow!("Invalid number of transactions"))
+                Err(anyhow::anyhow!(
+                    "Invalid number of transactions: {}, expected 20",
+                    transactions.0.len()
+                ))
             }
         },
     )

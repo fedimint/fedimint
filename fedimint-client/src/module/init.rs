@@ -20,7 +20,7 @@ use tokio::sync::watch;
 use tracing::warn;
 
 use super::recovery::{DynModuleBackup, RecoveryProgress};
-use super::{ClientContext, FinalClient};
+use super::{ClientContext, FinalClientIface};
 use crate::db::ClientMigrationFn;
 use crate::module::{ClientModule, DynClientModule};
 use crate::sm::{ModuleNotifier, Notifier};
@@ -263,7 +263,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + Debug + MaybeSend + MaybeSyn
     #[allow(clippy::too_many_arguments)]
     async fn recover(
         &self,
-        final_client: FinalClient,
+        final_client: FinalClientIface,
         federation_id: FederationId,
         num_peers: NumPeers,
         cfg: ClientModuleConfig,
@@ -283,7 +283,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + Debug + MaybeSend + MaybeSyn
     #[allow(clippy::too_many_arguments)]
     async fn init(
         &self,
-        final_client: FinalClient,
+        final_client: FinalClientIface,
         federation_id: FederationId,
         peer_num: usize,
         cfg: ClientModuleConfig,
@@ -324,7 +324,7 @@ where
 
     async fn recover(
         &self,
-        final_client: FinalClient,
+        final_client: FinalClientIface,
         federation_id: FederationId,
         num_peers: NumPeers,
         cfg: ClientModuleConfig,
@@ -381,7 +381,7 @@ where
 
     async fn init(
         &self,
-        final_client: FinalClient,
+        final_client: FinalClientIface,
         federation_id: FederationId,
         peer_num: usize,
         cfg: ClientModuleConfig,

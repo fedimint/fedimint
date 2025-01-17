@@ -85,7 +85,7 @@ use std::fmt::{Debug, Formatter};
 use std::future::pending;
 use std::ops::{self, Range};
 use std::pin::Pin;
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, bail, ensure, format_err, Context};
@@ -145,7 +145,7 @@ use futures::stream::FuturesUnordered;
 use futures::{Future, Stream, StreamExt};
 use meta::{LegacyMetaSource, MetaService};
 use module::recovery::RecoveryProgress;
-use module::{DynClientModule, FinalClient, IdxRange, OutPointRange};
+use module::{ClientContextIface, DynClientModule, FinalClientIface, IdxRange, OutPointRange};
 use rand::thread_rng;
 use secp256k1::{PublicKey, Secp256k1};
 use secret::{DeriveableSecretClientExt, PlainRootSecretStrategy, RootSecretStrategy as _};
@@ -341,7 +341,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
         kind: EventKind,
         module: Option<(ModuleKind, ModuleInstanceId)>,
         payload: serde_json::Value,
-        transient: bool,
+        persist: bool,
     );
 
     async fn transaction_update_stream(&self) -> BoxStream<TxSubmissionStatesSM>;
@@ -395,7 +395,7 @@ impl IGlobalClientContext for () {
         _kind: EventKind,
         _module: Option<(ModuleKind, ModuleInstanceId)>,
         _payload: serde_json::Value,
-        _transient: bool,
+        _persist: bool,
     ) {
         unimplemented!("fake implementation, only for tests");
     }
@@ -615,7 +615,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         kind: EventKind,
         module: Option<(ModuleKind, ModuleInstanceId)>,
         payload: serde_json::Value,
-        transient: bool,
+        persist: bool,
     ) {
         self.client
             .log_event_raw_dbtx(
@@ -623,7 +623,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
                 kind,
                 module,
                 serde_json::to_vec(&payload).expect("Serialization can't fail"),
-                transient,
+                persist,
             )
             .await;
     }
@@ -749,42 +749,6 @@ impl ops::Deref for ClientHandle {
 
     fn deref(&self) -> &Self::Target {
         self.inner.as_ref().expect("Must have inner client set")
-    }
-}
-
-impl ClientHandle {
-    pub(crate) fn downgrade(&self) -> ClientWeak {
-        ClientWeak {
-            inner: Arc::downgrade(self.inner.as_ref().expect("Inner always set")),
-        }
-    }
-}
-
-/// Internal self-reference to [`Client`]
-#[derive(Debug, Clone)]
-pub(crate) struct ClientStrong {
-    inner: Arc<Client>,
-}
-
-impl ops::Deref for ClientStrong {
-    type Target = Client;
-
-    fn deref(&self) -> &Self::Target {
-        self.inner.deref()
-    }
-}
-
-/// Like [`ClientStrong`] but using a [`Weak`] handle to [`Client`]
-///
-/// This is not meant to be used by external code.
-#[derive(Debug, Clone)]
-pub(crate) struct ClientWeak {
-    inner: Weak<Client>,
-}
-
-impl ClientWeak {
-    pub fn upgrade(&self) -> Option<ClientStrong> {
-        Weak::upgrade(&self.inner).map(|inner| ClientStrong { inner })
     }
 }
 
@@ -2187,7 +2151,7 @@ impl Client {
         kind: EventKind,
         module: Option<(ModuleKind, ModuleInstanceId)>,
         payload: Vec<u8>,
-        transient: bool,
+        persist: bool,
     ) where
         Cap: Send,
     {
@@ -2199,7 +2163,7 @@ impl Client {
             module_kind,
             module_id,
             payload,
-            transient,
+            persist,
         )
         .await;
     }
@@ -2259,6 +2223,112 @@ impl Client {
     }
 }
 
+#[apply(async_trait_maybe_send!)]
+impl ClientContextIface for Client {
+    fn get_module(&self, instance: ModuleInstanceId) -> &maybe_add_send_sync!(dyn IClientModule) {
+        Client::get_module(self, instance)
+    }
+
+    fn api_clone(&self) -> DynGlobalApi {
+        Client::api_clone(self)
+    }
+    fn decoders(&self) -> &ModuleDecoderRegistry {
+        Client::decoders(self)
+    }
+
+    async fn finalize_and_submit_transaction(
+        &self,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta_gen: Box<maybe_add_send_sync!(dyn Fn(OutPointRange) -> serde_json::Value)>,
+        tx_builder: TransactionBuilder,
+    ) -> anyhow::Result<OutPointRange> {
+        Client::finalize_and_submit_transaction(
+            self,
+            operation_id,
+            operation_type,
+            // |out_point_range| operation_meta_gen(out_point_range),
+            &operation_meta_gen,
+            tx_builder,
+        )
+        .await
+    }
+
+    async fn finalize_and_submit_transaction_inner(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        tx_builder: TransactionBuilder,
+    ) -> anyhow::Result<OutPointRange> {
+        Client::finalize_and_submit_transaction_inner(self, dbtx, operation_id, tx_builder).await
+    }
+
+    async fn transaction_updates(&self, operation_id: OperationId) -> TransactionUpdates {
+        Client::transaction_updates(self, operation_id).await
+    }
+
+    async fn await_primary_module_outputs(
+        &self,
+        operation_id: OperationId,
+        // TODO: make `impl Iterator<Item = ...>`
+        outputs: Vec<OutPoint>,
+    ) -> anyhow::Result<()> {
+        Client::await_primary_module_outputs(self, operation_id, outputs).await
+    }
+
+    fn operation_log(&self) -> &OperationLog {
+        Client::operation_log(self)
+    }
+
+    async fn has_active_states(&self, operation_id: OperationId) -> bool {
+        Client::has_active_states(self, operation_id).await
+    }
+
+    async fn operation_exists(&self, operation_id: OperationId) -> bool {
+        Client::operation_exists(self, operation_id).await
+    }
+
+    async fn config(&self) -> ClientConfig {
+        Client::config(self).await
+    }
+
+    fn db(&self) -> &Database {
+        Client::db(self)
+    }
+
+    fn executor(&self) -> &Executor {
+        Client::executor(self)
+    }
+
+    async fn invite_code(&self, peer: PeerId) -> Option<InviteCode> {
+        Client::invite_code(self, peer).await
+    }
+
+    fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {
+        Client::get_internal_payment_markers(self)
+    }
+
+    async fn log_event_json(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
+        module_kind: Option<ModuleKind>,
+        module_id: ModuleInstanceId,
+        kind: EventKind,
+        payload: serde_json::Value,
+        persist: bool,
+    ) {
+        dbtx.ensure_global()
+            .expect("Must be called with global dbtx");
+        self.log_event_raw_dbtx(
+            dbtx,
+            kind,
+            module_kind.map(|kind| (kind, module_id)),
+            serde_json::to_vec(&payload).expect("Serialization can't fail"),
+            persist,
+        )
+        .await;
+    }
+}
 #[derive(Deserialize)]
 struct GetInviteCodeRequest {
     peer: PeerId,
@@ -2811,7 +2881,7 @@ impl ClientBuilder {
             watch::Receiver<RecoveryProgress>,
         > = BTreeMap::new();
 
-        let final_client = FinalClient::default();
+        let final_client = FinalClientIface::default();
 
         let root_secret = Self::federation_root_secret(&root_secret, &config);
 
@@ -3059,13 +3129,15 @@ impl ClientBuilder {
                 log_event_added_transient_tx,
             ),
         );
+        let client_iface = std::sync::Arc::<Client>::downgrade(&client_inner);
+
         let client_arc = ClientHandle::new(client_inner);
 
         for (_, _, module) in client_arc.modules.iter_modules() {
             module.start().await;
         }
 
-        final_client.set(client_arc.downgrade());
+        final_client.set(client_iface.clone());
 
         if !module_recoveries.is_empty() {
             client_arc.spawn_module_recoveries_task(

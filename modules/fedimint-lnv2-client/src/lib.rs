@@ -582,7 +582,7 @@ impl LightningClientModule {
             .finalize_and_submit_transaction(
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
-                |change_range| {
+                move |change_range| {
                     LightningOperationMeta::Send(SendOperationMeta {
                         funding_txid: change_range.txid(),
                         funding_change_outpoints: change_range.into_iter().collect(),
