@@ -620,7 +620,7 @@ impl FedimintCli {
         handle_version_hash_command(version_hash);
 
         let cli_args = Opts::parse();
-        let base_level = if cli_args.verbose { "info" } else { "warn" };
+        let base_level = if cli_args.verbose { "debug" } else { "info" };
         TracingSetup::default()
             .with_base_level(base_level)
             .init()
