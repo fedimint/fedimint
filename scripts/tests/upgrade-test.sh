@@ -31,7 +31,11 @@ else
   done
 fi
 
-build_workspace
+# Avoid re-building workspace in parallel in all test derivations
+# Note: Respect 'CARGO_PROFILE' that crane uses
+>&2 echo "Pre-building workspace..."
+runLowPrio cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targets
+
 add_target_dir_to_path
 
 export FM_BACKWARDS_COMPATIBILITY_TEST=1
