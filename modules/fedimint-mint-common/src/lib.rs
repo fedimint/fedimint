@@ -223,17 +223,6 @@ impl Note {
 }
 
 impl Nonce {
-    pub fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = vec![];
-        bincode::serialize_into(&mut bytes, &self.0).unwrap();
-        bytes
-    }
-
-    pub fn from_bytes(bytes: &[u8]) -> Self {
-        // FIXME: handle errors or the client can be crashed
-        bincode::deserialize(bytes).unwrap()
-    }
-
     pub fn to_message(&self) -> tbs::Message {
         tbs::Message::from_bytes(&self.0.serialize()[..])
     }

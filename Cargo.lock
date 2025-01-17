@@ -3365,7 +3365,6 @@ name = "fedimint-mint-common"
 version = "0.6.0-alpha"
 dependencies = [
  "anyhow",
- "bincode",
  "bitcoin_hashes 0.14.0",
  "fedimint-core",
  "fedimint-tbs",

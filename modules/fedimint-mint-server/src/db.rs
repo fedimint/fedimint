@@ -1,9 +1,7 @@
-use std::time::SystemTime;
-
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint};
 use fedimint_mint_common::{BlindNonce, MintOutputOutcome, Nonce};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use strum_macros::EnumIter;
 
 #[repr(u8)]
@@ -12,7 +10,7 @@ pub enum DbKeyPrefix {
     NoteNonce = 0x10,
     OutputOutcome = 0x13,
     MintAuditItem = 0x14,
-    EcashBackup = 0x15,
+    // 0x15 was previously used for e-cash backups, but removed in DB migration 1
     BlindNonce = 0x16,
 }
 
@@ -91,25 +89,3 @@ impl_db_lookup!(
     key = MintAuditItemKey,
     query_prefix = MintAuditItemKeyPrefix
 );
-
-/// Key used to store user's ecash backups
-#[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
-pub struct EcashBackupKey(pub fedimint_core::secp256k1::PublicKey);
-
-#[derive(Debug, Encodable, Decodable)]
-pub struct EcashBackupKeyPrefix;
-
-impl_db_record!(
-    key = EcashBackupKey,
-    value = ECashUserBackupSnapshot,
-    db_prefix = DbKeyPrefix::EcashBackup,
-);
-impl_db_lookup!(key = EcashBackupKey, query_prefix = EcashBackupKeyPrefix);
-
-/// User's backup, received at certain time, containing encrypted payload
-#[derive(Debug, Clone, PartialEq, Eq, Encodable, Decodable, Serialize, Deserialize)]
-pub struct ECashUserBackupSnapshot {
-    pub timestamp: SystemTime,
-    #[serde(with = "fedimint_core::hex::serde")]
-    pub data: Vec<u8>,
-}
