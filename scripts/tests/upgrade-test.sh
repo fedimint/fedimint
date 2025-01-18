@@ -10,6 +10,14 @@ if [ "$#" -eq 0 ]; then
   exit 1
 fi
 
+PATH="$(pwd)/scripts/dev/run-test/:$PATH"
+
+# Upgrade tests can take its time, so we need to customize timeout
+# used in fm-run-test to be slightly less than the timeout we put on
+# every 'parallel' job.
+export FM_TEST_UPGRADE_TIMEOUT=${FM_TEST_UPGRADE_TIMEOUT:-800}
+export FM_RUN_TEST_TIMEOUT=$((FM_TEST_UPGRADE_TIMEOUT - 30))
+
 # TODO(v0.5.0): We do not need to run the `gatewayd-mnemonic` test from v0.4.0
 # -> v0.5.0 over and over again. Once we have verified this test passes for
 # v0.5.0, it can safely be removed.
@@ -51,6 +59,7 @@ done
 for upgrade_path in "${upgrade_paths[@]}"; do
   IFS=' ' read -r -a versions <<< "$upgrade_path"
   echo "## Starting upgrade test for path: $upgrade_path"
+  versions_str=$(IFS=,; echo "${versions[*]}")
 
   if contains "fedimintd" "${test_kinds[@]}"; then
     fedimintd_paths=()
@@ -64,7 +73,7 @@ for upgrade_path in "${upgrade_paths[@]}"; do
     done
 
     upgrade_tests+=(
-      "devimint upgrade-tests fedimintd --paths $(printf "%s " "${fedimintd_paths[@]}")"
+      "fm-run-test fedimintd-${versions_str} devimint upgrade-tests fedimintd --paths $(printf "%s " "${fedimintd_paths[@]}")"
     )
   fi
 
@@ -80,7 +89,7 @@ for upgrade_path in "${upgrade_paths[@]}"; do
     done
 
     upgrade_tests+=(
-      "devimint upgrade-tests fedimint-cli --paths $(printf "%s " "${fedimint_cli_paths[@]}")"
+      "fm-run-test fedimint-cli-${versions_str} devimint upgrade-tests fedimint-cli --paths $(printf "%s " "${fedimint_cli_paths[@]}")"
     )
   fi
 
@@ -99,7 +108,7 @@ for upgrade_path in "${upgrade_paths[@]}"; do
     done
 
     upgrade_tests+=(
-      "devimint upgrade-tests gatewayd --gatewayd-paths $(printf "%s " "${gatewayd_paths[@]}") --gateway-cli-paths $(printf "%s " "${gateway_cli_paths[@]}")"
+      "fm-run-test gateway-${versions_str} devimint upgrade-tests gatewayd --gatewayd-paths $(printf "%s " "${gatewayd_paths[@]}") --gateway-cli-paths $(printf "%s " "${gateway_cli_paths[@]}")"
     )
   fi
 
@@ -110,7 +119,7 @@ for upgrade_path in "${upgrade_paths[@]}"; do
     new_gateway_cli="gateway-cli"
 
     upgrade_tests+=(
-      "gateway-tests gatewayd-mnemonic --old-gatewayd-path $old_gatewayd --new-gatewayd-path $new_gatewayd --gw-type lnd --old-gateway-cli-path $old_gateway_cli --new-gateway-cli-path $new_gateway_cli"
+      "fm-run-test mnemonic-${versions_str} gateway-tests gatewayd-mnemonic --old-gatewayd-path $old_gatewayd --new-gatewayd-path $new_gatewayd --gw-type lnd --old-gateway-cli-path $old_gateway_cli --new-gateway-cli-path $new_gateway_cli"
     )
   fi
 done
@@ -129,6 +138,7 @@ fi
 parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS:-$(($(nproc) / 4 + 1))}")
 parallel_args+=(--load "${FM_TEST_CI_ALL_MAX_LOAD:-$(($(nproc) / 4 + 1))}")
 parallel_args+=(--delay "${FM_TEST_CI_ALL_DELAY:-$((64 / $(nproc) + 1))}")
+parallel_args+=(--timeout "$FM_TEST_UPGRADE_TIMEOUT")
 parallel_args+=(
   --halt-on-error 1
   --joblog "$joblog"

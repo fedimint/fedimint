@@ -1,12 +1,16 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Debug;
+use std::iter::once;
 use std::pin::Pin;
 use std::result;
 use std::sync::Arc;
+use std::time::Duration;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
 use arti_client::{TorAddr, TorClient, TorClientConfig};
+use async_channel::bounded;
+use async_trait::async_trait;
 use base64::Engine as _;
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1;
@@ -28,15 +32,15 @@ use fedimint_core::session_outcome::{SessionOutcome, SessionStatus};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::backoff_util::api_networking_backoff;
-use fedimint_core::util::{FmtCompact as _, SafeUrl};
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, util, NumPeersExt, PeerId, TransactionId,
 };
 use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_API};
+use futures::channel::oneshot;
 use futures::future::pending;
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
-use itertools::Itertools;
 use jsonrpsee_core::client::ClientT;
 pub use jsonrpsee_core::client::Error as JsonRpcClientError;
 use jsonrpsee_core::DeserializeOwned;
@@ -53,16 +57,14 @@ use serde_json::Value;
 use tokio_rustls::rustls::RootCertStore;
 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
 use tokio_rustls::{rustls::ClientConfig as TlsClientConfig, TlsConnector};
-use tracing::{debug, instrument, trace, warn};
+use tracing::{debug, info, info_span, instrument, warn, Instrument};
 
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 mod error;
 mod global_api;
 pub mod net;
-mod peer;
 
 pub use global_api::{GlobalFederationApiWithCache, GlobalFederationApiWithCacheExt};
-use peer::FederationPeer;
 
 pub const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2: ApiVersion = ApiVersion::new(0, 5);
 
@@ -110,7 +112,7 @@ pub trait IRawFederationApi: Debug + MaybeSend + MaybeSync {
         &self,
         peer_id: PeerId,
         method: &str,
-        params: &[Value],
+        params: &ApiRequestErased,
     ) -> result::Result<Value, JsonRpcClientError>;
 }
 
@@ -127,7 +129,7 @@ pub trait FederationApiExt: IRawFederationApi {
     where
         Ret: DeserializeOwned,
     {
-        self.request_raw(peer, &method, &[params.to_json()])
+        self.request_raw(peer, &method, &params)
             .await
             .map_err(PeerError::Rpc)
             .and_then(|v| {
@@ -144,7 +146,7 @@ pub trait FederationApiExt: IRawFederationApi {
     where
         FedRet: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
-        self.request_raw(peer_id, &method, &[params.to_json()])
+        self.request_raw(peer_id, &method, &params)
             .await
             .map_err(PeerError::Rpc)
             .and_then(|v| {
@@ -362,6 +364,7 @@ pub trait FederationApiExt: IRawFederationApi {
                 anyhow::format_err!("Admin peer_id not set"),
             ));
         };
+
         self.request_single_peer_federation(method.into(), params.with_auth(auth), self_peer_id)
             .await
     }
@@ -416,10 +419,7 @@ impl DynGlobalApi {
         api_secret: &Option<String>,
         connector: &Connector,
     ) -> DynGlobalApi {
-        GlobalFederationApiWithCache::new(
-            WsFederationApi::new(connector, vec![(peer, url)], api_secret).with_self_peer_id(peer),
-        )
-        .into()
+        Self::from_endpoints(once((peer, url)), api_secret, connector, Some(peer))
     }
 
     // FIXME: (@leonardo) Should we have the option to do DKG and config related
@@ -428,12 +428,8 @@ impl DynGlobalApi {
     pub fn from_pre_peer_id_admin_endpoint(url: SafeUrl, api_secret: &Option<String>) -> Self {
         // PeerIds are used only for informational purposes, but just in case, make a
         // big number so it stands out
-        let peer_id = PeerId::from(1024);
-        GlobalFederationApiWithCache::new(
-            WsFederationApi::new(&Connector::default(), vec![(peer_id, url)], api_secret)
-                .with_self_peer_id(peer_id),
-        )
-        .into()
+
+        Self::new_admin(PeerId::from(1024), url, api_secret, &Connector::default())
     }
 
     pub fn from_single_endpoint(
@@ -441,30 +437,39 @@ impl DynGlobalApi {
         url: SafeUrl,
         api_secret: &Option<String>,
         connector: &Connector,
+        admin_id: Option<PeerId>,
     ) -> Self {
-        GlobalFederationApiWithCache::new(WsFederationApi::new(
-            connector,
-            vec![(peer, url)],
-            api_secret,
-        ))
-        .into()
+        Self::from_endpoints(once((peer, url)), api_secret, connector, admin_id)
     }
 
     pub fn from_endpoints(
         peers: impl IntoIterator<Item = (PeerId, SafeUrl)>,
         api_secret: &Option<String>,
         connector: &Connector,
+        admin_id: Option<PeerId>,
     ) -> Self {
-        GlobalFederationApiWithCache::new(WsFederationApi::new(connector, peers, api_secret)).into()
+        let connector = match connector {
+            Connector::Tcp => {
+                WebsocketConnector::new(peers.into_iter().collect(), api_secret.clone()).into_dyn()
+            }
+            #[cfg(all(feature = "tor", not(target_family = "wasm")))]
+            Connector::Tor => {
+                TorConnector::new(peers.into_iter().collect(), api_secret.clone()).into_dyn()
+            }
+            #[cfg(all(feature = "tor", target_family = "wasm"))]
+            Connector::Tor => unimplemented!(),
+        };
+
+        GlobalFederationApiWithCache::new(ReconnectFederationApi::new(&connector, admin_id)).into()
     }
 
     pub fn from_invite_code(connector: &Connector, invite_code: &InviteCode) -> Self {
-        GlobalFederationApiWithCache::new(WsFederationApi::new(
-            connector,
-            invite_code.peers().into_iter().collect_vec(),
+        Self::from_endpoints(
+            invite_code.peers(),
             &invite_code.api_secret(),
-        ))
-        .into()
+            connector,
+            None,
+        )
     }
 }
 
@@ -641,84 +646,30 @@ where
     })
 }
 
-/// Mint API client that will try to run queries against all `peers` expecting
-/// equal results from at least `min_eq_results` of them. Peers that return
-/// differing results are returned as a peer faults list.
 #[derive(Debug, Clone)]
-pub struct WsFederationApi<C = WsClient> {
-    peer_ids: BTreeSet<PeerId>,
-    self_peer_id: Option<PeerId>,
-    peers: Arc<Vec<FederationPeer<C>>>,
-    module_id: Option<ModuleInstanceId>,
+pub struct WebsocketConnector {
+    peers: BTreeMap<PeerId, SafeUrl>,
+    api_secret: Option<String>,
 }
 
-impl<C: JsonRpcClient + Debug + 'static> IModuleFederationApi for WsFederationApi<C> {}
+impl WebsocketConnector {
+    pub fn new(peers: BTreeMap<PeerId, SafeUrl>, api_secret: Option<String>) -> Self {
+        Self { peers, api_secret }
+    }
+}
 
-/// Implementation of API calls over WebSockets
-///
-/// Can function as either the global or module API
-#[apply(async_trait_maybe_send!)]
-impl<C: JsonRpcClient + Debug + 'static> IRawFederationApi for WsFederationApi<C> {
-    fn all_peers(&self) -> &BTreeSet<PeerId> {
-        &self.peer_ids
+#[async_trait]
+impl IClientConnector for WebsocketConnector {
+    fn peers(&self) -> BTreeSet<PeerId> {
+        self.peers.keys().copied().collect()
     }
 
-    fn self_peer(&self) -> Option<PeerId> {
-        self.self_peer_id
-    }
-
-    fn with_module(&self, id: ModuleInstanceId) -> DynModuleApi {
-        WsFederationApi {
-            peer_ids: self.peer_ids.clone(),
-            peers: self.peers.clone(),
-            module_id: Some(id),
-            self_peer_id: self.self_peer_id,
-        }
-        .into()
-    }
-
-    async fn request_raw(
-        &self,
-        peer_id: PeerId,
-        method: &str,
-        params: &[Value],
-    ) -> JsonRpcResult<Value> {
-        let peer = self
+    async fn connect(&self, peer: PeerId) -> anyhow::Result<DynClientConnection> {
+        let api_endpoint = self
             .peers
-            .iter()
-            .find(|m| m.peer_id == peer_id)
-            .ok_or_else(|| JsonRpcClientError::Custom(format!("Invalid peer_id: {peer_id}")))?;
+            .get(&peer)
+            .expect("Could not find websocket api endpoint for peer {peer}");
 
-        let method = match self.module_id {
-            None => method.to_string(),
-            Some(id) => format!("module_{id}_{method}"),
-        };
-        peer.request(&method, params).await
-    }
-}
-
-#[apply(async_trait_maybe_send!)]
-pub trait JsonRpcClient: ClientT + Sized + MaybeSend + MaybeSync {
-    async fn connect(
-        url: &SafeUrl,
-        api_secret: Option<String>,
-    ) -> result::Result<Self, JsonRpcClientError>;
-
-    #[cfg(all(feature = "tor", not(target_family = "wasm")))]
-    async fn connect_with_tor(
-        url: &SafeUrl,
-        api_secret: Option<String>,
-    ) -> result::Result<Self, JsonRpcClientError>;
-
-    fn is_connected(&self) -> bool;
-}
-
-#[apply(async_trait_maybe_send!)]
-impl JsonRpcClient for WsClient {
-    async fn connect(
-        url: &SafeUrl,
-        api_secret: Option<String>,
-    ) -> result::Result<Self, JsonRpcClientError> {
         #[cfg(not(target_family = "wasm"))]
         let mut client = {
             let webpki_roots = webpki_roots::TLS_SERVER_ROOTS.iter().cloned();
@@ -737,7 +688,7 @@ impl JsonRpcClient for WsClient {
         #[cfg(target_family = "wasm")]
         let client = WsClientBuilder::default().max_concurrent_requests(u16::MAX as usize);
 
-        if let Some(api_secret) = api_secret {
+        if let Some(api_secret) = &self.api_secret {
             #[cfg(not(target_family = "wasm"))]
             {
                 // on native platforms, jsonrpsee-client ignores `user:pass@...` in the Url,
@@ -758,24 +709,54 @@ impl JsonRpcClient for WsClient {
             {
                 // on wasm, url will be handled by the browser, which should take care of
                 // `user:pass@...`
-                let mut url = url.clone();
+                let mut url = api_endpoint.clone();
                 url.set_username("fedimint").map_err(|_| {
                     JsonRpcClientError::Transport(anyhow::format_err!("invalid username").into())
                 })?;
                 url.set_password(Some(&api_secret)).map_err(|_| {
                     JsonRpcClientError::Transport(anyhow::format_err!("invalid secret").into())
                 })?;
-                return client.build(url.as_str()).await;
+
+                let client = client.build(url.as_str()).await?;
+
+                return Ok(client.into_dyn());
             }
         }
-        client.build(url.as_str()).await
+
+        let client = client.build(api_endpoint.as_str()).await?;
+
+        Ok(client.into_dyn())
+    }
+}
+
+#[cfg(all(feature = "tor", not(target_family = "wasm")))]
+#[derive(Debug, Clone)]
+pub struct TorConnector {
+    peers: BTreeMap<PeerId, SafeUrl>,
+    api_secret: Option<String>,
+}
+
+#[cfg(all(feature = "tor", not(target_family = "wasm")))]
+impl TorConnector {
+    pub fn new(peers: BTreeMap<PeerId, SafeUrl>, api_secret: Option<String>) -> Self {
+        Self { peers, api_secret }
+    }
+}
+
+#[cfg(all(feature = "tor", not(target_family = "wasm")))]
+#[async_trait]
+impl IClientConnector for TorConnector {
+    fn peers(&self) -> BTreeSet<PeerId> {
+        self.peers.keys().copied().collect()
     }
 
-    #[cfg(all(feature = "tor", not(target_family = "wasm")))]
-    async fn connect_with_tor(
-        url: &SafeUrl,
-        api_secret: Option<String>,
-    ) -> result::Result<Self, JsonRpcClientError> {
+    #[allow(clippy::too_many_lines)]
+    async fn connect(&self, peer: PeerId) -> anyhow::Result<DynClientConnection> {
+        let api_endpoint = self
+            .peers
+            .get(&peer)
+            .expect("Could not find websocket api endpoint for peer {peer}");
+
         let tor_config = TorClientConfig::default();
         let tor_client = TorClient::create_bootstrapped(tor_config)
             .await
@@ -787,9 +768,11 @@ impl JsonRpcClient for WsClient {
         // TODO: (@leonardo) should we implement our `IntoTorAddr` for `SafeUrl`
         // instead?
         let addr = (
-            url.host_str()
+            api_endpoint
+                .host_str()
                 .expect("It should've asserted for `host` on construction"),
-            url.port_or_known_default()
+            api_endpoint
+                .port_or_known_default()
                 .expect("It should've asserted for `port`, or used a default one, on construction"),
         );
         let tor_addr = TorAddr::from(addr).map_err(|e| JsonRpcClientError::Transport(e.into()))?;
@@ -803,7 +786,7 @@ impl JsonRpcClient for WsClient {
 
         // TODO: It can be updated to use `is_onion_address()` implementation,
         // once https://gitlab.torproject.org/tpo/core/arti/-/merge_requests/2214 lands.
-        let anonymized_stream = if url.is_onion_address() {
+        let anonymized_stream = if api_endpoint.is_onion_address() {
             let mut stream_prefs = arti_client::StreamPrefs::default();
             stream_prefs.connect_to_onion_services(arti_client::config::BoolOrAuto::Explicit(true));
 
@@ -827,13 +810,13 @@ impl JsonRpcClient for WsClient {
             anonymized_stream
         };
 
-        let is_tls = match url.scheme() {
+        let is_tls = match api_endpoint.scheme() {
             "wss" => true,
             "ws" => false,
             unexpected_scheme => {
                 let error =
                     format!("`{unexpected_scheme}` not supported, it's expected `ws` or `wss`!");
-                return Err(JsonRpcClientError::Transport(anyhow!(error).into()));
+                return Err(anyhow!(error));
             }
         };
 
@@ -854,7 +837,7 @@ impl JsonRpcClient for WsClient {
         let mut ws_client_builder =
             WsClientBuilder::default().max_concurrent_requests(u16::MAX as usize);
 
-        if let Some(api_secret) = api_secret {
+        if let Some(api_secret) = &self.api_secret {
             // on native platforms, jsonrpsee-client ignores `user:pass@...` in the Url,
             // but we can set up the headers manually
             let mut headers = HeaderMap::new();
@@ -872,14 +855,19 @@ impl JsonRpcClient for WsClient {
 
         match tls_connector {
             None => {
-                return ws_client_builder
-                    .build_with_stream(url.as_str(), anonymized_stream)
-                    .await;
+                let client = ws_client_builder
+                    .build_with_stream(api_endpoint.as_str(), anonymized_stream)
+                    .await?;
+
+                Ok(client.into_dyn())
             }
             Some(tls_connector) => {
-                let host = url.host_str().map(ToOwned::to_owned).ok_or_else(|| {
-                    JsonRpcClientError::Transport(anyhow!("Invalid host!").into())
-                })?;
+                let host = api_endpoint
+                    .host_str()
+                    .map(ToOwned::to_owned)
+                    .ok_or_else(|| {
+                        JsonRpcClientError::Transport(anyhow!("Invalid host!").into())
+                    })?;
 
                 // FIXME: (@leonardo) Is this leaking any data ? Should investigate it further
                 // if it's really needed.
@@ -891,26 +879,88 @@ impl JsonRpcClient for WsClient {
                     .await
                     .map_err(|e| JsonRpcClientError::Transport(e.into()))?;
 
-                return ws_client_builder
-                    .build_with_stream(url.as_str(), anonymized_tls_stream)
-                    .await;
+                let client = ws_client_builder
+                    .build_with_stream(api_endpoint.as_str(), anonymized_tls_stream)
+                    .await?;
+
+                Ok(client.into_dyn())
             }
         }
     }
+}
 
-    fn is_connected(&self) -> bool {
-        self.is_connected()
+#[async_trait]
+impl IClientConnection for WsClient {
+    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> anyhow::Result<Value> {
+        let method = match method {
+            ApiMethod::Core(method) => method,
+            ApiMethod::Module(module_id, method) => format!("module_{module_id}_{method}"),
+        };
+
+        Ok(ClientT::request(self, &method, [request.to_json()]).await?)
+    }
+
+    async fn await_disconnection(&self) {
+        self.on_disconnect().await;
     }
 }
 
-impl WsFederationApi<WsClient> {
-    /// Creates a new API client
-    pub fn new(
-        connector: &Connector,
-        peers: impl IntoIterator<Item = (PeerId, SafeUrl)>,
-        api_secret: &Option<String>,
-    ) -> Self {
-        Self::new_with_client(connector, peers, None, api_secret)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ApiMethod {
+    Core(String),
+    Module(ModuleInstanceId, String),
+}
+
+pub type DynClientConnector = Arc<dyn IClientConnector>;
+
+/// Allows to connect to peers. Connections are request based and should be
+/// authenticated and encrypted for production deployments.
+#[async_trait]
+pub trait IClientConnector: Send + Sync + 'static {
+    fn peers(&self) -> BTreeSet<PeerId>;
+
+    async fn connect(&self, peer: PeerId) -> anyhow::Result<DynClientConnection>;
+
+    fn into_dyn(self) -> DynClientConnector
+    where
+        Self: Sized,
+    {
+        Arc::new(self)
+    }
+}
+
+pub type DynClientConnection = Arc<dyn IClientConnection>;
+
+#[async_trait]
+pub trait IClientConnection: Debug + Send + Sync + 'static {
+    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> anyhow::Result<Value>;
+
+    async fn await_disconnection(&self);
+
+    fn into_dyn(self) -> DynClientConnection
+    where
+        Self: Sized,
+    {
+        Arc::new(self)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ReconnectFederationApi {
+    peers: BTreeSet<PeerId>,
+    admin_id: Option<PeerId>,
+    module_id: Option<ModuleInstanceId>,
+    connections: ReconnectClientConnections,
+}
+
+impl ReconnectFederationApi {
+    fn new(connector: &DynClientConnector, admin_id: Option<PeerId>) -> Self {
+        Self {
+            peers: connector.peers(),
+            admin_id,
+            module_id: None,
+            connections: ReconnectClientConnections::new(connector),
+        }
     }
 
     pub fn new_admin(
@@ -919,123 +969,274 @@ impl WsFederationApi<WsClient> {
         api_secret: &Option<String>,
         connector: &Connector,
     ) -> Self {
-        WsFederationApi::new(connector, vec![(peer, url)], api_secret).with_self_peer_id(peer)
+        Self::from_endpoints(once((peer, url)), api_secret, connector, Some(peer))
     }
 
     pub fn from_endpoints(
         peers: impl IntoIterator<Item = (PeerId, SafeUrl)>,
         api_secret: &Option<String>,
         connector: &Connector,
+        admin_id: Option<PeerId>,
     ) -> Self {
-        WsFederationApi::new(connector, peers, api_secret)
-    }
-
-    pub fn with_self_peer_id(self, self_peer_id: PeerId) -> Self {
-        Self {
-            self_peer_id: Some(self_peer_id),
-            ..self
-        }
-    }
-}
-
-impl<C> WsFederationApi<C>
-where
-    C: JsonRpcClient + 'static,
-{
-    /// Returns the [`PeerId`]'s for the current [`WsFederationApi`]
-    pub fn peers(&self) -> Vec<PeerId> {
-        self.peers.iter().map(|peer| peer.peer_id).collect()
-    }
-
-    /// Creates a new [`WsFederationApi`] client, for given [`Connector`].
-    pub fn new_with_client(
-        connector: &Connector,
-        peers: impl IntoIterator<Item = (PeerId, SafeUrl)>,
-        self_peer_id: Option<PeerId>,
-        api_secret: &Option<String>,
-    ) -> Self {
-        let (peer_connections, peer_ids) = peers
-            .into_iter()
-            .map(|(peer_id, url)| {
-                assert!(
-                    url.port_or_known_default().is_some(),
-                    "API client requires a port"
-                );
-                assert!(url.host().is_some(), "API client requires a target host");
-
-                (
-                    FederationPeer::new(*connector, url, peer_id, api_secret.clone()),
-                    peer_id,
-                )
-            })
-            .unzip();
-
-        WsFederationApi {
-            peer_ids,
-            self_peer_id,
-            peers: Arc::new(peer_connections),
-            module_id: None,
-        }
-    }
-}
-
-impl<C> FederationPeer<C>
-where
-    C: JsonRpcClient + 'static,
-{
-    #[instrument(target = LOG_CLIENT_NET_API, level = "trace", fields(peer = %self.peer_id, %method), skip_all)]
-    pub async fn request(&self, method: &str, params: &[Value]) -> JsonRpcResult<Value> {
-        // Strategies using timeouts often depend on failing requests returning quickly,
-        // so every request gets only one reconnection attempt.
-        const RETRIES: usize = 1;
-
-        for attempts in 0.. {
-            // The `match` statement below should always return if `RETRIES <= attempts`, so
-            // if we're looping again and `attempts` is greater than `RETRIES`, we have a
-            // bug.
-            debug_assert!(attempts <= RETRIES);
-
-            let rclient = self.client.read().await;
-            match rclient.client.get_try().await {
-                Ok(client) if client.is_connected() => {
-                    return client.request::<_, _>(method, params).await;
-                }
-                Err(err) => {
-                    if RETRIES <= attempts {
-                        return Err(JsonRpcClientError::Transport(err.into()));
-                    }
-                    debug!(target: LOG_CLIENT_NET_API, err=%err.fmt_compact(), "Triggering reconnection after connection error");
-                }
-                Ok(_client) => {
-                    if RETRIES <= attempts {
-                        return Err(JsonRpcClientError::Transport(
-                            anyhow::format_err!("Disconnected").into(),
-                        ));
-                    }
-                    debug!(target: LOG_CLIENT_NET_API, "Triggering reconnection after disconnection");
-                }
-            };
-
-            // Drop read lock so we can take the write lock, which is needed to reconnect.
-            drop(rclient);
-            let mut wclient = self.client.write().await;
-            match wclient.client.get_try().await {
-                Ok(client) if client.is_connected() => {
-                    // someone else connected, just loop again
-                    trace!(target: LOG_CLIENT_NET_API, "Some other request reconnected client, retrying");
-                }
-                _ => {
-                    wclient.reconnect(
-                        self.connector,
-                        self.peer_id,
-                        self.url.clone(),
-                        self.api_secret.clone(),
-                    );
-                }
+        let connector = match connector {
+            Connector::Tcp => {
+                WebsocketConnector::new(peers.into_iter().collect(), api_secret.clone()).into_dyn()
             }
+            #[cfg(all(feature = "tor", not(target_family = "wasm")))]
+            Connector::Tor => {
+                TorConnector::new(peers.into_iter().collect(), api_secret.clone()).into_dyn()
+            }
+            #[cfg(all(feature = "tor", target_family = "wasm"))]
+            Connector::Tor => unimplemented!(),
+        };
+
+        ReconnectFederationApi::new(&connector, admin_id)
+    }
+}
+
+impl IModuleFederationApi for ReconnectFederationApi {}
+
+#[apply(async_trait_maybe_send!)]
+impl IRawFederationApi for ReconnectFederationApi {
+    fn all_peers(&self) -> &BTreeSet<PeerId> {
+        &self.peers
+    }
+
+    fn self_peer(&self) -> Option<PeerId> {
+        self.admin_id
+    }
+
+    fn with_module(&self, id: ModuleInstanceId) -> DynModuleApi {
+        ReconnectFederationApi {
+            peers: self.peers.clone(),
+            admin_id: self.admin_id,
+            module_id: Some(id),
+            connections: self.connections.clone(),
+        }
+        .into()
+    }
+
+    async fn request_raw(
+        &self,
+        peer_id: PeerId,
+        method: &str,
+        params: &ApiRequestErased,
+    ) -> JsonRpcResult<Value> {
+        let method = match self.module_id {
+            Some(module_id) => ApiMethod::Module(module_id, method.to_string()),
+            None => ApiMethod::Core(method.to_string()),
+        };
+
+        self.connections
+            .request(peer_id, method, params.clone())
+            .await
+            .map_err(|e| JsonRpcClientError::Transport(e.into()))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ReconnectClientConnections {
+    connections: BTreeMap<PeerId, ClientConnection>,
+}
+
+impl ReconnectClientConnections {
+    pub fn new(connector: &DynClientConnector) -> Self {
+        ReconnectClientConnections {
+            connections: connector
+                .peers()
+                .into_iter()
+                .map(|peer| (peer, ClientConnection::new(peer, connector.clone())))
+                .collect(),
+        }
+    }
+
+    async fn request(
+        &self,
+        peer: PeerId,
+        method: ApiMethod,
+        request: ApiRequestErased,
+    ) -> anyhow::Result<Value> {
+        self.connections
+            .get(&peer)
+            .expect("Could not find client connection for peer {peer}")
+            .connection()
+            .await
+            .context("Failed to connect to peer")?
+            .request(method, request)
+            .await
+    }
+}
+
+#[derive(Clone, Debug)]
+struct ClientConnection {
+    sender: async_channel::Sender<oneshot::Sender<DynClientConnection>>,
+}
+
+impl ClientConnection {
+    fn new(peer: PeerId, connector: DynClientConnector) -> ClientConnection {
+        let (sender, receiver) = bounded::<oneshot::Sender<DynClientConnection>>(1024);
+
+        fedimint_core::task::spawn(
+            "peer-api-connection",
+            async move {
+                let mut backoff = api_networking_backoff();
+
+                while let Ok(sender) = receiver.recv().await {
+                    let mut senders = vec![sender];
+
+                    // Drain the queue, so we everyone that already joined fail or succeed
+                    // together.
+                    while let Ok(sender) = receiver.try_recv() {
+                        senders.push(sender);
+                    }
+
+                    match connector.connect(peer).await {
+                        Ok(connection) => {
+                            info!(target: LOG_CLIENT_NET_API, "Connected to peer api");
+
+                            for sender in senders {
+                                sender.send(connection.clone()).ok();
+                            }
+
+                            loop {
+                                tokio::select! {
+                                    sender = receiver.recv() => {
+                                        match sender.ok() {
+                                            Some(sender) => sender.send(connection.clone()).ok(),
+                                            None => break,
+                                        };
+                                    }
+                                    () = connection.await_disconnection() => break,
+                                }
+                            }
+
+                            info!(target: LOG_CLIENT_NET_API, "Disconnected from peer api");
+
+                            backoff = api_networking_backoff();
+                        }
+                        Err(e) => {
+                            info!(target: LOG_CLIENT_NET_API, "Failed to connect to peer api {e}");
+
+                            fedimint_core::task::sleep(
+                                backoff.next().expect("No limit to the number of retries"),
+                            )
+                            .await;
+                        }
+                    }
+                }
+
+                info!(target: LOG_CLIENT_NET_API, "Shutting down peer api connection task");
+            }
+            .instrument(info_span!("peer-api-connection", ?peer)),
+        );
+
+        ClientConnection { sender }
+    }
+
+    async fn connection(&self) -> Option<DynClientConnection> {
+        let (sender, receiver) = oneshot::channel();
+
+        if self.sender.send(sender).await.is_err() {
+            warn!(target: LOG_CLIENT_NET_API, "Connection channel already disconnected");
+            // This is to prevent crazy tight loops e.g. if the inner task panicked for some
+            // unforeseen reason or already shut down, before the code calling
+            // this one (possibly in a loop without await) did. Importantly this also gives
+            // an await point, that allows current task to be canceled.
+            fedimint_core::task::sleep(Duration::from_millis(100)).await;
+        };
+
+        receiver.await.ok()
+    }
+}
+
+#[cfg(all(feature = "enable_iroh", not(target_family = "wasm")))]
+mod iroh {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    use anyhow::anyhow;
+    use async_trait::async_trait;
+    use bitcoin::key::rand::rngs::OsRng;
+    use fedimint_core::module::{ApiError, ApiRequestErased};
+    use fedimint_core::PeerId;
+    use iroh::endpoint::Connection;
+    use iroh::{Endpoint, NodeId, SecretKey};
+    use serde::{Deserialize, Serialize};
+    use serde_json::Value;
+
+    use super::{ApiMethod, DynClientConnection, IClientConnection, IClientConnector};
+
+    const FEDIMINT_ALPN: &[u8] = "FEDIMINT_ALPN".as_bytes();
+
+    #[derive(Debug, Clone)]
+    pub struct IrohConnector {
+        node_ids: BTreeMap<PeerId, NodeId>,
+        endpoint: Endpoint,
+    }
+
+    impl IrohConnector {
+        #[allow(unused)]
+        pub async fn new(peers: BTreeMap<PeerId, NodeId>) -> anyhow::Result<Self> {
+            Ok(Self {
+                node_ids: peers,
+                endpoint: Endpoint::builder()
+                    .discovery_n0()
+                    .secret_key(SecretKey::generate(&mut OsRng))
+                    .alpns(vec![FEDIMINT_ALPN.to_vec()])
+                    .bind()
+                    .await?,
+            })
+        }
+    }
+
+    #[async_trait]
+    impl IClientConnector for IrohConnector {
+        fn peers(&self) -> BTreeSet<PeerId> {
+            self.node_ids.keys().copied().collect()
         }
 
-        unreachable!();
+        async fn connect(&self, peer: PeerId) -> anyhow::Result<DynClientConnection> {
+            let node_id = *self
+                .node_ids
+                .get(&peer)
+                .expect("Could not find node id for peer {peer}");
+
+            let connection = self.endpoint.connect(node_id, FEDIMINT_ALPN).await?;
+
+            Ok(connection.into_dyn())
+        }
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    struct IrohRequest {
+        method: ApiMethod,
+        request: ApiRequestErased,
+    }
+
+    #[async_trait]
+    impl IClientConnection for Connection {
+        async fn request(
+            &self,
+            method: ApiMethod,
+            request: ApiRequestErased,
+        ) -> anyhow::Result<Value> {
+            let json = serde_json::to_vec(&IrohRequest { method, request })?;
+
+            let (mut sink, mut stream) = self.open_bi().await?;
+
+            sink.write_all(&json).await?;
+
+            sink.finish()?;
+
+            let response = stream.read_to_end(1_000_000).await?;
+
+            let response = serde_json::from_slice::<Result<Value, ApiError>>(&response)?;
+
+            response.map_err(|e| anyhow!("Api Error: {:?}", e))
+        }
+
+        async fn await_disconnection(&self) {
+            self.closed().await;
+        }
     }
 }
 
@@ -1085,79 +1286,11 @@ pub struct GuardianConfigBackup {
 
 #[cfg(test)]
 mod tests {
-    use std::fmt;
     use std::str::FromStr as _;
 
     use fedimint_core::config::FederationId;
-    use jsonrpsee_core::client::BatchResponse;
-    use jsonrpsee_core::params::BatchRequestBuilder;
-    use jsonrpsee_core::traits::ToRpcParams;
 
     use super::*;
-
-    type Result<T = ()> = std::result::Result<T, JsonRpcClientError>;
-
-    #[apply(async_trait_maybe_send!)]
-    trait SimpleClient: Sized {
-        async fn connect() -> Result<Self>;
-
-        #[cfg(all(feature = "tor", not(target_family = "wasm")))]
-        async fn connect_with_tor() -> Result<Self>;
-
-        fn is_connected(&self) -> bool {
-            true
-        }
-
-        // reply with json
-        async fn request(&self, method: &str) -> Result<String>;
-    }
-
-    struct Client<C: SimpleClient>(C);
-
-    #[apply(async_trait_maybe_send!)]
-    impl<C: SimpleClient + MaybeSend + MaybeSync> JsonRpcClient for Client<C> {
-        async fn connect(_url: &SafeUrl, _api_secret: Option<String>) -> Result<Self> {
-            Ok(Self(C::connect().await?))
-        }
-
-        #[cfg(all(feature = "tor", not(target_family = "wasm")))]
-        async fn connect_with_tor(_url: &SafeUrl, _api_secret: Option<String>) -> Result<Self> {
-            Ok(Self(C::connect_with_tor().await?))
-        }
-
-        fn is_connected(&self) -> bool {
-            self.0.is_connected()
-        }
-    }
-
-    #[apply(async_trait_maybe_send!)]
-    impl<C: SimpleClient + MaybeSend + MaybeSync> ClientT for Client<C> {
-        async fn request<R, P>(&self, method: &str, _params: P) -> Result<R>
-        where
-            R: jsonrpsee_core::DeserializeOwned,
-            P: ToRpcParams + MaybeSend,
-        {
-            let json = self.0.request(method).await?;
-            Ok(serde_json::from_str(&json).unwrap())
-        }
-
-        async fn notification<P>(&self, _method: &str, _params: P) -> Result<()>
-        where
-            P: ToRpcParams + MaybeSend,
-        {
-            unimplemented!()
-        }
-
-        async fn batch_request<'a, R>(
-            &self,
-            _batch: BatchRequestBuilder<'a>,
-        ) -> std::result::Result<BatchResponse<'a, R>, jsonrpsee_core::client::Error>
-        where
-            R: DeserializeOwned + fmt::Debug + 'a,
-        {
-            unimplemented!()
-        }
-    }
 
     #[test]
     fn converts_invite_code() {

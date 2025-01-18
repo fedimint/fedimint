@@ -19,6 +19,7 @@ tor = [
     "arti-client/rustls",
     "arti-client/onion-service-client",
 ]
+enable_iroh = ["iroh"]
 
 [lib]
 name = "fedimint_api_client"
@@ -26,12 +27,14 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+async-channel = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
 bitcoin = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 futures = { workspace = true }
+iroh = { workspace = true, optional = true }
 itertools = { workspace = true }
 jsonrpsee-core = { version = "0.24.7" }
 jsonrpsee-types = { version = "0.24.7" }

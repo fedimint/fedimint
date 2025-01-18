@@ -1011,10 +1011,11 @@ impl Wallet {
         let bitcoind_rpc = bitcoind;
 
         let bitcoind_net = NetworkLegacyEncodingWrapper(
-            bitcoind_rpc
-                .get_network()
-                .await
-                .map_err(|e| WalletCreationError::RpcError(e.to_string()))?,
+            retry("verify network", backoff_util::aggressive_backoff(), || {
+                bitcoind_rpc.get_network()
+            })
+            .await
+            .map_err(|e| WalletCreationError::RpcError(e.to_string()))?,
         );
         if bitcoind_net != cfg.consensus.network {
             return Err(WalletCreationError::WrongNetwork(

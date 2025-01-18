@@ -53,6 +53,7 @@ pub async fn start_api_announcement_service(
         get_api_urls(&db, &cfg.consensus).await,
         &api_secret,
         &Connector::default(),
+        None,
     );
     let our_peer_id = cfg.local.identity;
     tg.spawn_cancellable("submit-api-url-announcement", async move {
