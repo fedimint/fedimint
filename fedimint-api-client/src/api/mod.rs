@@ -4,7 +4,6 @@ use std::iter::once;
 use std::pin::Pin;
 use std::result;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::{anyhow, Context};
 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
@@ -1136,14 +1135,10 @@ impl ClientConnection {
     async fn connection(&self) -> Option<DynClientConnection> {
         let (sender, receiver) = oneshot::channel();
 
-        if self.sender.send(sender).await.is_err() {
-            warn!(target: LOG_CLIENT_NET_API, "Connection channel already disconnected");
-            // This is to prevent crazy tight loops e.g. if the inner task panicked for some
-            // unforeseen reason or already shut down, before the code calling
-            // this one (possibly in a loop without await) did. Importantly this also gives
-            // an await point, that allows current task to be canceled.
-            fedimint_core::task::sleep(Duration::from_millis(100)).await;
-        };
+        self.sender
+            .send(sender)
+            .await
+            .expect("Api connection request channel closed unexpectedly");
 
         receiver.await.ok()
     }
