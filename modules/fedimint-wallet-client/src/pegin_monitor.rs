@@ -97,7 +97,7 @@ pub(crate) async fn run_peg_in_monitor(
     mut wakeup_receiver: watch::Receiver<()>,
 ) {
     let min_sleep: Duration = if is_running_in_test_env() {
-        Duration::from_millis(1)
+        Duration::from_millis(100)
     } else {
         Duration::from_secs(30)
     };
@@ -125,7 +125,7 @@ pub(crate) async fn run_peg_in_monitor(
             .duration_since(now)
             .unwrap_or_default()
             .max(min_sleep);
-        debug!(target: LOG_CLIENT_MODULE_WALLET, sleep_secs=%next_wakeup_duration.as_secs(), "Sleep after completing due checks");
+        debug!(target: LOG_CLIENT_MODULE_WALLET, sleep_msecs=%next_wakeup_duration.as_millis(), "Sleep after completing due checks");
         tokio::select! {
             () = sleep(next_wakeup_duration) => {
                 debug!(target: LOG_CLIENT_MODULE_WALLET, "Woken up by a scheduled wakeup");
