@@ -22,7 +22,6 @@ use fedimint_core::backup::ClientBackupSnapshot;
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ApiRequestErased, ApiVersion, SerdeModuleEncoding};
@@ -418,7 +417,13 @@ impl DynGlobalApi {
         api_secret: &Option<String>,
         connector: &Connector,
     ) -> DynGlobalApi {
-        Self::from_endpoints(once((peer, url)), api_secret, connector, Some(peer))
+        GlobalFederationApiWithCache::new(ReconnectFederationApi::from_endpoints(
+            once((peer, url)),
+            api_secret,
+            connector,
+            Some(peer),
+        ))
+        .into()
     }
 
     // FIXME: (@leonardo) Should we have the option to do DKG and config related
@@ -431,44 +436,15 @@ impl DynGlobalApi {
         Self::new_admin(PeerId::from(1024), url, api_secret, &Connector::default())
     }
 
-    pub fn from_single_endpoint(
-        peer: PeerId,
-        url: SafeUrl,
-        api_secret: &Option<String>,
-        connector: &Connector,
-        admin_id: Option<PeerId>,
-    ) -> Self {
-        Self::from_endpoints(once((peer, url)), api_secret, connector, admin_id)
-    }
-
     pub fn from_endpoints(
         peers: impl IntoIterator<Item = (PeerId, SafeUrl)>,
         api_secret: &Option<String>,
         connector: &Connector,
-        admin_id: Option<PeerId>,
     ) -> Self {
-        let connector = match connector {
-            Connector::Tcp => {
-                WebsocketConnector::new(peers.into_iter().collect(), api_secret.clone()).into_dyn()
-            }
-            #[cfg(all(feature = "tor", not(target_family = "wasm")))]
-            Connector::Tor => {
-                TorConnector::new(peers.into_iter().collect(), api_secret.clone()).into_dyn()
-            }
-            #[cfg(all(feature = "tor", target_family = "wasm"))]
-            Connector::Tor => unimplemented!(),
-        };
-
-        GlobalFederationApiWithCache::new(ReconnectFederationApi::new(&connector, admin_id)).into()
-    }
-
-    pub fn from_invite_code(connector: &Connector, invite_code: &InviteCode) -> Self {
-        Self::from_endpoints(
-            invite_code.peers(),
-            &invite_code.api_secret(),
-            connector,
-            None,
-        )
+        GlobalFederationApiWithCache::new(ReconnectFederationApi::from_endpoints(
+            peers, api_secret, connector, None,
+        ))
+        .into()
     }
 }
 
@@ -1284,6 +1260,7 @@ mod tests {
     use std::str::FromStr as _;
 
     use fedimint_core::config::FederationId;
+    use fedimint_core::invite_code::InviteCode;
 
     use super::*;
 
