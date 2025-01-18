@@ -10,6 +10,8 @@ if [ "$#" -eq 0 ]; then
   exit 1
 fi
 
+PATH="$(pwd)/scripts/dev/run-test/:$PATH"
+
 # TODO(v0.5.0): We do not need to run the `gatewayd-mnemonic` test from v0.4.0
 # -> v0.5.0 over and over again. Once we have verified this test passes for
 # v0.5.0, it can safely be removed.
@@ -64,7 +66,7 @@ for upgrade_path in "${upgrade_paths[@]}"; do
     done
 
     upgrade_tests+=(
-      "devimint upgrade-tests fedimintd --paths $(printf "%s " "${fedimintd_paths[@]}")"
+      "fm-run-test fedimintd devimint upgrade-tests fedimintd --paths $(printf "%s " "${fedimintd_paths[@]}")"
     )
   fi
 
@@ -80,7 +82,7 @@ for upgrade_path in "${upgrade_paths[@]}"; do
     done
 
     upgrade_tests+=(
-      "devimint upgrade-tests fedimint-cli --paths $(printf "%s " "${fedimint_cli_paths[@]}")"
+      "fm-run-test fedimint-cli devimint upgrade-tests fedimint-cli --paths $(printf "%s " "${fedimint_cli_paths[@]}")"
     )
   fi
 
@@ -99,7 +101,7 @@ for upgrade_path in "${upgrade_paths[@]}"; do
     done
 
     upgrade_tests+=(
-      "devimint upgrade-tests gatewayd --gatewayd-paths $(printf "%s " "${gatewayd_paths[@]}") --gateway-cli-paths $(printf "%s " "${gateway_cli_paths[@]}")"
+      "fm-run-test gateway devimint upgrade-tests gatewayd --gatewayd-paths $(printf "%s " "${gatewayd_paths[@]}") --gateway-cli-paths $(printf "%s " "${gateway_cli_paths[@]}")"
     )
   fi
 
@@ -110,7 +112,7 @@ for upgrade_path in "${upgrade_paths[@]}"; do
     new_gateway_cli="gateway-cli"
 
     upgrade_tests+=(
-      "gateway-tests gatewayd-mnemonic --old-gatewayd-path $old_gatewayd --new-gatewayd-path $new_gatewayd --gw-type lnd --old-gateway-cli-path $old_gateway_cli --new-gateway-cli-path $new_gateway_cli"
+      "fm-run-test mnemonic gateway-tests gatewayd-mnemonic --old-gatewayd-path $old_gatewayd --new-gatewayd-path $new_gatewayd --gw-type lnd --old-gateway-cli-path $old_gateway_cli --new-gateway-cli-path $new_gateway_cli"
     )
   fi
 done
