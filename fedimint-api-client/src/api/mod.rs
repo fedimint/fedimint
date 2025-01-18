@@ -1081,13 +1081,21 @@ impl ClientConnection {
                 let mut backoff = api_networking_backoff();
 
                 while let Ok(sender) = receiver.recv().await {
-                    let n_request = receiver.len();
+                    let mut senders = vec![sender];
+
+                    // Drain the queue, so we everyone that already joined fail or succeed
+                    // together.
+                    while let Ok(sender) = receiver.try_recv() {
+                        senders.push(sender);
+                    }
 
                     match connector.connect(peer).await {
                         Ok(connection) => {
                             info!(target: LOG_CLIENT_NET_API, "Connected to peer api");
 
-                            sender.send(connection.clone()).ok();
+                            for sender in senders {
+                                sender.send(connection.clone()).ok();
+                            }
 
                             loop {
                                 tokio::select! {
@@ -1107,12 +1115,6 @@ impl ClientConnection {
                         }
                         Err(e) => {
                             info!(target: LOG_CLIENT_NET_API, "Failed to connect to peer api {e}");
-
-                            // We need to drain the channel for the pending requests to fail.
-
-                            for _ in 0..n_request {
-                                receiver.try_recv().expect("Items exist");
-                            }
 
                             fedimint_core::task::sleep(
                                 backoff.next().expect("No limit to the number of retries"),
