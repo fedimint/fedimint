@@ -2682,7 +2682,6 @@ impl ClientBuilder {
                 .map(|(peer_id, peer_url)| (*peer_id, peer_url.url.clone())),
             &api_secret,
             &connector,
-            None,
         );
         Client::download_backup_from_federation_static(
             &api,
