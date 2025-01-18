@@ -2431,7 +2431,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strum 0.26.3",
- "thiserror 1.0.69",
+ "thiserror 2.0.11",
  "tokio",
  "tokio-rustls 0.26.0",
  "tracing",
@@ -2551,7 +2551,7 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.11",
  "tikv-jemallocator",
  "time",
  "tokio",
@@ -2582,7 +2582,7 @@ dependencies = [
  "serde_json",
  "strum 0.26.3",
  "strum_macros 0.26.4",
- "thiserror 1.0.69",
+ "thiserror 2.0.11",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -2678,7 +2678,7 @@ dependencies = [
  "strum 0.26.3",
  "strum_macros 0.26.4",
  "test-log",
- "thiserror 1.0.69",
+ "thiserror 2.0.11",
  "tokio",
  "tokio-rustls 0.24.1",
  "tokio-test",
@@ -2763,7 +2763,7 @@ dependencies = [
  "serde",
  "strum 0.26.3",
  "strum_macros 0.26.4",
- "thiserror 1.0.69",
+ "thiserror 2.0.11",
  "tracing",
 ]
 
@@ -2774,7 +2774,7 @@ dependencies = [
  "anyhow",
  "fedimint-core",
  "serde",
- "thiserror 1.0.69",
+ "thiserror 2.0.11",
 ]
 
 [[package]]
@@ -2827,7 +2827,7 @@ dependencies = [
  "serde",
  "strum 0.26.3",
  "strum_macros 0.26.4",
- "thiserror 1.0.69",
+ "thiserror 2.0.11",
 ]
 
 [[package]]
@@ -2837,7 +2837,7 @@ dependencies = [
  "anyhow",
  "fedimint-core",
  "serde",
- "thiserror 1.0.69",
+ "thiserror 2.0.11",
 ]
 
 [[package]]
@@ -2934,7 +2934,7 @@ dependencies = [
  "lightning-invoice",
  "lockable",
  "serde",
- "thiserror 1.0.69",
+ "thiserror 2.0.11",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -2966,7 +2966,7 @@ dependencies = [
  "serde_json",
  "strum 0.26.3",
  "strum_macros 0.26.4",
- "thiserror 1.0.69",
+ "thiserror 2.0.11",
  "tokio",
  "tracing",
 ]
@@ -2984,7 +2984,7 @@ dependencies = [
  "serde",
  "serde-big-array",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.11",
  "tracing",
 ]
 
@@ -3042,7 +3042,7 @@ dependencies = [
  "serde_millis",
  "strum 0.26.3",
  "strum_macros 0.26.4",
- "thiserror 1.0.69",
+ "thiserror 2.0.11",
  "tikv-jemallocator",
  "tokio",
  "tokio-stream",
@@ -3129,7 +3129,7 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.11",
  "tokio",
  "tracing",
 ]
@@ -3150,7 +3150,7 @@ dependencies = [
  "reqwest 0.12.9",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.11",
 ]
 
 [[package]]
@@ -3260,7 +3260,7 @@ dependencies = [
  "serde_json",
  "strum 0.26.3",
  "strum_macros 0.26.4",
- "thiserror 1.0.69",
+ "thiserror 2.0.11",
  "tracing",
 ]
 
@@ -3274,7 +3274,7 @@ dependencies = [
  "hex",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.11",
  "tracing",
 ]
 
@@ -3357,7 +3357,7 @@ dependencies = [
  "strum 0.26.3",
  "strum_macros 0.26.4",
  "test-log",
- "thiserror 1.0.69",
+ "thiserror 2.0.11",
  "tokio",
  "tracing",
 ]
@@ -3371,7 +3371,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-tbs",
  "serde",
- "thiserror 1.0.69",
+ "thiserror 2.0.11",
  "tracing",
 ]
 
@@ -3741,7 +3741,7 @@ dependencies = [
  "anyhow",
  "fedimint-core",
  "serde",
- "thiserror 1.0.69",
+ "thiserror 2.0.11",
 ]
 
 [[package]]
@@ -3798,7 +3798,7 @@ dependencies = [
  "miniscript",
  "serde",
  "test-log",
- "thiserror 1.0.69",
+ "thiserror 2.0.11",
  "tracing",
 ]
 
