@@ -55,7 +55,7 @@ use crate::metrics::{
     CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX, CONSENSUS_SESSION_COUNT,
 };
 use crate::net::p2p::ReconnectP2PConnections;
-use crate::net::p2p_connector::{P2PConnector, TlsTcpConnector};
+use crate::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
 use crate::LOG_CONSENSUS;
 
 // The name of the directory where the database checkpoints are stored.

@@ -11,10 +11,10 @@ use tokio::net::TcpStream;
 use tokio_rustls::TlsStream;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
-pub type DynP2PConnection<M> = Box<dyn P2PConnection<M>>;
+pub type DynP2PConnection<M> = Box<dyn IP2PConnection<M>>;
 
 #[async_trait]
-pub trait P2PConnection<M>: Send + 'static {
+pub trait IP2PConnection<M>: Send + 'static {
     async fn send(&mut self, message: M) -> anyhow::Result<()>;
 
     async fn receive(&mut self) -> anyhow::Result<M>;
@@ -34,7 +34,7 @@ pub enum LegacyMessage<M> {
 }
 
 #[async_trait]
-impl<M> P2PConnection<M> for Framed<TlsStream<TcpStream>, LengthDelimitedCodec>
+impl<M> IP2PConnection<M> for Framed<TlsStream<TcpStream>, LengthDelimitedCodec>
 where
     M: Serialize + DeserializeOwned + Send + 'static,
 {
@@ -71,10 +71,10 @@ pub mod iroh {
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use iroh::endpoint::Connection;
 
-    use crate::net::p2p_connection::P2PConnection;
+    use crate::net::p2p_connection::IP2PConnection;
 
     #[async_trait]
-    impl<M> P2PConnection<M> for Connection
+    impl<M> IP2PConnection<M> for Connection
     where
         M: Encodable + Decodable + Send + 'static,
     {

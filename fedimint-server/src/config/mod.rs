@@ -35,7 +35,7 @@ use crate::config::distributedgen::PeerHandleOps;
 use crate::envs::FM_MAX_CLIENT_CONNECTIONS_ENV;
 use crate::fedimint_core::encoding::Encodable;
 use crate::net::p2p::ReconnectP2PConnections;
-use crate::net::p2p_connector::{dns_sanitize, P2PConnector, TlsConfig, TlsTcpConnector};
+use crate::net::p2p_connector::{dns_sanitize, IP2PConnector, TlsConfig, TlsTcpConnector};
 
 pub mod api;
 pub mod distributedgen;

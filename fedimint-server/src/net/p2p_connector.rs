@@ -23,9 +23,9 @@ use tokio_stream::wrappers::TcpListenerStream;
 use tokio_stream::StreamExt;
 use tokio_util::codec::LengthDelimitedCodec;
 
-use crate::net::p2p_connection::{DynP2PConnection, P2PConnection};
+use crate::net::p2p_connection::{DynP2PConnection, IP2PConnection};
 
-pub type DynP2PConnector<M> = Arc<dyn P2PConnector<M>>;
+pub type DynP2PConnector<M> = Arc<dyn IP2PConnector<M>>;
 
 pub type P2PConnectionResult<M> = anyhow::Result<(PeerId, DynP2PConnection<M>)>;
 
@@ -35,7 +35,7 @@ pub type P2PConnectionListener<M> = Pin<Box<dyn Stream<Item = P2PConnectionResul
 /// Connections are message based and should be authenticated and encrypted for
 /// production deployments.
 #[async_trait]
-pub trait P2PConnector<M>: Send + Sync + 'static {
+pub trait IP2PConnector<M>: Send + Sync + 'static {
     fn peers(&self) -> Vec<PeerId>;
 
     async fn connect(&self, peer: PeerId) -> anyhow::Result<DynP2PConnection<M>>;
@@ -83,7 +83,7 @@ impl TlsTcpConnector {
 }
 
 #[async_trait]
-impl<M> P2PConnector<M> for TlsTcpConnector
+impl<M> IP2PConnector<M> for TlsTcpConnector
 where
     M: Serialize + DeserializeOwned + Send + 'static,
 {
@@ -253,9 +253,9 @@ pub mod iroh {
     use iroh::endpoint::Incoming;
     use iroh::{Endpoint, NodeId, SecretKey};
 
-    use crate::net::p2p_connection::P2PConnection;
+    use crate::net::p2p_connection::IP2PConnection;
     use crate::net::p2p_connector::{
-        DynP2PConnection, P2PConnectionListener, P2PConnectionResult, P2PConnector,
+        DynP2PConnection, IP2PConnector, P2PConnectionListener, P2PConnectionResult,
     };
 
     #[derive(Debug, Clone)]
@@ -295,7 +295,7 @@ pub mod iroh {
     }
 
     #[async_trait]
-    impl<M> P2PConnector<M> for IrohConnector
+    impl<M> IP2PConnector<M> for IrohConnector
     where
         M: Encodable + Decodable + Send + 'static,
     {
