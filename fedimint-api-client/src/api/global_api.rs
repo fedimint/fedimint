@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
 use std::num::NonZeroUsize;
-use std::result;
 use std::sync::Arc;
 
 use anyhow::{anyhow, format_err};
@@ -44,7 +43,6 @@ use fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId, Transact
 use fedimint_logging::LOG_CLIENT_NET_API;
 use futures::future::join_all;
 use itertools::Itertools;
-use jsonrpsee_core::client::Error as JsonRpcClientError;
 use rand::seq::SliceRandom;
 use serde_json::Value;
 use tokio::sync::OnceCell;
@@ -226,7 +224,7 @@ where
         peer_id: PeerId,
         method: &str,
         params: &ApiRequestErased,
-    ) -> result::Result<Value, JsonRpcClientError> {
+    ) -> anyhow::Result<Value> {
         self.inner.request_raw(peer_id, method, params).await
     }
 }

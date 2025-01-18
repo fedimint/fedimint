@@ -657,8 +657,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
         &task_group,
         PeerId::from(0),
         // FIXME: use proper mock
-        DynGlobalApi::from_endpoints([], &None, &Connector::Tcp, None)
-            .with_module(module_instance_id),
+        DynGlobalApi::from_endpoints([], &None, &Connector::Tcp).with_module(module_instance_id),
     )
     .await?;
 
