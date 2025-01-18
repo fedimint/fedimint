@@ -53,6 +53,7 @@ done
 for upgrade_path in "${upgrade_paths[@]}"; do
   IFS=' ' read -r -a versions <<< "$upgrade_path"
   echo "## Starting upgrade test for path: $upgrade_path"
+  versions_str=$(IFS=,; echo "${versions[*]}")
 
   if contains "fedimintd" "${test_kinds[@]}"; then
     fedimintd_paths=()
@@ -66,7 +67,7 @@ for upgrade_path in "${upgrade_paths[@]}"; do
     done
 
     upgrade_tests+=(
-      "fm-run-test fedimintd devimint upgrade-tests fedimintd --paths $(printf "%s " "${fedimintd_paths[@]}")"
+      "fm-run-test fedimintd-${versions_str} devimint upgrade-tests fedimintd --paths $(printf "%s " "${fedimintd_paths[@]}")"
     )
   fi
 
@@ -82,7 +83,7 @@ for upgrade_path in "${upgrade_paths[@]}"; do
     done
 
     upgrade_tests+=(
-      "fm-run-test fedimint-cli devimint upgrade-tests fedimint-cli --paths $(printf "%s " "${fedimint_cli_paths[@]}")"
+      "fm-run-test fedimint-cli-${versions_str} devimint upgrade-tests fedimint-cli --paths $(printf "%s " "${fedimint_cli_paths[@]}")"
     )
   fi
 
@@ -101,7 +102,7 @@ for upgrade_path in "${upgrade_paths[@]}"; do
     done
 
     upgrade_tests+=(
-      "fm-run-test gateway devimint upgrade-tests gatewayd --gatewayd-paths $(printf "%s " "${gatewayd_paths[@]}") --gateway-cli-paths $(printf "%s " "${gateway_cli_paths[@]}")"
+      "fm-run-test gateway-${versions_str} devimint upgrade-tests gatewayd --gatewayd-paths $(printf "%s " "${gatewayd_paths[@]}") --gateway-cli-paths $(printf "%s " "${gateway_cli_paths[@]}")"
     )
   fi
 
@@ -112,7 +113,7 @@ for upgrade_path in "${upgrade_paths[@]}"; do
     new_gateway_cli="gateway-cli"
 
     upgrade_tests+=(
-      "fm-run-test mnemonic gateway-tests gatewayd-mnemonic --old-gatewayd-path $old_gatewayd --new-gatewayd-path $new_gatewayd --gw-type lnd --old-gateway-cli-path $old_gateway_cli --new-gateway-cli-path $new_gateway_cli"
+      "fm-run-test mnemonic-${versions_str} gateway-tests gatewayd-mnemonic --old-gatewayd-path $old_gatewayd --new-gatewayd-path $new_gatewayd --gw-type lnd --old-gateway-cli-path $old_gateway_cli --new-gateway-cli-path $new_gateway_cli"
     )
   fi
 done
