@@ -68,7 +68,8 @@ impl DevFed {
     }
 }
 pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
-    DevJitFed::new(process_mgr, false)?
+    DevJitFed::new(process_mgr, false)
+        .await?
         .to_dev_fed(process_mgr)
         .await
 }
@@ -93,7 +94,7 @@ pub struct DevJitFed {
 }
 
 impl DevJitFed {
-    pub fn new(process_mgr: &ProcessManager, skip_setup: bool) -> Result<DevJitFed> {
+    pub async fn new(process_mgr: &ProcessManager, skip_setup: bool) -> Result<DevJitFed> {
         let fed_size = process_mgr.globals.FM_FED_SIZE;
         let offline_nodes = process_mgr.globals.FM_OFFLINE_NODES;
         anyhow::ensure!(
@@ -216,17 +217,24 @@ impl DevJitFed {
             }
         });
 
+        let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
+        let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+        let should_enable_ldk = gatewayd_version >= *VERSION_0_5_0_ALPHA
+                    && fedimintd_version >= *VERSION_0_5_0_ALPHA
+                    // and lnv2 was not explicitly disabled
+                    && !is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV);
+        let should_disable_lnv2 = gateway_cli_version <= *VERSION_0_4_0_ALPHA
+            || gatewayd_version <= *VERSION_0_4_0_ALPHA
+            || fedimintd_version <= *VERSION_0_4_0_ALPHA
+            || is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV)
+            || !should_enable_ldk;
+
         let gw_ldk = JitTryAnyhow::new_try({
             let process_mgr = process_mgr.to_owned();
             move || async move {
                 // TODO(support:v0.4.0): Only run LDK gateway when the federation supports LNv2
-                let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
-                let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-                if gatewayd_version >= *VERSION_0_5_0_ALPHA
-                    && fedimintd_version >= *VERSION_0_5_0_ALPHA
-                    // and lnv2 was not explicitly disabled
-                    && !is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV)
-                {
+                if should_enable_ldk {
                     debug!(target: LOG_DEVIMINT, "Starting ldk gateway...");
                     let start_time = fedimint_core::time::now();
                     let ldk_gw = Gatewayd::new(&process_mgr, LightningNode::Ldk).await?;
@@ -262,22 +270,14 @@ impl DevJitFed {
             let cln = cln.clone();
             let gw_ldk = gw_ldk.clone();
             let bitcoind = bitcoind.clone();
-            || async move {
+            move || async move {
                 // Note: We open new channel even if starting from existing state
                 // as ports change on every start, and without this nodes will not find each
                 // other.
 
-                let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
-                let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-                let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
-
                 let bitcoind = bitcoind.get_try().await?.deref().clone();
 
-                if gateway_cli_version <= *VERSION_0_4_0_ALPHA
-                    || gatewayd_version <= *VERSION_0_4_0_ALPHA
-                    || fedimintd_version <= *VERSION_0_4_0_ALPHA
-                    || is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV)
-                {
+                if should_disable_lnv2 {
                     let lnd = lnd.get_try().await?.deref().clone();
                     let cln = cln.get_try().await?.deref().clone();
 
