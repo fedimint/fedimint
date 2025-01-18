@@ -48,7 +48,7 @@
         kind: <a class="struct" href="../fedimint_eventlog/struct.EventKind.html" title="struct fedimint_eventlog::EventKind">EventKind</a>,
         module: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;(<a class="struct" href="../fedimint_core/core/struct.ModuleKind.html" title="struct fedimint_core::core::ModuleKind">ModuleKind</a>, <a class="type" href="../fedimint_core/core/type.ModuleInstanceId.html" title="type fedimint_core::core::ModuleInstanceId">ModuleInstanceId</a>)&gt;,
         payload: <a class="enum" href="https://docs.rs/serde_json/1.0.135/serde_json/value/enum.Value.html" title="enum serde_json::value::Value">Value</a>,
-        transient: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>,
+        persist: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>,
     ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
        <span class="where">where Self: 'async_trait,
              'life0: 'async_trait,
@@ -112,7 +112,7 @@ Returns transaction id of the funding transaction and an optional
     kind: <a class="struct" href="../fedimint_eventlog/struct.EventKind.html" title="struct fedimint_eventlog::EventKind">EventKind</a>,
     module: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;(<a class="struct" href="../fedimint_core/core/struct.ModuleKind.html" title="struct fedimint_core::core::ModuleKind">ModuleKind</a>, <a class="type" href="../fedimint_core/core/type.ModuleInstanceId.html" title="type fedimint_core::core::ModuleInstanceId">ModuleInstanceId</a>)&gt;,
     payload: <a class="enum" href="https://docs.rs/serde_json/1.0.135/serde_json/value/enum.Value.html" title="enum serde_json::value::Value">Value</a>,
-    transient: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>,
+    persist: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>,
 ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
     Self: 'async_trait,
     'life0: 'async_trait,
@@ -159,7 +159,7 @@ Returns transaction id of the funding transaction and an optional
     _kind: <a class="struct" href="../fedimint_eventlog/struct.EventKind.html" title="struct fedimint_eventlog::EventKind">EventKind</a>,
     _module: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;(<a class="struct" href="../fedimint_core/core/struct.ModuleKind.html" title="struct fedimint_core::core::ModuleKind">ModuleKind</a>, <a class="type" href="../fedimint_core/core/type.ModuleInstanceId.html" title="type fedimint_core::core::ModuleInstanceId">ModuleInstanceId</a>)&gt;,
     _payload: <a class="enum" href="https://docs.rs/serde_json/1.0.135/serde_json/value/enum.Value.html" title="enum serde_json::value::Value">Value</a>,
-    _transient: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>,
+    _persist: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>,
 ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
     Self: 'async_trait,
     'life0: 'async_trait,

@@ -2268,7 +2268,10 @@
 <a href="#2267" id="2267">2267</a>
 <a href="#2268" id="2268">2268</a>
 <a href="#2269" id="2269">2269</a>
-<a href="#2270" id="2270">2270</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2270" id="2270">2270</a>
+<a href="#2271" id="2271">2271</a>
+<a href="#2272" id="2272">2272</a>
+<a href="#2273" id="2273">2273</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -3494,7 +3497,7 @@
         <span class="kw">let </span>tx = TransactionBuilder::new().with_outputs(output);
         <span class="kw">let </span>extra_meta =
             serde_json::to_value(extra_meta).context(<span class="string">"Failed to serialize extra meta"</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>operation_meta_gen = |change_range: OutPointRange| LightningOperationMeta {
+        <span class="kw">let </span>operation_meta_gen = <span class="kw">move </span>|change_range: OutPointRange| LightningOperationMeta {
             variant: LightningOperationMetaVariant::Pay(LightningOperationMetaPay {
                 out_point: OutPoint {
                     txid: change_range.txid(),
@@ -3782,7 +3785,7 @@
                 .make_client_inputs(ClientInputBundle::new_no_sm(<span class="macro">vec!</span>[client_input])),
         );
         <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta).expect(<span class="string">"extra_meta is serializable"</span>);
-        <span class="kw">let </span>operation_meta_gen = |change_range: OutPointRange| LightningOperationMeta {
+        <span class="kw">let </span>operation_meta_gen = <span class="kw">move </span>|change_range: OutPointRange| LightningOperationMeta {
             variant: LightningOperationMetaVariant::Claim {
                 out_points: change_range.into_iter().collect(),
             },
@@ -3909,16 +3912,19 @@
         <span class="kw">let </span>tx =
             TransactionBuilder::new().with_outputs(<span class="self">self</span>.client_ctx.make_client_outputs(output));
         <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta).expect(<span class="string">"extra_meta is serializable"</span>);
-        <span class="kw">let </span>operation_meta_gen = |change_range: OutPointRange| LightningOperationMeta {
-            variant: LightningOperationMetaVariant::Receive {
-                out_point: OutPoint {
-                    txid: change_range.txid(),
-                    out_idx: <span class="number">0</span>,
+        <span class="kw">let </span>operation_meta_gen = {
+            <span class="kw">let </span>invoice = invoice.clone();
+            <span class="kw">move </span>|change_range: OutPointRange| LightningOperationMeta {
+                variant: LightningOperationMetaVariant::Receive {
+                    out_point: OutPoint {
+                        txid: change_range.txid(),
+                        out_idx: <span class="number">0</span>,
+                    },
+                    invoice: invoice.clone(),
+                    gateway_id,
                 },
-                invoice: invoice.clone(),
-                gateway_id,
-            },
-            extra_meta: extra_meta.clone(),
+                extra_meta: extra_meta.clone(),
+            }
         };
         <span class="kw">let </span>change_range = <span class="self">self
             </span>.client_ctx

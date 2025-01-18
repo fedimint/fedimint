@@ -4285,7 +4285,7 @@
 
         <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta)
             .expect(<span class="string">"MintClientModule::reissue_external_notes extra_meta is serializable"</span>);
-        <span class="kw">let </span>operation_meta_gen = |change_range: OutPointRange| MintOperationMeta {
+        <span class="kw">let </span>operation_meta_gen = <span class="kw">move </span>|change_range: OutPointRange| MintOperationMeta {
             variant: MintOperationMetaVariant::Reissuance {
                 legacy_out_point: <span class="prelude-val">None</span>,
                 txid: <span class="prelude-val">Some</span>(change_range.txid()),

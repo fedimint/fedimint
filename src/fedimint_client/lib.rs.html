@@ -3171,7 +3171,79 @@
 <a href="#3170" id="3170">3170</a>
 <a href="#3171" id="3171">3171</a>
 <a href="#3172" id="3172">3172</a>
-<a href="#3173" id="3173">3173</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#3173" id="3173">3173</a>
+<a href="#3174" id="3174">3174</a>
+<a href="#3175" id="3175">3175</a>
+<a href="#3176" id="3176">3176</a>
+<a href="#3177" id="3177">3177</a>
+<a href="#3178" id="3178">3178</a>
+<a href="#3179" id="3179">3179</a>
+<a href="#3180" id="3180">3180</a>
+<a href="#3181" id="3181">3181</a>
+<a href="#3182" id="3182">3182</a>
+<a href="#3183" id="3183">3183</a>
+<a href="#3184" id="3184">3184</a>
+<a href="#3185" id="3185">3185</a>
+<a href="#3186" id="3186">3186</a>
+<a href="#3187" id="3187">3187</a>
+<a href="#3188" id="3188">3188</a>
+<a href="#3189" id="3189">3189</a>
+<a href="#3190" id="3190">3190</a>
+<a href="#3191" id="3191">3191</a>
+<a href="#3192" id="3192">3192</a>
+<a href="#3193" id="3193">3193</a>
+<a href="#3194" id="3194">3194</a>
+<a href="#3195" id="3195">3195</a>
+<a href="#3196" id="3196">3196</a>
+<a href="#3197" id="3197">3197</a>
+<a href="#3198" id="3198">3198</a>
+<a href="#3199" id="3199">3199</a>
+<a href="#3200" id="3200">3200</a>
+<a href="#3201" id="3201">3201</a>
+<a href="#3202" id="3202">3202</a>
+<a href="#3203" id="3203">3203</a>
+<a href="#3204" id="3204">3204</a>
+<a href="#3205" id="3205">3205</a>
+<a href="#3206" id="3206">3206</a>
+<a href="#3207" id="3207">3207</a>
+<a href="#3208" id="3208">3208</a>
+<a href="#3209" id="3209">3209</a>
+<a href="#3210" id="3210">3210</a>
+<a href="#3211" id="3211">3211</a>
+<a href="#3212" id="3212">3212</a>
+<a href="#3213" id="3213">3213</a>
+<a href="#3214" id="3214">3214</a>
+<a href="#3215" id="3215">3215</a>
+<a href="#3216" id="3216">3216</a>
+<a href="#3217" id="3217">3217</a>
+<a href="#3218" id="3218">3218</a>
+<a href="#3219" id="3219">3219</a>
+<a href="#3220" id="3220">3220</a>
+<a href="#3221" id="3221">3221</a>
+<a href="#3222" id="3222">3222</a>
+<a href="#3223" id="3223">3223</a>
+<a href="#3224" id="3224">3224</a>
+<a href="#3225" id="3225">3225</a>
+<a href="#3226" id="3226">3226</a>
+<a href="#3227" id="3227">3227</a>
+<a href="#3228" id="3228">3228</a>
+<a href="#3229" id="3229">3229</a>
+<a href="#3230" id="3230">3230</a>
+<a href="#3231" id="3231">3231</a>
+<a href="#3232" id="3232">3232</a>
+<a href="#3233" id="3233">3233</a>
+<a href="#3234" id="3234">3234</a>
+<a href="#3235" id="3235">3235</a>
+<a href="#3236" id="3236">3236</a>
+<a href="#3237" id="3237">3237</a>
+<a href="#3238" id="3238">3238</a>
+<a href="#3239" id="3239">3239</a>
+<a href="#3240" id="3240">3240</a>
+<a href="#3241" id="3241">3241</a>
+<a href="#3242" id="3242">3242</a>
+<a href="#3243" id="3243">3243</a>
+<a href="#3244" id="3244">3244</a>
+<a href="#3245" id="3245">3245</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
@@ -3258,7 +3330,7 @@
 <span class="kw">use </span>std::future::pending;
 <span class="kw">use </span>std::ops::{<span class="self">self</span>, Range};
 <span class="kw">use </span>std::pin::Pin;
-<span class="kw">use </span>std::sync::{Arc, Weak};
+<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 <span class="kw">use </span>anyhow::{anyhow, bail, ensure, format_err, Context};
@@ -3318,7 +3390,7 @@
 <span class="kw">use </span>futures::{Future, Stream, StreamExt};
 <span class="kw">use </span>meta::{LegacyMetaSource, MetaService};
 <span class="kw">use </span>module::recovery::RecoveryProgress;
-<span class="kw">use </span>module::{DynClientModule, FinalClient, IdxRange, OutPointRange};
+<span class="kw">use </span>module::{ClientContextIface, DynClientModule, FinalClientIface, IdxRange, OutPointRange};
 <span class="kw">use </span>rand::thread_rng;
 <span class="kw">use </span>secp256k1::{PublicKey, Secp256k1};
 <span class="kw">use </span>secret::{DeriveableSecretClientExt, PlainRootSecretStrategy, RootSecretStrategy <span class="kw">as _</span>};
@@ -3514,7 +3586,7 @@
         kind: EventKind,
         module: <span class="prelude-ty">Option</span>&lt;(ModuleKind, ModuleInstanceId)&gt;,
         payload: serde_json::Value,
-        transient: bool,
+        persist: bool,
     );
 
     <span class="kw">async fn </span>transaction_update_stream(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;TxSubmissionStatesSM&gt;;
@@ -3568,7 +3640,7 @@
         _kind: EventKind,
         _module: <span class="prelude-ty">Option</span>&lt;(ModuleKind, ModuleInstanceId)&gt;,
         _payload: serde_json::Value,
-        _transient: bool,
+        _persist: bool,
     ) {
         <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
     }
@@ -3788,7 +3860,7 @@
         kind: EventKind,
         module: <span class="prelude-ty">Option</span>&lt;(ModuleKind, ModuleInstanceId)&gt;,
         payload: serde_json::Value,
-        transient: bool,
+        persist: bool,
     ) {
         <span class="self">self</span>.client
             .log_event_raw_dbtx(
@@ -3796,7 +3868,7 @@
                 kind,
                 module,
                 serde_json::to_vec(<span class="kw-2">&amp;</span>payload).expect(<span class="string">"Serialization can't fail"</span>),
-                transient,
+                persist,
             )
             .<span class="kw">await</span>;
     }
@@ -3922,42 +3994,6 @@
 
     <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
         <span class="self">self</span>.inner.as_ref().expect(<span class="string">"Must have inner client set"</span>)
-    }
-}
-
-<span class="kw">impl </span>ClientHandle {
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>downgrade(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientWeak {
-        ClientWeak {
-            inner: Arc::downgrade(<span class="self">self</span>.inner.as_ref().expect(<span class="string">"Inner always set"</span>)),
-        }
-    }
-}
-
-<span class="doccomment">/// Internal self-reference to [`Client`]
-</span><span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>ClientStrong {
-    inner: Arc&lt;Client&gt;,
-}
-
-<span class="kw">impl </span>ops::Deref <span class="kw">for </span>ClientStrong {
-    <span class="kw">type </span>Target = Client;
-
-    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
-        <span class="self">self</span>.inner.deref()
-    }
-}
-
-<span class="doccomment">/// Like [`ClientStrong`] but using a [`Weak`] handle to [`Client`]
-///
-/// This is not meant to be used by external code.
-</span><span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>ClientWeak {
-    inner: Weak&lt;Client&gt;,
-}
-
-<span class="kw">impl </span>ClientWeak {
-    <span class="kw">pub fn </span>upgrade(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ClientStrong&gt; {
-        Weak::upgrade(<span class="kw-2">&amp;</span><span class="self">self</span>.inner).map(|inner| ClientStrong { inner })
     }
 }
 
@@ -5360,7 +5396,7 @@
         kind: EventKind,
         module: <span class="prelude-ty">Option</span>&lt;(ModuleKind, ModuleInstanceId)&gt;,
         payload: Vec&lt;u8&gt;,
-        transient: bool,
+        persist: bool,
     ) <span class="kw">where
         </span>Cap: Send,
     {
@@ -5372,7 +5408,7 @@
             module_kind,
             module_id,
             payload,
-            transient,
+            persist,
         )
         .<span class="kw">await</span>;
     }
@@ -5432,6 +5468,112 @@
     }
 }
 
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">impl </span>ClientContextIface <span class="kw">for </span>Client {
+    <span class="kw">fn </span>get_module(<span class="kw-2">&amp;</span><span class="self">self</span>, instance: ModuleInstanceId) -&gt; <span class="kw-2">&amp;</span><span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule) {
+        Client::get_module(<span class="self">self</span>, instance)
+    }
+
+    <span class="kw">fn </span>api_clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynGlobalApi {
+        Client::api_clone(<span class="self">self</span>)
+    }
+    <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ModuleDecoderRegistry {
+        Client::decoders(<span class="self">self</span>)
+    }
+
+    <span class="kw">async fn </span>finalize_and_submit_transaction(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+        operation_type: <span class="kw-2">&amp;</span>str,
+        operation_meta_gen: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Fn(OutPointRange) -&gt; serde_json::Value)&gt;,
+        tx_builder: TransactionBuilder,
+    ) -&gt; anyhow::Result&lt;OutPointRange&gt; {
+        Client::finalize_and_submit_transaction(
+            <span class="self">self</span>,
+            operation_id,
+            operation_type,
+            <span class="comment">// |out_point_range| operation_meta_gen(out_point_range),
+            </span><span class="kw-2">&amp;</span>operation_meta_gen,
+            tx_builder,
+        )
+        .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>finalize_and_submit_transaction_inner(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
+        operation_id: OperationId,
+        tx_builder: TransactionBuilder,
+    ) -&gt; anyhow::Result&lt;OutPointRange&gt; {
+        Client::finalize_and_submit_transaction_inner(<span class="self">self</span>, dbtx, operation_id, tx_builder).<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>transaction_updates(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; TransactionUpdates {
+        Client::transaction_updates(<span class="self">self</span>, operation_id).<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>await_primary_module_outputs(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+        <span class="comment">// TODO: make `impl Iterator&lt;Item = ...&gt;`
+        </span>outputs: Vec&lt;OutPoint&gt;,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        Client::await_primary_module_outputs(<span class="self">self</span>, operation_id, outputs).<span class="kw">await
+    </span>}
+
+    <span class="kw">fn </span>operation_log(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>OperationLog {
+        Client::operation_log(<span class="self">self</span>)
+    }
+
+    <span class="kw">async fn </span>has_active_states(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; bool {
+        Client::has_active_states(<span class="self">self</span>, operation_id).<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>operation_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; bool {
+        Client::operation_exists(<span class="self">self</span>, operation_id).<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientConfig {
+        Client::config(<span class="self">self</span>).<span class="kw">await
+    </span>}
+
+    <span class="kw">fn </span>db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Database {
+        Client::db(<span class="self">self</span>)
+    }
+
+    <span class="kw">fn </span>executor(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Executor {
+        Client::executor(<span class="self">self</span>)
+    }
+
+    <span class="kw">async fn </span>invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: PeerId) -&gt; <span class="prelude-ty">Option</span>&lt;InviteCode&gt; {
+        Client::invite_code(<span class="self">self</span>, peer).<span class="kw">await
+    </span>}
+
+    <span class="kw">fn </span>get_internal_payment_markers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;(PublicKey, u64)&gt; {
+        Client::get_internal_payment_markers(<span class="self">self</span>)
+    }
+
+    <span class="kw">async fn </span>log_event_json(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>, NonCommittable&gt;,
+        module_kind: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt;,
+        module_id: ModuleInstanceId,
+        kind: EventKind,
+        payload: serde_json::Value,
+        persist: bool,
+    ) {
+        dbtx.ensure_global()
+            .expect(<span class="string">"Must be called with global dbtx"</span>);
+        <span class="self">self</span>.log_event_raw_dbtx(
+            dbtx,
+            kind,
+            module_kind.map(|kind| (kind, module_id)),
+            serde_json::to_vec(<span class="kw-2">&amp;</span>payload).expect(<span class="string">"Serialization can't fail"</span>),
+            persist,
+        )
+        .<span class="kw">await</span>;
+    }
+}
 <span class="attr">#[derive(Deserialize)]
 </span><span class="kw">struct </span>GetInviteCodeRequest {
     peer: PeerId,
@@ -5984,7 +6126,7 @@
             watch::Receiver&lt;RecoveryProgress&gt;,
         &gt; = BTreeMap::new();
 
-        <span class="kw">let </span>final_client = FinalClient::default();
+        <span class="kw">let </span>final_client = FinalClientIface::default();
 
         <span class="kw">let </span>root_secret = <span class="self">Self</span>::federation_root_secret(<span class="kw-2">&amp;</span>root_secret, <span class="kw-2">&amp;</span>config);
 
@@ -6232,13 +6374,15 @@
                 log_event_added_transient_tx,
             ),
         );
+        <span class="kw">let </span>client_iface = std::sync::Arc::&lt;Client&gt;::downgrade(<span class="kw-2">&amp;</span>client_inner);
+
         <span class="kw">let </span>client_arc = ClientHandle::new(client_inner);
 
         <span class="kw">for </span>(<span class="kw">_</span>, <span class="kw">_</span>, module) <span class="kw">in </span>client_arc.modules.iter_modules() {
             module.start().<span class="kw">await</span>;
         }
 
-        final_client.set(client_arc.downgrade());
+        final_client.set(client_iface.clone());
 
         <span class="kw">if </span>!module_recoveries.is_empty() {
             client_arc.spawn_module_recoveries_task(

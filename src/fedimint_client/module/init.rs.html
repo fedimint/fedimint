@@ -467,7 +467,7 @@
 <span class="kw">use </span>tracing::warn;
 
 <span class="kw">use </span><span class="kw">super</span>::recovery::{DynModuleBackup, RecoveryProgress};
-<span class="kw">use super</span>::{ClientContext, FinalClient};
+<span class="kw">use super</span>::{ClientContext, FinalClientIface};
 <span class="kw">use </span><span class="kw">crate</span>::db::ClientMigrationFn;
 <span class="kw">use </span><span class="kw">crate</span>::module::{ClientModule, DynClientModule};
 <span class="kw">use </span><span class="kw">crate</span>::sm::{ModuleNotifier, Notifier};
@@ -710,7 +710,7 @@
     <span class="attr">#[allow(clippy::too_many_arguments)]
     </span><span class="kw">async fn </span>recover(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        final_client: FinalClient,
+        final_client: FinalClientIface,
         federation_id: FederationId,
         num_peers: NumPeers,
         cfg: ClientModuleConfig,
@@ -730,7 +730,7 @@
     <span class="attr">#[allow(clippy::too_many_arguments)]
     </span><span class="kw">async fn </span>init(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        final_client: FinalClient,
+        final_client: FinalClientIface,
         federation_id: FederationId,
         peer_num: usize,
         cfg: ClientModuleConfig,
@@ -771,7 +771,7 @@
 
     <span class="kw">async fn </span>recover(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        final_client: FinalClient,
+        final_client: FinalClientIface,
         federation_id: FederationId,
         num_peers: NumPeers,
         cfg: ClientModuleConfig,
@@ -828,7 +828,7 @@
 
     <span class="kw">async fn </span>init(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        final_client: FinalClient,
+        final_client: FinalClientIface,
         federation_id: FederationId,
         peer_num: usize,
         cfg: ClientModuleConfig,
