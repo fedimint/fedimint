@@ -2,7 +2,7 @@ use core::fmt;
 use std::any::Any;
 use std::fmt::Debug;
 use std::ops::Range;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::{ffi, marker, ops};
 
 use anyhow::{anyhow, bail};
@@ -13,7 +13,7 @@ use fedimint_core::core::{
     Decoder, DynInput, DynOutput, IInput, IntoDynInstance, ModuleInstanceId, ModuleKind,
     OperationId,
 };
-use fedimint_core::db::{Database, DatabaseTransaction, GlobalDBTxAccessToken};
+use fedimint_core::db::{Database, DatabaseTransaction, GlobalDBTxAccessToken, NonCommittable};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
@@ -22,21 +22,22 @@ use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::BoxStream;
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
-    TransactionId,
+    PeerId, TransactionId,
 };
-use fedimint_eventlog::Event;
+use fedimint_eventlog::{Event, EventKind};
+use fedimint_logging::LOG_CLIENT;
 use futures::Stream;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use tracing::warn;
 
 use self::init::ClientModuleInit;
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
-use crate::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
-use crate::sm::{self, ActiveStateMeta, Context, DynContext, DynState, State};
+use crate::oplog::{OperationLog, OperationLogEntry, UpdateStreamOrOutcome};
+use crate::sm::{self, ActiveStateMeta, Context, DynContext, DynState, Executor, State};
 use crate::transaction::{ClientInputBundle, ClientOutputBundle, TransactionBuilder};
 use crate::{
-    oplog, AddStateMachinesResult, Client, ClientStrong, ClientWeak,
-    InstancelessDynClientInputBundle, TransactionUpdates,
+    oplog, AddStateMachinesResult, Client, InstancelessDynClientInputBundle, TransactionUpdates,
 };
 
 pub mod init;
@@ -44,21 +45,86 @@ pub mod recovery;
 
 pub type ClientModuleRegistry = ModuleRegistry<DynClientModule>;
 
+/// A fedimint-client interface exposed to client modules
+///
+/// To break the dependency of the client modules on the whole fedimint client
+/// and in particular the `fedimint-client` crate, the module gets access to an
+/// interface, that is implemented by the `Client`.
+///
+/// This allows lose coupling, less recompilation and better control and
+/// understanding of what functionality of the Client the modules get access to.
+#[apply(async_trait_maybe_send!)]
+pub trait ClientContextIface: MaybeSend + MaybeSync {
+    fn get_module(&self, instance: ModuleInstanceId) -> &maybe_add_send_sync!(dyn IClientModule);
+    fn api_clone(&self) -> DynGlobalApi;
+    fn decoders(&self) -> &ModuleDecoderRegistry;
+    async fn finalize_and_submit_transaction(
+        &self,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta_gen: Box<maybe_add_send_sync!(dyn Fn(OutPointRange) -> serde_json::Value)>,
+        tx_builder: TransactionBuilder,
+    ) -> anyhow::Result<OutPointRange>;
+
+    // TODO: unify
+    async fn finalize_and_submit_transaction_inner(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        tx_builder: TransactionBuilder,
+    ) -> anyhow::Result<OutPointRange>;
+
+    async fn transaction_updates(&self, operation_id: OperationId) -> TransactionUpdates;
+
+    async fn await_primary_module_outputs(
+        &self,
+        operation_id: OperationId,
+        // TODO: make `impl Iterator<Item = ...>`
+        outputs: Vec<OutPoint>,
+    ) -> anyhow::Result<()>;
+
+    fn operation_log(&self) -> &OperationLog;
+
+    async fn has_active_states(&self, operation_id: OperationId) -> bool;
+
+    async fn operation_exists(&self, operation_id: OperationId) -> bool;
+
+    async fn config(&self) -> ClientConfig;
+
+    fn db(&self) -> &Database;
+
+    fn executor(&self) -> &Executor;
+
+    async fn invite_code(&self, peer: PeerId) -> Option<InviteCode>;
+
+    fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)>;
+
+    async fn log_event_json(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
+        module_kind: Option<ModuleKind>,
+        module_id: ModuleInstanceId,
+        kind: EventKind,
+        payload: serde_json::Value,
+        persist: bool,
+    );
+}
+
 /// A final, fully initialized [`crate::Client`]
 ///
 /// Client modules need to be able to access a `Client` they are a part
 /// of. To break the circular dependency, the final `Client` is passed
 /// after `Client` was built via a shared state.
 #[derive(Clone, Default)]
-pub struct FinalClient(Arc<std::sync::OnceLock<ClientWeak>>);
+pub struct FinalClientIface(Arc<std::sync::OnceLock<Weak<dyn ClientContextIface>>>);
 
-impl FinalClient {
-    /// Get a temporary [`ClientStrong`]
+impl FinalClientIface {
+    /// Get a temporary strong reference to [`ClientContextIface`]
     ///
     /// Care must be taken to not let the user take ownership of this value,
     /// and not store it elsewhere permanently either, as it could prevent
     /// the cleanup of the Client.
-    pub(crate) fn get(&self) -> ClientStrong {
+    pub(crate) fn get(&self) -> Arc<dyn ClientContextIface> {
         self.0
             .get()
             .expect("client must be already set")
@@ -66,7 +132,7 @@ impl FinalClient {
             .expect("client module context must not be use past client shutdown")
     }
 
-    pub(crate) fn set(&self, client: ClientWeak) {
+    pub(crate) fn set(&self, client: Weak<dyn ClientContextIface>) {
         self.0.set(client).expect("FinalLazyClient already set");
     }
 }
@@ -76,7 +142,7 @@ impl FinalClient {
 /// Client modules can interact with the whole
 /// client through this struct.
 pub struct ClientContext<M> {
-    client: FinalClient,
+    client: FinalClientIface,
     module_instance_id: ModuleInstanceId,
     global_dbtx_access_token: GlobalDBTxAccessToken,
     module_db: Database,
@@ -100,7 +166,7 @@ impl<M> Clone for ClientContext<M> {
 pub struct ClientContextSelfRef<'s, M> {
     // we are OK storing `ClientStrong` here, because of the `'s` preventing `Self` from being
     // stored permanently somewhere
-    client: ClientStrong,
+    client: Arc<dyn ClientContextIface>,
     module_instance_id: ModuleInstanceId,
     _marker: marker::PhantomData<&'s M>,
 }
@@ -156,7 +222,7 @@ where
 
     /// A set of all decoders of all modules of the client
     pub fn decoders(&self) -> ModuleDecoderRegistry {
-        self.client.get().decoders().clone()
+        Clone::clone(self.client.get().decoders())
     }
 
     pub fn input_from_dyn<'i>(
@@ -251,7 +317,7 @@ where
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<OutPointRange>
     where
-        F: Fn(OutPointRange) -> Meta + Clone + MaybeSend + MaybeSync,
+        F: Fn(OutPointRange) -> Meta + Clone + MaybeSend + MaybeSync + 'static,
         Meta: serde::Serialize + MaybeSend,
     {
         self.client
@@ -259,7 +325,9 @@ where
             .finalize_and_submit_transaction(
                 operation_id,
                 operation_type,
-                operation_meta_gen,
+                Box::new(move |out_point_range| {
+                    serde_json::to_value(operation_meta_gen(out_point_range)).expect("Can't fail")
+                }),
                 tx_builder,
             )
             .await
@@ -307,7 +375,7 @@ where
     ///
     /// Only intended for internal use (private).
     fn global_db(&self) -> fedimint_core::db::Database {
-        let db = self.client.get().db().clone();
+        let db = Clone::clone(self.client.get().db());
 
         db.ensure_global()
             .expect("global_db must always return a global db");
@@ -333,17 +401,18 @@ where
     pub async fn get_own_active_states(&self) -> Vec<(M::States, ActiveStateMeta)> {
         self.client
             .get()
-            .executor
+            .executor()
             .get_active_states()
             .await
             .into_iter()
             .filter(|s| s.0.module_instance_id() == self.module_instance_id)
             .map(|s| {
                 (
-                    s.0.as_any()
-                        .downcast_ref::<M::States>()
-                        .expect("incorrect output type passed to module plugin")
-                        .clone(),
+                    Clone::clone(
+                        s.0.as_any()
+                            .downcast_ref::<M::States>()
+                            .expect("incorrect output type passed to module plugin"),
+                    ),
                     s.1,
                 )
             })
@@ -448,13 +517,13 @@ where
 
         self.client
             .get()
-            .operation_log
+            .operation_log()
             .add_operation_log_entry(&mut dbtx.to_ref_nc(), operation_id, op_type, operation_meta)
             .await;
 
         self.client
             .get()
-            .executor
+            .executor()
             .add_state_machines_dbtx(&mut dbtx.to_ref_nc(), sms)
             .await
             .expect("State machine is valid");
@@ -515,7 +584,7 @@ where
     ) -> AddStateMachinesResult {
         self.client
             .get()
-            .executor
+            .executor()
             .add_state_machines_dbtx(&mut dbtx.global_dbtx(self.global_dbtx_access_token), states)
             .await
     }
@@ -544,12 +613,23 @@ where
         E: Event + Send,
         Cap: Send,
     {
+        if <E as Event>::MODULE != Some(<M as ClientModule>::kind()) {
+            warn!(
+                target: LOG_CLIENT,
+                module_kind = %<M as ClientModule>::kind(),
+                event_module = ?<E as Event>::MODULE,
+                "Client module logging events of different module than its own. This might become an error in the future."
+            );
+        }
         self.client
             .get()
-            .log_event_dbtx(
-                &mut dbtx.global_dbtx(self.global_dbtx_access_token),
-                Some(self.module_instance_id),
-                event,
+            .log_event_json(
+                &mut dbtx.global_dbtx(self.global_dbtx_access_token).to_ref_nc(),
+                <E as Event>::MODULE,
+                self.module_instance_id,
+                <E as Event>::KIND,
+                serde_json::to_value(event).expect("Can't fail"),
+                <E as Event>::PERSIST,
             )
             .await;
     }
