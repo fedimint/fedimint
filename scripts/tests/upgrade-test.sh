@@ -12,6 +12,12 @@ fi
 
 PATH="$(pwd)/scripts/dev/run-test/:$PATH"
 
+# Upgrade tests can take its time, so we need to customize timeout
+# used in fm-run-test to be slightly less than the timeout we put on
+# every 'parallel' job.
+export FM_TEST_UPGRADE_TIMEOUT=${FM_TEST_UPGRADE_TIMEOUT:-800}
+export FM_RUN_TEST_TIMEOUT=$((FM_TEST_UPGRADE_TIMEOUT - 30))
+
 # TODO(v0.5.0): We do not need to run the `gatewayd-mnemonic` test from v0.4.0
 # -> v0.5.0 over and over again. Once we have verified this test passes for
 # v0.5.0, it can safely be removed.
@@ -132,6 +138,7 @@ fi
 parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS:-$(($(nproc) / 4 + 1))}")
 parallel_args+=(--load "${FM_TEST_CI_ALL_MAX_LOAD:-$(($(nproc) / 4 + 1))}")
 parallel_args+=(--delay "${FM_TEST_CI_ALL_DELAY:-$((64 / $(nproc) + 1))}")
+parallel_args+=(--timeout "$FM_TEST_UPGRADE_TIMEOUT")
 parallel_args+=(
   --halt-on-error 1
   --joblog "$joblog"
