@@ -203,7 +203,7 @@ async fn test_server_db_migrations() -> anyhow::Result<()> {
                         info!(target: LOG_DB, "Validated AlephUnits");
                     }
                     // Module prefix is reserved for modules, no migration testing is needed
-                    DbKeyPrefix::Module => {}
+                    DbKeyPrefix::Module | DbKeyPrefix::ServerInfo => {}
                     DbKeyPrefix::ApiAnnouncements => {
                         let announcements = dbtx
                             .find_by_prefix(&ApiAnnouncementPrefix)

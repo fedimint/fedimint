@@ -315,7 +315,7 @@ impl DatabaseDump {
                 );
             }
             // Module is a global prefix for all module data
-            ConsensusRange::DbKeyPrefix::Module => {}
+            ConsensusRange::DbKeyPrefix::Module | ConsensusRange::DbKeyPrefix::ServerInfo => {}
             ConsensusRange::DbKeyPrefix::ApiAnnouncements => {
                 push_db_pair_items_no_serde!(
                     dbtx,

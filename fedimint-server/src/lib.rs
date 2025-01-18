@@ -21,6 +21,7 @@
 //! Server side fedimint module traits
 
 extern crate fedimint_core;
+mod db;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -28,7 +29,7 @@ use std::path::{Path, PathBuf};
 use config::io::{read_server_config, PLAINTEXT_PASSWORD};
 use config::ServerConfig;
 use fedimint_aead::random_salt;
-use fedimint_core::db::Database;
+use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::write_new;
@@ -40,6 +41,7 @@ use tracing::{info, warn};
 
 use crate::config::api::{ConfigGenApi, ConfigGenSettings};
 use crate::config::io::{write_server_config, SALT_FILE};
+use crate::db::{ServerInfo, ServerInfoKey};
 use crate::metrics::initialize_gauge_metrics;
 use crate::net::api::announcement::start_api_announcement_service;
 use crate::net::api::RpcHandlerCtx;
@@ -111,6 +113,18 @@ pub async fn run(
     task_group.shutdown();
 
     Ok(())
+}
+
+async fn update_server_info_version_dbtx(
+    dbtx: &mut DatabaseTransaction<'_>,
+    code_version_str: &str,
+) {
+    let mut server_info = dbtx.get_value(&ServerInfoKey).await.unwrap_or(ServerInfo {
+        init_version: code_version_str.to_string(),
+        last_version: code_version_str.to_string(),
+    });
+    server_info.last_version = code_version_str.to_string();
+    dbtx.insert_entry(&ServerInfoKey, &server_info).await;
 }
 
 pub fn get_config(data_dir: &Path) -> anyhow::Result<Option<ServerConfig>> {

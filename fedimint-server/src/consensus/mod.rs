@@ -17,7 +17,7 @@ use db::get_global_database_migrations;
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{DynGlobalApi, P2PConnectionStatus};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
-use fedimint_core::db::{apply_migrations, apply_migrations_server, Database};
+use fedimint_core::db::{apply_migrations, apply_migrations_server_dbtx, Database};
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleRegistry;
@@ -33,9 +33,9 @@ use crate::config::{ServerConfig, ServerConfigLocal};
 use crate::consensus::api::ConsensusApi;
 use crate::consensus::engine::ConsensusEngine;
 use crate::envs::{FM_DB_CHECKPOINT_RETENTION_DEFAULT, FM_DB_CHECKPOINT_RETENTION_ENV};
-use crate::net;
 use crate::net::api::announcement::get_api_urls;
 use crate::net::api::{ApiSecrets, RpcHandlerCtx};
+use crate::{net, update_server_info_version_dbtx};
 
 /// How many txs can be stored in memory before blocking the API
 const TRANSACTION_BUFFER: usize = 1000;
@@ -54,12 +54,16 @@ pub async fn run(
 ) -> anyhow::Result<()> {
     cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
 
-    apply_migrations_server(
-        &db,
+    let mut global_dbtx = db.begin_transaction().await;
+    apply_migrations_server_dbtx(
+        &mut global_dbtx.to_ref_nc(),
         "fedimint-server".to_string(),
         get_global_database_migrations(),
     )
     .await?;
+
+    update_server_info_version_dbtx(&mut global_dbtx.to_ref_nc(), &code_version_str).await;
+    global_dbtx.commit_tx_result().await?;
 
     let mut modules = BTreeMap::new();
 

@@ -25,6 +25,7 @@ pub enum DbKeyPrefix {
     AlephUnits = 0x05,
     // TODO: do we want to split the server DB into consensus/non-consensus?
     ApiAnnouncements = 0x06,
+    ServerInfo = 0x07,
     Module = MODULE_GLOBAL_PREFIX,
 }
 
