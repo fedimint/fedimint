@@ -543,7 +543,11 @@ jobs:
               >&2 echo "Pushing to cachix: $bin"
               cachix push fedimint -c 8 -j 8 $(nix-store --query --references $(readlink -f result)) $(readlink -f result)
               >&2 echo "Pining in cachix: fedimint-release-$bin:$BUILD_ID"
-              cachix pin fedimint "fedimint-release-$bin:$BUILD_ID" $(readlink -f result)
+              if [[ $var == *"-rc."* ]] || [[ $var == *"-alpha."* ]] || [[ $var == *"-testing."* ]] ; then
+                >&2 echo "Will not pin in cachix, as looks like a pre-release"
+              else
+                cachix pin fedimint "fedimint-release-$bin:$BUILD_ID" $(readlink -f result)
+              fi
             fi
             # Note: keep in sync with sign.sh
             >&2 echo "Building bundled: $bin"
