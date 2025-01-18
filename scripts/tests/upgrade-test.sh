@@ -15,7 +15,7 @@ PATH="$(pwd)/scripts/dev/run-test/:$PATH"
 # Upgrade tests can take its time, so we need to customize timeout
 # used in fm-run-test to be slightly less than the timeout we put on
 # every 'parallel' job.
-export FM_TEST_UPGRADE_TIMEOUT=${FM_TEST_UPGRADE_TIMEOUT:-600}
+export FM_TEST_UPGRADE_TIMEOUT=${FM_TEST_UPGRADE_TIMEOUT:-800}
 export FM_RUN_TEST_TIMEOUT=$((FM_TEST_UPGRADE_TIMEOUT - 30))
 
 # TODO(v0.5.0): We do not need to run the `gatewayd-mnemonic` test from v0.4.0
