@@ -175,7 +175,7 @@ impl FederationError {
             matches!(
                 peer_err,
                 PeerError::Rpc(JsonRpcClientError::Call(err)) if err.code() == METHOD_NOT_FOUND_CODE
-            )
+            ) || peer_err.to_string().contains("MethodNotFound")
         })
     }
 }
