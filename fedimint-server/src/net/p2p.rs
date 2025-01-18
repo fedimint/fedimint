@@ -6,7 +6,6 @@
 //! details.
 
 use std::collections::BTreeMap;
-use std::time::Duration;
 
 use async_channel::{bounded, Receiver, Sender};
 use async_trait::async_trait;
@@ -144,14 +143,6 @@ impl<M: Clone + Send + 'static> IP2PConnections<M> for ReconnectP2PConnections<M
             .expect("No connection found for peer {peer}")
             .receive()
             .await
-    }
-
-    async fn await_empty_outgoing_message_queues(&self) {
-        for connection in self.connections.values() {
-            while !connection.outgoing.is_empty() {
-                sleep(Duration::from_millis(250)).await;
-            }
-        }
     }
 }
 

@@ -23,9 +23,6 @@ pub trait IP2PConnections<M>: Send + Sync + 'static {
     /// Await the next message from peer; return None if we are shutting down.
     async fn receive_from_peer(&self, peer: PeerId) -> Option<M>;
 
-    /// Await the outgoing message queues to be fully transmitted.
-    async fn await_empty_outgoing_message_queues(&self);
-
     /// Convert the struct to trait object.
     fn into_dyn(self) -> DynP2PConnections<M>
     where

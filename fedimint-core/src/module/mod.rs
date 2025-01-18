@@ -32,10 +32,10 @@ use registry::ModuleRegistry;
 use serde::{Deserialize, Serialize};
 use tracing::Instrument;
 
-// TODO: Make this module public and remove the wildcard `pub use` below
+// TODO: Make this module public and remove theDkgPeerMessage`pub use` below
 mod version;
 pub use self::version::*;
-use crate::config::DkgPeerMsg;
+use crate::config::DkgPeerMessage;
 use crate::core::{
     ClientConfig, Decoder, DecoderBuilder, Input, InputError, ModuleConsensusItem,
     ModuleInstanceId, ModuleKind, Output, OutputError, OutputOutcome,
@@ -672,14 +672,14 @@ pub struct PeerHandle<'a> {
     #[doc(hidden)]
     pub identity: PeerId,
     #[doc(hidden)]
-    pub connections: &'a DynP2PConnections<DkgPeerMsg>,
+    pub connections: &'a DynP2PConnections<DkgPeerMessage>,
 }
 
 impl<'a> PeerHandle<'a> {
     pub fn new(
         num_peers: NumPeers,
         identity: PeerId,
-        connections: &'a DynP2PConnections<DkgPeerMsg>,
+        connections: &'a DynP2PConnections<DkgPeerMessage>,
     ) -> Self {
         Self {
             num_peers,

@@ -867,9 +867,10 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
 
 /// Things that a `distributed_gen` config can send between peers
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum DkgPeerMsg {
+pub enum DkgPeerMessage {
     DistributedGen(SupportedDkgMessage),
     Encodable(Vec<u8>),
+    Completed,
 }
 
 /// Supported (by Fedimint's code) `DkgMessage<T>` types
