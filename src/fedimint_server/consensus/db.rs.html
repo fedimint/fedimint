@@ -210,7 +210,8 @@
 <a href="#209" id="209">209</a>
 <a href="#210" id="210">210</a>
 <a href="#211" id="211">211</a>
-<a href="#212" id="212">212</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>fedimint_core::core::{DynInput, DynModuleConsensusItem, DynOutput, ModuleInstanceId};
@@ -237,6 +238,7 @@
     AlephUnits = <span class="number">0x05</span>,
     <span class="comment">// TODO: do we want to split the server DB into consensus/non-consensus?
     </span>ApiAnnouncements = <span class="number">0x06</span>,
+    ServerInfo = <span class="number">0x07</span>,
     Module = MODULE_GLOBAL_PREFIX,
 }
 

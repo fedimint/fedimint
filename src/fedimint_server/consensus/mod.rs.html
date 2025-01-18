@@ -289,7 +289,11 @@
 <a href="#288" id="288">288</a>
 <a href="#289" id="289">289</a>
 <a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>aleph_bft;
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>aleph_bft;
 <span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>debug;
@@ -308,7 +312,7 @@
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
 <span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, P2PConnectionStatus};
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
-<span class="kw">use </span>fedimint_core::db::{apply_migrations, apply_migrations_server, Database};
+<span class="kw">use </span>fedimint_core::db::{apply_migrations, apply_migrations_server_dbtx, Database};
 <span class="kw">use </span>fedimint_core::envs::is_running_in_test_env;
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
@@ -324,9 +328,9 @@
 <span class="kw">use </span><span class="kw">crate</span>::consensus::api::ConsensusApi;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::engine::ConsensusEngine;
 <span class="kw">use </span><span class="kw">crate</span>::envs::{FM_DB_CHECKPOINT_RETENTION_DEFAULT, FM_DB_CHECKPOINT_RETENTION_ENV};
-<span class="kw">use </span><span class="kw">crate</span>::net;
 <span class="kw">use </span><span class="kw">crate</span>::net::api::announcement::get_api_urls;
 <span class="kw">use </span><span class="kw">crate</span>::net::api::{ApiSecrets, RpcHandlerCtx};
+<span class="kw">use crate</span>::{net, update_server_info_version_dbtx};
 
 <span class="doccomment">/// How many txs can be stored in memory before blocking the API
 </span><span class="kw">const </span>TRANSACTION_BUFFER: usize = <span class="number">1000</span>;
@@ -345,12 +349,16 @@
 ) -&gt; anyhow::Result&lt;()&gt; {
     cfg.validate_config(<span class="kw-2">&amp;</span>cfg.local.identity, <span class="kw-2">&amp;</span>module_init_registry)<span class="question-mark">?</span>;
 
-    apply_migrations_server(
-        <span class="kw-2">&amp;</span>db,
+    <span class="kw">let </span><span class="kw-2">mut </span>global_dbtx = db.begin_transaction().<span class="kw">await</span>;
+    apply_migrations_server_dbtx(
+        <span class="kw-2">&amp;mut </span>global_dbtx.to_ref_nc(),
         <span class="string">"fedimint-server"</span>.to_string(),
         get_global_database_migrations(),
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    update_server_info_version_dbtx(<span class="kw-2">&amp;mut </span>global_dbtx.to_ref_nc(), <span class="kw-2">&amp;</span>code_version_str).<span class="kw">await</span>;
+    global_dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
 
