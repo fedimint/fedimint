@@ -1396,8 +1396,7 @@
 <a href="#1395" id="1395">1395</a>
 <a href="#1396" id="1396">1396</a>
 <a href="#1397" id="1397">1397</a>
-<a href="#1398" id="1398">1398</a>
-<a href="#1399" id="1399">1399</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1398" id="1398">1398</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1432,9 +1431,7 @@
 <span class="kw">use </span>envs::{FM_API_SECRET_ENV, SALT_FILE};
 <span class="kw">use </span>fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
-<span class="kw">use </span>fedimint_api_client::api::{
-    DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, WsFederationApi,
-};
+<span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, FederationApiExt, FederationError};
 <span class="kw">use </span>fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 <span class="kw">use </span>fedimint_client::meta::{FetchKind, LegacyMetaSource, MetaSource};
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
@@ -2359,10 +2356,11 @@ Examples:
                 }
                 <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
-                <span class="kw">let </span>ws_api: Arc&lt;<span class="kw">_</span>&gt; = WsFederationApi::new(
-                    <span class="kw-2">&amp;</span>cli.connector(),
+                <span class="kw">let </span>ws_api: Arc&lt;<span class="kw">_</span>&gt; = DynGlobalApi::from_endpoints(
                     client.get_peer_urls().<span class="kw">await</span>,
                     client.api_secret(),
+                    <span class="kw-2">&amp;</span>cli.connector(),
+                    <span class="prelude-val">None</span>,
                 )
                 .into();
 
@@ -2375,7 +2373,7 @@ Examples:
                 };
                 <span class="kw">let </span>response: Value = <span class="kw">match </span>peer_id {
                     <span class="prelude-val">Some</span>(peer_id) =&gt; ws_api
-                        .request_raw(peer_id.into(), <span class="kw-2">&amp;</span>method, <span class="kw-2">&amp;</span>[params.to_json()])
+                        .request_raw(peer_id.into(), <span class="kw-2">&amp;</span>method, <span class="kw-2">&amp;</span>params)
                         .<span class="kw">await
                         </span>.map_err_cli()<span class="question-mark">?</span>,
                     <span class="prelude-val">None </span>=&gt; ws_api

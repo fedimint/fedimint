@@ -2214,7 +2214,8 @@
 <a href="#2213" id="2213">2213</a>
 <a href="#2214" id="2214">2214</a>
 <a href="#2215" id="2215">2215</a>
-<a href="#2216" id="2216">2216</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2216" id="2216">2216</a>
+<a href="#2217" id="2217">2217</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -3227,10 +3228,11 @@
         <span class="kw">let </span>bitcoind_rpc = bitcoind;
 
         <span class="kw">let </span>bitcoind_net = NetworkLegacyEncodingWrapper(
-            bitcoind_rpc
-                .get_network()
-                .<span class="kw">await
-                </span>.map_err(|e| WalletCreationError::RpcError(e.to_string()))<span class="question-mark">?</span>,
+            retry(<span class="string">"verify network"</span>, backoff_util::aggressive_backoff(), || {
+                bitcoind_rpc.get_network()
+            })
+            .<span class="kw">await
+            </span>.map_err(|e| WalletCreationError::RpcError(e.to_string()))<span class="question-mark">?</span>,
         );
         <span class="kw">if </span>bitcoind_net != cfg.consensus.network {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletCreationError::WrongNetwork(

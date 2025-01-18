@@ -827,7 +827,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone)]
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ApiError {
     <span class="kw">pub </span>code: i32,
     <span class="kw">pub </span>message: String,

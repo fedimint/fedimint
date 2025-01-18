@@ -627,7 +627,7 @@
     <span class="kw-2">mut </span>wakeup_receiver: watch::Receiver&lt;()&gt;,
 ) {
     <span class="kw">let </span>min_sleep: Duration = <span class="kw">if </span>is_running_in_test_env() {
-        Duration::from_millis(<span class="number">1</span>)
+        Duration::from_millis(<span class="number">100</span>)
     } <span class="kw">else </span>{
         Duration::from_secs(<span class="number">30</span>)
     };
@@ -655,7 +655,7 @@
             .duration_since(now)
             .unwrap_or_default()
             .max(min_sleep);
-        <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_WALLET, sleep_secs=%next_wakeup_duration.as_secs(), <span class="string">"Sleep after completing due checks"</span>);
+        <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_WALLET, sleep_msecs=%next_wakeup_duration.as_millis(), <span class="string">"Sleep after completing due checks"</span>);
         <span class="macro">tokio::select!</span> {
             () = sleep(next_wakeup_duration) =&gt; {
                 <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_WALLET, <span class="string">"Woken up by a scheduled wakeup"</span>);

@@ -1198,15 +1198,152 @@
 <a href="#1197" id="1197">1197</a>
 <a href="#1198" id="1198">1198</a>
 <a href="#1199" id="1199">1199</a>
-<a href="#1200" id="1200">1200</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
+<a href="#1200" id="1200">1200</a>
+<a href="#1201" id="1201">1201</a>
+<a href="#1202" id="1202">1202</a>
+<a href="#1203" id="1203">1203</a>
+<a href="#1204" id="1204">1204</a>
+<a href="#1205" id="1205">1205</a>
+<a href="#1206" id="1206">1206</a>
+<a href="#1207" id="1207">1207</a>
+<a href="#1208" id="1208">1208</a>
+<a href="#1209" id="1209">1209</a>
+<a href="#1210" id="1210">1210</a>
+<a href="#1211" id="1211">1211</a>
+<a href="#1212" id="1212">1212</a>
+<a href="#1213" id="1213">1213</a>
+<a href="#1214" id="1214">1214</a>
+<a href="#1215" id="1215">1215</a>
+<a href="#1216" id="1216">1216</a>
+<a href="#1217" id="1217">1217</a>
+<a href="#1218" id="1218">1218</a>
+<a href="#1219" id="1219">1219</a>
+<a href="#1220" id="1220">1220</a>
+<a href="#1221" id="1221">1221</a>
+<a href="#1222" id="1222">1222</a>
+<a href="#1223" id="1223">1223</a>
+<a href="#1224" id="1224">1224</a>
+<a href="#1225" id="1225">1225</a>
+<a href="#1226" id="1226">1226</a>
+<a href="#1227" id="1227">1227</a>
+<a href="#1228" id="1228">1228</a>
+<a href="#1229" id="1229">1229</a>
+<a href="#1230" id="1230">1230</a>
+<a href="#1231" id="1231">1231</a>
+<a href="#1232" id="1232">1232</a>
+<a href="#1233" id="1233">1233</a>
+<a href="#1234" id="1234">1234</a>
+<a href="#1235" id="1235">1235</a>
+<a href="#1236" id="1236">1236</a>
+<a href="#1237" id="1237">1237</a>
+<a href="#1238" id="1238">1238</a>
+<a href="#1239" id="1239">1239</a>
+<a href="#1240" id="1240">1240</a>
+<a href="#1241" id="1241">1241</a>
+<a href="#1242" id="1242">1242</a>
+<a href="#1243" id="1243">1243</a>
+<a href="#1244" id="1244">1244</a>
+<a href="#1245" id="1245">1245</a>
+<a href="#1246" id="1246">1246</a>
+<a href="#1247" id="1247">1247</a>
+<a href="#1248" id="1248">1248</a>
+<a href="#1249" id="1249">1249</a>
+<a href="#1250" id="1250">1250</a>
+<a href="#1251" id="1251">1251</a>
+<a href="#1252" id="1252">1252</a>
+<a href="#1253" id="1253">1253</a>
+<a href="#1254" id="1254">1254</a>
+<a href="#1255" id="1255">1255</a>
+<a href="#1256" id="1256">1256</a>
+<a href="#1257" id="1257">1257</a>
+<a href="#1258" id="1258">1258</a>
+<a href="#1259" id="1259">1259</a>
+<a href="#1260" id="1260">1260</a>
+<a href="#1261" id="1261">1261</a>
+<a href="#1262" id="1262">1262</a>
+<a href="#1263" id="1263">1263</a>
+<a href="#1264" id="1264">1264</a>
+<a href="#1265" id="1265">1265</a>
+<a href="#1266" id="1266">1266</a>
+<a href="#1267" id="1267">1267</a>
+<a href="#1268" id="1268">1268</a>
+<a href="#1269" id="1269">1269</a>
+<a href="#1270" id="1270">1270</a>
+<a href="#1271" id="1271">1271</a>
+<a href="#1272" id="1272">1272</a>
+<a href="#1273" id="1273">1273</a>
+<a href="#1274" id="1274">1274</a>
+<a href="#1275" id="1275">1275</a>
+<a href="#1276" id="1276">1276</a>
+<a href="#1277" id="1277">1277</a>
+<a href="#1278" id="1278">1278</a>
+<a href="#1279" id="1279">1279</a>
+<a href="#1280" id="1280">1280</a>
+<a href="#1281" id="1281">1281</a>
+<a href="#1282" id="1282">1282</a>
+<a href="#1283" id="1283">1283</a>
+<a href="#1284" id="1284">1284</a>
+<a href="#1285" id="1285">1285</a>
+<a href="#1286" id="1286">1286</a>
+<a href="#1287" id="1287">1287</a>
+<a href="#1288" id="1288">1288</a>
+<a href="#1289" id="1289">1289</a>
+<a href="#1290" id="1290">1290</a>
+<a href="#1291" id="1291">1291</a>
+<a href="#1292" id="1292">1292</a>
+<a href="#1293" id="1293">1293</a>
+<a href="#1294" id="1294">1294</a>
+<a href="#1295" id="1295">1295</a>
+<a href="#1296" id="1296">1296</a>
+<a href="#1297" id="1297">1297</a>
+<a href="#1298" id="1298">1298</a>
+<a href="#1299" id="1299">1299</a>
+<a href="#1300" id="1300">1300</a>
+<a href="#1301" id="1301">1301</a>
+<a href="#1302" id="1302">1302</a>
+<a href="#1303" id="1303">1303</a>
+<a href="#1304" id="1304">1304</a>
+<a href="#1305" id="1305">1305</a>
+<a href="#1306" id="1306">1306</a>
+<a href="#1307" id="1307">1307</a>
+<a href="#1308" id="1308">1308</a>
+<a href="#1309" id="1309">1309</a>
+<a href="#1310" id="1310">1310</a>
+<a href="#1311" id="1311">1311</a>
+<a href="#1312" id="1312">1312</a>
+<a href="#1313" id="1313">1313</a>
+<a href="#1314" id="1314">1314</a>
+<a href="#1315" id="1315">1315</a>
+<a href="#1316" id="1316">1316</a>
+<a href="#1317" id="1317">1317</a>
+<a href="#1318" id="1318">1318</a>
+<a href="#1319" id="1319">1319</a>
+<a href="#1320" id="1320">1320</a>
+<a href="#1321" id="1321">1321</a>
+<a href="#1322" id="1322">1322</a>
+<a href="#1323" id="1323">1323</a>
+<a href="#1324" id="1324">1324</a>
+<a href="#1325" id="1325">1325</a>
+<a href="#1326" id="1326">1326</a>
+<a href="#1327" id="1327">1327</a>
+<a href="#1328" id="1328">1328</a>
+<a href="#1329" id="1329">1329</a>
+<a href="#1330" id="1330">1330</a>
+<a href="#1331" id="1331">1331</a>
+<a href="#1332" id="1332">1332</a>
+<a href="#1333" id="1333">1333</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::iter::once;
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::result;
 <span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::anyhow;
+<span class="kw">use </span>anyhow::{anyhow, Context};
 <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
 </span><span class="kw">use </span>arti_client::{TorAddr, TorClient, TorClientConfig};
+<span class="kw">use </span>async_channel::bounded;
+<span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>base64::Engine <span class="kw">as _</span>;
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>bitcoin::secp256k1;
@@ -1228,15 +1365,15 @@
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 <span class="kw">use </span>fedimint_core::util::backoff_util::api_networking_backoff;
-<span class="kw">use </span>fedimint_core::util::{FmtCompact <span class="kw">as _</span>, SafeUrl};
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, util, NumPeersExt, PeerId, TransactionId,
 };
 <span class="kw">use </span>fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_API};
+<span class="kw">use </span>futures::channel::oneshot;
 <span class="kw">use </span>futures::future::pending;
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>futures::{Future, StreamExt};
-<span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>jsonrpsee_core::client::ClientT;
 <span class="kw">pub use </span>jsonrpsee_core::client::Error <span class="kw">as </span>JsonRpcClientError;
 <span class="kw">use </span>jsonrpsee_core::DeserializeOwned;
@@ -1253,16 +1390,14 @@
 </span><span class="kw">use </span>tokio_rustls::rustls::RootCertStore;
 <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
 </span><span class="kw">use </span>tokio_rustls::{rustls::ClientConfig <span class="kw">as </span>TlsClientConfig, TlsConnector};
-<span class="kw">use </span>tracing::{debug, instrument, trace, warn};
+<span class="kw">use </span>tracing::{debug, info, info_span, instrument, warn, Instrument};
 
 <span class="kw">use </span><span class="kw">crate</span>::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 <span class="kw">mod </span>error;
 <span class="kw">mod </span>global_api;
 <span class="kw">pub mod </span>net;
-<span class="kw">mod </span>peer;
 
 <span class="kw">pub use </span>global_api::{GlobalFederationApiWithCache, GlobalFederationApiWithCacheExt};
-<span class="kw">use </span>peer::FederationPeer;
 
 <span class="kw">pub const </span>VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2: ApiVersion = ApiVersion::new(<span class="number">0</span>, <span class="number">5</span>);
 
@@ -1310,7 +1445,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peer_id: PeerId,
         method: <span class="kw-2">&amp;</span>str,
-        params: <span class="kw-2">&amp;</span>[Value],
+        params: <span class="kw-2">&amp;</span>ApiRequestErased,
     ) -&gt; result::Result&lt;Value, JsonRpcClientError&gt;;
 }
 
@@ -1327,7 +1462,7 @@
     <span class="kw">where
         </span>Ret: DeserializeOwned,
     {
-        <span class="self">self</span>.request_raw(peer, <span class="kw-2">&amp;</span>method, <span class="kw-2">&amp;</span>[params.to_json()])
+        <span class="self">self</span>.request_raw(peer, <span class="kw-2">&amp;</span>method, <span class="kw-2">&amp;</span>params)
             .<span class="kw">await
             </span>.map_err(PeerError::Rpc)
             .and_then(|v| {
@@ -1344,7 +1479,7 @@
     <span class="kw">where
         </span>FedRet: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
-        <span class="self">self</span>.request_raw(peer_id, <span class="kw-2">&amp;</span>method, <span class="kw-2">&amp;</span>[params.to_json()])
+        <span class="self">self</span>.request_raw(peer_id, <span class="kw-2">&amp;</span>method, <span class="kw-2">&amp;</span>params)
             .<span class="kw">await
             </span>.map_err(PeerError::Rpc)
             .and_then(|v| {
@@ -1562,6 +1697,7 @@
                 <span class="macro">anyhow::format_err!</span>(<span class="string">"Admin peer_id not set"</span>),
             ));
         };
+
         <span class="self">self</span>.request_single_peer_federation(method.into(), params.with_auth(auth), self_peer_id)
             .<span class="kw">await
     </span>}
@@ -1616,10 +1752,7 @@
         api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
         connector: <span class="kw-2">&amp;</span>Connector,
     ) -&gt; DynGlobalApi {
-        GlobalFederationApiWithCache::new(
-            WsFederationApi::new(connector, <span class="macro">vec!</span>[(peer, url)], api_secret).with_self_peer_id(peer),
-        )
-        .into()
+        <span class="self">Self</span>::from_endpoints(once((peer, url)), api_secret, connector, <span class="prelude-val">Some</span>(peer))
     }
 
     <span class="comment">// FIXME: (@leonardo) Should we have the option to do DKG and config related
@@ -1628,12 +1761,8 @@
     </span><span class="kw">pub fn </span>from_pre_peer_id_admin_endpoint(url: SafeUrl, api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
         <span class="comment">// PeerIds are used only for informational purposes, but just in case, make a
         // big number so it stands out
-        </span><span class="kw">let </span>peer_id = PeerId::from(<span class="number">1024</span>);
-        GlobalFederationApiWithCache::new(
-            WsFederationApi::new(<span class="kw-2">&amp;</span>Connector::default(), <span class="macro">vec!</span>[(peer_id, url)], api_secret)
-                .with_self_peer_id(peer_id),
-        )
-        .into()
+
+        </span><span class="self">Self</span>::new_admin(PeerId::from(<span class="number">1024</span>), url, api_secret, <span class="kw-2">&amp;</span>Connector::default())
     }
 
     <span class="kw">pub fn </span>from_single_endpoint(
@@ -1641,30 +1770,39 @@
         url: SafeUrl,
         api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
         connector: <span class="kw-2">&amp;</span>Connector,
+        admin_id: <span class="prelude-ty">Option</span>&lt;PeerId&gt;,
     ) -&gt; <span class="self">Self </span>{
-        GlobalFederationApiWithCache::new(WsFederationApi::new(
-            connector,
-            <span class="macro">vec!</span>[(peer, url)],
-            api_secret,
-        ))
-        .into()
+        <span class="self">Self</span>::from_endpoints(once((peer, url)), api_secret, connector, admin_id)
     }
 
     <span class="kw">pub fn </span>from_endpoints(
         peers: <span class="kw">impl </span>IntoIterator&lt;Item = (PeerId, SafeUrl)&gt;,
         api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
         connector: <span class="kw-2">&amp;</span>Connector,
+        admin_id: <span class="prelude-ty">Option</span>&lt;PeerId&gt;,
     ) -&gt; <span class="self">Self </span>{
-        GlobalFederationApiWithCache::new(WsFederationApi::new(connector, peers, api_secret)).into()
+        <span class="kw">let </span>connector = <span class="kw">match </span>connector {
+            Connector::Tcp =&gt; {
+                WebsocketConnector::new(peers.into_iter().collect(), api_secret.clone()).into_dyn()
+            }
+            <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
+            </span>Connector::Tor =&gt; {
+                TorConnector::new(peers.into_iter().collect(), api_secret.clone()).into_dyn()
+            }
+            <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, target_family = <span class="string">"wasm"</span>))]
+            </span>Connector::Tor =&gt; <span class="macro">unimplemented!</span>(),
+        };
+
+        GlobalFederationApiWithCache::new(ReconnectFederationApi::new(<span class="kw-2">&amp;</span>connector, admin_id)).into()
     }
 
     <span class="kw">pub fn </span>from_invite_code(connector: <span class="kw-2">&amp;</span>Connector, invite_code: <span class="kw-2">&amp;</span>InviteCode) -&gt; <span class="self">Self </span>{
-        GlobalFederationApiWithCache::new(WsFederationApi::new(
-            connector,
-            invite_code.peers().into_iter().collect_vec(),
+        <span class="self">Self</span>::from_endpoints(
+            invite_code.peers(),
             <span class="kw-2">&amp;</span>invite_code.api_secret(),
-        ))
-        .into()
+            connector,
+            <span class="prelude-val">None</span>,
+        )
     }
 }
 
@@ -1841,84 +1979,30 @@
     })
 }
 
-<span class="doccomment">/// Mint API client that will try to run queries against all `peers` expecting
-/// equal results from at least `min_eq_results` of them. Peers that return
-/// differing results are returned as a peer faults list.
-</span><span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">pub struct </span>WsFederationApi&lt;C = WsClient&gt; {
-    peer_ids: BTreeSet&lt;PeerId&gt;,
-    self_peer_id: <span class="prelude-ty">Option</span>&lt;PeerId&gt;,
-    peers: Arc&lt;Vec&lt;FederationPeer&lt;C&gt;&gt;&gt;,
-    module_id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
+<span class="attr">#[derive(Debug, Clone)]
+</span><span class="kw">pub struct </span>WebsocketConnector {
+    peers: BTreeMap&lt;PeerId, SafeUrl&gt;,
+    api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
 
-<span class="kw">impl</span>&lt;C: JsonRpcClient + Debug + <span class="lifetime">'static</span>&gt; IModuleFederationApi <span class="kw">for </span>WsFederationApi&lt;C&gt; {}
+<span class="kw">impl </span>WebsocketConnector {
+    <span class="kw">pub fn </span>new(peers: BTreeMap&lt;PeerId, SafeUrl&gt;, api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ peers, api_secret }
+    }
+}
 
-<span class="doccomment">/// Implementation of API calls over WebSockets
-///
-/// Can function as either the global or module API
-</span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl</span>&lt;C: JsonRpcClient + Debug + <span class="lifetime">'static</span>&gt; IRawFederationApi <span class="kw">for </span>WsFederationApi&lt;C&gt; {
-    <span class="kw">fn </span>all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt; {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.peer_ids
+<span class="attr">#[async_trait]
+</span><span class="kw">impl </span>IClientConnector <span class="kw">for </span>WebsocketConnector {
+    <span class="kw">fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeSet&lt;PeerId&gt; {
+        <span class="self">self</span>.peers.keys().copied().collect()
     }
 
-    <span class="kw">fn </span>self_peer(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;PeerId&gt; {
-        <span class="self">self</span>.self_peer_id
-    }
-
-    <span class="kw">fn </span>with_module(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; DynModuleApi {
-        WsFederationApi {
-            peer_ids: <span class="self">self</span>.peer_ids.clone(),
-            peers: <span class="self">self</span>.peers.clone(),
-            module_id: <span class="prelude-val">Some</span>(id),
-            self_peer_id: <span class="self">self</span>.self_peer_id,
-        }
-        .into()
-    }
-
-    <span class="kw">async fn </span>request_raw(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        peer_id: PeerId,
-        method: <span class="kw-2">&amp;</span>str,
-        params: <span class="kw-2">&amp;</span>[Value],
-    ) -&gt; JsonRpcResult&lt;Value&gt; {
-        <span class="kw">let </span>peer = <span class="self">self
+    <span class="kw">async fn </span>connect(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: PeerId) -&gt; anyhow::Result&lt;DynClientConnection&gt; {
+        <span class="kw">let </span>api_endpoint = <span class="self">self
             </span>.peers
-            .iter()
-            .find(|m| m.peer_id == peer_id)
-            .ok_or_else(|| JsonRpcClientError::Custom(<span class="macro">format!</span>(<span class="string">"Invalid peer_id: {peer_id}"</span>)))<span class="question-mark">?</span>;
+            .get(<span class="kw-2">&amp;</span>peer)
+            .expect(<span class="string">"Could not find websocket api endpoint for peer {peer}"</span>);
 
-        <span class="kw">let </span>method = <span class="kw">match </span><span class="self">self</span>.module_id {
-            <span class="prelude-val">None </span>=&gt; method.to_string(),
-            <span class="prelude-val">Some</span>(id) =&gt; <span class="macro">format!</span>(<span class="string">"module_{id}_{method}"</span>),
-        };
-        peer.request(<span class="kw-2">&amp;</span>method, params).<span class="kw">await
-    </span>}
-}
-
-<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">pub trait </span>JsonRpcClient: ClientT + Sized + MaybeSend + MaybeSync {
-    <span class="kw">async fn </span>connect(
-        url: <span class="kw-2">&amp;</span>SafeUrl,
-        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
-    ) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcClientError&gt;;
-
-    <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
-    </span><span class="kw">async fn </span>connect_with_tor(
-        url: <span class="kw-2">&amp;</span>SafeUrl,
-        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
-    ) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcClientError&gt;;
-
-    <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
-}
-
-<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl </span>JsonRpcClient <span class="kw">for </span>WsClient {
-    <span class="kw">async fn </span>connect(
-        url: <span class="kw-2">&amp;</span>SafeUrl,
-        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
-    ) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcClientError&gt; {
         <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
         </span><span class="kw">let </span><span class="kw-2">mut </span>client = {
             <span class="kw">let </span>webpki_roots = webpki_roots::TLS_SERVER_ROOTS.iter().cloned();
@@ -1937,7 +2021,7 @@
         <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
         </span><span class="kw">let </span>client = WsClientBuilder::default().max_concurrent_requests(u16::MAX <span class="kw">as </span>usize);
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(api_secret) = api_secret {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(api_secret) = <span class="kw-2">&amp;</span><span class="self">self</span>.api_secret {
             <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
             </span>{
                 <span class="comment">// on native platforms, jsonrpsee-client ignores `user:pass@...` in the Url,
@@ -1958,24 +2042,54 @@
             </span>{
                 <span class="comment">// on wasm, url will be handled by the browser, which should take care of
                 // `user:pass@...`
-                </span><span class="kw">let </span><span class="kw-2">mut </span>url = url.clone();
+                </span><span class="kw">let </span><span class="kw-2">mut </span>url = api_endpoint.clone();
                 url.set_username(<span class="string">"fedimint"</span>).map_err(|<span class="kw">_</span>| {
                     JsonRpcClientError::Transport(<span class="macro">anyhow::format_err!</span>(<span class="string">"invalid username"</span>).into())
                 })<span class="question-mark">?</span>;
                 url.set_password(<span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>api_secret)).map_err(|<span class="kw">_</span>| {
                     JsonRpcClientError::Transport(<span class="macro">anyhow::format_err!</span>(<span class="string">"invalid secret"</span>).into())
                 })<span class="question-mark">?</span>;
-                <span class="kw">return </span>client.build(url.as_str()).<span class="kw">await</span>;
+
+                <span class="kw">let </span>client = client.build(url.as_str()).<span class="kw">await</span><span class="question-mark">?</span>;
+
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(client.into_dyn());
             }
         }
-        client.build(url.as_str()).<span class="kw">await
-    </span>}
 
-    <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
-    </span><span class="kw">async fn </span>connect_with_tor(
-        url: <span class="kw-2">&amp;</span>SafeUrl,
-        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
-    ) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcClientError&gt; {
+        <span class="kw">let </span>client = client.build(api_endpoint.as_str()).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(client.into_dyn())
+    }
+}
+
+<span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
+#[derive(Debug, Clone)]
+</span><span class="kw">pub struct </span>TorConnector {
+    peers: BTreeMap&lt;PeerId, SafeUrl&gt;,
+    api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+}
+
+<span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
+</span><span class="kw">impl </span>TorConnector {
+    <span class="kw">pub fn </span>new(peers: BTreeMap&lt;PeerId, SafeUrl&gt;, api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ peers, api_secret }
+    }
+}
+
+<span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
+#[async_trait]
+</span><span class="kw">impl </span>IClientConnector <span class="kw">for </span>TorConnector {
+    <span class="kw">fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeSet&lt;PeerId&gt; {
+        <span class="self">self</span>.peers.keys().copied().collect()
+    }
+
+    <span class="attr">#[allow(clippy::too_many_lines)]
+    </span><span class="kw">async fn </span>connect(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: PeerId) -&gt; anyhow::Result&lt;DynClientConnection&gt; {
+        <span class="kw">let </span>api_endpoint = <span class="self">self
+            </span>.peers
+            .get(<span class="kw-2">&amp;</span>peer)
+            .expect(<span class="string">"Could not find websocket api endpoint for peer {peer}"</span>);
+
         <span class="kw">let </span>tor_config = TorClientConfig::default();
         <span class="kw">let </span>tor_client = TorClient::create_bootstrapped(tor_config)
             .<span class="kw">await
@@ -1987,9 +2101,11 @@
         <span class="comment">// TODO: (@leonardo) should we implement our `IntoTorAddr` for `SafeUrl`
         // instead?
         </span><span class="kw">let </span>addr = (
-            url.host_str()
+            api_endpoint
+                .host_str()
                 .expect(<span class="string">"It should've asserted for `host` on construction"</span>),
-            url.port_or_known_default()
+            api_endpoint
+                .port_or_known_default()
                 .expect(<span class="string">"It should've asserted for `port`, or used a default one, on construction"</span>),
         );
         <span class="kw">let </span>tor_addr = TorAddr::from(addr).map_err(|e| JsonRpcClientError::Transport(e.into()))<span class="question-mark">?</span>;
@@ -2003,7 +2119,7 @@
 
         <span class="comment">// TODO: It can be updated to use `is_onion_address()` implementation,
         // once https://gitlab.torproject.org/tpo/core/arti/-/merge_requests/2214 lands.
-        </span><span class="kw">let </span>anonymized_stream = <span class="kw">if </span>url.is_onion_address() {
+        </span><span class="kw">let </span>anonymized_stream = <span class="kw">if </span>api_endpoint.is_onion_address() {
             <span class="kw">let </span><span class="kw-2">mut </span>stream_prefs = arti_client::StreamPrefs::default();
             stream_prefs.connect_to_onion_services(arti_client::config::BoolOrAuto::Explicit(<span class="bool-val">true</span>));
 
@@ -2027,13 +2143,13 @@
             anonymized_stream
         };
 
-        <span class="kw">let </span>is_tls = <span class="kw">match </span>url.scheme() {
+        <span class="kw">let </span>is_tls = <span class="kw">match </span>api_endpoint.scheme() {
             <span class="string">"wss" </span>=&gt; <span class="bool-val">true</span>,
             <span class="string">"ws" </span>=&gt; <span class="bool-val">false</span>,
             unexpected_scheme =&gt; {
                 <span class="kw">let </span>error =
                     <span class="macro">format!</span>(<span class="string">"`{unexpected_scheme}` not supported, it's expected `ws` or `wss`!"</span>);
-                <span class="kw">return </span><span class="prelude-val">Err</span>(JsonRpcClientError::Transport(<span class="macro">anyhow!</span>(error).into()));
+                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(error));
             }
         };
 
@@ -2054,7 +2170,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>ws_client_builder =
             WsClientBuilder::default().max_concurrent_requests(u16::MAX <span class="kw">as </span>usize);
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(api_secret) = api_secret {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(api_secret) = <span class="kw-2">&amp;</span><span class="self">self</span>.api_secret {
             <span class="comment">// on native platforms, jsonrpsee-client ignores `user:pass@...` in the Url,
             // but we can set up the headers manually
             </span><span class="kw">let </span><span class="kw-2">mut </span>headers = HeaderMap::new();
@@ -2072,14 +2188,19 @@
 
         <span class="kw">match </span>tls_connector {
             <span class="prelude-val">None </span>=&gt; {
-                <span class="kw">return </span>ws_client_builder
-                    .build_with_stream(url.as_str(), anonymized_stream)
-                    .<span class="kw">await</span>;
+                <span class="kw">let </span>client = ws_client_builder
+                    .build_with_stream(api_endpoint.as_str(), anonymized_stream)
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+                <span class="prelude-val">Ok</span>(client.into_dyn())
             }
             <span class="prelude-val">Some</span>(tls_connector) =&gt; {
-                <span class="kw">let </span>host = url.host_str().map(ToOwned::to_owned).ok_or_else(|| {
-                    JsonRpcClientError::Transport(<span class="macro">anyhow!</span>(<span class="string">"Invalid host!"</span>).into())
-                })<span class="question-mark">?</span>;
+                <span class="kw">let </span>host = api_endpoint
+                    .host_str()
+                    .map(ToOwned::to_owned)
+                    .ok_or_else(|| {
+                        JsonRpcClientError::Transport(<span class="macro">anyhow!</span>(<span class="string">"Invalid host!"</span>).into())
+                    })<span class="question-mark">?</span>;
 
                 <span class="comment">// FIXME: (@leonardo) Is this leaking any data ? Should investigate it further
                 // if it's really needed.
@@ -2091,26 +2212,88 @@
                     .<span class="kw">await
                     </span>.map_err(|e| JsonRpcClientError::Transport(e.into()))<span class="question-mark">?</span>;
 
-                <span class="kw">return </span>ws_client_builder
-                    .build_with_stream(url.as_str(), anonymized_tls_stream)
-                    .<span class="kw">await</span>;
+                <span class="kw">let </span>client = ws_client_builder
+                    .build_with_stream(api_endpoint.as_str(), anonymized_tls_stream)
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+                <span class="prelude-val">Ok</span>(client.into_dyn())
             }
         }
     }
+}
 
-    <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-        <span class="self">self</span>.is_connected()
+<span class="attr">#[async_trait]
+</span><span class="kw">impl </span>IClientConnection <span class="kw">for </span>WsClient {
+    <span class="kw">async fn </span>request(<span class="kw-2">&amp;</span><span class="self">self</span>, method: ApiMethod, request: ApiRequestErased) -&gt; anyhow::Result&lt;Value&gt; {
+        <span class="kw">let </span>method = <span class="kw">match </span>method {
+            ApiMethod::Core(method) =&gt; method,
+            ApiMethod::Module(module_id, method) =&gt; <span class="macro">format!</span>(<span class="string">"module_{module_id}_{method}"</span>),
+        };
+
+        <span class="prelude-val">Ok</span>(ClientT::request(<span class="self">self</span>, <span class="kw-2">&amp;</span>method, [request.to_json()]).<span class="kw">await</span><span class="question-mark">?</span>)
+    }
+
+    <span class="kw">async fn </span>await_disconnection(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="self">self</span>.on_disconnect().<span class="kw">await</span>;
     }
 }
 
-<span class="kw">impl </span>WsFederationApi&lt;WsClient&gt; {
-    <span class="doccomment">/// Creates a new API client
-    </span><span class="kw">pub fn </span>new(
-        connector: <span class="kw-2">&amp;</span>Connector,
-        peers: <span class="kw">impl </span>IntoIterator&lt;Item = (PeerId, SafeUrl)&gt;,
-        api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
-    ) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::new_with_client(connector, peers, <span class="prelude-val">None</span>, api_secret)
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub enum </span>ApiMethod {
+    Core(String),
+    Module(ModuleInstanceId, String),
+}
+
+<span class="kw">pub type </span>DynClientConnector = Arc&lt;<span class="kw">dyn </span>IClientConnector&gt;;
+
+<span class="doccomment">/// Allows to connect to peers. Connections are request based and should be
+/// authenticated and encrypted for production deployments.
+</span><span class="attr">#[async_trait]
+</span><span class="kw">pub trait </span>IClientConnector: Send + Sync + <span class="lifetime">'static </span>{
+    <span class="kw">fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeSet&lt;PeerId&gt;;
+
+    <span class="kw">async fn </span>connect(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: PeerId) -&gt; anyhow::Result&lt;DynClientConnection&gt;;
+
+    <span class="kw">fn </span>into_dyn(<span class="self">self</span>) -&gt; DynClientConnector
+    <span class="kw">where
+        </span><span class="self">Self</span>: Sized,
+    {
+        Arc::new(<span class="self">self</span>)
+    }
+}
+
+<span class="kw">pub type </span>DynClientConnection = Arc&lt;<span class="kw">dyn </span>IClientConnection&gt;;
+
+<span class="attr">#[async_trait]
+</span><span class="kw">pub trait </span>IClientConnection: Debug + Send + Sync + <span class="lifetime">'static </span>{
+    <span class="kw">async fn </span>request(<span class="kw-2">&amp;</span><span class="self">self</span>, method: ApiMethod, request: ApiRequestErased) -&gt; anyhow::Result&lt;Value&gt;;
+
+    <span class="kw">async fn </span>await_disconnection(<span class="kw-2">&amp;</span><span class="self">self</span>);
+
+    <span class="kw">fn </span>into_dyn(<span class="self">self</span>) -&gt; DynClientConnection
+    <span class="kw">where
+        </span><span class="self">Self</span>: Sized,
+    {
+        Arc::new(<span class="self">self</span>)
+    }
+}
+
+<span class="attr">#[derive(Clone, Debug)]
+</span><span class="kw">pub struct </span>ReconnectFederationApi {
+    peers: BTreeSet&lt;PeerId&gt;,
+    admin_id: <span class="prelude-ty">Option</span>&lt;PeerId&gt;,
+    module_id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
+    connections: ReconnectClientConnections,
+}
+
+<span class="kw">impl </span>ReconnectFederationApi {
+    <span class="kw">fn </span>new(connector: <span class="kw-2">&amp;</span>DynClientConnector, admin_id: <span class="prelude-ty">Option</span>&lt;PeerId&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            peers: connector.peers(),
+            admin_id,
+            module_id: <span class="prelude-val">None</span>,
+            connections: ReconnectClientConnections::new(connector),
+        }
     }
 
     <span class="kw">pub fn </span>new_admin(
@@ -2119,123 +2302,274 @@
         api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
         connector: <span class="kw-2">&amp;</span>Connector,
     ) -&gt; <span class="self">Self </span>{
-        WsFederationApi::new(connector, <span class="macro">vec!</span>[(peer, url)], api_secret).with_self_peer_id(peer)
+        <span class="self">Self</span>::from_endpoints(once((peer, url)), api_secret, connector, <span class="prelude-val">Some</span>(peer))
     }
 
     <span class="kw">pub fn </span>from_endpoints(
         peers: <span class="kw">impl </span>IntoIterator&lt;Item = (PeerId, SafeUrl)&gt;,
         api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
         connector: <span class="kw-2">&amp;</span>Connector,
+        admin_id: <span class="prelude-ty">Option</span>&lt;PeerId&gt;,
     ) -&gt; <span class="self">Self </span>{
-        WsFederationApi::new(connector, peers, api_secret)
-    }
-
-    <span class="kw">pub fn </span>with_self_peer_id(<span class="self">self</span>, self_peer_id: PeerId) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            self_peer_id: <span class="prelude-val">Some</span>(self_peer_id),
-            ..<span class="self">self
-        </span>}
-    }
-}
-
-<span class="kw">impl</span>&lt;C&gt; WsFederationApi&lt;C&gt;
-<span class="kw">where
-    </span>C: JsonRpcClient + <span class="lifetime">'static</span>,
-{
-    <span class="doccomment">/// Returns the [`PeerId`]'s for the current [`WsFederationApi`]
-    </span><span class="kw">pub fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;PeerId&gt; {
-        <span class="self">self</span>.peers.iter().map(|peer| peer.peer_id).collect()
-    }
-
-    <span class="doccomment">/// Creates a new [`WsFederationApi`] client, for given [`Connector`].
-    </span><span class="kw">pub fn </span>new_with_client(
-        connector: <span class="kw-2">&amp;</span>Connector,
-        peers: <span class="kw">impl </span>IntoIterator&lt;Item = (PeerId, SafeUrl)&gt;,
-        self_peer_id: <span class="prelude-ty">Option</span>&lt;PeerId&gt;,
-        api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
-    ) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span>(peer_connections, peer_ids) = peers
-            .into_iter()
-            .map(|(peer_id, url)| {
-                <span class="macro">assert!</span>(
-                    url.port_or_known_default().is_some(),
-                    <span class="string">"API client requires a port"
-                </span>);
-                <span class="macro">assert!</span>(url.host().is_some(), <span class="string">"API client requires a target host"</span>);
-
-                (
-                    FederationPeer::new(<span class="kw-2">*</span>connector, url, peer_id, api_secret.clone()),
-                    peer_id,
-                )
-            })
-            .unzip();
-
-        WsFederationApi {
-            peer_ids,
-            self_peer_id,
-            peers: Arc::new(peer_connections),
-            module_id: <span class="prelude-val">None</span>,
-        }
-    }
-}
-
-<span class="kw">impl</span>&lt;C&gt; FederationPeer&lt;C&gt;
-<span class="kw">where
-    </span>C: JsonRpcClient + <span class="lifetime">'static</span>,
-{
-    <span class="attr">#[instrument(target = LOG_CLIENT_NET_API, level = <span class="string">"trace"</span>, fields(peer = %<span class="self">self</span>.peer_id, %method), skip_all)]
-    </span><span class="kw">pub async fn </span>request(<span class="kw-2">&amp;</span><span class="self">self</span>, method: <span class="kw-2">&amp;</span>str, params: <span class="kw-2">&amp;</span>[Value]) -&gt; JsonRpcResult&lt;Value&gt; {
-        <span class="comment">// Strategies using timeouts often depend on failing requests returning quickly,
-        // so every request gets only one reconnection attempt.
-        </span><span class="kw">const </span>RETRIES: usize = <span class="number">1</span>;
-
-        <span class="kw">for </span>attempts <span class="kw">in </span><span class="number">0</span>.. {
-            <span class="comment">// The `match` statement below should always return if `RETRIES &lt;= attempts`, so
-            // if we're looping again and `attempts` is greater than `RETRIES`, we have a
-            // bug.
-            </span><span class="macro">debug_assert!</span>(attempts &lt;= RETRIES);
-
-            <span class="kw">let </span>rclient = <span class="self">self</span>.client.read().<span class="kw">await</span>;
-            <span class="kw">match </span>rclient.client.get_try().<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(client) <span class="kw">if </span>client.is_connected() =&gt; {
-                    <span class="kw">return </span>client.request::&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;(method, params).<span class="kw">await</span>;
-                }
-                <span class="prelude-val">Err</span>(err) =&gt; {
-                    <span class="kw">if </span>RETRIES &lt;= attempts {
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(JsonRpcClientError::Transport(err.into()));
-                    }
-                    <span class="macro">debug!</span>(target: LOG_CLIENT_NET_API, err=%err.fmt_compact(), <span class="string">"Triggering reconnection after connection error"</span>);
-                }
-                <span class="prelude-val">Ok</span>(_client) =&gt; {
-                    <span class="kw">if </span>RETRIES &lt;= attempts {
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(JsonRpcClientError::Transport(
-                            <span class="macro">anyhow::format_err!</span>(<span class="string">"Disconnected"</span>).into(),
-                        ));
-                    }
-                    <span class="macro">debug!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Triggering reconnection after disconnection"</span>);
-                }
-            };
-
-            <span class="comment">// Drop read lock so we can take the write lock, which is needed to reconnect.
-            </span>drop(rclient);
-            <span class="kw">let </span><span class="kw-2">mut </span>wclient = <span class="self">self</span>.client.write().<span class="kw">await</span>;
-            <span class="kw">match </span>wclient.client.get_try().<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(client) <span class="kw">if </span>client.is_connected() =&gt; {
-                    <span class="comment">// someone else connected, just loop again
-                    </span><span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Some other request reconnected client, retrying"</span>);
-                }
-                <span class="kw">_ </span>=&gt; {
-                    wclient.reconnect(
-                        <span class="self">self</span>.connector,
-                        <span class="self">self</span>.peer_id,
-                        <span class="self">self</span>.url.clone(),
-                        <span class="self">self</span>.api_secret.clone(),
-                    );
-                }
+        <span class="kw">let </span>connector = <span class="kw">match </span>connector {
+            Connector::Tcp =&gt; {
+                WebsocketConnector::new(peers.into_iter().collect(), api_secret.clone()).into_dyn()
             }
+            <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
+            </span>Connector::Tor =&gt; {
+                TorConnector::new(peers.into_iter().collect(), api_secret.clone()).into_dyn()
+            }
+            <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, target_family = <span class="string">"wasm"</span>))]
+            </span>Connector::Tor =&gt; <span class="macro">unimplemented!</span>(),
+        };
+
+        ReconnectFederationApi::new(<span class="kw-2">&amp;</span>connector, admin_id)
+    }
+}
+
+<span class="kw">impl </span>IModuleFederationApi <span class="kw">for </span>ReconnectFederationApi {}
+
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">impl </span>IRawFederationApi <span class="kw">for </span>ReconnectFederationApi {
+    <span class="kw">fn </span>all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt; {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.peers
+    }
+
+    <span class="kw">fn </span>self_peer(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;PeerId&gt; {
+        <span class="self">self</span>.admin_id
+    }
+
+    <span class="kw">fn </span>with_module(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; DynModuleApi {
+        ReconnectFederationApi {
+            peers: <span class="self">self</span>.peers.clone(),
+            admin_id: <span class="self">self</span>.admin_id,
+            module_id: <span class="prelude-val">Some</span>(id),
+            connections: <span class="self">self</span>.connections.clone(),
+        }
+        .into()
+    }
+
+    <span class="kw">async fn </span>request_raw(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        peer_id: PeerId,
+        method: <span class="kw-2">&amp;</span>str,
+        params: <span class="kw-2">&amp;</span>ApiRequestErased,
+    ) -&gt; JsonRpcResult&lt;Value&gt; {
+        <span class="kw">let </span>method = <span class="kw">match </span><span class="self">self</span>.module_id {
+            <span class="prelude-val">Some</span>(module_id) =&gt; ApiMethod::Module(module_id, method.to_string()),
+            <span class="prelude-val">None </span>=&gt; ApiMethod::Core(method.to_string()),
+        };
+
+        <span class="self">self</span>.connections
+            .request(peer_id, method, params.clone())
+            .<span class="kw">await
+            </span>.map_err(|e| JsonRpcClientError::Transport(e.into()))
+    }
+}
+
+<span class="attr">#[derive(Clone, Debug)]
+</span><span class="kw">pub struct </span>ReconnectClientConnections {
+    connections: BTreeMap&lt;PeerId, ClientConnection&gt;,
+}
+
+<span class="kw">impl </span>ReconnectClientConnections {
+    <span class="kw">pub fn </span>new(connector: <span class="kw-2">&amp;</span>DynClientConnector) -&gt; <span class="self">Self </span>{
+        ReconnectClientConnections {
+            connections: connector
+                .peers()
+                .into_iter()
+                .map(|peer| (peer, ClientConnection::new(peer, connector.clone())))
+                .collect(),
+        }
+    }
+
+    <span class="kw">async fn </span>request(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        peer: PeerId,
+        method: ApiMethod,
+        request: ApiRequestErased,
+    ) -&gt; anyhow::Result&lt;Value&gt; {
+        <span class="self">self</span>.connections
+            .get(<span class="kw-2">&amp;</span>peer)
+            .expect(<span class="string">"Could not find client connection for peer {peer}"</span>)
+            .connection()
+            .<span class="kw">await
+            </span>.context(<span class="string">"Failed to connect to peer"</span>)<span class="question-mark">?
+            </span>.request(method, request)
+            .<span class="kw">await
+    </span>}
+}
+
+<span class="attr">#[derive(Clone, Debug)]
+</span><span class="kw">struct </span>ClientConnection {
+    sender: async_channel::Sender&lt;oneshot::Sender&lt;DynClientConnection&gt;&gt;,
+}
+
+<span class="kw">impl </span>ClientConnection {
+    <span class="kw">fn </span>new(peer: PeerId, connector: DynClientConnector) -&gt; ClientConnection {
+        <span class="kw">let </span>(sender, receiver) = bounded::&lt;oneshot::Sender&lt;DynClientConnection&gt;&gt;(<span class="number">1024</span>);
+
+        fedimint_core::task::spawn(
+            <span class="string">"peer-api-connection"</span>,
+            <span class="kw">async move </span>{
+                <span class="kw">let </span><span class="kw-2">mut </span>backoff = api_networking_backoff();
+
+                <span class="kw">while let </span><span class="prelude-val">Ok</span>(sender) = receiver.recv().<span class="kw">await </span>{
+                    <span class="kw">let </span><span class="kw-2">mut </span>senders = <span class="macro">vec!</span>[sender];
+
+                    <span class="comment">// Drain the queue, so we everyone that already joined fail or succeed
+                    // together.
+                    </span><span class="kw">while let </span><span class="prelude-val">Ok</span>(sender) = receiver.try_recv() {
+                        senders.push(sender);
+                    }
+
+                    <span class="kw">match </span>connector.connect(peer).<span class="kw">await </span>{
+                        <span class="prelude-val">Ok</span>(connection) =&gt; {
+                            <span class="macro">info!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Connected to peer api"</span>);
+
+                            <span class="kw">for </span>sender <span class="kw">in </span>senders {
+                                sender.send(connection.clone()).ok();
+                            }
+
+                            <span class="kw">loop </span>{
+                                <span class="macro">tokio::select!</span> {
+                                    sender = receiver.recv() =&gt; {
+                                        <span class="kw">match </span>sender.ok() {
+                                            <span class="prelude-val">Some</span>(sender) =&gt; sender.send(connection.clone()).ok(),
+                                            <span class="prelude-val">None </span>=&gt; <span class="kw">break</span>,
+                                        };
+                                    }
+                                    () = connection.await_disconnection() =&gt; <span class="kw">break</span>,
+                                }
+                            }
+
+                            <span class="macro">info!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Disconnected from peer api"</span>);
+
+                            backoff = api_networking_backoff();
+                        }
+                        <span class="prelude-val">Err</span>(e) =&gt; {
+                            <span class="macro">info!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Failed to connect to peer api {e}"</span>);
+
+                            fedimint_core::task::sleep(
+                                backoff.next().expect(<span class="string">"No limit to the number of retries"</span>),
+                            )
+                            .<span class="kw">await</span>;
+                        }
+                    }
+                }
+
+                <span class="macro">info!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Shutting down peer api connection task"</span>);
+            }
+            .instrument(<span class="macro">info_span!</span>(<span class="string">"peer-api-connection"</span>, <span class="question-mark">?</span>peer)),
+        );
+
+        ClientConnection { sender }
+    }
+
+    <span class="kw">async fn </span>connection(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;DynClientConnection&gt; {
+        <span class="kw">let </span>(sender, receiver) = oneshot::channel();
+
+        <span class="kw">if </span><span class="self">self</span>.sender.send(sender).<span class="kw">await</span>.is_err() {
+            <span class="macro">warn!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Connection channel already disconnected"</span>);
+            <span class="comment">// This is to prevent crazy tight loops e.g. if the inner task panicked for some
+            // unforeseen reason or already shut down, before the code calling
+            // this one (possibly in a loop without await) did. Importantly this also gives
+            // an await point, that allows current task to be canceled.
+            </span>fedimint_core::task::sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+        };
+
+        receiver.<span class="kw">await</span>.ok()
+    }
+}
+
+<span class="attr">#[cfg(all(feature = <span class="string">"enable_iroh"</span>, not(target_family = <span class="string">"wasm"</span>)))]
+</span><span class="kw">mod </span>iroh {
+    <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
+
+    <span class="kw">use </span>anyhow::anyhow;
+    <span class="kw">use </span>async_trait::async_trait;
+    <span class="kw">use </span>bitcoin::key::rand::rngs::OsRng;
+    <span class="kw">use </span>fedimint_core::module::{ApiError, ApiRequestErased};
+    <span class="kw">use </span>fedimint_core::PeerId;
+    <span class="kw">use </span>iroh::endpoint::Connection;
+    <span class="kw">use </span>iroh::{Endpoint, NodeId, SecretKey};
+    <span class="kw">use </span>serde::{Deserialize, Serialize};
+    <span class="kw">use </span>serde_json::Value;
+
+    <span class="kw">use super</span>::{ApiMethod, DynClientConnection, IClientConnection, IClientConnector};
+
+    <span class="kw">const </span>FEDIMINT_ALPN: <span class="kw-2">&amp;</span>[u8] = <span class="string">"FEDIMINT_ALPN"</span>.as_bytes();
+
+    <span class="attr">#[derive(Debug, Clone)]
+    </span><span class="kw">pub struct </span>IrohConnector {
+        node_ids: BTreeMap&lt;PeerId, NodeId&gt;,
+        endpoint: Endpoint,
+    }
+
+    <span class="kw">impl </span>IrohConnector {
+        <span class="attr">#[allow(unused)]
+        </span><span class="kw">pub async fn </span>new(peers: BTreeMap&lt;PeerId, NodeId&gt;) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+            <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+                node_ids: peers,
+                endpoint: Endpoint::builder()
+                    .discovery_n0()
+                    .secret_key(SecretKey::generate(<span class="kw-2">&amp;mut </span>OsRng))
+                    .alpns(<span class="macro">vec!</span>[FEDIMINT_ALPN.to_vec()])
+                    .bind()
+                    .<span class="kw">await</span><span class="question-mark">?</span>,
+            })
+        }
+    }
+
+    <span class="attr">#[async_trait]
+    </span><span class="kw">impl </span>IClientConnector <span class="kw">for </span>IrohConnector {
+        <span class="kw">fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeSet&lt;PeerId&gt; {
+            <span class="self">self</span>.node_ids.keys().copied().collect()
         }
 
-        <span class="macro">unreachable!</span>();
+        <span class="kw">async fn </span>connect(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: PeerId) -&gt; anyhow::Result&lt;DynClientConnection&gt; {
+            <span class="kw">let </span>node_id = <span class="kw-2">*</span><span class="self">self
+                </span>.node_ids
+                .get(<span class="kw-2">&amp;</span>peer)
+                .expect(<span class="string">"Could not find node id for peer {peer}"</span>);
+
+            <span class="kw">let </span>connection = <span class="self">self</span>.endpoint.connect(node_id, FEDIMINT_ALPN).<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="prelude-val">Ok</span>(connection.into_dyn())
+        }
+    }
+
+    <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+    </span><span class="kw">struct </span>IrohRequest {
+        method: ApiMethod,
+        request: ApiRequestErased,
+    }
+
+    <span class="attr">#[async_trait]
+    </span><span class="kw">impl </span>IClientConnection <span class="kw">for </span>Connection {
+        <span class="kw">async fn </span>request(
+            <span class="kw-2">&amp;</span><span class="self">self</span>,
+            method: ApiMethod,
+            request: ApiRequestErased,
+        ) -&gt; anyhow::Result&lt;Value&gt; {
+            <span class="kw">let </span>json = serde_json::to_vec(<span class="kw-2">&amp;</span>IrohRequest { method, request })<span class="question-mark">?</span>;
+
+            <span class="kw">let </span>(<span class="kw-2">mut </span>sink, <span class="kw-2">mut </span>stream) = <span class="self">self</span>.open_bi().<span class="kw">await</span><span class="question-mark">?</span>;
+
+            sink.write_all(<span class="kw-2">&amp;</span>json).<span class="kw">await</span><span class="question-mark">?</span>;
+
+            sink.finish()<span class="question-mark">?</span>;
+
+            <span class="kw">let </span>response = stream.read_to_end(<span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="kw">let </span>response = serde_json::from_slice::&lt;<span class="prelude-ty">Result</span>&lt;Value, ApiError&gt;&gt;(<span class="kw-2">&amp;</span>response)<span class="question-mark">?</span>;
+
+            response.map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"Api Error: {:?}"</span>, e))
+        }
+
+        <span class="kw">async fn </span>await_disconnection(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+            <span class="self">self</span>.closed().<span class="kw">await</span>;
+        }
     }
 }
 
@@ -2285,79 +2619,11 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span>std::fmt;
     <span class="kw">use </span>std::str::FromStr <span class="kw">as _</span>;
 
     <span class="kw">use </span>fedimint_core::config::FederationId;
-    <span class="kw">use </span>jsonrpsee_core::client::BatchResponse;
-    <span class="kw">use </span>jsonrpsee_core::params::BatchRequestBuilder;
-    <span class="kw">use </span>jsonrpsee_core::traits::ToRpcParams;
 
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
-
-    <span class="kw">type </span><span class="prelude-ty">Result</span>&lt;T = ()&gt; = std::result::Result&lt;T, JsonRpcClientError&gt;;
-
-    <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-    </span><span class="kw">trait </span>SimpleClient: Sized {
-        <span class="kw">async fn </span>connect() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt;;
-
-        <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
-        </span><span class="kw">async fn </span>connect_with_tor() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt;;
-
-        <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-            <span class="bool-val">true
-        </span>}
-
-        <span class="comment">// reply with json
-        </span><span class="kw">async fn </span>request(<span class="kw-2">&amp;</span><span class="self">self</span>, method: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt;;
-    }
-
-    <span class="kw">struct </span>Client&lt;C: SimpleClient&gt;(C);
-
-    <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-    </span><span class="kw">impl</span>&lt;C: SimpleClient + MaybeSend + MaybeSync&gt; JsonRpcClient <span class="kw">for </span>Client&lt;C&gt; {
-        <span class="kw">async fn </span>connect(_url: <span class="kw-2">&amp;</span>SafeUrl, _api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-            <span class="prelude-val">Ok</span>(<span class="self">Self</span>(C::connect().<span class="kw">await</span><span class="question-mark">?</span>))
-        }
-
-        <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
-        </span><span class="kw">async fn </span>connect_with_tor(_url: <span class="kw-2">&amp;</span>SafeUrl, _api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-            <span class="prelude-val">Ok</span>(<span class="self">Self</span>(C::connect_with_tor().<span class="kw">await</span><span class="question-mark">?</span>))
-        }
-
-        <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-            <span class="self">self</span>.<span class="number">0</span>.is_connected()
-        }
-    }
-
-    <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-    </span><span class="kw">impl</span>&lt;C: SimpleClient + MaybeSend + MaybeSync&gt; ClientT <span class="kw">for </span>Client&lt;C&gt; {
-        <span class="kw">async fn </span>request&lt;R, P&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, method: <span class="kw-2">&amp;</span>str, _params: P) -&gt; <span class="prelude-ty">Result</span>&lt;R&gt;
-        <span class="kw">where
-            </span>R: jsonrpsee_core::DeserializeOwned,
-            P: ToRpcParams + MaybeSend,
-        {
-            <span class="kw">let </span>json = <span class="self">self</span>.<span class="number">0</span>.request(method).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="prelude-val">Ok</span>(serde_json::from_str(<span class="kw-2">&amp;</span>json).unwrap())
-        }
-
-        <span class="kw">async fn </span>notification&lt;P&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, _method: <span class="kw-2">&amp;</span>str, _params: P) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;
-        <span class="kw">where
-            </span>P: ToRpcParams + MaybeSend,
-        {
-            <span class="macro">unimplemented!</span>()
-        }
-
-        <span class="kw">async fn </span>batch_request&lt;<span class="lifetime">'a</span>, R&gt;(
-            <span class="kw-2">&amp;</span><span class="self">self</span>,
-            _batch: BatchRequestBuilder&lt;<span class="lifetime">'a</span>&gt;,
-        ) -&gt; std::result::Result&lt;BatchResponse&lt;<span class="lifetime">'a</span>, R&gt;, jsonrpsee_core::client::Error&gt;
-        <span class="kw">where
-            </span>R: DeserializeOwned + fmt::Debug + <span class="lifetime">'a</span>,
-        {
-            <span class="macro">unimplemented!</span>()
-        }
-    }
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>converts_invite_code() {

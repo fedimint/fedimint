@@ -401,7 +401,7 @@
             <span class="macro">matches!</span>(
                 peer_err,
                 PeerError::Rpc(JsonRpcClientError::Call(err)) <span class="kw">if </span>err.code() == METHOD_NOT_FOUND_CODE
-            )
+            ) || peer_err.to_string().contains(<span class="string">"MethodNotFound"</span>)
         })
     }
 }

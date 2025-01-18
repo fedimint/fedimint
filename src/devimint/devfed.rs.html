@@ -530,7 +530,8 @@
     }
 }
 <span class="kw">pub async fn </span>dev_fed(process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;DevFed&gt; {
-    DevJitFed::new(process_mgr, <span class="bool-val">false</span>)<span class="question-mark">?
+    DevJitFed::new(process_mgr, <span class="bool-val">false</span>)
+        .<span class="kw">await</span><span class="question-mark">?
         </span>.to_dev_fed(process_mgr)
         .<span class="kw">await
 </span>}
@@ -555,7 +556,7 @@
 }
 
 <span class="kw">impl </span>DevJitFed {
-    <span class="kw">pub fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, skip_setup: bool) -&gt; <span class="prelude-ty">Result</span>&lt;DevJitFed&gt; {
+    <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, skip_setup: bool) -&gt; <span class="prelude-ty">Result</span>&lt;DevJitFed&gt; {
         <span class="kw">let </span>fed_size = process_mgr.globals.FM_FED_SIZE;
         <span class="kw">let </span>offline_nodes = process_mgr.globals.FM_OFFLINE_NODES;
         <span class="macro">anyhow::ensure!</span>(
@@ -678,17 +679,24 @@
             }
         });
 
+        <span class="kw">let </span>gateway_cli_version = <span class="kw">crate</span>::util::GatewayCli::version_or_default().<span class="kw">await</span>;
+        <span class="kw">let </span>fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
+        <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
+        <span class="kw">let </span>should_enable_ldk = gatewayd_version &gt;= <span class="kw-2">*</span>VERSION_0_5_0_ALPHA
+                    &amp;&amp; fedimintd_version &gt;= <span class="kw-2">*</span>VERSION_0_5_0_ALPHA
+                    <span class="comment">// and lnv2 was not explicitly disabled
+                    </span>&amp;&amp; !is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV);
+        <span class="kw">let </span>should_disable_lnv2 = gateway_cli_version &lt;= <span class="kw-2">*</span>VERSION_0_4_0_ALPHA
+            || gatewayd_version &lt;= <span class="kw-2">*</span>VERSION_0_4_0_ALPHA
+            || fedimintd_version &lt;= <span class="kw-2">*</span>VERSION_0_4_0_ALPHA
+            || is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV)
+            || !should_enable_ldk;
+
         <span class="kw">let </span>gw_ldk = JitTryAnyhow::new_try({
             <span class="kw">let </span>process_mgr = process_mgr.to_owned();
             <span class="kw">move </span>|| <span class="kw">async move </span>{
                 <span class="comment">// TODO(support:v0.4.0): Only run LDK gateway when the federation supports LNv2
-                </span><span class="kw">let </span>fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
-                <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
-                <span class="kw">if </span>gatewayd_version &gt;= <span class="kw-2">*</span>VERSION_0_5_0_ALPHA
-                    &amp;&amp; fedimintd_version &gt;= <span class="kw-2">*</span>VERSION_0_5_0_ALPHA
-                    <span class="comment">// and lnv2 was not explicitly disabled
-                    </span>&amp;&amp; !is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV)
-                {
+                </span><span class="kw">if </span>should_enable_ldk {
                     <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting ldk gateway..."</span>);
                     <span class="kw">let </span>start_time = fedimint_core::time::now();
                     <span class="kw">let </span>ldk_gw = Gatewayd::new(<span class="kw-2">&amp;</span>process_mgr, LightningNode::Ldk).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -724,22 +732,14 @@
             <span class="kw">let </span>cln = cln.clone();
             <span class="kw">let </span>gw_ldk = gw_ldk.clone();
             <span class="kw">let </span>bitcoind = bitcoind.clone();
-            || <span class="kw">async move </span>{
+            <span class="kw">move </span>|| <span class="kw">async move </span>{
                 <span class="comment">// Note: We open new channel even if starting from existing state
                 // as ports change on every start, and without this nodes will not find each
                 // other.
 
-                </span><span class="kw">let </span>gateway_cli_version = <span class="kw">crate</span>::util::GatewayCli::version_or_default().<span class="kw">await</span>;
-                <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
-                <span class="kw">let </span>fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
+                </span><span class="kw">let </span>bitcoind = bitcoind.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
 
-                <span class="kw">let </span>bitcoind = bitcoind.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
-
-                <span class="kw">if </span>gateway_cli_version &lt;= <span class="kw-2">*</span>VERSION_0_4_0_ALPHA
-                    || gatewayd_version &lt;= <span class="kw-2">*</span>VERSION_0_4_0_ALPHA
-                    || fedimintd_version &lt;= <span class="kw-2">*</span>VERSION_0_4_0_ALPHA
-                    || is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV)
-                {
+                <span class="kw">if </span>should_disable_lnv2 {
                     <span class="kw">let </span>lnd = lnd.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
                     <span class="kw">let </span>cln = cln.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
 

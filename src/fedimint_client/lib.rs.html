@@ -3243,7 +3243,8 @@
 <a href="#3242" id="3242">3242</a>
 <a href="#3243" id="3243">3243</a>
 <a href="#3244" id="3244">3244</a>
-<a href="#3245" id="3245">3245</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#3245" id="3245">3245</a>
+<a href="#3246" id="3246">3246</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
@@ -3347,7 +3348,7 @@
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
 <span class="kw">use </span>fedimint_api_client::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, GlobalFederationApiWithCacheExt,
-    IGlobalFederationApi, WsFederationApi,
+    IGlobalFederationApi, ReconnectFederationApi,
 };
 <span class="kw">use </span>fedimint_core::config::{
     ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig, ModuleInitRegistry,
@@ -5927,6 +5928,7 @@
                 .map(|(peer_id, peer_url)| (<span class="kw-2">*</span>peer_id, peer_url.url.clone())),
             <span class="kw-2">&amp;</span>api_secret,
             <span class="kw-2">&amp;</span>connector,
+            <span class="prelude-val">None</span>,
         );
         Client::download_backup_from_federation_static(
             <span class="kw-2">&amp;</span>api,
@@ -6056,7 +6058,7 @@
         <span class="kw">let </span>connector = <span class="self">self</span>.connector;
         <span class="kw">let </span>peer_urls = get_api_urls(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>config).<span class="kw">await</span>;
         <span class="kw">let </span>api = <span class="kw">if let </span><span class="prelude-val">Some</span>(admin_creds) = <span class="self">self</span>.admin_creds.as_ref() {
-            WsFederationApi::new_admin(
+            ReconnectFederationApi::new_admin(
                 admin_creds.peer_id,
                 peer_urls
                     .into_iter()
@@ -6069,7 +6071,7 @@
             .with_cache()
             .into()
         } <span class="kw">else </span>{
-            WsFederationApi::from_endpoints(peer_urls, <span class="kw-2">&amp;</span>api_secret, <span class="kw-2">&amp;</span>connector)
+            ReconnectFederationApi::from_endpoints(peer_urls, <span class="kw-2">&amp;</span>api_secret, <span class="kw-2">&amp;</span>connector, <span class="prelude-val">None</span>)
                 .with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
                 .with_cache()
                 .into()
