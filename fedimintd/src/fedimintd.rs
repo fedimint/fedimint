@@ -265,7 +265,7 @@ impl Fedimintd {
             code_version_hash: code_version_hash.to_owned(),
             code_version_str: code_version_vendor_suffix.map_or_else(
                 || fedimint_version.to_string(),
-                |suffix| format!("{fedimint_version}.{suffix}"),
+                |suffix| format!("{fedimint_version}+{suffix}"),
             ),
         })
     }
