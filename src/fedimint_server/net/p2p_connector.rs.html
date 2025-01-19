@@ -343,7 +343,11 @@
 <a href="#342" id="342">342</a>
 <a href="#343" id="343">343</a>
 <a href="#344" id="344">344</a>
-<a href="#345" id="345">345</a></pre></div><pre class="rust"><code><span class="doccomment">//! Provides an abstract network connection interface and multiple
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a></pre></div><pre class="rust"><code><span class="doccomment">//! Provides an abstract network connection interface and multiple
 //! implementations
 
 </span><span class="kw">use </span>std::collections::BTreeMap;
@@ -366,10 +370,11 @@
 <span class="kw">use </span>tokio_rustls::{rustls, TlsAcceptor, TlsConnector, TlsStream};
 <span class="kw">use </span>tokio_stream::wrappers::TcpListenerStream;
 <span class="kw">use </span>tokio_stream::StreamExt;
+<span class="kw">use </span>tokio_util::codec::LengthDelimitedCodec;
 
-<span class="kw">use </span><span class="kw">crate</span>::net::p2p_connection::{DynP2PConnection, FramedTlsTcpStream, P2PConnection};
+<span class="kw">use </span><span class="kw">crate</span>::net::p2p_connection::{DynP2PConnection, IP2PConnection};
 
-<span class="kw">pub type </span>DynP2PConnector&lt;M&gt; = Arc&lt;<span class="kw">dyn </span>P2PConnector&lt;M&gt;&gt;;
+<span class="kw">pub type </span>DynP2PConnector&lt;M&gt; = Arc&lt;<span class="kw">dyn </span>IP2PConnector&lt;M&gt;&gt;;
 
 <span class="kw">pub type </span>P2PConnectionResult&lt;M&gt; = anyhow::Result&lt;(PeerId, DynP2PConnection&lt;M&gt;)&gt;;
 
@@ -379,7 +384,7 @@
 /// Connections are message based and should be authenticated and encrypted for
 /// production deployments.
 </span><span class="attr">#[async_trait]
-</span><span class="kw">pub trait </span>P2PConnector&lt;M&gt;: Send + Sync + <span class="lifetime">'static </span>{
+</span><span class="kw">pub trait </span>IP2PConnector&lt;M&gt;: Send + Sync + <span class="lifetime">'static </span>{
     <span class="kw">fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;PeerId&gt;;
 
     <span class="kw">async fn </span>connect(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: PeerId) -&gt; anyhow::Result&lt;DynP2PConnection&lt;M&gt;&gt;;
@@ -427,7 +432,7 @@
 }
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl</span>&lt;M&gt; P2PConnector&lt;M&gt; <span class="kw">for </span>TlsTcpConnector
+</span><span class="kw">impl</span>&lt;M&gt; IP2PConnector&lt;M&gt; <span class="kw">for </span>TlsTcpConnector
 <span class="kw">where
     </span>M: Serialize + DeserializeOwned + Send + <span class="lifetime">'static</span>,
 {
@@ -494,7 +499,10 @@
 
         <span class="macro">ensure!</span>(auth_peer == peer, <span class="string">"Connected to unexpected peer"</span>);
 
-        <span class="prelude-val">Ok</span>(FramedTlsTcpStream::new(TlsStream::Client(tls)).into_dyn())
+        <span class="prelude-val">Ok</span>(LengthDelimitedCodec::builder()
+            .length_field_type::&lt;u64&gt;()
+            .new_framed(TlsStream::Client(tls))
+            .into_dyn())
     }
 
     <span class="kw">async fn </span>listen(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; P2PConnectionListener&lt;M&gt; {
@@ -551,7 +559,10 @@
                         .find_map(|(peer, c)| <span class="kw">if </span>c == certificate { <span class="prelude-val">Some</span>(<span class="kw-2">*</span>peer) } <span class="kw">else </span>{ <span class="prelude-val">None </span>})
                         .context(<span class="string">"Unknown certificate"</span>)<span class="question-mark">?</span>;
 
-                    <span class="kw">let </span>framed = FramedTlsTcpStream::new(TlsStream::Server(tls)).into_dyn();
+                    <span class="kw">let </span>framed = LengthDelimitedCodec::builder()
+                        .length_field_type::&lt;u64&gt;()
+                        .new_framed(TlsStream::Server(tls))
+                        .into_dyn();
 
                     <span class="prelude-val">Ok</span>((auth_peer, framed))
                 }
@@ -591,10 +602,9 @@
     <span class="kw">use </span>iroh::endpoint::Incoming;
     <span class="kw">use </span>iroh::{Endpoint, NodeId, SecretKey};
 
-    <span class="kw">use </span><span class="kw">crate</span>::net::p2p_connection::iroh::IrohConnection;
-    <span class="kw">use </span><span class="kw">crate</span>::net::p2p_connection::P2PConnection;
+    <span class="kw">use </span><span class="kw">crate</span>::net::p2p_connection::IP2PConnection;
     <span class="kw">use </span><span class="kw">crate</span>::net::p2p_connector::{
-        DynP2PConnection, P2PConnectionListener, P2PConnectionResult, P2PConnector,
+        DynP2PConnection, IP2PConnector, P2PConnectionListener, P2PConnectionResult,
     };
 
     <span class="attr">#[derive(Debug, Clone)]
@@ -634,7 +644,7 @@
     }
 
     <span class="attr">#[async_trait]
-    </span><span class="kw">impl</span>&lt;M&gt; P2PConnector&lt;M&gt; <span class="kw">for </span>IrohConnector
+    </span><span class="kw">impl</span>&lt;M&gt; IP2PConnector&lt;M&gt; <span class="kw">for </span>IrohConnector
     <span class="kw">where
         </span>M: Encodable + Decodable + Send + <span class="lifetime">'static</span>,
     {
@@ -650,7 +660,7 @@
 
             <span class="kw">let </span>connection = <span class="self">self</span>.endpoint.connect(node_id, FEDIMINT_ALPN).<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="prelude-val">Ok</span>(IrohConnection::new(connection).into_dyn())
+            <span class="prelude-val">Ok</span>(connection.into_dyn())
         }
 
         <span class="kw">async fn </span>listen(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; P2PConnectionListener&lt;M&gt; {
@@ -683,9 +693,7 @@
             .context(<span class="string">"Node id {node_id} is unknown"</span>)<span class="question-mark">?
             </span>.<span class="number">0</span>;
 
-        <span class="kw">let </span>framed = IrohConnection::new(connection).into_dyn();
-
-        <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>peer_id, framed))
+        <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>peer_id, connection.into_dyn()))
     }
 }
 </code></pre></div></section></main></body></html>

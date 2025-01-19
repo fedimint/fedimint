@@ -98,54 +98,8 @@
 <a href="#97" id="97">97</a>
 <a href="#98" id="98">98</a>
 <a href="#99" id="99">99</a>
-<a href="#100" id="100">100</a>
-<a href="#101" id="101">101</a>
-<a href="#102" id="102">102</a>
-<a href="#103" id="103">103</a>
-<a href="#104" id="104">104</a>
-<a href="#105" id="105">105</a>
-<a href="#106" id="106">106</a>
-<a href="#107" id="107">107</a>
-<a href="#108" id="108">108</a>
-<a href="#109" id="109">109</a>
-<a href="#110" id="110">110</a>
-<a href="#111" id="111">111</a>
-<a href="#112" id="112">112</a>
-<a href="#113" id="113">113</a>
-<a href="#114" id="114">114</a>
-<a href="#115" id="115">115</a>
-<a href="#116" id="116">116</a>
-<a href="#117" id="117">117</a>
-<a href="#118" id="118">118</a>
-<a href="#119" id="119">119</a>
-<a href="#120" id="120">120</a>
-<a href="#121" id="121">121</a>
-<a href="#122" id="122">122</a>
-<a href="#123" id="123">123</a>
-<a href="#124" id="124">124</a>
-<a href="#125" id="125">125</a>
-<a href="#126" id="126">126</a>
-<a href="#127" id="127">127</a>
-<a href="#128" id="128">128</a>
-<a href="#129" id="129">129</a>
-<a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
-<a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
+<a href="#100" id="100">100</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::io::Cursor;
-<span class="kw">use </span>std::marker::PhantomData;
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>async_trait::async_trait;
@@ -157,10 +111,10 @@
 <span class="kw">use </span>tokio_rustls::TlsStream;
 <span class="kw">use </span>tokio_util::codec::{Framed, LengthDelimitedCodec};
 
-<span class="kw">pub type </span>DynP2PConnection&lt;M&gt; = Box&lt;<span class="kw">dyn </span>P2PConnection&lt;M&gt;&gt;;
+<span class="kw">pub type </span>DynP2PConnection&lt;M&gt; = Box&lt;<span class="kw">dyn </span>IP2PConnection&lt;M&gt;&gt;;
 
 <span class="attr">#[async_trait]
-</span><span class="kw">pub trait </span>P2PConnection&lt;M&gt;: Send + <span class="lifetime">'static </span>{
+</span><span class="kw">pub trait </span>IP2PConnection&lt;M&gt;: Send + <span class="lifetime">'static </span>{
     <span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, message: M) -&gt; anyhow::Result&lt;()&gt;;
 
     <span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;M&gt;;
@@ -173,23 +127,6 @@
     }
 }
 
-<span class="attr">#[derive(Debug)]
-</span><span class="kw">pub struct </span>FramedTlsTcpStream&lt;M&gt; {
-    stream: Framed&lt;TlsStream&lt;TcpStream&gt;, LengthDelimitedCodec&gt;,
-    _pd: PhantomData&lt;M&gt;,
-}
-
-<span class="kw">impl</span>&lt;T&gt; FramedTlsTcpStream&lt;T&gt; {
-    <span class="kw">pub fn </span>new(stream: TlsStream&lt;TcpStream&gt;) -&gt; FramedTlsTcpStream&lt;T&gt; {
-        FramedTlsTcpStream {
-            stream: LengthDelimitedCodec::builder()
-                .length_field_type::&lt;u64&gt;()
-                .new_framed(stream),
-            _pd: PhantomData,
-        }
-    }
-}
-
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>LegacyMessage&lt;M&gt; {
     Message(M),
@@ -197,7 +134,7 @@
 }
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl</span>&lt;M&gt; P2PConnection&lt;M&gt; <span class="kw">for </span>FramedTlsTcpStream&lt;M&gt;
+</span><span class="kw">impl</span>&lt;M&gt; IP2PConnection&lt;M&gt; <span class="kw">for </span>Framed&lt;TlsStream&lt;TcpStream&gt;, LengthDelimitedCodec&gt;
 <span class="kw">where
     </span>M: Serialize + DeserializeOwned + Send + <span class="lifetime">'static</span>,
 {
@@ -206,18 +143,14 @@
 
         bincode::serialize_into(<span class="kw-2">&amp;mut </span>bytes, <span class="kw-2">&amp;</span>LegacyMessage::Message(message))<span class="question-mark">?</span>;
 
-        <span class="self">self</span>.stream.send(Bytes::from_owner(bytes)).<span class="kw">await</span><span class="question-mark">?</span>;
+        SinkExt::send(<span class="self">self</span>, Bytes::from_owner(bytes)).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;M&gt; {
         <span class="kw">loop </span>{
-            <span class="kw">let </span>bytes = <span class="self">self
-                </span>.stream
-                .next()
-                .<span class="kw">await
-                </span>.context(<span class="string">"Framed stream is closed"</span>)<span class="question-mark">??</span>;
+            <span class="kw">let </span>bytes = <span class="self">self</span>.next().<span class="kw">await</span>.context(<span class="string">"Framed stream is closed"</span>)<span class="question-mark">??</span>;
 
             <span class="kw">if let </span><span class="prelude-val">Ok</span>(legacy_message) = bincode::deserialize_from(Cursor::new(<span class="kw-2">&amp;</span>bytes)) {
                 <span class="kw">match </span>legacy_message {
@@ -233,38 +166,20 @@
 
 <span class="attr">#[cfg(all(feature = <span class="string">"enable_iroh"</span>, not(target_family = <span class="string">"wasm"</span>)))]
 </span><span class="kw">pub mod </span>iroh {
-    <span class="kw">use </span>std::fmt::Debug;
-    <span class="kw">use </span>std::marker::PhantomData;
-
     <span class="kw">use </span>async_trait::async_trait;
     <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>iroh::endpoint::Connection;
 
-    <span class="kw">use </span><span class="kw">crate</span>::net::p2p_connection::P2PConnection;
-
-    <span class="attr">#[derive(Debug)]
-    </span><span class="kw">pub struct </span>IrohConnection&lt;M&gt; {
-        connection: Connection,
-        _pd: PhantomData&lt;M&gt;,
-    }
-
-    <span class="kw">impl</span>&lt;M&gt; IrohConnection&lt;M&gt; {
-        <span class="kw">pub fn </span>new(connection: Connection) -&gt; IrohConnection&lt;M&gt; {
-            IrohConnection {
-                connection,
-                _pd: PhantomData,
-            }
-        }
-    }
+    <span class="kw">use </span><span class="kw">crate</span>::net::p2p_connection::IP2PConnection;
 
     <span class="attr">#[async_trait]
-    </span><span class="kw">impl</span>&lt;M&gt; P2PConnection&lt;M&gt; <span class="kw">for </span>IrohConnection&lt;M&gt;
+    </span><span class="kw">impl</span>&lt;M&gt; IP2PConnection&lt;M&gt; <span class="kw">for </span>Connection
     <span class="kw">where
         </span>M: Encodable + Decodable + Send + <span class="lifetime">'static</span>,
     {
         <span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, message: M) -&gt; anyhow::Result&lt;()&gt; {
-            <span class="kw">let </span><span class="kw-2">mut </span>sink = <span class="self">self</span>.connection.open_uni().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>sink = <span class="self">self</span>.open_uni().<span class="kw">await</span><span class="question-mark">?</span>;
 
             sink.write_all(<span class="kw-2">&amp;</span>message.consensus_encode_to_vec()).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -274,12 +189,7 @@
         }
 
         <span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;M&gt; {
-            <span class="kw">let </span>bytes = <span class="self">self
-                </span>.connection
-                .accept_uni()
-                .<span class="kw">await</span><span class="question-mark">?
-                </span>.read_to_end(<span class="number">1_000_000_000</span>)
-                .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>bytes = <span class="self">self</span>.accept_uni().<span class="kw">await</span><span class="question-mark">?</span>.read_to_end(<span class="number">1_000_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="prelude-val">Ok</span>(Decodable::consensus_decode_whole(
                 <span class="kw-2">&amp;</span>bytes,

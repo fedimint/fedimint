@@ -726,10 +726,10 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tracing::Instrument;
 
-<span class="comment">// TODO: Make this module public and remove the wildcard `pub use` below
+<span class="comment">// TODO: Make this module public and remove theDkgPeerMessage`pub use` below
 </span><span class="kw">mod </span>version;
 <span class="kw">pub use </span><span class="self">self</span>::version::<span class="kw-2">*</span>;
-<span class="kw">use </span><span class="kw">crate</span>::config::DkgPeerMsg;
+<span class="kw">use </span><span class="kw">crate</span>::config::DkgPeerMessage;
 <span class="kw">use </span><span class="kw">crate</span>::core::{
     ClientConfig, Decoder, DecoderBuilder, Input, InputError, ModuleConsensusItem,
     ModuleInstanceId, ModuleKind, Output, OutputError, OutputOutcome,
@@ -1366,14 +1366,14 @@
     <span class="attr">#[doc(hidden)]
     </span><span class="kw">pub </span>identity: PeerId,
     <span class="attr">#[doc(hidden)]
-    </span><span class="kw">pub </span>connections: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>DynP2PConnections&lt;DkgPeerMsg&gt;,
+    </span><span class="kw">pub </span>connections: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>DynP2PConnections&lt;DkgPeerMessage&gt;,
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; PeerHandle&lt;<span class="lifetime">'a</span>&gt; {
     <span class="kw">pub fn </span>new(
         num_peers: NumPeers,
         identity: PeerId,
-        connections: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>DynP2PConnections&lt;DkgPeerMsg&gt;,
+        connections: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>DynP2PConnections&lt;DkgPeerMessage&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             num_peers,

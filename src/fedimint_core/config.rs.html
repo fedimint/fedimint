@@ -1082,7 +1082,8 @@
 <a href="#1081" id="1081">1081</a>
 <a href="#1082" id="1082">1082</a>
 <a href="#1083" id="1083">1083</a>
-<a href="#1084" id="1084">1084</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
+<a href="#1084" id="1084">1084</a>
+<a href="#1085" id="1085">1085</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::ops::Mul;
@@ -1951,9 +1952,10 @@
 
 <span class="doccomment">/// Things that a `distributed_gen` config can send between peers
 </span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone)]
-</span><span class="kw">pub enum </span>DkgPeerMsg {
+</span><span class="kw">pub enum </span>DkgPeerMessage {
     DistributedGen(SupportedDkgMessage),
     Encodable(Vec&lt;u8&gt;),
+    Completed,
 }
 
 <span class="doccomment">/// Supported (by Fedimint's code) `DkgMessage&lt;T&gt;` types
