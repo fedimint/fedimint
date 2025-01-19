@@ -7,7 +7,7 @@ use anyhow::{bail, format_err, Context};
 use fedimint_api_client::api::P2PConnectionStatus;
 use fedimint_core::admin_client::ConfigGenParamsConsensus;
 pub use fedimint_core::config::{
-    serde_binary_human_readable, ClientConfig, DkgPeerMsg, FederationId, GlobalClientConfig,
+    serde_binary_human_readable, ClientConfig, DkgPeerMessage, FederationId, GlobalClientConfig,
     JsonWithKind, ModuleInitRegistry, PeerUrl, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig,
 };
@@ -18,24 +18,24 @@ use fedimint_core::module::{
     ApiAuth, ApiVersion, CoreConsensusVersion, MultiApiVersion, PeerHandle,
     SupportedApiVersionsSummary, SupportedCoreApiVersions, CORE_CONSENSUS_VERSION,
 };
-use fedimint_core::net::peers::IP2PConnections;
-use fedimint_core::task::{sleep, TaskGroup};
+use fedimint_core::net::peers::{IP2PConnections, Recipient};
+use fedimint_core::task::{sleep, timeout, TaskGroup};
 use fedimint_core::{secp256k1, timing, NumPeersExt, PeerId};
-use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
+use fedimint_logging::LOG_NET_PEER_DKG;
 use fedimint_server_core::{DynServerModuleInit, ServerModuleInitRegistry};
 use rand::rngs::OsRng;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 use tokio_rustls::rustls;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::config::api::ConfigGenParamsLocal;
 use crate::config::distributedgen::PeerHandleOps;
 use crate::envs::FM_MAX_CLIENT_CONNECTIONS_ENV;
 use crate::fedimint_core::encoding::Encodable;
 use crate::net::p2p::ReconnectP2PConnections;
-use crate::net::p2p_connector::{dns_sanitize, P2PConnector, TlsConfig, TlsTcpConnector};
+use crate::net::p2p_connector::{dns_sanitize, IP2PConnector, TlsConfig, TlsTcpConnector};
 
 pub mod api;
 pub mod distributedgen;
@@ -519,15 +519,29 @@ impl ServerConfig {
             module_cfgs.insert(module_id, cfg);
         }
 
-        // We need to wait for out outgoing message queues to be fully transmitted
-        // before we move on in order for our peers to be able to complete the dkg.
-
-        connections.await_empty_outgoing_message_queues().await;
-
         info!(
-            target: LOG_NET_PEER,
+            target: LOG_NET_PEER_DKG,
             "Distributed key generation has completed successfully!"
         );
+
+        connections
+            .send(Recipient::Everyone, DkgPeerMessage::Completed)
+            .await;
+
+        if timeout(Duration::from_secs(30), async {
+            for peer in params
+                .peer_ids()
+                .into_iter()
+                .filter(|p| *p != params.local.our_id)
+            {
+                connections.receive_from_peer(peer).await;
+            }
+        })
+        .await
+        .is_err()
+        {
+            error!(target: LOG_NET_PEER_DKG, "Timeout waiting for dkg completion confirmation");
+        }
 
         let server = ServerConfig::from(
             params.clone(),

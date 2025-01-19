@@ -21,10 +21,11 @@ use tokio_rustls::rustls::RootCertStore;
 use tokio_rustls::{rustls, TlsAcceptor, TlsConnector, TlsStream};
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_stream::StreamExt;
+use tokio_util::codec::LengthDelimitedCodec;
 
-use crate::net::p2p_connection::{DynP2PConnection, FramedTlsTcpStream, P2PConnection};
+use crate::net::p2p_connection::{DynP2PConnection, IP2PConnection};
 
-pub type DynP2PConnector<M> = Arc<dyn P2PConnector<M>>;
+pub type DynP2PConnector<M> = Arc<dyn IP2PConnector<M>>;
 
 pub type P2PConnectionResult<M> = anyhow::Result<(PeerId, DynP2PConnection<M>)>;
 
@@ -34,7 +35,7 @@ pub type P2PConnectionListener<M> = Pin<Box<dyn Stream<Item = P2PConnectionResul
 /// Connections are message based and should be authenticated and encrypted for
 /// production deployments.
 #[async_trait]
-pub trait P2PConnector<M>: Send + Sync + 'static {
+pub trait IP2PConnector<M>: Send + Sync + 'static {
     fn peers(&self) -> Vec<PeerId>;
 
     async fn connect(&self, peer: PeerId) -> anyhow::Result<DynP2PConnection<M>>;
@@ -82,7 +83,7 @@ impl TlsTcpConnector {
 }
 
 #[async_trait]
-impl<M> P2PConnector<M> for TlsTcpConnector
+impl<M> IP2PConnector<M> for TlsTcpConnector
 where
     M: Serialize + DeserializeOwned + Send + 'static,
 {
@@ -149,7 +150,10 @@ where
 
         ensure!(auth_peer == peer, "Connected to unexpected peer");
 
-        Ok(FramedTlsTcpStream::new(TlsStream::Client(tls)).into_dyn())
+        Ok(LengthDelimitedCodec::builder()
+            .length_field_type::<u64>()
+            .new_framed(TlsStream::Client(tls))
+            .into_dyn())
     }
 
     async fn listen(&self) -> P2PConnectionListener<M> {
@@ -206,7 +210,10 @@ where
                         .find_map(|(peer, c)| if c == certificate { Some(*peer) } else { None })
                         .context("Unknown certificate")?;
 
-                    let framed = FramedTlsTcpStream::new(TlsStream::Server(tls)).into_dyn();
+                    let framed = LengthDelimitedCodec::builder()
+                        .length_field_type::<u64>()
+                        .new_framed(TlsStream::Server(tls))
+                        .into_dyn();
 
                     Ok((auth_peer, framed))
                 }
@@ -246,10 +253,9 @@ pub mod iroh {
     use iroh::endpoint::Incoming;
     use iroh::{Endpoint, NodeId, SecretKey};
 
-    use crate::net::p2p_connection::iroh::IrohConnection;
-    use crate::net::p2p_connection::P2PConnection;
+    use crate::net::p2p_connection::IP2PConnection;
     use crate::net::p2p_connector::{
-        DynP2PConnection, P2PConnectionListener, P2PConnectionResult, P2PConnector,
+        DynP2PConnection, IP2PConnector, P2PConnectionListener, P2PConnectionResult,
     };
 
     #[derive(Debug, Clone)]
@@ -289,7 +295,7 @@ pub mod iroh {
     }
 
     #[async_trait]
-    impl<M> P2PConnector<M> for IrohConnector
+    impl<M> IP2PConnector<M> for IrohConnector
     where
         M: Encodable + Decodable + Send + 'static,
     {
@@ -305,7 +311,7 @@ pub mod iroh {
 
             let connection = self.endpoint.connect(node_id, FEDIMINT_ALPN).await?;
 
-            Ok(IrohConnection::new(connection).into_dyn())
+            Ok(connection.into_dyn())
         }
 
         async fn listen(&self) -> P2PConnectionListener<M> {
@@ -338,8 +344,6 @@ pub mod iroh {
             .context("Node id {node_id} is unknown")?
             .0;
 
-        let framed = IrohConnection::new(connection).into_dyn();
-
-        Ok((*peer_id, framed))
+        Ok((*peer_id, connection.into_dyn()))
     }
 }
