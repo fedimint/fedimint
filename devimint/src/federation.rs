@@ -770,7 +770,7 @@ impl Federation {
         }
 
         self.bitcoind.mine_blocks(21).await?;
-        let bitcoind_block_height: u64 = self.bitcoind.get_block_count().await? - 1;
+        let bitcoind_block_height: u64 = self.bitcoind.get_block_height().await?;
         try_join_all(gateways.into_iter().map(|gw| {
             poll("gateway pegin", || async {
                 let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
