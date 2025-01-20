@@ -4,6 +4,8 @@ use std::io::Cursor;
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use futures::{SinkExt, StreamExt};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -36,7 +38,7 @@ pub enum LegacyMessage<M> {
 #[async_trait]
 impl<M> IP2PConnection<M> for Framed<TlsStream<TcpStream>, LengthDelimitedCodec>
 where
-    M: Serialize + DeserializeOwned + Send + 'static,
+    M: Encodable + Decodable + Serialize + DeserializeOwned + Send + 'static,
 {
     async fn send(&mut self, message: M) -> anyhow::Result<()> {
         let mut bytes = Vec::new();
@@ -59,7 +61,10 @@ where
                 }
             }
 
-            return Ok(bincode::deserialize_from(Cursor::new(&bytes))?);
+            return Ok(Decodable::consensus_decode_whole(
+                &bytes,
+                &ModuleDecoderRegistry::default(),
+            )?);
         }
     }
 }
