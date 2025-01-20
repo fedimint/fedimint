@@ -6,6 +6,7 @@ use std::marker;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use fedimint_api_client::api::DynModuleApi;
 use fedimint_core::config::{
     ClientModuleConfig, CommonModuleInitRegistry, ConfigGenModuleParams, ModuleInitParams,
     ModuleInitRegistry, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -44,6 +45,7 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
         db: Database,
         task_group: &TaskGroup,
         our_peer_id: PeerId,
+        module_api: DynModuleApi,
     ) -> anyhow::Result<DynServerModule>;
 
     fn validate_params(&self, params: &ConfigGenModuleParams) -> anyhow::Result<()>;
@@ -83,6 +85,7 @@ where
     task_group: TaskGroup,
     our_peer_id: PeerId,
     num_peers: NumPeers,
+    module_api: DynModuleApi,
     // ClientModuleInitArgs needs a bound because sometimes we need
     // to pass associated-types data, so let's just put it here right away
     _marker: marker::PhantomData<S>,
@@ -110,6 +113,10 @@ where
 
     pub fn our_peer_id(&self) -> PeerId {
         self.our_peer_id
+    }
+
+    pub fn module_api(&self) -> &DynModuleApi {
+        &self.module_api
     }
 }
 /// Module Generation trait with associated types
@@ -197,6 +204,7 @@ where
         db: Database,
         task_group: &TaskGroup,
         our_peer_id: PeerId,
+        module_api: DynModuleApi,
     ) -> anyhow::Result<DynServerModule> {
         <Self as ServerModuleInit>::init(
             self,
@@ -207,6 +215,7 @@ where
                 task_group: task_group.clone(),
                 our_peer_id,
                 _marker: PhantomData,
+                module_api,
             },
         )
         .await

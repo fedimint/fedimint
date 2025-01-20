@@ -67,6 +67,15 @@ pub async fn run(
 
     let mut modules = BTreeMap::new();
 
+    // TODO: make it work with all transports and federation secrets
+    let global_api = DynGlobalApi::from_endpoints(
+        cfg.consensus
+            .api_endpoints
+            .iter()
+            .map(|(&peer_id, url)| (peer_id, url.url.clone())),
+        &None,
+        &Connector::Tcp,
+    );
     for (module_id, module_cfg) in &cfg.consensus.modules {
         match module_init_registry.get(&module_cfg.kind) {
             Some(module_init) => {
@@ -88,6 +97,7 @@ pub async fn run(
                         db.with_prefix_module_id(*module_id).0,
                         task_group,
                         cfg.local.identity,
+                        global_api.with_module(*module_id),
                     )
                     .await?;
 
