@@ -294,7 +294,18 @@
 <a href="#293" id="293">293</a>
 <a href="#294" id="294">294</a>
 <a href="#295" id="295">295</a>
-<a href="#296" id="296">296</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>aleph_bft;
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>aleph_bft;
 <span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>debug;
@@ -363,6 +374,16 @@
 
     <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
 
+    <span class="comment">// TODO: make it work with all transports and federation secrets
+    </span><span class="kw">let </span>global_api = DynGlobalApi::from_endpoints(
+        cfg.consensus
+            .api_endpoints
+            .iter()
+            .map(|(<span class="kw-2">&amp;</span>peer_id, url)| (peer_id, url.url.clone())),
+        <span class="kw-2">&amp;</span><span class="prelude-val">None</span>,
+        <span class="kw-2">&amp;</span>Connector::Tcp,
+        <span class="prelude-val">None</span>,
+    );
     <span class="kw">for </span>(module_id, module_cfg) <span class="kw">in </span><span class="kw-2">&amp;</span>cfg.consensus.modules {
         <span class="kw">match </span>module_init_registry.get(<span class="kw-2">&amp;</span>module_cfg.kind) {
             <span class="prelude-val">Some</span>(module_init) =&gt; {
@@ -384,6 +405,7 @@
                         db.with_prefix_module_id(<span class="kw-2">*</span>module_id).<span class="number">0</span>,
                         task_group,
                         cfg.local.identity,
+                        global_api.with_module(<span class="kw-2">*</span>module_id),
                     )
                     .<span class="kw">await</span><span class="question-mark">?</span>;
 

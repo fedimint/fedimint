@@ -2215,7 +2215,113 @@
 <a href="#2214" id="2214">2214</a>
 <a href="#2215" id="2215">2215</a>
 <a href="#2216" id="2216">2216</a>
-<a href="#2217" id="2217">2217</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2217" id="2217">2217</a>
+<a href="#2218" id="2218">2218</a>
+<a href="#2219" id="2219">2219</a>
+<a href="#2220" id="2220">2220</a>
+<a href="#2221" id="2221">2221</a>
+<a href="#2222" id="2222">2222</a>
+<a href="#2223" id="2223">2223</a>
+<a href="#2224" id="2224">2224</a>
+<a href="#2225" id="2225">2225</a>
+<a href="#2226" id="2226">2226</a>
+<a href="#2227" id="2227">2227</a>
+<a href="#2228" id="2228">2228</a>
+<a href="#2229" id="2229">2229</a>
+<a href="#2230" id="2230">2230</a>
+<a href="#2231" id="2231">2231</a>
+<a href="#2232" id="2232">2232</a>
+<a href="#2233" id="2233">2233</a>
+<a href="#2234" id="2234">2234</a>
+<a href="#2235" id="2235">2235</a>
+<a href="#2236" id="2236">2236</a>
+<a href="#2237" id="2237">2237</a>
+<a href="#2238" id="2238">2238</a>
+<a href="#2239" id="2239">2239</a>
+<a href="#2240" id="2240">2240</a>
+<a href="#2241" id="2241">2241</a>
+<a href="#2242" id="2242">2242</a>
+<a href="#2243" id="2243">2243</a>
+<a href="#2244" id="2244">2244</a>
+<a href="#2245" id="2245">2245</a>
+<a href="#2246" id="2246">2246</a>
+<a href="#2247" id="2247">2247</a>
+<a href="#2248" id="2248">2248</a>
+<a href="#2249" id="2249">2249</a>
+<a href="#2250" id="2250">2250</a>
+<a href="#2251" id="2251">2251</a>
+<a href="#2252" id="2252">2252</a>
+<a href="#2253" id="2253">2253</a>
+<a href="#2254" id="2254">2254</a>
+<a href="#2255" id="2255">2255</a>
+<a href="#2256" id="2256">2256</a>
+<a href="#2257" id="2257">2257</a>
+<a href="#2258" id="2258">2258</a>
+<a href="#2259" id="2259">2259</a>
+<a href="#2260" id="2260">2260</a>
+<a href="#2261" id="2261">2261</a>
+<a href="#2262" id="2262">2262</a>
+<a href="#2263" id="2263">2263</a>
+<a href="#2264" id="2264">2264</a>
+<a href="#2265" id="2265">2265</a>
+<a href="#2266" id="2266">2266</a>
+<a href="#2267" id="2267">2267</a>
+<a href="#2268" id="2268">2268</a>
+<a href="#2269" id="2269">2269</a>
+<a href="#2270" id="2270">2270</a>
+<a href="#2271" id="2271">2271</a>
+<a href="#2272" id="2272">2272</a>
+<a href="#2273" id="2273">2273</a>
+<a href="#2274" id="2274">2274</a>
+<a href="#2275" id="2275">2275</a>
+<a href="#2276" id="2276">2276</a>
+<a href="#2277" id="2277">2277</a>
+<a href="#2278" id="2278">2278</a>
+<a href="#2279" id="2279">2279</a>
+<a href="#2280" id="2280">2280</a>
+<a href="#2281" id="2281">2281</a>
+<a href="#2282" id="2282">2282</a>
+<a href="#2283" id="2283">2283</a>
+<a href="#2284" id="2284">2284</a>
+<a href="#2285" id="2285">2285</a>
+<a href="#2286" id="2286">2286</a>
+<a href="#2287" id="2287">2287</a>
+<a href="#2288" id="2288">2288</a>
+<a href="#2289" id="2289">2289</a>
+<a href="#2290" id="2290">2290</a>
+<a href="#2291" id="2291">2291</a>
+<a href="#2292" id="2292">2292</a>
+<a href="#2293" id="2293">2293</a>
+<a href="#2294" id="2294">2294</a>
+<a href="#2295" id="2295">2295</a>
+<a href="#2296" id="2296">2296</a>
+<a href="#2297" id="2297">2297</a>
+<a href="#2298" id="2298">2298</a>
+<a href="#2299" id="2299">2299</a>
+<a href="#2300" id="2300">2300</a>
+<a href="#2301" id="2301">2301</a>
+<a href="#2302" id="2302">2302</a>
+<a href="#2303" id="2303">2303</a>
+<a href="#2304" id="2304">2304</a>
+<a href="#2305" id="2305">2305</a>
+<a href="#2306" id="2306">2306</a>
+<a href="#2307" id="2307">2307</a>
+<a href="#2308" id="2308">2308</a>
+<a href="#2309" id="2309">2309</a>
+<a href="#2310" id="2310">2310</a>
+<a href="#2311" id="2311">2311</a>
+<a href="#2312" id="2312">2312</a>
+<a href="#2313" id="2313">2313</a>
+<a href="#2314" id="2314">2314</a>
+<a href="#2315" id="2315">2315</a>
+<a href="#2316" id="2316">2316</a>
+<a href="#2317" id="2317">2317</a>
+<a href="#2318" id="2318">2318</a>
+<a href="#2319" id="2319">2319</a>
+<a href="#2320" id="2320">2320</a>
+<a href="#2321" id="2321">2321</a>
+<a href="#2322" id="2322">2322</a>
+<a href="#2323" id="2323">2323</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -2250,6 +2356,7 @@
     TxOutputSummary, WalletCommonInit, WalletConsensusItem, WalletCreationError, WalletInput,
     WalletModuleTypes, WalletOutput, WalletOutputOutcome, WalletSummary, DEPRECATED_RBF_ERROR,
 };
+<span class="kw">use </span>fedimint_api_client::api::{DynModuleApi, FederationApiExt};
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -2265,8 +2372,8 @@
 <span class="kw">use </span>fedimint_core::envs::{is_rbf_withdrawal_enabled, is_running_in_test_env, BitcoinRpcConfig};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
+    api_endpoint, ApiEndpoint, ApiError, ApiRequestErased, ApiVersion, CoreConsensusVersion,
+    InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
     TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
@@ -2288,7 +2395,8 @@
 <span class="kw">use </span>fedimint_wallet_common::endpoint_constants::{
     ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT, BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT,
     BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT,
-    PEG_OUT_FEES_ENDPOINT, UTXO_CONFIRMED_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
+    PEG_OUT_FEES_ENDPOINT, SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT, UTXO_CONFIRMED_ENDPOINT,
+    WALLET_SUMMARY_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_wallet_common::keys::CompressedPublicKey;
 <span class="kw">use </span>fedimint_wallet_common::tweakable::Tweakable;
@@ -2296,7 +2404,9 @@
     Rbf, UnknownWalletInputVariantError, WalletInputError, WalletOutputError, WalletOutputV0,
     CONFIRMATION_TARGET, FEERATE_MULTIPLIER, MODULE_CONSENSUS_VERSION,
 };
+<span class="kw">use </span>futures::future::join_all;
 <span class="kw">use </span>futures::{FutureExt, StreamExt};
+<span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>metrics::{
     WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS, WALLET_PEGIN_SATS,
     WALLET_PEGOUT_FEES_SATS, WALLET_PEGOUT_SATS,
@@ -2307,7 +2417,7 @@
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>tokio::sync::watch;
-<span class="kw">use </span>tracing::{debug, info, instrument, trace, warn};
+<span class="kw">use </span>tracing::{debug, error, info, instrument, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     migrate_to_v1, BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix,
@@ -2504,6 +2614,7 @@
             args.db(),
             args.task_group(),
             args.our_peer_id(),
+            args.module_api().clone(),
         )
         .<span class="kw">await</span><span class="question-mark">?
         </span>.into())
@@ -2675,15 +2786,30 @@
 
         items.push(WalletConsensusItem::Feerate(fee_rate_proposal));
 
-        <span class="kw">if </span>dbtx
+        <span class="comment">// Consensus upgrade activation voting
+        </span><span class="kw">let </span>manual_vote = dbtx
             .get_value(<span class="kw-2">&amp;</span>ConsensusVersionVotingActivationKey)
             .<span class="kw">await
-            </span>.is_some()
-            || is_running_in_test_env()
-        {
-            items.push(WalletConsensusItem::ModuleConsensusVersion(
-                MODULE_CONSENSUS_VERSION,
-            ));
+            </span>.map(|()| {
+                <span class="comment">// TODO: allow voting on any version between the currently active and max
+                // supported one in case we support a too high one already
+                </span>MODULE_CONSENSUS_VERSION
+            });
+
+        <span class="kw">let </span>active_consensus_version = <span class="self">self</span>.consensus_module_consensus_version(dbtx).<span class="kw">await</span>;
+        <span class="kw">let </span>automatic_vote = <span class="self">self</span>.peer_supported_consensus_version.borrow().and_then(
+            |supported_consensus_version| {
+                <span class="comment">// Only automatically vote if the commonly supported version is higher than the
+                // currently active one
+                </span>(active_consensus_version &lt; supported_consensus_version)
+                    .then_some(supported_consensus_version)
+            },
+        );
+
+        <span class="comment">// Prioritizing automatic vote for now since the manual vote never resets. Once
+        // that is fixed this should be switched around.
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(vote_version) = automatic_vote.or(manual_vote) {
+            items.push(WalletConsensusItem::ModuleConsensusVersion(vote_version));
         }
 
         items
@@ -3118,6 +3244,13 @@
                 }
             },
             <span class="macro">api_endpoint!</span> {
+                SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT,
+                ApiVersion::new(<span class="number">0</span>, <span class="number">2</span>),
+                <span class="kw">async </span>|_module: <span class="kw-2">&amp;</span>Wallet, _context, _params: ()| -&gt; ModuleConsensusVersion {
+                    <span class="prelude-val">Ok</span>(MODULE_CONSENSUS_VERSION)
+                }
+            },
+            <span class="macro">api_endpoint!</span> {
                 ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT,
                 ApiVersion::new(<span class="number">0</span>, <span class="number">2</span>),
                 <span class="kw">async </span>|_module: <span class="kw-2">&amp;</span>Wallet, context, _params: ()| -&gt; () {
@@ -3189,6 +3322,10 @@
     <span class="doccomment">/// Fee rate updated periodically by a background task
     </span>fee_rate_rx: watch::Receiver&lt;Feerate&gt;,
     task_group: TaskGroup,
+    <span class="doccomment">/// Maximum consensus version supported by *all* our peers. Used to
+    /// automatically activate new consensus versions as soon as everyone
+    /// upgrades.
+    </span>peer_supported_consensus_version: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;ModuleConsensusVersion&gt;&gt;,
 }
 
 <span class="kw">impl </span>Wallet {
@@ -3197,9 +3334,10 @@
         db: <span class="kw-2">&amp;</span>Database,
         task_group: <span class="kw-2">&amp;</span>TaskGroup,
         our_peer_id: PeerId,
+        module_api: DynModuleApi,
     ) -&gt; anyhow::Result&lt;Wallet&gt; {
         <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>cfg.local.bitcoin_rpc)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::new_with_bitcoind(cfg, db, btc_rpc, task_group, our_peer_id).<span class="kw">await</span><span class="question-mark">?</span>)
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::new_with_bitcoind(cfg, db, btc_rpc, task_group, our_peer_id, module_api).<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
     <span class="kw">pub async fn </span>new_with_bitcoind(
@@ -3208,6 +3346,7 @@
         bitcoind: DynBitcoindRpc,
         task_group: <span class="kw-2">&amp;</span>TaskGroup,
         our_peer_id: PeerId,
+        module_api: DynModuleApi,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Wallet, WalletCreationError&gt; {
         <span class="self">Self</span>::spawn_broadcast_pending_task(task_group, <span class="kw-2">&amp;</span>bitcoind, db);
 
@@ -3224,6 +3363,9 @@
             .clone()
             .spawn_block_count_update_task(task_group)
             .map_err(|e| WalletCreationError::BlockCountSourceError(e.to_string()))<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>peer_supported_consensus_version =
+            <span class="self">Self</span>::spawn_peer_supported_consensus_version_task(module_api, task_group);
 
         <span class="kw">let </span>bitcoind_rpc = bitcoind;
 
@@ -3249,6 +3391,7 @@
             block_count_rx,
             fee_rate_rx,
             task_group: task_group.clone(),
+            peer_supported_consensus_version,
         };
 
         <span class="prelude-val">Ok</span>(wallet)
@@ -3855,6 +3998,75 @@
         {
             <span class="self">self</span>.graceful_shutdown().<span class="kw">await</span>;
         }
+    }
+
+    <span class="kw">fn </span>spawn_peer_supported_consensus_version_task(
+        api_client: DynModuleApi,
+        task_group: <span class="kw-2">&amp;</span>TaskGroup,
+    ) -&gt; watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;ModuleConsensusVersion&gt;&gt; {
+        <span class="kw">let </span>(sender, receiver) = watch::channel(<span class="prelude-val">None</span>);
+        task_group.spawn_cancellable(<span class="string">"fetch-peer-consensus-versions"</span>, <span class="kw">async move </span>{
+            <span class="kw">loop </span>{
+                <span class="kw">let </span>request_futures = api_client.all_peers().iter().map(|<span class="kw-2">&amp;</span>peer| {
+                    <span class="kw">let </span>api_client_inner = api_client.clone();
+                    <span class="kw">async move </span>{
+                        api_client_inner
+                            .request_single_peer::&lt;ModuleConsensusVersion&gt;(
+                                SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT.to_owned(),
+                                ApiRequestErased::default(),
+                                peer,
+                            )
+                            .<span class="kw">await
+                            </span>.ok()
+                    }
+                });
+
+                <span class="kw">let </span>peer_consensus_versions = join_all(request_futures)
+                    .<span class="kw">await
+                    </span>.into_iter()
+                    .flatten()
+                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+
+                <span class="kw">let </span>sorted_consensus_versions = peer_consensus_versions
+                    .into_iter()
+                    .chain(std::iter::once(MODULE_CONSENSUS_VERSION))
+                    .sorted()
+                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+                <span class="kw">let </span>all_peers_supported_version =
+                    <span class="kw">if </span>sorted_consensus_versions.len() == api_client.all_peers().len() {
+                        <span class="kw">let </span>min_supported_version = <span class="kw-2">*</span>sorted_consensus_versions
+                            .first()
+                            .expect(<span class="string">"at least one element"</span>);
+
+                        <span class="macro">debug!</span>(
+                            target: LOG_MODULE_WALLET,
+                            <span class="question-mark">?</span>sorted_consensus_versions,
+                            <span class="string">"Fetched supported consensus versions from peers"
+                        </span>);
+
+                        <span class="prelude-val">Some</span>(min_supported_version)
+                    } <span class="kw">else </span>{
+                        <span class="macro">trace!</span>(
+                            target: LOG_MODULE_WALLET,
+                            <span class="question-mark">?</span>sorted_consensus_versions,
+                            <span class="string">"Not all peers have reported their consensus version yet"
+                        </span>);
+                        <span class="prelude-val">None
+                    </span>};
+
+                <span class="kw">if </span>sender.send(all_peers_supported_version).is_err() {
+                    <span class="macro">error!</span>(target: LOG_MODULE_WALLET, <span class="string">"Failed to send consensus version to watch channel, stopping task"</span>);
+                    <span class="kw">break</span>;
+                }
+
+                <span class="kw">if </span>is_running_in_test_env() {
+                    sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+                } <span class="kw">else </span>{
+                    sleep(Duration::from_secs(<span class="number">3600</span>)).<span class="kw">await</span>;
+                }
+            }
+        });
+        receiver
     }
 }
 
