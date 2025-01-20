@@ -6,8 +6,6 @@ use fedimint_core::fmt_utils::AbbreviateJson;
 use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::PeerId;
 use fedimint_logging::LOG_CLIENT_NET_API;
-use jsonrpsee_core::client::Error as JsonRpcClientError;
-use jsonrpsee_types::error::METHOD_NOT_FOUND_CODE;
 #[cfg(target_family = "wasm")]
 use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
 use serde::Serialize;
@@ -22,7 +20,7 @@ pub enum PeerError {
     #[error("Invalid peer id: {peer_id}")]
     InvalidPeerId { peer_id: PeerId },
     #[error("Rpc error: {0}")]
-    Rpc(#[from] JsonRpcClientError),
+    Rpc(#[from] anyhow::Error),
     #[error("Invalid response: {0}")]
     InvalidResponse(String),
 }
@@ -38,19 +36,7 @@ impl PeerError {
             PeerError::ResponseDeserialization(_)
             | PeerError::InvalidPeerId { .. }
             | PeerError::InvalidResponse(_) => true,
-            PeerError::Rpc(rpc_e) => match rpc_e {
-                // TODO: Does this cover all retryable cases?
-                JsonRpcClientError::Transport(_) | JsonRpcClientError::RequestTimeout => false,
-                JsonRpcClientError::RestartNeeded(_)
-                | JsonRpcClientError::Call(_)
-                | JsonRpcClientError::ParseError(_)
-                | JsonRpcClientError::InvalidSubscriptionId
-                | JsonRpcClientError::InvalidRequestId(_)
-                | JsonRpcClientError::Custom(_)
-                | JsonRpcClientError::HttpNotImplemented
-                | JsonRpcClientError::EmptyBatchRequest(_)
-                | JsonRpcClientError::RegisterMethod(_) => true,
-            },
+            PeerError::Rpc(_) => false,
         };
 
         trace!(target: LOG_CLIENT_NET_API, error = %self, "PeerError");
@@ -171,12 +157,9 @@ impl FederationError {
     }
 
     pub fn any_peer_error_method_not_found(&self) -> bool {
-        self.peer_errors.values().any(|peer_err| {
-            matches!(
-                peer_err,
-                PeerError::Rpc(JsonRpcClientError::Call(err)) if err.code() == METHOD_NOT_FOUND_CODE
-            ) || peer_err.to_string().contains("MethodNotFound")
-        })
+        self.peer_errors
+            .values()
+            .any(|peer_err| peer_err.to_string().contains("MethodNotFound"))
     }
 }
 

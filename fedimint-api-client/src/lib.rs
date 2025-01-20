@@ -27,13 +27,13 @@ impl Connector {
     /// giving up.
     pub async fn download_from_invite_code(
         &self,
-        invite_code: &InviteCode,
+        invite: &InviteCode,
     ) -> anyhow::Result<ClientConfig> {
-        debug!(target: LOG_CLIENT, %invite_code, "Downloading client config via invite code");
+        debug!(target: LOG_CLIENT, %invite, "Downloading client config via invite code");
 
-        let federation_id = invite_code.federation_id();
-        let api = DynGlobalApi::from_invite_code(self, invite_code);
-        let api_secret = invite_code.api_secret();
+        let federation_id = invite.federation_id();
+        let api = DynGlobalApi::from_endpoints(invite.peers(), &invite.api_secret(), self);
+        let api_secret = invite.api_secret();
 
         fedimint_core::util::retry(
             "Downloading client config",
@@ -74,7 +74,7 @@ impl Connector {
 
         debug!(target: LOG_CLIENT, "Verifying client config with all peers");
 
-        let client_config = DynGlobalApi::from_endpoints(api_endpoints, &api_secret, self, None)
+        let client_config = DynGlobalApi::from_endpoints(api_endpoints, &api_secret, self)
             .request_current_consensus::<ClientConfig>(
                 CLIENT_CONFIG_ENDPOINT.to_owned(),
                 ApiRequestErased::default(),
