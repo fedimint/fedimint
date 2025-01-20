@@ -1,11 +1,11 @@
 [package]
 name = "fedimint-metrics"
 version = { workspace = true }
-edition = "2021"
-license = "MIT"
-readme = "README.md"
+edition = { workspace = true }
+license = { workspace = true }
+readme = { workspace = true }
 description = "fedimint-metrics allows exporting prometheus metrics from Fedimint."
-repository = "https://github.com/fedimint/fedimint"
+repository = { workspace = true }
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]

@@ -1,10 +1,10 @@
 [package]
 name = "fedimint-tpe"
 version = { workspace = true }
-authors = ["The Fedimint Developers"]
-edition = "2021"
+authors = { workspace = true }
+edition = { workspace = true }
 description = "tpe is a helper cryptography library for threshold point encryption"
-license = "MIT"
+license = { workspace = true }
 
 [features]
 default = []

@@ -1,8 +1,8 @@
 [package]
 name = "fedimint-wasm-tests"
 version = { workspace = true }
-edition = "2021"
-license = "MIT"
+edition = { workspace = true }
+license = { workspace = true }
 description = "Wasm tests for the fedimint."
 publish = false
 

@@ -1,10 +1,10 @@
 [package]
 name = "gateway-tests"
 version = { workspace = true }
-authors = ["The Fedimint Developers"]
-edition = "2021"
+authors = { workspace = true }
+edition = { workspace = true }
 description = "gateway-tests contain integration tests for the gateway"
-license = "MIT"
+license = { workspace = true }
 publish = false
 
 # workaround: cargo-deny in Nix needs to see at least one

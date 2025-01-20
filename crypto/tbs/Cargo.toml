@@ -1,12 +1,12 @@
 [package]
 name = "fedimint-tbs"
 version = { workspace = true }
-authors = ["The Fedimint Developers"]
-edition = "2021"
+authors = { workspace = true }
+edition = { workspace = true }
 description = "tbs is a helper cryptography library for threshold blind signatures"
-license = "MIT"
-readme = "../../README.md"
-repository = "https://github.com/fedimint/fedimint"
+license = { workspace = true }
+readme = { workspace = true }
+repository = { workspace = true }
 
 [features]
 default = []

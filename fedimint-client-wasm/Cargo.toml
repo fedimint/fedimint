@@ -1,12 +1,12 @@
 [package]
-edition = "2021"
+edition = { workspace = true }
 name = "fedimint-client-wasm"
 version = { workspace = true }
-authors = ["The Fedimint Developers"]
+authors = { workspace = true }
 description = "fedimint client for wasm"
-license = "MIT"
-readme = "../README.md"
-repository = "https://github.com/fedimint/fedimint"
+license = { workspace = true }
+readme = { workspace = true }
+repository = { workspace = true }
 
 # https://rustwasm.github.io/wasm-pack/book/cargo-toml-configuration.html
 [package.metadata.wasm-pack.profile.release]

@@ -1,12 +1,12 @@
 [package]
 name = "fedimint-logging"
 version = { workspace = true }
-authors = ["The Fedimint Developers"]
-edition = "2021"
+authors = { workspace = true }
+edition = { workspace = true }
 description = "contains some utilities for logging and tracing"
-license = "MIT"
-readme = "../README.md"
-repository = "https://github.com/fedimint/fedimint"
+license = { workspace = true }
+readme = { workspace = true }
+repository = { workspace = true }
 
 [features]
 telemetry = [
