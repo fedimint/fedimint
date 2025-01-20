@@ -14,7 +14,7 @@ use fedimint_core::util::BoxFuture;
 use fedimint_core::{maybe_add_send, maybe_add_send_sync, module_plugin_dyn_newtype_define};
 
 use crate::sm::ClientSMDatabaseTransaction;
-use crate::DynGlobalClientContext;
+use crate::{DynGlobalClientContext, InFlightAmounts};
 
 /// Implementors act as state machines that can be executed
 pub trait State:
@@ -44,6 +44,12 @@ pub trait State:
     /// Operation this state machine belongs to. See [`OperationId`] for
     /// details.
     fn operation_id(&self) -> OperationId;
+
+    /// How much money is represented by this state machine. There may be
+    /// outgoing funds that could potentially be refunded or incoming funds we
+    /// are already guaranteed to receive, but are not yet in our wallet and
+    /// thus not reflected in the main balance.
+    fn in_flight_amounts(&self) -> InFlightAmounts;
 }
 
 /// Object-safe version of [`State`]
@@ -60,6 +66,12 @@ pub trait IState: Debug + DynEncodable + MaybeSend + MaybeSync {
     /// Operation this state machine belongs to. See [`OperationId`] for
     /// details.
     fn operation_id(&self) -> OperationId;
+
+    /// How much money is represented by this state machine. There may be
+    /// outgoing funds that could potentially be refunded or incoming funds we
+    /// are already guaranteed to receive, but are not yet in our wallet and
+    /// thus not reflected in the main balance.
+    fn in_flight_amounts(&self) -> InFlightAmounts;
 
     /// Clone state
     fn clone(&self, module_instance_id: ModuleInstanceId) -> DynState;
@@ -227,6 +239,10 @@ where
         <T as State>::operation_id(self)
     }
 
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        <T as State>::in_flight_amounts(self)
+    }
+
     fn clone(&self, module_instance_id: ModuleInstanceId) -> DynState {
         DynState::from_typed(module_instance_id, <T as Clone>::clone(self))
     }
@@ -267,6 +283,10 @@ impl IState for DynState {
 
     fn operation_id(&self) -> OperationId {
         (**self).operation_id()
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        self.0.in_flight_amounts()
     }
 
     fn clone(&self, module_instance_id: ModuleInstanceId) -> DynState {
@@ -436,6 +456,10 @@ where
 
     fn operation_id(&self) -> OperationId {
         self.operation_id
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        self.state.in_flight_amounts()
     }
 }
 

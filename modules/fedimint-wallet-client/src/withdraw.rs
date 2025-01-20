@@ -1,7 +1,7 @@
 use bitcoin::Txid;
 use fedimint_api_client::api::{deserialize_outcome, FederationApiExt};
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::DynGlobalClientContext;
+use fedimint_client::{DynGlobalClientContext, InFlightAmounts};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 #[allow(deprecated)]
@@ -61,6 +61,10 @@ impl State for WithdrawStateMachine {
 
     fn operation_id(&self) -> OperationId {
         self.operation_id
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        InFlightAmounts::default()
     }
 }
 

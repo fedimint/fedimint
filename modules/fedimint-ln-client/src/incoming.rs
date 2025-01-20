@@ -13,7 +13,7 @@ use std::time::Duration;
 use bitcoin::hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
-use fedimint_client::DynGlobalClientContext;
+use fedimint_client::{DynGlobalClientContext, InFlightAmounts};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::runtime::sleep;
@@ -116,6 +116,14 @@ impl State for IncomingStateMachine {
 
     fn operation_id(&self) -> fedimint_core::core::OperationId {
         self.common.operation_id
+    }
+
+    fn in_flight_amounts(&self) -> InFlightAmounts {
+        // FIXME: Technically funds are in flight, but the SMs don't contain the amount
+        // and a refund will only happen in the case that the recipient encrypted a
+        // faulty preimage, such self-sabotage is unlikely and slightly confusing UX in
+        // that corner-case seems acceptable.
+        InFlightAmounts::default()
     }
 }
 
