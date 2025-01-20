@@ -823,7 +823,7 @@
             code_version_hash: code_version_hash.to_owned(),
             code_version_str: code_version_vendor_suffix.map_or_else(
                 || fedimint_version.to_string(),
-                |suffix| <span class="macro">format!</span>(<span class="string">"{fedimint_version}.{suffix}"</span>),
+                |suffix| <span class="macro">format!</span>(<span class="string">"{fedimint_version}+{suffix}"</span>),
             ),
         })
     }
