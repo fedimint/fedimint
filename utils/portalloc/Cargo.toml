@@ -17,7 +17,7 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-dirs = "5.0.1"
+dirs = "6.0.0"
 fedimint-core = { workspace = true }
 fs2 = "0.4.3"
 rand = { workspace = true }
