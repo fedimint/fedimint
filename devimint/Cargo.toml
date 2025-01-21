@@ -1,9 +1,12 @@
 [package]
 name = "devimint"
 version = { workspace = true }
+authors = ["The Fedimint Developers"]
 edition = "2021"
+description = "devimint is a library useful for setting up a local environment to run the fedimint stack"
 license = "MIT"
-publish = false
+readme = "../README.md"
+repository = "https://github.com/fedimint/fedimint"
 
 [[bin]]
 name = "devimint"
