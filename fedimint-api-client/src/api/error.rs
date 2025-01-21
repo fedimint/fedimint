@@ -14,15 +14,63 @@ use tracing::{error, trace, warn};
 
 /// An API request error when calling a single federation peer
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum PeerError {
+    /// The response payload was returned successfully but failed to be
+    /// deserialized
     #[error("Response deserialization error: {0}")]
     ResponseDeserialization(anyhow::Error),
+
+    /// The request was addressed to an invalid `peer_id`
     #[error("Invalid peer id: {peer_id}")]
     InvalidPeerId { peer_id: PeerId },
-    #[error("Rpc error: {0}")]
-    Rpc(#[from] anyhow::Error),
+
+    /// The endpoint specification for the peer is invalid (e.g. wrong url)
+    #[error("Invalid endpoint")]
+    InvalidEndpoint(anyhow::Error),
+
+    /// Could not connect
+    #[error("Connection failed: {0}")]
+    Connection(anyhow::Error),
+
+    /// Underlying transport failed, in some typical way
+    #[error("Transport error: {0}")]
+    Transport(anyhow::Error),
+
+    /// The rpc id (e.g. jsonrpc method name) was not recognized by the peer
+    ///
+    /// This one is important and sometimes used to detect backward
+    /// compatibility capabilities, so transports should properly support
+    /// it.
+    #[error("Invalid rpc id")]
+    InvalidRpcId(anyhow::Error),
+
+    /// Something about the request we've sent was wrong, should not typically
+    /// happen
+    #[error("Invalid request")]
+    InvalidRequest(anyhow::Error),
+
+    /// Something about the response was wrong, should not typically happen
     #[error("Invalid response: {0}")]
-    InvalidResponse(String),
+    InvalidResponse(anyhow::Error),
+
+    /// Server returned an internal error, suggesting something is wrong with it
+    #[error("Unspecified server error")]
+    ServerError(anyhow::Error),
+
+    /// Some condition on the response this not match
+    ///
+    /// Typically expected, and often used in `FilterMap` query strategy to
+    /// reject responses that don't match some criteria.
+    #[error("Unspecified server error")]
+    ConditionFailed(anyhow::Error),
+
+    /// An internal client error
+    ///
+    /// Things that shouldn't happen (better than panicking), logical errors,
+    /// malfunctions caused by internal issues.
+    #[error("Unspecified internal client")]
+    InternalClientError(anyhow::Error),
 }
 
 impl PeerError {
@@ -35,8 +83,15 @@ impl PeerError {
         let important = match self {
             PeerError::ResponseDeserialization(_)
             | PeerError::InvalidPeerId { .. }
-            | PeerError::InvalidResponse(_) => true,
-            PeerError::Rpc(_) => false,
+            | PeerError::InvalidResponse(_)
+            | PeerError::InvalidRpcId(_)
+            | PeerError::InvalidRequest(_)
+            | PeerError::InternalClientError(_)
+            | PeerError::InvalidEndpoint(_)
+            | PeerError::ServerError(_) => true,
+            PeerError::Connection(_) | PeerError::Transport(_) | PeerError::ConditionFailed(_) => {
+                false
+            }
         };
 
         trace!(target: LOG_CLIENT_NET_API, error = %self, "PeerError");
@@ -159,7 +214,7 @@ impl FederationError {
     pub fn any_peer_error_method_not_found(&self) -> bool {
         self.peer_errors
             .values()
-            .any(|peer_err| peer_err.to_string().contains("MethodNotFound"))
+            .any(|peer_err| matches!(peer_err, PeerError::InvalidRpcId(_)))
     }
 }
 
