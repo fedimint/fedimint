@@ -1,8 +1,7 @@
 use std::collections::BTreeSet;
-use std::result;
 use std::string::ToString;
 
-use fedimint_api_client::api::{DynModuleApi, IRawFederationApi, JsonRpcClientError};
+use fedimint_api_client::api::{DynModuleApi, IRawFederationApi};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::module::ApiRequestErased;
@@ -139,7 +138,7 @@ where
         peer_id: PeerId,
         method: &str,
         params: &ApiRequestErased,
-    ) -> result::Result<Value, JsonRpcClientError> {
+    ) -> anyhow::Result<Value> {
         self.log_event(ApiCallStarted {
             method: method.to_string(),
             peer_id,

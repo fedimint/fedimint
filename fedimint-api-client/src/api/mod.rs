@@ -4,7 +4,6 @@ use std::iter::once;
 use std::pin::Pin;
 use std::result;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::{anyhow, Context};
 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
@@ -23,7 +22,6 @@ use fedimint_core::backup::ClientBackupSnapshot;
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ApiRequestErased, ApiVersion, SerdeModuleEncoding};
@@ -57,7 +55,7 @@ use serde_json::Value;
 use tokio_rustls::rustls::RootCertStore;
 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
 use tokio_rustls::{rustls::ClientConfig as TlsClientConfig, TlsConnector};
-use tracing::{debug, info, info_span, instrument, warn, Instrument};
+use tracing::{debug, info, instrument, trace, trace_span, warn, Instrument};
 
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 mod error;
@@ -113,7 +111,7 @@ pub trait IRawFederationApi: Debug + MaybeSend + MaybeSync {
         peer_id: PeerId,
         method: &str,
         params: &ApiRequestErased,
-    ) -> result::Result<Value, JsonRpcClientError>;
+    ) -> anyhow::Result<Value>;
 }
 
 /// An extension trait allowing to making federation-wide API call on top
@@ -419,7 +417,13 @@ impl DynGlobalApi {
         api_secret: &Option<String>,
         connector: &Connector,
     ) -> DynGlobalApi {
-        Self::from_endpoints(once((peer, url)), api_secret, connector, Some(peer))
+        GlobalFederationApiWithCache::new(ReconnectFederationApi::from_endpoints(
+            once((peer, url)),
+            api_secret,
+            connector,
+            Some(peer),
+        ))
+        .into()
     }
 
     // FIXME: (@leonardo) Should we have the option to do DKG and config related
@@ -432,44 +436,15 @@ impl DynGlobalApi {
         Self::new_admin(PeerId::from(1024), url, api_secret, &Connector::default())
     }
 
-    pub fn from_single_endpoint(
-        peer: PeerId,
-        url: SafeUrl,
-        api_secret: &Option<String>,
-        connector: &Connector,
-        admin_id: Option<PeerId>,
-    ) -> Self {
-        Self::from_endpoints(once((peer, url)), api_secret, connector, admin_id)
-    }
-
     pub fn from_endpoints(
         peers: impl IntoIterator<Item = (PeerId, SafeUrl)>,
         api_secret: &Option<String>,
         connector: &Connector,
-        admin_id: Option<PeerId>,
     ) -> Self {
-        let connector = match connector {
-            Connector::Tcp => {
-                WebsocketConnector::new(peers.into_iter().collect(), api_secret.clone()).into_dyn()
-            }
-            #[cfg(all(feature = "tor", not(target_family = "wasm")))]
-            Connector::Tor => {
-                TorConnector::new(peers.into_iter().collect(), api_secret.clone()).into_dyn()
-            }
-            #[cfg(all(feature = "tor", target_family = "wasm"))]
-            Connector::Tor => unimplemented!(),
-        };
-
-        GlobalFederationApiWithCache::new(ReconnectFederationApi::new(&connector, admin_id)).into()
-    }
-
-    pub fn from_invite_code(connector: &Connector, invite_code: &InviteCode) -> Self {
-        Self::from_endpoints(
-            invite_code.peers(),
-            &invite_code.api_secret(),
-            connector,
-            None,
-        )
+        GlobalFederationApiWithCache::new(ReconnectFederationApi::from_endpoints(
+            peers, api_secret, connector, None,
+        ))
+        .into()
     }
 }
 
@@ -710,12 +685,10 @@ impl IClientConnector for WebsocketConnector {
                 // on wasm, url will be handled by the browser, which should take care of
                 // `user:pass@...`
                 let mut url = api_endpoint.clone();
-                url.set_username("fedimint").map_err(|_| {
-                    JsonRpcClientError::Transport(anyhow::format_err!("invalid username").into())
-                })?;
-                url.set_password(Some(&api_secret)).map_err(|_| {
-                    JsonRpcClientError::Transport(anyhow::format_err!("invalid secret").into())
-                })?;
+                url.set_username("fedimint")
+                    .map_err(|_| anyhow!("invalid username"))?;
+                url.set_password(Some(&api_secret))
+                    .map_err(|_| anyhow!("invalid secret"))?;
 
                 let client = client.build(url.as_str()).await?;
 
@@ -759,8 +732,7 @@ impl IClientConnector for TorConnector {
 
         let tor_config = TorClientConfig::default();
         let tor_client = TorClient::create_bootstrapped(tor_config)
-            .await
-            .map_err(|e| JsonRpcClientError::Transport(e.into()))?
+            .await?
             .isolated_client();
 
         debug!("Successfully created and bootstrapped the `TorClient`, for given `TorConfig`.");
@@ -775,7 +747,7 @@ impl IClientConnector for TorConnector {
                 .port_or_known_default()
                 .expect("It should've asserted for `port`, or used a default one, on construction"),
         );
-        let tor_addr = TorAddr::from(addr).map_err(|e| JsonRpcClientError::Transport(e.into()))?;
+        let tor_addr = TorAddr::from(addr)?;
         let tor_addr_clone = tor_addr.clone();
 
         debug!(
@@ -792,8 +764,7 @@ impl IClientConnector for TorConnector {
 
             let anonymized_stream = tor_client
                 .connect_with_prefs(tor_addr, &stream_prefs)
-                .await
-                .map_err(|e| JsonRpcClientError::Transport(e.into()))?;
+                .await?;
 
             debug!(
                 ?tor_addr_clone,
@@ -801,10 +772,7 @@ impl IClientConnector for TorConnector {
             );
             anonymized_stream
         } else {
-            let anonymized_stream = tor_client
-                .connect(tor_addr)
-                .await
-                .map_err(|e| JsonRpcClientError::Transport(e.into()))?;
+            let anonymized_stream = tor_client.connect(tor_addr).await?;
 
             debug!(?tor_addr_clone, "Successfully connected to `Hostname`or `Ip` `TorAddr`, and established an anonymized `DataStream`");
             anonymized_stream
@@ -865,19 +833,15 @@ impl IClientConnector for TorConnector {
                 let host = api_endpoint
                     .host_str()
                     .map(ToOwned::to_owned)
-                    .ok_or_else(|| {
-                        JsonRpcClientError::Transport(anyhow!("Invalid host!").into())
-                    })?;
+                    .context("Invalid host!")?;
 
                 // FIXME: (@leonardo) Is this leaking any data ? Should investigate it further
                 // if it's really needed.
-                let server_name = rustls_pki_types::ServerName::try_from(host)
-                    .map_err(|e| JsonRpcClientError::Transport(e.into()))?;
+                let server_name = rustls_pki_types::ServerName::try_from(host)?;
 
                 let anonymized_tls_stream = tls_connector
                     .connect(server_name, anonymized_stream)
-                    .await
-                    .map_err(|e| JsonRpcClientError::Transport(e.into()))?;
+                    .await?;
 
                 let client = ws_client_builder
                     .build_with_stream(api_endpoint.as_str(), anonymized_tls_stream)
@@ -1021,7 +985,7 @@ impl IRawFederationApi for ReconnectFederationApi {
         peer_id: PeerId,
         method: &str,
         params: &ApiRequestErased,
-    ) -> JsonRpcResult<Value> {
+    ) -> anyhow::Result<Value> {
         let method = match self.module_id {
             Some(module_id) => ApiMethod::Module(module_id, method.to_string()),
             None => ApiMethod::Core(method.to_string()),
@@ -1030,7 +994,6 @@ impl IRawFederationApi for ReconnectFederationApi {
         self.connections
             .request(peer_id, method, params.clone())
             .await
-            .map_err(|e| JsonRpcClientError::Transport(e.into()))
     }
 }
 
@@ -1092,7 +1055,7 @@ impl ClientConnection {
 
                     match connector.connect(peer).await {
                         Ok(connection) => {
-                            info!(target: LOG_CLIENT_NET_API, "Connected to peer api");
+                            trace!(target: LOG_CLIENT_NET_API, "Connected to peer api");
 
                             for sender in senders {
                                 sender.send(connection.clone()).ok();
@@ -1110,12 +1073,12 @@ impl ClientConnection {
                                 }
                             }
 
-                            info!(target: LOG_CLIENT_NET_API, "Disconnected from peer api");
+                            trace!(target: LOG_CLIENT_NET_API, "Disconnected from peer api");
 
                             backoff = api_networking_backoff();
                         }
                         Err(e) => {
-                            info!(target: LOG_CLIENT_NET_API, "Failed to connect to peer api {e}");
+                            trace!(target: LOG_CLIENT_NET_API, "Failed to connect to peer api {e}");
 
                             fedimint_core::task::sleep(
                                 backoff.next().expect("No limit to the number of retries"),
@@ -1127,7 +1090,7 @@ impl ClientConnection {
 
                 info!(target: LOG_CLIENT_NET_API, "Shutting down peer api connection task");
             }
-            .instrument(info_span!("peer-api-connection", ?peer)),
+            .instrument(trace_span!("peer-api-connection", ?peer)),
         );
 
         ClientConnection { sender }
@@ -1136,14 +1099,10 @@ impl ClientConnection {
     async fn connection(&self) -> Option<DynClientConnection> {
         let (sender, receiver) = oneshot::channel();
 
-        if self.sender.send(sender).await.is_err() {
-            warn!(target: LOG_CLIENT_NET_API, "Connection channel already disconnected");
-            // This is to prevent crazy tight loops e.g. if the inner task panicked for some
-            // unforeseen reason or already shut down, before the code calling
-            // this one (possibly in a loop without await) did. Importantly this also gives
-            // an await point, that allows current task to be canceled.
-            fedimint_core::task::sleep(Duration::from_millis(100)).await;
-        };
+        self.sender
+            .send(sender)
+            .await
+            .expect("Api connection request channel closed unexpectedly");
 
         receiver.await.ok()
     }
@@ -1289,6 +1248,7 @@ mod tests {
     use std::str::FromStr as _;
 
     use fedimint_core::config::FederationId;
+    use fedimint_core::invite_code::InviteCode;
 
     use super::*;
 
