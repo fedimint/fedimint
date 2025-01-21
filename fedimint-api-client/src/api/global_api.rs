@@ -224,7 +224,7 @@ where
         peer_id: PeerId,
         method: &str,
         params: &ApiRequestErased,
-    ) -> anyhow::Result<Value> {
+    ) -> PeerResult<Value> {
         self.inner.request_raw(peer_id, method, params).await
     }
 }

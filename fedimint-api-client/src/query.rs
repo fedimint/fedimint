@@ -5,6 +5,8 @@ use std::mem;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{maybe_add_send_sync, NumPeers, PeerId};
 
+use crate::api::{PeerError, PeerResult};
+
 /// Fedimint query strategy
 ///
 /// Due to federated security model each Fedimint client API call to the
@@ -29,19 +31,17 @@ pub enum QueryStep<R> {
     /// Return the successful result
     Success(R),
     /// A non-retryable failure has occurred
-    Failure(anyhow::Error),
+    Failure(PeerError),
 }
 
 /// Returns when we obtain the first valid responses. RPC call errors or
 /// invalid responses are not retried.
 pub struct FilterMap<R, T> {
-    filter_map: Box<maybe_add_send_sync!(dyn Fn(R) -> anyhow::Result<T>)>,
+    filter_map: Box<maybe_add_send_sync!(dyn Fn(R) -> PeerResult<T>)>,
 }
 
 impl<R, T> FilterMap<R, T> {
-    pub fn new(
-        filter_map: impl Fn(R) -> anyhow::Result<T> + MaybeSend + MaybeSync + 'static,
-    ) -> Self {
+    pub fn new(filter_map: impl Fn(R) -> PeerResult<T> + MaybeSend + MaybeSync + 'static) -> Self {
         Self {
             filter_map: Box::new(filter_map),
         }
@@ -60,14 +60,14 @@ impl<R, T> QueryStrategy<R, T> for FilterMap<R, T> {
 /// Returns when we obtain a threshold of valid responses. RPC call errors or
 /// invalid responses are not retried.
 pub struct FilterMapThreshold<R, T> {
-    filter_map: Box<maybe_add_send_sync!(dyn Fn(PeerId, R) -> anyhow::Result<T>)>,
+    filter_map: Box<maybe_add_send_sync!(dyn Fn(PeerId, R) -> PeerResult<T>)>,
     filtered_responses: BTreeMap<PeerId, T>,
     threshold: usize,
 }
 
 impl<R, T> FilterMapThreshold<R, T> {
     pub fn new(
-        verifier: impl Fn(PeerId, R) -> anyhow::Result<T> + MaybeSend + MaybeSync + 'static,
+        verifier: impl Fn(PeerId, R) -> PeerResult<T> + MaybeSend + MaybeSync + 'static,
         num_peers: NumPeers,
     ) -> Self {
         Self {

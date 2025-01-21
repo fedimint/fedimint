@@ -16,7 +16,7 @@ mod collections;
 mod secp256k1;
 mod threshold_crypto;
 
-#[cfg(all(feature = "enable_iroh", not(target_family = "wasm")))]
+#[cfg(all(feature = "iroh", not(target_family = "wasm")))]
 mod iroh;
 #[cfg(not(target_family = "wasm"))]
 mod tls;

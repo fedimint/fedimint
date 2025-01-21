@@ -42,6 +42,7 @@ use futures::{Future, StreamExt};
 use jsonrpsee_core::client::ClientT;
 pub use jsonrpsee_core::client::Error as JsonRpcClientError;
 use jsonrpsee_core::DeserializeOwned;
+use jsonrpsee_types::ErrorCode;
 #[cfg(target_family = "wasm")]
 use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
 #[cfg(not(target_family = "wasm"))]
@@ -111,7 +112,7 @@ pub trait IRawFederationApi: Debug + MaybeSend + MaybeSync {
         peer_id: PeerId,
         method: &str,
         params: &ApiRequestErased,
-    ) -> anyhow::Result<Value>;
+    ) -> PeerResult<Value>;
 }
 
 /// An extension trait allowing to making federation-wide API call on top
@@ -129,7 +130,6 @@ pub trait FederationApiExt: IRawFederationApi {
     {
         self.request_raw(peer, &method, &params)
             .await
-            .map_err(PeerError::Rpc)
             .and_then(|v| {
                 serde_json::from_value(v).map_err(|e| PeerError::ResponseDeserialization(e.into()))
             })
@@ -146,7 +146,6 @@ pub trait FederationApiExt: IRawFederationApi {
     {
         self.request_raw(peer_id, &method, &params)
             .await
-            .map_err(PeerError::Rpc)
             .and_then(|v| {
                 serde_json::from_value(v).map_err(|e| PeerError::ResponseDeserialization(e.into()))
             })
@@ -212,7 +211,7 @@ pub trait FederationApiExt: IRawFederationApi {
                     }
                     QueryStep::Success(response) => return Ok(response),
                     QueryStep::Failure(e) => {
-                        peer_errors.insert(peer, PeerError::InvalidResponse(e.to_string()));
+                        peer_errors.insert(peer, e);
                     }
                     QueryStep::Continue => {}
                 },
@@ -639,11 +638,11 @@ impl IClientConnector for WebsocketConnector {
         self.peers.keys().copied().collect()
     }
 
-    async fn connect(&self, peer: PeerId) -> anyhow::Result<DynClientConnection> {
+    async fn connect(&self, peer_id: PeerId) -> PeerResult<DynClientConnection> {
         let api_endpoint = self
             .peers
-            .get(&peer)
-            .expect("Could not find websocket api endpoint for peer {peer}");
+            .get(&peer_id)
+            .ok_or_else(|| PeerError::InternalClientError(anyhow!("Invalid peer_id: {peer_id}")))?;
 
         #[cfg(not(target_family = "wasm"))]
         let mut client = {
@@ -686,17 +685,23 @@ impl IClientConnector for WebsocketConnector {
                 // `user:pass@...`
                 let mut url = api_endpoint.clone();
                 url.set_username("fedimint")
-                    .map_err(|_| anyhow!("invalid username"))?;
+                    .map_err(|_| PeerError::InvalidEndpoint(anyhow!("invalid username")))?;
                 url.set_password(Some(&api_secret))
-                    .map_err(|_| anyhow!("invalid secret"))?;
+                    .map_err(|_| PeerError::InvalidEndpoint(anyhow!("invalid secret")))?;
 
-                let client = client.build(url.as_str()).await?;
+                let client = client
+                    .build(url.as_str())
+                    .await
+                    .map_err(|err| PeerError::InternalClientError(err.into()))?;
 
                 return Ok(client.into_dyn());
             }
         }
 
-        let client = client.build(api_endpoint.as_str()).await?;
+        let client = client
+            .build(api_endpoint.as_str())
+            .await
+            .map_err(|err| PeerError::InternalClientError(err.into()))?;
 
         Ok(client.into_dyn())
     }
@@ -724,15 +729,16 @@ impl IClientConnector for TorConnector {
     }
 
     #[allow(clippy::too_many_lines)]
-    async fn connect(&self, peer: PeerId) -> anyhow::Result<DynClientConnection> {
+    async fn connect(&self, peer_id: PeerId) -> PeerResult<DynClientConnection> {
         let api_endpoint = self
             .peers
-            .get(&peer)
-            .expect("Could not find websocket api endpoint for peer {peer}");
+            .get(&peer_id)
+            .ok_or_else(|| PeerError::InternalClientError(anyhow!("Invalid peer_id: {peer_id}")))?;
 
         let tor_config = TorClientConfig::default();
         let tor_client = TorClient::create_bootstrapped(tor_config)
-            .await?
+            .await
+            .map_err(|err| PeerError::InternalClientError(err.into()))?
             .isolated_client();
 
         debug!("Successfully created and bootstrapped the `TorClient`, for given `TorConfig`.");
@@ -742,12 +748,15 @@ impl IClientConnector for TorConnector {
         let addr = (
             api_endpoint
                 .host_str()
-                .expect("It should've asserted for `host` on construction"),
+                .ok_or_else(|| PeerError::InvalidEndpoint(anyhow!("Expected host str")))?,
             api_endpoint
                 .port_or_known_default()
-                .expect("It should've asserted for `port`, or used a default one, on construction"),
+                .ok_or_else(|| PeerError::InvalidEndpoint(anyhow!("Expected port number")))?,
         );
-        let tor_addr = TorAddr::from(addr)?;
+        let tor_addr = TorAddr::from(addr).map_err(|e| {
+            PeerError::InvalidEndpoint(anyhow!("Invalid endpoint addr: {addr:?}: {e:#}"))
+        })?;
+
         let tor_addr_clone = tor_addr.clone();
 
         debug!(
@@ -764,7 +773,8 @@ impl IClientConnector for TorConnector {
 
             let anonymized_stream = tor_client
                 .connect_with_prefs(tor_addr, &stream_prefs)
-                .await?;
+                .await
+                .map_err(|e| PeerError::Connection(e.into()))?;
 
             debug!(
                 ?tor_addr_clone,
@@ -772,7 +782,10 @@ impl IClientConnector for TorConnector {
             );
             anonymized_stream
         } else {
-            let anonymized_stream = tor_client.connect(tor_addr).await?;
+            let anonymized_stream = tor_client
+                .connect(tor_addr)
+                .await
+                .map_err(|e| PeerError::Connection(e.into()))?;
 
             debug!(?tor_addr_clone, "Successfully connected to `Hostname`or `Ip` `TorAddr`, and established an anonymized `DataStream`");
             anonymized_stream
@@ -782,9 +795,9 @@ impl IClientConnector for TorConnector {
             "wss" => true,
             "ws" => false,
             unexpected_scheme => {
-                let error =
-                    format!("`{unexpected_scheme}` not supported, it's expected `ws` or `wss`!");
-                return Err(anyhow!(error));
+                return Err(PeerError::InvalidEndpoint(anyhow!(
+                    "Unsupported scheme: {unexpected_scheme}"
+                )));
             }
         };
 
@@ -825,7 +838,8 @@ impl IClientConnector for TorConnector {
             None => {
                 let client = ws_client_builder
                     .build_with_stream(api_endpoint.as_str(), anonymized_stream)
-                    .await?;
+                    .await
+                    .map_err(|e| PeerError::Connection(e.into()))?;
 
                 Ok(client.into_dyn())
             }
@@ -833,19 +847,22 @@ impl IClientConnector for TorConnector {
                 let host = api_endpoint
                     .host_str()
                     .map(ToOwned::to_owned)
-                    .context("Invalid host!")?;
+                    .ok_or_else(|| PeerError::InvalidEndpoint(anyhow!("Invalid host str")))?;
 
                 // FIXME: (@leonardo) Is this leaking any data ? Should investigate it further
                 // if it's really needed.
-                let server_name = rustls_pki_types::ServerName::try_from(host)?;
+                let server_name = rustls_pki_types::ServerName::try_from(host)
+                    .map_err(|e| PeerError::InvalidEndpoint(e.into()))?;
 
                 let anonymized_tls_stream = tls_connector
                     .connect(server_name, anonymized_stream)
-                    .await?;
+                    .await
+                    .map_err(|e| PeerError::Connection(e.into()))?;
 
                 let client = ws_client_builder
                     .build_with_stream(api_endpoint.as_str(), anonymized_tls_stream)
-                    .await?;
+                    .await
+                    .map_err(|e| PeerError::Connection(e.into()))?;
 
                 Ok(client.into_dyn())
             }
@@ -853,15 +870,53 @@ impl IClientConnector for TorConnector {
     }
 }
 
+fn jsonrpc_error_to_peer_error(jsonrpc_error: JsonRpcClientError) -> PeerError {
+    match jsonrpc_error {
+        JsonRpcClientError::Call(error_object) => {
+            let error = anyhow!(error_object.message().to_owned());
+            match ErrorCode::from(error_object.code()) {
+                ErrorCode::ParseError | ErrorCode::OversizedRequest | ErrorCode::InvalidRequest => {
+                    PeerError::InvalidRequest(error)
+                }
+                ErrorCode::MethodNotFound => PeerError::InvalidRpcId(error),
+                ErrorCode::InvalidParams => PeerError::InvalidRequest(error),
+                ErrorCode::InternalError | ErrorCode::ServerIsBusy | ErrorCode::ServerError(_) => {
+                    PeerError::ServerError(error)
+                }
+            }
+        }
+        JsonRpcClientError::Transport(error) => PeerError::Transport(anyhow!(error)),
+        JsonRpcClientError::RestartNeeded(arc) => PeerError::Transport(anyhow!(arc)),
+        JsonRpcClientError::ParseError(error) => PeerError::InvalidResponse(anyhow!(error)),
+        JsonRpcClientError::InvalidSubscriptionId => todo!(),
+        JsonRpcClientError::InvalidRequestId(invalid_request_id) => {
+            PeerError::InvalidRequest(anyhow!(invalid_request_id))
+        }
+        JsonRpcClientError::RequestTimeout => PeerError::Transport(anyhow!("Request timeout")),
+        JsonRpcClientError::Custom(e) => PeerError::Transport(anyhow!(e)),
+        JsonRpcClientError::HttpNotImplemented => {
+            PeerError::ServerError(anyhow!("Http not implemented"))
+        }
+        JsonRpcClientError::EmptyBatchRequest(empty_batch_request) => {
+            PeerError::InvalidRequest(anyhow!(empty_batch_request))
+        }
+        JsonRpcClientError::RegisterMethod(register_method_error) => {
+            PeerError::InvalidResponse(anyhow!(register_method_error))
+        }
+    }
+}
+
 #[async_trait]
 impl IClientConnection for WsClient {
-    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> anyhow::Result<Value> {
+    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value> {
         let method = match method {
             ApiMethod::Core(method) => method,
             ApiMethod::Module(module_id, method) => format!("module_{module_id}_{method}"),
         };
 
-        Ok(ClientT::request(self, &method, [request.to_json()]).await?)
+        Ok(ClientT::request(self, &method, [request.to_json()])
+            .await
+            .map_err(jsonrpc_error_to_peer_error)?)
     }
 
     async fn await_disconnection(&self) {
@@ -883,7 +938,7 @@ pub type DynClientConnector = Arc<dyn IClientConnector>;
 pub trait IClientConnector: Send + Sync + 'static {
     fn peers(&self) -> BTreeSet<PeerId>;
 
-    async fn connect(&self, peer: PeerId) -> anyhow::Result<DynClientConnection>;
+    async fn connect(&self, peer: PeerId) -> PeerResult<DynClientConnection>;
 
     fn into_dyn(self) -> DynClientConnector
     where
@@ -897,7 +952,7 @@ pub type DynClientConnection = Arc<dyn IClientConnection>;
 
 #[async_trait]
 pub trait IClientConnection: Debug + Send + Sync + 'static {
-    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> anyhow::Result<Value>;
+    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value>;
 
     async fn await_disconnection(&self);
 
@@ -985,7 +1040,7 @@ impl IRawFederationApi for ReconnectFederationApi {
         peer_id: PeerId,
         method: &str,
         params: &ApiRequestErased,
-    ) -> anyhow::Result<Value> {
+    ) -> PeerResult<Value> {
         let method = match self.module_id {
             Some(module_id) => ApiMethod::Module(module_id, method.to_string()),
             None => ApiMethod::Core(method.to_string()),
@@ -1018,13 +1073,14 @@ impl ReconnectClientConnections {
         peer: PeerId,
         method: ApiMethod,
         request: ApiRequestErased,
-    ) -> anyhow::Result<Value> {
+    ) -> PeerResult<Value> {
         self.connections
             .get(&peer)
             .expect("Could not find client connection for peer {peer}")
             .connection()
             .await
-            .context("Failed to connect to peer")?
+            .context("Failed to connect to peer")
+            .map_err(PeerError::Connection)?
             .request(method, request)
             .await
     }
@@ -1108,11 +1164,10 @@ impl ClientConnection {
     }
 }
 
-#[cfg(all(feature = "enable_iroh", not(target_family = "wasm")))]
+#[cfg(all(feature = "iroh", not(target_family = "wasm")))]
 mod iroh {
     use std::collections::{BTreeMap, BTreeSet};
 
-    use anyhow::anyhow;
     use async_trait::async_trait;
     use bitcoin::key::rand::rngs::OsRng;
     use fedimint_core::module::{ApiError, ApiRequestErased};
@@ -1122,7 +1177,9 @@ mod iroh {
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
 
-    use super::{ApiMethod, DynClientConnection, IClientConnection, IClientConnector};
+    use super::{
+        ApiMethod, DynClientConnection, IClientConnection, IClientConnector, PeerError, PeerResult,
+    };
 
     const FEDIMINT_ALPN: &[u8] = "FEDIMINT_ALPN".as_bytes();
 
@@ -1153,13 +1210,17 @@ mod iroh {
             self.node_ids.keys().copied().collect()
         }
 
-        async fn connect(&self, peer: PeerId) -> anyhow::Result<DynClientConnection> {
+        async fn connect(&self, peer_id: PeerId) -> PeerResult<DynClientConnection> {
             let node_id = *self
                 .node_ids
-                .get(&peer)
-                .expect("Could not find node id for peer {peer}");
+                .get(&peer_id)
+                .ok_or(PeerError::InvalidPeerId { peer_id })?;
 
-            let connection = self.endpoint.connect(node_id, FEDIMINT_ALPN).await?;
+            let connection = self
+                .endpoint
+                .connect(node_id, FEDIMINT_ALPN)
+                .await
+                .map_err(PeerError::Connection)?;
 
             Ok(connection.into_dyn())
         }
@@ -1173,24 +1234,31 @@ mod iroh {
 
     #[async_trait]
     impl IClientConnection for Connection {
-        async fn request(
-            &self,
-            method: ApiMethod,
-            request: ApiRequestErased,
-        ) -> anyhow::Result<Value> {
-            let json = serde_json::to_vec(&IrohRequest { method, request })?;
+        async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value> {
+            let json = serde_json::to_vec(&IrohRequest { method, request })
+                .expect("Serialization to vec can't fail");
 
-            let (mut sink, mut stream) = self.open_bi().await?;
+            let (mut sink, mut stream) = self
+                .open_bi()
+                .await
+                .map_err(|e| PeerError::Transport(e.into()))?;
 
-            sink.write_all(&json).await?;
+            sink.write_all(&json)
+                .await
+                .map_err(|e| PeerError::Transport(e.into()))?;
 
-            sink.finish()?;
+            sink.finish().map_err(|e| PeerError::Transport(e.into()))?;
 
-            let response = stream.read_to_end(1_000_000).await?;
+            let response = stream
+                .read_to_end(1_000_000)
+                .await
+                .map_err(|e| PeerError::Transport(e.into()))?;
 
-            let response = serde_json::from_slice::<Result<Value, ApiError>>(&response)?;
+            // TODO: We should not be serializing Results on the wire
+            let response = serde_json::from_slice::<Result<Value, ApiError>>(&response)
+                .map_err(|e| PeerError::InvalidResponse(e.into()))?;
 
-            response.map_err(|e| anyhow!("Api Error: {:?}", e))
+            response.map_err(|e| PeerError::InvalidResponse(anyhow::anyhow!("Api Error: {:?}", e)))
         }
 
         async fn await_disconnection(&self) {
