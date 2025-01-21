@@ -207,24 +207,7 @@
 <a href="#206" id="206">206</a>
 <a href="#207" id="207">207</a>
 <a href="#208" id="208">208</a>
-<a href="#209" id="209">209</a>
-<a href="#210" id="210">210</a>
-<a href="#211" id="211">211</a>
-<a href="#212" id="212">212</a>
-<a href="#213" id="213">213</a>
-<a href="#214" id="214">214</a>
-<a href="#215" id="215">215</a>
-<a href="#216" id="216">216</a>
-<a href="#217" id="217">217</a>
-<a href="#218" id="218">218</a>
-<a href="#219" id="219">219</a>
-<a href="#220" id="220">220</a>
-<a href="#221" id="221">221</a>
-<a href="#222" id="222">222</a>
-<a href="#223" id="223">223</a>
-<a href="#224" id="224">224</a>
-<a href="#225" id="225">225</a>
-<a href="#226" id="226">226</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#209" id="209">209</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display};
 <span class="kw">use </span>std::time::Duration;
 
@@ -232,8 +215,6 @@
 <span class="kw">use </span>fedimint_core::util::FmtCompactAnyhow <span class="kw">as _</span>;
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_NET_API;
-<span class="kw">use </span>jsonrpsee_core::client::Error <span class="kw">as </span>JsonRpcClientError;
-<span class="kw">use </span>jsonrpsee_types::error::METHOD_NOT_FOUND_CODE;
 <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
 </span><span class="kw">use </span>jsonrpsee_wasm_client::{Client <span class="kw">as </span>WsClient, WasmClientBuilder <span class="kw">as </span>WsClientBuilder};
 <span class="kw">use </span>serde::Serialize;
@@ -248,7 +229,7 @@
     <span class="attr">#[error(<span class="string">"Invalid peer id: {peer_id}"</span>)]
     </span>InvalidPeerId { peer_id: PeerId },
     <span class="attr">#[error(<span class="string">"Rpc error: {0}"</span>)]
-    </span>Rpc(<span class="attr">#[from] </span>JsonRpcClientError),
+    </span>Rpc(<span class="attr">#[from] </span>anyhow::Error),
     <span class="attr">#[error(<span class="string">"Invalid response: {0}"</span>)]
     </span>InvalidResponse(String),
 }
@@ -264,19 +245,7 @@
             PeerError::ResponseDeserialization(<span class="kw">_</span>)
             | PeerError::InvalidPeerId { .. }
             | PeerError::InvalidResponse(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-            PeerError::Rpc(rpc_e) =&gt; <span class="kw">match </span>rpc_e {
-                <span class="comment">// TODO: Does this cover all retryable cases?
-                </span>JsonRpcClientError::Transport(<span class="kw">_</span>) | JsonRpcClientError::RequestTimeout =&gt; <span class="bool-val">false</span>,
-                JsonRpcClientError::RestartNeeded(<span class="kw">_</span>)
-                | JsonRpcClientError::Call(<span class="kw">_</span>)
-                | JsonRpcClientError::ParseError(<span class="kw">_</span>)
-                | JsonRpcClientError::InvalidSubscriptionId
-                | JsonRpcClientError::InvalidRequestId(<span class="kw">_</span>)
-                | JsonRpcClientError::Custom(<span class="kw">_</span>)
-                | JsonRpcClientError::HttpNotImplemented
-                | JsonRpcClientError::EmptyBatchRequest(<span class="kw">_</span>)
-                | JsonRpcClientError::RegisterMethod(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-            },
+            PeerError::Rpc(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
         };
 
         <span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, error = %<span class="self">self</span>, <span class="string">"PeerError"</span>);
@@ -397,12 +366,9 @@
     }
 
     <span class="kw">pub fn </span>any_peer_error_method_not_found(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-        <span class="self">self</span>.peer_errors.values().any(|peer_err| {
-            <span class="macro">matches!</span>(
-                peer_err,
-                PeerError::Rpc(JsonRpcClientError::Call(err)) <span class="kw">if </span>err.code() == METHOD_NOT_FOUND_CODE
-            ) || peer_err.to_string().contains(<span class="string">"MethodNotFound"</span>)
-        })
+        <span class="self">self</span>.peer_errors
+            .values()
+            .any(|peer_err| peer_err.to_string().contains(<span class="string">"MethodNotFound"</span>))
     }
 }
 

@@ -166,12 +166,10 @@
 <a href="#165" id="165">165</a>
 <a href="#166" id="166">166</a>
 <a href="#167" id="167">167</a>
-<a href="#168" id="168">168</a>
-<a href="#169" id="169">169</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
-<span class="kw">use </span>std::result;
+<a href="#168" id="168">168</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::string::ToString;
 
-<span class="kw">use </span>fedimint_api_client::api::{DynModuleApi, IRawFederationApi, JsonRpcClientError};
+<span class="kw">use </span>fedimint_api_client::api::{DynModuleApi, IRawFederationApi};
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
@@ -308,7 +306,7 @@
         peer_id: PeerId,
         method: <span class="kw-2">&amp;</span>str,
         params: <span class="kw-2">&amp;</span>ApiRequestErased,
-    ) -&gt; result::Result&lt;Value, JsonRpcClientError&gt; {
+    ) -&gt; anyhow::Result&lt;Value&gt; {
         <span class="self">self</span>.log_event(ApiCallStarted {
             method: method.to_string(),
             peer_id,

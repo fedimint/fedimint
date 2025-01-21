@@ -3243,8 +3243,7 @@
 <a href="#3242" id="3242">3242</a>
 <a href="#3243" id="3243">3243</a>
 <a href="#3244" id="3244">3244</a>
-<a href="#3245" id="3245">3245</a>
-<a href="#3246" id="3246">3246</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#3245" id="3245">3245</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
@@ -5928,7 +5927,6 @@
                 .map(|(peer_id, peer_url)| (<span class="kw-2">*</span>peer_id, peer_url.url.clone())),
             <span class="kw-2">&amp;</span>api_secret,
             <span class="kw-2">&amp;</span>connector,
-            <span class="prelude-val">None</span>,
         );
         Client::download_backup_from_federation_static(
             <span class="kw-2">&amp;</span>api,

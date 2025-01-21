@@ -308,13 +308,15 @@
 <a href="#307" id="307">307</a>
 <a href="#308" id="308">308</a>
 <a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::convert::identity;
 <span class="kw">use </span>std::time::Duration;
 
+<span class="kw">use </span>anyhow::anyhow;
 <span class="kw">use </span>bitcoin::hashes::sha256::{<span class="self">self</span>, Hash <span class="kw">as </span>Sha256Hash};
 <span class="kw">use </span>fedimint_api_client::api::{
-    FederationApiExt, FederationResult, IModuleFederationApi, JsonRpcClientError, PeerError,
+    FederationApiExt, FederationResult, IModuleFederationApi, PeerError,
 };
 <span class="kw">use </span>fedimint_api_client::query::FilterMapThreshold;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
@@ -523,7 +525,7 @@
                 ),
             )
             .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| PeerError::Rpc(JsonRpcClientError::RequestTimeout))
+            </span>.map_err(|e| PeerError::Rpc(<span class="macro">anyhow!</span>(<span class="string">"Request timed out: {e}"</span>)))
             .and_then(identity)
             {
                 responses.insert(<span class="kw-2">*</span>peer, response);
@@ -547,7 +549,7 @@
                 ),
             )
             .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| PeerError::Rpc(JsonRpcClientError::RequestTimeout))
+            </span>.map_err(|e| PeerError::Rpc(<span class="macro">anyhow!</span>(<span class="string">"Request timed out: {e}"</span>)))
             .and_then(identity)
             {
                 <span class="kw">if </span>response {

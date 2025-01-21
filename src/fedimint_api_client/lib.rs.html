@@ -117,13 +117,13 @@
     /// giving up.
     </span><span class="kw">pub async fn </span>download_from_invite_code(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        invite_code: <span class="kw-2">&amp;</span>InviteCode,
+        invite: <span class="kw-2">&amp;</span>InviteCode,
     ) -&gt; anyhow::Result&lt;ClientConfig&gt; {
-        <span class="macro">debug!</span>(target: LOG_CLIENT, %invite_code, <span class="string">"Downloading client config via invite code"</span>);
+        <span class="macro">debug!</span>(target: LOG_CLIENT, %invite, <span class="string">"Downloading client config via invite code"</span>);
 
-        <span class="kw">let </span>federation_id = invite_code.federation_id();
-        <span class="kw">let </span>api = DynGlobalApi::from_invite_code(<span class="self">self</span>, invite_code);
-        <span class="kw">let </span>api_secret = invite_code.api_secret();
+        <span class="kw">let </span>federation_id = invite.federation_id();
+        <span class="kw">let </span>api = DynGlobalApi::from_endpoints(invite.peers(), <span class="kw-2">&amp;</span>invite.api_secret(), <span class="self">self</span>);
+        <span class="kw">let </span>api_secret = invite.api_secret();
 
         fedimint_core::util::retry(
             <span class="string">"Downloading client config"</span>,
@@ -164,7 +164,7 @@
 
         <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Verifying client config with all peers"</span>);
 
-        <span class="kw">let </span>client_config = DynGlobalApi::from_endpoints(api_endpoints, <span class="kw-2">&amp;</span>api_secret, <span class="self">self</span>, <span class="prelude-val">None</span>)
+        <span class="kw">let </span>client_config = DynGlobalApi::from_endpoints(api_endpoints, <span class="kw-2">&amp;</span>api_secret, <span class="self">self</span>)
             .request_current_consensus::&lt;ClientConfig&gt;(
                 CLIENT_CONFIG_ENDPOINT.to_owned(),
                 ApiRequestErased::default(),

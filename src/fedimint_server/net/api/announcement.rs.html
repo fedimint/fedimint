@@ -133,8 +133,7 @@
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#135" id="135">135</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
@@ -189,7 +188,6 @@
         get_api_urls(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>cfg.consensus).<span class="kw">await</span>,
         <span class="kw-2">&amp;</span>api_secret,
         <span class="kw-2">&amp;</span>Connector::default(),
-        <span class="prelude-val">None</span>,
     );
     <span class="kw">let </span>our_peer_id = cfg.local.identity;
     tg.spawn_cancellable(<span class="string">"submit-api-url-announcement"</span>, <span class="kw">async move </span>{
