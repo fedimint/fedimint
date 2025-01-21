@@ -264,3 +264,16 @@ cargo-sort-fix *ARGS="":
 # Check sort order in `Cargo.toml` files
 cargo-sort-check *ARGS="":
   cargo sort {{cargo_sort_defaults}} --check {{ARGS}}
+
+deploy-docker-demo HOST:
+  #!/usr/bin/env bash
+
+  set -euo pipefail
+  cd docker/current
+  ./deploy.sh {{HOST}}
+
+deploy-docker-demo-all:
+  just deploy-docker-demo fedimintd-docker-1.dev.fedimint.org
+  just deploy-docker-demo fedimintd-docker-2.dev.fedimint.org
+  just deploy-docker-demo fedimintd-docker-3.dev.fedimint.org
+  just deploy-docker-demo fedimintd-docker-4.dev.fedimint.org
