@@ -52,15 +52,19 @@ pub const FM_BITCOIN_RPC_URL_ENV: &str = "FM_BITCOIN_RPC_URL";
 
 /// Env var for bitcoin RPC kind (default, used only as a default value for DKG
 /// config settings)
-pub const FM_DEFAULT_BITCOIN_RPC_KIND_ENV: &str = "FM_DEFAULT_BITCOIND_RPC_KIND";
+pub const FM_DEFAULT_BITCOIN_RPC_KIND_ENV: &str = "FM_DEFAULT_BITCOIN_RPC_KIND";
+pub const FM_DEFAULT_BITCOIN_RPC_KIND_BAD_ENV: &str = "FM_DEFAULT_BITCOIND_RPC_KIND";
 /// Env var for bitcoin URL (default, used only as a default value for DKG
 /// config settings)
-pub const FM_DEFAULT_BITCOIN_RPC_URL_ENV: &str = "FM_DEFAULT_BITCOIND_RPC_URL";
+pub const FM_DEFAULT_BITCOIN_RPC_URL_ENV: &str = "FM_DEFAULT_BITCOIN_RPC_URL";
+pub const FM_DEFAULT_BITCOIN_RPC_URL_BAD_ENV: &str = "FM_DEFAULT_BITCOIND_RPC_URL";
 
 /// Env var for bitcoin RPC kind (forced, takes priority over config settings)
-pub const FM_FORCE_BITCOIN_RPC_KIND_ENV: &str = "FM_FORCE_BITCOIND_RPC_KIND";
+pub const FM_FORCE_BITCOIN_RPC_KIND_ENV: &str = "FM_FORCE_BITCOIN_RPC_KIND";
+pub const FM_FORCE_BITCOIN_RPC_KIND_BAD_ENV: &str = "FM_FORCE_BITCOIND_RPC_BAD_KIND";
 /// Env var for bitcoin URL (default, takes priority over config settings)
-pub const FM_FORCE_BITCOIN_RPC_URL_ENV: &str = "FM_FORCE_BITCOIND_RPC_URL";
+pub const FM_FORCE_BITCOIN_RPC_URL_ENV: &str = "FM_FORCE_BITCOIN_RPC_URL";
+pub const FM_FORCE_BITCOIN_RPC_URL_BAD_ENV: &str = "FM_FORCE_BITCOIND_RPC_URL";
 
 /// List of json api endpoint sources to use as a source of
 /// fee rate estimation.
@@ -95,6 +99,12 @@ impl BitcoinRpcConfig {
             .or_else(|_| env::var(FM_BITCOIN_RPC_KIND_ENV).inspect(|_v| {
                 warn!(target: LOG_CORE, "{FM_BITCOIN_RPC_KIND_ENV} is obsolete, use {FM_DEFAULT_BITCOIN_RPC_KIND_ENV} instead");
             }))
+            .or_else(|_| env::var(FM_FORCE_BITCOIN_RPC_KIND_BAD_ENV).inspect(|_v| {
+                warn!(target: LOG_CORE, "{FM_FORCE_BITCOIN_RPC_KIND_BAD_ENV} is obsolete, use {FM_FORCE_BITCOIN_RPC_KIND_ENV} instead");
+            }))
+            .or_else(|_| env::var(FM_DEFAULT_BITCOIN_RPC_KIND_BAD_ENV).inspect(|_v| {
+                warn!(target: LOG_CORE, "{FM_DEFAULT_BITCOIN_RPC_KIND_BAD_ENV} is obsolete, use {FM_DEFAULT_BITCOIN_RPC_KIND_ENV} instead");
+            }))
             .with_context(|| {
                 anyhow::anyhow!("failure looking up env var for Bitcoin RPC kind")
             })?,
@@ -102,6 +112,12 @@ impl BitcoinRpcConfig {
             .or_else(|_| env::var(FM_DEFAULT_BITCOIN_RPC_URL_ENV))
             .or_else(|_| env::var(FM_BITCOIN_RPC_URL_ENV).inspect(|_v| {
                 warn!(target: LOG_CORE, "{FM_BITCOIN_RPC_URL_ENV} is obsolete, use {FM_DEFAULT_BITCOIN_RPC_URL_ENV} instead");
+            }))
+            .or_else(|_| env::var(FM_FORCE_BITCOIN_RPC_URL_BAD_ENV).inspect(|_v| {
+                warn!(target: LOG_CORE, "{FM_FORCE_BITCOIN_RPC_URL_BAD_ENV} is obsolete, use {FM_FORCE_BITCOIN_RPC_URL_ENV} instead");
+            }))
+            .or_else(|_| env::var(FM_DEFAULT_BITCOIN_RPC_URL_BAD_ENV).inspect(|_v| {
+                warn!(target: LOG_CORE, "{FM_DEFAULT_BITCOIN_RPC_URL_BAD_ENV} is obsolete, use {FM_DEFAULT_BITCOIN_RPC_URL_ENV} instead");
             }))
             .with_context(|| {
                 anyhow::anyhow!("failure looking up env var for Bitcoin RPC URL")
