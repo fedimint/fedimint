@@ -55,6 +55,7 @@ use crate::metrics::{
     CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX, CONSENSUS_SESSION_COUNT,
 };
 use crate::net::p2p::ReconnectP2PConnections;
+use crate::net::p2p_connector::iroh::IrohConnector;
 use crate::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
 use crate::LOG_CONSENSUS;
 
@@ -172,17 +173,11 @@ impl ConsensusEngine {
         self.confirm_server_config_consensus_hash().await?;
 
         // Build P2P connections for the atomic broadcast
-        let connector = TlsTcpConnector::new(
-            self.cfg.tls_config(),
-            p2p_bind_addr,
-            self.cfg
-                .local
-                .p2p_endpoints
-                .iter()
-                .map(|(&id, endpoint)| (id, endpoint.url.clone()))
-                .collect(),
-            self.identity(),
+        let connector = IrohConnector::new(
+            self.cfg.private.iroh_secret_key.clone(),
+            self.cfg.consensus.iroh_public_keys.clone(),
         )
+        .await?
         .into_dyn();
 
         let connections = ReconnectP2PConnections::new(

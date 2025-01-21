@@ -242,7 +242,6 @@ pub fn parse_host_port(url: &SafeUrl) -> anyhow::Result<String> {
     Ok(format!("{host}:{port}"))
 }
 
-#[cfg(all(feature = "enable_iroh", not(target_family = "wasm")))]
 pub mod iroh {
     use std::collections::BTreeMap;
 
@@ -266,7 +265,7 @@ pub mod iroh {
         pub endpoint: Endpoint,
     }
 
-    const FEDIMINT_ALPN: &[u8] = "FEDIMINT_ALPN".as_bytes();
+    const FEDIMINT_P2P_ALPN: &[u8] = "FEDIMINT_P2P".as_bytes();
 
     impl IrohConnector {
         pub async fn new(
@@ -285,9 +284,9 @@ pub mod iroh {
                     .filter(|entry| entry.0 != identity)
                     .collect(),
                 endpoint: Endpoint::builder()
-                    .discovery_n0()
                     .secret_key(secret_key)
-                    .alpns(vec![FEDIMINT_ALPN.to_vec()])
+                    .discovery_dht()
+                    .alpns(vec![FEDIMINT_P2P_ALPN.to_vec()])
                     .bind()
                     .await?,
             })
@@ -309,7 +308,7 @@ pub mod iroh {
                 .get(&peer)
                 .expect("No node id found for peer {peer}");
 
-            let connection = self.endpoint.connect(node_id, FEDIMINT_ALPN).await?;
+            let connection = self.endpoint.connect(node_id, FEDIMINT_P2P_ALPN).await?;
 
             Ok(connection.into_dyn())
         }

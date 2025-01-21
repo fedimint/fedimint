@@ -11,8 +11,6 @@ repository = { workspace = true }
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
-[features]
-enable_iroh = ["iroh"]
 
 [lib]
 name = "fedimint_server"
@@ -39,7 +37,7 @@ fedimint-server-core = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 hyper = { workspace = true }
-iroh = { workspace = true, optional = true }
+iroh = { workspace = true }
 itertools = { workspace = true }
 jsonrpsee = { version = "0.24.7", features = ["server"] }
 parity-scale-codec = "3.7.0"

@@ -108,6 +108,7 @@ pub struct ServerConfigPrivate {
     pub broadcast_secret_key: SecretKey,
     /// Secret material from modules
     pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
+    pub iroh_secret_key: iroh::SecretKey,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable)]
@@ -118,6 +119,7 @@ pub struct ServerConfigConsensus {
     pub version: CoreConsensusVersion,
     /// Public keys for the atomic broadcast to authenticate messages
     pub broadcast_public_keys: BTreeMap<PeerId, PublicKey>,
+    pub iroh_public_keys: BTreeMap<PeerId, iroh::NodeId>,
     /// Number of rounds per session.
     #[serde(default = "default_broadcast_rounds_per_session")]
     pub broadcast_rounds_per_session: u16,
@@ -210,6 +212,8 @@ impl ServerConfig {
         identity: PeerId,
         broadcast_public_keys: BTreeMap<PeerId, PublicKey>,
         broadcast_secret_key: SecretKey,
+        iroh_public_keys: BTreeMap<PeerId, iroh::NodeId>,
+        iroh_secret_key: iroh::SecretKey,
         modules: BTreeMap<ModuleInstanceId, ServerModuleConfig>,
         code_version_str: String,
     ) -> Self {
@@ -217,6 +221,7 @@ impl ServerConfig {
             api_auth: params.local.api_auth.clone(),
             tls_key: params.local.our_private_key.clone(),
             broadcast_secret_key,
+            iroh_secret_key,
             modules: BTreeMap::new(),
         };
         let local = ServerConfigLocal {
@@ -234,6 +239,7 @@ impl ServerConfig {
             code_version: code_version_str,
             version: CORE_CONSENSUS_VERSION,
             broadcast_public_keys,
+            iroh_public_keys,
             broadcast_rounds_per_session: if is_running_in_test_env() {
                 DEFAULT_TEST_BROADCAST_ROUNDS_PER_SESSION
             } else {
@@ -383,10 +389,20 @@ impl ServerConfig {
 
         let mut broadcast_pks = BTreeMap::new();
         let mut broadcast_sks = BTreeMap::new();
+
+        let mut iroh_pks = BTreeMap::new();
+        let mut iroh_sks = BTreeMap::new();
+
         for peer_id in peer0.peer_ids() {
             let (broadcast_sk, broadcast_pk) = secp256k1::generate_keypair(&mut OsRng);
+
             broadcast_pks.insert(peer_id, broadcast_pk);
             broadcast_sks.insert(peer_id, broadcast_sk);
+
+            let iroh_sk = iroh::SecretKey::generate(&mut OsRng);
+
+            iroh_pks.insert(peer_id, iroh_sk.public());
+            iroh_sks.insert(peer_id, iroh_sk);
         }
 
         let modules = peer0.consensus.modules.iter_modules();
@@ -411,6 +427,8 @@ impl ServerConfig {
                     id,
                     broadcast_pks.clone(),
                     *broadcast_sks.get(&id).expect("We created this entry"),
+                    iroh_pks.clone(),
+                    iroh_sks.get(&id).expect("We created this entry").clone(),
                     module_configs
                         .iter()
                         .map(|(module_id, cfgs)| (*module_id, cfgs[&id].clone()))
@@ -548,6 +566,8 @@ impl ServerConfig {
             params.local.our_id,
             broadcast_public_keys,
             broadcast_sk,
+            todo!(),
+            todo!(),
             module_cfgs,
             code_version_str,
         );

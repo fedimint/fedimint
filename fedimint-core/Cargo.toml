@@ -11,8 +11,6 @@ repository = { workspace = true }
 [package.metadata.cargo-udeps.ignore]
 development = ["tokio-test"]
 
-[features]
-enable_iroh = ["iroh"]
 
 [lib]
 name = "fedimint_core"
@@ -41,7 +39,7 @@ futures = { workspace = true }
 hex = { workspace = true, features = ["serde"] }
 hex-conservative = { workspace = true }
 imbl = "3.0.0"
-iroh = { workspace = true, optional = true }
+iroh = { workspace = true }
 itertools = { workspace = true }
 jsonrpsee-core = { version = "0.24.7", features = ["client"] }
 lightning = { workspace = true }
