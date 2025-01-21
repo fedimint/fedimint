@@ -113,7 +113,23 @@
 <a href="#112" id="112">112</a>
 <a href="#113" id="113">113</a>
 <a href="#114" id="114">114</a>
-<a href="#115" id="115">115</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
@@ -167,15 +183,19 @@
 
 <span class="doccomment">/// Env var for bitcoin RPC kind (default, used only as a default value for DKG
 /// config settings)
-</span><span class="kw">pub const </span>FM_DEFAULT_BITCOIN_RPC_KIND_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_DEFAULT_BITCOIND_RPC_KIND"</span>;
+</span><span class="kw">pub const </span>FM_DEFAULT_BITCOIN_RPC_KIND_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_DEFAULT_BITCOIN_RPC_KIND"</span>;
+<span class="kw">pub const </span>FM_DEFAULT_BITCOIN_RPC_KIND_BAD_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_DEFAULT_BITCOIND_RPC_KIND"</span>;
 <span class="doccomment">/// Env var for bitcoin URL (default, used only as a default value for DKG
 /// config settings)
-</span><span class="kw">pub const </span>FM_DEFAULT_BITCOIN_RPC_URL_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_DEFAULT_BITCOIND_RPC_URL"</span>;
+</span><span class="kw">pub const </span>FM_DEFAULT_BITCOIN_RPC_URL_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_DEFAULT_BITCOIN_RPC_URL"</span>;
+<span class="kw">pub const </span>FM_DEFAULT_BITCOIN_RPC_URL_BAD_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_DEFAULT_BITCOIND_RPC_URL"</span>;
 
 <span class="doccomment">/// Env var for bitcoin RPC kind (forced, takes priority over config settings)
-</span><span class="kw">pub const </span>FM_FORCE_BITCOIN_RPC_KIND_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_FORCE_BITCOIND_RPC_KIND"</span>;
+</span><span class="kw">pub const </span>FM_FORCE_BITCOIN_RPC_KIND_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_FORCE_BITCOIN_RPC_KIND"</span>;
+<span class="kw">pub const </span>FM_FORCE_BITCOIN_RPC_KIND_BAD_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_FORCE_BITCOIND_RPC_BAD_KIND"</span>;
 <span class="doccomment">/// Env var for bitcoin URL (default, takes priority over config settings)
-</span><span class="kw">pub const </span>FM_FORCE_BITCOIN_RPC_URL_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_FORCE_BITCOIND_RPC_URL"</span>;
+</span><span class="kw">pub const </span>FM_FORCE_BITCOIN_RPC_URL_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_FORCE_BITCOIN_RPC_URL"</span>;
+<span class="kw">pub const </span>FM_FORCE_BITCOIN_RPC_URL_BAD_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_FORCE_BITCOIND_RPC_URL"</span>;
 
 <span class="doccomment">/// List of json api endpoint sources to use as a source of
 /// fee rate estimation.
@@ -210,6 +230,12 @@
             .or_else(|<span class="kw">_</span>| env::var(FM_BITCOIN_RPC_KIND_ENV).inspect(|_v| {
                 <span class="macro">warn!</span>(target: LOG_CORE, <span class="string">"{FM_BITCOIN_RPC_KIND_ENV} is obsolete, use {FM_DEFAULT_BITCOIN_RPC_KIND_ENV} instead"</span>);
             }))
+            .or_else(|<span class="kw">_</span>| env::var(FM_FORCE_BITCOIN_RPC_KIND_BAD_ENV).inspect(|_v| {
+                <span class="macro">warn!</span>(target: LOG_CORE, <span class="string">"{FM_FORCE_BITCOIN_RPC_KIND_BAD_ENV} is obsolete, use {FM_FORCE_BITCOIN_RPC_KIND_ENV} instead"</span>);
+            }))
+            .or_else(|<span class="kw">_</span>| env::var(FM_DEFAULT_BITCOIN_RPC_KIND_BAD_ENV).inspect(|_v| {
+                <span class="macro">warn!</span>(target: LOG_CORE, <span class="string">"{FM_DEFAULT_BITCOIN_RPC_KIND_BAD_ENV} is obsolete, use {FM_DEFAULT_BITCOIN_RPC_KIND_ENV} instead"</span>);
+            }))
             .with_context(|| {
                 <span class="macro">anyhow::anyhow!</span>(<span class="string">"failure looking up env var for Bitcoin RPC kind"</span>)
             })<span class="question-mark">?</span>,
@@ -217,6 +243,12 @@
             .or_else(|<span class="kw">_</span>| env::var(FM_DEFAULT_BITCOIN_RPC_URL_ENV))
             .or_else(|<span class="kw">_</span>| env::var(FM_BITCOIN_RPC_URL_ENV).inspect(|_v| {
                 <span class="macro">warn!</span>(target: LOG_CORE, <span class="string">"{FM_BITCOIN_RPC_URL_ENV} is obsolete, use {FM_DEFAULT_BITCOIN_RPC_URL_ENV} instead"</span>);
+            }))
+            .or_else(|<span class="kw">_</span>| env::var(FM_FORCE_BITCOIN_RPC_URL_BAD_ENV).inspect(|_v| {
+                <span class="macro">warn!</span>(target: LOG_CORE, <span class="string">"{FM_FORCE_BITCOIN_RPC_URL_BAD_ENV} is obsolete, use {FM_FORCE_BITCOIN_RPC_URL_ENV} instead"</span>);
+            }))
+            .or_else(|<span class="kw">_</span>| env::var(FM_DEFAULT_BITCOIN_RPC_URL_BAD_ENV).inspect(|_v| {
+                <span class="macro">warn!</span>(target: LOG_CORE, <span class="string">"{FM_DEFAULT_BITCOIN_RPC_URL_BAD_ENV} is obsolete, use {FM_DEFAULT_BITCOIN_RPC_URL_ENV} instead"</span>);
             }))
             .with_context(|| {
                 <span class="macro">anyhow::anyhow!</span>(<span class="string">"failure looking up env var for Bitcoin RPC URL"</span>)
