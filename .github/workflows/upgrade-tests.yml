@@ -84,6 +84,7 @@ jobs:
             env TEST_KINDS="$TEST_KINDS" \
             env FM_DEVIMINT_DISABLE_MODULE_LNV2=1 \
             env FM_TEST_CI_ALL_JOBS=5 \
+            env FM_TEST_UPGRADE_TIMEOUT=3600 \
             scripts/tests/run-with-nix-workspace-ci.sh ./scripts/tests/upgrade-test.sh "$VERSIONS"
 
   notifications:
