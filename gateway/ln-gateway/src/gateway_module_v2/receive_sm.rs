@@ -1,8 +1,8 @@
 use core::fmt;
 use std::collections::BTreeMap;
 
-use anyhow::{anyhow, ensure};
-use fedimint_api_client::api::FederationApiExt;
+use anyhow::anyhow;
+use fedimint_api_client::api::{FederationApiExt, PeerError};
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
@@ -149,14 +149,17 @@ impl ReceiveStateMachine {
             .module_api()
             .request_with_strategy_retry(
                 FilterMapThreshold::new(
-                    move |peer, share: DecryptionKeyShare| {
-                        ensure!(
-                            contract.verify_decryption_share(
-                                tpe_pks.get(&peer).ok_or(anyhow!("Unknown peer pk"))?,
-                                &share,
-                            ),
-                            "Invalid decryption share"
-                        );
+                    move |peer_id, share: DecryptionKeyShare| {
+                        if !contract.verify_decryption_share(
+                            tpe_pks.get(&peer_id).ok_or(PeerError::InternalClientError(
+                                anyhow!("Missing TPE PK for peer {peer_id}?!"),
+                            ))?,
+                            &share,
+                        ) {
+                            return Err(fedimint_api_client::api::PeerError::InvalidResponse(
+                                anyhow!("Invalid decryption share"),
+                            ));
+                        }
 
                         Ok(share)
                     },

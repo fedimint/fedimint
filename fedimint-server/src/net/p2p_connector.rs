@@ -242,7 +242,7 @@ pub fn parse_host_port(url: &SafeUrl) -> anyhow::Result<String> {
     Ok(format!("{host}:{port}"))
 }
 
-#[cfg(all(feature = "enable_iroh", not(target_family = "wasm")))]
+#[cfg(all(feature = "iroh", not(target_family = "wasm")))]
 pub mod iroh {
     use std::collections::BTreeMap;
 

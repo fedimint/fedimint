@@ -7,7 +7,7 @@
 
 use anyhow::{bail, Context as _};
 use api::net::Connector;
-use api::{DynGlobalApi, FederationApiExt as _};
+use api::{DynGlobalApi, FederationApiExt as _, PeerError};
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
@@ -55,7 +55,9 @@ impl Connector {
         // TODO: use new download approach based on guardian PKs
         let query_strategy = FilterMap::new(move |cfg: ClientConfig| {
             if federation_id != cfg.global.calculate_federation_id() {
-                bail!("FederationId in invite code does not match client config")
+                return Err(PeerError::ConditionFailed(anyhow::anyhow!(
+                    "FederationId in invite code does not match client config"
+                )));
             }
 
             Ok(cfg.global.api_endpoints)

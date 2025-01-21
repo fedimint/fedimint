@@ -214,7 +214,7 @@ where
                 ),
             )
             .await
-            .map_err(|e| PeerError::Rpc(anyhow!("Request timed out: {e}")))
+            .map_err(|e| PeerError::Transport(anyhow!("Request timed out: {e}")))
             .and_then(identity)
             {
                 responses.insert(*peer, response);
@@ -238,7 +238,7 @@ where
                 ),
             )
             .await
-            .map_err(|e| PeerError::Rpc(anyhow!("Request timed out: {e}")))
+            .map_err(|e| PeerError::Transport(anyhow!("Request timed out: {e}")))
             .and_then(identity)
             {
                 if response {
