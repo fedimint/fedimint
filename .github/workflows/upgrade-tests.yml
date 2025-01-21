@@ -66,6 +66,17 @@ jobs:
           # if empty, defaults to all test kinds within script
           TEST_KINDS="${{ github.event.inputs.test_kinds }}"
 
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # the GH runners become flaky with manual runs during the release
+            # process, so we reduce parallelism for manual release testing
+            FM_TEST_CI_ALL_JOBS="5"
+            # some upgrade paths can take a long time, so we increase the timeout
+            FM_TEST_UPGRADE_TIMEOUT="3600"
+          else
+            FM_TEST_CI_ALL_JOBS=""
+            FM_TEST_UPGRADE_TIMEOUT=""
+          fi
+
           # the default tmp dir is too long (/home/ubuntu/actions-runner/_work/_temp/)
           # we need to use `nix develop -c` to be able to use `nix build` inside of backwards-compatibility-test
           # Disable `sccache`, it seems incompatible with self-hosted runner sandbox for some reason, and
@@ -83,6 +94,8 @@ jobs:
             env -u RUSTC_WRAPPER \
             env TEST_KINDS="$TEST_KINDS" \
             env FM_DEVIMINT_DISABLE_MODULE_LNV2=1 \
+            env FM_TEST_CI_ALL_JOBS="$FM_TEST_CI_ALL_JOBS" \
+            env FM_TEST_UPGRADE_TIMEOUT="$FM_TEST_UPGRADE_TIMEOUT" \
             scripts/tests/run-with-nix-workspace-ci.sh ./scripts/tests/upgrade-test.sh "$VERSIONS"
 
   notifications:
