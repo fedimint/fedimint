@@ -3901,6 +3901,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-workspace"
+version = "0.7.0-alpha"
+dependencies = [
+ "fedimint-api-client",
+ "fedimint-core",
+]
+
+[[package]]
 name = "fedimintd"
 version = "0.7.0-alpha"
 dependencies = [

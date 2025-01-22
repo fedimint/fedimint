@@ -2,7 +2,9 @@ use std::collections::BTreeMap;
 use std::hash;
 
 use anyhow::{anyhow, bail};
-use fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
+use fedimint_api_client::api::{
+    deserialize_outcome, FederationApiExt, PeerError, SerdeOutputOutcome,
+};
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_client::module::{ClientContext, OutPointRange};
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -216,6 +218,7 @@ impl MintOutputStatesCreated {
                             &module_decoder,
                             &tbs_pks,
                         )
+                        .map_err(PeerError::InvalidResponse)
                     },
                     global_context.api().all_peers().to_num_peers(),
                 ),
@@ -402,6 +405,7 @@ impl MintOutputStatesCreatedMulti {
                                 &module_decoder,
                                 &tbs_pks,
                             )
+                            .map_err(PeerError::InvalidResponse)
                         },
                         api.all_peers().to_num_peers(),
                     ),
@@ -440,6 +444,7 @@ impl MintOutputStatesCreatedMulti {
                                             &module_decoder,
                                             &tbs_pks,
                                         )
+                                        .map_err(PeerError::InvalidResponse)
                                     },
                                     api.all_peers().to_num_peers(),
                                 ),
