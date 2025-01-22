@@ -36,6 +36,11 @@ pub mod txoproof;
 pub const KIND: ModuleKind = ModuleKind::from_static_str("wallet");
 pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 2);
 
+/// Module consensus version that introduced support for processing Bitcoin
+/// transactions that exceed the `ALEPH_BFT_UNIT_BYTE_LIMIT`.
+pub const SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION: ModuleConsensusVersion =
+    ModuleConsensusVersion::new(2, 2);
+
 /// Used for estimating a feerate that will confirm within a target number of
 /// blocks.
 ///

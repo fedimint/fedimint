@@ -19,6 +19,7 @@ pub enum DbKeyPrefix {
     ClaimedPegIn = 0x2e,
     RecoveryFinalized = 0x2f,
     RecoveryState = 0x30,
+    SupportsSafeDeposit = 0x31,
     /// Prefixes between 0xb0..=0xcf shall all be considered allocated for
     /// historical and future external use
     ExternalReservedStart = 0xb0,
@@ -182,4 +183,21 @@ impl_db_record!(
     key = RecoveryStateKey,
     value = (WalletRecoveryState, RecoveryFromHistoryCommon),
     db_prefix = DbKeyPrefix::RecoveryState,
+);
+
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct SupportsSafeDepositKey;
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct SupportsSafeDepositPrefix;
+
+impl_db_record!(
+    key = SupportsSafeDepositKey,
+    value = (),
+    db_prefix = DbKeyPrefix::SupportsSafeDeposit,
+);
+
+impl_db_lookup!(
+    key = SupportsSafeDepositKey,
+    query_prefix = SupportsSafeDepositPrefix
 );
