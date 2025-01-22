@@ -10,6 +10,7 @@
 #![allow(clippy::too_many_lines)]
 
 pub mod db;
+pub mod envs;
 
 use std::clone::Clone;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -33,6 +34,7 @@ use common::{
     TxOutputSummary, WalletCommonInit, WalletConsensusItem, WalletCreationError, WalletInput,
     WalletModuleTypes, WalletOutput, WalletOutputOutcome, WalletSummary, DEPRECATED_RBF_ERROR,
 };
+use envs::get_feerate_multiplier;
 use fedimint_api_client::api::{DynModuleApi, FederationApiExt};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
@@ -79,7 +81,7 @@ use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::{
     Rbf, UnknownWalletInputVariantError, WalletInputError, WalletOutputError, WalletOutputV0,
-    CONFIRMATION_TARGET, FEERATE_MULTIPLIER, MODULE_CONSENSUS_VERSION,
+    CONFIRMATION_TARGET, MODULE_CONSENSUS_VERSION,
 };
 use futures::future::join_all;
 use futures::{FutureExt, StreamExt};
@@ -1187,8 +1189,14 @@ impl Wallet {
     }
 
     pub fn get_fee_rate_opt(&self) -> Feerate {
+        // `get_feerate_multiplier` is clamped and can't be negative
+        // feerate sources as clamped and can't be negative or too large
+        #[allow(clippy::cast_precision_loss)]
+        #[allow(clippy::cast_sign_loss)]
         Feerate {
-            sats_per_kvb: self.fee_rate_rx.borrow().sats_per_kvb * FEERATE_MULTIPLIER,
+            sats_per_kvb: ((self.fee_rate_rx.borrow().sats_per_kvb as f64
+                * get_feerate_multiplier())
+            .round()) as u64,
         }
     }
 
