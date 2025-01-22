@@ -75,8 +75,8 @@ pub async fn run(
             .map(|(&peer_id, url)| (peer_id, url.url.clone())),
         &None,
         &Connector::Tcp,
-        None,
     );
+
     for (module_id, module_cfg) in &cfg.consensus.modules {
         match module_init_registry.get(&module_cfg.kind) {
             Some(module_init) => {
@@ -187,7 +187,6 @@ pub async fn run(
             api_urls,
             &force_api_secrets.get_active(),
             &Connector::default(),
-            None,
         ),
         self_id_str: cfg.local.identity.to_string(),
         peer_id_str: (0..cfg.consensus.api_endpoints.len())

@@ -962,7 +962,6 @@ impl FedimintCli {
                     client.get_peer_urls().await,
                     client.api_secret(),
                     &cli.connector(),
-                    None,
                 )
                 .into();
 
