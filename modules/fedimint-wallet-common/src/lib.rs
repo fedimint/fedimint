@@ -49,7 +49,7 @@ pub const CONFIRMATION_TARGET: u16 = 1;
 /// To further mitigate the risk of a peg-out transaction getting stuck in the
 /// mempool, we multiply the feerate estimate returned from the backend by this
 /// value.
-pub const FEERATE_MULTIPLIER: u64 = 4;
+pub const FEERATE_MULTIPLIER_DEFAULT: f64 = 2.0;
 
 pub type PartialSig = Vec<u8>;
 
