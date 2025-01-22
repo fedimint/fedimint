@@ -1,0 +1,26 @@
+[package]
+name = "fedimint-workspace"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+description = { workspace = true }
+license = { workspace = true }
+readme = { workspace = true }
+repository = { workspace = true }
+# This crate is only here to enable feature flags that we always
+# want to compile with during dev work.
+publish = false
+
+[package.metadata.cargo-udeps.ignore]
+normal = ["fedimint-api-client", "fedimint-core"]
+
+[lib]
+name = "fedimint_workspace"
+path = "src/lib.rs"
+
+# I couldn't find a better way to enable iroh during dev work
+# by default, while leaving it disabled by default for downstream,
+# so I made a whole crate just for it.
+[dependencies]
+fedimint-api-client = { workspace = true, features = ["iroh"] }
+fedimint-core = { workspace = true, features = ["iroh"] }

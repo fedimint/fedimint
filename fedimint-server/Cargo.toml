@@ -12,7 +12,6 @@ repository = { workspace = true }
 rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
-enable_iroh = ["iroh"]
 
 [lib]
 name = "fedimint_server"
