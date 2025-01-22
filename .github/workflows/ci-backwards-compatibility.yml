@@ -51,8 +51,6 @@ jobs:
 
       - name: Backwards-compatibility tests
         run: |
-          # TODO: should we create a separate perfit metric for merge queue vs pr push?
-
           # run a slimmed down back-compat test for PR push or each major version for merge queue
           if [[ "${{ github.event_name }}" == "merge_group" ]]; then
             PERFIT_METRIC="90S3yoXDQ-SXB0UbXG4qHQ"
@@ -61,6 +59,8 @@ jobs:
             PERFIT_METRIC="aPuCAjrFT7uE5Oax_T4sMw"
             VERSIONS_TO_TEST="v0.5.0"
           fi
+
+          export FM_DEVIMINT_DISABLE_MODULE_LNV2=1
 
           # the default tmp dir is too long (/home/ubuntu/actions-runner/_work/_temp/)
           # we need to use `nix develop -c` to be able to use `nix build` inside of backwards-compatibility-test
@@ -77,7 +77,6 @@ jobs:
                 --metadata "commit=${LAST_COMMIT_SHA}" \
                 -- \
             env -u RUSTC_WRAPPER \
-            env FM_DEVIMINT_DISABLE_MODULE_LNV2=1 \
             scripts/tests/run-with-nix-workspace-ci.sh ./scripts/tests/test-ci-all-backcompat.sh "$VERSIONS_TO_TEST"
 
   notifications:
