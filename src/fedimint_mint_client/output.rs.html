@@ -649,11 +649,18 @@
 <a href="#648" id="648">648</a>
 <a href="#649" id="649">649</a>
 <a href="#650" id="650">650</a>
-<a href="#651" id="651">651</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::hash;
 
 <span class="kw">use </span>anyhow::{anyhow, bail};
-<span class="kw">use </span>fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
+<span class="kw">use </span>fedimint_api_client::api::{
+    deserialize_outcome, FederationApiExt, PeerError, SerdeOutputOutcome,
+};
 <span class="kw">use </span>fedimint_api_client::query::FilterMapThreshold;
 <span class="kw">use </span>fedimint_client::module::{ClientContext, OutPointRange};
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -867,6 +874,7 @@
                             <span class="kw-2">&amp;</span>module_decoder,
                             <span class="kw-2">&amp;</span>tbs_pks,
                         )
+                        .map_err(PeerError::InvalidResponse)
                     },
                     global_context.api().all_peers().to_num_peers(),
                 ),
@@ -1053,6 +1061,7 @@
                                 <span class="kw-2">&amp;</span>module_decoder,
                                 <span class="kw-2">&amp;</span>tbs_pks,
                             )
+                            .map_err(PeerError::InvalidResponse)
                         },
                         api.all_peers().to_num_peers(),
                     ),
@@ -1091,6 +1100,7 @@
                                             <span class="kw-2">&amp;</span>module_decoder,
                                             <span class="kw-2">&amp;</span>tbs_pks,
                                         )
+                                        .map_err(PeerError::InvalidResponse)
                                     },
                                     api.all_peers().to_num_peers(),
                                 ),

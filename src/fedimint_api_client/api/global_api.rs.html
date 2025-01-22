@@ -790,7 +790,7 @@
         peer_id: PeerId,
         method: <span class="kw-2">&amp;</span>str,
         params: <span class="kw-2">&amp;</span>ApiRequestErased,
-    ) -&gt; anyhow::Result&lt;Value&gt; {
+    ) -&gt; PeerResult&lt;Value&gt; {
         <span class="self">self</span>.inner.request_raw(peer_id, method, params).<span class="kw">await
     </span>}
 }

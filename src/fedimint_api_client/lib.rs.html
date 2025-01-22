@@ -88,7 +88,9 @@
 <a href="#87" id="87">87</a>
 <a href="#88" id="88">88</a>
 <a href="#89" id="89">89</a>
-<a href="#90" id="90">90</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -97,7 +99,7 @@
 
 </span><span class="kw">use </span>anyhow::{bail, Context <span class="kw">as _</span>};
 <span class="kw">use </span>api::net::Connector;
-<span class="kw">use </span>api::{DynGlobalApi, FederationApiExt <span class="kw">as _</span>};
+<span class="kw">use </span>api::{DynGlobalApi, FederationApiExt <span class="kw">as _</span>, PeerError};
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId};
 <span class="kw">use </span>fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
@@ -145,7 +147,9 @@
         <span class="comment">// TODO: use new download approach based on guardian PKs
         </span><span class="kw">let </span>query_strategy = FilterMap::new(<span class="kw">move </span>|cfg: ClientConfig| {
             <span class="kw">if </span>federation_id != cfg.global.calculate_federation_id() {
-                <span class="macro">bail!</span>(<span class="string">"FederationId in invite code does not match client config"</span>)
+                <span class="kw">return </span><span class="prelude-val">Err</span>(PeerError::ConditionFailed(<span class="macro">anyhow::anyhow!</span>(
+                    <span class="string">"FederationId in invite code does not match client config"
+                </span>)));
             }
 
             <span class="prelude-val">Ok</span>(cfg.global.api_endpoints)

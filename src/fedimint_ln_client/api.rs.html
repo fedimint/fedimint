@@ -525,7 +525,7 @@
                 ),
             )
             .<span class="kw">await
-            </span>.map_err(|e| PeerError::Rpc(<span class="macro">anyhow!</span>(<span class="string">"Request timed out: {e}"</span>)))
+            </span>.map_err(|e| PeerError::Transport(<span class="macro">anyhow!</span>(<span class="string">"Request timed out: {e}"</span>)))
             .and_then(identity)
             {
                 responses.insert(<span class="kw-2">*</span>peer, response);
@@ -549,7 +549,7 @@
                 ),
             )
             .<span class="kw">await
-            </span>.map_err(|e| PeerError::Rpc(<span class="macro">anyhow!</span>(<span class="string">"Request timed out: {e}"</span>)))
+            </span>.map_err(|e| PeerError::Transport(<span class="macro">anyhow!</span>(<span class="string">"Request timed out: {e}"</span>)))
             .and_then(identity)
             {
                 <span class="kw">if </span>response {

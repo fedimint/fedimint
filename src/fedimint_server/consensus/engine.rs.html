@@ -870,7 +870,9 @@
 <a href="#869" id="869">869</a>
 <a href="#870" id="870">870</a>
 <a href="#871" id="871">871</a>
-<a href="#872" id="872">872</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -880,7 +882,7 @@
 <span class="kw">use </span>aleph_bft::Keychain <span class="kw">as </span>KeychainTrait;
 <span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>async_channel::Receiver;
-<span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, FederationApiExt, P2PConnectionStatus};
+<span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, FederationApiExt, P2PConnectionStatus, PeerError};
 <span class="kw">use </span>fedimint_api_client::query::FilterMap;
 <span class="kw">use </span>fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
@@ -1696,7 +1698,9 @@
         <span class="kw">let </span>threshold = <span class="self">self</span>.num_peers().threshold();
 
         <span class="kw">let </span>filter_map = <span class="kw">move </span>|response: SerdeModuleEncoding&lt;SignedSessionOutcome&gt;| {
-            <span class="kw">let </span>signed_session_outcome = response.try_into_inner(<span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+            <span class="kw">let </span>signed_session_outcome = response
+                .try_into_inner(<span class="kw-2">&amp;</span>decoders)
+                .map_err(|x| PeerError::ResponseDeserialization(x.into()))<span class="question-mark">?</span>;
             <span class="kw">let </span>header = signed_session_outcome.session_outcome.header(index);
             <span class="kw">if </span>signed_session_outcome.signatures.len() == threshold
                 &amp;&amp; signed_session_outcome
@@ -1706,7 +1710,7 @@
             {
                 <span class="prelude-val">Ok</span>(signed_session_outcome)
             } <span class="kw">else </span>{
-                <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">"Invalid signatures"</span>))
+                <span class="prelude-val">Err</span>(PeerError::InvalidResponse(<span class="macro">anyhow!</span>(<span class="string">"Invalid signatures"</span>)))
             }
         };
 

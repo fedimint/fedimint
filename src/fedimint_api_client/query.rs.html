@@ -141,6 +141,8 @@
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::{maybe_add_send_sync, NumPeers, PeerId};
 
+<span class="kw">use </span><span class="kw">crate</span>::api::{PeerError, PeerResult};
+
 <span class="doccomment">/// Fedimint query strategy
 ///
 /// Due to federated security model each Fedimint client API call to the
@@ -165,19 +167,17 @@
     <span class="doccomment">/// Return the successful result
     </span>Success(R),
     <span class="doccomment">/// A non-retryable failure has occurred
-    </span>Failure(anyhow::Error),
+    </span>Failure(PeerError),
 }
 
 <span class="doccomment">/// Returns when we obtain the first valid responses. RPC call errors or
 /// invalid responses are not retried.
 </span><span class="kw">pub struct </span>FilterMap&lt;R, T&gt; {
-    filter_map: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Fn(R) -&gt; anyhow::Result&lt;T&gt;)&gt;,
+    filter_map: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Fn(R) -&gt; PeerResult&lt;T&gt;)&gt;,
 }
 
 <span class="kw">impl</span>&lt;R, T&gt; FilterMap&lt;R, T&gt; {
-    <span class="kw">pub fn </span>new(
-        filter_map: <span class="kw">impl </span>Fn(R) -&gt; anyhow::Result&lt;T&gt; + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
-    ) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(filter_map: <span class="kw">impl </span>Fn(R) -&gt; PeerResult&lt;T&gt; + MaybeSend + MaybeSync + <span class="lifetime">'static</span>) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             filter_map: Box::new(filter_map),
         }
@@ -196,14 +196,14 @@
 <span class="doccomment">/// Returns when we obtain a threshold of valid responses. RPC call errors or
 /// invalid responses are not retried.
 </span><span class="kw">pub struct </span>FilterMapThreshold&lt;R, T&gt; {
-    filter_map: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Fn(PeerId, R) -&gt; anyhow::Result&lt;T&gt;)&gt;,
+    filter_map: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Fn(PeerId, R) -&gt; PeerResult&lt;T&gt;)&gt;,
     filtered_responses: BTreeMap&lt;PeerId, T&gt;,
     threshold: usize,
 }
 
 <span class="kw">impl</span>&lt;R, T&gt; FilterMapThreshold&lt;R, T&gt; {
     <span class="kw">pub fn </span>new(
-        verifier: <span class="kw">impl </span>Fn(PeerId, R) -&gt; anyhow::Result&lt;T&gt; + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
+        verifier: <span class="kw">impl </span>Fn(PeerId, R) -&gt; PeerResult&lt;T&gt; + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
         num_peers: NumPeers,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
