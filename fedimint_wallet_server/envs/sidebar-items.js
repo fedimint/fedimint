@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["FM_WALLET_FEERATE_MULTIPLIER_ENV"],"fn":["get_feerate_multiplier"]};

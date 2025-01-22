@@ -2321,7 +2321,15 @@
 <a href="#2320" id="2320">2320</a>
 <a href="#2321" id="2321">2321</a>
 <a href="#2322" id="2322">2322</a>
-<a href="#2323" id="2323">2323</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2323" id="2323">2323</a>
+<a href="#2324" id="2324">2324</a>
+<a href="#2325" id="2325">2325</a>
+<a href="#2326" id="2326">2326</a>
+<a href="#2327" id="2327">2327</a>
+<a href="#2328" id="2328">2328</a>
+<a href="#2329" id="2329">2329</a>
+<a href="#2330" id="2330">2330</a>
+<a href="#2331" id="2331">2331</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -2333,6 +2341,7 @@
 #![allow(clippy::too_many_lines)]
 
 </span><span class="kw">pub mod </span>db;
+<span class="kw">pub mod </span>envs;
 
 <span class="kw">use </span>std::clone::Clone;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -2356,6 +2365,7 @@
     TxOutputSummary, WalletCommonInit, WalletConsensusItem, WalletCreationError, WalletInput,
     WalletModuleTypes, WalletOutput, WalletOutputOutcome, WalletSummary, DEPRECATED_RBF_ERROR,
 };
+<span class="kw">use </span>envs::get_feerate_multiplier;
 <span class="kw">use </span>fedimint_api_client::api::{DynModuleApi, FederationApiExt};
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_core::config::{
@@ -2402,7 +2412,7 @@
 <span class="kw">use </span>fedimint_wallet_common::tweakable::Tweakable;
 <span class="kw">use </span>fedimint_wallet_common::{
     Rbf, UnknownWalletInputVariantError, WalletInputError, WalletOutputError, WalletOutputV0,
-    CONFIRMATION_TARGET, FEERATE_MULTIPLIER, MODULE_CONSENSUS_VERSION,
+    CONFIRMATION_TARGET, MODULE_CONSENSUS_VERSION,
 };
 <span class="kw">use </span>futures::future::join_all;
 <span class="kw">use </span>futures::{FutureExt, StreamExt};
@@ -3510,8 +3520,14 @@
     }
 
     <span class="kw">pub fn </span>get_fee_rate_opt(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Feerate {
-        Feerate {
-            sats_per_kvb: <span class="self">self</span>.fee_rate_rx.borrow().sats_per_kvb * FEERATE_MULTIPLIER,
+        <span class="comment">// `get_feerate_multiplier` is clamped and can't be negative
+        // feerate sources as clamped and can't be negative or too large
+        </span><span class="attr">#[allow(clippy::cast_precision_loss)]
+        #[allow(clippy::cast_sign_loss)]
+        </span>Feerate {
+            sats_per_kvb: ((<span class="self">self</span>.fee_rate_rx.borrow().sats_per_kvb <span class="kw">as </span>f64
+                * get_feerate_multiplier())
+            .round()) <span class="kw">as </span>u64,
         }
     }
 

@@ -607,7 +607,7 @@
 <span class="doccomment">/// To further mitigate the risk of a peg-out transaction getting stuck in the
 /// mempool, we multiply the feerate estimate returned from the backend by this
 /// value.
-</span><span class="kw">pub const </span>FEERATE_MULTIPLIER: u64 = <span class="number">4</span>;
+</span><span class="kw">pub const </span>FEERATE_MULTIPLIER_DEFAULT: f64 = <span class="number">2.0</span>;
 
 <span class="kw">pub type </span>PartialSig = Vec&lt;u8&gt;;
 
