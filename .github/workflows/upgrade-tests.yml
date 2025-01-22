@@ -64,7 +64,11 @@ jobs:
           VERSIONS=${VERSIONS:="v0.3.4-rc.1 current, v0.4.4 current, v0.5.0 current"}
 
           # if empty, defaults to all test kinds within script
-          TEST_KINDS="${{ github.event.inputs.test_kinds }}"
+          export TEST_KINDS="${{ github.event.inputs.test_kinds }}"
+          export FM_DEVIMINT_DISABLE_MODULE_LNV2=1
+
+          export FM_TEST_CI_ALL_JOBS
+          export FM_TEST_UPGRADE_TIMEOUT
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             # the GH runners become flaky with manual runs during the release
@@ -73,8 +77,8 @@ jobs:
             # some upgrade paths can take a long time, so we increase the timeout
             FM_TEST_UPGRADE_TIMEOUT="3600"
           else
-            FM_TEST_CI_ALL_JOBS=""
-            FM_TEST_UPGRADE_TIMEOUT=""
+            unset FM_TEST_CI_ALL_JOBS
+            unset FM_TEST_UPGRADE_TIMEOUT
           fi
 
           # the default tmp dir is too long (/home/ubuntu/actions-runner/_work/_temp/)
@@ -92,10 +96,6 @@ jobs:
                 --metadata "commit=${LAST_COMMIT_SHA}" \
                 -- \
             env -u RUSTC_WRAPPER \
-            env TEST_KINDS="$TEST_KINDS" \
-            env FM_DEVIMINT_DISABLE_MODULE_LNV2=1 \
-            env FM_TEST_CI_ALL_JOBS="$FM_TEST_CI_ALL_JOBS" \
-            env FM_TEST_UPGRADE_TIMEOUT="$FM_TEST_UPGRADE_TIMEOUT" \
             scripts/tests/run-with-nix-workspace-ci.sh ./scripts/tests/upgrade-test.sh "$VERSIONS"
 
   notifications:
