@@ -9,25 +9,22 @@ impl<T> Encodable for &[T]
 where
     T: Encodable + 'static,
 {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<usize> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         if TypeId::of::<T>() == TypeId::of::<u8>() {
             // unsafe: we've just checked that T is `u8` so the transmute here is a no-op
             let bytes = unsafe { std::mem::transmute::<&[T], &[u8]>(self) };
 
-            let mut len = 0;
-            len += (bytes.len() as u64).consensus_encode(writer)?;
+            (bytes.len() as u64).consensus_encode(writer)?;
             writer.write_all(bytes)?;
-            len += bytes.len();
-            return Ok(len);
+            return Ok(());
         }
 
-        let mut len = 0;
-        len += (self.len() as u64).consensus_encode(writer)?;
+        (self.len() as u64).consensus_encode(writer)?;
 
         for item in *self {
-            len += item.consensus_encode(writer)?;
+            item.consensus_encode(writer)?;
         }
-        Ok(len)
+        Ok(())
     }
 }
 
@@ -35,7 +32,7 @@ impl<T> Encodable for Vec<T>
 where
     T: Encodable + 'static,
 {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<usize> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         (self as &[T]).consensus_encode(writer)
     }
 }
@@ -104,12 +101,12 @@ impl<T> Encodable for VecDeque<T>
 where
     T: Encodable + 'static,
 {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<usize> {
-        let mut len = (self.len() as u64).consensus_encode(writer)?;
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        (self.len() as u64).consensus_encode(writer)?;
         for i in self {
-            len += i.consensus_encode(writer)?;
+            i.consensus_encode(writer)?;
         }
-        Ok(len)
+        Ok(())
     }
 }
 
@@ -131,19 +128,18 @@ impl<T, const SIZE: usize> Encodable for [T; SIZE]
 where
     T: Encodable + 'static,
 {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         if TypeId::of::<T>() == TypeId::of::<u8>() {
             // unsafe: we've just checked that T is `u8` so the transmute here is a no-op
             let bytes = unsafe { std::mem::transmute::<&[T; SIZE], &[u8; SIZE]>(self) };
             writer.write_all(bytes)?;
-            return Ok(bytes.len());
+            return Ok(());
         }
 
-        let mut len = 0;
         for item in self {
-            len += item.consensus_encode(writer)?;
+            item.consensus_encode(writer)?;
         }
-        Ok(len)
+        Ok(())
     }
 }
 
@@ -188,14 +184,13 @@ where
     K: Encodable,
     V: Encodable,
 {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        let mut len = 0;
-        len += (self.len() as u64).consensus_encode(writer)?;
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        (self.len() as u64).consensus_encode(writer)?;
         for (k, v) in self {
-            len += k.consensus_encode(writer)?;
-            len += v.consensus_encode(writer)?;
+            k.consensus_encode(writer)?;
+            v.consensus_encode(writer)?;
         }
-        Ok(len)
+        Ok(())
     }
 }
 
@@ -231,13 +226,12 @@ impl<K> Encodable for BTreeSet<K>
 where
     K: Encodable,
 {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        let mut len = 0;
-        len += (self.len() as u64).consensus_encode(writer)?;
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        (self.len() as u64).consensus_encode(writer)?;
         for k in self {
-            len += k.consensus_encode(writer)?;
+            k.consensus_encode(writer)?;
         }
-        Ok(len)
+        Ok(())
     }
 }
 

@@ -19,11 +19,12 @@ macro_rules! impl_encode_decode_bridge {
             fn consensus_encode<W: std::io::Write>(
                 &self,
                 writer: &mut W,
-            ) -> Result<usize, std::io::Error> {
-                Ok(bitcoin::consensus::Encodable::consensus_encode(
+            ) -> Result<(), std::io::Error> {
+                bitcoin::consensus::Encodable::consensus_encode(
                     self,
                     &mut std::io::BufWriter::new(writer),
-                )?)
+                )?;
+                Ok(())
             }
         }
 
@@ -50,8 +51,9 @@ impl_encode_decode_bridge!(bitcoin::Transaction);
 impl_encode_decode_bridge!(bitcoin::merkle_tree::PartialMerkleTree);
 
 impl crate::encoding::Encodable for bitcoin::psbt::Psbt {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        Ok(self.serialize_to_writer(&mut CountWrite::from(writer))?)
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        self.serialize_to_writer(&mut BitoinIoWriteAdapter::from(writer))?;
+        Ok(())
     }
 }
 
@@ -66,11 +68,12 @@ impl crate::encoding::Decodable for bitcoin::psbt::Psbt {
 }
 
 impl crate::encoding::Encodable for bitcoin::Txid {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        Ok(bitcoin::consensus::Encodable::consensus_encode(
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        bitcoin::consensus::Encodable::consensus_encode(
             self,
             &mut std::io::BufWriter::new(writer),
-        )?)
+        )?;
+        Ok(())
     }
 
     fn consensus_encode_to_hex(&self) -> String {
@@ -114,7 +117,7 @@ impl<K> Encodable for Descriptor<K>
 where
     K: MiniscriptKey,
 {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         let descriptor_str = self.to_string();
         descriptor_str.consensus_encode(writer)
     }
@@ -148,7 +151,7 @@ impl std::fmt::Display for NetworkLegacyEncodingWrapper {
 }
 
 impl Encodable for NetworkLegacyEncodingWrapper {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         u32::from_le_bytes(self.0.magic().to_bytes()).consensus_encode(writer)
     }
 }
@@ -167,7 +170,7 @@ impl Decodable for NetworkLegacyEncodingWrapper {
     }
 }
 impl Encodable for bitcoin::Network {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.magic().to_bytes().consensus_encode(writer)
     }
 }
@@ -185,7 +188,7 @@ impl Decodable for bitcoin::Network {
 }
 
 impl Encodable for bitcoin::Amount {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         self.to_sat().consensus_encode(writer)
     }
 }
@@ -200,19 +203,16 @@ impl Decodable for bitcoin::Amount {
 }
 
 impl Encodable for bitcoin::Address<NetworkUnchecked> {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        let mut len = 0;
-        len +=
-            NetworkLegacyEncodingWrapper(get_network_for_address(self)).consensus_encode(writer)?;
-        len += self
-            .clone()
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), Error> {
+        NetworkLegacyEncodingWrapper(get_network_for_address(self)).consensus_encode(writer)?;
+        self.clone()
             // We need an `Address<NetworkChecked>` in order to get the script pubkey.
             // Calling `assume_checked` is generally a bad idea, but it's safe here where we're
             // encoding the address because addresses are always decoded as unchecked.
             .assume_checked()
             .script_pubkey()
             .consensus_encode(writer)?;
-        Ok(len)
+        Ok(())
     }
 }
 
@@ -232,7 +232,7 @@ impl Decodable for bitcoin::Address<NetworkUnchecked> {
 }
 
 impl Encodable for bitcoin::hashes::sha256::Hash {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.to_byte_array().consensus_encode(writer)
     }
 }
@@ -249,7 +249,7 @@ impl Decodable for bitcoin::hashes::sha256::Hash {
 }
 
 impl Encodable for lightning_invoice::Bolt11Invoice {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.to_string().consensus_encode(writer)
     }
 }
@@ -266,11 +266,10 @@ impl Decodable for lightning_invoice::Bolt11Invoice {
 }
 
 impl Encodable for lightning_invoice::RoutingFees {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        let mut len = 0;
-        len += self.base_msat.consensus_encode(writer)?;
-        len += self.proportional_millionths.consensus_encode(writer)?;
-        Ok(len)
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.base_msat.consensus_encode(writer)?;
+        self.proportional_millionths.consensus_encode(writer)?;
+        Ok(())
     }
 }
 
@@ -289,10 +288,10 @@ impl Decodable for lightning_invoice::RoutingFees {
 }
 
 impl Encodable for BigSize {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        let mut writer = CountWrite::from(writer);
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        let mut writer = BitoinIoWriteAdapter::from(writer);
         self.write(&mut writer)?;
-        Ok(usize::try_from(writer.count()).expect("can't overflow"))
+        Ok(())
     }
 }
 
@@ -399,28 +398,19 @@ impl<'a, R: std::io::Read> bitcoin_io::BufRead for BufBitcoinReader<'a, R> {
 /// Copy&pasted from <https://github.com/SOF3/count-write> which
 /// uses Apache license (and it's a trivial amount of code, repeating
 /// on stack overflow).
-struct CountWrite<W> {
+pub struct BitoinIoWriteAdapter<W> {
     inner: W,
-    count: u64,
 }
 
-impl<W> CountWrite<W> {
-    /// Returns the number of bytes successfully written so far
-    fn count(&self) -> u64 {
-        self.count
-    }
-}
-
-impl<W> From<W> for CountWrite<W> {
+impl<W> From<W> for BitoinIoWriteAdapter<W> {
     fn from(inner: W) -> Self {
-        Self { inner, count: 0 }
+        Self { inner }
     }
 }
 
-impl<W: Write> bitcoin_io::Write for CountWrite<W> {
+impl<W: Write> bitcoin_io::Write for BitoinIoWriteAdapter<W> {
     fn write(&mut self, buf: &[u8]) -> bitcoin_io::Result<usize> {
         let written = self.inner.write(buf)?;
-        self.count += written as u64;
         Ok(written)
     }
 

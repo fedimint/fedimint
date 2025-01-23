@@ -138,7 +138,7 @@ impl ClientBackup {
             {
                 let size = module_backup.consensus_encode_to_len();
                 let limit = Self::PER_MODULE_SIZE_LIMIT_BYTES;
-                if size < limit {
+                if size < u64::try_from(limit).expect("Can't fail") {
                     modules.insert(module_id, module_backup.clone());
                 } else if let Some(last_module_backup) =
                     last_backup.and_then(|lb| lb.modules.get(&module_id))
@@ -173,11 +173,10 @@ impl ClientBackup {
 }
 
 impl Encodable for ClientBackup {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> std::result::Result<usize, Error> {
-        let mut len = 0;
-        len += self.session_count.consensus_encode(writer)?;
-        len += self.metadata.consensus_encode(writer)?;
-        len += self.modules.consensus_encode(writer)?;
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> std::result::Result<(), Error> {
+        self.session_count.consensus_encode(writer)?;
+        self.metadata.consensus_encode(writer)?;
+        self.modules.consensus_encode(writer)?;
 
         // Old-style padding.
         //
@@ -190,9 +189,9 @@ impl Encodable for ClientBackup {
         // anyway, so we moved padding to encrypt/decryption. But for abundance of
         // caution, we'll keep the old padding around, and always fill it
         // with an empty Vec.
-        len += Vec::<u8>::new().consensus_encode(writer)?;
+        Vec::<u8>::new().consensus_encode(writer)?;
 
-        Ok(len)
+        Ok(())
     }
 }
 

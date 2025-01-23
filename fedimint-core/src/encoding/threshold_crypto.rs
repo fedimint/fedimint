@@ -7,17 +7,16 @@ use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
 
 impl Encodable for threshold_crypto::PublicKeySet {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        let mut len = 0;
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         let num_coeff = self.coefficients().len() as u64;
-        len += num_coeff.consensus_encode(writer)?;
+        num_coeff.consensus_encode(writer)?;
         for coefficient in self.coefficients() {
-            len += coefficient
+            coefficient
                 .to_affine()
                 .to_compressed()
                 .consensus_encode(writer)?;
         }
-        Ok(len)
+        Ok(())
     }
 }
 
@@ -46,7 +45,7 @@ impl Decodable for threshold_crypto::PublicKeySet {
 }
 
 impl Encodable for threshold_crypto::PublicKey {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.to_bytes().consensus_encode(writer)
     }
 }
@@ -62,7 +61,7 @@ impl Decodable for threshold_crypto::PublicKey {
 }
 
 impl Encodable for threshold_crypto::Ciphertext {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.to_bytes().consensus_encode(writer)
     }
 }
@@ -80,7 +79,7 @@ impl Decodable for threshold_crypto::Ciphertext {
 }
 
 impl Encodable for threshold_crypto::DecryptionShare {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.to_bytes().consensus_encode(writer)
     }
 }

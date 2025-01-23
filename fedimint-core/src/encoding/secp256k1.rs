@@ -4,10 +4,10 @@ use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
 
 impl Encodable for secp256k1::ecdsa::Signature {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         let bytes = self.serialize_compact();
         writer.write_all(&bytes)?;
-        Ok(bytes.len())
+        Ok(())
     }
 }
 
@@ -22,7 +22,7 @@ impl Decodable for secp256k1::ecdsa::Signature {
 }
 
 impl Encodable for secp256k1::PublicKey {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         self.serialize().consensus_encode(writer)
     }
 }
@@ -38,7 +38,7 @@ impl Decodable for secp256k1::PublicKey {
 }
 
 impl Encodable for secp256k1::SecretKey {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         self.secret_bytes().consensus_encode(writer)
     }
 }
@@ -54,11 +54,11 @@ impl Decodable for secp256k1::SecretKey {
 }
 
 impl Encodable for secp256k1::schnorr::Signature {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         let bytes = &self[..];
         assert_eq!(bytes.len(), secp256k1::constants::SCHNORR_SIGNATURE_SIZE);
         writer.write_all(bytes)?;
-        Ok(secp256k1::constants::SCHNORR_SIGNATURE_SIZE)
+        Ok(())
     }
 }
 
@@ -75,7 +75,7 @@ impl Decodable for secp256k1::schnorr::Signature {
 }
 
 impl Encodable for bitcoin::key::Keypair {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.secret_bytes().consensus_encode(writer)
     }
 }
