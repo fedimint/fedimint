@@ -183,7 +183,25 @@
 <a href="#182" id="182">182</a>
 <a href="#183" id="183">183</a>
 <a href="#184" id="184">184</a>
-<a href="#185" id="185">185</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::ops;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::SystemTime;
@@ -204,6 +222,7 @@
     ClaimedPegIn = <span class="number">0x2e</span>,
     RecoveryFinalized = <span class="number">0x2f</span>,
     RecoveryState = <span class="number">0x30</span>,
+    SupportsSafeDeposit = <span class="number">0x31</span>,
     <span class="doccomment">/// Prefixes between 0xb0..=0xcf shall all be considered allocated for
     /// historical and future external use
     </span>ExternalReservedStart = <span class="number">0xb0</span>,
@@ -367,5 +386,22 @@
     key = RecoveryStateKey,
     value = (WalletRecoveryState, RecoveryFromHistoryCommon),
     db_prefix = DbKeyPrefix::RecoveryState,
+);
+
+<span class="attr">#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+</span><span class="kw">pub struct </span>SupportsSafeDepositKey;
+
+<span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>SupportsSafeDepositPrefix;
+
+<span class="macro">impl_db_record!</span>(
+    key = SupportsSafeDepositKey,
+    value = (),
+    db_prefix = DbKeyPrefix::SupportsSafeDeposit,
+);
+
+<span class="macro">impl_db_lookup!</span>(
+    key = SupportsSafeDepositKey,
+    query_prefix = SupportsSafeDepositPrefix
 );
 </code></pre></div></section></main></body></html>

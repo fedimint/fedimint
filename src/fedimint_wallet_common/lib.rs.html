@@ -556,7 +556,12 @@
 <a href="#555" id="555">555</a>
 <a href="#556" id="556">556</a>
 <a href="#557" id="557">557</a>
-<a href="#558" id="558">558</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#558" id="558">558</a>
+<a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -593,6 +598,11 @@
 
 <span class="kw">pub const </span>KIND: ModuleKind = ModuleKind::from_static_str(<span class="string">"wallet"</span>);
 <span class="kw">pub const </span>MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(<span class="number">2</span>, <span class="number">2</span>);
+
+<span class="doccomment">/// Module consensus version that introduced support for processing Bitcoin
+/// transactions that exceed the `ALEPH_BFT_UNIT_BYTE_LIMIT`.
+</span><span class="kw">pub const </span>SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION: ModuleConsensusVersion =
+    ModuleConsensusVersion::new(<span class="number">2</span>, <span class="number">2</span>);
 
 <span class="doccomment">/// Used for estimating a feerate that will confirm within a target number of
 /// blocks.
