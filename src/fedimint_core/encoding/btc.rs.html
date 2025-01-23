@@ -600,17 +600,7 @@
 <a href="#599" id="599">599</a>
 <a href="#600" id="600">600</a>
 <a href="#601" id="601">601</a>
-<a href="#602" id="602">602</a>
-<a href="#603" id="603">603</a>
-<a href="#604" id="604">604</a>
-<a href="#605" id="605">605</a>
-<a href="#606" id="606">606</a>
-<a href="#607" id="607">607</a>
-<a href="#608" id="608">608</a>
-<a href="#609" id="609">609</a>
-<a href="#610" id="610">610</a>
-<a href="#611" id="611">611</a>
-<a href="#612" id="612">612</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
+<a href="#602" id="602">602</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::format_err;
@@ -631,11 +621,12 @@
             <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(
                 <span class="kw-2">&amp;</span><span class="self">self</span>,
                 writer: <span class="kw-2">&amp;mut </span>W,
-            ) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
-                <span class="prelude-val">Ok</span>(bitcoin::consensus::Encodable::consensus_encode(
+            ) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
+                bitcoin::consensus::Encodable::consensus_encode(
                     <span class="self">self</span>,
                     <span class="kw-2">&amp;mut </span>std::io::BufWriter::new(writer),
-                )<span class="question-mark">?</span>)
+                )<span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(())
             }
         }
 
@@ -662,8 +653,9 @@
 <span class="macro">impl_encode_decode_bridge!</span>(bitcoin::merkle_tree::PartialMerkleTree);
 
 <span class="kw">impl </span><span class="kw">crate</span>::encoding::Encodable <span class="kw">for </span>bitcoin::psbt::Psbt {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.serialize_to_writer(<span class="kw-2">&amp;mut </span>CountWrite::from(writer))<span class="question-mark">?</span>)
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
+        <span class="self">self</span>.serialize_to_writer(<span class="kw-2">&amp;mut </span>BitoinIoWriteAdapter::from(writer))<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
@@ -678,11 +670,12 @@
 }
 
 <span class="kw">impl </span><span class="kw">crate</span>::encoding::Encodable <span class="kw">for </span>bitcoin::Txid {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
-        <span class="prelude-val">Ok</span>(bitcoin::consensus::Encodable::consensus_encode(
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
+        bitcoin::consensus::Encodable::consensus_encode(
             <span class="self">self</span>,
             <span class="kw-2">&amp;mut </span>std::io::BufWriter::new(writer),
-        )<span class="question-mark">?</span>)
+        )<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">fn </span>consensus_encode_to_hex(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
@@ -726,7 +719,7 @@
 <span class="kw">where
     </span>K: MiniscriptKey,
 {
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
         <span class="kw">let </span>descriptor_str = <span class="self">self</span>.to_string();
         descriptor_str.consensus_encode(writer)
     }
@@ -760,7 +753,7 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>NetworkLegacyEncodingWrapper {
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
         u32::from_le_bytes(<span class="self">self</span>.<span class="number">0</span>.magic().to_bytes()).consensus_encode(writer)
     }
 }
@@ -779,7 +772,7 @@
     }
 }
 <span class="kw">impl </span>Encodable <span class="kw">for </span>bitcoin::Network {
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
         <span class="self">self</span>.magic().to_bytes().consensus_encode(writer)
     }
 }
@@ -797,7 +790,7 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>bitcoin::Amount {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
         <span class="self">self</span>.to_sat().consensus_encode(writer)
     }
 }
@@ -812,19 +805,16 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>bitcoin::Address&lt;NetworkUnchecked&gt; {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-        len +=
-            NetworkLegacyEncodingWrapper(get_network_for_address(<span class="self">self</span>)).consensus_encode(writer)<span class="question-mark">?</span>;
-        len += <span class="self">self
-            </span>.clone()
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+        NetworkLegacyEncodingWrapper(get_network_for_address(<span class="self">self</span>)).consensus_encode(writer)<span class="question-mark">?</span>;
+        <span class="self">self</span>.clone()
             <span class="comment">// We need an `Address&lt;NetworkChecked&gt;` in order to get the script pubkey.
             // Calling `assume_checked` is generally a bad idea, but it's safe here where we're
             // encoding the address because addresses are always decoded as unchecked.
             </span>.assume_checked()
             .script_pubkey()
             .consensus_encode(writer)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(len)
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
@@ -844,7 +834,7 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>bitcoin::hashes::sha256::Hash {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
         <span class="self">self</span>.to_byte_array().consensus_encode(writer)
     }
 }
@@ -861,7 +851,7 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>lightning_invoice::Bolt11Invoice {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
         <span class="self">self</span>.to_string().consensus_encode(writer)
     }
 }
@@ -878,11 +868,10 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>lightning_invoice::RoutingFees {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-        len += <span class="self">self</span>.base_msat.consensus_encode(writer)<span class="question-mark">?</span>;
-        len += <span class="self">self</span>.proportional_millionths.consensus_encode(writer)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(len)
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+        <span class="self">self</span>.base_msat.consensus_encode(writer)<span class="question-mark">?</span>;
+        <span class="self">self</span>.proportional_millionths.consensus_encode(writer)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
@@ -901,10 +890,10 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>BigSize {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>writer = CountWrite::from(writer);
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>writer = BitoinIoWriteAdapter::from(writer);
         <span class="self">self</span>.write(<span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(usize::try_from(writer.count()).expect(<span class="string">"can't overflow"</span>))
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
@@ -1011,28 +1000,19 @@
 /// Copy&amp;pasted from &lt;https://github.com/SOF3/count-write&gt; which
 /// uses Apache license (and it's a trivial amount of code, repeating
 /// on stack overflow).
-</span><span class="kw">struct </span>CountWrite&lt;W&gt; {
+</span><span class="kw">pub struct </span>BitoinIoWriteAdapter&lt;W&gt; {
     inner: W,
-    count: u64,
 }
 
-<span class="kw">impl</span>&lt;W&gt; CountWrite&lt;W&gt; {
-    <span class="doccomment">/// Returns the number of bytes successfully written so far
-    </span><span class="kw">fn </span>count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
-        <span class="self">self</span>.count
-    }
-}
-
-<span class="kw">impl</span>&lt;W&gt; From&lt;W&gt; <span class="kw">for </span>CountWrite&lt;W&gt; {
+<span class="kw">impl</span>&lt;W&gt; From&lt;W&gt; <span class="kw">for </span>BitoinIoWriteAdapter&lt;W&gt; {
     <span class="kw">fn </span>from(inner: W) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{ inner, count: <span class="number">0 </span>}
+        <span class="self">Self </span>{ inner }
     }
 }
 
-<span class="kw">impl</span>&lt;W: Write&gt; bitcoin_io::Write <span class="kw">for </span>CountWrite&lt;W&gt; {
+<span class="kw">impl</span>&lt;W: Write&gt; bitcoin_io::Write <span class="kw">for </span>BitoinIoWriteAdapter&lt;W&gt; {
     <span class="kw">fn </span>write(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;</span>[u8]) -&gt; bitcoin_io::Result&lt;usize&gt; {
         <span class="kw">let </span>written = <span class="self">self</span>.inner.write(buf)<span class="question-mark">?</span>;
-        <span class="self">self</span>.count += written <span class="kw">as </span>u64;
         <span class="prelude-val">Ok</span>(written)
     }
 

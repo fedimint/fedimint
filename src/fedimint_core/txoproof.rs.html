@@ -123,9 +123,7 @@
 <a href="#122" id="122">122</a>
 <a href="#123" id="123">123</a>
 <a href="#124" id="124">124</a>
-<a href="#125" id="125">125</a>
-<a href="#126" id="126">126</a>
-<a href="#127" id="127">127</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
+<a href="#125" id="125">125</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::io::Cursor;
 
@@ -192,13 +190,11 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>TxOutProof {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>written = <span class="number">0</span>;
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
+        <span class="self">self</span>.block_header.consensus_encode(writer)<span class="question-mark">?</span>;
+        <span class="self">self</span>.merkle_proof.consensus_encode(writer)<span class="question-mark">?</span>;
 
-        written += <span class="self">self</span>.block_header.consensus_encode(writer)<span class="question-mark">?</span>;
-        written += <span class="self">self</span>.merkle_proof.consensus_encode(writer)<span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(written)
+        <span class="prelude-val">Ok</span>(())
     }
 }
 

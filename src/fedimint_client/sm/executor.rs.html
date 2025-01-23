@@ -1447,13 +1447,7 @@
 <a href="#1446" id="1446">1446</a>
 <a href="#1447" id="1447">1447</a>
 <a href="#1448" id="1448">1448</a>
-<a href="#1449" id="1449">1449</a>
-<a href="#1450" id="1450">1450</a>
-<a href="#1451" id="1451">1451</a>
-<a href="#1452" id="1452">1452</a>
-<a href="#1453" id="1453">1453</a>
-<a href="#1454" id="1454">1454</a>
-<a href="#1455" id="1455">1455</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
+<a href="#1449" id="1449">1449</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 <span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::io::{Error, Read, Write};
@@ -2373,11 +2367,10 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>ActiveStateKey {
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-        len += <span class="self">self</span>.operation_id.consensus_encode(writer)<span class="question-mark">?</span>;
-        len += <span class="self">self</span>.state.consensus_encode(writer)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(len)
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+        <span class="self">self</span>.operation_id.consensus_encode(writer)<span class="question-mark">?</span>;
+        <span class="self">self</span>.state.consensus_encode(writer)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
@@ -2404,11 +2397,10 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>ActiveStateKeyBytes {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-        len += <span class="self">self</span>.operation_id.consensus_encode(writer)<span class="question-mark">?</span>;
-        len += writer.write(<span class="self">self</span>.state.as_slice())<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(len)
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
+        <span class="self">self</span>.operation_id.consensus_encode(writer)<span class="question-mark">?</span>;
+        writer.write_all(<span class="self">self</span>.state.as_slice())<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
@@ -2441,7 +2433,7 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>ActiveOperationStateKeyPrefix {
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
         <span class="self">self</span>.operation_id.consensus_encode(writer)
     }
 }
@@ -2457,11 +2449,10 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>ActiveModuleOperationStateKeyPrefix {
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-        len += <span class="self">self</span>.operation_id.consensus_encode(writer)<span class="question-mark">?</span>;
-        len += <span class="self">self</span>.module_instance.consensus_encode(writer)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(len)
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+        <span class="self">self</span>.operation_id.consensus_encode(writer)<span class="question-mark">?</span>;
+        <span class="self">self</span>.module_instance.consensus_encode(writer)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
@@ -2473,8 +2464,8 @@
 </span><span class="kw">pub struct </span>ActiveStateKeyPrefix;
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>ActiveStateKeyPrefix {
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, _writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="prelude-val">Ok</span>(<span class="number">0</span>)
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, _writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
@@ -2545,11 +2536,10 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>InactiveStateKey {
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-        len += <span class="self">self</span>.operation_id.consensus_encode(writer)<span class="question-mark">?</span>;
-        len += <span class="self">self</span>.state.consensus_encode(writer)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(len)
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+        <span class="self">self</span>.operation_id.consensus_encode(writer)<span class="question-mark">?</span>;
+        <span class="self">self</span>.state.consensus_encode(writer)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
@@ -2576,11 +2566,10 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>InactiveStateKeyBytes {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-        len += <span class="self">self</span>.operation_id.consensus_encode(writer)<span class="question-mark">?</span>;
-        len += writer.write(<span class="self">self</span>.state.as_slice())<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(len)
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
+        <span class="self">self</span>.operation_id.consensus_encode(writer)<span class="question-mark">?</span>;
+        writer.write_all(<span class="self">self</span>.state.as_slice())<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
@@ -2613,7 +2602,7 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>InactiveOperationStateKeyPrefix {
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
         <span class="self">self</span>.operation_id.consensus_encode(writer)
     }
 }
@@ -2629,11 +2618,10 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>InactiveModuleOperationStateKeyPrefix {
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-        len += <span class="self">self</span>.operation_id.consensus_encode(writer)<span class="question-mark">?</span>;
-        len += <span class="self">self</span>.module_instance.consensus_encode(writer)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(len)
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+        <span class="self">self</span>.operation_id.consensus_encode(writer)<span class="question-mark">?</span>;
+        <span class="self">self</span>.module_instance.consensus_encode(writer)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
@@ -2645,8 +2633,8 @@
 </span><span class="kw">pub struct </span>InactiveStateKeyPrefix;
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>InactiveStateKeyPrefix {
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, _writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="prelude-val">Ok</span>(<span class="number">0</span>)
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, _writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+        <span class="prelude-val">Ok</span>(())
     }
 }
 

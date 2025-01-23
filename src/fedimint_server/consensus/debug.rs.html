@@ -97,10 +97,11 @@
 <a href="#96" id="96">96</a>
 <a href="#97" id="97">97</a>
 <a href="#98" id="98">98</a>
-<a href="#99" id="99">99</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>bitcoin::hashes::{sha256, Hash <span class="kw">as _</span>};
-<span class="kw">use </span>fedimint_core::encoding::Encodable <span class="kw">as _</span>;
+<span class="kw">use </span>fedimint_core::encoding::{CountWrite, Encodable <span class="kw">as _</span>};
 <span class="kw">use </span>fedimint_core::session_outcome::AcceptedItem;
 
 <span class="kw">use </span><span class="kw">crate</span>::ConsensusItem;
@@ -152,16 +153,17 @@
 <span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; fmt::Display <span class="kw">for </span>DebugConsensusItemCompact&lt;<span class="lifetime">'a</span>&gt; {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
         <span class="kw">let </span><span class="kw-2">mut </span>engine = sha256::HashEngine::default();
-        <span class="kw">let </span>len = <span class="self">self
-            </span>.<span class="number">0
-            </span>.consensus_encode(<span class="kw-2">&amp;mut </span>engine)
+        <span class="kw">let </span><span class="kw-2">mut </span>count = CountWrite::from(<span class="kw-2">&amp;mut </span>engine);
+        <span class="self">self</span>.<span class="number">0
+            </span>.consensus_encode(<span class="kw-2">&amp;mut </span>count)
             .map_err(|<span class="kw">_</span>| fmt::Error)<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>count = count.count();
         <span class="kw">let </span>hash = <span class="kw-2">*</span>sha256::Hash::from_engine(engine).as_byte_array();
         f.write_fmt(<span class="macro">format_args!</span>(
-            <span class="string">"{}; peer={}; len={}; "</span>,
+            <span class="string">"{}; peer={}; len={count}; "</span>,
             hex::encode(<span class="kw-2">&amp;</span>hash[<span class="number">0</span>..<span class="number">12</span>]),
             <span class="self">self</span>.<span class="number">0</span>.peer,
-            len
         ))<span class="question-mark">?</span>;
 
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>.item {

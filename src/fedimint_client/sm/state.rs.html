@@ -514,8 +514,7 @@
 <a href="#513" id="513">513</a>
 <a href="#514" id="514">514</a>
 <a href="#515" id="515">515</a>
-<a href="#516" id="516">516</a>
-<a href="#517" id="517">517</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::any::Any;
+<a href="#516" id="516">516</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>std::hash;
@@ -872,7 +871,7 @@
 <span class="kw">impl </span>Eq <span class="kw">for </span>DynState {}
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>DynState {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
         <span class="self">self</span>.<span class="number">1</span>.consensus_encode(writer)<span class="question-mark">?</span>;
         <span class="self">self</span>.<span class="number">0</span>.consensus_encode_dyn(writer)
     }
@@ -973,11 +972,10 @@
 <span class="kw">where
     </span>S: State,
 {
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-        len += <span class="self">self</span>.operation_id.consensus_encode(writer)<span class="question-mark">?</span>;
-        len += <span class="self">self</span>.state.consensus_encode(writer)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(len)
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+        <span class="self">self</span>.operation_id.consensus_encode(writer)<span class="question-mark">?</span>;
+        <span class="self">self</span>.state.consensus_encode(writer)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
     }
 }
 

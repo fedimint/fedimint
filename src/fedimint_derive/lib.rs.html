@@ -438,10 +438,7 @@
 <a href="#437" id="437">437</a>
 <a href="#438" id="438">438</a>
 <a href="#439" id="439">439</a>
-<a href="#440" id="440">440</a>
-<a href="#441" id="441">441</a>
-<a href="#442" id="442">442</a>
-<a href="#443" id="443">443</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#440" id="440">440</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![cfg_attr(feature = <span class="string">"diagnostics"</span>, feature(proc_macro_diagnostic))]
 
 </span><span class="kw">use </span>itertools::Itertools;
@@ -503,7 +500,7 @@
     <span class="kw">let </span>output = <span class="macro">quote!</span> {
         <span class="kw">impl </span>#impl_generics ::fedimint_core::encoding::Encodable <span class="kw">for </span>#ident #ty_generics #where_clause {
             <span class="attr">#[allow(deprecated)]
-            </span><span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::result::Result&lt;usize, std::io::Error&gt; {
+            </span><span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::result::Result&lt;(), std::io::Error&gt; {
                 #encode_inner
             }
         }
@@ -521,9 +518,8 @@
             .map(|(idx, <span class="kw">_</span>)| Index::from(idx))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         <span class="macro">quote!</span> {
-            <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-            #(len += ::fedimint_core::encoding::Encodable::consensus_encode(<span class="kw-2">&amp;</span><span class="self">self</span>.#field_names, writer)<span class="question-mark">?</span>;)*
-            <span class="prelude-val">Ok</span>(len)
+            #(::fedimint_core::encoding::Encodable::consensus_encode(<span class="kw-2">&amp;</span><span class="self">self</span>.#field_names, writer)<span class="question-mark">?</span>;)*
+            <span class="prelude-val">Ok</span>(())
         }
     } <span class="kw">else </span>{
         <span class="comment">// Named struct
@@ -532,9 +528,8 @@
             .map(|field| field.ident.clone().unwrap())
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         <span class="macro">quote!</span> {
-            <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-            #(len += ::fedimint_core::encoding::Encodable::consensus_encode(<span class="kw-2">&amp;</span><span class="self">self</span>.#field_names, writer)<span class="question-mark">?</span>;)*
-            <span class="prelude-val">Ok</span>(len)
+            #(::fedimint_core::encoding::Encodable::consensus_encode(<span class="kw-2">&amp;</span><span class="self">self</span>.#field_names, writer)<span class="question-mark">?</span>;)*
+            <span class="prelude-val">Ok</span>(())
         }
     }
 }
@@ -652,8 +647,8 @@
         .map(|_variant| {
             <span class="macro">quote!</span> {
                 #ident::Default { variant, bytes } =&gt; {
-                    len += ::fedimint_core::encoding::Encodable::consensus_encode(variant, writer)<span class="question-mark">?</span>;
-                    len += ::fedimint_core::encoding::Encodable::consensus_encode(bytes, writer)<span class="question-mark">?</span>;
+                    ::fedimint_core::encoding::Encodable::consensus_encode(variant, writer)<span class="question-mark">?</span>;
+                    ::fedimint_core::encoding::Encodable::consensus_encode(bytes, writer)<span class="question-mark">?</span>;
                 }
             }
         });
@@ -661,22 +656,21 @@
     <span class="kw">let </span>match_arms = non_default_match_arms.chain(default_match_arm);
 
     <span class="macro">quote!</span> {
-        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
         <span class="kw">match </span><span class="self">self </span>{
             #(#match_arms)*
         }
-        <span class="prelude-val">Ok</span>(len)
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
 <span class="kw">fn </span>derive_enum_variant_encode_block(idx: u64, fields: <span class="kw-2">&amp;</span>[Ident]) -&gt; TokenStream2 {
     <span class="macro">quote!</span> {
-        len += ::fedimint_core::encoding::Encodable::consensus_encode(<span class="kw-2">&amp;</span>(#idx), writer)<span class="question-mark">?</span>;
+        ::fedimint_core::encoding::Encodable::consensus_encode(<span class="kw-2">&amp;</span>(#idx), writer)<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::&lt;u8&gt;::new();
         #(::fedimint_core::encoding::Encodable::consensus_encode(#fields, <span class="kw-2">&amp;mut </span>bytes)<span class="question-mark">?</span>;)*
 
-        len += ::fedimint_core::encoding::Encodable::consensus_encode(<span class="kw-2">&amp;</span>bytes, writer)<span class="question-mark">?</span>;
+        ::fedimint_core::encoding::Encodable::consensus_encode(<span class="kw-2">&amp;</span>bytes, writer)<span class="question-mark">?</span>;
     }
 }
 

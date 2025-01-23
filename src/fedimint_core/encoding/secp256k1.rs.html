@@ -132,10 +132,10 @@
 <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>secp256k1::ecdsa::Signature {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
         <span class="kw">let </span>bytes = <span class="self">self</span>.serialize_compact();
         writer.write_all(<span class="kw-2">&amp;</span>bytes)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(bytes.len())
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
@@ -150,7 +150,7 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>secp256k1::PublicKey {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
         <span class="self">self</span>.serialize().consensus_encode(writer)
     }
 }
@@ -166,7 +166,7 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>secp256k1::SecretKey {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
         <span class="self">self</span>.secret_bytes().consensus_encode(writer)
     }
 }
@@ -182,11 +182,11 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>secp256k1::schnorr::Signature {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
         <span class="kw">let </span>bytes = <span class="kw-2">&amp;</span><span class="self">self</span>[..];
         <span class="macro">assert_eq!</span>(bytes.len(), secp256k1::constants::SCHNORR_SIGNATURE_SIZE);
         writer.write_all(bytes)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(secp256k1::constants::SCHNORR_SIGNATURE_SIZE)
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
@@ -203,7 +203,7 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>bitcoin::key::Keypair {
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
         <span class="self">self</span>.secret_bytes().consensus_encode(writer)
     }
 }

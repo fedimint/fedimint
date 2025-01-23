@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"macro":["impl_encode_decode_bridge"],"struct":["BufBitcoinReader","CountWrite","NetworkLegacyEncodingWrapper","SimpleBitcoinRead"]};
+window.SIDEBAR_ITEMS = {"macro":["impl_encode_decode_bridge"],"struct":["BitoinIoWriteAdapter","BufBitcoinReader","NetworkLegacyEncodingWrapper","SimpleBitcoinRead"]};

@@ -114,8 +114,7 @@
 <a href="#113" id="113">113</a>
 <a href="#114" id="114">114</a>
 <a href="#115" id="115">115</a>
-<a href="#116" id="116">116</a>
-<a href="#117" id="117">117</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Read, Write};
+<a href="#116" id="116">116</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Read, Write};
 
 <span class="kw">use </span>threshold_crypto::group::Curve;
 <span class="kw">use </span>threshold_crypto::{G1Affine, G1Projective};
@@ -124,17 +123,16 @@
 <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>threshold_crypto::PublicKeySet {
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
         <span class="kw">let </span>num_coeff = <span class="self">self</span>.coefficients().len() <span class="kw">as </span>u64;
-        len += num_coeff.consensus_encode(writer)<span class="question-mark">?</span>;
+        num_coeff.consensus_encode(writer)<span class="question-mark">?</span>;
         <span class="kw">for </span>coefficient <span class="kw">in </span><span class="self">self</span>.coefficients() {
-            len += coefficient
+            coefficient
                 .to_affine()
                 .to_compressed()
                 .consensus_encode(writer)<span class="question-mark">?</span>;
         }
-        <span class="prelude-val">Ok</span>(len)
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
@@ -163,7 +161,7 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>threshold_crypto::PublicKey {
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
         <span class="self">self</span>.to_bytes().consensus_encode(writer)
     }
 }
@@ -179,7 +177,7 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>threshold_crypto::Ciphertext {
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
         <span class="self">self</span>.to_bytes().consensus_encode(writer)
     }
 }
@@ -197,7 +195,7 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>threshold_crypto::DecryptionShare {
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
         <span class="self">self</span>.to_bytes().consensus_encode(writer)
     }
 }

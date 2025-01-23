@@ -828,9 +828,9 @@
 // not implement `Decodable` directly, and `Vec` here has len only
 // for the purpose of knowing how many bytes to carry.
 </span><span class="kw">impl </span>Encodable <span class="kw">for </span>DynUnknown {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, w: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, w: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
         w.write_all(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>[..])<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="number">0</span>.len())
+        <span class="prelude-val">Ok</span>(())
     }
 }
 

@@ -326,13 +326,7 @@
 <a href="#325" id="325">325</a>
 <a href="#326" id="326">326</a>
 <a href="#327" id="327">327</a>
-<a href="#328" id="328">328</a>
-<a href="#329" id="329">329</a>
-<a href="#330" id="330">330</a>
-<a href="#331" id="331">331</a>
-<a href="#332" id="332">332</a>
-<a href="#333" id="333">333</a>
-<a href="#334" id="334">334</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::any::TypeId;
+<a href="#328" id="328">328</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::any::TypeId;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, VecDeque};
 <span class="kw">use </span>std::fmt::Debug;
 
@@ -343,25 +337,22 @@
 <span class="kw">where
     </span>T: Encodable + <span class="lifetime">'static</span>,
 {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::io::Result&lt;usize&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::io::Result&lt;()&gt; {
         <span class="kw">if </span>TypeId::of::&lt;T&gt;() == TypeId::of::&lt;u8&gt;() {
             <span class="comment">// unsafe: we've just checked that T is `u8` so the transmute here is a no-op
             </span><span class="kw">let </span>bytes = <span class="kw">unsafe </span>{ std::mem::transmute::&lt;<span class="kw-2">&amp;</span>[T], <span class="kw-2">&amp;</span>[u8]&gt;(<span class="self">self</span>) };
 
-            <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-            len += (bytes.len() <span class="kw">as </span>u64).consensus_encode(writer)<span class="question-mark">?</span>;
+            (bytes.len() <span class="kw">as </span>u64).consensus_encode(writer)<span class="question-mark">?</span>;
             writer.write_all(bytes)<span class="question-mark">?</span>;
-            len += bytes.len();
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(len);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
 
-        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-        len += (<span class="self">self</span>.len() <span class="kw">as </span>u64).consensus_encode(writer)<span class="question-mark">?</span>;
+        (<span class="self">self</span>.len() <span class="kw">as </span>u64).consensus_encode(writer)<span class="question-mark">?</span>;
 
         <span class="kw">for </span>item <span class="kw">in </span><span class="kw-2">*</span><span class="self">self </span>{
-            len += item.consensus_encode(writer)<span class="question-mark">?</span>;
+            item.consensus_encode(writer)<span class="question-mark">?</span>;
         }
-        <span class="prelude-val">Ok</span>(len)
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
@@ -369,7 +360,7 @@
 <span class="kw">where
     </span>T: Encodable + <span class="lifetime">'static</span>,
 {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::io::Result&lt;usize&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::io::Result&lt;()&gt; {
         (<span class="self">self </span><span class="kw">as </span><span class="kw-2">&amp;</span>[T]).consensus_encode(writer)
     }
 }
@@ -438,12 +429,12 @@
 <span class="kw">where
     </span>T: Encodable + <span class="lifetime">'static</span>,
 {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::io::Result&lt;usize&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>len = (<span class="self">self</span>.len() <span class="kw">as </span>u64).consensus_encode(writer)<span class="question-mark">?</span>;
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::io::Result&lt;()&gt; {
+        (<span class="self">self</span>.len() <span class="kw">as </span>u64).consensus_encode(writer)<span class="question-mark">?</span>;
         <span class="kw">for </span>i <span class="kw">in </span><span class="self">self </span>{
-            len += i.consensus_encode(writer)<span class="question-mark">?</span>;
+            i.consensus_encode(writer)<span class="question-mark">?</span>;
         }
-        <span class="prelude-val">Ok</span>(len)
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
@@ -465,19 +456,18 @@
 <span class="kw">where
     </span>T: Encodable + <span class="lifetime">'static</span>,
 {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
         <span class="kw">if </span>TypeId::of::&lt;T&gt;() == TypeId::of::&lt;u8&gt;() {
             <span class="comment">// unsafe: we've just checked that T is `u8` so the transmute here is a no-op
             </span><span class="kw">let </span>bytes = <span class="kw">unsafe </span>{ std::mem::transmute::&lt;<span class="kw-2">&amp;</span>[T; SIZE], <span class="kw-2">&amp;</span>[u8; SIZE]&gt;(<span class="self">self</span>) };
             writer.write_all(bytes)<span class="question-mark">?</span>;
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(bytes.len());
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
 
-        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
         <span class="kw">for </span>item <span class="kw">in </span><span class="self">self </span>{
-            len += item.consensus_encode(writer)<span class="question-mark">?</span>;
+            item.consensus_encode(writer)<span class="question-mark">?</span>;
         }
-        <span class="prelude-val">Ok</span>(len)
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
@@ -522,14 +512,13 @@
     </span>K: Encodable,
     V: Encodable,
 {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-        len += (<span class="self">self</span>.len() <span class="kw">as </span>u64).consensus_encode(writer)<span class="question-mark">?</span>;
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
+        (<span class="self">self</span>.len() <span class="kw">as </span>u64).consensus_encode(writer)<span class="question-mark">?</span>;
         <span class="kw">for </span>(k, v) <span class="kw">in </span><span class="self">self </span>{
-            len += k.consensus_encode(writer)<span class="question-mark">?</span>;
-            len += v.consensus_encode(writer)<span class="question-mark">?</span>;
+            k.consensus_encode(writer)<span class="question-mark">?</span>;
+            v.consensus_encode(writer)<span class="question-mark">?</span>;
         }
-        <span class="prelude-val">Ok</span>(len)
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
@@ -565,13 +554,12 @@
 <span class="kw">where
     </span>K: Encodable,
 {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-        len += (<span class="self">self</span>.len() <span class="kw">as </span>u64).consensus_encode(writer)<span class="question-mark">?</span>;
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
+        (<span class="self">self</span>.len() <span class="kw">as </span>u64).consensus_encode(writer)<span class="question-mark">?</span>;
         <span class="kw">for </span>k <span class="kw">in </span><span class="self">self </span>{
-            len += k.consensus_encode(writer)<span class="question-mark">?</span>;
+            k.consensus_encode(writer)<span class="question-mark">?</span>;
         }
-        <span class="prelude-val">Ok</span>(len)
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
