@@ -28,11 +28,11 @@ clap = { workspace = true }
 clap_complete = "4.5.42"
 fedimint-core = { workspace = true }
 fedimint-eventlog = { workspace = true }
-fedimint-lightning = { package = "fedimint-lightning", path = "../fedimint-lightning", version = "=0.6.0-rc.0" }
+fedimint-lightning = { package = "fedimint-lightning", path = "../fedimint-lightning", version = "=0.6.0-rc.1" }
 fedimint-logging = { workspace = true }
 fedimint-mint-client = { workspace = true }
 lightning-invoice = { workspace = true }
-ln-gateway = { package = "fedimint-ln-gateway", path = "../ln-gateway", version = "=0.6.0-rc.0" }
+ln-gateway = { package = "fedimint-ln-gateway", path = "../ln-gateway", version = "=0.6.0-rc.1" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

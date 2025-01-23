@@ -29,7 +29,7 @@ fedimint-api-client = { workspace = true }
 fedimint-bitcoind = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-lightning = { package = "fedimint-lightning", path = "../gateway/fedimint-lightning", version = "=0.6.0-rc.0" }
+fedimint-lightning = { package = "fedimint-lightning", path = "../gateway/fedimint-lightning", version = "=0.6.0-rc.1" }
 fedimint-ln-common = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-portalloc = { workspace = true }
@@ -38,7 +38,7 @@ fedimint-server = { workspace = true }
 fedimint-testing-core = { workspace = true }
 fs-lock = { workspace = true }
 lightning-invoice = { workspace = true }
-ln-gateway = { package = "fedimint-ln-gateway", path = "../gateway/ln-gateway", version = "=0.6.0-rc.0" }
+ln-gateway = { package = "fedimint-ln-gateway", path = "../gateway/ln-gateway", version = "=0.6.0-rc.1" }
 rand = { workspace = true }
 tempfile = "3.15.0"
 tokio = { workspace = true }
