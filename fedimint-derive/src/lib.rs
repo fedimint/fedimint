@@ -60,7 +60,7 @@ pub fn derive_encodable(input: TokenStream) -> TokenStream {
     let output = quote! {
         impl #impl_generics ::fedimint_core::encoding::Encodable for #ident #ty_generics #where_clause {
             #[allow(deprecated)]
-            fn consensus_encode<W: std::io::Write>(&self, mut writer: &mut W) -> std::result::Result<usize, std::io::Error> {
+            fn consensus_encode<W: std::io::Write>(&self, mut writer: &mut W) -> std::result::Result<(), std::io::Error> {
                 #encode_inner
             }
         }
@@ -78,9 +78,8 @@ fn derive_struct_encode(fields: &Fields) -> TokenStream2 {
             .map(|(idx, _)| Index::from(idx))
             .collect::<Vec<_>>();
         quote! {
-            let mut len = 0;
-            #(len += ::fedimint_core::encoding::Encodable::consensus_encode(&self.#field_names, writer)?;)*
-            Ok(len)
+            #(::fedimint_core::encoding::Encodable::consensus_encode(&self.#field_names, writer)?;)*
+            Ok(())
         }
     } else {
         // Named struct
@@ -89,9 +88,8 @@ fn derive_struct_encode(fields: &Fields) -> TokenStream2 {
             .map(|field| field.ident.clone().unwrap())
             .collect::<Vec<_>>();
         quote! {
-            let mut len = 0;
-            #(len += ::fedimint_core::encoding::Encodable::consensus_encode(&self.#field_names, writer)?;)*
-            Ok(len)
+            #(::fedimint_core::encoding::Encodable::consensus_encode(&self.#field_names, writer)?;)*
+            Ok(())
         }
     }
 }
@@ -209,8 +207,8 @@ fn derive_enum_encode(ident: &Ident, variants: &Punctuated<Variant, Comma>) -> T
         .map(|_variant| {
             quote! {
                 #ident::Default { variant, bytes } => {
-                    len += ::fedimint_core::encoding::Encodable::consensus_encode(variant, writer)?;
-                    len += ::fedimint_core::encoding::Encodable::consensus_encode(bytes, writer)?;
+                    ::fedimint_core::encoding::Encodable::consensus_encode(variant, writer)?;
+                    ::fedimint_core::encoding::Encodable::consensus_encode(bytes, writer)?;
                 }
             }
         });
@@ -218,22 +216,21 @@ fn derive_enum_encode(ident: &Ident, variants: &Punctuated<Variant, Comma>) -> T
     let match_arms = non_default_match_arms.chain(default_match_arm);
 
     quote! {
-        let mut len = 0;
         match self {
             #(#match_arms)*
         }
-        Ok(len)
+        Ok(())
     }
 }
 
 fn derive_enum_variant_encode_block(idx: u64, fields: &[Ident]) -> TokenStream2 {
     quote! {
-        len += ::fedimint_core::encoding::Encodable::consensus_encode(&(#idx), writer)?;
+        ::fedimint_core::encoding::Encodable::consensus_encode(&(#idx), writer)?;
 
         let mut bytes = Vec::<u8>::new();
         #(::fedimint_core::encoding::Encodable::consensus_encode(#fields, &mut bytes)?;)*
 
-        len += ::fedimint_core::encoding::Encodable::consensus_encode(&bytes, writer)?;
+        ::fedimint_core::encoding::Encodable::consensus_encode(&bytes, writer)?;
     }
 }
 

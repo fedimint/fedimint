@@ -355,7 +355,7 @@ impl PartialEq for DynState {
 impl Eq for DynState {}
 
 impl Encodable for DynState {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         self.1.consensus_encode(writer)?;
         self.0.consensus_encode_dyn(writer)
     }
@@ -456,11 +456,10 @@ impl<S> Encodable for OperationState<S>
 where
     S: State,
 {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        let mut len = 0;
-        len += self.operation_id.consensus_encode(writer)?;
-        len += self.state.consensus_encode(writer)?;
-        Ok(len)
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.operation_id.consensus_encode(writer)?;
+        self.state.consensus_encode(writer)?;
+        Ok(())
     }
 }
 

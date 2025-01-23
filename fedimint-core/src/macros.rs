@@ -313,16 +313,15 @@ macro_rules! module_plugin_dyn_newtype_encode_decode {
             fn consensus_encode<W: std::io::Write>(
                 &self,
                 writer: &mut W,
-            ) -> Result<usize, std::io::Error> {
-                let mut written = self.module_instance_id.consensus_encode(writer)?;
+            ) -> Result<(), std::io::Error> {
+                self.module_instance_id.consensus_encode(writer)?;
 
                 let mut buf = Vec::with_capacity(512);
-                let buf_written = self.inner.consensus_encode_dyn(&mut buf)?;
-                assert_eq!(buf.len(), buf_written);
+                self.inner.consensus_encode_dyn(&mut buf)?;
 
-                written += buf.consensus_encode(writer)?;
+                buf.consensus_encode(writer)?;
 
-                Ok(written)
+                Ok(())
             }
         }
 

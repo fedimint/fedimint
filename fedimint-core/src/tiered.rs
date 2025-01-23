@@ -121,8 +121,9 @@ impl<C> Encodable for Tiered<C>
 where
     C: Encodable,
 {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        self.0.consensus_encode(writer)
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        self.0.consensus_encode(writer)?;
+        Ok(())
     }
 }
 

@@ -4,7 +4,7 @@ use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
 
 impl Encodable for iroh::SecretKey {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.to_bytes().consensus_encode(writer)
     }
 }
@@ -21,7 +21,7 @@ impl Decodable for iroh::SecretKey {
 }
 
 impl Encodable for iroh::PublicKey {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.as_bytes().consensus_encode(writer)
     }
 }

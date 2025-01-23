@@ -96,7 +96,7 @@ impl IdentifiableContract for IncomingContract {
 }
 
 impl Encodable for OfferId {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.to_byte_array().consensus_encode(writer)
     }
 }

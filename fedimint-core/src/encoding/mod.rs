@@ -38,19 +38,51 @@ use crate::core::ModuleInstanceId;
 use crate::module::registry::ModuleDecoderRegistry;
 use crate::util::SafeUrl;
 
+/// A writer counting number of bytes written to it
+///
+/// Copy&pasted from <https://github.com/SOF3/count-write> which
+/// uses Apache license (and it's a trivial amount of code, repeating
+/// on stack overflow).
+pub struct CountWrite<W> {
+    inner: W,
+    count: u64,
+}
+
+impl<W> CountWrite<W> {
+    /// Returns the number of bytes successfully written so far
+    pub fn count(&self) -> u64 {
+        self.count
+    }
+}
+
+impl<W> From<W> for CountWrite<W> {
+    fn from(inner: W) -> Self {
+        Self { inner, count: 0 }
+    }
+}
+
+impl<W: Write> io::Write for CountWrite<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let written = self.inner.write(buf)?;
+        self.count += written as u64;
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
+}
+
 /// Object-safe trait for things that can encode themselves
 ///
 /// Like `rust-bitcoin`'s `consensus_encode`, but without generics,
 /// so can be used in `dyn` objects.
 pub trait DynEncodable {
-    fn consensus_encode_dyn(
-        &self,
-        writer: &mut dyn std::io::Write,
-    ) -> Result<usize, std::io::Error>;
+    fn consensus_encode_dyn(&self, writer: &mut dyn std::io::Write) -> Result<(), std::io::Error>;
 }
 
 impl Encodable for dyn DynEncodable {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         self.consensus_encode_dyn(writer)
     }
 }
@@ -62,13 +94,13 @@ where
     fn consensus_encode_dyn(
         &self,
         mut writer: &mut dyn std::io::Write,
-    ) -> Result<usize, std::io::Error> {
+    ) -> Result<(), std::io::Error> {
         <Self as Encodable>::consensus_encode(self, &mut writer)
     }
 }
 
 impl Encodable for Box<dyn DynEncodable> {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         (**self).consensus_encode_dyn(writer)
     }
 }
@@ -77,7 +109,7 @@ impl<T> Encodable for &T
 where
     T: Encodable,
 {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         (**self).consensus_encode(writer)
     }
 }
@@ -88,7 +120,7 @@ pub trait Encodable {
     /// Returns the number of bytes written on success.
     ///
     /// The only errors returned are errors propagated from the writer.
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error>;
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error>;
 
     /// [`Self::consensus_encode`] to newly allocated `Vec<u8>`
     fn consensus_encode_to_vec(&self) -> Vec<u8> {
@@ -107,9 +139,12 @@ pub trait Encodable {
     }
 
     /// Encode without storing the encoding, return the size
-    fn consensus_encode_to_len(&self) -> usize {
-        self.consensus_encode(&mut io::sink())
-            .expect("encoding to bytes can't fail for io reasons")
+    fn consensus_encode_to_len(&self) -> u64 {
+        let mut writer = CountWrite::from(io::sink());
+        self.consensus_encode(&mut writer)
+            .expect("encoding to bytes can't fail for io reasons");
+
+        writer.count()
     }
 
     /// Generate a SHA256 hash of the consensus encoding using the default hash
@@ -250,7 +285,7 @@ pub trait Decodable: Sized {
 }
 
 impl Encodable for SafeUrl {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.to_string().consensus_encode(writer)
     }
 }
@@ -284,10 +319,10 @@ impl From<anyhow::Error> for DecodeError {
 macro_rules! impl_encode_decode_num_as_plain {
     ($num_type:ty) => {
         impl Encodable for $num_type {
-            fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
+            fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), Error> {
                 let bytes = self.to_be_bytes();
                 writer.write_all(&bytes[..])?;
-                Ok(bytes.len())
+                Ok(())
             }
         }
 
@@ -307,7 +342,7 @@ macro_rules! impl_encode_decode_num_as_plain {
 macro_rules! impl_encode_decode_num_as_bigsize {
     ($num_type:ty) => {
         impl Encodable for $num_type {
-            fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
+            fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), Error> {
                 BigSize(u64::from(*self)).consensus_encode(writer)
             }
         }
@@ -334,11 +369,10 @@ macro_rules! impl_encode_decode_tuple {
     ($($x:ident),*) => (
         #[allow(non_snake_case)]
         impl <$($x: Encodable),*> Encodable for ($($x),*) {
-            fn consensus_encode<W: std::io::Write>(&self, s: &mut W) -> Result<usize, std::io::Error> {
+            fn consensus_encode<W: std::io::Write>(&self, s: &mut W) -> Result<(), std::io::Error> {
                 let &($(ref $x),*) = self;
-                let mut len = 0;
-                $(len += $x.consensus_encode(s)?;)*
-                Ok(len)
+                $($x.consensus_encode(s)?;)*
+                Ok(())
             }
         }
 
@@ -359,15 +393,14 @@ impl<T> Encodable for Option<T>
 where
     T: Encodable,
 {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        let mut len = 0;
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         if let Some(inner) = self {
-            len += 1u8.consensus_encode(writer)?;
-            len += inner.consensus_encode(writer)?;
+            1u8.consensus_encode(writer)?;
+            inner.consensus_encode(writer)?;
         } else {
-            len += 0u8.consensus_encode(writer)?;
+            0u8.consensus_encode(writer)?;
         }
-        Ok(len)
+        Ok(())
     }
 }
 
@@ -397,21 +430,19 @@ where
     T: Encodable,
     E: Encodable,
 {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        let mut len = 0;
-
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         match self {
             Ok(value) => {
-                len += 1u8.consensus_encode(writer)?;
-                len += value.consensus_encode(writer)?;
+                1u8.consensus_encode(writer)?;
+                value.consensus_encode(writer)?;
             }
             Err(error) => {
-                len += 0u8.consensus_encode(writer)?;
-                len += error.consensus_encode(writer)?;
+                0u8.consensus_encode(writer)?;
+                error.consensus_encode(writer)?;
             }
         }
 
-        Ok(len)
+        Ok(())
     }
 }
 
@@ -443,7 +474,7 @@ impl<T> Encodable for Box<T>
 where
     T: Encodable,
 {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.as_ref().consensus_encode(writer)
     }
 }
@@ -463,11 +494,8 @@ where
 }
 
 impl Encodable for () {
-    fn consensus_encode<W: std::io::Write>(
-        &self,
-        _writer: &mut W,
-    ) -> Result<usize, std::io::Error> {
-        Ok(0)
+    fn consensus_encode<W: std::io::Write>(&self, _writer: &mut W) -> Result<(), std::io::Error> {
+        Ok(())
     }
 }
 
@@ -481,13 +509,13 @@ impl Decodable for () {
 }
 
 impl Encodable for &str {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.as_bytes().consensus_encode(writer)
     }
 }
 
 impl Encodable for String {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.as_bytes().consensus_encode(writer)
     }
 }
@@ -505,7 +533,7 @@ impl Decodable for String {
 }
 
 impl Encodable for SystemTime {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         let duration = self.duration_since(UNIX_EPOCH).expect("valid duration");
         duration.consensus_encode_dyn(writer)
     }
@@ -522,12 +550,11 @@ impl Decodable for SystemTime {
 }
 
 impl Encodable for Duration {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        let mut count = 0;
-        count += self.as_secs().consensus_encode(writer)?;
-        count += self.subsec_nanos().consensus_encode(writer)?;
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        self.as_secs().consensus_encode(writer)?;
+        self.subsec_nanos().consensus_encode(writer)?;
 
-        Ok(count)
+        Ok(())
     }
 }
 
@@ -543,10 +570,10 @@ impl Decodable for Duration {
 }
 
 impl Encodable for bool {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         let bool_as_u8 = u8::from(*self);
         writer.write_all(&[bool_as_u8])?;
-        Ok(1)
+        Ok(())
     }
 }
 
@@ -596,7 +623,7 @@ impl std::fmt::Display for DecodeError {
 }
 
 impl Encodable for Cow<'static, str> {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         self.as_ref().consensus_encode(writer)
     }
 }
@@ -743,15 +770,15 @@ impl<T> Encodable for DynRawFallback<T>
 where
     T: Encodable,
 {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         match self {
             Self::Raw {
                 module_instance_id,
                 raw,
             } => {
-                let mut written = module_instance_id.consensus_encode(writer)?;
-                written += raw.consensus_encode(writer)?;
-                Ok(written)
+                module_instance_id.consensus_encode(writer)?;
+                raw.consensus_encode(writer)?;
+                Ok(())
             }
             Self::Decoded(v) => v.consensus_encode(writer),
         }
@@ -772,14 +799,12 @@ mod tests {
         T: Encodable + Decodable + Eq + Debug,
     {
         let mut bytes = Vec::new();
-        let len = value.consensus_encode(&mut bytes).unwrap();
-        assert_eq!(len, bytes.len());
+        value.consensus_encode(&mut bytes).unwrap();
 
         let mut cursor = Cursor::new(bytes);
         let decoded =
             T::consensus_decode_partial(&mut cursor, &ModuleDecoderRegistry::default()).unwrap();
         assert_eq!(value, &decoded);
-        assert_eq!(cursor.position(), len as u64);
     }
 
     pub(crate) fn test_roundtrip_expected<T>(value: &T, expected: &[u8])
@@ -787,15 +812,13 @@ mod tests {
         T: Encodable + Decodable + Eq + Debug,
     {
         let mut bytes = Vec::new();
-        let len = value.consensus_encode(&mut bytes).unwrap();
-        assert_eq!(len, bytes.len());
+        value.consensus_encode(&mut bytes).unwrap();
         assert_eq!(&expected, &bytes);
 
         let mut cursor = Cursor::new(bytes);
         let decoded =
             T::consensus_decode_partial(&mut cursor, &ModuleDecoderRegistry::default()).unwrap();
         assert_eq!(value, &decoded);
-        assert_eq!(cursor.position(), len as u64);
     }
 
     #[derive(Debug, Eq, PartialEq, Encodable, Decodable)]

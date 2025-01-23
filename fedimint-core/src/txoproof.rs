@@ -65,13 +65,11 @@ impl Decodable for TxOutProof {
 }
 
 impl Encodable for TxOutProof {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        let mut written = 0;
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        self.block_header.consensus_encode(writer)?;
+        self.merkle_proof.consensus_encode(writer)?;
 
-        written += self.block_header.consensus_encode(writer)?;
-        written += self.merkle_proof.consensus_encode(writer)?;
-
-        Ok(written)
+        Ok(())
     }
 }
 

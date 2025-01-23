@@ -28,10 +28,7 @@ impl<const WORD_COUNT: usize> RootSecretStrategy for Bip39RootSecretStrategy<WOR
         )
     }
 
-    fn consensus_encode(
-        secret: &Self::Encoding,
-        writer: &mut impl Write,
-    ) -> std::io::Result<usize> {
+    fn consensus_encode(secret: &Self::Encoding, writer: &mut impl Write) -> std::io::Result<()> {
         secret.to_entropy().consensus_encode(writer)
     }
 
