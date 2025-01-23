@@ -918,11 +918,10 @@ impl ActiveStateKey {
 }
 
 impl Encodable for ActiveStateKey {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        let mut len = 0;
-        len += self.operation_id.consensus_encode(writer)?;
-        len += self.state.consensus_encode(writer)?;
-        Ok(len)
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.operation_id.consensus_encode(writer)?;
+        self.state.consensus_encode(writer)?;
+        Ok(())
     }
 }
 
@@ -949,11 +948,10 @@ pub struct ActiveStateKeyBytes {
 }
 
 impl Encodable for ActiveStateKeyBytes {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        let mut len = 0;
-        len += self.operation_id.consensus_encode(writer)?;
-        len += writer.write(self.state.as_slice())?;
-        Ok(len)
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        self.operation_id.consensus_encode(writer)?;
+        writer.write_all(self.state.as_slice())?;
+        Ok(())
     }
 }
 
@@ -986,7 +984,7 @@ pub(crate) struct ActiveOperationStateKeyPrefix {
 }
 
 impl Encodable for ActiveOperationStateKeyPrefix {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.operation_id.consensus_encode(writer)
     }
 }
@@ -1002,11 +1000,10 @@ pub(crate) struct ActiveModuleOperationStateKeyPrefix {
 }
 
 impl Encodable for ActiveModuleOperationStateKeyPrefix {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        let mut len = 0;
-        len += self.operation_id.consensus_encode(writer)?;
-        len += self.module_instance.consensus_encode(writer)?;
-        Ok(len)
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.operation_id.consensus_encode(writer)?;
+        self.module_instance.consensus_encode(writer)?;
+        Ok(())
     }
 }
 
@@ -1018,8 +1015,8 @@ impl ::fedimint_core::db::DatabaseLookup for ActiveModuleOperationStateKeyPrefix
 pub struct ActiveStateKeyPrefix;
 
 impl Encodable for ActiveStateKeyPrefix {
-    fn consensus_encode<W: Write>(&self, _writer: &mut W) -> Result<usize, Error> {
-        Ok(0)
+    fn consensus_encode<W: Write>(&self, _writer: &mut W) -> Result<(), Error> {
+        Ok(())
     }
 }
 
@@ -1090,11 +1087,10 @@ impl InactiveStateKey {
 }
 
 impl Encodable for InactiveStateKey {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        let mut len = 0;
-        len += self.operation_id.consensus_encode(writer)?;
-        len += self.state.consensus_encode(writer)?;
-        Ok(len)
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.operation_id.consensus_encode(writer)?;
+        self.state.consensus_encode(writer)?;
+        Ok(())
     }
 }
 
@@ -1121,11 +1117,10 @@ pub struct InactiveStateKeyBytes {
 }
 
 impl Encodable for InactiveStateKeyBytes {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        let mut len = 0;
-        len += self.operation_id.consensus_encode(writer)?;
-        len += writer.write(self.state.as_slice())?;
-        Ok(len)
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        self.operation_id.consensus_encode(writer)?;
+        writer.write_all(self.state.as_slice())?;
+        Ok(())
     }
 }
 
@@ -1158,7 +1153,7 @@ pub(crate) struct InactiveOperationStateKeyPrefix {
 }
 
 impl Encodable for InactiveOperationStateKeyPrefix {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.operation_id.consensus_encode(writer)
     }
 }
@@ -1174,11 +1169,10 @@ pub(crate) struct InactiveModuleOperationStateKeyPrefix {
 }
 
 impl Encodable for InactiveModuleOperationStateKeyPrefix {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        let mut len = 0;
-        len += self.operation_id.consensus_encode(writer)?;
-        len += self.module_instance.consensus_encode(writer)?;
-        Ok(len)
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.operation_id.consensus_encode(writer)?;
+        self.module_instance.consensus_encode(writer)?;
+        Ok(())
     }
 }
 
@@ -1190,8 +1184,8 @@ impl ::fedimint_core::db::DatabaseLookup for InactiveModuleOperationStateKeyPref
 pub struct InactiveStateKeyPrefix;
 
 impl Encodable for InactiveStateKeyPrefix {
-    fn consensus_encode<W: Write>(&self, _writer: &mut W) -> Result<usize, Error> {
-        Ok(0)
+    fn consensus_encode<W: Write>(&self, _writer: &mut W) -> Result<(), Error> {
+        Ok(())
     }
 }
 

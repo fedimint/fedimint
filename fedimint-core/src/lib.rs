@@ -195,10 +195,10 @@ impl std::fmt::Display for OutPoint {
 }
 
 impl Encodable for TransactionId {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), Error> {
         let bytes = &self[..];
         writer.write_all(bytes)?;
-        Ok(bytes.len())
+        Ok(())
     }
 }
 

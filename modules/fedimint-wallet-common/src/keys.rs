@@ -23,7 +23,7 @@ impl CompressedPublicKey {
 }
 
 impl Encodable for CompressedPublicKey {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.key.serialize().consensus_encode(writer)
     }
 }

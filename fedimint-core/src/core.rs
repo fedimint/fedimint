@@ -221,9 +221,9 @@ impl fmt::Display for DynUnknown {
 // not implement `Decodable` directly, and `Vec` here has len only
 // for the purpose of knowing how many bytes to carry.
 impl Encodable for DynUnknown {
-    fn consensus_encode<W: std::io::Write>(&self, w: &mut W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(&self, w: &mut W) -> Result<(), std::io::Error> {
         w.write_all(&self.0[..])?;
-        Ok(self.0.len())
+        Ok(())
     }
 }
 

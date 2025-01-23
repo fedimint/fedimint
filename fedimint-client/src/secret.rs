@@ -62,7 +62,7 @@ pub trait RootSecretStrategy: Debug {
     fn consensus_encode(
         secret: &Self::Encoding,
         writer: &mut impl std::io::Write,
-    ) -> std::io::Result<usize>;
+    ) -> std::io::Result<()>;
 
     /// Deserialization function for the external encoding
     fn consensus_decode_partial(
@@ -87,10 +87,7 @@ impl RootSecretStrategy for PlainRootSecretStrategy {
         DerivableSecret::new_root(secret.as_ref(), FEDIMINT_CLIENT_NONCE)
     }
 
-    fn consensus_encode(
-        secret: &Self::Encoding,
-        writer: &mut impl Write,
-    ) -> std::io::Result<usize> {
+    fn consensus_encode(secret: &Self::Encoding, writer: &mut impl Write) -> std::io::Result<()> {
         secret.consensus_encode(writer)
     }
 

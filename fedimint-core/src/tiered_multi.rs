@@ -166,7 +166,7 @@ impl<C> Encodable for TieredMulti<C>
 where
     C: Encodable + 'static,
 {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         self.0.consensus_encode(writer)
     }
 }

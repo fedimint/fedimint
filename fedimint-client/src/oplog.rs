@@ -361,21 +361,19 @@ impl OperationLogEntry {
 }
 
 impl Encodable for OperationLogEntry {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        let mut len = 0;
-        len += self.operation_module_kind.consensus_encode(writer)?;
-        len += serde_json::to_string(&self.meta)
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        self.operation_module_kind.consensus_encode(writer)?;
+        serde_json::to_string(&self.meta)
             .expect("JSON serialization should not fail")
             .consensus_encode(writer)?;
-        len += self
-            .outcome
+        self.outcome
             .as_ref()
             .map(|outcome| {
                 serde_json::to_string(outcome).expect("JSON serialization should not fail")
             })
             .consensus_encode(writer)?;
 
-        Ok(len)
+        Ok(())
     }
 }
 

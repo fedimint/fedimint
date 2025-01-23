@@ -263,7 +263,7 @@ pub struct LightningGatewayRegistration {
 }
 
 impl Encodable for LightningGatewayRegistration {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         let json_repr = serde_json::to_string(self).map_err(|e| {
             Error::new(
                 ErrorKind::Other,
