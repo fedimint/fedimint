@@ -23,15 +23,15 @@ mod withdraw;
 use std::collections::BTreeMap;
 use std::future;
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
-use anyhow::{anyhow, bail, Context as AnyhowContext};
+use anyhow::{anyhow, bail, ensure, Context as AnyhowContext};
 use async_stream::stream;
 use backup::WalletModuleBackup;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::secp256k1::{All, Secp256k1, SECP256K1};
 use bitcoin::{Address, Network, ScriptBuf};
-use client_db::{DbKeyPrefix, PegInTweakIndexKey, TweakIdx};
+use client_db::{DbKeyPrefix, PegInTweakIndexKey, SupportsSafeDepositKey, TweakIdx};
 use fedimint_api_client::api::{DynModuleApi, FederationResult};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
@@ -51,12 +51,12 @@ use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::BitcoinRpcConfig;
+use fedimint_core::envs::{is_running_in_test_env, BitcoinRpcConfig};
 use fedimint_core::module::{
     ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleConsensusVersion, ModuleInit,
     MultiApiVersion,
 };
-use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
+use fedimint_core::task::{sleep, MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::util::backoff_util::background_backoff;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{
@@ -79,7 +79,7 @@ use crate::api::WalletFederationApi;
 use crate::backup::WalletRecovery;
 use crate::client_db::{
     ClaimedPegInData, ClaimedPegInKey, ClaimedPegInPrefix, NextPegInTweakIndexKey,
-    PegInTweakIndexData, PegInTweakIndexPrefix, RecoveryFinalizedKey,
+    PegInTweakIndexData, PegInTweakIndexPrefix, RecoveryFinalizedKey, SupportsSafeDepositPrefix,
 };
 use crate::deposit::DepositStateMachine;
 use crate::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates};
@@ -203,6 +203,16 @@ impl ModuleInit for WalletClientInit {
                     if let Some(val) = dbtx.get_value(&RecoveryFinalizedKey).await {
                         wallet_client_items.insert("RecoveryFinalized".to_string(), Box::new(val));
                     }
+                }
+                DbKeyPrefix::SupportsSafeDeposit => {
+                    push_db_pair_items!(
+                        dbtx,
+                        SupportsSafeDepositPrefix,
+                        SupportsSafeDepositKey,
+                        (),
+                        wallet_client_items,
+                        "Supports Safe Deposit"
+                    );
                 }
                 DbKeyPrefix::RecoveryState
                 | DbKeyPrefix::ExternalReservedStart
@@ -418,6 +428,14 @@ impl ClientModule for WalletClientModule {
                 pegin_monitor_wakeup_receiver,
             )
         });
+
+        self.task_group
+            .spawn_cancellable("supports-safe-deposit-version", {
+                let db = self.db.clone();
+                let module_api = self.module_api.clone();
+
+                poll_supports_safe_deposit_version(db, module_api)
+            });
     }
 
     fn supports_backup(&self) -> bool {
@@ -632,6 +650,60 @@ impl WalletClientModule {
 
     pub async fn btc_tx_has_no_size_limit(&self) -> FederationResult<bool> {
         Ok(self.module_api.module_consensus_version().await? >= ModuleConsensusVersion::new(2, 2))
+    }
+
+    /// Returns true if the federation's wallet module consensus version
+    /// supports processing all deposits.
+    ///
+    /// This method is safe to call offline, since it first attempts to read a
+    /// key from the db that represents the client has previously been able to
+    /// verify the wallet module consensus version. If the client has not
+    /// verified the version, it must be online to fetch the latest wallet
+    /// module consensus version.
+    pub async fn supports_safe_deposit(&self) -> bool {
+        let mut dbtx = self.db.begin_transaction().await;
+
+        let already_verified_supports_safe_deposit =
+            dbtx.get_value(&SupportsSafeDepositKey).await.is_some();
+
+        already_verified_supports_safe_deposit || {
+            match self.module_api.module_consensus_version().await {
+                Ok(module_consensus_version) => {
+                    let supported_version =
+                        SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION <= module_consensus_version;
+
+                    if supported_version {
+                        dbtx.insert_new_entry(&SupportsSafeDepositKey, &()).await;
+                        dbtx.commit_tx().await;
+                    }
+
+                    supported_version
+                }
+                Err(_) => false,
+            }
+        }
+    }
+
+    /// Allocates a deposit address controlled by the federation, guaranteeing
+    /// safe handling of all deposits, including on-chain transactions exceeding
+    /// `ALEPH_BFT_UNIT_BYTE_LIMIT`.
+    ///
+    /// Returns an error if the client has never been online to verify the
+    /// federation's wallet module consensus version supports processing all
+    /// deposits.
+    pub async fn safe_allocate_deposit_address<M>(
+        &self,
+        extra_meta: M,
+    ) -> anyhow::Result<(OperationId, Address, TweakIdx)>
+    where
+        M: Serialize + MaybeSend + MaybeSync,
+    {
+        ensure!(
+            self.supports_safe_deposit().await,
+            "Wallet module consensus version doesn't support safe deposits",
+        );
+
+        self.allocate_deposit_address_expert_only(extra_meta).await
     }
 
     /// Allocates a deposit address that is controlled by the federation.
@@ -1189,6 +1261,34 @@ impl WalletClientModule {
                     }
                 }
             }))
+    }
+}
+
+/// Polls the federation checking if the activated module consensus version
+/// supports safe deposits, saving the result in the db once it does.
+async fn poll_supports_safe_deposit_version(db: Database, module_api: DynModuleApi) {
+    loop {
+        let mut dbtx = db.begin_transaction().await;
+
+        if dbtx.get_value(&SupportsSafeDepositKey).await.is_some() {
+            break;
+        }
+
+        if let Ok(module_consensus_version) = module_api.module_consensus_version().await {
+            if SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION <= module_consensus_version {
+                dbtx.insert_new_entry(&SupportsSafeDepositKey, &()).await;
+                dbtx.commit_tx().await;
+                break;
+            }
+        }
+
+        drop(dbtx);
+
+        if is_running_in_test_env() {
+            sleep(Duration::from_secs(1)).await;
+        } else {
+            sleep(Duration::from_secs(3600)).await;
+        }
     }
 }
 
