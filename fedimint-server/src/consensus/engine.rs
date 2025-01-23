@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use aleph_bft::Keychain as KeychainTrait;
 use anyhow::{anyhow, bail};
 use async_channel::Receiver;
-use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, P2PConnectionStatus};
+use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, P2PConnectionStatus, PeerError};
 use fedimint_api_client::query::FilterMap;
 use fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
@@ -824,7 +824,9 @@ impl ConsensusEngine {
         let threshold = self.num_peers().threshold();
 
         let filter_map = move |response: SerdeModuleEncoding<SignedSessionOutcome>| {
-            let signed_session_outcome = response.try_into_inner(&decoders)?;
+            let signed_session_outcome = response
+                .try_into_inner(&decoders)
+                .map_err(|x| PeerError::ResponseDeserialization(x.into()))?;
             let header = signed_session_outcome.session_outcome.header(index);
             if signed_session_outcome.signatures.len() == threshold
                 && signed_session_outcome
@@ -834,7 +836,7 @@ impl ConsensusEngine {
             {
                 Ok(signed_session_outcome)
             } else {
-                Err(anyhow!("Invalid signatures"))
+                Err(PeerError::InvalidResponse(anyhow!("Invalid signatures")))
             }
         };
 

@@ -12,7 +12,6 @@ repository = { workspace = true }
 development = ["tokio-test"]
 
 [features]
-enable_iroh = ["iroh"]
 
 [lib]
 name = "fedimint_core"
