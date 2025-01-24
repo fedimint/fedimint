@@ -11,7 +11,9 @@ use fedimint_api_client::api::{
     FederationStatus, GuardianConfigBackup, P2PConnectionStatus, PeerStatus, StatusResponse,
 };
 use fedimint_core::admin_client::ServerStatus;
-use fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
+use fedimint_core::backup::{
+    BackupStatistics, ClientBackupKey, ClientBackupKeyPrefix, ClientBackupSnapshot,
+};
 use fedimint_core::config::{ClientConfig, JsonClientConfig};
 use fedimint_core::core::backup::{SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES};
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
@@ -23,10 +25,10 @@ use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::endpoint_constants::{
     API_ANNOUNCEMENTS_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT,
     AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
-    CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT, FEDERATION_ID_ENDPOINT,
-    FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT,
-    RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT,
-    SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SHUTDOWN_ENDPOINT,
+    BACKUP_STATISTICS_ENDPOINT, CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT,
+    FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
+    INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SHUTDOWN_ENDPOINT,
     SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
     SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
@@ -389,6 +391,37 @@ impl ConsensusApi {
         dbtx.get_value(&ClientBackupKey(id)).await
     }
 
+    async fn backup_statistics(&self, dbtx: &mut DatabaseTransaction<'_>) -> BackupStatistics {
+        const DAY_SECS: u64 = 24 * 60 * 60;
+        const WEEK_SECS: u64 = 7 * DAY_SECS;
+        const MONTH_SECS: u64 = 30 * DAY_SECS;
+        const QUARTER_SECS: u64 = 3 * MONTH_SECS;
+
+        let mut backup_stats = BackupStatistics::default();
+
+        let mut all_backups_stream = dbtx.find_by_prefix(&ClientBackupKeyPrefix).await;
+        while let Some((_, backup)) = all_backups_stream.next().await {
+            backup_stats.num_backups += 1;
+            backup_stats.total_size += backup.data.len();
+
+            let age_secs = backup.timestamp.elapsed().unwrap_or_default().as_secs();
+            if age_secs < DAY_SECS {
+                backup_stats.refreshed_1d += 1;
+            }
+            if age_secs < WEEK_SECS {
+                backup_stats.refreshed_1w += 1;
+            }
+            if age_secs < MONTH_SECS {
+                backup_stats.refreshed_1m += 1;
+            }
+            if age_secs < QUARTER_SECS {
+                backup_stats.refreshed_3m += 1;
+            }
+        }
+
+        backup_stats
+    }
+
     /// List API URL announcements from all peers we have received them from (at
     /// least ourselves)
     async fn api_announcements(&self) -> BTreeMap<PeerId, SignedApiAnnouncement> {
@@ -724,6 +757,14 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             ApiVersion::new(0, 4),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> String {
                 Ok(fedimint.fedimintd_version())
+            }
+        },
+        api_endpoint! {
+            BACKUP_STATISTICS_ENDPOINT,
+            ApiVersion::new(0, 5),
+            async |fedimint: &ConsensusApi, context, _v: ()| -> BackupStatistics {
+                check_auth(context)?;
+                Ok(fedimint.backup_statistics(&mut context.dbtx().into_nc()).await)
             }
         },
     ]

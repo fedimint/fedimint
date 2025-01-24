@@ -31,3 +31,14 @@ pub struct ClientBackupSnapshot {
     #[serde(with = "fedimint_core::hex::serde")]
     pub data: Vec<u8>,
 }
+
+/// Statistics about backups stored in the federation
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct BackupStatistics {
+    pub num_backups: usize,
+    pub total_size: usize,
+    pub refreshed_1d: usize,
+    pub refreshed_1w: usize,
+    pub refreshed_1m: usize,
+    pub refreshed_3m: usize,
+}
