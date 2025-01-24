@@ -20,7 +20,7 @@ pub mod events;
 mod pegin_monitor;
 mod withdraw;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::future;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -73,6 +73,7 @@ use secp256k1::Keypair;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tokio::sync::watch;
+use tokio::sync::watch::Receiver;
 use tracing::{debug, instrument};
 
 use crate::api::WalletFederationApi;
@@ -253,6 +254,8 @@ impl ClientModuleInit for WalletClientInit {
         let (pegin_claimed_sender, pegin_claimed_receiver) = watch::channel(());
         let (pegin_monitor_wakeup_sender, pegin_monitor_wakeup_receiver) = watch::channel(());
 
+        let (in_flight_balance_sender, _) = watch::channel(HashMap::default());
+
         Ok(WalletClientModule {
             db,
             data,
@@ -266,6 +269,7 @@ impl ClientModuleInit for WalletClientInit {
             pegin_claimed_sender,
             task_group: args.task_group().clone(),
             admin_auth: args.admin_auth().cloned(),
+            in_flight_balance_sender,
         })
     }
 
@@ -389,6 +393,7 @@ pub struct WalletClientModule {
     pegin_claimed_receiver: watch::Receiver<()>,
     task_group: TaskGroup,
     admin_auth: Option<ApiAuth>,
+    in_flight_balance_sender: watch::Sender<HashMap<OperationId, InFlightAmounts>>,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -418,6 +423,7 @@ impl ClientModule for WalletClientModule {
             let data = self.data.clone();
             let pegin_claimed_sender = self.pegin_claimed_sender.clone();
             let pegin_monitor_wakeup_receiver = self.pegin_monitor_wakeup_receiver.clone();
+            let in_flight_amounts_sender = self.in_flight_balance_sender.clone();
             pegin_monitor::run_peg_in_monitor(
                 client_ctx,
                 db,
@@ -426,6 +432,7 @@ impl ClientModule for WalletClientModule {
                 data,
                 pegin_claimed_sender,
                 pegin_monitor_wakeup_receiver,
+                in_flight_amounts_sender,
             )
         });
 
@@ -492,6 +499,10 @@ impl ClientModule for WalletClientModule {
         args: &[std::ffi::OsString],
     ) -> anyhow::Result<serde_json::Value> {
         cli::handle_cli_command(self, args).await
+    }
+
+    fn in_flight_balance(&self) -> Option<Receiver<HashMap<OperationId, InFlightAmounts>>> {
+        Some(self.in_flight_balance_sender.subscribe())
     }
 }
 

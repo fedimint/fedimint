@@ -1,11 +1,14 @@
 use std::cmp;
+use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
-use bitcoin::ScriptBuf;
+use bitcoin::amount::CheckedSum;
+use bitcoin::{Amount, ScriptBuf};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client::module::{ClientContext, OutPointRange};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle};
+use fedimint_client::InFlightAmounts;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
@@ -86,7 +89,7 @@ impl NextActions {
 ///
 /// On the high level it maintains a list of derived addresses with some info
 /// like when is the next time to check for deposits on them.
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
 pub(crate) async fn run_peg_in_monitor(
     client_ctx: ClientContext<WalletClientModule>,
     db: Database,
@@ -95,6 +98,7 @@ pub(crate) async fn run_peg_in_monitor(
     data: WalletClientModuleData,
     pegin_claimed_sender: watch::Sender<()>,
     mut wakeup_receiver: watch::Receiver<()>,
+    in_flight_balance_sender: watch::Sender<HashMap<OperationId, InFlightAmounts>>,
 ) {
     let min_sleep: Duration = if is_running_in_test_env() {
         Duration::from_millis(100)
@@ -103,7 +107,7 @@ pub(crate) async fn run_peg_in_monitor(
     };
 
     loop {
-        if let Err(err) = check_for_deposits(
+        match check_for_deposits(
             &db,
             &data,
             &btc_rpc,
@@ -113,8 +117,21 @@ pub(crate) async fn run_peg_in_monitor(
         )
         .await
         {
-            warn!(target: LOG_CLIENT_MODULE_WALLET, error = %err.fmt_compact_anyhow(), "Error checking for deposits");
-            continue;
+            Ok(in_flight_amounts) => {
+                in_flight_balance_sender.send_modify(|current_in_flight_amounts| {
+                    for (operation_id, in_flight_balance) in in_flight_amounts {
+                        if in_flight_balance == InFlightAmounts::default() {
+                            current_in_flight_amounts.remove(&operation_id);
+                        } else {
+                            current_in_flight_amounts.insert(operation_id, in_flight_balance);
+                        }
+                    }
+                });
+            }
+            Err(err) => {
+                warn!(target: LOG_CLIENT_MODULE_WALLET, error = %err.fmt_compact_anyhow(), "Error checking for deposits");
+                continue;
+            }
         }
 
         let now = time::now();
@@ -148,24 +165,27 @@ async fn check_for_deposits(
     module_api: &DynModuleApi,
     client_ctx: &ClientContext<WalletClientModule>,
     pengin_claimed_sender: &watch::Sender<()>,
-) -> Result<(), anyhow::Error> {
+) -> Result<HashMap<OperationId, InFlightAmounts>, anyhow::Error> {
+    let mut in_flight_amounts = HashMap::new();
     let due = NextActions::from_db_state(db).await.due;
     trace!(target: LOG_CLIENT_MODULE_WALLET, ?due, "Checking for deposists");
     for (due_key, due_val) in due {
-        check_and_claim_idx_pegins(
+        let in_flight_amount = check_and_claim_idx_pegins(
             data,
             due_key,
             btc_rpc,
             module_api,
             db,
             client_ctx,
-            due_val,
+            due_val.clone(),
             pengin_claimed_sender,
         )
         .await?;
+
+        in_flight_amounts.insert(due_val.operation_id, in_flight_amount);
     }
 
-    Ok(())
+    Ok(in_flight_amounts)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -178,10 +198,19 @@ async fn check_and_claim_idx_pegins(
     client_ctx: &ClientContext<WalletClientModule>,
     due_val: PegInTweakIndexData,
     pengin_claimed_sender: &watch::Sender<()>,
-) -> Result<(), anyhow::Error> {
+) -> Result<InFlightAmounts, anyhow::Error> {
     let now = time::now();
     match check_idx_pegins(data, due_key.0, btc_rpc, module_api, db, client_ctx).await {
         Ok(outcomes) => {
+            let pending_amount = outcomes
+                .iter()
+                .filter_map(|outcome| match outcome {
+                    CheckOutcome::Pending { amount, .. } => Some(*amount),
+                    _ => None,
+                })
+                .checked_sum()
+                .expect("There are only 21*10^14 satoshis in total");
+
             let next_check_time = CheckOutcome::retry_delay_vec(&outcomes, due_val.creation_time)
                 .map(|duration| now + duration);
             db
@@ -218,12 +247,14 @@ async fn check_and_claim_idx_pegins(
                     None,
                 )
                 .await?;
+
+            Ok(InFlightAmounts::incoming(pending_amount.into()))
         }
         Err(err) => {
             debug!(target: LOG_CLIENT_MODULE_WALLET, err = %err.fmt_compact_anyhow(), tweak_idx=%due_key.0, "Error checking tweak_idx");
+            Ok(InFlightAmounts::default())
         }
     }
-    Ok(())
 }
 
 /// Outcome of checking a single deposit Bitcoin transaction output
@@ -232,7 +263,10 @@ async fn check_and_claim_idx_pegins(
 #[derive(Copy, Clone, Debug)]
 enum CheckOutcome {
     /// There's a tx pending (needs more confirmation)
-    Pending { num_blocks_needed: u64 },
+    Pending {
+        num_blocks_needed: u64,
+        amount: Amount,
+    },
     /// A state machine was created to claim the peg-in
     Claimed { outpoint: bitcoin::OutPoint },
 
@@ -248,7 +282,9 @@ impl CheckOutcome {
     fn retry_delay(self) -> Option<Duration> {
         match self {
             // Check again in time proportional to the expected block confirmation time
-            CheckOutcome::Pending { num_blocks_needed } => {
+            CheckOutcome::Pending {
+                num_blocks_needed, ..
+            } => {
                 if is_running_in_test_env() {
                     // In tests, we basically mine all blocks right away
                     Some(Duration::from_millis(1))
@@ -363,6 +399,11 @@ async fn check_idx_pegins(
             } else {
                 outcomes.push(CheckOutcome::Pending {
                     num_blocks_needed: finality_delay,
+                    amount: transaction
+                        .output
+                        .get(out_idx as usize)
+                        .expect("tx output exists")
+                        .value,
                 });
                 debug!(target:LOG_CLIENT_MODULE_WALLET, %txid, %out_idx,"In the mempool");
                 continue;
@@ -371,7 +412,14 @@ async fn check_idx_pegins(
         let num_blocks_needed = tx_block_count.saturating_sub(current_consensus_block_count);
 
         if 0 < num_blocks_needed {
-            outcomes.push(CheckOutcome::Pending { num_blocks_needed });
+            outcomes.push(CheckOutcome::Pending {
+                num_blocks_needed,
+                amount: transaction
+                    .output
+                    .get(out_idx as usize)
+                    .expect("tx output exists")
+                    .value,
+            });
             debug!(target: LOG_CLIENT_MODULE_WALLET, %txid, %out_idx, %num_blocks_needed, %finality_delay, %tx_block_count, %current_consensus_block_count, "Needs more confirmations");
             continue;
         }

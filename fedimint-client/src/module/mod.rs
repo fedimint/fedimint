@@ -1,5 +1,6 @@
 use core::fmt;
 use std::any::Any;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::ops::Range;
 use std::sync::{Arc, Weak};
@@ -29,6 +30,7 @@ use fedimint_logging::LOG_CLIENT;
 use futures::Stream;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use tokio::sync::watch;
 use tracing::warn;
 
 use self::init::ClientModuleInit;
@@ -37,7 +39,8 @@ use crate::oplog::{OperationLog, OperationLogEntry, UpdateStreamOrOutcome};
 use crate::sm::{self, ActiveStateMeta, Context, DynContext, DynState, Executor, State};
 use crate::transaction::{ClientInputBundle, ClientOutputBundle, TransactionBuilder};
 use crate::{
-    oplog, AddStateMachinesResult, Client, InstancelessDynClientInputBundle, TransactionUpdates,
+    oplog, AddStateMachinesResult, Client, InFlightAmounts, InstancelessDynClientInputBundle,
+    TransactionUpdates,
 };
 
 pub mod init;
@@ -797,6 +800,14 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         unimplemented!()
     }
 
+    /// Some modules (e.g. the wallet module) track their in-flight balances
+    /// internally and not in state machines. In that case a watch receiver
+    /// containing the module's in-flight balance will be returned, `None`
+    /// otherwise.
+    fn in_flight_balance(&self) -> Option<watch::Receiver<HashMap<OperationId, InFlightAmounts>>> {
+        None
+    }
+
     /// Leave the federation
     ///
     /// While technically there's nothing stopping the client from just
@@ -910,6 +921,8 @@ pub trait IClientModule: Debug {
     ) -> Amount;
 
     async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()>;
+
+    fn in_flight_balance(&self) -> Option<watch::Receiver<HashMap<OperationId, InFlightAmounts>>>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -1034,6 +1047,10 @@ where
 
     async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()> {
         <T as ClientModule>::subscribe_balance_changes(self).await
+    }
+
+    fn in_flight_balance(&self) -> Option<watch::Receiver<HashMap<OperationId, InFlightAmounts>>> {
+        <T as ClientModule>::in_flight_balance(self)
     }
 }
 
