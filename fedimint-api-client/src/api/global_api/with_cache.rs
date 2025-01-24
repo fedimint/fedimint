@@ -9,13 +9,13 @@ use bitcoin::secp256k1;
 use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams,
 };
-use fedimint_core::backup::ClientBackupSnapshot;
+use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::endpoint_constants::{
     ADD_CONFIG_GEN_PEER_ENDPOINT, API_ANNOUNCEMENTS_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT,
     AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
-    CONFIG_GEN_PEERS_ENDPOINT, CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
+    BACKUP_STATISTICS_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT, CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
     DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
     GUARDIAN_CONFIG_BACKUP_ENDPOINT, RECOVER_ENDPOINT, RESTART_FEDERATION_SETUP_ENDPOINT,
     RUN_DKG_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT,
@@ -556,6 +556,15 @@ where
     async fn shutdown(&self, session: Option<u64>, auth: ApiAuth) -> FederationResult<()> {
         self.request_admin(SHUTDOWN_ENDPOINT, ApiRequestErased::new(session), auth)
             .await
+    }
+
+    async fn backup_statistics(&self, auth: ApiAuth) -> FederationResult<BackupStatistics> {
+        self.request_admin(
+            BACKUP_STATISTICS_ENDPOINT,
+            ApiRequestErased::default(),
+            auth,
+        )
+        .await
     }
 
     async fn fedimintd_version(&self, peer_id: PeerId) -> PeerResult<String> {

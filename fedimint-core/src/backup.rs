@@ -33,7 +33,7 @@ pub struct ClientBackupSnapshot {
 }
 
 /// Statistics about backups stored in the federation
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Default)]
 pub struct BackupStatistics {
     pub num_backups: usize,
     pub total_size: usize,
