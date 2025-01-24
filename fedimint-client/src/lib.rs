@@ -80,12 +80,13 @@
 //!
 //! For a hacky instantiation of a complete client see the [`ng` subcommand of `fedimint-cli`](https://github.com/fedimint/fedimint/blob/55f9d88e17d914b92a7018de677d16e57ed42bf6/fedimint-cli/src/ng.rs#L56-L73).
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::future::pending;
+use std::iter::once;
 use std::ops::{self, Range};
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, bail, ensure, format_err, Context};
@@ -145,6 +146,7 @@ use fedimint_eventlog::{
     EventLogId, PersistedLogEntry,
 };
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API, LOG_CLIENT_RECOVERY};
+use futures::future::select_all;
 use futures::stream::FuturesUnordered;
 use futures::{Future, Stream, StreamExt};
 use meta::{LegacyMetaSource, MetaService};
@@ -874,6 +876,7 @@ pub struct Client {
     log_event_added_rx: watch::Receiver<()>,
     log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
     request_hook: ApiRequestHook,
+    in_flight_balance_receiver: OnceLock<watch::Receiver<HashMap<OperationId, InFlightAmounts>>>,
 }
 
 impl Client {
@@ -1484,6 +1487,57 @@ impl Client {
                 }
             }
         })
+    }
+
+    pub fn subscribe_in_flight_balances(
+        &self,
+    ) -> watch::Receiver<HashMap<OperationId, InFlightAmounts>> {
+        self.in_flight_balance_receiver
+            .get_or_init(|| {
+                let (_tx, rx) = watch::channel(HashMap::new());
+
+                let mut channels = self
+                    .modules
+                    .iter_modules()
+                    .filter_map(|(_, _, module)| module.in_flight_balance())
+                    .chain(once(self.executor.balance_in_flight()))
+                    .collect::<Vec<_>>();
+                self.task_group
+                    .spawn_cancellable("in_flight_balance_receiver", async move {
+                        let mut in_flight_balances = HashMap::new();
+
+                        loop {
+                            // Sum up entries from all the channels
+                            let all_channel_entries = channels
+                                .iter()
+                                .flat_map(|receiver| receiver.borrow().clone());
+                            for (operation_id, in_flight_balance) in all_channel_entries {
+                                let operation_in_flight_balance = in_flight_balances
+                                    .entry(operation_id)
+                                    .or_insert_with(InFlightAmounts::default);
+                                operation_in_flight_balance
+                                    .checked_add(in_flight_balance)
+                                    .expect("In-flight balance overflow");
+                            }
+
+                            // Wait for any changes in the in-flight balance channels
+                            let change_futures = channels
+                                .iter_mut()
+                                .map(|receiver| Box::pin(async move { receiver.changed().await }));
+                            if let (Err(err), _, _) = select_all(change_futures).await {
+                                error!(
+                                    target: LOG_CLIENT,
+                                    err = %err.fmt_compact(),
+                                    "Error in in-flight balance receiver"
+                                );
+                                break;
+                            };
+                        }
+                    });
+
+                rx
+            })
+            .clone()
     }
 
     /// Query the federation for API version support and then calculate
@@ -3119,6 +3173,7 @@ impl ClientBuilder {
             client_recovery_progress_receiver,
             meta_service: self.meta_service,
             connector,
+            in_flight_balance_receiver: OnceLock::default(),
         });
         client_inner
             .task_group
