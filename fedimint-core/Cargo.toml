@@ -39,7 +39,7 @@ fedimint-logging = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true, features = ["serde"] }
 hex-conservative = { workspace = true }
-imbl = "3.0.0"
+imbl = "4.0.1"
 iroh = { workspace = true, optional = true }
 itertools = { workspace = true }
 jsonrpsee-core = { version = "0.24.8", features = ["client"] }
