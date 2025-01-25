@@ -2687,7 +2687,7 @@ dependencies = [
  "jsonrpsee-core",
  "lightning",
  "lightning-invoice",
- "lightning-types",
+ "lightning-types 0.2.0",
  "macro_rules_attribute",
  "miniscript",
  "parity-scale-codec",
@@ -5981,7 +5981,7 @@ dependencies = [
  "bech32 0.9.1",
  "bitcoin",
  "lightning-invoice",
- "lightning-types",
+ "lightning-types 0.1.0",
 ]
 
 [[package]]
@@ -6016,7 +6016,7 @@ checksum = "90ab9f6ea77e20e3129235e62a2e6bd64ed932363df104e864ee65ccffb54a8f"
 dependencies = [
  "bech32 0.9.1",
  "bitcoin",
- "lightning-types",
+ "lightning-types 0.1.0",
  "serde",
 ]
 
@@ -6030,7 +6030,7 @@ dependencies = [
  "chrono",
  "lightning",
  "lightning-invoice",
- "lightning-types",
+ "lightning-types 0.1.0",
  "serde",
  "serde_json",
 ]
@@ -6089,6 +6089,15 @@ dependencies = [
  "bech32 0.9.1",
  "bitcoin",
  "hex-conservative 0.2.1",
+]
+
+[[package]]
+name = "lightning-types"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2cd84d4e71472035903e43caded8ecc123066ce466329ccd5ae537a8d5488c7"
+dependencies = [
+ "bitcoin",
 ]
 
 [[package]]

@@ -45,7 +45,7 @@ itertools = { workspace = true }
 jsonrpsee-core = { version = "0.24.8", features = ["client"] }
 lightning = { workspace = true }
 lightning-invoice = { workspace = true, features = ["serde"] }
-lightning-types = "0.1.0"
+lightning-types = "0.2.0"
 macro_rules_attribute = "0.2.0"
 miniscript = { workspace = true, features = ["serde"] }
 parity-scale-codec = { version = "3.7.0", features = ["derive"] }
