@@ -51,7 +51,7 @@ pub struct LockedRoot<'a> {
 impl<'a> Drop for LockedRoot<'a> {
     fn drop(&mut self) {
         if self.locked {
-            let Ok(()) = self.lock_file.unlock() else {
+            let Ok(()) = FileExt::unlock(self.lock_file) else {
                 warn!("Failed to release the lock file");
                 return;
             };
