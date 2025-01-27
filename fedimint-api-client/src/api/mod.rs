@@ -39,6 +39,7 @@ use futures::channel::oneshot;
 use futures::future::pending;
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
+use global_api::with_cache::GlobalFederationApiWithCache;
 use jsonrpsee_core::client::ClientT;
 pub use jsonrpsee_core::client::Error as JsonRpcClientError;
 use jsonrpsee_core::DeserializeOwned;
@@ -60,10 +61,8 @@ use tracing::{debug, info, instrument, trace, trace_span, warn, Instrument};
 
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 mod error;
-mod global_api;
+pub mod global_api;
 pub mod net;
-
-pub use global_api::{GlobalFederationApiWithCache, GlobalFederationApiWithCacheExt};
 
 pub const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2: ApiVersion = ApiVersion::new(0, 5);
 

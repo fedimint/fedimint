@@ -99,10 +99,11 @@ use db::{
     ClientModuleRecovery, ClientPreRootSecretHashKey, EncodedClientSecretKey, InitMode,
     PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey,
 };
+use fedimint_api_client::api::global_api::with_cache::GlobalFederationApiWithCacheExt;
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{
-    ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, GlobalFederationApiWithCacheExt,
-    IGlobalFederationApi, ReconnectFederationApi,
+    ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
+    ReconnectFederationApi,
 };
 use fedimint_core::config::{
     ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig, ModuleInitRegistry,
