@@ -46,33 +46,31 @@ questions. [Join the Discord](https://discord.gg/cEVEmqCgWG) and say hi! We are 
 developers of all skill levels to Fedimint and associated open-source Bitcoin projects. Fedimint touches many different
 areas of Bitcoin development, so there is something for everyone. See below for more information on how to get involved.
 
-## Running your own Fedimint
+## Using Fedimint
 
-The preferred way to run Fedimint is with multiple **guardian servers** working together in a federation. Fedimint is
-built to be **Byzantine Fault Tolerant**, meaning it can continue functioning even if some guardians act maliciously.
-Specifically, a federation with `3m + 1` guardians can tolerate up to m malicious guardians. For example:
-	•	A federation with 4 guardians can handle 1 malicious guardian.
-	•	A federation with 7 guardians can handle 2 malicious guardians.
+To use Fedimint you only need a client application, that will allow interacting with
+Fedimint federations.
 
-You can also run Fedimint in **solo mode** with just one guardian. While this is useful for testing or development, it
-is not recommended for real-world use since it lacks the resilience of a federation with multiple guardians.
+You can pick one of Fedimint-supporting applications:
 
-To support **Lightning payments**, Fedimint requires a **Lightning Gateway**. This is a participant in the federation
-that swaps ecash for sending and receiving Lightning payments. Note that the Lightning Gateway is not a guardian—it’s an
-untrusted economic actor that interacts with the federation.
+* [Fedi](https://www.fedi.xyz/) - for MacOS, Android and Web browsers
+* [Harbor Wallet](https://harbor.cash/) - desktop wallet
+* [Mutiny Wallet](https://www.mutinywallet.com/) - web wallet
+* `fedimint-cli` - Fedimint's built in CLI wallet for developers and automation
 
-### Setting up Federations
+## Running your own Fedimint federation
 
-If you are interested in setting up a Fedimint federation, refer to [Setting up Fedimint federation](./docs/deploying.md)
-documentation.
+If you are interested in setting up a Fedimint federation, refer to [Running your own Fedimint federation](./docs/deploying.md).
 
-## For Developers
+## Developing Fedimint
 
 We are actively looking for developers to help build Fedimint and associated open-source Bitcoin projects. Fedimint
 touches many different areas of Bitcoin development, so there is something for everyone. The best places to get started
 are:
 
-- [The Fedimint Developer Discord](https://discord.gg/cEVEmqCgWG): the best place to get help and ask questions.
+- [Fedimint Hacking Guide](./HACKING.md#) for information about working on the code.
+- [Fedimint Contributing Guidelines](CONTRIBUTING.md#) for information for contributors.
+- [Fedimint Developer Discord Server](https://discord.gg/cEVEmqCgWG): the best place to get help and ask questions.
 - [Fedimint Technical Reference Documentation](https://docs.fedimint.org)
 - [Fedimint Contributor Calendar](https://calendar.google.com/calendar/u/0/embed?src=fedimintcalendar@gmail.com): This
   calendar contains all the developer calls and events.
@@ -85,86 +83,3 @@ are:
   great place to learn about the internals of Fedimint and Bitcoin. We normally plan these calls based off requests from
   contributors on aspects of Fedimint they want to learn more about, so please reach out if you have a topic you want to
   learn more about.
-
-For contribution guidelines, Areas of contributions and how to get involved, please refer to
-the [Contributing Guidelines](CONTRIBUTING.md).
-
-### Fedimint Repos and Projects to Contribute To
-
-- [Fedimint](https://github.com/fedimint/fedimint/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22): The
-  core Fedimint repository. This is where the core consensus and networking code lives. Fedimint is an advanced Rust
-  project and is a great place to learn Rust, cryptography, networking, consensus, and bitcoin development. We have a
-  lot of good first issues, are happy to mentor new developers, and are always looking for experienced Rust developers
-  to help with the core codebase.
-- [UI](https://github.com/fedimint/ui): The default Fedimint Guardian and Lightning Gateway UIs. These are Typescript
-  and React projects. Contributing to this repo helps with UI/UX design and development to make Fedimint more user
-  friendly.
-- [Lightning Gateway](https://github.com/fedimint/fedimint/issues?q=is%3Aissue+is%3Aopen+label%3Alightning): Fedimint's
-  Lightning Gateway is implemented as an HTLC interceptor and currently works with CLN, LND, and LDK's sample-node
-  implementations. We are always looking for lightning developers to help with the Lightning Gateway, especially around
-  improving payment reliability and to add support for more lightning implementations.
-- [Custom Modules](https://github.com/fedimint/fedimint-custom-modules-example): Fedimint ships with 3 default modules:
-  Bitcoin, Lightning, and Chaumian Ecash. You can write custom modules that define further consensus items and
-  transaction types leveraging the payments modules to build your own federated applications. We are always looking for
-  developers to help build custom modules and to help improve the module system.
-- [Fedimint Web SDK](https://github.com/fedimint/fedimint-web-sdk): The Fedimint Web SDK is a Typescript library for
-  building Fedimint applications. We are looking for developers to help improve the SDK and add support for more features.
-
-## Spinning up the Fedimint Developer Environment
-
-Fedimint is a Rust project and uses the [Nix package manager](https://nixos.org/) to manage dependencies and build the
-project.
-
-### Local Development
-
-We have a detailed tutorial on how to use the cli to send/receive ecash, lightning payments, and perform other developer
-operations in the [Fedimint Developer Tutorial](https://github.com/fedimint/fedimint/blob/master/docs/tutorial.md).
-
-Fedimint's developer environment and rust build pipeline is managed
-through [Nix Flakebox](https://github.com/rustshop/flakebox). To get started, install Nix.
-
-```bash
-curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
-```
-
-Then fork and clone the Fedimint repo.
-
-```bash
-git clone https://github.com/your-username/fedimint.git
-```
-
-Then enter the nix developer environment.
-
-```bash
-nix develop
-```
-
-and use this command to start a local regtest network with 4 guardians, a bitcoin node, and a lightning gateway.
-
-```bash
-just mprocs
-```
-
-You can then interact with the guardians and lightning gateway using the cli. For more details on how to use the cli,
-see the [Fedimint Developer Tutorial](https://github.com/fedimint/fedimint/blob/master/docs/tutorial.md).
-
-If you want to run with UIs, see the [UI](https://github.com/fedimint/ui) repo for developer environment instructions.
-
-# Maintainers
-
-| Area              | Lead-Maintainer    | Co-Maintainers               | Status                                |
-|-------------------|--------------------|------------------------------|---------------------------------------|
-| Project Lead      | @elsirion          | @dpc @joschisan              | X                                     |
-| Core Server       | @joschisan         | X                            | mostly well factored, no known issues |
-| Core Consensus    | @joschisan         | @bradleystachurski           | polished and documented               |
-| Lightning Module  | @joschisan         | @m1sterc001guy               | active development, known issues      |
-| Mint Module       | @joschisan         | X                            | active development, known issues      |
-| Wallet Module     | @bradleystachurski | @dpc @joschisan              | active development, critical issues   |
-| Core Client       | @dpc               | X                            | X                                     |
-| Lightning Gateway | @m1sterc001guy     | @joschisan                   | X                                     |
-| Database          | @m1sterc001guy     | X                            | X                                     |
-| Networking        | X                  | X                            | X                                     |
-| CI / Nix          | @dpc               | @maan2003 @bradleystachurski | X                                     |
-| Testing           | @bradleystachurski | X                            | X                                     |
-| Devimint          | @maan2003          | X                            | X                                     |
-| Config Generation | X                  | X                            | X                                     |
