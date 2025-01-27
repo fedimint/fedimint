@@ -15,6 +15,7 @@ pub mod envs;
 use std::clone::Clone;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::convert::Infallible;
+use std::sync::Arc;
 #[cfg(not(target_family = "wasm"))]
 use std::time::Duration;
 
@@ -95,7 +96,7 @@ use miniscript::{translate_hash_fail, Descriptor, TranslatePk};
 use rand::rngs::OsRng;
 use serde::Serialize;
 use strum::IntoEnumIterator;
-use tokio::sync::watch;
+use tokio::sync::{watch, Notify};
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::db::{
@@ -416,6 +417,14 @@ impl ServerModule for Wallet {
         &'a self,
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> Vec<WalletConsensusItem> {
+        if tokio::time::timeout(Duration::from_secs(15), self.propose_citem.notified())
+            .await
+            .is_err()
+        {
+            // No notifications, return no citem, just so the caller know we didn't hang
+            return vec![];
+        }
+
         let mut items = dbtx
             .find_by_prefix(&PegOutTxSignatureCIPrefix)
             .await
@@ -780,6 +789,11 @@ impl ServerModule for Wallet {
         dbtx.insert_new_entry(&PegOutTxSignatureCI(txid), &sigs)
             .await;
 
+        let propose_citem_tx = self.propose_citem.clone();
+        dbtx.on_commit(move || {
+            propose_citem_tx.notify_one();
+        });
+
         dbtx.insert_new_entry(
             &PegOutBitcoinTransaction(out_point),
             &WalletOutputOutcome::new_v0(txid),
@@ -1000,6 +1014,10 @@ pub struct Wallet {
     block_count_rx: watch::Receiver<Option<u64>>,
     /// Fee rate updated periodically by a background task
     fee_rate_rx: watch::Receiver<Feerate>,
+
+    /// Consensus proposals will wait for this notification
+    propose_citem: Arc<Notify>,
+
     task_group: TaskGroup,
     /// Maximum consensus version supported by *all* our peers. Used to
     /// automatically activate new consensus versions as soon as everyone
@@ -1027,20 +1045,30 @@ impl Wallet {
         our_peer_id: PeerId,
         module_api: DynModuleApi,
     ) -> Result<Wallet, WalletCreationError> {
-        Self::spawn_broadcast_pending_task(task_group, &bitcoind, db);
+        let propose_citem = Arc::new(Notify::new());
+        let (block_count_tx, block_count_rx) = watch::channel(None);
+        let (fee_rate_tx, fee_rate_rx) = watch::channel(cfg.consensus.default_fee);
 
-        let fee_rate_rx = bitcoind
+        Self::spawn_broadcast_pending_task(task_group, &bitcoind, db);
+        bitcoind
             .clone()
-            .spawn_fee_rate_update_task(
-                task_group,
-                cfg.consensus.default_fee,
-                cfg.consensus.network.0,
-                CONFIRMATION_TARGET,
-            )
+            .spawn_fee_rate_update_task(task_group, cfg.consensus.network.0, CONFIRMATION_TARGET, {
+                let propose_citem = propose_citem.clone();
+                move |feerate| {
+                    let _ = fee_rate_tx.send(feerate);
+                    propose_citem.notify_one();
+                }
+            })
             .map_err(|e| WalletCreationError::FeerateSourceError(e.to_string()))?;
-        let block_count_rx = bitcoind
+        bitcoind
             .clone()
-            .spawn_block_count_update_task(task_group)
+            .spawn_block_count_update_task(task_group, {
+                let propose_citem = propose_citem.clone();
+                move |count| {
+                    let _ = block_count_tx.send(Some(count));
+                    propose_citem.notify_one();
+                }
+            })
             .map_err(|e| WalletCreationError::BlockCountSourceError(e.to_string()))?;
 
         let peer_supported_consensus_version =
@@ -1062,6 +1090,10 @@ impl Wallet {
             ));
         }
 
+        // Propose consensus items right after start, just for good startup
+        // latency
+        propose_citem.notify_one();
+
         let wallet = Wallet {
             cfg,
             secp: Default::default(),
@@ -1071,6 +1103,7 @@ impl Wallet {
             fee_rate_rx,
             task_group: task_group.clone(),
             peer_supported_consensus_version,
+            propose_citem,
         };
 
         Ok(wallet)
