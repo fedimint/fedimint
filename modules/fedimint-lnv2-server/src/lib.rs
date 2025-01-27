@@ -629,8 +629,11 @@ impl ServerModule for Lightning {
 
 impl Lightning {
     fn new(cfg: LightningConfig, task_group: &TaskGroup) -> anyhow::Result<Self> {
+        let (block_count_tx, block_count_rx) = watch::channel(None);
         let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
-        let block_count_rx = btc_rpc.spawn_block_count_update_task(task_group)?;
+        btc_rpc.spawn_block_count_update_task(task_group, move |count| {
+            let _ = block_count_tx.send(Some(count));
+        })?;
 
         Ok(Lightning {
             cfg,

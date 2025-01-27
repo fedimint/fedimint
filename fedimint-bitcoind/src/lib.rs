@@ -25,7 +25,6 @@ use fedimint_core::util::{get_median, FmtCompactAnyhow, SafeUrl};
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, Feerate};
 use fedimint_logging::{LOG_BITCOIND, LOG_CORE};
 use feerate_source::{FeeRateSource, FetchJson};
-use tokio::sync::watch;
 use tokio::time::Interval;
 use tracing::{debug, trace, warn};
 
@@ -198,8 +197,8 @@ impl DynBitcoindRpc {
     pub fn spawn_block_count_update_task(
         self,
         task_group: &TaskGroup,
-    ) -> anyhow::Result<watch::Receiver<Option<u64>>> {
-        let (block_count_tx, block_count_rx) = watch::channel(None);
+        on_update: impl Fn(u64) + Send + Sync + 'static,
+    ) -> anyhow::Result<()> {
         let mut desired_interval = get_bitcoin_polling_interval();
 
         task_group.spawn_cancellable("block count background task", {
@@ -212,8 +211,7 @@ impl DynBitcoindRpc {
                         .await;
 
                     match res {
-                        Ok(c) => {
-                            let _ = block_count_tx.send(Some(c));
+                        Ok(c) => {                            on_update(c);
                         },
                         Err(err) => {
                             warn!(target: LOG_BITCOIND, err = %err.fmt_compact_anyhow(), "Unable to get block count from the node");
@@ -232,7 +230,7 @@ impl DynBitcoindRpc {
                 }
             }
         });
-        Ok(block_count_rx)
+        Ok(())
     }
 
     /// Spawns a background task that queries the feerate periodically and sends
@@ -240,12 +238,10 @@ impl DynBitcoindRpc {
     pub fn spawn_fee_rate_update_task(
         self,
         task_group: &TaskGroup,
-        default_fee: Feerate,
         network: Network,
         confirmation_target: u16,
-    ) -> anyhow::Result<watch::Receiver<Feerate>> {
-        let (fee_rate_tx, fee_rate_rx) = watch::channel(default_fee);
-
+        on_update: impl Fn(Feerate) + Send + Sync + 'static,
+    ) -> anyhow::Result<()> {
         let sources = std::env::var(FM_WALLET_FEERATE_SOURCES_ENV)
             .unwrap_or_else(|_| match network {
                 Network::Bitcoin => "https://mempool.space/api/v1/fees/recommended#.;https://blockstream.info/api/fee-estimates#.\"1\"".to_owned(),
@@ -289,7 +285,7 @@ impl DynBitcoindRpc {
 
                 if let Some(r) = get_median(&available_feerates) {
                     let feerate = Feerate { sats_per_kvb: r };
-                    let _ = fee_rate_tx.send(feerate);
+                    on_update(feerate);
                 } else {
                     // During tests (regtest) we never get any real feerate, so no point spamming about it
                     if !is_running_in_test_env() {
@@ -309,7 +305,7 @@ impl DynBitcoindRpc {
             }
         });
 
-        Ok(fee_rate_rx)
+        Ok(())
     }
 }
 
