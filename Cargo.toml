@@ -172,7 +172,7 @@ hkdf = { package = "fedimint-hkdf", path = "./crypto/hkdf", version = "=0.7.0-al
 hyper = "1.5"
 iroh = { version = "0.30.0", default-features = false }
 itertools = "0.13.0"
-jaq-core = "2.0.0"
+jaq-core = "2.1.0"
 jaq-json = { version = "1.0.0", features = ["serde_json"] }
 lightning = "0.0.125"
 lightning-invoice = { version = "0.32.0", features = ["std"] }
