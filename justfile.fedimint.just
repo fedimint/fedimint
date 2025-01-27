@@ -265,11 +265,12 @@ cargo-sort-fix *ARGS="":
 cargo-sort-check *ARGS="":
   cargo sort {{cargo_sort_defaults}} --check {{ARGS}}
 
+# deploy our docker-compose deployment to HOST
 deploy-docker-demo HOST:
   #!/usr/bin/env bash
 
   set -euo pipefail
-  cd docker/current
+  cd docker/deploy-fedimintd
   ./deploy.sh {{HOST}}
 
 deploy-docker-demo-all:
