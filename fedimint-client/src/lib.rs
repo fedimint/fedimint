@@ -100,6 +100,7 @@ use db::{
     PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey,
 };
 use fedimint_api_client::api::global_api::with_cache::GlobalFederationApiWithCacheExt;
+use fedimint_api_client::api::global_api::with_online_toggle::RawFederationApiWithOnlineToggleExt;
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
@@ -870,6 +871,7 @@ pub struct Client {
     /// Receiver for events fired every time (ordered) log event is added.
     log_event_added_rx: watch::Receiver<()>,
     log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
+    online_toggle_tx: watch::Sender<bool>,
 }
 
 impl Client {
@@ -2381,6 +2383,7 @@ pub struct ClientBuilder {
     connector: Connector,
     stopped: bool,
     log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
+    online_toggle_tx: Option<watch::Sender<bool>>,
 }
 
 impl ClientBuilder {
@@ -2398,6 +2401,7 @@ impl ClientBuilder {
             stopped: false,
             meta_service,
             log_event_added_transient_tx,
+            online_toggle_tx: None,
         }
     }
 
@@ -2413,6 +2417,7 @@ impl ClientBuilder {
             meta_service: client.meta_service.clone(),
             connector: client.connector,
             log_event_added_transient_tx: client.log_event_added_transient_tx.clone(),
+            online_toggle_tx: Some(client.online_toggle_tx.clone()),
         }
     }
 
@@ -2428,6 +2433,22 @@ impl ClientBuilder {
 
     pub fn stopped(&mut self) {
         self.stopped = true;
+    }
+
+    /// Build the [`Client`] with ability to toggle/gate API request through a
+    /// "online toggle"
+    ///
+    /// When the `online_toggle_tx` is set to `true`, the [`Client`] will
+    /// proceed as normal, but when it's `false` it will consider network
+    /// unavailable and requests will fail until toggle is set back to
+    /// `true`.
+    ///
+    /// This is intended to be used by downstream applications, e.g. to
+    /// simulate offline mode, or save batter when the OS indicates lack of
+    /// connectivity.
+    pub fn with_online_toggle(mut self, online_toggle_tx: watch::Sender<bool>) -> Self {
+        self.online_toggle_tx = Some(online_toggle_tx);
+        self
     }
 
     /// Uses this module with the given instance id as the primary module. See
@@ -2753,6 +2774,7 @@ impl ClientBuilder {
 
         let api_secret = Client::get_api_secret_from_db(&self.db_no_decoders).await;
         let stopped = self.stopped;
+        let online_toggle_tx = self.online_toggle_tx.clone();
 
         let log_event_added_transient_tx = self.log_event_added_transient_tx.clone();
         let client = self
@@ -2761,6 +2783,7 @@ impl ClientBuilder {
                 &config,
                 api_secret,
                 log_event_added_transient_tx,
+                online_toggle_tx.unwrap_or_else(|| watch::channel(true).0),
             )
             .await?;
         if !stopped {
@@ -2778,12 +2801,14 @@ impl ClientBuilder {
         stopped: bool,
     ) -> anyhow::Result<ClientHandle> {
         let log_event_added_transient_tx = self.log_event_added_transient_tx.clone();
+        let online_toggle_tx = self.online_toggle_tx.clone();
         let client = self
             .build_stopped(
                 pre_root_secret,
                 &config,
                 api_secret,
                 log_event_added_transient_tx,
+                online_toggle_tx.unwrap_or(watch::channel(true).0),
             )
             .await?;
         if !stopped {
@@ -2801,6 +2826,7 @@ impl ClientBuilder {
         config: &ClientConfig,
         api_secret: Option<String>,
         log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
+        online_toggle_tx: watch::Sender<bool>,
     ) -> anyhow::Result<ClientHandle> {
         let (log_event_added_tx, log_event_added_rx) = watch::channel(());
         let (log_ordering_wakeup_tx, log_ordering_wakeup_rx) = watch::channel(());
@@ -2822,11 +2848,13 @@ impl ClientBuilder {
                 &connector,
             )
             .with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
+            .with_online_toggle(online_toggle_tx.subscribe())
             .with_cache()
             .into()
         } else {
             ReconnectFederationApi::from_endpoints(peer_urls, &api_secret, &connector, None)
                 .with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
+                .with_online_toggle(online_toggle_tx.subscribe())
                 .with_cache()
                 .into()
         };
@@ -3094,6 +3122,8 @@ impl ClientBuilder {
             log_ordering_wakeup_tx,
             log_event_added_rx,
             log_event_added_transient_tx: log_event_added_transient_tx.clone(),
+            online_toggle_tx,
+
             executor,
             api,
             secp_ctx: Secp256k1::new(),
