@@ -103,7 +103,7 @@ impl GatewayLdkClient {
         } else {
             let alias = format!("{network} LDK Gateway");
             let mut bytes = [0u8; 32];
-            bytes[..alias.as_bytes().len()].copy_from_slice(alias.as_bytes());
+            bytes[..alias.len()].copy_from_slice(alias.as_bytes());
             Some(NodeAlias(bytes))
         };
 

@@ -322,7 +322,7 @@ where
         }
 
         /// Make enough progress to justify saving a state snapshot
-        async fn make_progress<'a, Init, Recovery: RecoveryFromHistory<Init = Init>>(
+        async fn make_progress<Init, Recovery: RecoveryFromHistory<Init = Init>>(
             client_ctx: &ClientContext<<Init as ClientModuleInit>::Module>,
             common_state: &mut RecoveryFromHistoryCommon,
             state: &mut Recovery,

@@ -527,7 +527,7 @@ async fn get_user_client(
     let user_db = db_path
         .as_ref()
         .map(|db_path| db_path.join(format!("user_{user_index}.db")));
-    let user_invite_code = if user_db.as_ref().map_or(false, |db| db.exists()) {
+    let user_invite_code = if user_db.as_ref().is_some_and(|db| db.exists()) {
         None
     } else {
         invite_code.clone()
