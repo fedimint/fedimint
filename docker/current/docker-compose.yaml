@@ -42,7 +42,7 @@ services:
     restart: unless-stopped
 
   fedimintd:
-    image: fedimint/fedimintd:v0.5.0
+    image: ${FEDIMINTD_IMAGE}
     volumes:
       - fedimintd_data:/data
     ports:
