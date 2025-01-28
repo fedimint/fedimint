@@ -55,11 +55,7 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         .await?;
 
     let gw_lnd = dev_fed.gw_lnd().await?;
-    let gw_ldk = dev_fed
-        .gw_ldk_connected()
-        .await?
-        .as_ref()
-        .expect("Gateways of version 0.5.0 or higher support LDK");
+    let gw_ldk = dev_fed.gw_ldk_connected().await?;
 
     let gateways = [gw_lnd.addr.clone(), gw_ldk.addr.clone()];
 
@@ -168,11 +164,7 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     assert_eq!(client.balance().await?, 10_000 * 1000);
 
     let gw_lnd = dev_fed.gw_lnd().await?;
-    let gw_ldk = dev_fed
-        .gw_ldk()
-        .await?
-        .as_ref()
-        .expect("Gateways of version 0.5.0 or higher support LDK");
+    let gw_ldk = dev_fed.gw_ldk().await?;
     let lnd = dev_fed.lnd().await?;
 
     let (hold_preimage, hold_invoice, hold_payment_hash) = lnd.create_hold_invoice(60000).await?;

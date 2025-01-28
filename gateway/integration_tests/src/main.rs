@@ -88,15 +88,7 @@ async fn backup_restore_test() -> anyhow::Result<()> {
                 return Ok(());
             }
 
-            let gw = if is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV) {
-                dev_fed.gw_lnd_registered().await?
-            } else {
-                dev_fed
-                    .gw_ldk_connected()
-                    .await?
-                    .as_ref()
-                    .expect("LDK Gateway should be available")
-            };
+            let gw = dev_fed.gw_ldk_connected().await?;
 
             let fed = dev_fed.fed().await?;
             fed.pegin_gateways(10_000_000, vec![gw]).await?;
@@ -314,11 +306,7 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
 
             let gw = match gw_type {
                 LightningNodeType::Lnd => dev_fed.gw_lnd_registered().await?,
-                LightningNodeType::Ldk => dev_fed
-                    .gw_ldk_connected()
-                    .await?
-                    .as_ref()
-                    .expect("LDK Gateway should be available"),
+                LightningNodeType::Ldk => dev_fed.gw_ldk_connected().await?,
             };
 
             let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
@@ -525,7 +513,7 @@ async fn liquidity_test() -> anyhow::Result<()> {
         }
 
         let gw_lnd = dev_fed.gw_lnd_registered().await?;
-        let gw_ldk = dev_fed.gw_ldk_connected().await?.as_ref().expect("LDK Should be available");
+        let gw_ldk = dev_fed.gw_ldk_connected().await?;
         let gateways = [gw_lnd, gw_ldk].to_vec();
 
         let gateway_matrix = gateways

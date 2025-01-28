@@ -279,7 +279,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                     .map(|_| ())
                             },
                             async {
-                                if let Some(gw_ldk) = dev_fed.gw_ldk_connected().await? {
+                                if let Ok(gw_ldk) = dev_fed.gw_ldk_connected().await {
                                     let pegin_addr = gw_ldk
                                         .get_pegin_addr(
                                             &dev_fed.fed().await?.calculate_federation_id(),
