@@ -62,7 +62,7 @@ use tokio::sync::watch;
 use tpe::{
     derive_pk_share, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare, SecretKeyShare,
 };
-use tracing::debug;
+use tracing::trace;
 
 use crate::db::{
     BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, DecryptionKeyShareKey,
@@ -338,7 +338,7 @@ impl ServerModule for Lightning {
         )];
 
         if let Ok(block_count) = self.get_block_count() {
-            debug!(target: LOG_MODULE_LNV2, ?block_count, "Proposing block count");
+            trace!(target: LOG_MODULE_LNV2, ?block_count, "Proposing block count");
             items.push(LightningConsensusItem::BlockCountVote(block_count));
         }
 
