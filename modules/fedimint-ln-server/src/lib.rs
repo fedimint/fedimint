@@ -6,6 +6,7 @@
 
 pub mod db;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{bail, format_err, Context};
@@ -66,7 +67,7 @@ use strum::IntoEnumIterator;
 use threshold_crypto::poly::Commitment;
 use threshold_crypto::serde_impl::SerdeSecret;
 use threshold_crypto::{PublicKeySet, SecretKeyShare};
-use tokio::sync::watch;
+use tokio::sync::{watch, Notify};
 use tracing::{debug, error, info, info_span, trace, warn};
 
 use crate::db::{
@@ -341,6 +342,8 @@ pub struct Lightning {
     our_peer_id: PeerId,
     /// Block count updated periodically by a background task
     block_count_rx: watch::Receiver<Option<u64>>,
+    /// Consensus proposals will wait for this notification
+    propose_citem: Arc<Notify>,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -352,6 +355,14 @@ impl ServerModule for Lightning {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> Vec<LightningConsensusItem> {
+        if tokio::time::timeout(Duration::from_secs(15), self.propose_citem.notified())
+            .await
+            .is_err()
+        {
+            // No notifications, return no citem, just so the caller know we didn't hang
+            return vec![];
+        }
+
         let mut items: Vec<LightningConsensusItem> = dbtx
             .find_by_prefix(&ProposeDecryptionShareKeyPrefix)
             .await
@@ -441,6 +452,10 @@ impl ServerModule for Lightning {
                 // Delete decryption shares once we've decrypted the preimage
                 dbtx.remove_entry(&ProposeDecryptionShareKey(contract_id))
                     .await;
+                let propose_citem_tx = self.propose_citem.clone();
+                dbtx.on_commit(move || {
+                    propose_citem_tx.notify_one();
+                });
 
                 dbtx.remove_by_prefix(&AgreedDecryptionShareContractIdPrefix(contract_id))
                     .await;
@@ -698,6 +713,11 @@ impl ServerModule for Lightning {
                     )
                     .await;
 
+                    let propose_citem_tx = self.propose_citem.clone();
+                    dbtx.on_commit(move || {
+                        propose_citem_tx.notify_one();
+                    });
+
                     dbtx.remove_entry(&OfferKey(offer.hash)).await;
                 }
 
@@ -946,17 +966,21 @@ impl Lightning {
         our_peer_id: PeerId,
         task_group: &TaskGroup,
     ) -> anyhow::Result<Self> {
+        let propose_citem = Arc::new(Notify::new());
         let (block_count_tx, block_count_rx) = watch::channel(None);
         let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
         btc_rpc.spawn_block_count_update_task(task_group, {
+            let propose_citem = propose_citem.clone();
             move |count| {
                 let _ = block_count_tx.send(Some(count));
+                propose_citem.notify_one();
             }
         })?;
         Ok(Lightning {
             cfg,
             our_peer_id,
             block_count_rx,
+            propose_citem,
         })
     }
 

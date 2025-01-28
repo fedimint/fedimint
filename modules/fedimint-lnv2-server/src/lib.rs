@@ -5,6 +5,7 @@
 mod db;
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, ensure, format_err, Context};
@@ -58,7 +59,7 @@ use group::Curve;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use strum::IntoEnumIterator;
-use tokio::sync::watch;
+use tokio::sync::{watch, Notify};
 use tpe::{
     derive_pk_share, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare, SecretKeyShare,
 };
@@ -322,6 +323,9 @@ pub struct Lightning {
     cfg: LightningConfig,
     /// Block count updated periodically by a background task
     block_count_rx: watch::Receiver<Option<u64>>,
+
+    /// Consensus proposals will wait for this notification
+    propose_citem: Arc<Notify>,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -333,6 +337,16 @@ impl ServerModule for Lightning {
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
     ) -> Vec<LightningConsensusItem> {
+        if tokio::time::timeout(Duration::from_secs(15), self.propose_citem.notified())
+            .await
+            .is_err()
+        {
+            // Just update time
+            return vec![LightningConsensusItem::UnixTimeVote(
+                duration_since_epoch().as_secs(),
+            )];
+        }
+
         let mut items = vec![LightningConsensusItem::UnixTimeVote(
             duration_since_epoch().as_secs(),
         )];
@@ -629,15 +643,22 @@ impl ServerModule for Lightning {
 
 impl Lightning {
     fn new(cfg: LightningConfig, task_group: &TaskGroup) -> anyhow::Result<Self> {
+        let propose_citem = Arc::new(Notify::new());
         let (block_count_tx, block_count_rx) = watch::channel(None);
         let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
-        btc_rpc.spawn_block_count_update_task(task_group, move |count| {
-            let _ = block_count_tx.send(Some(count));
+        btc_rpc.spawn_block_count_update_task(task_group, {
+            let propose_citem = propose_citem.clone();
+            move |count| {
+                let _ = block_count_tx.send(Some(count));
+
+                propose_citem.notify_one();
+            }
         })?;
 
         Ok(Lightning {
             cfg,
             block_count_rx,
+            propose_citem,
         })
     }
 
