@@ -8,6 +8,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Debug;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
 use std::{env, iter};
@@ -201,9 +202,12 @@ impl DynBitcoindRpc {
     ) -> anyhow::Result<()> {
         let mut desired_interval = get_bitcoin_polling_interval();
 
+        // Note: atomic only to workaround Send+Sync async closure limitation
+        let last_block_count = AtomicU64::new(0);
+
         task_group.spawn_cancellable("block count background task", {
             async move {
-                debug!(target: LOG_BITCOIND, "Updating bitcoin block count");
+                trace!(target: LOG_BITCOIND, "Fetching block count from bitcoind");
 
                 let update_block_count = || async {
                     let res = self
@@ -211,7 +215,11 @@ impl DynBitcoindRpc {
                         .await;
 
                     match res {
-                        Ok(c) => {                            on_update(c);
+                        Ok(block_count) => {
+                            if last_block_count.load(Ordering::SeqCst) != block_count {
+                                on_update(block_count);
+                                last_block_count.store(block_count, Ordering::SeqCst);
+                            }
                         },
                         Err(err) => {
                             warn!(target: LOG_BITCOIND, err = %err.fmt_compact_anyhow(), "Unable to get block count from the node");
@@ -259,7 +267,10 @@ impl DynBitcoindRpc {
         let mut desired_interval = get_bitcoin_polling_interval();
 
         task_group.spawn_cancellable("feerate background task", async move {
-            debug!(target: LOG_BITCOIND, "Updating feerate");
+            trace!(target: LOG_BITCOIND, "Fetching feerate from sources");
+
+            // Note: atomic only to workaround Send+Sync async closure limitation
+            let last_feerate = AtomicU64::new(0);
 
             let update_fee_rate = || async {
                 trace!(target: LOG_BITCOIND, "Updating bitcoin fee rate");
@@ -283,9 +294,11 @@ impl DynBitcoindRpc {
 
                 available_feerates.sort_unstable();
 
-                if let Some(r) = get_median(&available_feerates) {
-                    let feerate = Feerate { sats_per_kvb: r };
-                    on_update(feerate);
+                if let Some(feerate) = get_median(&available_feerates) {
+                    if feerate != last_feerate.load(Ordering::SeqCst) {
+                        on_update(Feerate { sats_per_kvb: feerate });
+                        last_feerate.store(feerate, Ordering::SeqCst);
+                    }
                 } else {
                     // During tests (regtest) we never get any real feerate, so no point spamming about it
                     if !is_running_in_test_env() {

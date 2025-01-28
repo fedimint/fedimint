@@ -950,6 +950,7 @@ impl Lightning {
         let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
         btc_rpc.spawn_block_count_update_task(task_group, {
             move |count| {
+                debug!(target: LOG_MODULE_LN, %count, "New block count");
                 let _ = block_count_tx.send(Some(count));
             }
         })?;

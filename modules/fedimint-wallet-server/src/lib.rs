@@ -1042,6 +1042,7 @@ impl Wallet {
             .clone()
             .spawn_fee_rate_update_task(task_group, cfg.consensus.network.0, CONFIRMATION_TARGET, {
                 move |feerate| {
+                    debug!(target: LOG_MODULE_WALLET, %feerate, "New feerate");
                     let _ = fee_rate_tx.send(feerate);
                 }
             })
@@ -1050,6 +1051,7 @@ impl Wallet {
             .clone()
             .spawn_block_count_update_task(task_group, {
                 move |count| {
+                    debug!(target: LOG_MODULE_WALLET, %count, "New block count");
                     let _ = block_count_tx.send(Some(count));
                 }
             })
