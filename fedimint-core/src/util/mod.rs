@@ -479,6 +479,31 @@ where
     }
 }
 
+/// Computes the median from a slice of sorted `u64`s
+pub fn get_median(vals: &[u64]) -> Option<u64> {
+    if vals.is_empty() {
+        return None;
+    }
+    let len = vals.len();
+    let mid = len / 2;
+
+    if len % 2 == 0 {
+        Some((vals[mid - 1] + vals[mid]) / 2)
+    } else {
+        Some(vals[mid])
+    }
+}
+
+/// Computes the average of the given `u64` slice.
+pub fn get_average(vals: &[u64]) -> Option<u64> {
+    if vals.is_empty() {
+        return None;
+    }
+
+    let sum: u64 = vals.iter().sum();
+    Some(sum / vals.len() as u64)
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::atomic::{AtomicU8, Ordering};

@@ -1262,14 +1262,14 @@ async fn gateway_read_payment_log() -> anyhow::Result<()> {
         .0
         .iter()
         .tuple_windows()
-        .all(|(e1, e2)| e1.3 > e2.3));
+        .all(|(e1, e2)| e1.timestamp > e2.timestamp));
 
     // Verify that we retrieve the rest of the events
     let start_event = transactions
         .0
         .last()
         .expect("no transactions")
-        .0
+        .event_id
         .saturating_sub(1);
 
     let transactions = gateway

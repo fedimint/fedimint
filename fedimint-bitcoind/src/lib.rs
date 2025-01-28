@@ -21,7 +21,7 @@ use fedimint_core::envs::{
 use fedimint_core::task::TaskGroup;
 use fedimint_core::time::now;
 use fedimint_core::txoproof::TxOutProof;
-use fedimint_core::util::{FmtCompactAnyhow, SafeUrl};
+use fedimint_core::util::{get_median, FmtCompactAnyhow, SafeUrl};
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, Feerate};
 use fedimint_logging::{LOG_BITCOIND, LOG_CORE};
 use feerate_source::{FeeRateSource, FetchJson};
@@ -322,19 +322,4 @@ fn get_bitcoin_polling_interval() -> Interval {
     } else {
         Duration::from_secs(30)
     })
-}
-
-/// Computes the median from a slice of `u64`s
-fn get_median(vals: &[u64]) -> Option<u64> {
-    if vals.is_empty() {
-        return None;
-    }
-    let len = vals.len();
-    let mid = len / 2;
-
-    if len % 2 == 0 {
-        Some((vals[mid - 1] + vals[mid]) / 2)
-    } else {
-        Some(vals[mid])
-    }
 }

@@ -51,6 +51,7 @@ fedimint-wallet-client = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
 hex = { workspace = true }
+itertools = { workspace = true }
 lightning-invoice = { workspace = true }
 lockable = "0.1.1"
 prost = "0.13.4"
@@ -81,7 +82,6 @@ fedimint-lnv2-server = { workspace = true }
 fedimint-testing = { workspace = true }
 fedimint-unknown-common = { workspace = true }
 fedimint-unknown-server = { workspace = true }
-itertools = { workspace = true }
 
 [build-dependencies]
 fedimint-build = { workspace = true }

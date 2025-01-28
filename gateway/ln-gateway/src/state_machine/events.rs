@@ -1,14 +1,15 @@
 use fedimint_core::core::{ModuleKind, OperationId};
 use fedimint_core::Amount;
-use fedimint_eventlog::{Event, EventKind};
+use fedimint_eventlog::{Event, EventKind, PersistedLogEntry};
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::ContractId;
 use serde::{Deserialize, Serialize};
 
 use super::pay::OutgoingPaymentError;
+use crate::events::{filter_events, join_events, StructuredPaymentEvents};
 
 /// LNv1 event that is emitted when an outgoing payment attempt is initiated.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct OutgoingPaymentStarted {
     /// The contract ID that uniquely identifies the outgoing contract.
     pub contract_id: ContractId,
@@ -27,7 +28,7 @@ impl Event for OutgoingPaymentStarted {
 }
 
 /// LNv1 event that is emitted when an outgoing payment attempt has succeeded.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct OutgoingPaymentSucceeded {
     /// LNv1 outgoing contract
     pub outgoing_contract: OutgoingContractAccount,
@@ -46,7 +47,7 @@ impl Event for OutgoingPaymentSucceeded {
 }
 
 /// LNv1 event that is emitted when an outgoing payment attempt has failed.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct OutgoingPaymentFailed {
     /// LNv1 outgoing contract
     pub outgoing_contract: OutgoingContractAccount,
@@ -65,7 +66,7 @@ impl Event for OutgoingPaymentFailed {
 }
 
 /// LNv1 event that is emitted when an incoming payment attempt has started.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct IncomingPaymentStarted {
     /// The contract ID that uniquely identifies the incoming contract.
     pub contract_id: ContractId,
@@ -90,7 +91,7 @@ impl Event for IncomingPaymentStarted {
 }
 
 /// LNv1 event that is emitted when an incoming payment attempt was successful.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct IncomingPaymentSucceeded {
     /// The payment hash of the invoice that was paid.
     pub payment_hash: bitcoin::hashes::sha256::Hash,
@@ -106,7 +107,7 @@ impl Event for IncomingPaymentSucceeded {
 }
 
 /// LNv1 event that is emitted when an incoming payment attempt has failed.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct IncomingPaymentFailed {
     /// The payment hash of the invoice that failed to be paid.
     pub payment_hash: bitcoin::hashes::sha256::Hash,
@@ -123,7 +124,7 @@ impl Event for IncomingPaymentFailed {
 
 /// LNv1 event that is emitted when a preimage was successfully revealed to the
 /// Lightning Network.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct CompleteLightningPaymentSucceeded {
     /// The payment hash of the payment.
     pub payment_hash: bitcoin::hashes::sha256::Hash,
@@ -133,4 +134,113 @@ impl Event for CompleteLightningPaymentSucceeded {
     const MODULE: Option<ModuleKind> = Some(fedimint_ln_common::KIND);
 
     const KIND: EventKind = EventKind::from_static("complete-lightning-payment-succeeded");
+}
+
+/// Computes the `StructurePaymentEvents` for all LNv1 payments.
+///
+/// Filters the event set for LNv1 events and joins them together.
+pub fn compute_lnv1_stats(
+    all_events: &[PersistedLogEntry],
+) -> (StructuredPaymentEvents, StructuredPaymentEvents) {
+    let outgoing_start_events = filter_events(
+        all_events,
+        OutgoingPaymentStarted::KIND,
+        fedimint_ln_common::KIND,
+    )
+    .collect::<Vec<_>>();
+    let outgoing_success_events = filter_events(
+        all_events,
+        OutgoingPaymentSucceeded::KIND,
+        fedimint_ln_common::KIND,
+    )
+    .collect::<Vec<_>>();
+    let outgoing_failure_events = filter_events(
+        all_events,
+        OutgoingPaymentFailed::KIND,
+        fedimint_ln_common::KIND,
+    )
+    .collect::<Vec<_>>();
+
+    let outgoing_success_stats =
+        join_events::<OutgoingPaymentStarted, OutgoingPaymentSucceeded, (u64, Amount)>(
+            &outgoing_start_events,
+            &outgoing_success_events,
+            |start_event, success_event, latency| {
+                if start_event.contract_id == success_event.contract_id {
+                    success_event
+                        .outgoing_contract
+                        .amount
+                        .checked_sub(start_event.invoice_amount)
+                        .map(|fee| (latency, fee))
+                } else {
+                    None
+                }
+            },
+        )
+        .collect::<Vec<_>>();
+
+    let outgoing_failure_stats = join_events::<OutgoingPaymentStarted, OutgoingPaymentFailed, u64>(
+        &outgoing_start_events,
+        &outgoing_failure_events,
+        |start_event, fail_event, latency| {
+            if start_event.contract_id == fail_event.contract_id {
+                Some(latency)
+            } else {
+                None
+            }
+        },
+    )
+    .collect::<Vec<_>>();
+
+    let incoming_start_events = filter_events(
+        all_events,
+        IncomingPaymentStarted::KIND,
+        fedimint_ln_common::KIND,
+    )
+    .collect::<Vec<_>>();
+    let incoming_success_events = filter_events(
+        all_events,
+        IncomingPaymentSucceeded::KIND,
+        fedimint_ln_common::KIND,
+    )
+    .collect::<Vec<_>>();
+    let incoming_failure_events = filter_events(
+        all_events,
+        IncomingPaymentFailed::KIND,
+        fedimint_ln_common::KIND,
+    )
+    .collect::<Vec<_>>();
+    let incoming_success_stats =
+        join_events::<IncomingPaymentStarted, IncomingPaymentSucceeded, (u64, Amount)>(
+            &incoming_start_events,
+            &incoming_success_events,
+            |start_event, success_event, latency| {
+                if start_event.payment_hash == success_event.payment_hash {
+                    start_event
+                        .contract_amount
+                        .checked_sub(start_event.invoice_amount)
+                        .map(|fee| (latency, fee))
+                } else {
+                    None
+                }
+            },
+        )
+        .collect::<Vec<_>>();
+
+    let incoming_failure_stats = join_events::<IncomingPaymentStarted, IncomingPaymentFailed, u64>(
+        &incoming_start_events,
+        &incoming_failure_events,
+        |start_event, fail_event, latency| {
+            if start_event.payment_hash == fail_event.payment_hash {
+                Some(latency)
+            } else {
+                None
+            }
+        },
+    )
+    .collect::<Vec<_>>();
+
+    let outgoing = StructuredPaymentEvents::new(&outgoing_success_stats, outgoing_failure_stats);
+    let incoming = StructuredPaymentEvents::new(&incoming_success_stats, incoming_failure_stats);
+    (outgoing, incoming)
 }
