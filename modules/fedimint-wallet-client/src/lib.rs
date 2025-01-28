@@ -1285,7 +1285,7 @@ async fn poll_supports_safe_deposit_version(db: Database, module_api: DynModuleA
         drop(dbtx);
 
         if is_running_in_test_env() {
-            sleep(Duration::from_secs(1)).await;
+            sleep(Duration::from_secs(30)).await;
         } else {
             sleep(Duration::from_secs(3600)).await;
         }

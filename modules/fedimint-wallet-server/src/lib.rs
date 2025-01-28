@@ -1782,7 +1782,7 @@ impl Wallet {
                 }
 
                 if is_running_in_test_env() {
-                    sleep(Duration::from_secs(1)).await;
+                    sleep(Duration::from_secs(30)).await;
                 } else {
                     sleep(Duration::from_secs(3600)).await;
                 }
