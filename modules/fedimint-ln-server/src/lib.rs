@@ -362,7 +362,7 @@ impl ServerModule for Lightning {
             .await;
 
         if let Ok(block_count_vote) = self.get_block_count() {
-            debug!(target: LOG_MODULE_LN, ?block_count_vote, "Proposing block count");
+            trace!(target: LOG_MODULE_LN, ?block_count_vote, "Proposing block count");
             items.push(LightningConsensusItem::BlockCount(block_count_vote));
         }
 
