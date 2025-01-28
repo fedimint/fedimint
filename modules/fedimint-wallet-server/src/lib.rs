@@ -1745,7 +1745,8 @@ impl Wallet {
                 }
 
                 if is_running_in_test_env() {
-                    sleep(Duration::from_secs(1)).await;
+                    // Even in tests we don't want to spam the federation with requests about it
+                    sleep(Duration::from_secs(30)).await;
                 } else {
                     sleep(Duration::from_secs(3600)).await;
                 }
