@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::future;
-use std::io::{Read, Write};
 use std::ops::Range;
 use std::time::{Duration, SystemTime};
 
@@ -23,6 +22,29 @@ use tracing::{error, instrument, warn};
 use crate::db::{
     ChronologicalOperationLogKey, ChronologicalOperationLogKeyPrefix, OperationLogKey,
 };
+
+/// Json value using string representation as db encoding.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(transparent)]
+pub struct JsonStringed(pub serde_json::Value);
+
+impl Encodable for JsonStringed {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        let json_str = serde_json::to_string(&self.0).expect("JSON serialization should not fail");
+        json_str.consensus_encode(writer)
+    }
+}
+
+impl Decodable for JsonStringed {
+    fn consensus_decode_partial<R: std::io::Read>(
+        r: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let json_str = String::consensus_decode_partial(r, modules)?;
+        let value = serde_json::from_str(&json_str).map_err(DecodeError::from_err)?;
+        Ok(JsonStringed(value))
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct OperationLog {
@@ -68,10 +90,11 @@ impl OperationLog {
             &OperationLogKey { operation_id },
             &OperationLogEntry {
                 operation_module_kind: operation_type.to_string(),
-                meta: serde_json::to_value(operation_meta)
-                    .expect("Can only fail if meta is not serializable"),
+                meta: JsonStringed(
+                    serde_json::to_value(operation_meta)
+                        .expect("Can only fail if meta is not serializable"),
+                ),
                 outcome: None,
-                outcome_time: None,
             },
         )
         .await;
@@ -181,14 +204,17 @@ impl OperationLog {
         operation_id: OperationId,
         outcome: &(impl Serialize + Debug),
     ) -> anyhow::Result<()> {
-        let outcome_json = serde_json::to_value(outcome).expect("Outcome is not serializable");
+        let outcome_json =
+            JsonStringed(serde_json::to_value(outcome).expect("Outcome is not serializable"));
 
         let mut dbtx = db.begin_transaction().await;
         let mut operation = Self::get_operation_inner(&mut dbtx.to_ref_nc(), operation_id)
             .await
             .expect("Operation exists");
-        operation.outcome = Some(outcome_json);
-        operation.outcome_time = Some(fedimint_core::time::now());
+        operation.outcome = Some(OperationOutcome {
+            time: fedimint_core::time::now(),
+            outcome: outcome_json,
+        });
         dbtx.insert_entry(&OperationLogKey { operation_id }, &operation)
             .await;
         dbtx.commit_tx_result().await?;
@@ -273,52 +299,19 @@ fn rev_epoch_ranges(
 }
 
 /// V0 version of operation log entry for migration purposes
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct OperationLogEntryV0 {
     pub(crate) operation_module_kind: String,
-    pub(crate) meta: serde_json::Value,
-    pub(crate) outcome: Option<serde_json::Value>,
+    pub(crate) meta: JsonStringed,
+    pub(crate) outcome: Option<JsonStringed>,
 }
 
-impl Encodable for OperationLogEntryV0 {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
-        self.operation_module_kind.consensus_encode(writer)?;
-        serde_json::to_string(&self.meta)
-            .expect("JSON serialization should not fail")
-            .consensus_encode(writer)?;
-        self
-            .outcome
-            .as_ref()
-            .map(|outcome| {
-                serde_json::to_string(outcome).expect("JSON serialization should not fail")
-            })
-            .consensus_encode(writer)?;
-
-        Ok(())
-    }
-}
-
-impl Decodable for OperationLogEntryV0 {
-    fn consensus_decode_partial<R: Read>(
-        r: &mut R,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        let operation_type = String::consensus_decode_partial(r, modules)?;
-
-        let meta_str = String::consensus_decode_partial(r, modules)?;
-        let meta = serde_json::from_str(&meta_str).map_err(DecodeError::from_err)?;
-
-        let outcome_str = Option::<String>::consensus_decode_partial(r, modules)?;
-        let outcome = outcome_str
-            .map(|outcome_str| serde_json::from_str(&outcome_str).map_err(DecodeError::from_err))
-            .transpose()?;
-
-        Ok(OperationLogEntryV0 {
-            operation_module_kind: operation_type,
-            meta,
-            outcome,
-        })
-    }
+/// Represents the outcome of an operation, combining both the outcome value and
+/// its timestamp
+#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq)]
+pub(crate) struct OperationOutcome {
+    pub(crate) time: SystemTime,
+    pub(crate) outcome: JsonStringed,
 }
 
 /// Represents an operation triggered by a user, typically related to sending or
@@ -340,13 +333,12 @@ impl Decodable for OperationLogEntryV0 {
 ///        will return `None` and the appropriate update subscription function
 ///        has to be called. See the respective client extension trait for these
 ///        functions.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct OperationLogEntry {
     pub(crate) operation_module_kind: String,
-    pub(crate) meta: serde_json::Value,
+    pub(crate) meta: JsonStringed,
     // TODO: probably change all that JSON to Dyn-types
-    pub(crate) outcome: Option<serde_json::Value>,
-    pub(crate) outcome_time: Option<SystemTime>,
+    pub(crate) outcome: Option<OperationOutcome>,
 }
 
 impl OperationLogEntry {
@@ -361,7 +353,7 @@ impl OperationLogEntry {
     /// in the module's client crate. The module can be determined by calling
     /// [`OperationLogEntry::operation_module_kind`].
     pub fn meta<M: DeserializeOwned>(&self) -> M {
-        serde_json::from_value(self.meta.clone()).expect("JSON deserialization should not fail")
+        serde_json::from_value(self.meta.0.clone()).expect("JSON deserialization should not fail")
     }
 
     /// Returns the last state update of the operation, if any was cached yet.
@@ -383,13 +375,14 @@ impl OperationLogEntry {
     /// [`serde_json::Value`] to get the unstructured data.
     pub fn outcome<D: DeserializeOwned>(&self) -> Option<D> {
         self.outcome.as_ref().map(|outcome| {
-            serde_json::from_value(outcome.clone()).expect("JSON deserialization should not fail")
+            serde_json::from_value(outcome.outcome.0.clone())
+                .expect("JSON deserialization should not fail")
         })
     }
 
     /// Returns the time when the outcome was cached.
     pub fn outcome_time(&self) -> Option<SystemTime> {
-        self.outcome_time
+        self.outcome.as_ref().map(|o| o.time)
     }
 
     /// Returns an a [`UpdateStreamOrOutcome`] enum that can be converted into
@@ -414,50 +407,6 @@ impl OperationLogEntry {
                 stream_gen(),
             )),
         }
-    }
-}
-
-impl Encodable for OperationLogEntry {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
-        self.operation_module_kind.consensus_encode(writer)?;
-        serde_json::to_string(&self.meta)
-            .expect("JSON serialization should not fail")
-            .consensus_encode(writer)?;
-        self.outcome
-            .as_ref()
-            .map(|outcome| {
-                serde_json::to_string(outcome).expect("JSON serialization should not fail")
-            })
-            .consensus_encode(writer)?;
-        self.outcome_time.consensus_encode(writer)?;
-
-        Ok(())
-    }
-}
-
-impl Decodable for OperationLogEntry {
-    fn consensus_decode_partial<R: Read>(
-        r: &mut R,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        let operation_type = String::consensus_decode_partial(r, modules)?;
-
-        let meta_str = String::consensus_decode_partial(r, modules)?;
-        let meta = serde_json::from_str(&meta_str).map_err(DecodeError::from_err)?;
-
-        let outcome_str = Option::<String>::consensus_decode_partial(r, modules)?;
-        let outcome = outcome_str
-            .map(|outcome_str| serde_json::from_str(&outcome_str).map_err(DecodeError::from_err))
-            .transpose()?;
-
-        let outcome_time = Option::<SystemTime>::consensus_decode_partial(r, modules)?;
-
-        Ok(OperationLogEntry {
-            operation_module_kind: operation_type,
-            meta,
-            outcome,
-            outcome_time,
-        })
     }
 }
 
@@ -531,16 +480,15 @@ mod tests {
 
     use super::UpdateStreamOrOutcome;
     use crate::db::{ChronologicalOperationLogKey, OperationLogKey};
-    use crate::oplog::{OperationLog, OperationLogEntry};
+    use crate::oplog::{JsonStringed, OperationLog, OperationLogEntry, OperationOutcome};
 
     #[test]
     fn test_operation_log_entry_serde() {
-        // Test with outcome_time = None
+        // Test with outcome = None
         let op_log = OperationLogEntry {
             operation_module_kind: "test".to_string(),
-            meta: serde_json::to_value(()).unwrap(),
+            meta: JsonStringed(serde_json::to_value(()).unwrap()),
             outcome: None,
-            outcome_time: None,
         };
 
         op_log.meta::<()>();
@@ -561,9 +509,11 @@ mod tests {
 
         let op_log = OperationLogEntry {
             operation_module_kind: "test".to_string(),
-            meta: serde_json::to_value(meta.clone()).unwrap(),
-            outcome: Some(serde_json::to_value("test_outcome").unwrap()),
-            outcome_time: Some(fedimint_core::time::now()),
+            meta: JsonStringed(serde_json::to_value(meta.clone()).unwrap()),
+            outcome: Some(OperationOutcome {
+                time: fedimint_core::time::now(),
+                outcome: JsonStringed(serde_json::to_value("test_outcome").unwrap()),
+            }),
         };
 
         assert_eq!(op_log.meta::<Meta>(), meta);
@@ -584,7 +534,6 @@ mod tests {
 
         let op = op_log.get_operation(op_id).await.expect("op exists");
         assert_eq!(op.outcome, None);
-        assert_eq!(op.outcome_time, None);
 
         OperationLog::set_operation_outcome(&db, op_id, &"baz")
             .await
@@ -592,7 +541,7 @@ mod tests {
 
         let op = op_log.get_operation(op_id).await.expect("op exists");
         assert_eq!(op.outcome::<String>(), Some("baz".to_string()));
-        assert!(op.outcome_time.is_some(), "outcome_time should be set");
+        assert!(op.outcome_time().is_some(), "outcome_time should be set");
 
         let update_stream_or_outcome =
             op.outcome_or_updates::<String, _>(&db, op_id, futures::stream::empty);
@@ -634,7 +583,7 @@ mod tests {
         let op_updated = op_log.get_operation(op_id).await.expect("op exists");
         assert_eq!(op_updated.outcome::<String>(), Some("baz".to_string()));
         assert!(
-            op_updated.outcome_time.is_some(),
+            op_updated.outcome_time().is_some(),
             "outcome_time should be set after stream completion"
         );
     }
@@ -708,9 +657,8 @@ mod tests {
                 &OperationLogKey { operation_id },
                 &OperationLogEntry {
                     operation_module_kind: "operation_type".to_string(),
-                    meta: serde_json::Value::Null,
+                    meta: JsonStringed(serde_json::Value::Null),
                     outcome: None,
-                    outcome_time: None,
                 },
             )
             .await;

@@ -23,7 +23,7 @@ use tracing::{debug, info, trace, warn};
 
 use crate::backup::{ClientBackup, Metadata};
 use crate::module::recovery::RecoveryProgress;
-use crate::oplog::{OperationLogEntry, OperationLogEntryV0};
+use crate::oplog::{OperationLogEntry, OperationLogEntryV0, OperationOutcome};
 use crate::sm::executor::{
     ActiveStateKeyBytes, ActiveStateKeyPrefixBytes, InactiveStateKeyBytes,
     InactiveStateKeyPrefixBytes,
@@ -476,34 +476,36 @@ pub fn get_core_client_database_migrations() -> BTreeMap<DatabaseVersion, CoreMi
             let mut op_id_max_time = BTreeMap::new();
 
             // Process inactive states
-            let inactive_states = dbtx
-                .find_by_prefix(&InactiveStateKeyPrefixBytes)
-                .await
-                .collect::<Vec<_>>()
-                .await;
+            {
+                let mut inactive_states_stream =
+                    dbtx.find_by_prefix(&InactiveStateKeyPrefixBytes).await;
 
-            for (state, meta) in inactive_states {
-                let entry = op_id_max_time
-                    .entry(state.operation_id)
-                    .or_insert(meta.created_at);
-                *entry = (*entry).max(meta.created_at).max(meta.exited_at);
+                while let Some((state, meta)) = inactive_states_stream.next().await {
+                    let entry = op_id_max_time
+                        .entry(state.operation_id)
+                        .or_insert(meta.exited_at);
+                    *entry = (*entry).max(meta.exited_at);
+                }
             }
-
             // Migrate each V0 operation log entry to the new format
             for (op_key_v0, log_entry_v0) in operation_logs {
                 let new_entry = OperationLogEntry {
                     operation_module_kind: log_entry_v0.operation_module_kind,
                     meta: log_entry_v0.meta,
-                    outcome_time: log_entry_v0.outcome.as_ref().map(|_| {
-                        // If we found state times, use the max, otherwise use current time
-                        op_id_max_time
-                            .get(&op_key_v0.operation_id)
-                            .copied()
-                            .unwrap_or_else(fedimint_core::time::now)
+                    outcome: log_entry_v0.outcome.map(|outcome| {
+                        OperationOutcome {
+                            outcome,
+                            // If we found state times, use the max, otherwise use
+                            // current time
+                            time: op_id_max_time
+                                .get(&op_key_v0.operation_id)
+                                .copied()
+                                .unwrap_or_else(fedimint_core::time::now),
+                        }
                     }),
-                    outcome: log_entry_v0.outcome,
                 };
 
+                dbtx.remove_entry(&op_key_v0).await;
                 dbtx.insert_entry(
                     &OperationLogKey {
                         operation_id: op_key_v0.operation_id,
