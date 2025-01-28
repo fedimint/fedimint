@@ -597,6 +597,10 @@ impl ServerModule for Wallet {
 
                     dbtx.remove_entry(&PegOutTxSignatureCI(txid)).await;
                     dbtx.remove_entry(&UnsignedTransactionKey(txid)).await;
+                    let propose_citem_tx = self.propose_citem.clone();
+                    dbtx.on_commit(move || {
+                        propose_citem_tx.notify_one();
+                    });
                 }
             }
             WalletConsensusItem::ModuleConsensusVersion(module_consensus_version) => {
