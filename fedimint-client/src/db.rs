@@ -23,7 +23,7 @@ use tracing::{debug, info, trace, warn};
 
 use crate::backup::{ClientBackup, Metadata};
 use crate::module::recovery::RecoveryProgress;
-use crate::oplog::OperationLogEntry;
+use crate::oplog::{OperationLogEntry, OperationLogEntryV0};
 use crate::sm::executor::{
     ActiveStateKeyBytes, ActiveStateKeyPrefixBytes, InactiveStateKeyBytes,
     InactiveStateKeyPrefixBytes,
@@ -111,6 +111,25 @@ impl_db_record!(
 );
 
 impl_db_lookup!(key = OperationLogKey, query_prefix = OperationLogKeyPrefix);
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct OperationLogKeyV0 {
+    pub operation_id: OperationId,
+}
+
+#[derive(Debug, Encodable)]
+pub struct OperationLogKeyPrefixV0;
+
+impl_db_record!(
+    key = OperationLogKeyV0,
+    value = OperationLogEntryV0,
+    db_prefix = DbKeyPrefix::OperationLog
+);
+
+impl_db_lookup!(
+    key = OperationLogKeyV0,
+    query_prefix = OperationLogKeyPrefixV0
+);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ClientPreRootSecretHashKey;
@@ -437,6 +456,63 @@ pub fn get_core_client_database_migrations() -> BTreeMap<DatabaseVersion, CoreMi
 
             dbtx.remove_entry(&id).await;
             dbtx.insert_new_entry(&ClientConfigKey, &config).await;
+            Ok(())
+        })
+    });
+
+    // Migration to add outcome_time to OperationLogEntry
+    migrations.insert(DatabaseVersion(1), |mut ctx| {
+        Box::pin(async move {
+            let mut dbtx = ctx.dbtx();
+
+            // Read all OperationLogEntries using V0 format
+            let operation_logs = dbtx
+                .find_by_prefix(&OperationLogKeyPrefixV0)
+                .await
+                .collect::<Vec<_>>()
+                .await;
+
+            // Build a map from operation_id -> max_time of inactive state
+            let mut op_id_max_time = BTreeMap::new();
+
+            // Process inactive states
+            let inactive_states = dbtx
+                .find_by_prefix(&InactiveStateKeyPrefixBytes)
+                .await
+                .collect::<Vec<_>>()
+                .await;
+
+            for (state, meta) in inactive_states {
+                let entry = op_id_max_time
+                    .entry(state.operation_id)
+                    .or_insert(meta.created_at);
+                *entry = (*entry).max(meta.created_at).max(meta.exited_at);
+            }
+
+            // Migrate each V0 operation log entry to the new format
+            for (op_key_v0, log_entry_v0) in operation_logs {
+                let new_entry = OperationLogEntry {
+                    operation_module_kind: log_entry_v0.operation_module_kind,
+                    meta: log_entry_v0.meta,
+                    outcome_time: log_entry_v0.outcome.as_ref().map(|_| {
+                        // If we found state times, use the max, otherwise use current time
+                        op_id_max_time
+                            .get(&op_key_v0.operation_id)
+                            .copied()
+                            .unwrap_or_else(fedimint_core::time::now)
+                    }),
+                    outcome: log_entry_v0.outcome,
+                };
+
+                dbtx.insert_entry(
+                    &OperationLogKey {
+                        operation_id: op_key_v0.operation_id,
+                    },
+                    &new_entry,
+                )
+                .await;
+            }
+
             Ok(())
         })
     });

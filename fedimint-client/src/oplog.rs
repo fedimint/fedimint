@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::future;
 use std::io::{Read, Write};
 use std::ops::Range;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use async_stream::stream;
 use fedimint_core::core::OperationId;
@@ -71,6 +71,7 @@ impl OperationLog {
                 meta: serde_json::to_value(operation_meta)
                     .expect("Can only fail if meta is not serializable"),
                 outcome: None,
+                outcome_time: None,
             },
         )
         .await;
@@ -187,6 +188,7 @@ impl OperationLog {
             .await
             .expect("Operation exists");
         operation.outcome = Some(outcome_json);
+        operation.outcome_time = Some(fedimint_core::time::now());
         dbtx.insert_entry(&OperationLogKey { operation_id }, &operation)
             .await;
         dbtx.commit_tx_result().await?;
@@ -270,6 +272,55 @@ fn rev_epoch_ranges(
         })
 }
 
+/// V0 version of operation log entry for migration purposes
+#[derive(Debug)]
+pub struct OperationLogEntryV0 {
+    pub(crate) operation_module_kind: String,
+    pub(crate) meta: serde_json::Value,
+    pub(crate) outcome: Option<serde_json::Value>,
+}
+
+impl Encodable for OperationLogEntryV0 {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        self.operation_module_kind.consensus_encode(writer)?;
+        serde_json::to_string(&self.meta)
+            .expect("JSON serialization should not fail")
+            .consensus_encode(writer)?;
+        self
+            .outcome
+            .as_ref()
+            .map(|outcome| {
+                serde_json::to_string(outcome).expect("JSON serialization should not fail")
+            })
+            .consensus_encode(writer)?;
+
+        Ok(())
+    }
+}
+
+impl Decodable for OperationLogEntryV0 {
+    fn consensus_decode_partial<R: Read>(
+        r: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let operation_type = String::consensus_decode_partial(r, modules)?;
+
+        let meta_str = String::consensus_decode_partial(r, modules)?;
+        let meta = serde_json::from_str(&meta_str).map_err(DecodeError::from_err)?;
+
+        let outcome_str = Option::<String>::consensus_decode_partial(r, modules)?;
+        let outcome = outcome_str
+            .map(|outcome_str| serde_json::from_str(&outcome_str).map_err(DecodeError::from_err))
+            .transpose()?;
+
+        Ok(OperationLogEntryV0 {
+            operation_module_kind: operation_type,
+            meta,
+            outcome,
+        })
+    }
+}
+
 /// Represents an operation triggered by a user, typically related to sending or
 /// receiving money.
 ///
@@ -291,10 +342,11 @@ fn rev_epoch_ranges(
 ///        functions.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OperationLogEntry {
-    operation_module_kind: String,
-    meta: serde_json::Value,
+    pub(crate) operation_module_kind: String,
+    pub(crate) meta: serde_json::Value,
     // TODO: probably change all that JSON to Dyn-types
     pub(crate) outcome: Option<serde_json::Value>,
+    pub(crate) outcome_time: Option<SystemTime>,
 }
 
 impl OperationLogEntry {
@@ -335,6 +387,11 @@ impl OperationLogEntry {
         })
     }
 
+    /// Returns the time when the outcome was cached.
+    pub fn outcome_time(&self) -> Option<SystemTime> {
+        self.outcome_time
+    }
+
     /// Returns an a [`UpdateStreamOrOutcome`] enum that can be converted into
     /// an update stream for easier handling using
     /// [`UpdateStreamOrOutcome::into_stream`] but can also be matched over to
@@ -372,6 +429,7 @@ impl Encodable for OperationLogEntry {
                 serde_json::to_string(outcome).expect("JSON serialization should not fail")
             })
             .consensus_encode(writer)?;
+        self.outcome_time.consensus_encode(writer)?;
 
         Ok(())
     }
@@ -392,10 +450,13 @@ impl Decodable for OperationLogEntry {
             .map(|outcome_str| serde_json::from_str(&outcome_str).map_err(DecodeError::from_err))
             .transpose()?;
 
+        let outcome_time = Option::<SystemTime>::consensus_decode_partial(r, modules)?;
+
         Ok(OperationLogEntry {
             operation_module_kind: operation_type,
             meta,
             outcome,
+            outcome_time,
         })
     }
 }
@@ -474,10 +535,12 @@ mod tests {
 
     #[test]
     fn test_operation_log_entry_serde() {
+        // Test with outcome_time = None
         let op_log = OperationLogEntry {
             operation_module_kind: "test".to_string(),
             meta: serde_json::to_value(()).unwrap(),
             outcome: None,
+            outcome_time: None,
         };
 
         op_log.meta::<()>();
@@ -499,7 +562,8 @@ mod tests {
         let op_log = OperationLogEntry {
             operation_module_kind: "test".to_string(),
             meta: serde_json::to_value(meta.clone()).unwrap(),
-            outcome: None,
+            outcome: Some(serde_json::to_value("test_outcome").unwrap()),
+            outcome_time: Some(fedimint_core::time::now()),
         };
 
         assert_eq!(op_log.meta::<Meta>(), meta);
@@ -520,6 +584,7 @@ mod tests {
 
         let op = op_log.get_operation(op_id).await.expect("op exists");
         assert_eq!(op.outcome, None);
+        assert_eq!(op.outcome_time, None);
 
         OperationLog::set_operation_outcome(&db, op_id, &"baz")
             .await
@@ -527,6 +592,7 @@ mod tests {
 
         let op = op_log.get_operation(op_id).await.expect("op exists");
         assert_eq!(op.outcome::<String>(), Some("baz".to_string()));
+        assert!(op.outcome_time.is_some(), "outcome_time should be set");
 
         let update_stream_or_outcome =
             op.outcome_or_updates::<String, _>(&db, op_id, futures::stream::empty);
@@ -567,6 +633,10 @@ mod tests {
 
         let op_updated = op_log.get_operation(op_id).await.expect("op exists");
         assert_eq!(op_updated.outcome::<String>(), Some("baz".to_string()));
+        assert!(
+            op_updated.outcome_time.is_some(),
+            "outcome_time should be set after stream completion"
+        );
     }
 
     #[tokio::test]
@@ -640,6 +710,7 @@ mod tests {
                     operation_module_kind: "operation_type".to_string(),
                     meta: serde_json::Value::Null,
                     outcome: None,
+                    outcome_time: None,
                 },
             )
             .await;
