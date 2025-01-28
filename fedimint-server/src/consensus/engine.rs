@@ -32,7 +32,7 @@ use fedimint_server_core::{ServerModuleRegistry, ServerModuleRegistryExt};
 use futures::StreamExt;
 use rand::Rng;
 use tokio::sync::watch;
-use tracing::{debug, info, instrument, warn, Level};
+use tracing::{debug, info, instrument, trace, warn, Level};
 
 use crate::config::ServerConfig;
 use crate::consensus::aleph_bft::backup::{BackupReader, BackupWriter};
@@ -655,7 +655,7 @@ impl ConsensusEngine {
             .with_label_values(&[peer_id_str])
             .start_timer();
 
-        debug!(
+        trace!(
             target: LOG_CONSENSUS,
             %peer,
             item = ?DebugConsensusItem(&item),
@@ -698,9 +698,21 @@ impl ConsensusEngine {
         // item has been fully processed without errors
         dbtx.warn_uncommitted();
 
-        dbtx.insert_entry(&AcceptedItemKey(item_index), &AcceptedItem { item, peer })
-            .await;
+        dbtx.insert_entry(
+            &AcceptedItemKey(item_index),
+            &AcceptedItem {
+                item: item.clone(),
+                peer,
+            },
+        )
+        .await;
 
+        debug!(
+            target: LOG_CONSENSUS,
+            %peer,
+            item = ?DebugConsensusItem(&item),
+            "Processed consensus item"
+        );
         let mut audit = Audit::default();
 
         for (module_instance_id, kind, module) in self.modules.iter_modules() {
