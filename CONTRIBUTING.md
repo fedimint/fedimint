@@ -57,6 +57,27 @@ Contributors are encouraged to review PRs even after they have been merged.
 
 If you need additional reviews, feel free to post a link to your PR in the #code-review channel on Discord.
 
+
+# Maintainers
+
+| Area              | Lead-Maintainer    | Co-Maintainers               | Status                                |
+|-------------------|--------------------|------------------------------|---------------------------------------|
+| Project Lead      | @elsirion          | @dpc @joschisan              | X                                     |
+| Core Server       | @joschisan         | X                            | mostly well factored, no known issues |
+| Core Consensus    | @joschisan         | @bradleystachurski           | polished and documented               |
+| Lightning Module  | @joschisan         | @m1sterc001guy               | active development, known issues      |
+| Mint Module       | @joschisan         | X                            | active development, known issues      |
+| Wallet Module     | @bradleystachurski | @dpc @joschisan              | active development, critical issues   |
+| Core Client       | @dpc               | X                            | X                                     |
+| Lightning Gateway | @m1sterc001guy     | @joschisan                   | X                                     |
+| Database          | @m1sterc001guy     | X                            | X                                     |
+| Networking        | X                  | X                            | X                                     |
+| CI / Nix          | @dpc               | @maan2003 @bradleystachurski | X                                     |
+| Testing           | @bradleystachurski | X                            | X                                     |
+| Devimint          | @maan2003          | X                            | X                                     |
+| Config Generation | X                  | X                            | X                                     |
+
+
 ## Developer Certificate of Origin
 
 ```
