@@ -872,7 +872,19 @@
 <a href="#871" id="871">871</a>
 <a href="#872" id="872">872</a>
 <a href="#873" id="873">873</a>
-<a href="#874" id="874">874</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -906,7 +918,7 @@
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>tokio::sync::watch;
-<span class="kw">use </span>tracing::{debug, info, instrument, warn, Level};
+<span class="kw">use </span>tracing::{debug, info, instrument, trace, warn, Level};
 
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::aleph_bft::backup::{BackupReader, BackupWriter};
@@ -1529,7 +1541,7 @@
             .with_label_values(<span class="kw-2">&amp;</span>[peer_id_str])
             .start_timer();
 
-        <span class="macro">debug!</span>(
+        <span class="macro">trace!</span>(
             target: LOG_CONSENSUS,
             %peer,
             item = <span class="question-mark">?</span>DebugConsensusItem(<span class="kw-2">&amp;</span>item),
@@ -1572,9 +1584,21 @@
         // item has been fully processed without errors
         </span>dbtx.warn_uncommitted();
 
-        dbtx.insert_entry(<span class="kw-2">&amp;</span>AcceptedItemKey(item_index), <span class="kw-2">&amp;</span>AcceptedItem { item, peer })
-            .<span class="kw">await</span>;
+        dbtx.insert_entry(
+            <span class="kw-2">&amp;</span>AcceptedItemKey(item_index),
+            <span class="kw-2">&amp;</span>AcceptedItem {
+                item: item.clone(),
+                peer,
+            },
+        )
+        .<span class="kw">await</span>;
 
+        <span class="macro">debug!</span>(
+            target: LOG_CONSENSUS,
+            %peer,
+            item = <span class="question-mark">?</span>DebugConsensusItem(<span class="kw-2">&amp;</span>item),
+            <span class="string">"Processed consensus item"
+        </span>);
         <span class="kw">let </span><span class="kw-2">mut </span>audit = Audit::default();
 
         <span class="kw">for </span>(module_instance_id, kind, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
