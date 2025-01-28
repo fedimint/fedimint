@@ -952,12 +952,16 @@ impl ServerModule for Wallet {
             api_endpoint! {
                 ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT,
                 ApiVersion::new(0, 2),
-                async |_module: &Wallet, context, _params: ()| -> () {
+                async |module: &Wallet, context, _params: ()| -> () {
                     check_auth(context)?;
 
                     let mut dbtx = context.dbtx();
 
                     dbtx.insert_entry(&ConsensusVersionVotingActivationKey, &()).await;
+                    let propose_citem_tx = module.propose_citem.clone();
+                    dbtx.on_commit(move || {
+                        propose_citem_tx.notify_one();
+                    });
 
                     dbtx.commit_tx_result().await.map_err(|e| ApiError::server_error(e.to_string()))?;
 
