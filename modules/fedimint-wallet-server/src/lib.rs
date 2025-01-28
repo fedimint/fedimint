@@ -15,6 +15,7 @@ pub mod envs;
 use std::clone::Clone;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::convert::Infallible;
+use std::sync::Arc;
 #[cfg(not(target_family = "wasm"))]
 use std::time::Duration;
 
@@ -57,7 +58,7 @@ use fedimint_core::module::{
 };
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::task::sleep;
-use fedimint_core::task::{TaskGroup, TaskHandle};
+use fedimint_core::task::TaskGroup;
 use fedimint_core::util::{backoff_util, retry, FmtCompactAnyhow as _};
 use fedimint_core::{
     apply, async_trait_maybe_send, get_network_for_address, push_db_key_items, push_db_pair_items,
@@ -95,7 +96,7 @@ use miniscript::{translate_hash_fail, Descriptor, TranslatePk};
 use rand::rngs::OsRng;
 use serde::Serialize;
 use strum::IntoEnumIterator;
-use tokio::sync::watch;
+use tokio::sync::{watch, Notify};
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::db::{
@@ -588,6 +589,10 @@ impl ServerModule for Wallet {
 
                     dbtx.remove_entry(&PegOutTxSignatureCI(txid)).await;
                     dbtx.remove_entry(&UnsignedTransactionKey(txid)).await;
+                    let broadcast_pending = self.broadcast_pending.clone();
+                    dbtx.on_commit(move || {
+                        broadcast_pending.notify_one();
+                    });
                 }
             }
             WalletConsensusItem::ModuleConsensusVersion(module_consensus_version) => {
@@ -1000,6 +1005,10 @@ pub struct Wallet {
     block_count_rx: watch::Receiver<Option<u64>>,
     /// Fee rate updated periodically by a background task
     fee_rate_rx: watch::Receiver<Feerate>,
+
+    /// Broadcasting pending txes can be triggered immediately with this
+    broadcast_pending: Arc<Notify>,
+
     task_group: TaskGroup,
     /// Maximum consensus version supported by *all* our peers. Used to
     /// automatically activate new consensus versions as soon as everyone
@@ -1027,7 +1036,8 @@ impl Wallet {
         our_peer_id: PeerId,
         module_api: DynModuleApi,
     ) -> Result<Wallet, WalletCreationError> {
-        Self::spawn_broadcast_pending_task(task_group, &bitcoind, db);
+        let broadcast_pending = Arc::new(Notify::new());
+        Self::spawn_broadcast_pending_task(task_group, &bitcoind, db, broadcast_pending.clone());
 
         let fee_rate_rx = bitcoind
             .clone()
@@ -1071,6 +1081,7 @@ impl Wallet {
             fee_rate_rx,
             task_group: task_group.clone(),
             peer_supported_consensus_version,
+            broadcast_pending,
         };
 
         Ok(wallet)
@@ -1624,13 +1635,12 @@ impl Wallet {
         task_group: &TaskGroup,
         bitcoind: &DynBitcoindRpc,
         db: &Database,
+        broadcast_pending_notify: Arc<Notify>,
     ) {
-        task_group.spawn("broadcast pending", {
+        task_group.spawn_cancellable("broadcast pending", {
             let bitcoind = bitcoind.clone();
             let db = db.clone();
-            |handle| async move {
-                run_broadcast_pending_tx(db, bitcoind, &handle).await;
-            }
+            run_broadcast_pending_tx(db, bitcoind, broadcast_pending_notify)
         });
     }
 
@@ -1756,10 +1766,11 @@ impl Wallet {
 }
 
 #[instrument(target = LOG_MODULE_WALLET, level = "debug", skip_all)]
-pub async fn run_broadcast_pending_tx(db: Database, rpc: DynBitcoindRpc, tg_handle: &TaskHandle) {
-    while !tg_handle.is_shutting_down() {
+pub async fn run_broadcast_pending_tx(db: Database, rpc: DynBitcoindRpc, broadcast: Arc<Notify>) {
+    loop {
+        // Unless something new happened, we broadcast once a minute
+        let _ = tokio::time::timeout(Duration::from_secs(60), broadcast.notified()).await;
         broadcast_pending_tx(db.begin_transaction_nc().await, &rpc).await;
-        sleep(Duration::from_secs(1)).await;
     }
 }
 
@@ -1774,12 +1785,14 @@ pub async fn broadcast_pending_tx(mut dbtx: DatabaseTransaction<'_>, rpc: &DynBi
         .iter()
         .filter_map(|tx| tx.rbf.clone().map(|rbf| rbf.txid))
         .collect();
-    debug!(
-        target: LOG_MODULE_WALLET,
-        "Broadcasting pending transactions (total={}, rbf={})",
-        pending_tx.len(),
-        rbf_txids.len()
-    );
+    if !pending_tx.is_empty() {
+        debug!(
+            target: LOG_MODULE_WALLET,
+            "Broadcasting pending transactions (total={}, rbf={})",
+            pending_tx.len(),
+            rbf_txids.len()
+        );
+    }
 
     for PendingTransaction { tx, .. } in pending_tx {
         if !rbf_txids.contains(&tx.compute_txid()) {
