@@ -445,7 +445,7 @@ impl ServerModule for Wallet {
                     .await
                     .unwrap_or(0);
 
-                debug!(
+                trace!(
                     target: LOG_MODULE_WALLET,
                     ?current_vote,
                     ?block_count_vote,
@@ -500,12 +500,10 @@ impl ServerModule for Wallet {
         consensus_item: WalletConsensusItem,
         peer: PeerId,
     ) -> anyhow::Result<()> {
-        trace!(?consensus_item, "Received consensus proposals");
+        trace!(target: LOG_MODULE_WALLET, ?consensus_item, "Received consensus proposals");
 
         match consensus_item {
             WalletConsensusItem::BlockCount(block_count_vote) => {
-                debug!(target: LOG_MODULE_WALLET, ?peer, ?block_count_vote, "Received block count vote");
-
                 let current_vote = dbtx.get_value(&BlockCountVoteKey(peer)).await.unwrap_or(0);
 
                 if block_count_vote < current_vote {
