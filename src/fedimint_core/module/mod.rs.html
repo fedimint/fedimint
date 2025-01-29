@@ -1071,7 +1071,7 @@
             <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = <span class="kw-2">&amp;</span>result {
                 <span class="macro">tracing::warn!</span>(target: LOG_NET_API, path = E::PATH, <span class="question-mark">?</span>error, <span class="string">"api request error"</span>);
             } <span class="kw">else </span>{
-                <span class="macro">tracing::debug!</span>(target: LOG_NET_API, path = E::PATH, <span class="string">"api request complete"</span>);
+                <span class="macro">tracing::trace!</span>(target: LOG_NET_API, path = E::PATH, <span class="string">"api request complete"</span>);
             }
             result
         }
