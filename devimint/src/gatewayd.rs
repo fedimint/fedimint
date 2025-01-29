@@ -15,7 +15,7 @@ use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_testing::ln::LightningNodeType;
 use ln_gateway::envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV;
-use ln_gateway::rpc::{GatewayBalances, MnemonicResponse, V1_API_ENDPOINT};
+use ln_gateway::rpc::{GatewayBalances, MnemonicResponse, PaymentSummaryResponse, V1_API_ENDPOINT};
 use tracing::info;
 
 use crate::cmd;
@@ -615,5 +615,10 @@ impl Gatewayd {
         }
 
         Ok(())
+    }
+
+    pub async fn payment_summary(&self) -> Result<PaymentSummaryResponse> {
+        let out_json = cmd!(self, "payment-summary").out_json().await?;
+        Ok(serde_json::from_value(out_json).expect("Could not deserialize PaymentSummaryResponse"))
     }
 }

@@ -2,13 +2,14 @@ pub mod rpc_client;
 pub mod rpc_server;
 
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Network};
 use fedimint_core::config::{FederationId, JsonClientConfig};
-use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
+use fedimint_core::core::OperationId;
 use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
-use fedimint_eventlog::{EventKind, EventLogId};
+use fedimint_eventlog::{EventKind, EventLogId, PersistedLogEntry};
 use fedimint_mint_client::OOBNotes;
 use fedimint_wallet_client::PegOutFees;
 use lightning_invoice::Bolt11Invoice;
@@ -37,20 +38,13 @@ pub const OPEN_CHANNEL_ENDPOINT: &str = "/open_channel";
 pub const CLOSE_CHANNELS_WITH_PEER_ENDPOINT: &str = "/close_channels_with_peer";
 pub const PAY_INVOICE_FOR_OPERATOR_ENDPOINT: &str = "/pay_invoice_for_operator";
 pub const PAYMENT_LOG_ENDPOINT: &str = "/payment_log";
+pub const PAYMENT_SUMMARY_ENDPOINT: &str = "/payment_summary";
 pub const RECEIVE_ECASH_ENDPOINT: &str = "/receive_ecash";
 pub const SET_FEES_ENDPOINT: &str = "/set_fees";
 pub const STOP_ENDPOINT: &str = "/stop";
 pub const SEND_ONCHAIN_ENDPOINT: &str = "/send_onchain";
 pub const SPEND_ECASH_ENDPOINT: &str = "/spend_ecash";
 pub const WITHDRAW_ENDPOINT: &str = "/withdraw";
-
-type GatewayTransactionEvent = (
-    EventLogId,
-    EventKind,
-    Option<(ModuleKind, ModuleInstanceId)>,
-    u64,
-    serde_json::Value,
-);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConnectFedPayload {
@@ -244,4 +238,25 @@ pub struct PaymentLogPayload {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PaymentLogResponse(pub Vec<GatewayTransactionEvent>);
+pub struct PaymentLogResponse(pub Vec<PersistedLogEntry>);
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PaymentSummaryResponse {
+    pub outgoing: PaymentStats,
+    pub incoming: PaymentStats,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PaymentStats {
+    pub average_latency: Option<Duration>,
+    pub median_latency: Option<Duration>,
+    pub total_fees: Amount,
+    pub total_success: usize,
+    pub total_failure: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PaymentSummaryPayload {
+    pub start_millis: u64,
+    pub end_millis: u64,
+}

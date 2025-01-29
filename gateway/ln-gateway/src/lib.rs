@@ -30,7 +30,7 @@ use std::fmt::Display;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, UNIX_EPOCH};
 
 use anyhow::{anyhow, Context};
 use async_trait::async_trait;
@@ -43,7 +43,7 @@ use config::{GatewayOpts, LightningMode};
 use db::GatewayDbtxNcExt;
 use envs::FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV;
 use error::FederationNotConnected;
-use events::ALL_GATEWAY_EVENTS;
+use events::{StructuredPaymentEvents, ALL_GATEWAY_EVENTS};
 use federation_manager::FederationManager;
 use fedimint_api_client::api::net::Connector;
 use fedimint_bip39::{Bip39RootSecretStrategy, Language, Mnemonic};
@@ -92,14 +92,17 @@ use fedimint_wallet_client::{
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
 };
 use futures::stream::StreamExt;
+use gateway_module_v2::events::compute_lnv2_stats;
 use lightning_invoice::Bolt11Invoice;
 use rand::thread_rng;
 use rpc::{
     CreateInvoiceForOperatorPayload, DepositAddressRecheckPayload, FederationInfo,
     GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, PayInvoiceForOperatorPayload,
-    PaymentLogPayload, PaymentLogResponse, ReceiveEcashPayload, ReceiveEcashResponse,
-    SetFeesPayload, SpendEcashPayload, SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
+    PaymentLogPayload, PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse,
+    ReceiveEcashPayload, ReceiveEcashResponse, SetFeesPayload, SpendEcashPayload,
+    SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
 };
+use state_machine::events::compute_lnv1_stats;
 use state_machine::{GatewayClientModule, GatewayExtPayStates};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, info_span, warn};
@@ -108,6 +111,7 @@ use crate::config::LightningModuleMode;
 use crate::db::{get_gatewayd_database_migrations, FederationConfig};
 use crate::envs::FM_GATEWAY_MNEMONIC_ENV;
 use crate::error::{AdminGatewayError, LNv1Error, LNv2Error, PublicGatewayError};
+use crate::events::get_events_for_duration;
 use crate::gateway_module_v2::GatewayClientModuleV2;
 use crate::rpc::rpc_server::run_webserver;
 use crate::rpc::{
@@ -1571,12 +1575,11 @@ impl Gateway {
 
         let mut payment_log = Vec::new();
 
-        let log_start = EventLogId::new(0);
         while payment_log.len() < pagination_size {
             let batch = client.get_event_log(Some(start_position), BATCH_SIZE).await;
             let mut filtered_batch = batch
                 .into_iter()
-                .filter(|e| e.0 <= end_position && event_kinds.contains(&e.1))
+                .filter(|e| e.event_id <= end_position && event_kinds.contains(&e.event_kind))
                 .collect::<Vec<_>>();
             filtered_batch.reverse();
             payment_log.extend(filtered_batch);
@@ -1584,7 +1587,7 @@ impl Gateway {
             // Compute the start position for the next batch query
             start_position = start_position.saturating_sub(BATCH_SIZE);
 
-            if start_position == log_start {
+            if start_position == EventLogId::LOG_START {
                 break;
             }
         }
@@ -1593,6 +1596,58 @@ impl Gateway {
         payment_log.truncate(pagination_size);
 
         Ok(PaymentLogResponse(payment_log))
+    }
+
+    /// Computes the 24 hour payment summary statistics for this gateway.
+    /// Combines the LNv1 and LNv2 stats together.
+    pub async fn handle_payment_summary_msg(
+        &self,
+        PaymentSummaryPayload {
+            start_millis,
+            end_millis,
+        }: PaymentSummaryPayload,
+    ) -> AdminResult<PaymentSummaryResponse> {
+        let federation_manager = self.federation_manager.read().await;
+        let fed_configs = federation_manager.get_all_federation_configs().await;
+        let federation_ids = fed_configs.keys().collect::<Vec<_>>();
+        let start = UNIX_EPOCH + Duration::from_millis(start_millis);
+        let end = UNIX_EPOCH + Duration::from_millis(end_millis);
+
+        if start > end {
+            return Err(AdminGatewayError::Unexpected(anyhow!("Invalid time range")));
+        }
+
+        let mut outgoing = StructuredPaymentEvents::default();
+        let mut incoming = StructuredPaymentEvents::default();
+        for fed_id in federation_ids {
+            let client = federation_manager
+                .client(fed_id)
+                .expect("No client available")
+                .value();
+            let all_events = &get_events_for_duration(client, start, end).await;
+
+            if self.is_running_lnv1() && self.is_running_lnv2() {
+                let (mut lnv1_outgoing, mut lnv1_incoming) = compute_lnv1_stats(all_events);
+                let (mut lnv2_outgoing, mut lnv2_incoming) = compute_lnv2_stats(all_events);
+                outgoing.combine(&mut lnv1_outgoing);
+                incoming.combine(&mut lnv1_incoming);
+                outgoing.combine(&mut lnv2_outgoing);
+                incoming.combine(&mut lnv2_incoming);
+            } else if self.is_running_lnv1() {
+                let (mut lnv1_outgoing, mut lnv1_incoming) = compute_lnv1_stats(all_events);
+                outgoing.combine(&mut lnv1_outgoing);
+                incoming.combine(&mut lnv1_incoming);
+            } else {
+                let (mut lnv2_outgoing, mut lnv2_incoming) = compute_lnv2_stats(all_events);
+                outgoing.combine(&mut lnv2_outgoing);
+                incoming.combine(&mut lnv2_incoming);
+            }
+        }
+
+        Ok(PaymentSummaryResponse {
+            outgoing: outgoing.compute_payment_stats(),
+            incoming: incoming.compute_payment_stats(),
+        })
     }
 
     /// Registers the gateway with each specified federation.

@@ -1217,15 +1217,15 @@ impl FedimintCli {
                     .await
                     .into_iter()
                     .map(|v| {
-                        let module_id = v.2.as_ref().map(|m| m.1);
-                        let module_kind = v.2.map(|m| m.0);
+                        let module_id = v.module.as_ref().map(|m| m.1);
+                        let module_kind = v.module.map(|m| m.0);
                         serde_json::json!({
-                            "id": v.0,
-                            "kind": v.1,
+                            "id": v.event_id,
+                            "kind": v.event_kind,
                             "module_kind": module_kind,
                             "module_id": module_id,
-                            "ts": v.3,
-                            "payload": v.4
+                            "ts": v.timestamp,
+                            "payload": v.value
                         })
                     })
                     .collect();
