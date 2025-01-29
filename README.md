@@ -55,7 +55,6 @@ You can pick one of Fedimint-supporting applications:
 
 * [Fedi](https://www.fedi.xyz/) - for MacOS, Android and Web browsers
 * [Harbor Wallet](https://harbor.cash/) - desktop wallet
-* [Mutiny Wallet](https://www.mutinywallet.com/) - web wallet
 * `fedimint-cli` - Fedimint's built in CLI wallet for developers and automation
 
 ## Running your own Fedimint federation
