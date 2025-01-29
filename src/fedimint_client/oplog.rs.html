@@ -744,12 +744,30 @@
 <a href="#743" id="743">743</a>
 <a href="#744" id="744">744</a>
 <a href="#745" id="745">745</a>
-<a href="#746" id="746">746</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future;
-<span class="kw">use </span>std::io::{Read, Write};
 <span class="kw">use </span>std::ops::Range;
-<span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>fedimint_core::core::OperationId;
@@ -769,6 +787,29 @@
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     ChronologicalOperationLogKey, ChronologicalOperationLogKeyPrefix, OperationLogKey,
 };
+
+<span class="doccomment">/// Json value using string representation as db encoding.
+</span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(transparent)]
+</span><span class="kw">pub struct </span>JsonStringed(<span class="kw">pub </span>serde_json::Value);
+
+<span class="kw">impl </span>Encodable <span class="kw">for </span>JsonStringed {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
+        <span class="kw">let </span>json_str = serde_json::to_string(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>).expect(<span class="string">"JSON serialization should not fail"</span>);
+        json_str.consensus_encode(writer)
+    }
+}
+
+<span class="kw">impl </span>Decodable <span class="kw">for </span>JsonStringed {
+    <span class="kw">fn </span>consensus_decode_partial&lt;R: std::io::Read&gt;(
+        r: <span class="kw-2">&amp;mut </span>R,
+        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        <span class="kw">let </span>json_str = String::consensus_decode_partial(r, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>value = serde_json::from_str(<span class="kw-2">&amp;</span>json_str).map_err(DecodeError::from_err)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(JsonStringed(value))
+    }
+}
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>OperationLog {
@@ -814,8 +855,10 @@
             <span class="kw-2">&amp;</span>OperationLogKey { operation_id },
             <span class="kw-2">&amp;</span>OperationLogEntry {
                 operation_module_kind: operation_type.to_string(),
-                meta: serde_json::to_value(operation_meta)
-                    .expect(<span class="string">"Can only fail if meta is not serializable"</span>),
+                meta: JsonStringed(
+                    serde_json::to_value(operation_meta)
+                        .expect(<span class="string">"Can only fail if meta is not serializable"</span>),
+                ),
                 outcome: <span class="prelude-val">None</span>,
             },
         )
@@ -926,13 +969,17 @@
         operation_id: OperationId,
         outcome: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>Serialize + Debug),
     ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>outcome_json = serde_json::to_value(outcome).expect(<span class="string">"Outcome is not serializable"</span>);
+        <span class="kw">let </span>outcome_json =
+            JsonStringed(serde_json::to_value(outcome).expect(<span class="string">"Outcome is not serializable"</span>));
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>operation = <span class="self">Self</span>::get_operation_inner(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(), operation_id)
             .<span class="kw">await
             </span>.expect(<span class="string">"Operation exists"</span>);
-        operation.outcome = <span class="prelude-val">Some</span>(outcome_json);
+        operation.outcome = <span class="prelude-val">Some</span>(OperationOutcome {
+            time: fedimint_core::time::now(),
+            outcome: outcome_json,
+        });
         dbtx.insert_entry(<span class="kw-2">&amp;</span>OperationLogKey { operation_id }, <span class="kw-2">&amp;</span>operation)
             .<span class="kw">await</span>;
         dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1016,6 +1063,22 @@
         })
 }
 
+<span class="doccomment">/// V0 version of operation log entry for migration purposes
+</span><span class="attr">#[derive(Debug, Serialize, Deserialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>OperationLogEntryV0 {
+    <span class="kw">pub</span>(<span class="kw">crate</span>) operation_module_kind: String,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) meta: JsonStringed,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) outcome: <span class="prelude-ty">Option</span>&lt;JsonStringed&gt;,
+}
+
+<span class="doccomment">/// Represents the outcome of an operation, combining both the outcome value and
+/// its timestamp
+</span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq)]
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>OperationOutcome {
+    <span class="kw">pub</span>(<span class="kw">crate</span>) time: SystemTime,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) outcome: JsonStringed,
+}
+
 <span class="doccomment">/// Represents an operation triggered by a user, typically related to sending or
 /// receiving money.
 ///
@@ -1035,12 +1098,12 @@
 ///        will return `None` and the appropriate update subscription function
 ///        has to be called. See the respective client extension trait for these
 ///        functions.
-</span><span class="attr">#[derive(Debug, Serialize, Deserialize)]
+</span><span class="attr">#[derive(Debug, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>OperationLogEntry {
-    operation_module_kind: String,
-    meta: serde_json::Value,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) operation_module_kind: String,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) meta: JsonStringed,
     <span class="comment">// TODO: probably change all that JSON to Dyn-types
-    </span><span class="kw">pub</span>(<span class="kw">crate</span>) outcome: <span class="prelude-ty">Option</span>&lt;serde_json::Value&gt;,
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) outcome: <span class="prelude-ty">Option</span>&lt;OperationOutcome&gt;,
 }
 
 <span class="kw">impl </span>OperationLogEntry {
@@ -1055,7 +1118,7 @@
     /// in the module's client crate. The module can be determined by calling
     /// [`OperationLogEntry::operation_module_kind`].
     </span><span class="kw">pub fn </span>meta&lt;M: DeserializeOwned&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; M {
-        serde_json::from_value(<span class="self">self</span>.meta.clone()).expect(<span class="string">"JSON deserialization should not fail"</span>)
+        serde_json::from_value(<span class="self">self</span>.meta.<span class="number">0</span>.clone()).expect(<span class="string">"JSON deserialization should not fail"</span>)
     }
 
     <span class="doccomment">/// Returns the last state update of the operation, if any was cached yet.
@@ -1077,8 +1140,14 @@
     /// [`serde_json::Value`] to get the unstructured data.
     </span><span class="kw">pub fn </span>outcome&lt;D: DeserializeOwned&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;D&gt; {
         <span class="self">self</span>.outcome.as_ref().map(|outcome| {
-            serde_json::from_value(outcome.clone()).expect(<span class="string">"JSON deserialization should not fail"</span>)
+            serde_json::from_value(outcome.outcome.<span class="number">0</span>.clone())
+                .expect(<span class="string">"JSON deserialization should not fail"</span>)
         })
+    }
+
+    <span class="doccomment">/// Returns the time when the outcome was cached.
+    </span><span class="kw">pub fn </span>outcome_time(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;SystemTime&gt; {
+        <span class="self">self</span>.outcome.as_ref().map(|o| o.time)
     }
 
     <span class="doccomment">/// Returns an a [`UpdateStreamOrOutcome`] enum that can be converted into
@@ -1103,46 +1172,6 @@
                 stream_gen(),
             )),
         }
-    }
-}
-
-<span class="kw">impl </span>Encodable <span class="kw">for </span>OperationLogEntry {
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
-        <span class="self">self</span>.operation_module_kind.consensus_encode(writer)<span class="question-mark">?</span>;
-        serde_json::to_string(<span class="kw-2">&amp;</span><span class="self">self</span>.meta)
-            .expect(<span class="string">"JSON serialization should not fail"</span>)
-            .consensus_encode(writer)<span class="question-mark">?</span>;
-        <span class="self">self</span>.outcome
-            .as_ref()
-            .map(|outcome| {
-                serde_json::to_string(outcome).expect(<span class="string">"JSON serialization should not fail"</span>)
-            })
-            .consensus_encode(writer)<span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(())
-    }
-}
-
-<span class="kw">impl </span>Decodable <span class="kw">for </span>OperationLogEntry {
-    <span class="kw">fn </span>consensus_decode_partial&lt;R: Read&gt;(
-        r: <span class="kw-2">&amp;mut </span>R,
-        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>operation_type = String::consensus_decode_partial(r, modules)<span class="question-mark">?</span>;
-
-        <span class="kw">let </span>meta_str = String::consensus_decode_partial(r, modules)<span class="question-mark">?</span>;
-        <span class="kw">let </span>meta = serde_json::from_str(<span class="kw-2">&amp;</span>meta_str).map_err(DecodeError::from_err)<span class="question-mark">?</span>;
-
-        <span class="kw">let </span>outcome_str = <span class="prelude-ty">Option</span>::&lt;String&gt;::consensus_decode_partial(r, modules)<span class="question-mark">?</span>;
-        <span class="kw">let </span>outcome = outcome_str
-            .map(|outcome_str| serde_json::from_str(<span class="kw-2">&amp;</span>outcome_str).map_err(DecodeError::from_err))
-            .transpose()<span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(OperationLogEntry {
-            operation_module_kind: operation_type,
-            meta,
-            outcome,
-        })
     }
 }
 
@@ -1216,13 +1245,14 @@
 
     <span class="kw">use </span><span class="kw">super</span>::UpdateStreamOrOutcome;
     <span class="kw">use </span><span class="kw">crate</span>::db::{ChronologicalOperationLogKey, OperationLogKey};
-    <span class="kw">use </span><span class="kw">crate</span>::oplog::{OperationLog, OperationLogEntry};
+    <span class="kw">use </span><span class="kw">crate</span>::oplog::{JsonStringed, OperationLog, OperationLogEntry, OperationOutcome};
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_operation_log_entry_serde() {
-        <span class="kw">let </span>op_log = OperationLogEntry {
+        <span class="comment">// Test with outcome = None
+        </span><span class="kw">let </span>op_log = OperationLogEntry {
             operation_module_kind: <span class="string">"test"</span>.to_string(),
-            meta: serde_json::to_value(()).unwrap(),
+            meta: JsonStringed(serde_json::to_value(()).unwrap()),
             outcome: <span class="prelude-val">None</span>,
         };
 
@@ -1244,8 +1274,11 @@
 
         <span class="kw">let </span>op_log = OperationLogEntry {
             operation_module_kind: <span class="string">"test"</span>.to_string(),
-            meta: serde_json::to_value(meta.clone()).unwrap(),
-            outcome: <span class="prelude-val">None</span>,
+            meta: JsonStringed(serde_json::to_value(meta.clone()).unwrap()),
+            outcome: <span class="prelude-val">Some</span>(OperationOutcome {
+                time: fedimint_core::time::now(),
+                outcome: JsonStringed(serde_json::to_value(<span class="string">"test_outcome"</span>).unwrap()),
+            }),
         };
 
         <span class="macro">assert_eq!</span>(op_log.meta::&lt;Meta&gt;(), meta);
@@ -1273,6 +1306,7 @@
 
         <span class="kw">let </span>op = op_log.get_operation(op_id).<span class="kw">await</span>.expect(<span class="string">"op exists"</span>);
         <span class="macro">assert_eq!</span>(op.outcome::&lt;String&gt;(), <span class="prelude-val">Some</span>(<span class="string">"baz"</span>.to_string()));
+        <span class="macro">assert!</span>(op.outcome_time().is_some(), <span class="string">"outcome_time should be set"</span>);
 
         <span class="kw">let </span>update_stream_or_outcome =
             op.outcome_or_updates::&lt;String, <span class="kw">_</span>&gt;(<span class="kw-2">&amp;</span>db, op_id, futures::stream::empty);
@@ -1313,6 +1347,10 @@
 
         <span class="kw">let </span>op_updated = op_log.get_operation(op_id).<span class="kw">await</span>.expect(<span class="string">"op exists"</span>);
         <span class="macro">assert_eq!</span>(op_updated.outcome::&lt;String&gt;(), <span class="prelude-val">Some</span>(<span class="string">"baz"</span>.to_string()));
+        <span class="macro">assert!</span>(
+            op_updated.outcome_time().is_some(),
+            <span class="string">"outcome_time should be set after stream completion"
+        </span>);
     }
 
     <span class="attr">#[tokio::test]
@@ -1384,7 +1422,7 @@
                 <span class="kw-2">&amp;</span>OperationLogKey { operation_id },
                 <span class="kw-2">&amp;</span>OperationLogEntry {
                     operation_module_kind: <span class="string">"operation_type"</span>.to_string(),
-                    meta: serde_json::Value::Null,
+                    meta: JsonStringed(serde_json::Value::Null),
                     outcome: <span class="prelude-val">None</span>,
                 },
             )
