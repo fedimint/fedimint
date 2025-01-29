@@ -2327,7 +2327,20 @@
 <a href="#2326" id="2326">2326</a>
 <a href="#2327" id="2327">2327</a>
 <a href="#2328" id="2328">2328</a>
-<a href="#2329" id="2329">2329</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2329" id="2329">2329</a>
+<a href="#2330" id="2330">2330</a>
+<a href="#2331" id="2331">2331</a>
+<a href="#2332" id="2332">2332</a>
+<a href="#2333" id="2333">2333</a>
+<a href="#2334" id="2334">2334</a>
+<a href="#2335" id="2335">2335</a>
+<a href="#2336" id="2336">2336</a>
+<a href="#2337" id="2337">2337</a>
+<a href="#2338" id="2338">2338</a>
+<a href="#2339" id="2339">2339</a>
+<a href="#2340" id="2340">2340</a>
+<a href="#2341" id="2341">2341</a>
+<a href="#2342" id="2342">2342</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -2344,6 +2357,7 @@
 <span class="kw">use </span>std::clone::Clone;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::Infallible;
+<span class="kw">use </span>std::sync::Arc;
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
 </span><span class="kw">use </span>std::time::Duration;
 
@@ -2386,7 +2400,7 @@
 };
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
 </span><span class="kw">use </span>fedimint_core::task::sleep;
-<span class="kw">use </span>fedimint_core::task::{TaskGroup, TaskHandle};
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry, FmtCompactAnyhow <span class="kw">as _</span>};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, get_network_for_address, push_db_key_items, push_db_pair_items,
@@ -2424,7 +2438,7 @@
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum::IntoEnumIterator;
-<span class="kw">use </span>tokio::sync::watch;
+<span class="kw">use </span>tokio::sync::{watch, Notify};
 <span class="kw">use </span>tracing::{debug, error, info, instrument, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{
@@ -2915,6 +2929,10 @@
 
                     dbtx.remove_entry(<span class="kw-2">&amp;</span>PegOutTxSignatureCI(txid)).<span class="kw">await</span>;
                     dbtx.remove_entry(<span class="kw-2">&amp;</span>UnsignedTransactionKey(txid)).<span class="kw">await</span>;
+                    <span class="kw">let </span>broadcast_pending = <span class="self">self</span>.broadcast_pending.clone();
+                    dbtx.on_commit(<span class="kw">move </span>|| {
+                        broadcast_pending.notify_one();
+                    });
                 }
             }
             WalletConsensusItem::ModuleConsensusVersion(module_consensus_version) =&gt; {
@@ -3327,6 +3345,10 @@
     </span>block_count_rx: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;,
     <span class="doccomment">/// Fee rate updated periodically by a background task
     </span>fee_rate_rx: watch::Receiver&lt;Feerate&gt;,
+
+    <span class="doccomment">/// Broadcasting pending txes can be triggered immediately with this
+    </span>broadcast_pending: Arc&lt;Notify&gt;,
+
     task_group: TaskGroup,
     <span class="doccomment">/// Maximum consensus version supported by *all* our peers. Used to
     /// automatically activate new consensus versions as soon as everyone
@@ -3354,7 +3376,8 @@
         our_peer_id: PeerId,
         module_api: DynModuleApi,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Wallet, WalletCreationError&gt; {
-        <span class="self">Self</span>::spawn_broadcast_pending_task(task_group, <span class="kw-2">&amp;</span>bitcoind, db);
+        <span class="kw">let </span>broadcast_pending = Arc::new(Notify::new());
+        <span class="self">Self</span>::spawn_broadcast_pending_task(task_group, <span class="kw-2">&amp;</span>bitcoind, db, broadcast_pending.clone());
 
         <span class="kw">let </span>fee_rate_rx = bitcoind
             .clone()
@@ -3398,6 +3421,7 @@
             fee_rate_rx,
             task_group: task_group.clone(),
             peer_supported_consensus_version,
+            broadcast_pending,
         };
 
         <span class="prelude-val">Ok</span>(wallet)
@@ -3951,13 +3975,12 @@
         task_group: <span class="kw-2">&amp;</span>TaskGroup,
         bitcoind: <span class="kw-2">&amp;</span>DynBitcoindRpc,
         db: <span class="kw-2">&amp;</span>Database,
+        broadcast_pending_notify: Arc&lt;Notify&gt;,
     ) {
-        task_group.spawn(<span class="string">"broadcast pending"</span>, {
+        task_group.spawn_cancellable(<span class="string">"broadcast pending"</span>, {
             <span class="kw">let </span>bitcoind = bitcoind.clone();
             <span class="kw">let </span>db = db.clone();
-            |handle| <span class="kw">async move </span>{
-                run_broadcast_pending_tx(db, bitcoind, <span class="kw-2">&amp;</span>handle).<span class="kw">await</span>;
-            }
+            run_broadcast_pending_tx(db, bitcoind, broadcast_pending_notify)
         });
     }
 
@@ -4083,10 +4106,11 @@
 }
 
 <span class="attr">#[instrument(target = LOG_MODULE_WALLET, level = <span class="string">"debug"</span>, skip_all)]
-</span><span class="kw">pub async fn </span>run_broadcast_pending_tx(db: Database, rpc: DynBitcoindRpc, tg_handle: <span class="kw-2">&amp;</span>TaskHandle) {
-    <span class="kw">while </span>!tg_handle.is_shutting_down() {
+</span><span class="kw">pub async fn </span>run_broadcast_pending_tx(db: Database, rpc: DynBitcoindRpc, broadcast: Arc&lt;Notify&gt;) {
+    <span class="kw">loop </span>{
+        <span class="comment">// Unless something new happened, we broadcast once a minute
+        </span><span class="kw">let _ </span>= tokio::time::timeout(Duration::from_secs(<span class="number">60</span>), broadcast.notified()).<span class="kw">await</span>;
         broadcast_pending_tx(db.begin_transaction_nc().<span class="kw">await</span>, <span class="kw-2">&amp;</span>rpc).<span class="kw">await</span>;
-        sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
     }
 }
 
@@ -4101,12 +4125,14 @@
         .iter()
         .filter_map(|tx| tx.rbf.clone().map(|rbf| rbf.txid))
         .collect();
-    <span class="macro">debug!</span>(
-        target: LOG_MODULE_WALLET,
-        <span class="string">"Broadcasting pending transactions (total={}, rbf={})"</span>,
-        pending_tx.len(),
-        rbf_txids.len()
-    );
+    <span class="kw">if </span>!pending_tx.is_empty() {
+        <span class="macro">debug!</span>(
+            target: LOG_MODULE_WALLET,
+            <span class="string">"Broadcasting pending transactions (total={}, rbf={})"</span>,
+            pending_tx.len(),
+            rbf_txids.len()
+        );
+    }
 
     <span class="kw">for </span>PendingTransaction { tx, .. } <span class="kw">in </span>pending_tx {
         <span class="kw">if </span>!rbf_txids.contains(<span class="kw-2">&amp;</span>tx.compute_txid()) {
