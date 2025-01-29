@@ -617,7 +617,12 @@
 <a href="#616" id="616">616</a>
 <a href="#617" id="617">617</a>
 <a href="#618" id="618">618</a>
-<a href="#619" id="619">619</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -634,7 +639,7 @@
 <span class="kw">use </span>fedimint_lnv2_common::gateway_api::PaymentFee;
 <span class="kw">use </span>fedimint_testing::ln::LightningNodeType;
 <span class="kw">use </span>ln_gateway::envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV;
-<span class="kw">use </span>ln_gateway::rpc::{GatewayBalances, MnemonicResponse, V1_API_ENDPOINT};
+<span class="kw">use </span>ln_gateway::rpc::{GatewayBalances, MnemonicResponse, PaymentSummaryResponse, V1_API_ENDPOINT};
 <span class="kw">use </span>tracing::info;
 
 <span class="kw">use </span><span class="kw">crate</span>::cmd;
@@ -1234,6 +1239,11 @@
         }
 
         <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">pub async fn </span>payment_summary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;PaymentSummaryResponse&gt; {
+        <span class="kw">let </span>out_json = <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"payment-summary"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(serde_json::from_value(out_json).expect(<span class="string">"Could not deserialize PaymentSummaryResponse"</span>))
     }
 }
 </code></pre></div></section></main></body></html>

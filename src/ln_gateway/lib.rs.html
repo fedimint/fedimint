@@ -2163,7 +2163,62 @@
 <a href="#2162" id="2162">2162</a>
 <a href="#2163" id="2163">2163</a>
 <a href="#2164" id="2164">2164</a>
-<a href="#2165" id="2165">2165</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2165" id="2165">2165</a>
+<a href="#2166" id="2166">2166</a>
+<a href="#2167" id="2167">2167</a>
+<a href="#2168" id="2168">2168</a>
+<a href="#2169" id="2169">2169</a>
+<a href="#2170" id="2170">2170</a>
+<a href="#2171" id="2171">2171</a>
+<a href="#2172" id="2172">2172</a>
+<a href="#2173" id="2173">2173</a>
+<a href="#2174" id="2174">2174</a>
+<a href="#2175" id="2175">2175</a>
+<a href="#2176" id="2176">2176</a>
+<a href="#2177" id="2177">2177</a>
+<a href="#2178" id="2178">2178</a>
+<a href="#2179" id="2179">2179</a>
+<a href="#2180" id="2180">2180</a>
+<a href="#2181" id="2181">2181</a>
+<a href="#2182" id="2182">2182</a>
+<a href="#2183" id="2183">2183</a>
+<a href="#2184" id="2184">2184</a>
+<a href="#2185" id="2185">2185</a>
+<a href="#2186" id="2186">2186</a>
+<a href="#2187" id="2187">2187</a>
+<a href="#2188" id="2188">2188</a>
+<a href="#2189" id="2189">2189</a>
+<a href="#2190" id="2190">2190</a>
+<a href="#2191" id="2191">2191</a>
+<a href="#2192" id="2192">2192</a>
+<a href="#2193" id="2193">2193</a>
+<a href="#2194" id="2194">2194</a>
+<a href="#2195" id="2195">2195</a>
+<a href="#2196" id="2196">2196</a>
+<a href="#2197" id="2197">2197</a>
+<a href="#2198" id="2198">2198</a>
+<a href="#2199" id="2199">2199</a>
+<a href="#2200" id="2200">2200</a>
+<a href="#2201" id="2201">2201</a>
+<a href="#2202" id="2202">2202</a>
+<a href="#2203" id="2203">2203</a>
+<a href="#2204" id="2204">2204</a>
+<a href="#2205" id="2205">2205</a>
+<a href="#2206" id="2206">2206</a>
+<a href="#2207" id="2207">2207</a>
+<a href="#2208" id="2208">2208</a>
+<a href="#2209" id="2209">2209</a>
+<a href="#2210" id="2210">2210</a>
+<a href="#2211" id="2211">2211</a>
+<a href="#2212" id="2212">2212</a>
+<a href="#2213" id="2213">2213</a>
+<a href="#2214" id="2214">2214</a>
+<a href="#2215" id="2215">2215</a>
+<a href="#2216" id="2216">2216</a>
+<a href="#2217" id="2217">2217</a>
+<a href="#2218" id="2218">2218</a>
+<a href="#2219" id="2219">2219</a>
+<a href="#2220" id="2220">2220</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2195,7 +2250,7 @@
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>std::time::{Duration, UNIX_EPOCH};
 
 <span class="kw">use </span>anyhow::{anyhow, Context};
 <span class="kw">use </span>async_trait::async_trait;
@@ -2208,7 +2263,7 @@
 <span class="kw">use </span>db::GatewayDbtxNcExt;
 <span class="kw">use </span>envs::FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV;
 <span class="kw">use </span>error::FederationNotConnected;
-<span class="kw">use </span>events::ALL_GATEWAY_EVENTS;
+<span class="kw">use </span>events::{StructuredPaymentEvents, ALL_GATEWAY_EVENTS};
 <span class="kw">use </span>federation_manager::FederationManager;
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
 <span class="kw">use </span>fedimint_bip39::{Bip39RootSecretStrategy, Language, Mnemonic};
@@ -2257,14 +2312,17 @@
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
 };
 <span class="kw">use </span>futures::stream::StreamExt;
+<span class="kw">use </span>gateway_module_v2::events::compute_lnv2_stats;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>rand::thread_rng;
 <span class="kw">use </span>rpc::{
     CreateInvoiceForOperatorPayload, DepositAddressRecheckPayload, FederationInfo,
     GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, PayInvoiceForOperatorPayload,
-    PaymentLogPayload, PaymentLogResponse, ReceiveEcashPayload, ReceiveEcashResponse,
-    SetFeesPayload, SpendEcashPayload, SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
+    PaymentLogPayload, PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse,
+    ReceiveEcashPayload, ReceiveEcashResponse, SetFeesPayload, SpendEcashPayload,
+    SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
 };
+<span class="kw">use </span>state_machine::events::compute_lnv1_stats;
 <span class="kw">use </span>state_machine::{GatewayClientModule, GatewayExtPayStates};
 <span class="kw">use </span>tokio::sync::RwLock;
 <span class="kw">use </span>tracing::{debug, error, info, info_span, warn};
@@ -2273,6 +2331,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::db::{get_gatewayd_database_migrations, FederationConfig};
 <span class="kw">use </span><span class="kw">crate</span>::envs::FM_GATEWAY_MNEMONIC_ENV;
 <span class="kw">use </span><span class="kw">crate</span>::error::{AdminGatewayError, LNv1Error, LNv2Error, PublicGatewayError};
+<span class="kw">use </span><span class="kw">crate</span>::events::get_events_for_duration;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::GatewayClientModuleV2;
 <span class="kw">use </span><span class="kw">crate</span>::rpc::rpc_server::run_webserver;
 <span class="kw">use </span><span class="kw">crate</span>::rpc::{
@@ -3736,12 +3795,11 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>payment_log = Vec::new();
 
-        <span class="kw">let </span>log_start = EventLogId::new(<span class="number">0</span>);
         <span class="kw">while </span>payment_log.len() &lt; pagination_size {
             <span class="kw">let </span>batch = client.get_event_log(<span class="prelude-val">Some</span>(start_position), BATCH_SIZE).<span class="kw">await</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>filtered_batch = batch
                 .into_iter()
-                .filter(|e| e.<span class="number">0 </span>&lt;= end_position &amp;&amp; event_kinds.contains(<span class="kw-2">&amp;</span>e.<span class="number">1</span>))
+                .filter(|e| e.event_id &lt;= end_position &amp;&amp; event_kinds.contains(<span class="kw-2">&amp;</span>e.event_kind))
                 .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
             filtered_batch.reverse();
             payment_log.extend(filtered_batch);
@@ -3749,7 +3807,7 @@
             <span class="comment">// Compute the start position for the next batch query
             </span>start_position = start_position.saturating_sub(BATCH_SIZE);
 
-            <span class="kw">if </span>start_position == log_start {
+            <span class="kw">if </span>start_position == EventLogId::LOG_START {
                 <span class="kw">break</span>;
             }
         }
@@ -3758,6 +3816,58 @@
         </span>payment_log.truncate(pagination_size);
 
         <span class="prelude-val">Ok</span>(PaymentLogResponse(payment_log))
+    }
+
+    <span class="doccomment">/// Computes the 24 hour payment summary statistics for this gateway.
+    /// Combines the LNv1 and LNv2 stats together.
+    </span><span class="kw">pub async fn </span>handle_payment_summary_msg(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        PaymentSummaryPayload {
+            start_millis,
+            end_millis,
+        }: PaymentSummaryPayload,
+    ) -&gt; AdminResult&lt;PaymentSummaryResponse&gt; {
+        <span class="kw">let </span>federation_manager = <span class="self">self</span>.federation_manager.read().<span class="kw">await</span>;
+        <span class="kw">let </span>fed_configs = federation_manager.get_all_federation_configs().<span class="kw">await</span>;
+        <span class="kw">let </span>federation_ids = fed_configs.keys().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="kw">let </span>start = UNIX_EPOCH + Duration::from_millis(start_millis);
+        <span class="kw">let </span>end = UNIX_EPOCH + Duration::from_millis(end_millis);
+
+        <span class="kw">if </span>start &gt; end {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::Unexpected(<span class="macro">anyhow!</span>(<span class="string">"Invalid time range"</span>)));
+        }
+
+        <span class="kw">let </span><span class="kw-2">mut </span>outgoing = StructuredPaymentEvents::default();
+        <span class="kw">let </span><span class="kw-2">mut </span>incoming = StructuredPaymentEvents::default();
+        <span class="kw">for </span>fed_id <span class="kw">in </span>federation_ids {
+            <span class="kw">let </span>client = federation_manager
+                .client(fed_id)
+                .expect(<span class="string">"No client available"</span>)
+                .value();
+            <span class="kw">let </span>all_events = <span class="kw-2">&amp;</span>get_events_for_duration(client, start, end).<span class="kw">await</span>;
+
+            <span class="kw">if </span><span class="self">self</span>.is_running_lnv1() &amp;&amp; <span class="self">self</span>.is_running_lnv2() {
+                <span class="kw">let </span>(<span class="kw-2">mut </span>lnv1_outgoing, <span class="kw-2">mut </span>lnv1_incoming) = compute_lnv1_stats(all_events);
+                <span class="kw">let </span>(<span class="kw-2">mut </span>lnv2_outgoing, <span class="kw-2">mut </span>lnv2_incoming) = compute_lnv2_stats(all_events);
+                outgoing.combine(<span class="kw-2">&amp;mut </span>lnv1_outgoing);
+                incoming.combine(<span class="kw-2">&amp;mut </span>lnv1_incoming);
+                outgoing.combine(<span class="kw-2">&amp;mut </span>lnv2_outgoing);
+                incoming.combine(<span class="kw-2">&amp;mut </span>lnv2_incoming);
+            } <span class="kw">else if </span><span class="self">self</span>.is_running_lnv1() {
+                <span class="kw">let </span>(<span class="kw-2">mut </span>lnv1_outgoing, <span class="kw-2">mut </span>lnv1_incoming) = compute_lnv1_stats(all_events);
+                outgoing.combine(<span class="kw-2">&amp;mut </span>lnv1_outgoing);
+                incoming.combine(<span class="kw-2">&amp;mut </span>lnv1_incoming);
+            } <span class="kw">else </span>{
+                <span class="kw">let </span>(<span class="kw-2">mut </span>lnv2_outgoing, <span class="kw-2">mut </span>lnv2_incoming) = compute_lnv2_stats(all_events);
+                outgoing.combine(<span class="kw-2">&amp;mut </span>lnv2_outgoing);
+                incoming.combine(<span class="kw-2">&amp;mut </span>lnv2_incoming);
+            }
+        }
+
+        <span class="prelude-val">Ok</span>(PaymentSummaryResponse {
+            outgoing: outgoing.compute_payment_stats(),
+            incoming: incoming.compute_payment_stats(),
+        })
     }
 
     <span class="doccomment">/// Registers the gateway with each specified federation.

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["CompleteLightningPaymentSucceeded","IncomingPaymentFailed","IncomingPaymentStarted","IncomingPaymentSucceeded","OutgoingPaymentFailed","OutgoingPaymentStarted","OutgoingPaymentSucceeded"]};
+window.SIDEBAR_ITEMS = {"fn":["compute_lnv2_stats"],"struct":["CompleteLightningPaymentSucceeded","IncomingPaymentFailed","IncomingPaymentStarted","IncomingPaymentSucceeded","OutgoingPaymentFailed","OutgoingPaymentStarted","OutgoingPaymentSucceeded"]};

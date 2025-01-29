@@ -534,13 +534,7 @@
 <a href="#533" id="533">533</a>
 <a href="#534" id="534">534</a>
 <a href="#535" id="535">535</a>
-<a href="#536" id="536">536</a>
-<a href="#537" id="537">537</a>
-<a href="#538" id="538">538</a>
-<a href="#539" id="539">539</a>
-<a href="#540" id="540">540</a>
-<a href="#541" id="541">541</a>
-<a href="#542" id="542">542</a></pre></div><pre class="rust"><code><span class="attr">#![allow(clippy::needless_lifetimes)]
+<a href="#536" id="536">536</a></pre></div><pre class="rust"><code><span class="attr">#![allow(clippy::needless_lifetimes)]
 
 </span><span class="doccomment">//! Client Event Log
 //!
@@ -634,20 +628,18 @@
 </span><span class="kw">pub struct </span>EventLogId(u64);
 
 <span class="kw">impl </span>EventLogId {
+    <span class="kw">pub const </span>LOG_START: EventLogId = EventLogId(<span class="number">0</span>);
+
     <span class="kw">fn </span>next(<span class="self">self</span>) -&gt; EventLogId {
         <span class="self">Self</span>(<span class="self">self</span>.<span class="number">0 </span>+ <span class="number">1</span>)
     }
 
-    <span class="kw">fn </span>saturating_add(<span class="self">self</span>, rhs: u64) -&gt; EventLogId {
+    <span class="kw">pub fn </span>saturating_add(<span class="self">self</span>, rhs: u64) -&gt; EventLogId {
         <span class="self">Self</span>(<span class="self">self</span>.<span class="number">0</span>.saturating_add(rhs))
     }
 
     <span class="kw">pub fn </span>saturating_sub(<span class="self">self</span>, rhs: u64) -&gt; EventLogId {
         <span class="self">Self</span>(<span class="self">self</span>.<span class="number">0</span>.saturating_sub(rhs))
-    }
-
-    <span class="kw">pub fn </span>new(log: u64) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>(log)
     }
 }
 
@@ -711,6 +703,16 @@
     <span class="doccomment">/// Event-kind specific payload, typically encoded as a json string for
     /// flexibility.
     </span><span class="kw">pub </span>payload: Vec&lt;u8&gt;,
+}
+
+<span class="doccomment">/// Struct used for processing log entries after they have been persisted.
+</span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>PersistedLogEntry {
+    <span class="kw">pub </span>event_id: EventLogId,
+    <span class="kw">pub </span>event_kind: EventKind,
+    <span class="kw">pub </span>module: <span class="prelude-ty">Option</span>&lt;(ModuleKind, u16)&gt;,
+    <span class="kw">pub </span>timestamp: u64,
+    <span class="kw">pub </span>value: serde_json::Value,
 }
 
 <span class="macro">impl_db_record!</span>(
@@ -789,13 +791,7 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         pos: <span class="prelude-ty">Option</span>&lt;EventLogId&gt;,
         limit: u64,
-    ) -&gt; Vec&lt;(
-        EventLogId,
-        EventKind,
-        <span class="prelude-ty">Option</span>&lt;(ModuleKind, ModuleInstanceId)&gt;,
-        u64,
-        serde_json::Value,
-    )&gt;;
+    ) -&gt; Vec&lt;PersistedLogEntry&gt;;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -857,24 +853,16 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         pos: <span class="prelude-ty">Option</span>&lt;EventLogId&gt;,
         limit: u64,
-    ) -&gt; Vec&lt;(
-        EventLogId,
-        EventKind,
-        <span class="prelude-ty">Option</span>&lt;(ModuleKind, ModuleInstanceId)&gt;,
-        u64,
-        serde_json::Value,
-    )&gt; {
+    ) -&gt; Vec&lt;PersistedLogEntry&gt; {
         <span class="kw">let </span>pos = pos.unwrap_or_default();
         <span class="self">self</span>.find_by_range(pos..pos.saturating_add(limit))
             .<span class="kw">await
-            </span>.map(|(k, v)| {
-                (
-                    k,
-                    v.kind,
-                    v.module,
-                    v.ts_usecs,
-                    serde_json::from_slice(<span class="kw-2">&amp;</span>v.payload).unwrap_or_default(),
-                )
+            </span>.map(|(k, v)| PersistedLogEntry {
+                event_id: k,
+                event_kind: v.kind,
+                module: v.module,
+                timestamp: v.ts_usecs,
+                value: serde_json::from_slice(<span class="kw-2">&amp;</span>v.payload).unwrap_or_default(),
             })
             .collect()
             .<span class="kw">await

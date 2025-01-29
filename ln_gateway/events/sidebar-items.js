@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["ALL_GATEWAY_EVENTS"]};
+window.SIDEBAR_ITEMS = {"constant":["ALL_GATEWAY_EVENTS"],"fn":["filter_events","get_events_for_duration","join_events"],"struct":["StructuredPaymentEvents"]};

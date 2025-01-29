@@ -307,7 +307,19 @@
 <a href="#306" id="306">306</a>
 <a href="#307" id="307">307</a>
 <a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::{Address, Txid};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_lightning::{
@@ -324,13 +336,14 @@
     BackupPayload, ConfigPayload, ConnectFedPayload, CreateInvoiceForOperatorPayload,
     DepositAddressPayload, DepositAddressRecheckPayload, FederationInfo, GatewayBalances,
     GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, PayInvoiceForOperatorPayload,
-    PaymentLogPayload, PaymentLogResponse, ReceiveEcashPayload, ReceiveEcashResponse,
-    SetFeesPayload, SpendEcashPayload, SpendEcashResponse, WithdrawPayload, WithdrawResponse,
-    ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
+    PaymentLogPayload, PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse,
+    ReceiveEcashPayload, ReceiveEcashResponse, SetFeesPayload, SpendEcashPayload,
+    SpendEcashResponse, WithdrawPayload, WithdrawResponse, ADDRESS_ENDPOINT,
+    ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
     CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
     GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
     GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
-    MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAYMENT_LOG_ENDPOINT,
+    MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT,
     PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT, SEND_ONCHAIN_ENDPOINT,
     SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, WITHDRAW_ENDPOINT,
 };
@@ -567,6 +580,17 @@
             </span>.base_url
             .join(PAYMENT_LOG_ENDPOINT)
             .expect(<span class="string">"Invalid base url"</span>);
+        <span class="self">self</span>.call_post(url, payload).<span class="kw">await
+    </span>}
+
+    <span class="kw">pub async fn </span>payment_summary(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        payload: PaymentSummaryPayload,
+    ) -&gt; GatewayRpcResult&lt;PaymentSummaryResponse&gt; {
+        <span class="kw">let </span>url = <span class="self">self
+            </span>.base_url
+            .join(PAYMENT_SUMMARY_ENDPOINT)
+            .expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
 

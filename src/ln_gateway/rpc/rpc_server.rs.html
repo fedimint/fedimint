@@ -441,7 +441,18 @@
 <a href="#440" id="440">440</a>
 <a href="#441" id="441">441</a>
 <a href="#442" id="442">442</a>
-<a href="#443" id="443">443</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>axum::extract::Request;
 <span class="kw">use </span>axum::http::{header, StatusCode};
@@ -469,14 +480,15 @@
 <span class="kw">use super</span>::{
     BackupPayload, ConnectFedPayload, CreateInvoiceForOperatorPayload, DepositAddressPayload,
     DepositAddressRecheckPayload, InfoPayload, LeaveFedPayload, PayInvoiceForOperatorPayload,
-    PaymentLogPayload, ReceiveEcashPayload, SetFeesPayload, SpendEcashPayload, WithdrawPayload,
-    ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
-    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
-    GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
-    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
-    MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAYMENT_LOG_ENDPOINT,
-    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT, SEND_ONCHAIN_ENDPOINT,
-    SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, V1_API_ENDPOINT, WITHDRAW_ENDPOINT,
+    PaymentLogPayload, PaymentSummaryPayload, ReceiveEcashPayload, SetFeesPayload,
+    SpendEcashPayload, WithdrawPayload, ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT,
+    BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
+    CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, GATEWAY_INFO_ENDPOINT,
+    GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
+    LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT,
+    PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT, PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
+    RECEIVE_ECASH_ENDPOINT, SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT,
+    STOP_ENDPOINT, V1_API_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 <span class="kw">use </span><span class="kw">crate</span>::error::{AdminGatewayError, PublicGatewayError};
 <span class="kw">use </span><span class="kw">crate</span>::rpc::ConfigPayload;
@@ -611,6 +623,7 @@
         .route(MNEMONIC_ENDPOINT, get(mnemonic))
         .route(STOP_ENDPOINT, get(stop))
         .route(PAYMENT_LOG_ENDPOINT, post(payment_log))
+        .route(PAYMENT_SUMMARY_ENDPOINT, post(payment_summary))
         .route(SET_FEES_ENDPOINT, post(set_fees))
         .route(CONFIGURATION_ENDPOINT, post(configuration))
         <span class="comment">// FIXME: deprecated &gt;= 0.3.0
@@ -883,5 +896,14 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, AdminGatewayError&gt; {
     <span class="kw">let </span>payment_log = gateway.handle_payment_log_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(payment_log)))
+}
+
+<span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err)]
+</span><span class="kw">async fn </span>payment_summary(
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
+    Json(payload): Json&lt;PaymentSummaryPayload&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, AdminGatewayError&gt; {
+    <span class="kw">let </span>payment_summary = gateway.handle_payment_summary_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(payment_summary)))
 }
 </code></pre></div></section></main></body></html>

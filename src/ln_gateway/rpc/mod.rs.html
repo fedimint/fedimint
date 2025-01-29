@@ -245,17 +245,33 @@
 <a href="#244" id="244">244</a>
 <a href="#245" id="245">245</a>
 <a href="#246" id="246">246</a>
-<a href="#247" id="247">247</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
 <span class="kw">pub mod </span>rpc_server;
 
 <span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::{Address, Network};
 <span class="kw">use </span>fedimint_core::config::{FederationId, JsonClientConfig};
-<span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
+<span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
-<span class="kw">use </span>fedimint_eventlog::{EventKind, EventLogId};
+<span class="kw">use </span>fedimint_eventlog::{EventKind, EventLogId, PersistedLogEntry};
 <span class="kw">use </span>fedimint_mint_client::OOBNotes;
 <span class="kw">use </span>fedimint_wallet_client::PegOutFees;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
@@ -284,20 +300,13 @@
 <span class="kw">pub const </span>CLOSE_CHANNELS_WITH_PEER_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/close_channels_with_peer"</span>;
 <span class="kw">pub const </span>PAY_INVOICE_FOR_OPERATOR_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/pay_invoice_for_operator"</span>;
 <span class="kw">pub const </span>PAYMENT_LOG_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/payment_log"</span>;
+<span class="kw">pub const </span>PAYMENT_SUMMARY_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/payment_summary"</span>;
 <span class="kw">pub const </span>RECEIVE_ECASH_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/receive_ecash"</span>;
 <span class="kw">pub const </span>SET_FEES_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/set_fees"</span>;
 <span class="kw">pub const </span>STOP_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/stop"</span>;
 <span class="kw">pub const </span>SEND_ONCHAIN_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/send_onchain"</span>;
 <span class="kw">pub const </span>SPEND_ECASH_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/spend_ecash"</span>;
 <span class="kw">pub const </span>WITHDRAW_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/withdraw"</span>;
-
-<span class="kw">type </span>GatewayTransactionEvent = (
-    EventLogId,
-    EventKind,
-    <span class="prelude-ty">Option</span>&lt;(ModuleKind, ModuleInstanceId)&gt;,
-    u64,
-    serde_json::Value,
-);
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>ConnectFedPayload {
@@ -491,5 +500,26 @@
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
-</span><span class="kw">pub struct </span>PaymentLogResponse(<span class="kw">pub </span>Vec&lt;GatewayTransactionEvent&gt;);
+</span><span class="kw">pub struct </span>PaymentLogResponse(<span class="kw">pub </span>Vec&lt;PersistedLogEntry&gt;);
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>PaymentSummaryResponse {
+    <span class="kw">pub </span>outgoing: PaymentStats,
+    <span class="kw">pub </span>incoming: PaymentStats,
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>PaymentStats {
+    <span class="kw">pub </span>average_latency: <span class="prelude-ty">Option</span>&lt;Duration&gt;,
+    <span class="kw">pub </span>median_latency: <span class="prelude-ty">Option</span>&lt;Duration&gt;,
+    <span class="kw">pub </span>total_fees: Amount,
+    <span class="kw">pub </span>total_success: usize,
+    <span class="kw">pub </span>total_failure: usize,
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>PaymentSummaryPayload {
+    <span class="kw">pub </span>start_millis: u64,
+    <span class="kw">pub </span>end_millis: u64,
+}
 </code></pre></div></section></main></body></html>
