@@ -377,7 +377,7 @@ impl ApiEndpoint<()> {
             if let Err(error) = &result {
                 tracing::warn!(target: LOG_NET_API, path = E::PATH, ?error, "api request error");
             } else {
-                tracing::debug!(target: LOG_NET_API, path = E::PATH, "api request complete");
+                tracing::trace!(target: LOG_NET_API, path = E::PATH, "api request complete");
             }
             result
         }
