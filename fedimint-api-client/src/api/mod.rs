@@ -30,7 +30,7 @@ use fedimint_core::session_outcome::{SessionOutcome, SessionStatus};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::backoff_util::api_networking_backoff;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, util, NumPeersExt, PeerId, TransactionId,
 };
@@ -216,8 +216,7 @@ pub trait FederationApiExt: IRawFederationApi {
                     QueryStep::Continue => {}
                 },
                 Err(e) => {
-                    e.report_if_important(peer);
-
+                    e.report_if_unusual(peer, "RequestWithStrategy");
                     peer_errors.insert(peer, e);
                 }
             }
@@ -257,7 +256,9 @@ pub trait FederationApiExt: IRawFederationApi {
                         || async {
                             self.request_single_peer(method.clone(), params.clone(), *peer)
                                 .await
-                                .inspect_err(|e| e.report_if_important(*peer))
+                                .inspect_err(|e| {
+                                    e.report_if_unusual(*peer, "QueryWithStrategyRetry");
+                                })
                                 .map_err(|e| anyhow!(e.to_string()))
                         },
                     )
@@ -292,7 +293,11 @@ pub trait FederationApiExt: IRawFederationApi {
                                             peer,
                                         )
                                         .await
-                                        .inspect_err(|e| e.report_if_important(peer))
+                                        .inspect_err(|err| {
+                                            if err.is_unusual() {
+                                                debug!(target: LOG_CLIENT_NET_API, err = %err.fmt_compact(), "Unusual peer error");
+                                            }
+                                        })
                                         .map_err(|e| anyhow!(e.to_string()))
                                     },
                                 )
