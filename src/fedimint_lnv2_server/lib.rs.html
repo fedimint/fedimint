@@ -791,7 +791,11 @@
 <a href="#790" id="790">790</a>
 <a href="#791" id="791">791</a>
 <a href="#792" id="792">792</a>
-<a href="#793" id="793">793</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 
@@ -855,7 +859,7 @@
 <span class="kw">use </span>tpe::{
     derive_pk_share, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare, SecretKeyShare,
 };
-<span class="kw">use </span>tracing::trace;
+<span class="kw">use </span>tracing::{debug, trace};
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, DecryptionKeyShareKey,
@@ -1423,8 +1427,12 @@
 
 <span class="kw">impl </span>Lightning {
     <span class="kw">fn </span>new(cfg: LightningConfig, task_group: <span class="kw-2">&amp;</span>TaskGroup) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">let </span>(block_count_tx, block_count_rx) = watch::channel(<span class="prelude-val">None</span>);
         <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>cfg.local.bitcoin_rpc)<span class="question-mark">?</span>;
-        <span class="kw">let </span>block_count_rx = btc_rpc.spawn_block_count_update_task(task_group)<span class="question-mark">?</span>;
+        btc_rpc.spawn_block_count_update_task(task_group, <span class="kw">move </span>|count| {
+            <span class="macro">debug!</span>(target: LOG_MODULE_LNV2, %count, <span class="string">"New block count"</span>);
+            <span class="kw">let _ </span>= block_count_tx.send(<span class="prelude-val">Some</span>(count));
+        })<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(Lightning {
             cfg,

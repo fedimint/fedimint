@@ -2341,7 +2341,13 @@
 <a href="#2340" id="2340">2340</a>
 <a href="#2341" id="2341">2341</a>
 <a href="#2342" id="2342">2342</a>
-<a href="#2343" id="2343">2343</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2343" id="2343">2343</a>
+<a href="#2344" id="2344">2344</a>
+<a href="#2345" id="2345">2345</a>
+<a href="#2346" id="2346">2346</a>
+<a href="#2347" id="2347">2347</a>
+<a href="#2348" id="2348">2348</a>
+<a href="#2349" id="2349">2349</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -3377,21 +3383,27 @@
         our_peer_id: PeerId,
         module_api: DynModuleApi,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Wallet, WalletCreationError&gt; {
+        <span class="kw">let </span>(block_count_tx, block_count_rx) = watch::channel(<span class="prelude-val">None</span>);
+        <span class="kw">let </span>(fee_rate_tx, fee_rate_rx) = watch::channel(cfg.consensus.default_fee);
         <span class="kw">let </span>broadcast_pending = Arc::new(Notify::new());
         <span class="self">Self</span>::spawn_broadcast_pending_task(task_group, <span class="kw-2">&amp;</span>bitcoind, db, broadcast_pending.clone());
-
-        <span class="kw">let </span>fee_rate_rx = bitcoind
+        bitcoind
             .clone()
-            .spawn_fee_rate_update_task(
-                task_group,
-                cfg.consensus.default_fee,
-                cfg.consensus.network.<span class="number">0</span>,
-                CONFIRMATION_TARGET,
-            )
+            .spawn_fee_rate_update_task(task_group, cfg.consensus.network.<span class="number">0</span>, CONFIRMATION_TARGET, {
+                <span class="kw">move </span>|feerate| {
+                    <span class="macro">debug!</span>(target: LOG_MODULE_WALLET, %feerate, <span class="string">"New feerate"</span>);
+                    <span class="kw">let _ </span>= fee_rate_tx.send(feerate);
+                }
+            })
             .map_err(|e| WalletCreationError::FeerateSourceError(e.to_string()))<span class="question-mark">?</span>;
-        <span class="kw">let </span>block_count_rx = bitcoind
+        bitcoind
             .clone()
-            .spawn_block_count_update_task(task_group)
+            .spawn_block_count_update_task(task_group, {
+                <span class="kw">move </span>|count| {
+                    <span class="macro">debug!</span>(target: LOG_MODULE_WALLET, %count, <span class="string">"New block count"</span>);
+                    <span class="kw">let _ </span>= block_count_tx.send(<span class="prelude-val">Some</span>(count));
+                }
+            })
             .map_err(|e| WalletCreationError::BlockCountSourceError(e.to_string()))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>peer_supported_consensus_version =

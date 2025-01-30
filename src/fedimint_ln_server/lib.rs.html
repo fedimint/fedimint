@@ -1491,7 +1491,13 @@
 <a href="#1490" id="1490">1490</a>
 <a href="#1491" id="1491">1491</a>
 <a href="#1492" id="1492">1492</a>
-<a href="#1493" id="1493">1493</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1493" id="1493">1493</a>
+<a href="#1494" id="1494">1494</a>
+<a href="#1495" id="1495">1495</a>
+<a href="#1496" id="1496">1496</a>
+<a href="#1497" id="1497">1497</a>
+<a href="#1498" id="1498">1498</a>
+<a href="#1499" id="1499">1499</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -2440,8 +2446,14 @@
         our_peer_id: PeerId,
         task_group: <span class="kw-2">&amp;</span>TaskGroup,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">let </span>(block_count_tx, block_count_rx) = watch::channel(<span class="prelude-val">None</span>);
         <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>cfg.local.bitcoin_rpc)<span class="question-mark">?</span>;
-        <span class="kw">let </span>block_count_rx = btc_rpc.spawn_block_count_update_task(task_group)<span class="question-mark">?</span>;
+        btc_rpc.spawn_block_count_update_task(task_group, {
+            <span class="kw">move </span>|count| {
+                <span class="macro">debug!</span>(target: LOG_MODULE_LN, %count, <span class="string">"New block count"</span>);
+                <span class="kw">let _ </span>= block_count_tx.send(<span class="prelude-val">Some</span>(count));
+            }
+        })<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(Lightning {
             cfg,
             our_peer_id,

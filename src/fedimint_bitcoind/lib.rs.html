@@ -323,7 +323,16 @@
 <a href="#322" id="322">322</a>
 <a href="#323" id="323">323</a>
 <a href="#324" id="324">324</a>
-<a href="#325" id="325">325</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::missing_errors_doc)]
@@ -333,6 +342,7 @@
 
 </span><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
 <span class="kw">use </span>std::sync::{Arc, LazyLock, Mutex};
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::{env, iter};
@@ -350,7 +360,6 @@
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, Feerate};
 <span class="kw">use </span>fedimint_logging::{LOG_BITCOIND, LOG_CORE};
 <span class="kw">use </span>feerate_source::{FeeRateSource, FetchJson};
-<span class="kw">use </span>tokio::sync::watch;
 <span class="kw">use </span>tokio::time::Interval;
 <span class="kw">use </span>tracing::{debug, trace, warn};
 
@@ -523,13 +532,16 @@
     </span><span class="kw">pub fn </span>spawn_block_count_update_task(
         <span class="self">self</span>,
         task_group: <span class="kw-2">&amp;</span>TaskGroup,
-    ) -&gt; anyhow::Result&lt;watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;&gt; {
-        <span class="kw">let </span>(block_count_tx, block_count_rx) = watch::channel(<span class="prelude-val">None</span>);
+        on_update: <span class="kw">impl </span>Fn(u64) + Send + Sync + <span class="lifetime">'static</span>,
+    ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>desired_interval = get_bitcoin_polling_interval();
+
+        <span class="comment">// Note: atomic only to workaround Send+Sync async closure limitation
+        </span><span class="kw">let </span>last_block_count = AtomicU64::new(<span class="number">0</span>);
 
         task_group.spawn_cancellable(<span class="string">"block count background task"</span>, {
             <span class="kw">async move </span>{
-                <span class="macro">debug!</span>(target: LOG_BITCOIND, <span class="string">"Updating bitcoin block count"</span>);
+                <span class="macro">trace!</span>(target: LOG_BITCOIND, <span class="string">"Fetching block count from bitcoind"</span>);
 
                 <span class="kw">let </span>update_block_count = || <span class="kw">async </span>{
                     <span class="kw">let </span>res = <span class="self">self
@@ -537,8 +549,11 @@
                         .<span class="kw">await</span>;
 
                     <span class="kw">match </span>res {
-                        <span class="prelude-val">Ok</span>(c) =&gt; {
-                            <span class="kw">let _ </span>= block_count_tx.send(<span class="prelude-val">Some</span>(c));
+                        <span class="prelude-val">Ok</span>(block_count) =&gt; {
+                            <span class="kw">if </span>last_block_count.load(Ordering::SeqCst) != block_count {
+                                on_update(block_count);
+                                last_block_count.store(block_count, Ordering::SeqCst);
+                            }
                         },
                         <span class="prelude-val">Err</span>(err) =&gt; {
                             <span class="macro">warn!</span>(target: LOG_BITCOIND, err = %err.fmt_compact_anyhow(), <span class="string">"Unable to get block count from the node"</span>);
@@ -557,7 +572,7 @@
                 }
             }
         });
-        <span class="prelude-val">Ok</span>(block_count_rx)
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="doccomment">/// Spawns a background task that queries the feerate periodically and sends
@@ -565,12 +580,10 @@
     </span><span class="kw">pub fn </span>spawn_fee_rate_update_task(
         <span class="self">self</span>,
         task_group: <span class="kw-2">&amp;</span>TaskGroup,
-        default_fee: Feerate,
         network: Network,
         confirmation_target: u16,
-    ) -&gt; anyhow::Result&lt;watch::Receiver&lt;Feerate&gt;&gt; {
-        <span class="kw">let </span>(fee_rate_tx, fee_rate_rx) = watch::channel(default_fee);
-
+        on_update: <span class="kw">impl </span>Fn(Feerate) + Send + Sync + <span class="lifetime">'static</span>,
+    ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>sources = std::env::var(FM_WALLET_FEERATE_SOURCES_ENV)
             .unwrap_or_else(|<span class="kw">_</span>| <span class="kw">match </span>network {
                 Network::Bitcoin =&gt; <span class="string">"https://mempool.space/api/v1/fees/recommended#.;https://blockstream.info/api/fee-estimates#.\"1\""</span>.to_owned(),
@@ -588,7 +601,10 @@
         <span class="kw">let </span><span class="kw-2">mut </span>desired_interval = get_bitcoin_polling_interval();
 
         task_group.spawn_cancellable(<span class="string">"feerate background task"</span>, <span class="kw">async move </span>{
-            <span class="macro">debug!</span>(target: LOG_BITCOIND, <span class="string">"Updating feerate"</span>);
+            <span class="macro">trace!</span>(target: LOG_BITCOIND, <span class="string">"Fetching feerate from sources"</span>);
+
+            <span class="comment">// Note: atomic only to workaround Send+Sync async closure limitation
+            </span><span class="kw">let </span>last_feerate = AtomicU64::new(<span class="number">0</span>);
 
             <span class="kw">let </span>update_fee_rate = || <span class="kw">async </span>{
                 <span class="macro">trace!</span>(target: LOG_BITCOIND, <span class="string">"Updating bitcoin fee rate"</span>);
@@ -612,9 +628,11 @@
 
                 available_feerates.sort_unstable();
 
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(r) = get_median(<span class="kw-2">&amp;</span>available_feerates) {
-                    <span class="kw">let </span>feerate = Feerate { sats_per_kvb: r };
-                    <span class="kw">let _ </span>= fee_rate_tx.send(feerate);
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(feerate) = get_median(<span class="kw-2">&amp;</span>available_feerates) {
+                    <span class="kw">if </span>feerate != last_feerate.load(Ordering::SeqCst) {
+                        on_update(Feerate { sats_per_kvb: feerate });
+                        last_feerate.store(feerate, Ordering::SeqCst);
+                    }
                 } <span class="kw">else </span>{
                     <span class="comment">// During tests (regtest) we never get any real feerate, so no point spamming about it
                     </span><span class="kw">if </span>!is_running_in_test_env() {
@@ -634,7 +652,7 @@
             }
         });
 
-        <span class="prelude-val">Ok</span>(fee_rate_rx)
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
