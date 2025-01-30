@@ -865,7 +865,7 @@
         MetaConsensusItem { key, value, salt }: MetaConsensusItem,
         peer_id: PeerId,
     ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="macro">debug!</span>(target: LOG_MODULE_META, %peer_id, %key, %value, %salt, <span class="string">"Received a submission"</span>);
+        <span class="macro">trace!</span>(target: LOG_MODULE_META, %key, %value, %salt, <span class="string">"Processing consensus item proposal"</span>);
 
         <span class="kw">let </span>new_value = MetaSubmissionValue { salt, value };
         <span class="comment">// first of all: any new submission overrides previous submission

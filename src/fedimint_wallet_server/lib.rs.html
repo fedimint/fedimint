@@ -2844,7 +2844,7 @@
         consensus_item: WalletConsensusItem,
         peer: PeerId,
     ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="macro">trace!</span>(target: LOG_MODULE_WALLET, <span class="question-mark">?</span>consensus_item, <span class="string">"Received consensus proposals"</span>);
+        <span class="macro">trace!</span>(target: LOG_MODULE_WALLET, <span class="question-mark">?</span>consensus_item, <span class="string">"Processing consensus item proposal"</span>);
 
         <span class="kw">match </span>consensus_item {
             WalletConsensusItem::BlockCount(block_count_vote) =&gt; {
