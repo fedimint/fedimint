@@ -501,7 +501,7 @@ impl ServerModule for Wallet {
         consensus_item: WalletConsensusItem,
         peer: PeerId,
     ) -> anyhow::Result<()> {
-        trace!(target: LOG_MODULE_WALLET, ?consensus_item, "Received consensus proposals");
+        trace!(target: LOG_MODULE_WALLET, ?consensus_item, "Processing consensus item proposal");
 
         match consensus_item {
             WalletConsensusItem::BlockCount(block_count_vote) => {
