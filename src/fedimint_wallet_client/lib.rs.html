@@ -1511,7 +1511,8 @@
 <a href="#1510" id="1510">1510</a>
 <a href="#1511" id="1511">1511</a>
 <a href="#1512" id="1512">1512</a>
-<a href="#1513" id="1513">1513</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1513" id="1513">1513</a>
+<a href="#1514" id="1514">1514</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2798,7 +2799,8 @@
         drop(dbtx);
 
         <span class="kw">if </span>is_running_in_test_env() {
-            sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+            <span class="comment">// Even in tests we don't want to spam the federation with requests about it
+            </span>sleep(Duration::from_secs(<span class="number">10</span>)).<span class="kw">await</span>;
         } <span class="kw">else </span>{
             sleep(Duration::from_secs(<span class="number">3600</span>)).<span class="kw">await</span>;
         }

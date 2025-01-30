@@ -2340,7 +2340,8 @@
 <a href="#2339" id="2339">2339</a>
 <a href="#2340" id="2340">2340</a>
 <a href="#2341" id="2341">2341</a>
-<a href="#2342" id="2342">2342</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2342" id="2342">2342</a>
+<a href="#2343" id="2343">2343</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -4095,7 +4096,8 @@
                 }
 
                 <span class="kw">if </span>is_running_in_test_env() {
-                    sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+                    <span class="comment">// Even in tests we don't want to spam the federation with requests about it
+                    </span>sleep(Duration::from_secs(<span class="number">30</span>)).<span class="kw">await</span>;
                 } <span class="kw">else </span>{
                     sleep(Duration::from_secs(<span class="number">3600</span>)).<span class="kw">await</span>;
                 }
