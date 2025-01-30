@@ -337,7 +337,7 @@ impl ServerModule for Meta {
         MetaConsensusItem { key, value, salt }: MetaConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()> {
-        debug!(target: LOG_MODULE_META, %peer_id, %key, %value, %salt, "Received a submission");
+        trace!(target: LOG_MODULE_META, %key, %value, %salt, "Processing consensus item proposal");
 
         let new_value = MetaSubmissionValue { salt, value };
         // first of all: any new submission overrides previous submission
