@@ -864,7 +864,7 @@ impl ConsensusEngine {
             match result {
                 Ok(signed_session_outcome) => return signed_session_outcome,
                 Err(error) => {
-                    tracing::error!(target: LOG_CONSENSUS, "Error while requesting signed session outcome: {}", error);
+                    error.report_if_unusual("Requesting Session Outcome");
                 }
             }
         }

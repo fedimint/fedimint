@@ -74,13 +74,8 @@ pub enum PeerError {
 }
 
 impl PeerError {
-    /// Report errors that are worth reporting
-    ///
-    /// The goal here is to avoid spamming logs with errors that happen commonly
-    /// for all sorts of expected reasons, while printing ones that suggest
-    /// there's a problem.
-    pub fn report_if_important(&self, peer_id: PeerId) {
-        let important = match self {
+    pub fn is_unusual(&self) -> bool {
+        match self {
             PeerError::ResponseDeserialization(_)
             | PeerError::InvalidPeerId { .. }
             | PeerError::InvalidResponse(_)
@@ -92,12 +87,20 @@ impl PeerError {
             PeerError::Connection(_) | PeerError::Transport(_) | PeerError::ConditionFailed(_) => {
                 false
             }
-        };
+        }
+    }
+    /// Report errors that are worth reporting
+    ///
+    /// The goal here is to avoid spamming logs with errors that happen commonly
+    /// for all sorts of expected reasons, while printing ones that suggest
+    /// there's a problem.
+    pub fn report_if_unusual(&self, peer_id: PeerId, context: &str) {
+        let unusual = self.is_unusual();
 
-        trace!(target: LOG_CLIENT_NET_API, error = %self, "PeerError");
+        trace!(target: LOG_CLIENT_NET_API, error = %self, %context, "PeerError");
 
-        if important {
-            warn!(target: LOG_CLIENT_NET_API, error = %self, %peer_id, "Unusual PeerError");
+        if unusual {
+            warn!(target: LOG_CLIENT_NET_API, error = %self,%context, %peer_id, "Unusual PeerError");
         }
     }
 }
@@ -109,6 +112,10 @@ impl PeerError {
 pub struct FederationError {
     pub method: String,
     pub params: serde_json::Value,
+    /// Higher-level general error
+    ///
+    /// The `general` error should be Some, when the error is not simply peers
+    /// responding with enough errors, but something more global.
     pub general: Option<anyhow::Error>,
     pub peer_errors: BTreeMap<PeerId, PeerError>,
 }
@@ -128,7 +135,7 @@ impl Display for FederationError {
             }
         }
         for (i, (peer, e)) in self.peer_errors.iter().enumerate() {
-            f.write_fmt(format_args!("{peer} => {e})"))?;
+            f.write_fmt(format_args!("{peer} => {e:#})"))?;
             if i == self.peer_errors.len() - 1 {
                 f.write_str(", ")?;
             }
@@ -157,22 +164,10 @@ impl FederationError {
         params: impl Serialize,
         peer_errors: BTreeMap<PeerId, PeerError>,
     ) -> Self {
-        use std::fmt::Write;
-        let general_fmt = peer_errors
-            .iter()
-            .fold(String::new(), |mut s, (peer_id, e)| {
-                if !s.is_empty() {
-                    write!(s, ", ").expect("can't fail");
-                }
-                write!(s, "peer-{peer_id}: {e}").expect("can't fail");
-
-                s
-            });
-
         Self {
             method: method.into(),
             params: serde_json::to_value(params).unwrap_or_default(),
-            general: Some(anyhow::anyhow!("Received errors from peers: {general_fmt}",)),
+            general: None,
             peer_errors,
         }
     }
@@ -192,12 +187,13 @@ impl FederationError {
     }
 
     /// Report any errors
-    pub fn report_if_important(&self) {
+    pub fn report_if_unusual(&self, context: &str) {
         if let Some(error) = self.general.as_ref() {
-            warn!(target: LOG_CLIENT_NET_API, err = %error.fmt_compact_anyhow(), "General FederationError");
+            // Any general federation errors are unusual
+            warn!(target: LOG_CLIENT_NET_API, err = %error.fmt_compact_anyhow(), %context, "General FederationError");
         }
         for (peer_id, e) in &self.peer_errors {
-            e.report_if_important(*peer_id);
+            e.report_if_unusual(*peer_id, context);
         }
     }
 
@@ -238,7 +234,7 @@ impl OutputOutcomeError {
     pub fn report_if_important(&self) {
         let important = match self {
             OutputOutcomeError::Federation(e) => {
-                e.report_if_important();
+                e.report_if_unusual("OutputOutcome");
                 return;
             }
             OutputOutcomeError::Core(_)

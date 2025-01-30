@@ -9,11 +9,13 @@ use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::Keypair;
 use fedimint_core::task::sleep;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{OutPoint, TransactionId};
 use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
 use fedimint_ln_common::contracts::{DecryptedPreimage, FundedContract};
 use fedimint_ln_common::federation_endpoint_constants::ACCOUNT_ENDPOINT;
 use fedimint_ln_common::LightningInput;
+use fedimint_logging::LOG_CLIENT_MODULE_LN;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -229,8 +231,12 @@ impl LightningReceiveConfirmedInvoice {
                     debug!("Still waiting preimage decryption for contract {contract_id}");
                 }
                 Err(error) => {
-                    error.report_if_important();
-                    info!("External LN payment retryable error waiting for preimage decryption: {error:?}");
+                    error.report_if_unusual("Awaiting incoming contract");
+                    debug!(
+                        target: LOG_CLIENT_MODULE_LN,
+                        err = %error.fmt_compact(),
+                        "External LN payment retryable error waiting for preimage decryption"
+                    );
                 }
             }
             sleep(RETRY_DELAY).await;
