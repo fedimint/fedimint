@@ -71,6 +71,8 @@ use crate::db::{
     PreimagePrefix, UnixTimeVoteKey, UnixTimeVotePrefix,
 };
 
+const MIN_UNIX_TIME_VOTE_INCREMENT_SECS: u64 = 30;
+
 #[derive(Debug, Clone)]
 pub struct LightningInit;
 
@@ -369,6 +371,11 @@ impl ServerModule for Lightning {
                     .unwrap_or(0);
 
                 ensure!(current_vote < vote, "Unix time vote is redundant");
+
+                ensure!(
+                    current_vote + MIN_UNIX_TIME_VOTE_INCREMENT_SECS < vote,
+                    "Unit time vote is not incremented enough"
+                );
 
                 Ok(())
             }
