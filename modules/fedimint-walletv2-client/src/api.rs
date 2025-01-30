@@ -1,16 +1,18 @@
 use std::collections::BTreeSet;
 
-use bitcoin::{OutPoint, Txid};
+use bitcoin::OutPoint;
 use fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_walletv2_common::endpoint_constants::{
     CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, FEDERATION_WALLET_ENDPOINT,
-    FILTER_UNSPENT_OUTPOINTS_ENDPOINT, PENDING_TRANSACTIONS_ENDPOINT, RECEIVE_FEE_ENDPOINT,
-    SEND_FEE_ENDPOINT,
+    FILTER_UNSPENT_OUTPOINTS_ENDPOINT, PENDING_INFO_ENDPOINT, RECEIVE_FEE_ENDPOINT,
+    SEND_FEE_ENDPOINT, TRANSACTION_INFO_ENDPOINT, TRANSACTION_LOG_ENDPOINT,
 };
-use fedimint_walletv2_common::{FederationWallet, ReceiveFee, SendFee};
+use fedimint_walletv2_common::{
+    FederationWallet, PendingInfo, ReceiveFee, SendFee, TransactionInfo,
+};
 
 #[apply(async_trait_maybe_send!)]
 pub trait WalletFederationApi {
@@ -24,7 +26,11 @@ pub trait WalletFederationApi {
 
     async fn receive_fee(&self) -> FederationResult<Option<ReceiveFee>>;
 
-    async fn pending_transactions(&self) -> FederationResult<BTreeSet<Txid>>;
+    async fn pending_info(&self) -> FederationResult<PendingInfo>;
+
+    async fn transaction_info(&self, index: u64) -> FederationResult<Option<TransactionInfo>>;
+
+    async fn transaction_log(&self, n: usize) -> FederationResult<Vec<TransactionInfo>>;
 
     async fn filter_unspent_outpoints(
         &self,
@@ -71,10 +77,23 @@ where
             .await
     }
 
-    async fn pending_transactions(&self) -> FederationResult<BTreeSet<Txid>> {
+    async fn pending_info(&self) -> FederationResult<PendingInfo> {
+        self.request_current_consensus(PENDING_INFO_ENDPOINT.to_string(), ApiRequestErased::new(()))
+            .await
+    }
+
+    async fn transaction_info(&self, index: u64) -> FederationResult<Option<TransactionInfo>> {
         self.request_current_consensus(
-            PENDING_TRANSACTIONS_ENDPOINT.to_string(),
-            ApiRequestErased::new(()),
+            TRANSACTION_INFO_ENDPOINT.to_string(),
+            ApiRequestErased::new(index),
+        )
+        .await
+    }
+
+    async fn transaction_log(&self, n: usize) -> FederationResult<Vec<TransactionInfo>> {
+        self.request_current_consensus(
+            TRANSACTION_LOG_ENDPOINT.to_string(),
+            ApiRequestErased::new(n),
         )
         .await
     }

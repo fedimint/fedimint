@@ -35,7 +35,8 @@ async fn await_consensus_block_count(
     loop {
         if client
             .get_first_module::<WalletClientModule>()?
-            .consensus_block_count()
+            .info()
+            .block_count()
             .await?
             >= block_count
         {
@@ -57,8 +58,10 @@ async fn await_pending_transaction_count(
     loop {
         if client
             .get_first_module::<WalletClientModule>()?
-            .pending_transactions()
+            .info()
+            .pending()
             .await?
+            .transactions
             .len()
             == transaction_count
         {
@@ -110,7 +113,8 @@ async fn test_send_and_receive() -> anyhow::Result<()> {
 
     let current_consensus = client
         .get_first_module::<WalletClientModule>()?
-        .consensus_block_count()
+        .info()
+        .block_count()
         .await?;
 
     bitcoin.mine_blocks(6).await;
@@ -142,7 +146,8 @@ async fn test_send_and_receive() -> anyhow::Result<()> {
     assert_eq!(
         client
             .get_first_module::<WalletClientModule>()?
-            .federation_value()
+            .info()
+            .total_value()
             .await?,
         bsats(200_000)
     );
@@ -172,7 +177,8 @@ async fn test_send_and_receive() -> anyhow::Result<()> {
     assert!(
         client
             .get_first_module::<WalletClientModule>()?
-            .federation_value()
+            .info()
+            .total_value()
             .await?
             >= bsats(295_000)
     );
@@ -199,7 +205,8 @@ async fn test_send_and_receive() -> anyhow::Result<()> {
     assert!(
         client
             .get_first_module::<WalletClientModule>()?
-            .federation_value()
+            .info()
+            .total_value()
             .await?
             < bsats(50_000)
     );
@@ -256,7 +263,8 @@ async fn fee_exceeds_one_bitcoin_within_twenty_five_pending_transactions() -> an
 
     let current_consensus = client
         .get_first_module::<WalletClientModule>()?
-        .consensus_block_count()
+        .info()
+        .block_count()
         .await?;
 
     bitcoin.mine_blocks(6).await;

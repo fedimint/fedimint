@@ -60,12 +60,12 @@ use fedimint_walletv2_common::config::{
 };
 use fedimint_walletv2_common::endpoint_constants::{
     CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, FEDERATION_WALLET_ENDPOINT,
-    FILTER_UNSPENT_OUTPOINTS_ENDPOINT, LOCAL_BLOCK_COUNT_ENDPOINT, PENDING_TRANSACTIONS_ENDPOINT,
-    RECEIVE_FEE_ENDPOINT, SEND_FEE_ENDPOINT,
+    FILTER_UNSPENT_OUTPOINTS_ENDPOINT, LOCAL_BLOCK_COUNT_ENDPOINT, PENDING_INFO_ENDPOINT,
+    RECEIVE_FEE_ENDPOINT, SEND_FEE_ENDPOINT, TRANSACTION_INFO_ENDPOINT, TRANSACTION_LOG_ENDPOINT,
 };
 use fedimint_walletv2_common::{
-    descriptor, tweak_public_key, FederationWallet, ReceiveFee, SendFee, WalletInputError,
-    WalletOutputError, MODULE_CONSENSUS_VERSION,
+    descriptor, tweak_public_key, FederationWallet, PendingInfo, ReceiveFee, SendFee,
+    TransactionInfo, WalletInputError, WalletOutputError, MODULE_CONSENSUS_VERSION,
 };
 use futures::StreamExt;
 use miniscript::descriptor::Wsh;
@@ -78,8 +78,8 @@ use tracing::info;
 
 use crate::db::{
     BlockCountVoteKey, BlockCountVotePrefix, FeeRateVoteKey, FeeRateVotePrefix, OutputOutcomeKey,
-    PendingTransactionKey, PendingTransactionPrefix, SpentOutPointKey, UnsignedTransactionKey,
-    UnsignedTransactionPrefix, UnspentTxOutKey,
+    PendingTransactionKey, PendingTransactionPrefix, SpentOutPointKey, TransactionLogKey,
+    TransactionLogPrefix, UnsignedTransactionKey, UnsignedTransactionPrefix, UnspentTxOutKey,
 };
 
 /// Used for estimating a feerate that will confirm within a target number of
@@ -93,11 +93,20 @@ use crate::db::{
 pub const CONFIRMATION_TARGET: u16 = 1;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Encodable, Decodable)]
+pub struct TransactionLog {
+    pub transaction: Transaction,
+    pub vbytes: u64,
+    pub fee: Amount,
+    pub created: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Encodable, Decodable)]
 pub struct UnsignedTransaction {
     pub transaction: Transaction,
     pub spent_tx_outs: Vec<SpentTxOut>,
     pub vbytes: u64,
     pub fee: Amount,
+    pub created: u64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Encodable, Decodable)]
@@ -105,6 +114,7 @@ pub struct PendingTransaction {
     pub transaction: Transaction,
     pub vbytes: u64,
     pub fee: Amount,
+    pub created: u64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
@@ -287,6 +297,16 @@ impl ServerModule for Wallet {
             .collect::<Vec<WalletConsensusItem>>()
             .await;
 
+        let network = util::retry(
+            "get_network",
+            util::backoff_util::background_backoff(),
+            || self.btc_rpc.get_network(),
+        )
+        .await
+        .expect("Bitcoind rpc to get_network failed");
+
+        assert_eq!(network, self.cfg.consensus.network);
+
         if let Ok(block_count) = self.btc_rpc.get_block_count().await {
             items.push(WalletConsensusItem::BlockCount(
                 block_count.saturating_sub(self.cfg.consensus.finality_delay),
@@ -347,6 +367,16 @@ impl ServerModule for Wallet {
                 .await;
 
                 for height in old_consensus_block_count..new_consensus_block_count {
+                    let network = util::retry(
+                        "get_network",
+                        util::backoff_util::background_backoff(),
+                        || self.btc_rpc.get_network(),
+                    )
+                    .await
+                    .expect("Bitcoind rpc to get_network failed");
+
+                    assert_eq!(network, self.cfg.consensus.network);
+
                     let block_hash = util::retry(
                         "get_block_hash",
                         util::backoff_util::background_backoff(),
@@ -450,6 +480,7 @@ impl ServerModule for Wallet {
                             transaction,
                             vbytes: unsigned_transaction.vbytes,
                             fee: unsigned_transaction.fee,
+                            created: unsigned_transaction.created,
                         },
                     )
                     .await;
@@ -559,7 +590,19 @@ impl ServerModule for Wallet {
                 )
                 .await;
 
-                self.increment_feerate_index(dbtx).await;
+                let index = self.total_transactions(dbtx).await;
+                let created = self.consensus_block_count(dbtx).await;
+
+                dbtx.insert_new_entry(
+                    &TransactionLogKey(index),
+                    &TransactionLog {
+                        transaction: transaction.clone(),
+                        vbytes: self.cfg.consensus.send_tx_vbytes,
+                        fee: input.fee.value,
+                        created,
+                    },
+                )
+                .await;
 
                 dbtx.insert_new_entry(
                     &UnsignedTransactionKey(transaction.compute_txid()),
@@ -577,9 +620,12 @@ impl ServerModule for Wallet {
                         ],
                         vbytes: self.cfg.consensus.send_tx_vbytes,
                         fee: input.fee.value,
+                        created,
                     },
                 )
                 .await;
+
+                self.increment_feerate_index(dbtx).await;
             }
             None => {
                 dbtx.insert_new_entry(
@@ -696,7 +742,19 @@ impl ServerModule for Wallet {
         )
         .await;
 
-        self.increment_feerate_index(dbtx).await;
+        let index = self.total_transactions(dbtx).await;
+        let created = self.consensus_block_count(dbtx).await;
+
+        dbtx.insert_new_entry(
+            &TransactionLogKey(index),
+            &TransactionLog {
+                transaction: transaction.clone(),
+                vbytes: self.cfg.consensus.send_tx_vbytes,
+                fee: output.fee.value,
+                created,
+            },
+        )
+        .await;
 
         dbtx.insert_new_entry(
             &UnsignedTransactionKey(transaction.compute_txid()),
@@ -708,9 +766,12 @@ impl ServerModule for Wallet {
                 }],
                 vbytes: self.cfg.consensus.send_tx_vbytes,
                 fee: output.fee.value,
+                created,
             },
         )
         .await;
+
+        self.increment_feerate_index(dbtx).await;
 
         let amount = pegout_value
             .to_sat()
@@ -794,18 +855,24 @@ impl ServerModule for Wallet {
                 }
             },
             api_endpoint! {
-                PENDING_TRANSACTIONS_ENDPOINT,
+                PENDING_INFO_ENDPOINT,
                 ApiVersion::new(0, 0),
-                async |_module: &Wallet, context, _params: ()| -> BTreeSet<bitcoin::Txid> {
-                    let transactions = context.dbtx()
-                        .into_nc()
-                        .find_by_prefix(&PendingTransactionPrefix)
-                        .await
-                        .map(|entry| entry.0.0)
-                        .collect::<BTreeSet<bitcoin::Txid>>()
-                        .await;
-
-                    Ok(transactions)
+                async |module: &Wallet, context, _params: ()| -> PendingInfo {
+                    Ok(module.wallet_info(&mut context.dbtx().into_nc()).await)
+                }
+            },
+            api_endpoint! {
+                TRANSACTION_INFO_ENDPOINT,
+                ApiVersion::new(0, 0),
+                async |module: &Wallet, context, params: u64| -> Option<TransactionInfo> {
+                    Ok(module.transaction_info(&mut context.dbtx().into_nc(), params).await)
+                }
+            },
+            api_endpoint! {
+                TRANSACTION_LOG_ENDPOINT,
+                ApiVersion::new(0, 0),
+                async |module: &Wallet, context, params: usize| -> Vec<TransactionInfo> {
+                    Ok(module.transaction_log(&mut context.dbtx().into_nc(), params).await)
                 }
             },
             api_endpoint! {
@@ -832,11 +899,6 @@ impl Wallet {
         task_group: &TaskGroup,
     ) -> anyhow::Result<Wallet> {
         let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
-
-        ensure!(
-            btc_rpc.get_network().await? == cfg.consensus.network,
-            "Connected bitcoind is on different network",
-        );
 
         Self::spawn_broadcast_pending_transactions_task(btc_rpc.clone(), db.clone(), task_group);
 
@@ -1152,5 +1214,76 @@ impl Wallet {
             .await;
 
         outpoints.difference(&claimed_outpoints).copied().collect()
+    }
+
+    async fn wallet_info(&self, dbtx: &mut DatabaseTransaction<'_>) -> PendingInfo {
+        let n_pending = dbtx
+            .find_by_prefix(&PendingTransactionPrefix)
+            .await
+            .count()
+            .await;
+
+        let transactions = self.transaction_log(dbtx, n_pending).await;
+
+        assert_eq!(transactions.len(), n_pending);
+
+        let total_vbytes = transactions.iter().map(|info| info.vbytes).sum::<u64>();
+
+        let total_fee = transactions.iter().map(|info| info.fee).sum::<Amount>();
+
+        let total_feerate = (1000 * total_fee.to_sat())
+            .checked_div(total_vbytes)
+            .unwrap_or(0);
+
+        PendingInfo {
+            transactions,
+            total_vbytes,
+            total_fee,
+            total_feerate,
+        }
+    }
+
+    async fn transaction_info(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        index: u64,
+    ) -> Option<TransactionInfo> {
+        dbtx.get_value(&TransactionLogKey(index))
+            .await
+            .map(|entry| TransactionInfo {
+                index,
+                txid: entry.transaction.compute_txid(),
+                vbytes: entry.vbytes,
+                fee: entry.fee,
+                feerate: (1000 * entry.fee.to_sat()) / entry.vbytes,
+                created: entry.created,
+            })
+    }
+
+    async fn transaction_log(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        n_transactions: usize,
+    ) -> Vec<TransactionInfo> {
+        dbtx.find_by_prefix_sorted_descending(&TransactionLogPrefix)
+            .await
+            .take(n_transactions)
+            .map(|(key, entry)| TransactionInfo {
+                index: key.0,
+                txid: entry.transaction.compute_txid(),
+                vbytes: entry.vbytes,
+                fee: entry.fee,
+                feerate: (1000 * entry.fee.to_sat()) / entry.vbytes,
+                created: entry.created,
+            })
+            .collect()
+            .await
+    }
+
+    async fn total_transactions(&self, dbtx: &mut DatabaseTransaction<'_>) -> u64 {
+        dbtx.find_by_prefix(&TransactionLogPrefix)
+            .await
+            .count()
+            .await as u64
     }
 }

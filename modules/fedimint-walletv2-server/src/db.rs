@@ -5,7 +5,9 @@ use secp256k1::ecdsa::Signature;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
-use crate::{FederationWallet, PendingTransaction, UnsignedTransaction, WalletOutputOutcome};
+use crate::{
+    FederationWallet, PendingTransaction, TransactionLog, UnsignedTransaction, WalletOutputOutcome,
+};
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -15,11 +17,12 @@ pub enum DbKeyPrefix {
     BlockCountVote = 0x32,
     FeeRateVote = 0x33,
     FeeRateIndex = 0x34,
-    UnsignedTransaction = 0x35,
-    Signatures = 0x36,
-    PendingTransaction = 0x37,
-    OutputOutcome = 0x38,
-    FederationWallet = 0x39,
+    TransactionLog = 0x35,
+    UnsignedTransaction = 0x36,
+    Signatures = 0x37,
+    PendingTransaction = 0x38,
+    OutputOutcome = 0x39,
+    FederationWallet = 0x40,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -72,6 +75,20 @@ impl_db_lookup!(
     key = FederationWalletKey,
     query_prefix = FederationWalletPrefix
 );
+
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct TransactionLogKey(pub u64);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct TransactionLogPrefix;
+
+impl_db_record!(
+    key = TransactionLogKey,
+    value = TransactionLog,
+    db_prefix = DbKeyPrefix::TransactionLog,
+);
+
+impl_db_lookup!(key = TransactionLogKey, query_prefix = TransactionLogPrefix);
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct UnsignedTransactionKey(pub Txid);

@@ -114,6 +114,24 @@ pub struct FederationWallet {
     pub tweak: sha256::Hash,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PendingInfo {
+    pub transactions: Vec<TransactionInfo>,
+    pub total_fee: bitcoin::Amount,
+    pub total_vbytes: u64,
+    pub total_feerate: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct TransactionInfo {
+    pub index: u64,
+    pub txid: bitcoin::Txid,
+    pub fee: bitcoin::Amount,
+    pub vbytes: u64,
+    pub feerate: u64,
+    pub created: u64,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct SendFee {
     // This index ensures that once a Fedimint transaction becomes invalid due to a
