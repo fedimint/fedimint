@@ -377,6 +377,7 @@ impl ServerModule for Lightning {
     ) -> anyhow::Result<()> {
         let span = info_span!("process decryption share", %peer_id);
         let _guard = span.enter();
+        trace!(target: LOG_MODULE_LN, ?consensus_item, "Processing consensus item proposal");
 
         match consensus_item {
             LightningConsensusItem::DecryptPreimage(contract_id, share) => {

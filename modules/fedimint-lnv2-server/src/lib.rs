@@ -351,6 +351,7 @@ impl ServerModule for Lightning {
         consensus_item: LightningConsensusItem,
         peer: PeerId,
     ) -> anyhow::Result<()> {
+        trace!(target: LOG_MODULE_LNV2, ?consensus_item, "Processing consensus item proposal");
         match consensus_item {
             LightningConsensusItem::BlockCountVote(vote) => {
                 let current_vote = dbtx
