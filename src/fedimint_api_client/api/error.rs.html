@@ -258,11 +258,7 @@
 <a href="#257" id="257">257</a>
 <a href="#258" id="258">258</a>
 <a href="#259" id="259">259</a>
-<a href="#260" id="260">260</a>
-<a href="#261" id="261">261</a>
-<a href="#262" id="262">262</a>
-<a href="#263" id="263">263</a>
-<a href="#264" id="264">264</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#260" id="260">260</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display};
 <span class="kw">use </span>std::time::Duration;
 
@@ -338,13 +334,8 @@
 }
 
 <span class="kw">impl </span>PeerError {
-    <span class="doccomment">/// Report errors that are worth reporting
-    ///
-    /// The goal here is to avoid spamming logs with errors that happen commonly
-    /// for all sorts of expected reasons, while printing ones that suggest
-    /// there's a problem.
-    </span><span class="kw">pub fn </span>report_if_important(<span class="kw-2">&amp;</span><span class="self">self</span>, peer_id: PeerId) {
-        <span class="kw">let </span>important = <span class="kw">match </span><span class="self">self </span>{
+    <span class="kw">pub fn </span>is_unusual(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="kw">match </span><span class="self">self </span>{
             PeerError::ResponseDeserialization(<span class="kw">_</span>)
             | PeerError::InvalidPeerId { .. }
             | PeerError::InvalidResponse(<span class="kw">_</span>)
@@ -356,12 +347,20 @@
             PeerError::Connection(<span class="kw">_</span>) | PeerError::Transport(<span class="kw">_</span>) | PeerError::ConditionFailed(<span class="kw">_</span>) =&gt; {
                 <span class="bool-val">false
             </span>}
-        };
+        }
+    }
+    <span class="doccomment">/// Report errors that are worth reporting
+    ///
+    /// The goal here is to avoid spamming logs with errors that happen commonly
+    /// for all sorts of expected reasons, while printing ones that suggest
+    /// there's a problem.
+    </span><span class="kw">pub fn </span>report_if_unusual(<span class="kw-2">&amp;</span><span class="self">self</span>, peer_id: PeerId, context: <span class="kw-2">&amp;</span>str) {
+        <span class="kw">let </span>unusual = <span class="self">self</span>.is_unusual();
 
-        <span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, error = %<span class="self">self</span>, <span class="string">"PeerError"</span>);
+        <span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, error = %<span class="self">self</span>, %context, <span class="string">"PeerError"</span>);
 
-        <span class="kw">if </span>important {
-            <span class="macro">warn!</span>(target: LOG_CLIENT_NET_API, error = %<span class="self">self</span>, %peer_id, <span class="string">"Unusual PeerError"</span>);
+        <span class="kw">if </span>unusual {
+            <span class="macro">warn!</span>(target: LOG_CLIENT_NET_API, error = %<span class="self">self</span>,%context, %peer_id, <span class="string">"Unusual PeerError"</span>);
         }
     }
 }
@@ -373,7 +372,11 @@
 </span><span class="kw">pub struct </span>FederationError {
     <span class="kw">pub </span>method: String,
     <span class="kw">pub </span>params: serde_json::Value,
-    <span class="kw">pub </span>general: <span class="prelude-ty">Option</span>&lt;anyhow::Error&gt;,
+    <span class="doccomment">/// Higher-level general error
+    ///
+    /// The `general` error should be Some, when the error is not simply peers
+    /// responding with enough errors, but something more global.
+    </span><span class="kw">pub </span>general: <span class="prelude-ty">Option</span>&lt;anyhow::Error&gt;,
     <span class="kw">pub </span>peer_errors: BTreeMap&lt;PeerId, PeerError&gt;,
 }
 
@@ -392,7 +395,7 @@
             }
         }
         <span class="kw">for </span>(i, (peer, e)) <span class="kw">in </span><span class="self">self</span>.peer_errors.iter().enumerate() {
-            f.write_fmt(<span class="macro">format_args!</span>(<span class="string">"{peer} =&gt; {e})"</span>))<span class="question-mark">?</span>;
+            f.write_fmt(<span class="macro">format_args!</span>(<span class="string">"{peer} =&gt; {e:#})"</span>))<span class="question-mark">?</span>;
             <span class="kw">if </span>i == <span class="self">self</span>.peer_errors.len() - <span class="number">1 </span>{
                 f.write_str(<span class="string">", "</span>)<span class="question-mark">?</span>;
             }
@@ -421,22 +424,10 @@
         params: <span class="kw">impl </span>Serialize,
         peer_errors: BTreeMap&lt;PeerId, PeerError&gt;,
     ) -&gt; <span class="self">Self </span>{
-        <span class="kw">use </span>std::fmt::Write;
-        <span class="kw">let </span>general_fmt = peer_errors
-            .iter()
-            .fold(String::new(), |<span class="kw-2">mut </span>s, (peer_id, e)| {
-                <span class="kw">if </span>!s.is_empty() {
-                    <span class="macro">write!</span>(s, <span class="string">", "</span>).expect(<span class="string">"can't fail"</span>);
-                }
-                <span class="macro">write!</span>(s, <span class="string">"peer-{peer_id}: {e}"</span>).expect(<span class="string">"can't fail"</span>);
-
-                s
-            });
-
         <span class="self">Self </span>{
             method: method.into(),
             params: serde_json::to_value(params).unwrap_or_default(),
-            general: <span class="prelude-val">Some</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Received errors from peers: {general_fmt}"</span>,)),
+            general: <span class="prelude-val">None</span>,
             peer_errors,
         }
     }
@@ -456,12 +447,13 @@
     }
 
     <span class="doccomment">/// Report any errors
-    </span><span class="kw">pub fn </span>report_if_important(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+    </span><span class="kw">pub fn </span>report_if_unusual(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span>str) {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(error) = <span class="self">self</span>.general.as_ref() {
-            <span class="macro">warn!</span>(target: LOG_CLIENT_NET_API, err = %error.fmt_compact_anyhow(), <span class="string">"General FederationError"</span>);
+            <span class="comment">// Any general federation errors are unusual
+            </span><span class="macro">warn!</span>(target: LOG_CLIENT_NET_API, err = %error.fmt_compact_anyhow(), %context, <span class="string">"General FederationError"</span>);
         }
         <span class="kw">for </span>(peer_id, e) <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.peer_errors {
-            e.report_if_important(<span class="kw-2">*</span>peer_id);
+            e.report_if_unusual(<span class="kw-2">*</span>peer_id, context);
         }
     }
 
@@ -502,7 +494,7 @@
     <span class="kw">pub fn </span>report_if_important(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">let </span>important = <span class="kw">match </span><span class="self">self </span>{
             OutputOutcomeError::Federation(e) =&gt; {
-                e.report_if_important();
+                e.report_if_unusual(<span class="string">"OutputOutcome"</span>);
                 <span class="kw">return</span>;
             }
             OutputOutcomeError::Core(<span class="kw">_</span>)
