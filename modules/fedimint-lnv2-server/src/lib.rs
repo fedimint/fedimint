@@ -62,7 +62,7 @@ use tokio::sync::watch;
 use tpe::{
     derive_pk_share, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare, SecretKeyShare,
 };
-use tracing::trace;
+use tracing::{debug, trace};
 
 use crate::db::{
     BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, DecryptionKeyShareKey,
@@ -630,8 +630,12 @@ impl ServerModule for Lightning {
 
 impl Lightning {
     fn new(cfg: LightningConfig, task_group: &TaskGroup) -> anyhow::Result<Self> {
+        let (block_count_tx, block_count_rx) = watch::channel(None);
         let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
-        let block_count_rx = btc_rpc.spawn_block_count_update_task(task_group)?;
+        btc_rpc.spawn_block_count_update_task(task_group, move |count| {
+            debug!(target: LOG_MODULE_LNV2, %count, "New block count");
+            let _ = block_count_tx.send(Some(count));
+        })?;
 
         Ok(Lightning {
             cfg,

@@ -1034,21 +1034,27 @@ impl Wallet {
         our_peer_id: PeerId,
         module_api: DynModuleApi,
     ) -> Result<Wallet, WalletCreationError> {
+        let (block_count_tx, block_count_rx) = watch::channel(None);
+        let (fee_rate_tx, fee_rate_rx) = watch::channel(cfg.consensus.default_fee);
         let broadcast_pending = Arc::new(Notify::new());
         Self::spawn_broadcast_pending_task(task_group, &bitcoind, db, broadcast_pending.clone());
-
-        let fee_rate_rx = bitcoind
+        bitcoind
             .clone()
-            .spawn_fee_rate_update_task(
-                task_group,
-                cfg.consensus.default_fee,
-                cfg.consensus.network.0,
-                CONFIRMATION_TARGET,
-            )
+            .spawn_fee_rate_update_task(task_group, cfg.consensus.network.0, CONFIRMATION_TARGET, {
+                move |feerate| {
+                    debug!(target: LOG_MODULE_WALLET, %feerate, "New feerate");
+                    let _ = fee_rate_tx.send(feerate);
+                }
+            })
             .map_err(|e| WalletCreationError::FeerateSourceError(e.to_string()))?;
-        let block_count_rx = bitcoind
+        bitcoind
             .clone()
-            .spawn_block_count_update_task(task_group)
+            .spawn_block_count_update_task(task_group, {
+                move |count| {
+                    debug!(target: LOG_MODULE_WALLET, %count, "New block count");
+                    let _ = block_count_tx.send(Some(count));
+                }
+            })
             .map_err(|e| WalletCreationError::BlockCountSourceError(e.to_string()))?;
 
         let peer_supported_consensus_version =

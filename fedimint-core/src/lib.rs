@@ -38,7 +38,7 @@
 
 extern crate self as fedimint_core;
 
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 use std::io::Error;
 use std::str::FromStr;
 
@@ -229,6 +229,12 @@ impl Decodable for TransactionId {
 )]
 pub struct Feerate {
     pub sats_per_kvb: u64,
+}
+
+impl fmt::Display for Feerate {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("{}sat/kvb", self.sats_per_kvb))
+    }
 }
 
 impl Feerate {
