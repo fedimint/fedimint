@@ -25,6 +25,7 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::NumPeers;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
 use fedimint_server_core::{DynServerModule, ServerModuleInitRegistry};
+use iroh::discovery::Discovery;
 use jsonrpsee::server::ServerHandle;
 use tokio::sync::watch;
 use tracing::{info, warn};
@@ -51,6 +52,7 @@ pub async fn run(
     force_api_secrets: ApiSecrets,
     data_dir: PathBuf,
     code_version_str: String,
+    discovery: Option<Box<dyn Discovery>>,
 ) -> anyhow::Result<()> {
     cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
 
@@ -204,7 +206,7 @@ pub async fn run(
         checkpoint_retention,
         p2p_bind_addr,
     }
-    .run()
+    .run(discovery)
     .await?;
 
     api_handler

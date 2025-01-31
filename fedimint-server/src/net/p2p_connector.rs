@@ -249,6 +249,7 @@ pub mod iroh {
     use async_trait::async_trait;
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::PeerId;
+    use iroh::discovery::Discovery;
     use iroh::endpoint::Incoming;
     use iroh::{Endpoint, NodeId, SecretKey};
 
@@ -271,6 +272,7 @@ pub mod iroh {
         pub async fn new(
             secret_key: SecretKey,
             node_ids: BTreeMap<PeerId, NodeId>,
+            discovery: Option<Box<dyn Discovery>>,
         ) -> anyhow::Result<Self> {
             let identity = *node_ids
                 .iter()
@@ -278,14 +280,19 @@ pub mod iroh {
                 .expect("Our public key is not part of the keyset")
                 .0;
 
+            let endpoint = if let Some(discovery) = discovery {
+                Endpoint::builder().discovery(discovery)
+            } else {
+                Endpoint::builder().discovery_n0().discovery_dht()
+            };
+
             Ok(Self {
                 node_ids: node_ids
                     .into_iter()
                     .filter(|entry| entry.0 != identity)
                     .collect(),
-                endpoint: Endpoint::builder()
+                endpoint: endpoint
                     .secret_key(secret_key)
-                    .discovery_dht()
                     .alpns(vec![FEDIMINT_P2P_ALPN.to_vec()])
                     .bind()
                     .await?,

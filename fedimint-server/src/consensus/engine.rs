@@ -30,6 +30,7 @@ use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{timing, NumPeers, NumPeersExt, PeerId};
 use fedimint_server_core::{ServerModuleRegistry, ServerModuleRegistryExt};
 use futures::StreamExt;
+use iroh::discovery::Discovery;
 use rand::Rng;
 use tokio::sync::watch;
 use tracing::{debug, info, instrument, warn, Level};
@@ -92,12 +93,12 @@ impl ConsensusEngine {
     }
 
     #[instrument(target = LOG_CONSENSUS, name = "run", skip_all, fields(id=%self.cfg.local.identity))]
-    pub async fn run(self) -> anyhow::Result<()> {
+    pub async fn run(self, discovery: Option<Box<dyn Discovery>>) -> anyhow::Result<()> {
         if self.num_peers().total() == 1 {
             self.run_single_guardian(self.task_group.make_handle())
                 .await
         } else {
-            self.run_consensus(self.p2p_bind_addr, self.task_group.make_handle())
+            self.run_consensus(self.p2p_bind_addr, self.task_group.make_handle(), discovery)
                 .await
         }
     }
@@ -164,8 +165,9 @@ impl ConsensusEngine {
 
     pub async fn run_consensus(
         &self,
-        p2p_bind_addr: SocketAddr,
+        _p2p_bind_addr: SocketAddr,
         task_handle: TaskHandle,
+        discovery: Option<Box<dyn Discovery>>,
     ) -> anyhow::Result<()> {
         // We need four peers to run the atomic broadcast
         assert!(self.num_peers().total() >= 4);
@@ -176,6 +178,7 @@ impl ConsensusEngine {
         let connector = IrohConnector::new(
             self.cfg.private.iroh_secret_key.clone(),
             self.cfg.consensus.iroh_public_keys.clone(),
+            discovery,
         )
         .await?
         .into_dyn();

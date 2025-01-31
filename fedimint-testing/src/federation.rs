@@ -250,6 +250,7 @@ impl FederationTestBuilder {
                     fedimint_server::net::api::ApiSecrets::default(),
                     checkpoint_dir,
                     code_version_str.to_string(),
+                    Some(Box::new(discovery)),
                 )
                 .await
                 .expect("Could not initialise consensus");
