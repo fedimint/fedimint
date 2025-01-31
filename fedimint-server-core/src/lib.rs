@@ -21,7 +21,7 @@ use fedimint_core::module::{
     ApiEndpoint, ApiEndpointContext, ApiRequestErased, CommonModuleInit, InputMeta, ModuleCommon,
     ModuleInit, TransactionItemAmount,
 };
-use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, OutPoint, PeerId};
+use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, InPoint, OutPoint, PeerId};
 pub use init::*;
 
 #[apply(async_trait_maybe_send!)]
@@ -99,6 +99,7 @@ pub trait ServerModule: Debug + Sized {
         &'a self,
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b <Self::Common as ModuleCommon>::Input,
+        in_point: InPoint,
     ) -> Result<InputMeta, <Self::Common as ModuleCommon>::InputError>;
 
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
@@ -230,6 +231,7 @@ pub trait IServerModule: Debug {
         &'a self,
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b DynInput,
+        in_point: InPoint,
     ) -> Result<InputMeta, DynInputError>;
 
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
@@ -371,6 +373,7 @@ where
         &'a self,
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b DynInput,
+        in_point: InPoint,
     ) -> Result<InputMeta, DynInputError> {
         <Self as ServerModule>::process_input(
             self,
@@ -379,6 +382,7 @@ where
                 .as_any()
                 .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Input>()
                 .expect("incorrect input type passed to module plugin"),
+            in_point,
         )
         .await
         .map(Into::into)
