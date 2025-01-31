@@ -1363,8 +1363,7 @@
 <a href="#1362" id="1362">1362</a>
 <a href="#1363" id="1363">1363</a>
 <a href="#1364" id="1364">1364</a>
-<a href="#1365" id="1365">1365</a>
-<a href="#1366" id="1366">1366</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
+<a href="#1365" id="1365">1365</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::iter::once;
 <span class="kw">use </span>std::pin::Pin;
@@ -1405,6 +1404,7 @@
 <span class="kw">use </span>futures::future::pending;
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>futures::{Future, StreamExt};
+<span class="kw">use </span>global_api::with_cache::GlobalFederationApiWithCache;
 <span class="kw">use </span>jsonrpsee_core::client::ClientT;
 <span class="kw">pub use </span>jsonrpsee_core::client::Error <span class="kw">as </span>JsonRpcClientError;
 <span class="kw">use </span>jsonrpsee_core::DeserializeOwned;
@@ -1426,10 +1426,8 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 <span class="kw">mod </span>error;
-<span class="kw">mod </span>global_api;
+<span class="kw">pub mod </span>global_api;
 <span class="kw">pub mod </span>net;
-
-<span class="kw">pub use </span>global_api::{GlobalFederationApiWithCache, GlobalFederationApiWithCacheExt};
 
 <span class="kw">pub const </span>VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2: ApiVersion = ApiVersion::new(<span class="number">0</span>, <span class="number">5</span>);
 

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["GlobalFederationApiWithCache"],"trait":["GlobalFederationApiWithCacheExt"]};
+window.SIDEBAR_ITEMS = {"mod":["with_cache","with_request_hook"]};

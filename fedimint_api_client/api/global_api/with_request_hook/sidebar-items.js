@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["RawFederationApiWithRequestHook"],"trait":["RawFederationApiWithRequestHookExt"],"type":["ApiRequestHook","DynIRawFederationApi"]};
