@@ -75,8 +75,8 @@ use fedimint_lightning::lnd::GatewayLndClient;
 use fedimint_lightning::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
-    LightningContext, LightningRpcError, LightningV2Manager, OpenChannelRequest,
-    PayInvoiceResponse, PaymentAction, RouteHtlcStream, SendOnchainRequest,
+    LightningContext, LightningRpcError, OpenChannelRequest, PayInvoiceResponse, PaymentAction,
+    RouteHtlcStream, SendOnchainRequest,
 };
 use fedimint_ln_client::pay::PaymentData;
 use fedimint_ln_common::config::LightningClientConfig;
@@ -1923,7 +1923,6 @@ impl Gateway {
                 lnd_tls_cert,
                 lnd_macaroon,
                 None,
-                Arc::new(self.clone()),
             )),
             LightningMode::Ldk {
                 esplora_server_url,
@@ -2212,18 +2211,6 @@ impl Gateway {
     fn is_running_lnv1(&self) -> bool {
         self.lightning_module_mode == LightningModuleMode::LNv1
             || self.lightning_module_mode == LightningModuleMode::All
-    }
-}
-
-#[async_trait]
-impl LightningV2Manager for Gateway {
-    async fn contains_incoming_contract(&self, payment_image: PaymentImage) -> bool {
-        self.gateway_db
-            .begin_transaction_nc()
-            .await
-            .load_registered_incoming_contract(payment_image)
-            .await
-            .is_some()
     }
 }
 
