@@ -28,7 +28,8 @@ use fedimint_core::module::{
 use fedimint_core::secp256k1::{Message, PublicKey, SECP256K1};
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, Amount, NumPeersExt, OutPoint, PeerId,
+    apply, async_trait_maybe_send, push_db_pair_items, Amount, InPoint, NumPeersExt, OutPoint,
+    PeerId,
 };
 pub use fedimint_ln_common as common;
 use fedimint_ln_common::config::{
@@ -530,6 +531,7 @@ impl ServerModule for Lightning {
         &'a self,
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b LightningInput,
+        _in_point: InPoint,
     ) -> Result<InputMeta, LightningInputError> {
         let input = input.ensure_v0_ref()?;
 
@@ -1255,7 +1257,7 @@ mod tests {
     use fedimint_core::module::{InputMeta, TransactionItemAmount};
     use fedimint_core::secp256k1::{generate_keypair, PublicKey};
     use fedimint_core::task::TaskGroup;
-    use fedimint_core::{Amount, OutPoint, PeerId, TransactionId};
+    use fedimint_core::{Amount, InPoint, OutPoint, PeerId, TransactionId};
     use fedimint_ln_common::config::{
         LightningClientConfig, LightningConfig, LightningGenParams, LightningGenParamsConsensus,
         LightningGenParamsLocal, Network,
@@ -1419,7 +1421,14 @@ mod tests {
             .await;
 
         let processed_input_meta = server
-            .process_input(&mut module_dbtx.to_ref_nc(), &lightning_input)
+            .process_input(
+                &mut module_dbtx.to_ref_nc(),
+                &lightning_input,
+                InPoint {
+                    txid: TransactionId::all_zeros(),
+                    in_idx: 0,
+                },
+            )
             .await
             .expect("should process valid incoming contract");
         let expected_input_meta = InputMeta {
@@ -1473,7 +1482,14 @@ mod tests {
             .await;
 
         let processed_input_meta = server
-            .process_input(&mut module_dbtx.to_ref_nc(), &lightning_input)
+            .process_input(
+                &mut module_dbtx.to_ref_nc(),
+                &lightning_input,
+                InPoint {
+                    txid: TransactionId::all_zeros(),
+                    in_idx: 0,
+                },
+            )
             .await
             .expect("should process valid outgoing contract");
 

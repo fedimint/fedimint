@@ -163,6 +163,37 @@ impl FromStr for BitcoinAmountOrAll {
     }
 }
 
+/// `InPoint` represents a globally unique input in a transaction
+///
+/// Hence, a transaction ID and the input index is required.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Deserialize,
+    Serialize,
+    Encodable,
+    Decodable,
+)]
+pub struct InPoint {
+    /// The referenced transaction ID
+    pub txid: TransactionId,
+    /// As a transaction may have multiple inputs, this refers to the index of
+    /// the input in a transaction
+    pub in_idx: u64,
+}
+
+impl std::fmt::Display for InPoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.txid, self.in_idx)
+    }
+}
+
 /// `OutPoint` represents a globally unique output in a transaction
 ///
 /// Hence, a transaction ID and the output index is required.

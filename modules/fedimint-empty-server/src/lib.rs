@@ -17,7 +17,7 @@ use fedimint_core::module::{
     ApiEndpoint, CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle,
     SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
-use fedimint_core::{push_db_pair_items, OutPoint, PeerId};
+use fedimint_core::{push_db_pair_items, InPoint, OutPoint, PeerId};
 use fedimint_empty_common::config::{
     EmptyClientConfig, EmptyConfig, EmptyConfigConsensus, EmptyConfigLocal, EmptyConfigPrivate,
     EmptyGenParams,
@@ -197,6 +197,7 @@ impl ServerModule for Empty {
         &'a self,
         _dbtx: &mut DatabaseTransaction<'c>,
         _input: &'b EmptyInput,
+        _in_point: InPoint,
     ) -> Result<InputMeta, EmptyInputError> {
         Err(EmptyInputError::NotSupported)
     }
