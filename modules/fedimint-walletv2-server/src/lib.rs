@@ -77,7 +77,7 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 
 use crate::db::{
-    BlockCountVoteKey, BlockCountVotePrefix, FeeRateVoteKey, FeeRateVotePrefix, OutputOutcomeKey,
+    BlockCountVoteKey, BlockCountVotePrefix, FeeRateVoteKey, FeeRateVotePrefix,
     PendingTransactionKey, PendingTransactionPrefix, SpentOutPointKey, TransactionLogKey,
     TransactionLogPrefix, UnsignedTransactionKey, UnsignedTransactionPrefix, UnspentTxOutKey,
 };
@@ -659,7 +659,7 @@ impl ServerModule for Wallet {
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a WalletOutput,
-        out_point: OutPoint,
+        _outpoint: OutPoint,
     ) -> Result<TransactionItemAmount, WalletOutputError> {
         let output = output.ensure_v0_ref()?;
 
@@ -689,7 +689,7 @@ impl ServerModule for Wallet {
             return Err(WalletOutputError::InsufficicentTotalFee);
         }
 
-        let pegout_value = output
+        let output_value = output
             .value
             .checked_add(output.fee.value)
             .ok_or(WalletOutputError::ArithmeticOverflow)?;
@@ -697,7 +697,7 @@ impl ServerModule for Wallet {
         // The change is non-zero as it contains the fees taken by the federation
         let change_value = federation_utxo
             .value
-            .checked_sub(pegout_value)
+            .checked_sub(output_value)
             .ok_or(WalletOutputError::ArithmeticOverflow)?;
 
         let transaction = Transaction {
@@ -724,12 +724,6 @@ impl ServerModule for Wallet {
         };
 
         dbtx.insert_new_entry(
-            &OutputOutcomeKey(out_point),
-            &WalletOutputOutcome::new_v0(transaction.compute_txid()),
-        )
-        .await;
-
-        dbtx.insert_new_entry(
             &FederationWalletKey,
             &FederationWallet {
                 outpoint: bitcoin::OutPoint {
@@ -743,6 +737,7 @@ impl ServerModule for Wallet {
         .await;
 
         let index = self.total_transactions(dbtx).await;
+
         let created = self.consensus_block_count(dbtx).await;
 
         dbtx.insert_new_entry(
@@ -773,7 +768,7 @@ impl ServerModule for Wallet {
 
         self.increment_feerate_index(dbtx).await;
 
-        let amount = pegout_value
+        let amount = output_value
             .to_sat()
             .checked_mul(1000)
             .map(fedimint_core::Amount::from_msats)
@@ -787,10 +782,10 @@ impl ServerModule for Wallet {
 
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        out_point: OutPoint,
+        _dbtx: &mut DatabaseTransaction<'_>,
+        _outpoint: OutPoint,
     ) -> Option<WalletOutputOutcome> {
-        dbtx.get_value(&OutputOutcomeKey(out_point)).await
+        None
     }
 
     async fn audit(

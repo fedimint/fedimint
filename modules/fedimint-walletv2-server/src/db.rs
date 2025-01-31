@@ -5,9 +5,7 @@ use secp256k1::ecdsa::Signature;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
-use crate::{
-    FederationWallet, PendingTransaction, TransactionLog, UnsignedTransaction, WalletOutputOutcome,
-};
+use crate::{FederationWallet, PendingTransaction, TransactionLog, UnsignedTransaction};
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -21,8 +19,7 @@ pub enum DbKeyPrefix {
     UnsignedTransaction = 0x36,
     Signatures = 0x37,
     PendingTransaction = 0x38,
-    OutputOutcome = 0x39,
-    FederationWallet = 0x40,
+    FederationWallet = 0x39,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -142,19 +139,6 @@ impl_db_lookup!(
     key = PendingTransactionKey,
     query_prefix = PendingTransactionPrefix
 );
-
-#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
-pub struct OutputOutcomeKey(pub fedimint_core::OutPoint);
-
-#[derive(Clone, Debug, Encodable, Decodable)]
-pub struct OutputOutcomePrefix;
-
-impl_db_record!(
-    key = OutputOutcomeKey,
-    value = WalletOutputOutcome,
-    db_prefix = DbKeyPrefix::OutputOutcome,
-);
-impl_db_lookup!(key = OutputOutcomeKey, query_prefix = OutputOutcomePrefix);
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct BlockCountVoteKey(pub PeerId);

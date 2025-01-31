@@ -245,24 +245,12 @@ impl std::fmt::Display for WalletOutputV0 {
     }
 }
 
-extensible_associated_module_type!(
-    WalletOutputOutcome,
-    WalletOutputOutcomeV0,
-    UnknownWalletOutputOutcomeVariantError
-);
-
-impl WalletOutputOutcome {
-    pub fn new_v0(txid: bitcoin::Txid) -> WalletOutputOutcome {
-        WalletOutputOutcome::V0(WalletOutputOutcomeV0(txid))
-    }
-}
-
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct WalletOutputOutcomeV0(pub bitcoin::Txid);
+pub struct WalletOutputOutcome;
 
-impl std::fmt::Display for WalletOutputOutcomeV0 {
+impl std::fmt::Display for WalletOutputOutcome {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Wallet PegOut Bitcoin TxId {}", self.0)
+        write!(f, "Wallet Output Outcome")
     }
 }
 
