@@ -99,10 +99,14 @@ use db::{
     ClientModuleRecovery, ClientPreRootSecretHashKey, EncodedClientSecretKey, InitMode,
     PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey,
 };
+use fedimint_api_client::api::global_api::with_cache::GlobalFederationApiWithCacheExt;
+use fedimint_api_client::api::global_api::with_request_hook::{
+    ApiRequestHook, RawFederationApiWithRequestHookExt,
+};
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{
-    ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, GlobalFederationApiWithCacheExt,
-    IGlobalFederationApi, ReconnectFederationApi,
+    ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
+    ReconnectFederationApi,
 };
 use fedimint_core::config::{
     ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig, ModuleInitRegistry,
@@ -869,6 +873,7 @@ pub struct Client {
     /// Receiver for events fired every time (ordered) log event is added.
     log_event_added_rx: watch::Receiver<()>,
     log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
+    request_hook: ApiRequestHook,
 }
 
 impl Client {
@@ -2368,6 +2373,7 @@ pub struct ClientBuilder {
     connector: Connector,
     stopped: bool,
     log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
+    request_hook: ApiRequestHook,
 }
 
 impl ClientBuilder {
@@ -2385,6 +2391,7 @@ impl ClientBuilder {
             stopped: false,
             meta_service,
             log_event_added_transient_tx,
+            request_hook: Arc::new(|api| api),
         }
     }
 
@@ -2400,6 +2407,7 @@ impl ClientBuilder {
             meta_service: client.meta_service.clone(),
             connector: client.connector,
             log_event_added_transient_tx: client.log_event_added_transient_tx.clone(),
+            request_hook: client.request_hook.clone(),
         }
     }
 
@@ -2415,6 +2423,19 @@ impl ClientBuilder {
 
     pub fn stopped(&mut self) {
         self.stopped = true;
+    }
+
+    /// Build the [`Client`] with a custom wrapper around its api request logic
+    ///
+    /// This is intended to be used by downstream applications, e.g. to:
+    ///
+    /// * simulate offline mode,
+    /// * save battery when the OS indicates lack of connectivity,
+    /// * inject faults and delays for testing purposes,
+    /// * collect statistics and emit notifications.
+    pub fn with_api_request_hook(mut self, hook: ApiRequestHook) -> Self {
+        self.request_hook = hook;
+        self
     }
 
     /// Uses this module with the given instance id as the primary module. See
@@ -2740,6 +2761,7 @@ impl ClientBuilder {
 
         let api_secret = Client::get_api_secret_from_db(&self.db_no_decoders).await;
         let stopped = self.stopped;
+        let request_hook = self.request_hook.clone();
 
         let log_event_added_transient_tx = self.log_event_added_transient_tx.clone();
         let client = self
@@ -2748,6 +2770,7 @@ impl ClientBuilder {
                 &config,
                 api_secret,
                 log_event_added_transient_tx,
+                request_hook,
             )
             .await?;
         if !stopped {
@@ -2765,12 +2788,14 @@ impl ClientBuilder {
         stopped: bool,
     ) -> anyhow::Result<ClientHandle> {
         let log_event_added_transient_tx = self.log_event_added_transient_tx.clone();
+        let request_hook = self.request_hook.clone();
         let client = self
             .build_stopped(
                 pre_root_secret,
                 &config,
                 api_secret,
                 log_event_added_transient_tx,
+                request_hook,
             )
             .await?;
         if !stopped {
@@ -2788,6 +2813,7 @@ impl ClientBuilder {
         config: &ClientConfig,
         api_secret: Option<String>,
         log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
+        request_hook: ApiRequestHook,
     ) -> anyhow::Result<ClientHandle> {
         let (log_event_added_tx, log_event_added_rx) = watch::channel(());
         let (log_ordering_wakeup_tx, log_ordering_wakeup_rx) = watch::channel(());
@@ -2809,11 +2835,13 @@ impl ClientBuilder {
                 &connector,
             )
             .with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
+            .with_request_hook(&request_hook)
             .with_cache()
             .into()
         } else {
             ReconnectFederationApi::from_endpoints(peer_urls, &api_secret, &connector, None)
                 .with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
+                .with_request_hook(&request_hook)
                 .with_cache()
                 .into()
         };
@@ -3081,6 +3109,7 @@ impl ClientBuilder {
             log_ordering_wakeup_tx,
             log_event_added_rx,
             log_event_added_transient_tx: log_event_added_transient_tx.clone(),
+            request_hook,
             executor,
             api,
             secp_ctx: Secp256k1::new(),
