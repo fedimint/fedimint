@@ -3597,6 +3597,8 @@ dependencies = [
  "fedimint-server",
  "fedimint-testing-core",
  "fs-lock",
+ "futures",
+ "iroh",
  "lightning-invoice",
  "rand",
  "tempfile",

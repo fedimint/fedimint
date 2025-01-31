@@ -1,6 +1,8 @@
-use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
-use std::time::Duration;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::net::SocketAddr;
+use std::pin::Pin;
+use std::sync::{Arc, RwLock};
+use std::time::{Duration, SystemTime};
 
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt};
@@ -26,6 +28,9 @@ use fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use fedimint_server::consensus;
 use fedimint_server::core::ServerModuleInitRegistry;
 use fedimint_server::net::p2p_connector::parse_host_port;
+use futures::{stream, Stream, StreamExt};
+use iroh::discovery::{Discovery, DiscoveryItem};
+use iroh::{Endpoint, NodeAddr, NodeId, RelayUrl};
 use ln_gateway::rpc::ConnectFedPayload;
 use ln_gateway::Gateway;
 use tokio_rustls::rustls;
@@ -212,30 +217,33 @@ impl FederationTestBuilder {
         let params = local_config_gen_params(&peers, self.base_port, &self.params)
             .expect("Generates local config");
 
-        let configs =
-            ServerConfig::trusted_dealer_gen(&params, &self.server_init, &self.version_hash);
+        let cfgs = ServerConfig::trusted_dealer_gen(&params, &self.server_init, &self.version_hash);
 
         let task_group = TaskGroup::new();
-        for (peer_id, config) in configs.clone() {
+
+        let info: Arc<RwLock<BTreeMap<NodeId, NodeInfo>>> = Default::default();
+
+        for (peer_id, cfg) in cfgs.clone() {
             let p2p_bind_addr = params.get(&peer_id).expect("Must exist").local.p2p_bind;
             let api_bind_addr = params.get(&peer_id).expect("Must exist").local.api_bind;
             if u16::from(peer_id) >= self.num_peers - self.num_offline {
                 continue;
             }
 
-            let instances = config.consensus.iter_module_instances();
+            let instances = cfg.consensus.iter_module_instances();
             let decoders = self.server_init.available_decoders(instances).unwrap();
             let db = Database::new(MemDatabase::new(), decoders);
             let module_init_registry = self.server_init.clone();
             let subgroup = task_group.make_subgroup();
             let checkpoint_dir = tempfile::Builder::new().tempdir().unwrap().into_path();
             let code_version_str = env!("CARGO_PKG_VERSION");
+            let discovery = TestDiscovery::new(cfg.private.iroh_secret_key.public(), info.clone());
 
             task_group.spawn("fedimintd", move |_| async move {
                 consensus::run(
                     p2p_bind_addr,
                     api_bind_addr,
-                    config.clone(),
+                    cfg.clone(),
                     db.clone(),
                     module_init_registry,
                     &subgroup,
@@ -248,7 +256,7 @@ impl FederationTestBuilder {
             });
         }
 
-        for (peer_id, config) in configs.clone() {
+        for (peer_id, config) in cfgs.clone() {
             if u16::from(peer_id) >= self.num_peers - self.num_offline {
                 continue;
             }
@@ -275,7 +283,7 @@ impl FederationTestBuilder {
         }
 
         FederationTest {
-            configs,
+            configs: cfgs,
             server_init: self.server_init,
             client_init: self.client_init,
             primary_module_kind: self.primary_module_kind,
@@ -349,4 +357,68 @@ pub fn local_config_gen_params(
             Ok((*peer, params))
         })
         .collect::<anyhow::Result<HashMap<_, _>>>()
+}
+
+#[derive(Debug, Clone)]
+pub struct TestDiscovery {
+    node_id: NodeId,
+    info: Arc<RwLock<BTreeMap<NodeId, NodeInfo>>>,
+}
+
+#[derive(Debug)]
+struct NodeInfo {
+    relay_url: Option<RelayUrl>,
+    direct_addresses: BTreeSet<SocketAddr>,
+    last_updated: SystemTime,
+}
+
+impl TestDiscovery {
+    pub fn new(node_id: NodeId, info: Arc<RwLock<BTreeMap<NodeId, NodeInfo>>>) -> Self {
+        Self { node_id, info }
+    }
+}
+
+impl Discovery for TestDiscovery {
+    fn publish(&self, relay_url: Option<&RelayUrl>, direct_addresses: &BTreeSet<SocketAddr>) {
+        let mut guard = self.info.write().expect("Test discovery lock is poisoned");
+
+        guard.insert(
+            self.node_id,
+            NodeInfo {
+                relay_url: relay_url.cloned(),
+                direct_addresses: direct_addresses.clone(),
+                last_updated: SystemTime::now(),
+            },
+        );
+    }
+
+    fn resolve(
+        &self,
+        _endpoint: Endpoint,
+        node_id: NodeId,
+    ) -> Option<Pin<Box<dyn Stream<Item = anyhow::Result<DiscoveryItem>> + Send + 'static>>> {
+        let guard = self.info.read().expect("Test discovery lock is poisoned");
+
+        match guard.get(&node_id) {
+            Some(addr_info) => {
+                let item = DiscoveryItem {
+                    node_addr: NodeAddr {
+                        node_id,
+                        relay_url: addr_info.relay_url.clone(),
+                        direct_addresses: addr_info.direct_addresses.clone(),
+                    },
+                    provenance: "test_discovery",
+                    last_updated: Some(
+                        addr_info
+                            .last_updated
+                            .duration_since(SystemTime::UNIX_EPOCH)
+                            .expect("time drift")
+                            .as_micros() as u64,
+                    ),
+                };
+                Some(stream::iter(Some(Ok(item))).boxed())
+            }
+            None => None,
+        }
+    }
 }

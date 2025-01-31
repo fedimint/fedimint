@@ -37,6 +37,8 @@ fedimint-rocksdb = { workspace = true }
 fedimint-server = { workspace = true }
 fedimint-testing-core = { workspace = true }
 fs-lock = { workspace = true }
+futures = { workspace = true }
+iroh = { workspace = true }
 lightning-invoice = { workspace = true }
 ln-gateway = { package = "fedimint-ln-gateway", path = "../gateway/ln-gateway", version = "=0.7.0-alpha" }
 rand = { workspace = true }
