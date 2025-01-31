@@ -18,7 +18,7 @@ use futures::future::{self, Either};
 use inner::TaskGroupInner;
 use thiserror::Error;
 use tokio::sync::{oneshot, watch};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, trace};
 
 use crate::runtime;
 // TODO: stop using `task::*`, and use `runtime::*` in the code
@@ -136,6 +136,34 @@ impl TaskGroup {
         Fut: Future<Output = R> + MaybeSend + 'static,
         R: MaybeSend + 'static,
     {
+        self.spawn_inner(name, f, false)
+    }
+
+    /// This is a version of [`Self::spawn`] that uses less noisy logging level
+    ///
+    /// Meant for tasks that are spawned often enough to not be as interesting.
+    pub fn spawn_silent<Fut, R>(
+        &self,
+        name: impl Into<String>,
+        f: impl FnOnce(TaskHandle) -> Fut + MaybeSend + 'static,
+    ) -> oneshot::Receiver<R>
+    where
+        Fut: Future<Output = R> + MaybeSend + 'static,
+        R: MaybeSend + 'static,
+    {
+        self.spawn_inner(name, f, true)
+    }
+
+    fn spawn_inner<Fut, R>(
+        &self,
+        name: impl Into<String>,
+        f: impl FnOnce(TaskHandle) -> Fut + MaybeSend + 'static,
+        quiet: bool,
+    ) -> oneshot::Receiver<R>
+    where
+        Fut: Future<Output = R> + MaybeSend + 'static,
+        R: MaybeSend + 'static,
+    {
         let name = name.into();
         let mut guard = TaskPanicGuard {
             name: name.clone(),
@@ -148,10 +176,19 @@ impl TaskGroup {
         let handle = crate::runtime::spawn(&name, {
             let name = name.clone();
             async move {
+                // Unfortunately log levels need to be static
+                if quiet {
+                    trace!(target: LOG_TASK, "Starting task {name}");
+                } else {
+                    debug!(target: LOG_TASK, "Starting task {name}");
+                }
                 // if receiver is not interested, just drop the message
-                debug!(target: LOG_TASK, "Starting task {name}");
                 let r = f(handle).await;
-                debug!(target: LOG_TASK, "Finished task {name}");
+                if quiet {
+                    trace!(target: LOG_TASK, "Finished task {name}");
+                } else {
+                    debug!(target: LOG_TASK, "Finished task {name}");
+                }
                 let _ = tx.send(r);
             }
         });
