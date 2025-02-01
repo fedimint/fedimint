@@ -173,7 +173,7 @@ hyper = "1.5"
 iroh = { version = "0.30.0", default-features = false }
 itertools = "0.13.0"
 jaq-core = "2.1.0"
-jaq-json = { version = "1.0.0", features = ["serde_json"] }
+jaq-json = { version = "1.1.0", features = ["serde_json"] }
 lightning = "0.0.125"
 lightning-invoice = { version = "0.32.0", features = ["std"] }
 ln-gateway = { package = "fedimint-ln-gateway", path = "./gateway/ln-gateway", version = "=0.7.0-alpha" }
