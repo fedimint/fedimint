@@ -28,7 +28,7 @@ use fedimint_core::task::{timeout, TaskGroup};
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, BitcoinHash, NumPeers, NumPeersExt,
+    apply, async_trait_maybe_send, push_db_pair_items, BitcoinHash, InPoint, NumPeers, NumPeersExt,
     OutPoint, PeerId,
 };
 use fedimint_lnv2_common::config::{
@@ -383,6 +383,7 @@ impl ServerModule for Lightning {
         &'a self,
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b LightningInput,
+        _in_point: InPoint,
     ) -> Result<InputMeta, LightningInputError> {
         let (pub_key, amount) = match input.ensure_v0_ref()? {
             LightningInputV0::Outgoing(contract_id, outgoing_witness) => {

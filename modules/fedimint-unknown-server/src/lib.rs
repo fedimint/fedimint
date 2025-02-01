@@ -17,7 +17,7 @@ use fedimint_core::module::{
     ApiEndpoint, CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle,
     SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
-use fedimint_core::{OutPoint, PeerId};
+use fedimint_core::{InPoint, OutPoint, PeerId};
 use fedimint_server_core::{DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs};
 pub use fedimint_unknown_common as common;
 use fedimint_unknown_common::config::{
@@ -176,6 +176,7 @@ impl ServerModule for Unknown {
         &'a self,
         _dbtx: &mut DatabaseTransaction<'c>,
         _input: &'b UnknownInput,
+        _in_point: InPoint,
     ) -> Result<InputMeta, UnknownInputError> {
         unreachable!();
     }
