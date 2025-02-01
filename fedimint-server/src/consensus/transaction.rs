@@ -1,7 +1,7 @@
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::module::{CoreConsensusVersion, TransactionItemAmount};
 use fedimint_core::transaction::{Transaction, TransactionError, TRANSACTION_OVERFLOW_ERROR};
-use fedimint_core::{Amount, OutPoint};
+use fedimint_core::{Amount, InPoint, OutPoint};
 use fedimint_server_core::ServerModuleRegistry;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
@@ -46,7 +46,9 @@ pub async fn process_transaction_with_dbtx(
     let mut funding_verifier = FundingVerifier::default();
     let mut public_keys = Vec::new();
 
-    for input in &transaction.inputs {
+    let txid = transaction.tx_hash();
+
+    for (input, in_idx) in transaction.inputs.iter().zip(0u64..) {
         // somewhat unfortunately, we need to do the extra checks berofe `process_x`
         // does the changes in the dbtx
         if mode == TxProcessingMode::Submission {
@@ -68,6 +70,7 @@ pub async fn process_transaction_with_dbtx(
                     .to_ref_with_prefix_module_id(input.module_instance_id())
                     .0,
                 input,
+                InPoint { txid, in_idx },
             )
             .await
             .map_err(TransactionError::Input)?;
@@ -77,8 +80,6 @@ pub async fn process_transaction_with_dbtx(
     }
 
     transaction.validate_signatures(&public_keys)?;
-
-    let txid = transaction.tx_hash();
 
     for (output, out_idx) in transaction.outputs.iter().zip(0u64..) {
         // somewhat unfortunately, we need to do the extra checks berofe `process_x`

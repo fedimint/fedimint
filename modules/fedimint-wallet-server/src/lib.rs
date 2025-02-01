@@ -62,7 +62,7 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::util::{backoff_util, retry, FmtCompactAnyhow as _};
 use fedimint_core::{
     apply, async_trait_maybe_send, get_network_for_address, push_db_key_items, push_db_pair_items,
-    Feerate, NumPeersExt, OutPoint, PeerId,
+    Feerate, InPoint, NumPeersExt, OutPoint, PeerId,
 };
 use fedimint_logging::LOG_MODULE_WALLET;
 use fedimint_server::config::distributedgen::PeerHandleOps;
@@ -624,6 +624,7 @@ impl ServerModule for Wallet {
         &'a self,
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b WalletInput,
+        _in_point: InPoint,
     ) -> Result<InputMeta, WalletInputError> {
         let (outpoint, value, pub_key) = match input {
             WalletInput::V0(input) => {
