@@ -169,7 +169,7 @@ group = "0.13.0"
 hex = "0.4.3"
 hex-conservative = "0.3.0"
 hkdf = { package = "fedimint-hkdf", path = "./crypto/hkdf", version = "=0.7.0-alpha" }
-hyper = "1.5"
+hyper = "1.6"
 iroh = { version = "0.30.0", default-features = false }
 itertools = "0.13.0"
 jaq-core = "2.1.0"
