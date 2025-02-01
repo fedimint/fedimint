@@ -189,10 +189,11 @@
 <a href="#188" id="188">188</a>
 <a href="#189" id="189">189</a>
 <a href="#190" id="190">190</a>
-<a href="#191" id="191">191</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_core::module::{CoreConsensusVersion, TransactionItemAmount};
 <span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionError, TRANSACTION_OVERFLOW_ERROR};
-<span class="kw">use </span>fedimint_core::{Amount, OutPoint};
+<span class="kw">use </span>fedimint_core::{Amount, InPoint, OutPoint};
 <span class="kw">use </span>fedimint_server_core::ServerModuleRegistry;
 <span class="kw">use </span>rayon::iter::{IntoParallelIterator, ParallelIterator};
 
@@ -237,7 +238,9 @@
     <span class="kw">let </span><span class="kw-2">mut </span>funding_verifier = FundingVerifier::default();
     <span class="kw">let </span><span class="kw-2">mut </span>public_keys = Vec::new();
 
-    <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>transaction.inputs {
+    <span class="kw">let </span>txid = transaction.tx_hash();
+
+    <span class="kw">for </span>(input, in_idx) <span class="kw">in </span>transaction.inputs.iter().zip(<span class="number">0u64</span>..) {
         <span class="comment">// somewhat unfortunately, we need to do the extra checks berofe `process_x`
         // does the changes in the dbtx
         </span><span class="kw">if </span>mode == TxProcessingMode::Submission {
@@ -259,6 +262,7 @@
                     .to_ref_with_prefix_module_id(input.module_instance_id())
                     .<span class="number">0</span>,
                 input,
+                InPoint { txid, in_idx },
             )
             .<span class="kw">await
             </span>.map_err(TransactionError::Input)<span class="question-mark">?</span>;
@@ -268,8 +272,6 @@
     }
 
     transaction.validate_signatures(<span class="kw-2">&amp;</span>public_keys)<span class="question-mark">?</span>;
-
-    <span class="kw">let </span>txid = transaction.tx_hash();
 
     <span class="kw">for </span>(output, out_idx) <span class="kw">in </span>transaction.outputs.iter().zip(<span class="number">0u64</span>..) {
         <span class="comment">// somewhat unfortunately, we need to do the extra checks berofe `process_x`

@@ -329,7 +329,8 @@
 <a href="#328" id="328">328</a>
 <a href="#329" id="329">329</a>
 <a href="#330" id="330">330</a>
-<a href="#331" id="331">331</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -352,7 +353,7 @@
     ApiEndpoint, CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle,
     SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
-<span class="kw">use </span>fedimint_core::{push_db_pair_items, Amount, OutPoint, PeerId};
+<span class="kw">use </span>fedimint_core::{push_db_pair_items, Amount, InPoint, OutPoint, PeerId};
 <span class="kw">use </span>fedimint_dummy_common::config::{
     DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigLocal, DummyConfigPrivate,
     DummyGenParams,
@@ -554,6 +555,7 @@
         <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">'b </span>DummyInput,
+        _in_point: InPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, DummyInputError&gt; {
         <span class="kw">let </span>current_funds = dbtx
             .get_value(<span class="kw-2">&amp;</span>DummyFundsKeyV1(input.account))

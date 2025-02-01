@@ -2347,7 +2347,8 @@
 <a href="#2346" id="2346">2346</a>
 <a href="#2347" id="2347">2347</a>
 <a href="#2348" id="2348">2348</a>
-<a href="#2349" id="2349">2349</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2349" id="2349">2349</a>
+<a href="#2350" id="2350">2350</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -2411,7 +2412,7 @@
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry, FmtCompactAnyhow <span class="kw">as _</span>};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, get_network_for_address, push_db_key_items, push_db_pair_items,
-    Feerate, NumPeersExt, OutPoint, PeerId,
+    Feerate, InPoint, NumPeersExt, OutPoint, PeerId,
 };
 <span class="kw">use </span>fedimint_logging::LOG_MODULE_WALLET;
 <span class="kw">use </span>fedimint_server::config::distributedgen::PeerHandleOps;
@@ -2973,6 +2974,7 @@
         <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">'b </span>WalletInput,
+        _in_point: InPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, WalletInputError&gt; {
         <span class="kw">let </span>(outpoint, value, pub_key) = <span class="kw">match </span>input {
             WalletInput::V0(input) =&gt; {

@@ -1497,7 +1497,23 @@
 <a href="#1496" id="1496">1496</a>
 <a href="#1497" id="1497">1497</a>
 <a href="#1498" id="1498">1498</a>
-<a href="#1499" id="1499">1499</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1499" id="1499">1499</a>
+<a href="#1500" id="1500">1500</a>
+<a href="#1501" id="1501">1501</a>
+<a href="#1502" id="1502">1502</a>
+<a href="#1503" id="1503">1503</a>
+<a href="#1504" id="1504">1504</a>
+<a href="#1505" id="1505">1505</a>
+<a href="#1506" id="1506">1506</a>
+<a href="#1507" id="1507">1507</a>
+<a href="#1508" id="1508">1508</a>
+<a href="#1509" id="1509">1509</a>
+<a href="#1510" id="1510">1510</a>
+<a href="#1511" id="1511">1511</a>
+<a href="#1512" id="1512">1512</a>
+<a href="#1513" id="1513">1513</a>
+<a href="#1514" id="1514">1514</a>
+<a href="#1515" id="1515">1515</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -1527,7 +1543,8 @@
 <span class="kw">use </span>fedimint_core::secp256k1::{Message, PublicKey, SECP256K1};
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, Amount, NumPeersExt, OutPoint, PeerId,
+    apply, async_trait_maybe_send, push_db_pair_items, Amount, InPoint, NumPeersExt, OutPoint,
+    PeerId,
 };
 <span class="kw">pub use </span>fedimint_ln_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_ln_common::config::{
@@ -2029,6 +2046,7 @@
         <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">'b </span>LightningInput,
+        _in_point: InPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, LightningInputError&gt; {
         <span class="kw">let </span>input = input.ensure_v0_ref()<span class="question-mark">?</span>;
 
@@ -2760,7 +2778,7 @@
     <span class="kw">use </span>fedimint_core::module::{InputMeta, TransactionItemAmount};
     <span class="kw">use </span>fedimint_core::secp256k1::{generate_keypair, PublicKey};
     <span class="kw">use </span>fedimint_core::task::TaskGroup;
-    <span class="kw">use </span>fedimint_core::{Amount, OutPoint, PeerId, TransactionId};
+    <span class="kw">use </span>fedimint_core::{Amount, InPoint, OutPoint, PeerId, TransactionId};
     <span class="kw">use </span>fedimint_ln_common::config::{
         LightningClientConfig, LightningConfig, LightningGenParams, LightningGenParamsConsensus,
         LightningGenParamsLocal, Network,
@@ -2924,7 +2942,14 @@
             .<span class="kw">await</span>;
 
         <span class="kw">let </span>processed_input_meta = server
-            .process_input(<span class="kw-2">&amp;mut </span>module_dbtx.to_ref_nc(), <span class="kw-2">&amp;</span>lightning_input)
+            .process_input(
+                <span class="kw-2">&amp;mut </span>module_dbtx.to_ref_nc(),
+                <span class="kw-2">&amp;</span>lightning_input,
+                InPoint {
+                    txid: TransactionId::all_zeros(),
+                    in_idx: <span class="number">0</span>,
+                },
+            )
             .<span class="kw">await
             </span>.expect(<span class="string">"should process valid incoming contract"</span>);
         <span class="kw">let </span>expected_input_meta = InputMeta {
@@ -2978,7 +3003,14 @@
             .<span class="kw">await</span>;
 
         <span class="kw">let </span>processed_input_meta = server
-            .process_input(<span class="kw-2">&amp;mut </span>module_dbtx.to_ref_nc(), <span class="kw-2">&amp;</span>lightning_input)
+            .process_input(
+                <span class="kw-2">&amp;mut </span>module_dbtx.to_ref_nc(),
+                <span class="kw-2">&amp;</span>lightning_input,
+                InPoint {
+                    txid: TransactionId::all_zeros(),
+                    in_idx: <span class="number">0</span>,
+                },
+            )
             .<span class="kw">await
             </span>.expect(<span class="string">"should process valid outgoing contract"</span>);
 

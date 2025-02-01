@@ -526,7 +526,8 @@
 <a href="#525" id="525">525</a>
 <a href="#526" id="526">526</a>
 <a href="#527" id="527">527</a>
-<a href="#528" id="528">528</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
 
 </span><span class="kw">pub mod </span>db;
@@ -554,7 +555,7 @@
     ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
     TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
-<span class="kw">use </span>fedimint_core::{push_db_pair_items, NumPeers, OutPoint, PeerId};
+<span class="kw">use </span>fedimint_core::{push_db_pair_items, InPoint, NumPeers, OutPoint, PeerId};
 <span class="kw">use </span>fedimint_logging::LOG_MODULE_META;
 <span class="kw">use </span>fedimint_meta_common::config::{
     MetaClientConfig, MetaConfig, MetaConfigConsensus, MetaConfigLocal, MetaConfigPrivate,
@@ -916,6 +917,7 @@
         <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
         _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'c</span>&gt;,
         _input: <span class="kw-2">&amp;</span><span class="lifetime">'b </span>MetaInput,
+        _in_point: InPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, MetaInputError&gt; {
         <span class="prelude-val">Err</span>(MetaInputError::NotSupported)
     }

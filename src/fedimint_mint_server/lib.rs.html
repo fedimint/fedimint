@@ -878,7 +878,16 @@
 <a href="#877" id="877">877</a>
 <a href="#878" id="878">878</a>
 <a href="#879" id="879">879</a>
-<a href="#880" id="880">880</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -907,8 +916,8 @@
 };
 <span class="kw">use </span>fedimint_core::util::BoxFuture;
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, NumPeersExt,
-    OutPoint, PeerId, Tiered, TieredMulti,
+    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, InPoint,
+    NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti,
 };
 <span class="kw">use </span>fedimint_logging::LOG_MODULE_MINT;
 <span class="kw">pub use </span>fedimint_mint_common <span class="kw">as </span>common;
@@ -1336,6 +1345,7 @@
         <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">'b </span>MintInput,
+        _in_point: InPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, MintInputError&gt; {
         <span class="kw">let </span>input = input.ensure_v0_ref()<span class="question-mark">?</span>;
 
@@ -1626,7 +1636,7 @@
     <span class="kw">use </span>fedimint_core::db::Database;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
     <span class="kw">use </span>fedimint_core::module::ModuleConsensusVersion;
-    <span class="kw">use </span>fedimint_core::{secp256k1, Amount, PeerId};
+    <span class="kw">use </span>fedimint_core::{secp256k1, Amount, BitcoinHash, InPoint, PeerId, TransactionId};
     <span class="kw">use </span>fedimint_mint_common::config::FeeConsensus;
     <span class="kw">use </span>fedimint_mint_common::{MintInput, Nonce, Note};
     <span class="kw">use </span>fedimint_server::core::{ServerModule, ServerModuleInit};
@@ -1745,6 +1755,10 @@
         mint.process_input(
             <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>).<span class="number">0</span>.into_nc(),
             <span class="kw-2">&amp;</span>input,
+            InPoint {
+                txid: TransactionId::all_zeros(),
+                in_idx: <span class="number">0</span>,
+            },
         )
         .<span class="kw">await
         </span>.expect(<span class="string">"Spend of valid e-cash works"</span>);
@@ -1752,6 +1766,10 @@
             mint.process_input(
                 <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>).<span class="number">0</span>.into_nc(),
                 <span class="kw-2">&amp;</span>input,
+                InPoint {
+                    txid: TransactionId::all_zeros(),
+                    in_idx: <span class="number">0
+                </span>},
             )
             .<span class="kw">await</span>,
             <span class="prelude-val">Err</span>(<span class="kw">_</span>)

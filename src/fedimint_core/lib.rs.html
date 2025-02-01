@@ -355,7 +355,38 @@
 <a href="#354" id="354">354</a>
 <a href="#355" id="355">355</a>
 <a href="#356" id="356">356</a>
-<a href="#357" id="357">357</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic, clippy::nursery)]
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_precision_loss)]
@@ -517,6 +548,37 @@
             <span class="kw">let </span>amount = Amount::from_str(s)<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(<span class="self">Self</span>::Amount(amount.try_into()<span class="question-mark">?</span>))
         }
+    }
+}
+
+<span class="doccomment">/// `InPoint` represents a globally unique input in a transaction
+///
+/// Hence, a transaction ID and the input index is required.
+</span><span class="attr">#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Deserialize,
+    Serialize,
+    Encodable,
+    Decodable,
+)]
+</span><span class="kw">pub struct </span>InPoint {
+    <span class="doccomment">/// The referenced transaction ID
+    </span><span class="kw">pub </span>txid: TransactionId,
+    <span class="doccomment">/// As a transaction may have multiple inputs, this refers to the index of
+    /// the input in a transaction
+    </span><span class="kw">pub </span>in_idx: u64,
+}
+
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>InPoint {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">"{}:{}"</span>, <span class="self">self</span>.txid, <span class="self">self</span>.in_idx)
     }
 }
 

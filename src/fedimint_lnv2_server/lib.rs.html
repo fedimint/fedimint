@@ -795,7 +795,8 @@
 <a href="#794" id="794">794</a>
 <a href="#795" id="795">795</a>
 <a href="#796" id="796">796</a>
-<a href="#797" id="797">797</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 
@@ -825,7 +826,7 @@
 <span class="kw">use </span>fedimint_core::time::duration_since_epoch;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, BitcoinHash, NumPeers, NumPeersExt,
+    apply, async_trait_maybe_send, push_db_pair_items, BitcoinHash, InPoint, NumPeers, NumPeersExt,
     OutPoint, PeerId,
 };
 <span class="kw">use </span>fedimint_lnv2_common::config::{
@@ -1180,6 +1181,7 @@
         <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">'b </span>LightningInput,
+        _in_point: InPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, LightningInputError&gt; {
         <span class="kw">let </span>(pub_key, amount) = <span class="kw">match </span>input.ensure_v0_ref()<span class="question-mark">? </span>{
             LightningInputV0::Outgoing(contract_id, outgoing_witness) =&gt; {
