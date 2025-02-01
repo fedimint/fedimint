@@ -728,7 +728,48 @@
 <a href="#727" id="727">727</a>
 <a href="#728" id="728">728</a>
 <a href="#729" id="729">729</a>
-<a href="#730" id="730">730</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
+<a href="#740" id="740">740</a>
+<a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -741,7 +782,9 @@
     FederationStatus, GuardianConfigBackup, P2PConnectionStatus, PeerStatus, StatusResponse,
 };
 <span class="kw">use </span>fedimint_core::admin_client::ServerStatus;
-<span class="kw">use </span>fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
+<span class="kw">use </span>fedimint_core::backup::{
+    BackupStatistics, ClientBackupKey, ClientBackupKeyPrefix, ClientBackupSnapshot,
+};
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, JsonClientConfig};
 <span class="kw">use </span>fedimint_core::core::backup::{SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES};
 <span class="kw">use </span>fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
@@ -753,10 +796,10 @@
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
     API_ANNOUNCEMENTS_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT,
     AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
-    CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT, FEDERATION_ID_ENDPOINT,
-    FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT,
-    RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT,
-    SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SHUTDOWN_ENDPOINT,
+    BACKUP_STATISTICS_ENDPOINT, CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT,
+    FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
+    INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SHUTDOWN_ENDPOINT,
     SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
     SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
@@ -1119,6 +1162,37 @@
         dbtx.get_value(<span class="kw-2">&amp;</span>ClientBackupKey(id)).<span class="kw">await
     </span>}
 
+    <span class="kw">async fn </span>backup_statistics(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; BackupStatistics {
+        <span class="kw">const </span>DAY_SECS: u64 = <span class="number">24 </span>* <span class="number">60 </span>* <span class="number">60</span>;
+        <span class="kw">const </span>WEEK_SECS: u64 = <span class="number">7 </span>* DAY_SECS;
+        <span class="kw">const </span>MONTH_SECS: u64 = <span class="number">30 </span>* DAY_SECS;
+        <span class="kw">const </span>QUARTER_SECS: u64 = <span class="number">3 </span>* MONTH_SECS;
+
+        <span class="kw">let </span><span class="kw-2">mut </span>backup_stats = BackupStatistics::default();
+
+        <span class="kw">let </span><span class="kw-2">mut </span>all_backups_stream = dbtx.find_by_prefix(<span class="kw-2">&amp;</span>ClientBackupKeyPrefix).<span class="kw">await</span>;
+        <span class="kw">while let </span><span class="prelude-val">Some</span>((<span class="kw">_</span>, backup)) = all_backups_stream.next().<span class="kw">await </span>{
+            backup_stats.num_backups += <span class="number">1</span>;
+            backup_stats.total_size += backup.data.len();
+
+            <span class="kw">let </span>age_secs = backup.timestamp.elapsed().unwrap_or_default().as_secs();
+            <span class="kw">if </span>age_secs &lt; DAY_SECS {
+                backup_stats.refreshed_1d += <span class="number">1</span>;
+            }
+            <span class="kw">if </span>age_secs &lt; WEEK_SECS {
+                backup_stats.refreshed_1w += <span class="number">1</span>;
+            }
+            <span class="kw">if </span>age_secs &lt; MONTH_SECS {
+                backup_stats.refreshed_1m += <span class="number">1</span>;
+            }
+            <span class="kw">if </span>age_secs &lt; QUARTER_SECS {
+                backup_stats.refreshed_3m += <span class="number">1</span>;
+            }
+        }
+
+        backup_stats
+    }
+
     <span class="doccomment">/// List API URL announcements from all peers we have received them from (at
     /// least ourselves)
     </span><span class="kw">async fn </span>api_announcements(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;PeerId, SignedApiAnnouncement&gt; {
@@ -1454,6 +1528,14 @@
             ApiVersion::new(<span class="number">0</span>, <span class="number">4</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; String {
                 <span class="prelude-val">Ok</span>(fedimint.fedimintd_version())
+            }
+        },
+        <span class="macro">api_endpoint!</span> {
+            BACKUP_STATISTICS_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">5</span>),
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, _v: ()| -&gt; BackupStatistics {
+                check_auth(context)<span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(fedimint.backup_statistics(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc()).<span class="kw">await</span>)
             }
         },
     ]
