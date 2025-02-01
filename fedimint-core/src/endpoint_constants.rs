@@ -6,6 +6,7 @@ pub const AUTH_ENDPOINT: &str = "auth";
 #[deprecated(note = "https://github.com/fedimint/fedimint/issues/6671")]
 pub const AWAIT_OUTPUT_OUTCOME_ENDPOINT: &str = "await_output_outcome";
 pub const BACKUP_ENDPOINT: &str = "backup";
+pub const BACKUP_STATISTICS_ENDPOINT: &str = "backup_statistics";
 pub const CHECK_BITCOIN_STATUS_ENDPOINT: &str = "check_bitcoin_status";
 pub const CLIENT_CONFIG_ENDPOINT: &str = "client_config";
 pub const CLIENT_CONFIG_JSON_ENDPOINT: &str = "client_config_json";

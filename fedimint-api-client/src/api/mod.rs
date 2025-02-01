@@ -18,7 +18,7 @@ use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams,
     ServerStatus,
 };
-use fedimint_core::backup::ClientBackupSnapshot;
+use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -601,6 +601,9 @@ pub trait IGlobalFederationApi: IRawFederationApi {
 
     /// Returns the fedimintd version a peer is running
     async fn fedimintd_version(&self, peer_id: PeerId) -> PeerResult<String>;
+
+    /// Fetch the backup statistics from the federation (admin endpoint)
+    async fn backup_statistics(&self, auth: ApiAuth) -> FederationResult<BackupStatistics>;
 }
 
 pub fn deserialize_outcome<R>(

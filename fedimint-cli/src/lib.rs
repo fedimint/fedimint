@@ -379,6 +379,8 @@ enum AdminCmd {
         /// Session index to stop after
         session_idx: u64,
     },
+    /// Show statistics about client backups stored by the federation
+    BackupStatistics,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -932,6 +934,18 @@ impl FedimintCli {
                     .await?;
 
                 Ok(CliOutput::Raw(json!(null)))
+            }
+            Command::Admin(AdminCmd::BackupStatistics) => {
+                let client = self.client_open(&cli).await?;
+
+                let backup_statistics = cli
+                    .admin_client(&client.get_peer_urls().await, client.api_secret())?
+                    .backup_statistics(cli.auth()?)
+                    .await?;
+
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(backup_statistics).expect("Can be encoded"),
+                ))
             }
             Command::Dev(DevCmd::Api {
                 method,
