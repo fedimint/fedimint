@@ -333,8 +333,10 @@ impl ServerModule for Lightning {
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
     ) -> Vec<LightningConsensusItem> {
+        // We reduce the time granularity to deduplicate votes more often and not save
+        // one consensus item every second.
         let mut items = vec![LightningConsensusItem::UnixTimeVote(
-            duration_since_epoch().as_secs(),
+            60 * (duration_since_epoch().as_secs() / 60),
         )];
 
         if let Ok(block_count) = self.get_block_count() {
