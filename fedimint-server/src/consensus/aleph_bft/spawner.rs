@@ -15,7 +15,7 @@ impl Spawner {
 
 impl aleph_bft::SpawnHandle for Spawner {
     fn spawn(&self, name: &str, task: impl futures::Future<Output = ()> + Send + 'static) {
-        self.task_group.spawn(name, |_| task);
+        self.task_group.spawn_silent(name, |_| task);
     }
 
     fn spawn_essential(
@@ -25,7 +25,7 @@ impl aleph_bft::SpawnHandle for Spawner {
     ) -> aleph_bft::TaskHandle {
         let (sender, receiver) = futures::channel::oneshot::channel();
 
-        self.task_group.spawn(name, |_| async {
+        self.task_group.spawn_silent(name, |_| async {
             task.await;
 
             if sender.send(()).is_err() {
