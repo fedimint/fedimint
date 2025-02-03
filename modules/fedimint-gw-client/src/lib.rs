@@ -4,14 +4,16 @@ pub mod pay;
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::ensure;
 use async_stream::stream;
+use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::key::Secp256k1;
-use bitcoin::secp256k1::All;
+use bitcoin::secp256k1::{All, PublicKey};
+use complete::{GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState};
 use events::{IncomingPaymentStarted, OutgoingPaymentStarted};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::derivable_secret::ChildId;
@@ -24,13 +26,20 @@ use fedimint_client::sm::{Context, DynState, ModuleNotifier, State};
 use fedimint_client::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
-use fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlobalClientContext};
+use fedimint_client::{
+    sm_enum_variant_translation, AddStateMachinesError, ClientHandleArc, DynGlobalClientContext,
+};
+use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion};
+use fedimint_core::util::{SafeUrl, Spanned};
 use fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint};
-use fedimint_lightning::{InterceptPaymentRequest, LightningContext};
+use fedimint_lightning::{
+    InterceptPaymentRequest, InterceptPaymentResponse, LightningContext, LightningRpcError,
+    PayInvoiceResponse,
+};
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
@@ -41,6 +50,7 @@ use fedimint_ln_client::{
     RealGatewayConnection,
 };
 use fedimint_ln_common::config::LightningClientConfig;
+use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{ContractId, Preimage};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::{
@@ -59,10 +69,6 @@ use self::pay::{
     GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates,
     OutgoingPaymentError,
 };
-use crate::state_machine::complete::{
-    GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState,
-};
-use crate::Gateway;
 
 /// The high-level state of a reissue operation started with
 /// [`GatewayClientModule::gateway_pay_bolt11_invoice`].
@@ -116,7 +122,7 @@ pub enum GatewayMeta {
 #[derive(Debug, Clone)]
 pub struct GatewayClientInit {
     pub federation_index: u64,
-    pub gateway: Arc<Gateway>,
+    pub lightning_manager: Arc<dyn IGatewayClientV1>,
 }
 
 impl ModuleInit for GatewayClientInit {
@@ -151,7 +157,7 @@ impl ClientModuleInit for GatewayClientInit {
             module_api: args.module_api().clone(),
             federation_index: self.federation_index,
             client_ctx: args.context(),
-            gateway: self.gateway.clone(),
+            lightning_manager: self.lightning_manager.clone(),
         })
     }
 }
@@ -162,8 +168,8 @@ pub struct GatewayClientContext {
     secp: Secp256k1<All>,
     pub ln_decoder: Decoder,
     notifier: ModuleNotifier<GatewayClientStateMachines>,
-    gateway: Arc<Gateway>,
     pub client_ctx: ClientContext<GatewayClientModule>,
+    pub lightning_manager: Arc<dyn IGatewayClientV1>,
 }
 
 impl Context for GatewayClientContext {
@@ -192,7 +198,7 @@ pub struct GatewayClientModule {
     federation_index: u64,
     module_api: DynModuleApi,
     client_ctx: ClientContext<Self>,
-    gateway: Arc<Gateway>,
+    pub lightning_manager: Arc<dyn IGatewayClientV1>,
 }
 
 impl ClientModule for GatewayClientModule {
@@ -208,8 +214,8 @@ impl ClientModule for GatewayClientModule {
             secp: Secp256k1::new(),
             ln_decoder: self.decoder(),
             notifier: self.notifier.clone(),
-            gateway: self.gateway.clone(),
             client_ctx: self.client_ctx.clone(),
+            lightning_manager: self.lightning_manager.clone(),
         }
     }
 
@@ -242,6 +248,8 @@ impl GatewayClientModule {
         ttl: Duration,
         fees: RoutingFees,
         lightning_context: LightningContext,
+        api: SafeUrl,
+        gateway_id: PublicKey,
     ) -> LightningGatewayAnnouncement {
         LightningGatewayAnnouncement {
             info: LightningGateway {
@@ -249,10 +257,10 @@ impl GatewayClientModule {
                 gateway_redeem_key: self.redeem_key.public_key(),
                 node_pub_key: lightning_context.lightning_public_key,
                 lightning_alias: lightning_context.lightning_alias,
-                api: self.gateway.versioned_api.clone(),
+                api,
                 route_hints,
                 fees,
-                gateway_id: self.gateway.gateway_id,
+                gateway_id,
                 supports_private_payments: lightning_context.lnrpc.supports_private_payments(),
             },
             ttl,
@@ -371,9 +379,17 @@ impl GatewayClientModule {
         time_to_live: Duration,
         fees: RoutingFees,
         lightning_context: LightningContext,
+        api: SafeUrl,
+        gateway_id: PublicKey,
     ) {
-        let registration_info =
-            self.to_gateway_registration_info(route_hints, time_to_live, fees, lightning_context);
+        let registration_info = self.to_gateway_registration_info(
+            route_hints,
+            time_to_live,
+            fees,
+            lightning_context,
+            api,
+            gateway_id,
+        );
         let gateway_id = registration_info.info.gateway_id;
 
         let federation_id = self
@@ -599,17 +615,9 @@ impl GatewayClientModule {
         pay_invoice_payload: PayInvoicePayload,
     ) -> anyhow::Result<OperationId> {
         let payload = pay_invoice_payload.clone();
-        let lightning_context = self.gateway.get_lightning_context().await?;
-
-        if matches!(
-            pay_invoice_payload.payment_data,
-            PaymentData::PrunedInvoice { .. }
-        ) {
-            ensure!(
-                lightning_context.lnrpc.supports_private_payments(),
-                "Private payments are not supported by the lightning node"
-            );
-        }
+        self.lightning_manager
+            .verify_pruned_invoice(pay_invoice_payload.payment_data)
+            .await?;
 
         self.client_ctx.module_db()
             .autocommit(
@@ -861,4 +869,61 @@ impl TryFrom<PaymentData> for SwapParameters {
             amount_msat,
         })
     }
+}
+
+/// An interface between module implementation and the general `Gateway`
+///
+/// To abstract away and decouple the core gateway from the modules, the
+/// interface between them is expressed as a trait. The gateway handles
+/// operations that require Lightning node access or database access.
+#[async_trait]
+pub trait IGatewayClientV1: Debug + Send + Sync {
+    /// Verifies that the supplied `preimage_auth` is the same as the
+    /// `preimage_auth` that initiated the payment.
+    ///
+    /// If it is not, then this will return an error because this client is not
+    /// authorized to receive the preimage.
+    async fn verify_preimage_authentication(
+        &self,
+        payment_hash: sha256::Hash,
+        preimage_auth: sha256::Hash,
+        contract: OutgoingContractAccount,
+    ) -> Result<(), OutgoingPaymentError>;
+
+    /// Verify that the lightning node supports private payments if a pruned
+    /// invoice is supplied.
+    async fn verify_pruned_invoice(&self, payment_data: PaymentData) -> anyhow::Result<()>;
+
+    /// Retrieves the federation's routing fees from the federation's config.
+    async fn get_routing_fees(&self, federation_id: FederationId) -> Option<RoutingFees>;
+
+    /// Retrieve a client given a federation ID, used for swapping ecash between
+    /// federations.
+    async fn get_client(&self, federation_id: &FederationId) -> Option<Spanned<ClientHandleArc>>;
+
+    // Retrieve a client given an invoice.
+    //
+    // Checks if the invoice route hint last hop has source node id matching this
+    // gateways node pubkey and if the short channel id matches one assigned by
+    // this gateway to a connected federation. In this case, the gateway can
+    // avoid paying the invoice over the lightning network and instead perform a
+    // direct swap between the two federations.
+    async fn get_client_for_invoice(
+        &self,
+        payment_data: PaymentData,
+    ) -> Option<Spanned<ClientHandleArc>>;
+
+    /// Pay a Lightning invoice using the gateway's lightning node.
+    async fn pay(
+        &self,
+        payment_data: PaymentData,
+        max_delay: u64,
+        max_fee: Amount,
+    ) -> Result<PayInvoiceResponse, LightningRpcError>;
+
+    /// Use the gateway's lightning node to send a complete HTLC response.
+    async fn complete_htlc(
+        &self,
+        htlc_response: InterceptPaymentResponse,
+    ) -> Result<(), LightningRpcError>;
 }

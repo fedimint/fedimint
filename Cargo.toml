@@ -43,6 +43,7 @@ members = [
     "modules/fedimint-empty-client",
     "modules/fedimint-empty-common",
     "modules/fedimint-empty-server",
+    "modules/fedimint-gw-client",
     "modules/fedimint-ln-client",
     "modules/fedimint-ln-common",
     "modules/fedimint-ln-server",
@@ -136,6 +137,7 @@ fedimint-dummy-common = { path = "./modules/fedimint-dummy-common", version = "=
 fedimint-dummy-server = { path = "./modules/fedimint-dummy-server", version = "=0.7.0-alpha" }
 fedimint-empty-common = { path = "./modules/fedimint-empty-common", version = "=0.7.0-alpha" }
 fedimint-eventlog = { path = "./fedimint-eventlog", version = "=0.7.0-alpha" }
+fedimint-gw-client = { path = "./modules/fedimint-gw-client", version = "=0.7.0-alpha" }
 fedimint-lightning = { package = "fedimint-lightning", path = "./gateway/fedimint-lightning", version = "=0.7.0-alpha" }
 fedimint-lnv2-client = { path = "./modules/fedimint-lnv2-client", version = "=0.7.0-alpha" }
 fedimint-lnv2-common = { path = "./modules/fedimint-lnv2-common", version = "=0.7.0-alpha" }

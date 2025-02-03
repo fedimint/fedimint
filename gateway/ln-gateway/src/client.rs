@@ -13,11 +13,11 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_gw_client::GatewayClientInit;
 
 use crate::db::{FederationConfig, GatewayDbExt};
 use crate::error::AdminGatewayError;
 use crate::gateway_module_v2::GatewayClientInitV2;
-use crate::state_machine::GatewayClientInit;
 use crate::{AdminResult, Gateway};
 
 #[derive(Debug, Clone)]
@@ -72,7 +72,7 @@ impl GatewayClientBuilder {
         if gateway.is_running_lnv1() {
             registry.attach(GatewayClientInit {
                 federation_index,
-                gateway: gateway.clone(),
+                lightning_manager: gateway.clone(),
             });
         }
 

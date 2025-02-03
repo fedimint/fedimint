@@ -2886,6 +2886,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-logging",
  "futures",
+ "itertools 0.13.0",
  "serde",
  "serde_json",
  "test-log",
@@ -2926,6 +2927,31 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "fedimint-gw-client"
+version = "0.7.0-alpha"
+dependencies = [
+ "anyhow",
+ "aquamarine",
+ "async-stream",
+ "async-trait",
+ "bitcoin",
+ "erased-serde 0.4.5",
+ "fedimint-api-client",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-eventlog",
+ "fedimint-lightning",
+ "fedimint-ln-client",
+ "fedimint-ln-common",
+ "futures",
+ "lightning-invoice",
+ "serde",
+ "thiserror 2.0.11",
+ "tokio-stream",
+ "tracing",
 ]
 
 [[package]]
@@ -3033,6 +3059,7 @@ dependencies = [
  "fedimint-dummy-common",
  "fedimint-dummy-server",
  "fedimint-eventlog",
+ "fedimint-gw-client",
  "fedimint-lightning",
  "fedimint-ln-client",
  "fedimint-ln-common",

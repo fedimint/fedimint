@@ -400,7 +400,7 @@ pub struct CloseChannelsWithPeerRequest {
     pub pubkey: secp256k1::PublicKey,
 }
 
-// Trait that specifies how to interact with the gateway's lightning node.
+// TODO: Move into `fedimint-gateway-v2` crate
 #[async_trait]
 pub trait LightningV2Manager: Debug + Send + Sync {
     async fn contains_incoming_contract(&self, payment_image: PaymentImage) -> bool;

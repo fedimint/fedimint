@@ -1,6 +1,5 @@
 use std::fmt::{self, Display};
 
-use bitcoin::hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle,
@@ -9,7 +8,6 @@ use fedimint_client::{ClientHandleArc, DynGlobalClientContext};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::util::Spanned;
 use fedimint_core::{secp256k1, Amount, OutPoint, TransactionId};
 use fedimint_lightning::{LightningRpcError, PayInvoiceResponse};
 use fedimint_ln_client::api::LnFederationApi;
@@ -26,10 +24,8 @@ use tokio_stream::StreamExt;
 use tracing::{debug, error, info, warn, Instrument};
 
 use super::{GatewayClientContext, GatewayExtReceiveStates};
-use crate::db::GatewayDbtxNcExt;
-use crate::state_machine::events::{OutgoingPaymentFailed, OutgoingPaymentSucceeded};
-use crate::state_machine::GatewayClientModule;
-use crate::GatewayState;
+use crate::events::{OutgoingPaymentFailed, OutgoingPaymentSucceeded};
+use crate::GatewayClientModule;
 
 const TIMELOCK_DELTA: u64 = 10;
 
@@ -192,8 +188,8 @@ pub enum OutgoingPaymentErrorType {
 )]
 pub struct OutgoingPaymentError {
     pub error_type: OutgoingPaymentErrorType,
-    contract_id: ContractId,
-    contract: Option<OutgoingContractAccount>,
+    pub contract_id: ContractId,
+    pub contract: Option<OutgoingContractAccount>,
 }
 
 impl Display for OutgoingPaymentError {
@@ -278,13 +274,14 @@ impl GatewayPayInvoice {
     ) -> GatewayPayStateMachine {
         debug!("Buying preimage contract {contract:?}");
         // Verify that this client is authorized to receive the preimage.
-        if let Err(err) = Self::verify_preimage_authentication(
-            &context,
-            payload.payment_data.payment_hash(),
-            payload.preimage_auth,
-            contract.clone(),
-        )
-        .await
+        if let Err(err) = context
+            .lightning_manager
+            .verify_preimage_authentication(
+                payload.payment_data.payment_hash(),
+                payload.preimage_auth,
+                contract.clone(),
+            )
+            .await
         {
             warn!("Preimage authentication failed: {err} for contract {contract:?}");
             return GatewayPayStateMachine {
@@ -296,9 +293,10 @@ impl GatewayPayInvoice {
             };
         }
 
-        if let Some(client) =
-            Self::check_swap_to_federation(context.clone(), payment_parameters.payment_data.clone())
-                .await
+        if let Some(client) = context
+            .lightning_manager
+            .get_client_for_invoice(payment_parameters.payment_data.clone())
+            .await
         {
             client
                 .with(|client| {
@@ -363,9 +361,9 @@ impl GatewayPayInvoice {
                 });
             }
 
-            let mut gateway_dbtx = context.gateway.gateway_db.begin_transaction_nc().await;
-            let config = gateway_dbtx
-                .load_federation_config(federation_id)
+            let routing_fees = context
+                .lightning_manager
+                .get_routing_fees(federation_id)
                 .await
                 .ok_or(OutgoingPaymentError {
                     error_type: OutgoingPaymentErrorType::InvalidFederationConfiguration,
@@ -378,7 +376,7 @@ impl GatewayPayInvoice {
                 context.redeem_key,
                 consensus_block_count.unwrap(),
                 &payment_data,
-                config.lightning_fee.into(),
+                routing_fees,
             )
             .map_err(|e| {
                 warn!("Invalid outgoing contract: {e:?}");
@@ -416,28 +414,10 @@ impl GatewayPayInvoice {
                 .expect("We already checked that an amount was supplied"),
         );
 
-        let Ok(lightning_context) = context.gateway.get_lightning_context().await else {
-            return Self::gateway_pay_cancel_contract(
-                LightningRpcError::FailedToConnect,
-                contract,
-                common,
-            );
-        };
-
-        let payment_result = match buy_preimage.payment_data {
-            PaymentData::Invoice(invoice) => {
-                lightning_context
-                    .lnrpc
-                    .pay(invoice, max_delay, max_fee)
-                    .await
-            }
-            PaymentData::PrunedInvoice(invoice) => {
-                lightning_context
-                    .lnrpc
-                    .pay_private(invoice, buy_preimage.max_delay, max_fee)
-                    .await
-            }
-        };
+        let payment_result = context
+            .lightning_manager
+            .pay(buy_preimage.payment_data, max_delay, max_fee)
+            .await;
 
         match payment_result {
             Ok(PayInvoiceResponse { preimage, .. }) => {
@@ -542,43 +522,6 @@ impl GatewayPayInvoice {
         }
     }
 
-    /// Verifies that the supplied `preimage_auth` is the same as the
-    /// `preimage_auth` that initiated the payment. If it is not, then this
-    /// will return an error because this client is not authorized to receive
-    /// the preimage.
-    async fn verify_preimage_authentication(
-        context: &GatewayClientContext,
-        payment_hash: sha256::Hash,
-        preimage_auth: sha256::Hash,
-        contract: OutgoingContractAccount,
-    ) -> Result<(), OutgoingPaymentError> {
-        let mut dbtx = context.gateway.gateway_db.begin_transaction().await;
-        if let Some(secret_hash) = dbtx.load_preimage_authentication(payment_hash).await {
-            if secret_hash != preimage_auth {
-                return Err(OutgoingPaymentError {
-                    error_type: OutgoingPaymentErrorType::InvalidInvoicePreimage,
-                    contract_id: contract.contract.contract_id(),
-                    contract: Some(contract),
-                });
-            }
-        } else {
-            // Committing the `preimage_auth` to the database can fail if two users try to
-            // pay the same invoice at the same time.
-            dbtx.save_new_preimage_authentication(payment_hash, preimage_auth)
-                .await;
-            return dbtx
-                .commit_tx_result()
-                .await
-                .map_err(|_| OutgoingPaymentError {
-                    error_type: OutgoingPaymentErrorType::InvoiceAlreadyPaid,
-                    contract_id: contract.contract.contract_id(),
-                    contract: Some(contract),
-                });
-        }
-
-        Ok(())
-    }
-
     fn validate_outgoing_account(
         account: &OutgoingContractAccount,
         redeem_key: bitcoin::key::Keypair,
@@ -627,36 +570,6 @@ impl GatewayPayInvoice {
             max_send_amount: account.amount,
             payment_data: payment_data.clone(),
         })
-    }
-
-    // Checks if the invoice route hint last hop has source node id matching this
-    // gateways node pubkey and if the short channel id matches one assigned by
-    // this gateway to a connected federation. In this case, the gateway can
-    // avoid paying the invoice over the lightning network and instead perform a
-    // direct swap between the two federations.
-    async fn check_swap_to_federation(
-        context: GatewayClientContext,
-        payment_data: PaymentData,
-    ) -> Option<Spanned<ClientHandleArc>> {
-        let rhints = payment_data.route_hints();
-        match rhints.first().and_then(|rh| rh.0.last()) {
-            None => None,
-            Some(hop) => match context.gateway.state.read().await.clone() {
-                GatewayState::Running { lightning_context } => {
-                    if hop.src_node_id != lightning_context.lightning_public_key {
-                        return None;
-                    }
-
-                    context
-                        .gateway
-                        .federation_manager
-                        .read()
-                        .await
-                        .get_client_for_index(hop.short_channel_id)
-                }
-                _ => None,
-            },
-        }
     }
 }
 
@@ -775,13 +688,11 @@ impl GatewayPayWaitForSwapPreimage {
         contract: OutgoingContractAccount,
     ) -> Result<Preimage, OutgoingPaymentError> {
         debug!("Waiting preimage for contract {contract:?}");
+
         let client = context
-            .gateway
-            .federation_manager
-            .read()
+            .lightning_manager
+            .get_client(&federation_id)
             .await
-            .client(&federation_id)
-            .cloned()
             .ok_or(OutgoingPaymentError {
                 contract_id: contract.contract.contract_id(),
                 contract: Some(contract.clone()),

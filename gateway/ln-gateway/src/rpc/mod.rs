@@ -8,8 +8,9 @@ use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Network};
 use fedimint_core::config::{FederationId, JsonClientConfig};
 use fedimint_core::core::OperationId;
+use fedimint_core::util::{get_average, get_median};
 use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
-use fedimint_eventlog::{EventKind, EventLogId, PersistedLogEntry};
+use fedimint_eventlog::{EventKind, EventLogId, PersistedLogEntry, StructuredPaymentEvents};
 use fedimint_mint_client::OOBNotes;
 use fedimint_wallet_client::PegOutFees;
 use lightning_invoice::Bolt11Invoice;
@@ -253,6 +254,19 @@ pub struct PaymentStats {
     pub total_fees: Amount,
     pub total_success: usize,
     pub total_failure: usize,
+}
+
+impl PaymentStats {
+    /// Computes the payment statistics for the given structured payment events.
+    pub fn compute(events: &StructuredPaymentEvents) -> Self {
+        PaymentStats {
+            average_latency: get_average(&events.latencies).map(Duration::from_micros),
+            median_latency: get_median(&events.latencies).map(Duration::from_micros),
+            total_fees: Amount::from_msats(events.fees.iter().map(|a| a.msats).sum()),
+            total_success: events.latencies.len(),
+            total_failure: events.latencies_failure.len(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

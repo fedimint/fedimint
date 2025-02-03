@@ -22,9 +22,10 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::{apply, async_trait_maybe_send, impl_db_lookup, impl_db_record};
+use fedimint_core::{apply, async_trait_maybe_send, impl_db_lookup, impl_db_record, Amount};
 use fedimint_logging::LOG_CLIENT_EVENT_LOG;
 use futures::{Future, StreamExt};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, watch};
 use tracing::{debug, trace};
@@ -437,6 +438,101 @@ where
         } else if log_event_added.changed().await.is_err() {
             break Ok(());
         }
+    }
+}
+
+/// Filters the `PersistedLogEntries` by the `EventKind` and
+/// `ModuleKind`.
+pub fn filter_events_by_kind<'a, I>(
+    all_events: I,
+    module_kind: ModuleKind,
+    event_kind: EventKind,
+) -> impl Iterator<Item = &'a PersistedLogEntry> + 'a
+where
+    I: IntoIterator<Item = &'a PersistedLogEntry> + 'a,
+{
+    all_events.into_iter().filter(move |e| {
+        if let Some((m, _)) = &e.module {
+            e.event_kind == event_kind && *m == module_kind
+        } else {
+            false
+        }
+    })
+}
+
+/// Joins two sets of events on a predicate.
+///
+/// This function computes a "nested loop join" by first computing the cross
+/// product of the start event vector and the success/failure event vectors. The
+/// resulting cartesian product is then filtered according to the join predicate
+/// supplied in the parameters.
+///
+/// This function is intended for small data sets. If the data set relations
+/// grow, this function should implement a different join algorithm or be moved
+/// out of the gateway.
+pub fn join_events<'a, L, R, Res>(
+    events_l: &'a [&PersistedLogEntry],
+    events_r: &'a [&PersistedLogEntry],
+    predicate: impl Fn(L, R, u64) -> Option<Res> + 'a,
+) -> impl Iterator<Item = Res> + 'a
+where
+    L: Event,
+    R: Event,
+{
+    events_l
+        .iter()
+        .cartesian_product(events_r)
+        .filter_map(move |(l, r)| {
+            if let Some(latency) = r.timestamp.checked_sub(l.timestamp) {
+                let event_l: L =
+                    serde_json::from_value(l.value.clone()).expect("could not parse JSON");
+                let event_r: R =
+                    serde_json::from_value(r.value.clone()).expect("could not parse JSON");
+                predicate(event_l, event_r, latency)
+            } else {
+                None
+            }
+        })
+}
+
+/// Helper struct for storing computed data about outgoing and incoming
+/// payments.
+#[derive(Debug, Default)]
+pub struct StructuredPaymentEvents {
+    pub latencies: Vec<u64>,
+    pub fees: Vec<Amount>,
+    pub latencies_failure: Vec<u64>,
+}
+
+impl StructuredPaymentEvents {
+    pub fn new(
+        success_stats: &[(u64, Amount)],
+        failure_stats: Vec<u64>,
+    ) -> StructuredPaymentEvents {
+        let mut events = StructuredPaymentEvents {
+            latencies: success_stats.iter().map(|(l, _)| *l).collect(),
+            fees: success_stats.iter().map(|(_, f)| *f).collect(),
+            latencies_failure: failure_stats,
+        };
+        events.sort();
+        events
+    }
+
+    /// Combines this `StructuredPaymentEvents` with the `other`
+    /// `StructuredPaymentEvents` by appending all of the internal vectors.
+    pub fn combine(&mut self, other: &mut StructuredPaymentEvents) {
+        self.latencies.append(&mut other.latencies);
+        self.fees.append(&mut other.fees);
+        self.latencies_failure.append(&mut other.latencies_failure);
+        self.sort();
+    }
+
+    /// Sorts this `StructuredPaymentEvents` by sorting all of the internal
+    /// vectors.
+    fn sort(&mut self) {
+        self.latencies.sort_unstable();
+        self.fees.sort_unstable();
+        self.latencies_failure.sort_unstable();
     }
 }
 
