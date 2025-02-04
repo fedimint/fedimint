@@ -1439,62 +1439,22 @@
 <a href="#1438" id="1438">1438</a>
 <a href="#1439" id="1439">1439</a>
 <a href="#1440" id="1440">1440</a>
-<a href="#1441" id="1441">1441</a>
-<a href="#1442" id="1442">1442</a>
-<a href="#1443" id="1443">1443</a>
-<a href="#1444" id="1444">1444</a>
-<a href="#1445" id="1445">1445</a>
-<a href="#1446" id="1446">1446</a>
-<a href="#1447" id="1447">1447</a>
-<a href="#1448" id="1448">1448</a>
-<a href="#1449" id="1449">1449</a>
-<a href="#1450" id="1450">1450</a>
-<a href="#1451" id="1451">1451</a>
-<a href="#1452" id="1452">1452</a>
-<a href="#1453" id="1453">1453</a>
-<a href="#1454" id="1454">1454</a>
-<a href="#1455" id="1455">1455</a>
-<a href="#1456" id="1456">1456</a>
-<a href="#1457" id="1457">1457</a>
-<a href="#1458" id="1458">1458</a>
-<a href="#1459" id="1459">1459</a>
-<a href="#1460" id="1460">1460</a>
-<a href="#1461" id="1461">1461</a>
-<a href="#1462" id="1462">1462</a>
-<a href="#1463" id="1463">1463</a>
-<a href="#1464" id="1464">1464</a>
-<a href="#1465" id="1465">1465</a>
-<a href="#1466" id="1466">1466</a>
-<a href="#1467" id="1467">1467</a>
-<a href="#1468" id="1468">1468</a>
-<a href="#1469" id="1469">1469</a>
-<a href="#1470" id="1470">1470</a>
-<a href="#1471" id="1471">1471</a>
-<a href="#1472" id="1472">1472</a>
-<a href="#1473" id="1473">1473</a>
-<a href="#1474" id="1474">1474</a>
-<a href="#1475" id="1475">1475</a>
-<a href="#1476" id="1476">1476</a>
-<a href="#1477" id="1477">1477</a>
-<a href="#1478" id="1478">1478</a>
-<a href="#1479" id="1479">1479</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
-<span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
+<a href="#1441" id="1441">1441</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::ensure;
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
+<span class="kw">use </span>bitcoin::hashes::Hash;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
 <span class="kw">use </span>fedimint_ln_common::route_hints::{RouteHint, RouteHintHop};
 <span class="kw">use </span>fedimint_ln_common::PrunedInvoice;
-<span class="kw">use </span>fedimint_lnv2_common::contracts::PaymentImage;
 <span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>secp256k1::PublicKey;
-<span class="kw">use </span>tokio::sync::{mpsc, RwLock};
+<span class="kw">use </span>tokio::sync::mpsc;
 <span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
 <span class="kw">use </span>tonic_lnd::invoicesrpc::lookup_invoice_msg::InvoiceRef;
 <span class="kw">use </span>tonic_lnd::invoicesrpc::{
@@ -1528,7 +1488,7 @@
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
     GetRouteHintsResponse, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
-    LightningV2Manager, OpenChannelResponse, PayInvoiceResponse, PaymentAction, SendOnchainRequest,
+    OpenChannelResponse, PayInvoiceResponse, PaymentAction, SendOnchainRequest,
     SendOnchainResponse,
 };
 
@@ -1543,8 +1503,6 @@
     tls_cert: String,
     macaroon: String,
     lnd_sender: <span class="prelude-ty">Option</span>&lt;mpsc::Sender&lt;ForwardHtlcInterceptResponse&gt;&gt;,
-    payment_hashes: Arc&lt;RwLock&lt;BTreeSet&lt;Vec&lt;u8&gt;&gt;&gt;&gt;,
-    lnv2_manager: Arc&lt;<span class="kw">dyn </span>LightningV2Manager&gt;,
 }
 
 <span class="kw">impl </span>GatewayLndClient {
@@ -1553,7 +1511,6 @@
         tls_cert: String,
         macaroon: String,
         lnd_sender: <span class="prelude-ty">Option</span>&lt;mpsc::Sender&lt;ForwardHtlcInterceptResponse&gt;&gt;,
-        lnv2_manager: Arc&lt;<span class="kw">dyn </span>LightningV2Manager&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="macro">info!</span>(
             <span class="string">"Gateway configured to connect to LND LnRpcClient at \n address: {},\n tls cert path: {},\n macaroon path: {} "</span>,
@@ -1564,8 +1521,6 @@
             tls_cert,
             macaroon,
             lnd_sender,
-            lnv2_manager,
-            payment_hashes: Arc::new(RwLock::new(BTreeSet::new())),
         }
     }
 
@@ -1681,10 +1636,6 @@
             }
         });
 
-        <span class="comment">// Invoice monitor task has already spawned, we can safely remove it from the
-        // set
-        </span><span class="self">self</span>.payment_hashes.write().<span class="kw">await</span>.remove(<span class="kw-2">&amp;</span>payment_hash);
-
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -1764,36 +1715,13 @@
                 // the HOLD invoice.
                 </span><span class="kw">let </span>payment_hash = invoice.r_hash.clone();
 
-                <span class="kw">let </span>created_payment_hash = self_copy
-                    .payment_hashes
-                    .read()
-                    .<span class="kw">await
-                    </span>.contains(<span class="kw-2">&amp;</span>payment_hash);
-
-                <span class="kw">let </span>db_contains_payment_hash = self_copy
-                    .lnv2_manager
-                    .contains_incoming_contract(PaymentImage::Hash(sha256::Hash::from_byte_array(
-                        payment_hash
-                            .clone()
-                            .try_into()
-                            .expect(<span class="string">"Malformatted payment hash"</span>),
-                    )))
-                    .<span class="kw">await</span>;
-
-                <span class="kw">let </span>contains_payment_hash = created_payment_hash || db_contains_payment_hash;
-
                 <span class="macro">debug!</span>(
                     <span class="question-mark">?</span>invoice,
-                    <span class="question-mark">?</span>created_payment_hash,
-                    <span class="question-mark">?</span>db_contains_payment_hash,
                     <span class="string">"LND Invoice Update {}"</span>,
                     PrettyPaymentHash(<span class="kw-2">&amp;</span>payment_hash),
                 );
 
-                <span class="kw">if </span>contains_payment_hash
-                    &amp;&amp; invoice.r_preimage.is_empty()
-                    &amp;&amp; invoice.state() == InvoiceState::Open
-                {
+                <span class="kw">if </span>invoice.r_preimage.is_empty() &amp;&amp; invoice.state() == InvoiceState::Open {
                     <span class="macro">info!</span>(
                         <span class="string">"Monitoring new LNv2 invoice with {}"</span>,
                         PrettyPaymentHash(<span class="kw-2">&amp;</span>payment_hash)
@@ -2428,8 +2356,6 @@
             tls_cert: <span class="self">self</span>.tls_cert.clone(),
             macaroon: <span class="self">self</span>.macaroon.clone(),
             lnd_sender: <span class="prelude-val">Some</span>(lnd_sender.clone()),
-            lnv2_manager: <span class="self">self</span>.lnv2_manager.clone(),
-            payment_hashes: <span class="self">self</span>.payment_hashes.clone(),
         });
         <span class="prelude-val">Ok</span>((Box::pin(ReceiverStream::new(gateway_receiver)), new_client))
     }
@@ -2549,8 +2475,6 @@
                     ..Default::default()
                 },
             };
-
-            <span class="self">self</span>.payment_hashes.write().<span class="kw">await</span>.insert(payment_hash);
 
             <span class="kw">let </span>hold_invoice_response = client
                 .invoices()

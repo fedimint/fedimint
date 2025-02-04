@@ -398,14 +398,7 @@
 <a href="#397" id="397">397</a>
 <a href="#398" id="398">398</a>
 <a href="#399" id="399">399</a>
-<a href="#400" id="400">400</a>
-<a href="#401" id="401">401</a>
-<a href="#402" id="402">402</a>
-<a href="#403" id="403">403</a>
-<a href="#404" id="404">404</a>
-<a href="#405" id="405">405</a>
-<a href="#406" id="406">406</a>
-<a href="#407" id="407">407</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>ldk;
+<a href="#400" id="400">400</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>ldk;
 <span class="kw">pub mod </span>lnd;
 
 <span class="kw">use </span>std::fmt::Debug;
@@ -424,7 +417,6 @@
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
 <span class="kw">use </span>fedimint_ln_common::PrunedInvoice;
-<span class="kw">use </span>fedimint_lnv2_common::contracts::PaymentImage;
 <span class="kw">use </span>futures::stream::BoxStream;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -805,11 +797,5 @@
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>CloseChannelsWithPeerRequest {
     <span class="kw">pub </span>pubkey: secp256k1::PublicKey,
-}
-
-<span class="comment">// TODO: Move into `fedimint-gateway-v2` crate
-</span><span class="attr">#[async_trait]
-</span><span class="kw">pub trait </span>LightningV2Manager: Debug + Send + Sync {
-    <span class="kw">async fn </span>contains_incoming_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_image: PaymentImage) -&gt; bool;
 }
 </code></pre></div></section></main></body></html>

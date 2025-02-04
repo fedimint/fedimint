@@ -2344,20 +2344,7 @@
 <a href="#2343" id="2343">2343</a>
 <a href="#2344" id="2344">2344</a>
 <a href="#2345" id="2345">2345</a>
-<a href="#2346" id="2346">2346</a>
-<a href="#2347" id="2347">2347</a>
-<a href="#2348" id="2348">2348</a>
-<a href="#2349" id="2349">2349</a>
-<a href="#2350" id="2350">2350</a>
-<a href="#2351" id="2351">2351</a>
-<a href="#2352" id="2352">2352</a>
-<a href="#2353" id="2353">2353</a>
-<a href="#2354" id="2354">2354</a>
-<a href="#2355" id="2355">2355</a>
-<a href="#2356" id="2356">2356</a>
-<a href="#2357" id="2357">2357</a>
-<a href="#2358" id="2358">2358</a>
-<a href="#2359" id="2359">2359</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2346" id="2346">2346</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2434,8 +2421,8 @@
 <span class="kw">use </span>fedimint_lightning::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
-    LightningContext, LightningRpcError, LightningV2Manager, OpenChannelRequest,
-    PayInvoiceResponse, PaymentAction, RouteHtlcStream, SendOnchainRequest,
+    LightningContext, LightningRpcError, OpenChannelRequest, PayInvoiceResponse, PaymentAction,
+    RouteHtlcStream, SendOnchainRequest,
 };
 <span class="kw">use </span>fedimint_ln_client::pay::PaymentData;
 <span class="kw">use </span>fedimint_ln_common::config::LightningClientConfig;
@@ -4282,7 +4269,6 @@
                 lnd_tls_cert,
                 lnd_macaroon,
                 <span class="prelude-val">None</span>,
-                Arc::new(<span class="self">self</span>.clone()),
             )),
             LightningMode::Ldk {
                 esplora_server_url,
@@ -4571,18 +4557,6 @@
     </span><span class="kw">fn </span>is_running_lnv1(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="self">self</span>.lightning_module_mode == LightningModuleMode::LNv1
             || <span class="self">self</span>.lightning_module_mode == LightningModuleMode::All
-    }
-}
-
-<span class="attr">#[async_trait]
-</span><span class="kw">impl </span>LightningV2Manager <span class="kw">for </span>Gateway {
-    <span class="kw">async fn </span>contains_incoming_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_image: PaymentImage) -&gt; bool {
-        <span class="self">self</span>.gateway_db
-            .begin_transaction_nc()
-            .<span class="kw">await
-            </span>.load_registered_incoming_contract(payment_image)
-            .<span class="kw">await
-            </span>.is_some()
     }
 }
 
