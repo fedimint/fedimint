@@ -2972,7 +2972,6 @@ dependencies = [
  "fedimint-bitcoind",
  "fedimint-core",
  "fedimint-ln-common",
- "fedimint-lnv2-common",
  "fedimint-tonic-lnd",
  "futures",
  "hex",

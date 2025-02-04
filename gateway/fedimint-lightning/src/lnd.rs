@@ -1,4 +1,3 @@
-use std::collections::BTreeSet;
 use std::fmt::{self, Display};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -6,16 +5,15 @@ use std::time::Duration;
 
 use anyhow::ensure;
 use async_trait::async_trait;
-use bitcoin::hashes::{sha256, Hash};
+use bitcoin::hashes::Hash;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::{RouteHint, RouteHintHop};
 use fedimint_ln_common::PrunedInvoice;
-use fedimint_lnv2_common::contracts::PaymentImage;
 use hex::ToHex;
 use secp256k1::PublicKey;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic_lnd::invoicesrpc::lookup_invoice_msg::InvoiceRef;
 use tonic_lnd::invoicesrpc::{
@@ -49,7 +47,7 @@ use crate::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
     GetRouteHintsResponse, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
-    LightningV2Manager, OpenChannelResponse, PayInvoiceResponse, PaymentAction, SendOnchainRequest,
+    OpenChannelResponse, PayInvoiceResponse, PaymentAction, SendOnchainRequest,
     SendOnchainResponse,
 };
 
@@ -64,8 +62,6 @@ pub struct GatewayLndClient {
     tls_cert: String,
     macaroon: String,
     lnd_sender: Option<mpsc::Sender<ForwardHtlcInterceptResponse>>,
-    payment_hashes: Arc<RwLock<BTreeSet<Vec<u8>>>>,
-    lnv2_manager: Arc<dyn LightningV2Manager>,
 }
 
 impl GatewayLndClient {
@@ -74,7 +70,6 @@ impl GatewayLndClient {
         tls_cert: String,
         macaroon: String,
         lnd_sender: Option<mpsc::Sender<ForwardHtlcInterceptResponse>>,
-        lnv2_manager: Arc<dyn LightningV2Manager>,
     ) -> Self {
         info!(
             "Gateway configured to connect to LND LnRpcClient at \n address: {},\n tls cert path: {},\n macaroon path: {} ",
@@ -85,8 +80,6 @@ impl GatewayLndClient {
             tls_cert,
             macaroon,
             lnd_sender,
-            lnv2_manager,
-            payment_hashes: Arc::new(RwLock::new(BTreeSet::new())),
         }
     }
 
@@ -202,10 +195,6 @@ impl GatewayLndClient {
             }
         });
 
-        // Invoice monitor task has already spawned, we can safely remove it from the
-        // set
-        self.payment_hashes.write().await.remove(&payment_hash);
-
         Ok(())
     }
 
@@ -285,36 +274,13 @@ impl GatewayLndClient {
                 // the HOLD invoice.
                 let payment_hash = invoice.r_hash.clone();
 
-                let created_payment_hash = self_copy
-                    .payment_hashes
-                    .read()
-                    .await
-                    .contains(&payment_hash);
-
-                let db_contains_payment_hash = self_copy
-                    .lnv2_manager
-                    .contains_incoming_contract(PaymentImage::Hash(sha256::Hash::from_byte_array(
-                        payment_hash
-                            .clone()
-                            .try_into()
-                            .expect("Malformatted payment hash"),
-                    )))
-                    .await;
-
-                let contains_payment_hash = created_payment_hash || db_contains_payment_hash;
-
                 debug!(
                     ?invoice,
-                    ?created_payment_hash,
-                    ?db_contains_payment_hash,
                     "LND Invoice Update {}",
                     PrettyPaymentHash(&payment_hash),
                 );
 
-                if contains_payment_hash
-                    && invoice.r_preimage.is_empty()
-                    && invoice.state() == InvoiceState::Open
-                {
+                if invoice.r_preimage.is_empty() && invoice.state() == InvoiceState::Open {
                     info!(
                         "Monitoring new LNv2 invoice with {}",
                         PrettyPaymentHash(&payment_hash)
@@ -949,8 +915,6 @@ impl ILnRpcClient for GatewayLndClient {
             tls_cert: self.tls_cert.clone(),
             macaroon: self.macaroon.clone(),
             lnd_sender: Some(lnd_sender.clone()),
-            lnv2_manager: self.lnv2_manager.clone(),
-            payment_hashes: self.payment_hashes.clone(),
         });
         Ok((Box::pin(ReceiverStream::new(gateway_receiver)), new_client))
     }
@@ -1070,8 +1034,6 @@ impl ILnRpcClient for GatewayLndClient {
                     ..Default::default()
                 },
             };
-
-            self.payment_hashes.write().await.insert(payment_hash);
 
             let hold_invoice_response = client
                 .invoices()
