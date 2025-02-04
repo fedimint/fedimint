@@ -807,7 +807,7 @@
     <span class="kw">pub </span>pubkey: secp256k1::PublicKey,
 }
 
-<span class="comment">// Trait that specifies how to interact with the gateway's lightning node.
+<span class="comment">// TODO: Move into `fedimint-gateway-v2` crate
 </span><span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>LightningV2Manager: Debug + Send + Sync {
     <span class="kw">async fn </span>contains_incoming_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_image: PaymentImage) -&gt; bool;

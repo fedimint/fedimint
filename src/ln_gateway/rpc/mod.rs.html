@@ -260,7 +260,21 @@
 <a href="#259" id="259">259</a>
 <a href="#260" id="260">260</a>
 <a href="#261" id="261">261</a>
-<a href="#262" id="262">262</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
 <span class="kw">pub mod </span>rpc_server;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -270,8 +284,9 @@
 <span class="kw">use </span>bitcoin::{Address, Network};
 <span class="kw">use </span>fedimint_core::config::{FederationId, JsonClientConfig};
 <span class="kw">use </span>fedimint_core::core::OperationId;
+<span class="kw">use </span>fedimint_core::util::{get_average, get_median};
 <span class="kw">use </span>fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
-<span class="kw">use </span>fedimint_eventlog::{EventKind, EventLogId, PersistedLogEntry};
+<span class="kw">use </span>fedimint_eventlog::{EventKind, EventLogId, PersistedLogEntry, StructuredPaymentEvents};
 <span class="kw">use </span>fedimint_mint_client::OOBNotes;
 <span class="kw">use </span>fedimint_wallet_client::PegOutFees;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
@@ -515,6 +530,19 @@
     <span class="kw">pub </span>total_fees: Amount,
     <span class="kw">pub </span>total_success: usize,
     <span class="kw">pub </span>total_failure: usize,
+}
+
+<span class="kw">impl </span>PaymentStats {
+    <span class="doccomment">/// Computes the payment statistics for the given structured payment events.
+    </span><span class="kw">pub fn </span>compute(events: <span class="kw-2">&amp;</span>StructuredPaymentEvents) -&gt; <span class="self">Self </span>{
+        PaymentStats {
+            average_latency: get_average(<span class="kw-2">&amp;</span>events.latencies).map(Duration::from_micros),
+            median_latency: get_median(<span class="kw-2">&amp;</span>events.latencies).map(Duration::from_micros),
+            total_fees: Amount::from_msats(events.fees.iter().map(|a| a.msats).sum()),
+            total_success: events.latencies.len(),
+            total_failure: events.latencies_failure.len(),
+        }
+    }
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]

@@ -248,18 +248,22 @@
 <a href="#247" id="247">247</a>
 <a href="#248" id="248">248</a>
 <a href="#249" id="249">249</a>
-<a href="#250" id="250">250</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::SystemTime;
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::SystemTime;
 
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::Amount;
-<span class="kw">use </span>fedimint_eventlog::{Event, EventKind, PersistedLogEntry};
+<span class="kw">use </span>fedimint_eventlog::{
+    filter_events_by_kind, join_events, Event, EventKind, PersistedLogEntry,
+    StructuredPaymentEvents,
+};
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{Commitment, OutgoingContract, PaymentImage};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_millis;
 
 <span class="kw">use </span><span class="kw">super</span>::send_sm::Cancelled;
-<span class="kw">use </span><span class="kw">crate</span>::events::{filter_events, join_events, StructuredPaymentEvents};
 
 <span class="doccomment">/// Event that is emitted when an outgoing payment attempt is initiated.
 </span><span class="attr">#[derive(Serialize, Deserialize, Debug)]
@@ -394,22 +398,22 @@
 </span><span class="kw">pub fn </span>compute_lnv2_stats(
     all_events: <span class="kw-2">&amp;</span>[PersistedLogEntry],
 ) -&gt; (StructuredPaymentEvents, StructuredPaymentEvents) {
-    <span class="kw">let </span>outgoing_start_events = filter_events(
+    <span class="kw">let </span>outgoing_start_events = filter_events_by_kind(
         all_events,
+        fedimint_lnv2_common::KIND,
         OutgoingPaymentStarted::KIND,
-        fedimint_lnv2_common::KIND,
     )
     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-    <span class="kw">let </span>outgoing_success_events = filter_events(
+    <span class="kw">let </span>outgoing_success_events = filter_events_by_kind(
         all_events,
+        fedimint_lnv2_common::KIND,
         OutgoingPaymentSucceeded::KIND,
-        fedimint_lnv2_common::KIND,
     )
     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-    <span class="kw">let </span>outgoing_failure_events = filter_events(
+    <span class="kw">let </span>outgoing_failure_events = filter_events_by_kind(
         all_events,
-        OutgoingPaymentFailed::KIND,
         fedimint_lnv2_common::KIND,
+        OutgoingPaymentFailed::KIND,
     )
     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
@@ -443,22 +447,22 @@
     )
     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-    <span class="kw">let </span>incoming_start_events = filter_events(
+    <span class="kw">let </span>incoming_start_events = filter_events_by_kind(
         all_events,
+        fedimint_lnv2_common::KIND,
         IncomingPaymentStarted::KIND,
-        fedimint_lnv2_common::KIND,
     )
     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-    <span class="kw">let </span>incoming_success_events = filter_events(
+    <span class="kw">let </span>incoming_success_events = filter_events_by_kind(
         all_events,
+        fedimint_lnv2_common::KIND,
         IncomingPaymentSucceeded::KIND,
-        fedimint_lnv2_common::KIND,
     )
     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-    <span class="kw">let </span>incoming_failure_events = filter_events(
+    <span class="kw">let </span>incoming_failure_events = filter_events_by_kind(
         all_events,
-        IncomingPaymentFailed::KIND,
         fedimint_lnv2_common::KIND,
+        IncomingPaymentFailed::KIND,
     )
     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 

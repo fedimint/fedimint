@@ -156,13 +156,13 @@
 <span class="kw">use </span>fedimint_core::config::{FederationId, FederationIdPrefix};
 <span class="kw">use </span>fedimint_core::envs::is_env_var_set;
 <span class="kw">use </span>fedimint_core::fmt_utils::OptStacktrace;
+<span class="kw">use </span>fedimint_gw_client::pay::OutgoingPaymentError;
 <span class="kw">use </span>fedimint_lightning::LightningRpcError;
 <span class="kw">use </span>reqwest::StatusCode;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::error;
 
 <span class="kw">use </span><span class="kw">crate</span>::envs::FM_DEBUG_GATEWAY_ENV;
-<span class="kw">use </span><span class="kw">crate</span>::state_machine::pay::OutgoingPaymentError;
 
 <span class="doccomment">/// Errors that unauthenticated endpoints can encounter. For privacy reasons,
 /// the error messages are intended to be redacted before returning to the

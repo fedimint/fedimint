@@ -2218,7 +2218,146 @@
 <a href="#2217" id="2217">2217</a>
 <a href="#2218" id="2218">2218</a>
 <a href="#2219" id="2219">2219</a>
-<a href="#2220" id="2220">2220</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2220" id="2220">2220</a>
+<a href="#2221" id="2221">2221</a>
+<a href="#2222" id="2222">2222</a>
+<a href="#2223" id="2223">2223</a>
+<a href="#2224" id="2224">2224</a>
+<a href="#2225" id="2225">2225</a>
+<a href="#2226" id="2226">2226</a>
+<a href="#2227" id="2227">2227</a>
+<a href="#2228" id="2228">2228</a>
+<a href="#2229" id="2229">2229</a>
+<a href="#2230" id="2230">2230</a>
+<a href="#2231" id="2231">2231</a>
+<a href="#2232" id="2232">2232</a>
+<a href="#2233" id="2233">2233</a>
+<a href="#2234" id="2234">2234</a>
+<a href="#2235" id="2235">2235</a>
+<a href="#2236" id="2236">2236</a>
+<a href="#2237" id="2237">2237</a>
+<a href="#2238" id="2238">2238</a>
+<a href="#2239" id="2239">2239</a>
+<a href="#2240" id="2240">2240</a>
+<a href="#2241" id="2241">2241</a>
+<a href="#2242" id="2242">2242</a>
+<a href="#2243" id="2243">2243</a>
+<a href="#2244" id="2244">2244</a>
+<a href="#2245" id="2245">2245</a>
+<a href="#2246" id="2246">2246</a>
+<a href="#2247" id="2247">2247</a>
+<a href="#2248" id="2248">2248</a>
+<a href="#2249" id="2249">2249</a>
+<a href="#2250" id="2250">2250</a>
+<a href="#2251" id="2251">2251</a>
+<a href="#2252" id="2252">2252</a>
+<a href="#2253" id="2253">2253</a>
+<a href="#2254" id="2254">2254</a>
+<a href="#2255" id="2255">2255</a>
+<a href="#2256" id="2256">2256</a>
+<a href="#2257" id="2257">2257</a>
+<a href="#2258" id="2258">2258</a>
+<a href="#2259" id="2259">2259</a>
+<a href="#2260" id="2260">2260</a>
+<a href="#2261" id="2261">2261</a>
+<a href="#2262" id="2262">2262</a>
+<a href="#2263" id="2263">2263</a>
+<a href="#2264" id="2264">2264</a>
+<a href="#2265" id="2265">2265</a>
+<a href="#2266" id="2266">2266</a>
+<a href="#2267" id="2267">2267</a>
+<a href="#2268" id="2268">2268</a>
+<a href="#2269" id="2269">2269</a>
+<a href="#2270" id="2270">2270</a>
+<a href="#2271" id="2271">2271</a>
+<a href="#2272" id="2272">2272</a>
+<a href="#2273" id="2273">2273</a>
+<a href="#2274" id="2274">2274</a>
+<a href="#2275" id="2275">2275</a>
+<a href="#2276" id="2276">2276</a>
+<a href="#2277" id="2277">2277</a>
+<a href="#2278" id="2278">2278</a>
+<a href="#2279" id="2279">2279</a>
+<a href="#2280" id="2280">2280</a>
+<a href="#2281" id="2281">2281</a>
+<a href="#2282" id="2282">2282</a>
+<a href="#2283" id="2283">2283</a>
+<a href="#2284" id="2284">2284</a>
+<a href="#2285" id="2285">2285</a>
+<a href="#2286" id="2286">2286</a>
+<a href="#2287" id="2287">2287</a>
+<a href="#2288" id="2288">2288</a>
+<a href="#2289" id="2289">2289</a>
+<a href="#2290" id="2290">2290</a>
+<a href="#2291" id="2291">2291</a>
+<a href="#2292" id="2292">2292</a>
+<a href="#2293" id="2293">2293</a>
+<a href="#2294" id="2294">2294</a>
+<a href="#2295" id="2295">2295</a>
+<a href="#2296" id="2296">2296</a>
+<a href="#2297" id="2297">2297</a>
+<a href="#2298" id="2298">2298</a>
+<a href="#2299" id="2299">2299</a>
+<a href="#2300" id="2300">2300</a>
+<a href="#2301" id="2301">2301</a>
+<a href="#2302" id="2302">2302</a>
+<a href="#2303" id="2303">2303</a>
+<a href="#2304" id="2304">2304</a>
+<a href="#2305" id="2305">2305</a>
+<a href="#2306" id="2306">2306</a>
+<a href="#2307" id="2307">2307</a>
+<a href="#2308" id="2308">2308</a>
+<a href="#2309" id="2309">2309</a>
+<a href="#2310" id="2310">2310</a>
+<a href="#2311" id="2311">2311</a>
+<a href="#2312" id="2312">2312</a>
+<a href="#2313" id="2313">2313</a>
+<a href="#2314" id="2314">2314</a>
+<a href="#2315" id="2315">2315</a>
+<a href="#2316" id="2316">2316</a>
+<a href="#2317" id="2317">2317</a>
+<a href="#2318" id="2318">2318</a>
+<a href="#2319" id="2319">2319</a>
+<a href="#2320" id="2320">2320</a>
+<a href="#2321" id="2321">2321</a>
+<a href="#2322" id="2322">2322</a>
+<a href="#2323" id="2323">2323</a>
+<a href="#2324" id="2324">2324</a>
+<a href="#2325" id="2325">2325</a>
+<a href="#2326" id="2326">2326</a>
+<a href="#2327" id="2327">2327</a>
+<a href="#2328" id="2328">2328</a>
+<a href="#2329" id="2329">2329</a>
+<a href="#2330" id="2330">2330</a>
+<a href="#2331" id="2331">2331</a>
+<a href="#2332" id="2332">2332</a>
+<a href="#2333" id="2333">2333</a>
+<a href="#2334" id="2334">2334</a>
+<a href="#2335" id="2335">2335</a>
+<a href="#2336" id="2336">2336</a>
+<a href="#2337" id="2337">2337</a>
+<a href="#2338" id="2338">2338</a>
+<a href="#2339" id="2339">2339</a>
+<a href="#2340" id="2340">2340</a>
+<a href="#2341" id="2341">2341</a>
+<a href="#2342" id="2342">2342</a>
+<a href="#2343" id="2343">2343</a>
+<a href="#2344" id="2344">2344</a>
+<a href="#2345" id="2345">2345</a>
+<a href="#2346" id="2346">2346</a>
+<a href="#2347" id="2347">2347</a>
+<a href="#2348" id="2348">2348</a>
+<a href="#2349" id="2349">2349</a>
+<a href="#2350" id="2350">2350</a>
+<a href="#2351" id="2351">2351</a>
+<a href="#2352" id="2352">2352</a>
+<a href="#2353" id="2353">2353</a>
+<a href="#2354" id="2354">2354</a>
+<a href="#2355" id="2355">2355</a>
+<a href="#2356" id="2356">2356</a>
+<a href="#2357" id="2357">2357</a>
+<a href="#2358" id="2358">2358</a>
+<a href="#2359" id="2359">2359</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2241,7 +2380,6 @@
 <span class="kw">mod </span>federation_manager;
 <span class="kw">pub mod </span>gateway_module_v2;
 <span class="kw">pub mod </span>rpc;
-<span class="kw">pub mod </span>state_machine;
 <span class="kw">mod </span>types;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
@@ -2252,7 +2390,7 @@
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, UNIX_EPOCH};
 
-<span class="kw">use </span>anyhow::{anyhow, Context};
+<span class="kw">use </span>anyhow::{anyhow, ensure, Context};
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>bitcoin::{Address, Network, Txid};
@@ -2263,7 +2401,7 @@
 <span class="kw">use </span>db::GatewayDbtxNcExt;
 <span class="kw">use </span>envs::FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV;
 <span class="kw">use </span>error::FederationNotConnected;
-<span class="kw">use </span>events::{StructuredPaymentEvents, ALL_GATEWAY_EVENTS};
+<span class="kw">use </span>events::ALL_GATEWAY_EVENTS;
 <span class="kw">use </span>federation_manager::FederationManager;
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
 <span class="kw">use </span>fedimint_bip39::{Bip39RootSecretStrategy, Language, Mnemonic};
@@ -2287,17 +2425,22 @@
 <span class="kw">use </span>fedimint_core::{
     fedimint_build_code_version_env, get_network_for_address, Amount, BitcoinAmountOrAll,
 };
-<span class="kw">use </span>fedimint_eventlog::{DBTransactionEventLogExt, EventLogId};
+<span class="kw">use </span>fedimint_eventlog::{DBTransactionEventLogExt, EventLogId, StructuredPaymentEvents};
+<span class="kw">use </span>fedimint_gw_client::events::compute_lnv1_stats;
+<span class="kw">use </span>fedimint_gw_client::pay::{OutgoingPaymentError, OutgoingPaymentErrorType};
+<span class="kw">use </span>fedimint_gw_client::{GatewayClientModule, GatewayExtPayStates, IGatewayClientV1};
 <span class="kw">use </span>fedimint_lightning::ldk::{<span class="self">self</span>, GatewayLdkChainSourceConfig};
 <span class="kw">use </span>fedimint_lightning::lnd::GatewayLndClient;
 <span class="kw">use </span>fedimint_lightning::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
-    LightningContext, LightningRpcError, LightningV2Manager, OpenChannelRequest, PaymentAction,
-    RouteHtlcStream, SendOnchainRequest,
+    LightningContext, LightningRpcError, LightningV2Manager, OpenChannelRequest,
+    PayInvoiceResponse, PaymentAction, RouteHtlcStream, SendOnchainRequest,
 };
+<span class="kw">use </span>fedimint_ln_client::pay::PaymentData;
 <span class="kw">use </span>fedimint_ln_common::config::LightningClientConfig;
-<span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
+<span class="kw">use </span>fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
+<span class="kw">use </span>fedimint_ln_common::contracts::{IdentifiableContract, Preimage};
 <span class="kw">use </span>fedimint_ln_common::LightningCommonInit;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 <span class="kw">use </span>fedimint_lnv2_common::gateway_api::{
@@ -2313,17 +2456,15 @@
 };
 <span class="kw">use </span>futures::stream::StreamExt;
 <span class="kw">use </span>gateway_module_v2::events::compute_lnv2_stats;
-<span class="kw">use </span>lightning_invoice::Bolt11Invoice;
+<span class="kw">use </span>lightning_invoice::{Bolt11Invoice, RoutingFees};
 <span class="kw">use </span>rand::thread_rng;
 <span class="kw">use </span>rpc::{
     CreateInvoiceForOperatorPayload, DepositAddressRecheckPayload, FederationInfo,
     GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, PayInvoiceForOperatorPayload,
-    PaymentLogPayload, PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse,
-    ReceiveEcashPayload, ReceiveEcashResponse, SetFeesPayload, SpendEcashPayload,
-    SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
+    PaymentLogPayload, PaymentLogResponse, PaymentStats, PaymentSummaryPayload,
+    PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse, SetFeesPayload,
+    SpendEcashPayload, SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
 };
-<span class="kw">use </span>state_machine::events::compute_lnv1_stats;
-<span class="kw">use </span>state_machine::{GatewayClientModule, GatewayExtPayStates};
 <span class="kw">use </span>tokio::sync::RwLock;
 <span class="kw">use </span>tracing::{debug, error, info, info_span, warn};
 
@@ -3357,6 +3498,8 @@
                     GW_ANNOUNCEMENT_TTL,
                     federation_config.lightning_fee.into(),
                     lightning_context,
+                    <span class="self">self</span>.versioned_api.clone(),
+                    <span class="self">self</span>.gateway_id,
                 )
                 .<span class="kw">await</span>;
         }
@@ -3865,8 +4008,8 @@
         }
 
         <span class="prelude-val">Ok</span>(PaymentSummaryResponse {
-            outgoing: outgoing.compute_payment_stats(),
-            incoming: incoming.compute_payment_stats(),
+            outgoing: PaymentStats::compute(<span class="kw-2">&amp;</span>outgoing),
+            incoming: PaymentStats::compute(<span class="kw-2">&amp;</span>incoming),
         })
     }
 
@@ -3892,6 +4035,8 @@
                     <span class="kw">let </span>route_hints = route_hints.clone();
                     <span class="kw">let </span>lightning_context = lightning_context.clone();
                     <span class="kw">let </span>federation_config = federation_config.clone();
+                    <span class="kw">let </span>api = <span class="self">self</span>.versioned_api.clone();
+                    <span class="kw">let </span>gateway_id = <span class="self">self</span>.gateway_id;
 
                     <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = register_task_group
                         .spawn_cancellable(<span class="string">"register_federation"</span>, <span class="kw">async move </span>{
@@ -3904,6 +4049,8 @@
                                     GW_ANNOUNCEMENT_TTL,
                                     federation_config.lightning_fee.into(),
                                     lightning_context,
+                                    api,
+                                    gateway_id,
                                 )
                                 .<span class="kw">await</span>;
                         })
@@ -4437,5 +4584,136 @@
             .<span class="kw">await
             </span>.is_some()
     }
+}
+
+<span class="attr">#[async_trait]
+</span><span class="kw">impl </span>IGatewayClientV1 <span class="kw">for </span>Gateway {
+    <span class="kw">async fn </span>verify_preimage_authentication(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        payment_hash: sha256::Hash,
+        preimage_auth: sha256::Hash,
+        contract: OutgoingContractAccount,
+    ) -&gt; std::result::Result&lt;(), OutgoingPaymentError&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(secret_hash) = dbtx.load_preimage_authentication(payment_hash).<span class="kw">await </span>{
+            <span class="kw">if </span>secret_hash != preimage_auth {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingPaymentError {
+                    error_type: OutgoingPaymentErrorType::InvalidInvoicePreimage,
+                    contract_id: contract.contract.contract_id(),
+                    contract: <span class="prelude-val">Some</span>(contract),
+                });
+            }
+        } <span class="kw">else </span>{
+            <span class="comment">// Committing the `preimage_auth` to the database can fail if two users try to
+            // pay the same invoice at the same time.
+            </span>dbtx.save_new_preimage_authentication(payment_hash, preimage_auth)
+                .<span class="kw">await</span>;
+            <span class="kw">return </span>dbtx
+                .commit_tx_result()
+                .<span class="kw">await
+                </span>.map_err(|<span class="kw">_</span>| OutgoingPaymentError {
+                    error_type: OutgoingPaymentErrorType::InvoiceAlreadyPaid,
+                    contract_id: contract.contract.contract_id(),
+                    contract: <span class="prelude-val">Some</span>(contract),
+                });
+        }
+
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">async fn </span>verify_pruned_invoice(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_data: PaymentData) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>lightning_context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">if </span><span class="macro">matches!</span>(payment_data, PaymentData::PrunedInvoice { .. }) {
+            <span class="macro">ensure!</span>(
+                lightning_context.lnrpc.supports_private_payments(),
+                <span class="string">"Private payments are not supported by the lightning node"
+            </span>);
+        }
+
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">async fn </span>get_routing_fees(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId) -&gt; <span class="prelude-ty">Option</span>&lt;RoutingFees&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>gateway_dbtx = <span class="self">self</span>.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
+        gateway_dbtx
+            .load_federation_config(federation_id)
+            .<span class="kw">await
+            </span>.map(|c| c.lightning_fee.into())
+    }
+
+    <span class="kw">async fn </span>get_client(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: <span class="kw-2">&amp;</span>FederationId) -&gt; <span class="prelude-ty">Option</span>&lt;Spanned&lt;ClientHandleArc&gt;&gt; {
+        <span class="self">self</span>.federation_manager
+            .read()
+            .<span class="kw">await
+            </span>.client(federation_id)
+            .cloned()
+    }
+
+    <span class="kw">async fn </span>get_client_for_invoice(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        payment_data: PaymentData,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;Spanned&lt;ClientHandleArc&gt;&gt; {
+        <span class="kw">let </span>rhints = payment_data.route_hints();
+        <span class="kw">match </span>rhints.first().and_then(|rh| rh.<span class="number">0</span>.last()) {
+            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
+            <span class="prelude-val">Some</span>(hop) =&gt; <span class="kw">match </span><span class="self">self</span>.get_lightning_context().<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>(lightning_context) =&gt; {
+                    <span class="kw">if </span>hop.src_node_id != lightning_context.lightning_public_key {
+                        <span class="kw">return </span><span class="prelude-val">None</span>;
+                    }
+
+                    <span class="self">self</span>.federation_manager
+                        .read()
+                        .<span class="kw">await
+                        </span>.get_client_for_index(hop.short_channel_id)
+                }
+                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
+            },
+        }
+    }
+
+    <span class="kw">async fn </span>pay(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        payment_data: PaymentData,
+        max_delay: u64,
+        max_fee: Amount,
+    ) -&gt; std::result::Result&lt;PayInvoiceResponse, LightningRpcError&gt; {
+        <span class="kw">let </span>lightning_context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">match </span>payment_data {
+            PaymentData::Invoice(invoice) =&gt; {
+                lightning_context
+                    .lnrpc
+                    .pay(invoice, max_delay, max_fee)
+                    .<span class="kw">await
+            </span>}
+            PaymentData::PrunedInvoice(invoice) =&gt; {
+                lightning_context
+                    .lnrpc
+                    .pay_private(invoice, max_delay, max_fee)
+                    .<span class="kw">await
+            </span>}
+        }
+    }
+
+    <span class="kw">async fn </span>complete_htlc(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        htlc: InterceptPaymentResponse,
+    ) -&gt; std::result::Result&lt;(), LightningRpcError&gt; {
+        <span class="comment">// Wait until the lightning node is online to complete the HTLC.
+        </span><span class="kw">let </span>lightning_context = <span class="kw">loop </span>{
+            <span class="kw">match </span><span class="self">self</span>.get_lightning_context().<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>(lightning_context) =&gt; <span class="kw">break </span>lightning_context,
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    <span class="macro">warn!</span>(<span class="string">"Trying to complete HTLC but got {e}, will keep retrying..."</span>);
+                    sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
+                    <span class="kw">continue</span>;
+                }
+            }
+        };
+
+        lightning_context.lnrpc.complete_htlc(htlc).<span class="kw">await
+    </span>}
 }
 </code></pre></div></section></main></body></html>

@@ -235,11 +235,11 @@
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_gw_client::GatewayClientInit;
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{FederationConfig, GatewayDbExt};
 <span class="kw">use </span><span class="kw">crate</span>::error::AdminGatewayError;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::GatewayClientInitV2;
-<span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayClientInit;
 <span class="kw">use crate</span>::{AdminResult, Gateway};
 
 <span class="attr">#[derive(Debug, Clone)]
@@ -294,7 +294,7 @@
         <span class="kw">if </span>gateway.is_running_lnv1() {
             registry.attach(GatewayClientInit {
                 federation_index,
-                gateway: gateway.clone(),
+                lightning_manager: gateway.clone(),
             });
         }
 
