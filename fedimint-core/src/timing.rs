@@ -92,7 +92,7 @@ impl TimeReporter {
         Self {
             inner: Some(TimeReporterInner {
                 name: name.into(),
-                level: Level::DEBUG,
+                level: Level::TRACE,
                 start: crate::time::now(),
                 threshold: None,
             }),
