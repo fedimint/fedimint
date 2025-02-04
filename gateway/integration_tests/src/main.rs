@@ -16,7 +16,6 @@ use devimint::version_constants::{
 };
 use devimint::{cmd, util, Gatewayd, LightningNode};
 use fedimint_core::config::FederationId;
-use fedimint_core::envs::{is_env_var_set, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV};
 use fedimint_core::util::backoff_util::aggressive_backoff_long;
 use fedimint_core::util::retry;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
@@ -42,8 +41,6 @@ enum GatewayTest {
         old_gatewayd_path: PathBuf,
         #[arg(long)]
         new_gatewayd_path: PathBuf,
-        #[arg(long = "gw-type")]
-        gateway_type: LightningNodeType,
         #[arg(long)]
         old_gateway_cli_path: PathBuf,
         #[arg(long)]
@@ -61,14 +58,12 @@ async fn main() -> anyhow::Result<()> {
         GatewayTest::GatewaydMnemonic {
             old_gatewayd_path,
             new_gatewayd_path,
-            gateway_type,
             old_gateway_cli_path,
             new_gateway_cli_path,
         } => {
             mnemonic_upgrade_test(
                 old_gatewayd_path,
                 new_gatewayd_path,
-                gateway_type,
                 old_gateway_cli_path,
                 new_gateway_cli_path,
             )
@@ -88,14 +83,14 @@ async fn backup_restore_test() -> anyhow::Result<()> {
                 return Ok(());
             }
 
-            let gw = if is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV) {
-                dev_fed.gw_lnd_registered().await?
-            } else {
+            let gw = if devimint::util::supports_lnv2() {
                 dev_fed
                     .gw_ldk_connected()
                     .await?
                     .as_ref()
                     .expect("LDK Gateway should be available")
+            } else {
+                dev_fed.gw_lnd_registered().await?
             };
 
             let fed = dev_fed.fed().await?;
@@ -109,33 +104,20 @@ async fn backup_restore_test() -> anyhow::Result<()> {
                 .ln
                 .clone()
                 .expect("Gateway is not connected to Lightning Node");
-            let new_gw_ldk = stop_and_recover_gateway(
+            let new_gw = stop_and_recover_gateway(
                 process_mgr.clone(),
                 mnemonic.clone(),
                 gw.to_owned(),
-                ln,
+                ln.clone(),
                 fed,
             )
             .await?;
 
-            // Recovery with a backup does not work properly prior to v0.3.0
-            let fedimintd_version = util::FedimintdCmd::version_or_default().await;
-            if fedimintd_version >= *VERSION_0_3_0
-                && !is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV)
-            {
-                // Recover with a backup
-                info!("Wiping gateway and recovering with a backup...");
-                info!("Creating backup...");
-                new_gw_ldk.backup_to_fed(fed).await?;
-                stop_and_recover_gateway(
-                    process_mgr,
-                    mnemonic,
-                    new_gw_ldk,
-                    LightningNode::Ldk,
-                    fed,
-                )
-                .await?;
-            }
+            // Recover with a backup
+            info!("Wiping gateway and recovering with a backup...");
+            info!("Creating backup...");
+            new_gw.backup_to_fed(fed).await?;
+            stop_and_recover_gateway(process_mgr, mnemonic, new_gw, ln, fed).await?;
 
             info!("backup_restore_test successful");
             Ok(())
@@ -212,12 +194,12 @@ async fn stop_and_recover_gateway(
 async fn mnemonic_upgrade_test(
     old_gatewayd_path: PathBuf,
     new_gatewayd_path: PathBuf,
-    gw_type: LightningNodeType,
     old_gateway_cli_path: PathBuf,
     new_gateway_cli_path: PathBuf,
 ) -> anyhow::Result<()> {
     std::env::set_var("FM_GATEWAYD_BASE_EXECUTABLE", old_gatewayd_path);
     std::env::set_var("FM_GATEWAY_CLI_BASE_EXECUTABLE", old_gateway_cli_path);
+    std::env::set_var("FM_ENABLE_MODULE_LNV2", "0");
 
     devimint::run_devfed_test(|dev_fed, process_mgr| async move {
         let gatewayd_version = util::Gatewayd::version_or_default().await;
@@ -273,9 +255,7 @@ async fn mnemonic_upgrade_test(
             .expect("Data dir is not set")
             .parse()
             .expect("Could not parse data dir");
-        let gw_fed_db = data_dir
-            .join(gw_type.to_string())
-            .join(format!("{federation_id}.db"));
+        let gw_fed_db = data_dir.join("lnd").join(format!("{federation_id}.db"));
         remove_dir_all(gw_fed_db)?;
 
         gw_lnd.connect_fed(fed).await?;
@@ -516,11 +496,9 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
 async fn liquidity_test() -> anyhow::Result<()> {
     devimint::run_devfed_test(|dev_fed, _process_mgr| async move {
         let federation = dev_fed.fed().await?;
-        let gatewayd_version = util::Gatewayd::version_or_default().await;
-        // LDK Gateway is not available when fedimintd version is < v0.5
-        let fedimintd_version = util::FedimintdCmd::version_or_default().await;
-        if gatewayd_version < *VERSION_0_5_0_ALPHA || fedimintd_version < *VERSION_0_5_0_ALPHA || is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV) {
-            info!(%gatewayd_version, "Version did not support gateway liquidity management, skipping");
+
+        if !devimint::util::supports_lnv2() {
+            info!("LNv2 is not supported, which is necessary for LDK GW and liquidity test");
             return Ok(());
         }
 

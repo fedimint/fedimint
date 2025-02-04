@@ -462,6 +462,8 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                 fedimintd_version
             );
 
+            info!(?paths, "JUMOELL printing paths");
+
             let mut dev_fed = dev_fed(process_mgr).await?;
             let client = dev_fed.fed.new_joined_client("test-client").await?;
             try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
@@ -2106,6 +2108,8 @@ pub enum TestCmd {
     UpgradeTests {
         #[clap(subcommand)]
         binary: UpgradeTest,
+        #[arg(long)]
+        lnv2: String,
     },
 }
 
@@ -2196,7 +2200,8 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
             let dev_fed = dev_fed(&process_mgr).await?;
             cannot_replay_tx_test(dev_fed).await?;
         }
-        TestCmd::UpgradeTests { binary } => {
+        TestCmd::UpgradeTests { binary, lnv2 } => {
+            std::env::set_var("FM_ENABLE_MODULE_LNV2", lnv2);
             let (process_mgr, _) = setup(common_args).await?;
             Box::pin(upgrade_tests(&process_mgr, binary)).await?;
         }

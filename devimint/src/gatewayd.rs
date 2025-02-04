@@ -6,7 +6,6 @@ use std::str::FromStr;
 use anyhow::{anyhow, Context, Result};
 use esplora_client::Txid;
 use fedimint_core::config::FederationId;
-use fedimint_core::envs::{is_env_var_set, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{Amount, BitcoinAmountOrAll};
@@ -22,7 +21,7 @@ use crate::cmd;
 use crate::envs::{FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV};
 use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
-use crate::util::{poll, Command, ProcessHandle, ProcessManager};
+use crate::util::{poll, supports_lnv2, Command, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
 use crate::version_constants::{VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA, VERSION_0_6_0_ALPHA};
 
@@ -62,12 +61,8 @@ impl Gatewayd {
             ),
             (FM_GATEWAY_API_ADDR_ENV.to_owned(), addr.clone()),
         ]);
-        // TODO(support:v0.4.0): Run the gateway in LNv1 mode only before v0.5.0 because
-        // that is the only module it supported.
-        let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
-        if fedimintd_version < *VERSION_0_5_0_ALPHA
-            || is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV)
-        {
+        if !supports_lnv2() {
+            tracing::info!("LNv2 is not supported, running gatewayd in LNv1 mode");
             gateway_env.insert(
                 FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV.to_owned(),
                 "LNv1".to_string(),
@@ -139,6 +134,11 @@ impl Gatewayd {
         self.process.terminate().await?;
         std::env::set_var("FM_GATEWAYD_BASE_EXECUTABLE", gatewayd_path);
         std::env::set_var("FM_GATEWAY_CLI_BASE_EXECUTABLE", gateway_cli_path);
+
+        if supports_lnv2() {
+            tracing::info!("LNv2 is now supported, running in All mode");
+            std::env::set_var(FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV, "All");
+        }
 
         let new_ln = ln;
         let new_gw = Self::new(process_mgr, new_ln.clone()).await?;

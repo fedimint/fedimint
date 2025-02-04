@@ -14,7 +14,7 @@ use fedimint_core::admin_client::{
     ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams, ServerStatus,
 };
 use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
-use fedimint_core::envs::is_env_var_set;
+use fedimint_core::envs::{is_env_var_set, FM_ENABLE_MODULE_LNV2_ENV};
 use fedimint_core::module::ApiAuth;
 use fedimint_core::task::{self, block_in_place, block_on};
 use fedimint_core::time::now;
@@ -1176,6 +1176,10 @@ fn to_command(cli: Vec<String>) -> Command {
         cmd,
         args_debug: cli,
     }
+}
+
+pub fn supports_lnv2() -> bool {
+    is_env_var_set(FM_ENABLE_MODULE_LNV2_ENV)
 }
 
 /// Returns true if running backwards-compatibility tests

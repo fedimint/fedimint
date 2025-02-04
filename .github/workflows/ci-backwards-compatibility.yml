@@ -55,8 +55,6 @@ jobs:
             VERSIONS_TO_TEST="v0.5.0"
           fi
 
-          export FM_DEVIMINT_DISABLE_MODULE_LNV2=1
-
           # the default tmp dir is too long (/home/ubuntu/actions-runner/_work/_temp/)
           # we need to use `nix develop -c` to be able to use `nix build` inside of backwards-compatibility-test
           # Disable `sccache`, it seems incompatible with self-hosted runner sandbox for some reason, and
