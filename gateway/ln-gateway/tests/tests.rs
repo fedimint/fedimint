@@ -23,6 +23,12 @@ use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::Event;
+use fedimint_gw_client::pay::{
+    OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
+};
+use fedimint_gw_client::{
+    GatewayClientModule, GatewayExtPayStates, GatewayExtReceiveStates, GatewayMeta, Htlc,
+};
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_client::{
@@ -56,12 +62,6 @@ use ln_gateway::gateway_module_v2::events::{
 };
 use ln_gateway::gateway_module_v2::{FinalReceiveState, GatewayClientModuleV2};
 use ln_gateway::rpc::{PaymentLogPayload, SetFeesPayload};
-use ln_gateway::state_machine::pay::{
-    OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
-};
-use ln_gateway::state_machine::{
-    GatewayClientModule, GatewayExtPayStates, GatewayExtReceiveStates, GatewayMeta, Htlc,
-};
 use ln_gateway::Gateway;
 use secp256k1::{Keypair, PublicKey};
 use tpe::G1Affine;

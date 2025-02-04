@@ -1,11 +1,9 @@
 use std::fmt;
-use std::time::Duration;
 
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::task::sleep;
 use fedimint_lightning::{InterceptPaymentResponse, PaymentAction};
 use fedimint_ln_client::incoming::IncomingSmStates;
 use fedimint_ln_common::contracts::Preimage;
@@ -246,18 +244,6 @@ impl CompleteHtlcState {
         common: GatewayCompleteCommon,
         htlc_outcome: HtlcOutcome,
     ) -> Result<(), CompleteHtlcError> {
-        // Wait until the lightning node is online to complete the HTLC.
-        let lightning_context = loop {
-            match context.gateway.get_lightning_context().await {
-                Ok(lightning_context) => break lightning_context,
-                Err(e) => {
-                    warn!("Trying to complete HTLC but got {e}, will keep retrying...");
-                    sleep(Duration::from_secs(5)).await;
-                    continue;
-                }
-            }
-        };
-
         let htlc = InterceptPaymentResponse {
             action: match htlc_outcome {
                 HtlcOutcome::Success(preimage) => PaymentAction::Settle(preimage),
@@ -268,8 +254,8 @@ impl CompleteHtlcState {
             htlc_id: common.htlc_id,
         };
 
-        lightning_context
-            .lnrpc
+        context
+            .lightning_manager
             .complete_htlc(htlc)
             .await
             .map_err(|_| CompleteHtlcError::FailedToCompleteHtlc)

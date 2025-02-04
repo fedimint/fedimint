@@ -21,7 +21,6 @@ mod events;
 mod federation_manager;
 pub mod gateway_module_v2;
 pub mod rpc;
-pub mod state_machine;
 mod types;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -32,7 +31,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, ensure, Context};
 use async_trait::async_trait;
 use bitcoin::hashes::sha256;
 use bitcoin::{Address, Network, Txid};
@@ -43,7 +42,7 @@ use config::{GatewayOpts, LightningMode};
 use db::GatewayDbtxNcExt;
 use envs::FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV;
 use error::FederationNotConnected;
-use events::{StructuredPaymentEvents, ALL_GATEWAY_EVENTS};
+use events::ALL_GATEWAY_EVENTS;
 use federation_manager::FederationManager;
 use fedimint_api_client::api::net::Connector;
 use fedimint_bip39::{Bip39RootSecretStrategy, Language, Mnemonic};
@@ -67,17 +66,22 @@ use fedimint_core::util::{SafeUrl, Spanned};
 use fedimint_core::{
     fedimint_build_code_version_env, get_network_for_address, Amount, BitcoinAmountOrAll,
 };
-use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId};
+use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId, StructuredPaymentEvents};
+use fedimint_gw_client::events::compute_lnv1_stats;
+use fedimint_gw_client::pay::{OutgoingPaymentError, OutgoingPaymentErrorType};
+use fedimint_gw_client::{GatewayClientModule, GatewayExtPayStates, IGatewayClientV1};
 use fedimint_lightning::ldk::{self, GatewayLdkChainSourceConfig};
 use fedimint_lightning::lnd::GatewayLndClient;
 use fedimint_lightning::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
-    LightningContext, LightningRpcError, LightningV2Manager, OpenChannelRequest, PaymentAction,
-    RouteHtlcStream, SendOnchainRequest,
+    LightningContext, LightningRpcError, LightningV2Manager, OpenChannelRequest,
+    PayInvoiceResponse, PaymentAction, RouteHtlcStream, SendOnchainRequest,
 };
+use fedimint_ln_client::pay::PaymentData;
 use fedimint_ln_common::config::LightningClientConfig;
-use fedimint_ln_common::contracts::Preimage;
+use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
+use fedimint_ln_common::contracts::{IdentifiableContract, Preimage};
 use fedimint_ln_common::LightningCommonInit;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{
@@ -93,17 +97,15 @@ use fedimint_wallet_client::{
 };
 use futures::stream::StreamExt;
 use gateway_module_v2::events::compute_lnv2_stats;
-use lightning_invoice::Bolt11Invoice;
+use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::thread_rng;
 use rpc::{
     CreateInvoiceForOperatorPayload, DepositAddressRecheckPayload, FederationInfo,
     GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, PayInvoiceForOperatorPayload,
-    PaymentLogPayload, PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse,
-    ReceiveEcashPayload, ReceiveEcashResponse, SetFeesPayload, SpendEcashPayload,
-    SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
+    PaymentLogPayload, PaymentLogResponse, PaymentStats, PaymentSummaryPayload,
+    PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse, SetFeesPayload,
+    SpendEcashPayload, SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
 };
-use state_machine::events::compute_lnv1_stats;
-use state_machine::{GatewayClientModule, GatewayExtPayStates};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, info_span, warn};
 
@@ -1137,6 +1139,8 @@ impl Gateway {
                     GW_ANNOUNCEMENT_TTL,
                     federation_config.lightning_fee.into(),
                     lightning_context,
+                    self.versioned_api.clone(),
+                    self.gateway_id,
                 )
                 .await;
         }
@@ -1645,8 +1649,8 @@ impl Gateway {
         }
 
         Ok(PaymentSummaryResponse {
-            outgoing: outgoing.compute_payment_stats(),
-            incoming: incoming.compute_payment_stats(),
+            outgoing: PaymentStats::compute(&outgoing),
+            incoming: PaymentStats::compute(&incoming),
         })
     }
 
@@ -1672,6 +1676,8 @@ impl Gateway {
                     let route_hints = route_hints.clone();
                     let lightning_context = lightning_context.clone();
                     let federation_config = federation_config.clone();
+                    let api = self.versioned_api.clone();
+                    let gateway_id = self.gateway_id;
 
                     if let Err(e) = register_task_group
                         .spawn_cancellable("register_federation", async move {
@@ -1684,6 +1690,8 @@ impl Gateway {
                                     GW_ANNOUNCEMENT_TTL,
                                     federation_config.lightning_fee.into(),
                                     lightning_context,
+                                    api,
+                                    gateway_id,
                                 )
                                 .await;
                         })
@@ -2216,5 +2224,136 @@ impl LightningV2Manager for Gateway {
             .load_registered_incoming_contract(payment_image)
             .await
             .is_some()
+    }
+}
+
+#[async_trait]
+impl IGatewayClientV1 for Gateway {
+    async fn verify_preimage_authentication(
+        &self,
+        payment_hash: sha256::Hash,
+        preimage_auth: sha256::Hash,
+        contract: OutgoingContractAccount,
+    ) -> std::result::Result<(), OutgoingPaymentError> {
+        let mut dbtx = self.gateway_db.begin_transaction().await;
+        if let Some(secret_hash) = dbtx.load_preimage_authentication(payment_hash).await {
+            if secret_hash != preimage_auth {
+                return Err(OutgoingPaymentError {
+                    error_type: OutgoingPaymentErrorType::InvalidInvoicePreimage,
+                    contract_id: contract.contract.contract_id(),
+                    contract: Some(contract),
+                });
+            }
+        } else {
+            // Committing the `preimage_auth` to the database can fail if two users try to
+            // pay the same invoice at the same time.
+            dbtx.save_new_preimage_authentication(payment_hash, preimage_auth)
+                .await;
+            return dbtx
+                .commit_tx_result()
+                .await
+                .map_err(|_| OutgoingPaymentError {
+                    error_type: OutgoingPaymentErrorType::InvoiceAlreadyPaid,
+                    contract_id: contract.contract.contract_id(),
+                    contract: Some(contract),
+                });
+        }
+
+        Ok(())
+    }
+
+    async fn verify_pruned_invoice(&self, payment_data: PaymentData) -> anyhow::Result<()> {
+        let lightning_context = self.get_lightning_context().await?;
+
+        if matches!(payment_data, PaymentData::PrunedInvoice { .. }) {
+            ensure!(
+                lightning_context.lnrpc.supports_private_payments(),
+                "Private payments are not supported by the lightning node"
+            );
+        }
+
+        Ok(())
+    }
+
+    async fn get_routing_fees(&self, federation_id: FederationId) -> Option<RoutingFees> {
+        let mut gateway_dbtx = self.gateway_db.begin_transaction_nc().await;
+        gateway_dbtx
+            .load_federation_config(federation_id)
+            .await
+            .map(|c| c.lightning_fee.into())
+    }
+
+    async fn get_client(&self, federation_id: &FederationId) -> Option<Spanned<ClientHandleArc>> {
+        self.federation_manager
+            .read()
+            .await
+            .client(federation_id)
+            .cloned()
+    }
+
+    async fn get_client_for_invoice(
+        &self,
+        payment_data: PaymentData,
+    ) -> Option<Spanned<ClientHandleArc>> {
+        let rhints = payment_data.route_hints();
+        match rhints.first().and_then(|rh| rh.0.last()) {
+            None => None,
+            Some(hop) => match self.get_lightning_context().await {
+                Ok(lightning_context) => {
+                    if hop.src_node_id != lightning_context.lightning_public_key {
+                        return None;
+                    }
+
+                    self.federation_manager
+                        .read()
+                        .await
+                        .get_client_for_index(hop.short_channel_id)
+                }
+                Err(_) => None,
+            },
+        }
+    }
+
+    async fn pay(
+        &self,
+        payment_data: PaymentData,
+        max_delay: u64,
+        max_fee: Amount,
+    ) -> std::result::Result<PayInvoiceResponse, LightningRpcError> {
+        let lightning_context = self.get_lightning_context().await?;
+
+        match payment_data {
+            PaymentData::Invoice(invoice) => {
+                lightning_context
+                    .lnrpc
+                    .pay(invoice, max_delay, max_fee)
+                    .await
+            }
+            PaymentData::PrunedInvoice(invoice) => {
+                lightning_context
+                    .lnrpc
+                    .pay_private(invoice, max_delay, max_fee)
+                    .await
+            }
+        }
+    }
+
+    async fn complete_htlc(
+        &self,
+        htlc: InterceptPaymentResponse,
+    ) -> std::result::Result<(), LightningRpcError> {
+        // Wait until the lightning node is online to complete the HTLC.
+        let lightning_context = loop {
+            match self.get_lightning_context().await {
+                Ok(lightning_context) => break lightning_context,
+                Err(e) => {
+                    warn!("Trying to complete HTLC but got {e}, will keep retrying...");
+                    sleep(Duration::from_secs(5)).await;
+                    continue;
+                }
+            }
+        };
+
+        lightning_context.lnrpc.complete_htlc(htlc).await
     }
 }

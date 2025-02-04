@@ -3,13 +3,15 @@ use std::time::SystemTime;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::Amount;
-use fedimint_eventlog::{Event, EventKind, PersistedLogEntry};
+use fedimint_eventlog::{
+    filter_events_by_kind, join_events, Event, EventKind, PersistedLogEntry,
+    StructuredPaymentEvents,
+};
 use fedimint_lnv2_common::contracts::{Commitment, OutgoingContract, PaymentImage};
 use serde::{Deserialize, Serialize};
 use serde_millis;
 
 use super::send_sm::Cancelled;
-use crate::events::{filter_events, join_events, StructuredPaymentEvents};
 
 /// Event that is emitted when an outgoing payment attempt is initiated.
 #[derive(Serialize, Deserialize, Debug)]
@@ -144,22 +146,22 @@ impl Event for CompleteLightningPaymentSucceeded {
 pub fn compute_lnv2_stats(
     all_events: &[PersistedLogEntry],
 ) -> (StructuredPaymentEvents, StructuredPaymentEvents) {
-    let outgoing_start_events = filter_events(
+    let outgoing_start_events = filter_events_by_kind(
         all_events,
+        fedimint_lnv2_common::KIND,
         OutgoingPaymentStarted::KIND,
-        fedimint_lnv2_common::KIND,
     )
     .collect::<Vec<_>>();
-    let outgoing_success_events = filter_events(
+    let outgoing_success_events = filter_events_by_kind(
         all_events,
+        fedimint_lnv2_common::KIND,
         OutgoingPaymentSucceeded::KIND,
-        fedimint_lnv2_common::KIND,
     )
     .collect::<Vec<_>>();
-    let outgoing_failure_events = filter_events(
+    let outgoing_failure_events = filter_events_by_kind(
         all_events,
-        OutgoingPaymentFailed::KIND,
         fedimint_lnv2_common::KIND,
+        OutgoingPaymentFailed::KIND,
     )
     .collect::<Vec<_>>();
 
@@ -193,22 +195,22 @@ pub fn compute_lnv2_stats(
     )
     .collect::<Vec<_>>();
 
-    let incoming_start_events = filter_events(
+    let incoming_start_events = filter_events_by_kind(
         all_events,
+        fedimint_lnv2_common::KIND,
         IncomingPaymentStarted::KIND,
-        fedimint_lnv2_common::KIND,
     )
     .collect::<Vec<_>>();
-    let incoming_success_events = filter_events(
+    let incoming_success_events = filter_events_by_kind(
         all_events,
+        fedimint_lnv2_common::KIND,
         IncomingPaymentSucceeded::KIND,
-        fedimint_lnv2_common::KIND,
     )
     .collect::<Vec<_>>();
-    let incoming_failure_events = filter_events(
+    let incoming_failure_events = filter_events_by_kind(
         all_events,
-        IncomingPaymentFailed::KIND,
         fedimint_lnv2_common::KIND,
+        IncomingPaymentFailed::KIND,
     )
     .collect::<Vec<_>>();
 
