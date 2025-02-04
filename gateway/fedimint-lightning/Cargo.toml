@@ -20,7 +20,6 @@ fedimint-bip39 = { version = "=0.7.0-alpha", path = "../../fedimint-bip39" }
 fedimint-bitcoind = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-ln-common = { workspace = true }
-fedimint-lnv2-common = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 ldk-node = "0.4.3"
