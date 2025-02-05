@@ -14,10 +14,10 @@ use fedimint_core::core::ModuleKind;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_gw_client::GatewayClientInit;
+use fedimint_gwv2_client::GatewayClientInitV2;
 
 use crate::db::{FederationConfig, GatewayDbExt};
 use crate::error::AdminGatewayError;
-use crate::gateway_module_v2::GatewayClientInitV2;
 use crate::{AdminResult, Gateway};
 
 #[derive(Debug, Clone)]

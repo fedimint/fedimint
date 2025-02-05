@@ -1,19 +1,15 @@
 use std::fmt;
-use std::time::Duration;
 
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::task::sleep;
-use fedimint_lightning::{InterceptPaymentResponse, PaymentAction};
-use fedimint_ln_common::contracts::Preimage;
+use fedimint_lightning::{InterceptPaymentResponse, PaymentAction, Preimage};
 use fedimint_lnv2_common::contracts::PaymentImage;
-use tracing::warn;
 
 use super::events::CompleteLightningPaymentSucceeded;
 use super::FinalReceiveState;
-use crate::gateway_module_v2::GatewayClientContextV2;
+use crate::GatewayClientContextV2;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that completes the incoming payment by contacting the
@@ -154,27 +150,7 @@ impl CompleteStateMachine {
             action,
         };
 
-        loop {
-            match context.gateway.get_lightning_context().await {
-                Ok(lightning_context) => {
-                    match lightning_context
-                        .lnrpc
-                        .complete_htlc(intercept_htlc_response.clone())
-                        .await
-                    {
-                        Ok(..) => return,
-                        Err(error) => {
-                            warn!("Trying to complete HTLC but got {error}, will keep retrying...");
-                        }
-                    }
-                }
-                Err(error) => {
-                    warn!("Trying to complete HTLC but got {error}, will keep retrying...");
-                }
-            }
-
-            sleep(Duration::from_secs(5)).await;
-        }
+        context.gateway.complete_htlc(intercept_htlc_response).await;
     }
 
     async fn transition_completion(

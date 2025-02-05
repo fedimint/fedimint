@@ -19,7 +19,6 @@ pub mod envs;
 mod error;
 mod events;
 mod federation_manager;
-pub mod gateway_module_v2;
 pub mod rpc;
 mod types;
 
@@ -70,6 +69,8 @@ use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId, StructuredPaymentE
 use fedimint_gw_client::events::compute_lnv1_stats;
 use fedimint_gw_client::pay::{OutgoingPaymentError, OutgoingPaymentErrorType};
 use fedimint_gw_client::{GatewayClientModule, GatewayExtPayStates, IGatewayClientV1};
+use fedimint_gwv2_client::events::compute_lnv2_stats;
+use fedimint_gwv2_client::{GatewayClientModuleV2, IGatewayClientV2, EXPIRATION_DELTA_MINIMUM_V2};
 use fedimint_lightning::ldk::{self, GatewayLdkChainSourceConfig};
 use fedimint_lightning::lnd::GatewayLndClient;
 use fedimint_lightning::{
@@ -96,7 +97,6 @@ use fedimint_wallet_client::{
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
 };
 use futures::stream::StreamExt;
-use gateway_module_v2::events::compute_lnv2_stats;
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::thread_rng;
 use rpc::{
@@ -114,7 +114,6 @@ use crate::db::{get_gatewayd_database_migrations, FederationConfig};
 use crate::envs::FM_GATEWAY_MNEMONIC_ENV;
 use crate::error::{AdminGatewayError, LNv1Error, LNv2Error, PublicGatewayError};
 use crate::events::get_events_for_duration;
-use crate::gateway_module_v2::GatewayClientModuleV2;
 use crate::rpc::rpc_server::run_webserver;
 use crate::rpc::{
     BackupPayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
@@ -131,9 +130,6 @@ const DEFAULT_NUM_ROUTE_HINTS: u32 = 1;
 
 /// Default Bitcoin network for testing purposes.
 pub const DEFAULT_NETWORK: Network = Network::Regtest;
-
-/// LNv2 CLTV Delta in blocks
-const EXPIRATION_DELTA_MINIMUM_V2: u64 = 144;
 
 pub type Result<T> = std::result::Result<T, PublicGatewayError>;
 pub type AdminResult<T> = std::result::Result<T, AdminGatewayError>;
@@ -2211,6 +2207,80 @@ impl Gateway {
     fn is_running_lnv1(&self) -> bool {
         self.lightning_module_mode == LightningModuleMode::LNv1
             || self.lightning_module_mode == LightningModuleMode::All
+    }
+}
+
+#[async_trait]
+impl IGatewayClientV2 for Gateway {
+    async fn complete_htlc(&self, htlc_response: InterceptPaymentResponse) {
+        loop {
+            match self.get_lightning_context().await {
+                Ok(lightning_context) => {
+                    match lightning_context
+                        .lnrpc
+                        .complete_htlc(htlc_response.clone())
+                        .await
+                    {
+                        Ok(..) => return,
+                        Err(error) => {
+                            warn!("Trying to complete HTLC but got {error}, will keep retrying...");
+                        }
+                    }
+                }
+                Err(error) => {
+                    warn!("Trying to complete HTLC but got {error}, will keep retrying...");
+                }
+            }
+
+            sleep(Duration::from_secs(5)).await;
+        }
+    }
+
+    async fn is_direct_swap(
+        &self,
+        invoice: &Bolt11Invoice,
+    ) -> anyhow::Result<Option<(IncomingContract, ClientHandleArc)>> {
+        let lightning_context = self.get_lightning_context().await?;
+        if lightning_context.lightning_public_key == invoice.get_payee_pub_key() {
+            let (contract, client) = self
+                .get_registered_incoming_contract_and_client_v2(
+                    PaymentImage::Hash(*invoice.payment_hash()),
+                    invoice
+                        .amount_milli_satoshis()
+                        .expect("The amount invoice has been previously checked"),
+                )
+                .await?;
+            Ok(Some((contract, client)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn pay(
+        &self,
+        invoice: Bolt11Invoice,
+        max_delay: u64,
+        max_fee: Amount,
+    ) -> std::result::Result<[u8; 32], LightningRpcError> {
+        let lightning_context = self.get_lightning_context().await?;
+        lightning_context
+            .lnrpc
+            .pay(invoice, max_delay, max_fee)
+            .await
+            .map(|response| response.preimage.0)
+    }
+
+    async fn min_contract_amount(
+        &self,
+        federation_id: &FederationId,
+        amount: u64,
+    ) -> anyhow::Result<Amount> {
+        Ok(self
+            .routing_info_v2(federation_id)
+            .await?
+            .ok_or(anyhow!("Routing Info not available"))?
+            .send_fee_minimum
+            .add_to(amount))
     }
 }
 

@@ -2955,6 +2955,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-gwv2-client"
+version = "0.7.0-alpha"
+dependencies = [
+ "anyhow",
+ "aquamarine",
+ "async-stream",
+ "async-trait",
+ "bitcoin",
+ "erased-serde 0.4.5",
+ "fedimint-api-client",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-eventlog",
+ "fedimint-lightning",
+ "fedimint-lnv2-common",
+ "fedimint-tpe",
+ "futures",
+ "lightning-invoice",
+ "serde",
+ "serde_millis",
+ "thiserror 2.0.11",
+ "tracing",
+]
+
+[[package]]
 name = "fedimint-hkdf"
 version = "0.7.0-alpha"
 dependencies = [
@@ -3059,6 +3084,7 @@ dependencies = [
  "fedimint-dummy-server",
  "fedimint-eventlog",
  "fedimint-gw-client",
+ "fedimint-gwv2-client",
  "fedimint-lightning",
  "fedimint-ln-client",
  "fedimint-ln-common",
@@ -3086,7 +3112,6 @@ dependencies = [
  "reqwest 0.12.9",
  "serde",
  "serde_json",
- "serde_millis",
  "strum 0.26.3",
  "strum_macros 0.26.4",
  "thiserror 2.0.11",
