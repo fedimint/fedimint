@@ -1409,7 +1409,16 @@
 <a href="#1408" id="1408">1408</a>
 <a href="#1409" id="1409">1409</a>
 <a href="#1410" id="1410">1410</a>
-<a href="#1411" id="1411">1411</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1411" id="1411">1411</a>
+<a href="#1412" id="1412">1412</a>
+<a href="#1413" id="1413">1413</a>
+<a href="#1414" id="1414">1414</a>
+<a href="#1415" id="1415">1415</a>
+<a href="#1416" id="1416">1416</a>
+<a href="#1417" id="1417">1417</a>
+<a href="#1418" id="1418">1418</a>
+<a href="#1419" id="1419">1419</a>
+<a href="#1420" id="1420">1420</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2660,10 +2669,19 @@ Examples:
                 ))
             }
             Command::Completion { shell } =&gt; {
+                <span class="kw">let </span>bin_path = PathBuf::from(
+                    std::env::args_os()
+                        .next()
+                        .expect(<span class="string">"Binary name is always provided if we get this far"</span>),
+                );
+                <span class="kw">let </span>bin_name = bin_path
+                    .file_name()
+                    .expect(<span class="string">"path has file name"</span>)
+                    .to_string_lossy();
                 clap_complete::generate(
                     shell,
                     <span class="kw-2">&amp;mut </span>Opts::command(),
-                    <span class="string">"fedimint-cli"</span>,
+                    bin_name.as_ref(),
                     <span class="kw-2">&amp;mut </span>std::io::stdout(),
                 );
                 <span class="comment">// HACK: prints true to stdout which is fine for shells
