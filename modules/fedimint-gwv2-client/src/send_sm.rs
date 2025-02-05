@@ -8,13 +8,13 @@ use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::Keypair;
 use fedimint_core::{Amount, OutPoint};
-use fedimint_lnv2_common::contracts::{OutgoingContract, PaymentImage};
+use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, LightningInvoice, OutgoingWitness};
 use serde::{Deserialize, Serialize};
 
 use super::events::{OutgoingPaymentFailed, OutgoingPaymentSucceeded};
 use super::FinalReceiveState;
-use crate::gateway_module_v2::{GatewayClientContextV2, GatewayClientModuleV2};
+use crate::{GatewayClientContextV2, GatewayClientModuleV2};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct SendStateMachine {
@@ -171,58 +171,48 @@ impl SendStateMachine {
             return Err(Cancelled::Underfunded);
         };
 
-        let lightning_context = context
+        match context
             .gateway
-            .get_lightning_context()
+            .is_direct_swap(&invoice)
             .await
-            .map_err(|e| Cancelled::LightningRpcError(e.to_string()))?;
-
-        if lightning_context.lightning_public_key == invoice.get_payee_pub_key() {
-            let (contract, client) = context
-                .gateway
-                .get_registered_incoming_contract_and_client_v2(
-                    PaymentImage::Hash(*invoice.payment_hash()),
-                    invoice
-                        .amount_milli_satoshis()
-                        .expect("The amount invoice has been checked previously"),
-                )
-                .await
-                .map_err(|e| Cancelled::RegistrationError(e.to_string()))?;
-
-            return match client
-                .get_first_module::<GatewayClientModuleV2>()
-                .expect("Must have client module")
-                .relay_direct_swap(
-                    contract,
-                    invoice
-                        .amount_milli_satoshis()
-                        .expect("amountless invoices are not supported"),
-                )
-                .await
-            {
-                Ok(final_receive_state) => match final_receive_state {
-                    FinalReceiveState::Rejected => Err(Cancelled::Rejected),
-                    FinalReceiveState::Success(preimage) => Ok(PaymentResponse {
-                        preimage,
-                        target_federation: Some(client.federation_id()),
-                    }),
-                    FinalReceiveState::Refunded => Err(Cancelled::Refunded),
-                    FinalReceiveState::Failure => Err(Cancelled::Failure),
-                },
-                Err(e) => Err(Cancelled::FinalizationError(e.to_string())),
-            };
+            .map_err(|e| Cancelled::RegistrationError(e.to_string()))?
+        {
+            Some((contract, client)) => {
+                match client
+                    .get_first_module::<GatewayClientModuleV2>()
+                    .expect("Must have client module")
+                    .relay_direct_swap(
+                        contract,
+                        invoice
+                            .amount_milli_satoshis()
+                            .expect("amountless invoices are not supported"),
+                    )
+                    .await
+                {
+                    Ok(final_receive_state) => match final_receive_state {
+                        FinalReceiveState::Rejected => Err(Cancelled::Rejected),
+                        FinalReceiveState::Success(preimage) => Ok(PaymentResponse {
+                            preimage,
+                            target_federation: Some(client.federation_id()),
+                        }),
+                        FinalReceiveState::Refunded => Err(Cancelled::Refunded),
+                        FinalReceiveState::Failure => Err(Cancelled::Failure),
+                    },
+                    Err(e) => Err(Cancelled::FinalizationError(e.to_string())),
+                }
+            }
+            None => {
+                let preimage = context
+                    .gateway
+                    .pay(invoice, max_delay, max_fee)
+                    .await
+                    .map_err(|e| Cancelled::LightningRpcError(e.to_string()))?;
+                Ok(PaymentResponse {
+                    preimage,
+                    target_federation: None,
+                })
+            }
         }
-
-        let preimage = lightning_context
-            .lnrpc
-            .pay(invoice, max_delay, max_fee)
-            .await
-            .map(|response| response.preimage.0)
-            .map_err(|e| Cancelled::LightningRpcError(e.to_string()))?;
-        Ok(PaymentResponse {
-            preimage,
-            target_federation: None,
-        })
     }
 
     async fn transition_send_payment(

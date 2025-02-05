@@ -1,0 +1,41 @@
+[package]
+name = "fedimint-gwv2-client"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+description = "fedimint-gwv2-client is a crate for servicing lightning payments on behalf of fedimint clients"
+license = { workspace = true }
+readme = { workspace = true }
+repository = { workspace = true }
+
+[package.metadata.docs.rs]
+rustc-args = ["--cfg", "tokio_unstable"]
+
+[package.metadata.cargo-udeps.ignore]
+# cargo udeps can't detect that one
+normal = ["aquamarine"]
+
+[lib]
+name = "fedimint_gwv2_client"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+aquamarine = { workspace = true }
+async-stream = { workspace = true }
+async-trait = { workspace = true }
+bitcoin = { workspace = true }
+erased-serde = { workspace = true }
+fedimint-api-client = { path = "../../fedimint-api-client", version = "=0.7.0-alpha" }
+fedimint-client = { path = "../../fedimint-client", version = "=0.7.0-alpha" }
+fedimint-core = { workspace = true }
+fedimint-eventlog = { workspace = true }
+fedimint-lightning = { path = "../../gateway/fedimint-lightning", version = "=0.7.0-alpha" }
+fedimint-lnv2-common = { workspace = true }
+futures = { workspace = true }
+lightning-invoice = { workspace = true }
+serde = { workspace = true }
+serde_millis = "0.1.1"
+thiserror = { workspace = true }
+tpe = { workspace = true }
+tracing = { workspace = true, features = ["log"] }

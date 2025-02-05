@@ -19,7 +19,7 @@ use tpe::{aggregate_dk_shares, AggregatePublicKey, DecryptionKeyShare, PublicKey
 use tracing::error;
 
 use super::events::{IncomingPaymentFailed, IncomingPaymentSucceeded};
-use crate::gateway_module_v2::GatewayClientContextV2;
+use crate::GatewayClientContextV2;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct ReceiveStateMachine {

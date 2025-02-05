@@ -29,6 +29,11 @@ use fedimint_gw_client::pay::{
 use fedimint_gw_client::{
     GatewayClientModule, GatewayExtPayStates, GatewayExtReceiveStates, GatewayMeta, Htlc,
 };
+use fedimint_gwv2_client::events::{
+    CompleteLightningPaymentSucceeded, IncomingPaymentStarted, IncomingPaymentSucceeded,
+    OutgoingPaymentStarted, OutgoingPaymentSucceeded,
+};
+use fedimint_gwv2_client::{FinalReceiveState, GatewayClientModuleV2};
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_client::{
@@ -56,11 +61,6 @@ use futures::Future;
 use itertools::Itertools;
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description, RoutingFees};
 use ln_gateway::config::LightningModuleMode;
-use ln_gateway::gateway_module_v2::events::{
-    CompleteLightningPaymentSucceeded, IncomingPaymentStarted, IncomingPaymentSucceeded,
-    OutgoingPaymentStarted, OutgoingPaymentSucceeded,
-};
-use ln_gateway::gateway_module_v2::{FinalReceiveState, GatewayClientModuleV2};
 use ln_gateway::rpc::{PaymentLogPayload, SetFeesPayload};
 use ln_gateway::Gateway;
 use secp256k1::{Keypair, PublicKey};

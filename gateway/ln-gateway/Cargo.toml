@@ -40,6 +40,7 @@ fedimint-client = { path = "../../fedimint-client", version = "=0.7.0-alpha" }
 fedimint-core = { workspace = true }
 fedimint-eventlog = { workspace = true }
 fedimint-gw-client = { workspace = true }
+fedimint-gwv2-client = { workspace = true }
 fedimint-lightning = { path = "../fedimint-lightning", version = "=0.7.0-alpha" }
 fedimint-ln-client = { workspace = true }
 fedimint-ln-common = { workspace = true }
@@ -59,7 +60,6 @@ rand = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_millis = "0.1.1"
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
@@ -68,7 +68,6 @@ tokio-stream = { workspace = true }
 tonic = { version = "0.12.3", features = ["transport", "tls"] }
 tonic_lnd = { workspace = true }
 tower-http = { version = "0.6.2", features = ["cors", "auth"] }
-tpe = { workspace = true }
 tracing = { workspace = true, features = ["log"] }
 url = { workspace = true, features = ["serde"] }
 
@@ -83,6 +82,7 @@ fedimint-testing = { workspace = true }
 fedimint-unknown-common = { workspace = true }
 fedimint-unknown-server = { workspace = true }
 itertools = { workspace = true }
+tpe = { workspace = true }
 
 [build-dependencies]
 fedimint-build = { workspace = true }

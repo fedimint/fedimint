@@ -5,14 +5,13 @@ use fedimint_client::ClientHandle;
 use fedimint_eventlog::{
     DBTransactionEventLogExt, Event, EventKind, EventLogId, PersistedLogEntry,
 };
-use fedimint_mint_client::event::{OOBNotesReissued, OOBNotesSpent};
-use fedimint_wallet_client::events::{DepositConfirmed, WithdrawRequest};
-
-use crate::gateway_module_v2::events::{
+use fedimint_gwv2_client::events::{
     CompleteLightningPaymentSucceeded, IncomingPaymentFailed, IncomingPaymentStarted,
     IncomingPaymentSucceeded, OutgoingPaymentFailed, OutgoingPaymentStarted,
     OutgoingPaymentSucceeded,
 };
+use fedimint_mint_client::event::{OOBNotesReissued, OOBNotesSpent};
+use fedimint_wallet_client::events::{DepositConfirmed, WithdrawRequest};
 
 pub const ALL_GATEWAY_EVENTS: [EventKind; 11] = [
     OutgoingPaymentStarted::KIND,

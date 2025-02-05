@@ -14,7 +14,7 @@ use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
-use fedimint_ln_common::contracts::Preimage;
+pub use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::PrunedInvoice;
 use futures::stream::BoxStream;

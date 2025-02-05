@@ -6,9 +6,11 @@ mod send_sm;
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::fmt::Debug;
 use std::sync::Arc;
 
 use anyhow::{anyhow, ensure};
+use async_trait::async_trait;
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::Message;
 use events::{IncomingPaymentStarted, OutgoingPaymentStarted};
@@ -21,7 +23,7 @@ use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransit
 use fedimint_client::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
-use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_client::{sm_enum_variant_translation, ClientHandleArc, DynGlobalClientContext};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::DatabaseTransaction;
@@ -32,6 +34,7 @@ use fedimint_core::module::{
 use fedimint_core::secp256k1::Keypair;
 use fedimint_core::time::now;
 use fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint, PeerId};
+use fedimint_lightning::{InterceptPaymentResponse, LightningRpcError};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::SendPaymentPayload;
@@ -39,6 +42,7 @@ use fedimint_lnv2_common::{
     LightningCommonInit, LightningInvoice, LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
 use futures::StreamExt;
+use lightning_invoice::Bolt11Invoice;
 use receive_sm::{ReceiveSMState, ReceiveStateMachine};
 use secp256k1::schnorr::Signature;
 use send_sm::{SendSMState, SendStateMachine};
@@ -46,20 +50,20 @@ use serde::{Deserialize, Serialize};
 use tpe::{AggregatePublicKey, PublicKeyShare};
 use tracing::{info, warn};
 
-use crate::gateway_module_v2::api::GatewayFederationApi;
-use crate::gateway_module_v2::complete_sm::{
-    CompleteSMCommon, CompleteSMState, CompleteStateMachine,
-};
-use crate::gateway_module_v2::receive_sm::ReceiveSMCommon;
-use crate::gateway_module_v2::send_sm::SendSMCommon;
-use crate::{Gateway, EXPIRATION_DELTA_MINIMUM_V2};
+use crate::api::GatewayFederationApi;
+use crate::complete_sm::{CompleteSMCommon, CompleteSMState, CompleteStateMachine};
+use crate::receive_sm::ReceiveSMCommon;
+use crate::send_sm::SendSMCommon;
+
+/// LNv2 CLTV Delta in blocks
+pub const EXPIRATION_DELTA_MINIMUM_V2: u64 = 144;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GatewayOperationMetaV2;
 
 #[derive(Debug, Clone)]
 pub struct GatewayClientInitV2 {
-    pub gateway: Arc<Gateway>,
+    pub gateway: Arc<dyn IGatewayClientV2>,
 }
 
 impl ModuleInit for GatewayClientInitV2 {
@@ -107,7 +111,7 @@ pub struct GatewayClientModuleV2 {
     pub client_ctx: ClientContext<Self>,
     pub module_api: DynModuleApi,
     pub keypair: Keypair,
-    pub gateway: Arc<Gateway>,
+    pub gateway: Arc<dyn IGatewayClientV2>,
 }
 
 #[derive(Debug, Clone)]
@@ -116,7 +120,7 @@ pub struct GatewayClientContextV2 {
     pub decoder: Decoder,
     pub tpe_agg_pk: AggregatePublicKey,
     pub tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
-    pub gateway: Arc<Gateway>,
+    pub gateway: Arc<dyn IGatewayClientV2>,
 }
 
 impl Context for GatewayClientContextV2 {
@@ -305,11 +309,8 @@ impl GatewayClientModuleV2 {
 
         let min_contract_amount = self
             .gateway
-            .routing_info_v2(&payload.federation_id)
-            .await?
-            .ok_or(anyhow!("Routing Info not available"))?
-            .send_fee_minimum
-            .add_to(amount);
+            .min_contract_amount(&payload.federation_id, amount)
+            .await?;
 
         let send_sm = GatewayClientStateMachinesV2::Send(SendStateMachine {
             common: SendSMCommon {
@@ -600,4 +601,49 @@ impl GatewayClientModuleV2 {
             }
         }
     }
+}
+
+/// An interface between module implementation and the general `Gateway`
+///
+/// To abstract away and decouple the core gateway from the modules, the
+/// interface between the is expressed as a trait. The core gateway handles
+/// LNv2 operations that require access to the database or lightning node.
+#[async_trait]
+pub trait IGatewayClientV2: Debug + Send + Sync {
+    /// Use the gateway's lightning node to complete a payment
+    async fn complete_htlc(&self, htlc_response: InterceptPaymentResponse);
+
+    /// Determines if the payment can be completed using a direct swap to
+    /// another federation.
+    ///
+    /// A direct swap is determined by checking the gateway's connected
+    /// lightning node against the invoice's payee lightning node. If they
+    /// are the same, then the gateway can use another client to complete
+    /// the payment be swapping ecash instead of a payment over the
+    /// Lightning network.
+    async fn is_direct_swap(
+        &self,
+        invoice: &Bolt11Invoice,
+    ) -> anyhow::Result<Option<(IncomingContract, ClientHandleArc)>>;
+
+    /// Initiates a payment over the Lightning network.
+    async fn pay(
+        &self,
+        invoice: Bolt11Invoice,
+        max_delay: u64,
+        max_fee: Amount,
+    ) -> Result<[u8; 32], LightningRpcError>;
+
+    /// Computes the minimum contract amount necessary for making an outgoing
+    /// payment.
+    ///
+    /// The minimum contract amount must contain transaction fees to cover the
+    /// gateway's transaction fee and optionally additional fee to cover the
+    /// gateway's Lightning fee if the payment goes over the Lightning
+    /// network.
+    async fn min_contract_amount(
+        &self,
+        federation_id: &FederationId,
+        amount: u64,
+    ) -> anyhow::Result<Amount>;
 }
