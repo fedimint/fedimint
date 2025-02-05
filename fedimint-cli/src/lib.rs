@@ -1249,10 +1249,19 @@ impl FedimintCli {
                 ))
             }
             Command::Completion { shell } => {
+                let bin_path = PathBuf::from(
+                    std::env::args_os()
+                        .next()
+                        .expect("Binary name is always provided if we get this far"),
+                );
+                let bin_name = bin_path
+                    .file_name()
+                    .expect("path has file name")
+                    .to_string_lossy();
                 clap_complete::generate(
                     shell,
                     &mut Opts::command(),
-                    "fedimint-cli",
+                    bin_name.as_ref(),
                     &mut std::io::stdout(),
                 );
                 // HACK: prints true to stdout which is fine for shells
