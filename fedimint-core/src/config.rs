@@ -866,8 +866,9 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
 }
 
 /// Things that a `distributed_gen` config can send between peers
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum DkgPeerMessage {
+    Checksum(sha256::Hash),
     DistributedGen(SupportedDkgMessage),
     Encodable(Vec<u8>),
     Completed,
@@ -886,7 +887,7 @@ pub trait ISupportedDkgMessage: Sized + Serialize + DeserializeOwned {
 }
 
 /// `enum` version of [`SupportedDkgMessage`]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum SupportedDkgMessage {
     G1(DkgMessage<G1Projective>),
     G2(DkgMessage<G2Projective>),

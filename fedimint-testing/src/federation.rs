@@ -8,7 +8,7 @@ use fedimint_client::{Client, ClientHandleArc};
 use fedimint_client_module::module::init::ClientModuleInitRegistry;
 use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client_module::AdminCreds;
-use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
+use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerConnectionInfo};
 use fedimint_core::config::{
     ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry, META_FEDERATION_NAME_KEY,
 };
@@ -22,8 +22,9 @@ use fedimint_core::task::{block_in_place, sleep_in_test, TaskGroup};
 use fedimint_core::PeerId;
 use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;
-use fedimint_server::config::api::ConfigGenParamsLocal;
-use fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
+use fedimint_server::config::{
+    gen_cert_and_key, ConfigGenParams, ConfigGenParamsLocal, ServerConfig,
+};
 use fedimint_server::consensus;
 use fedimint_server::core::ServerModuleInitRegistry;
 use fedimint_server::net::p2p_connector::parse_host_port;
@@ -305,19 +306,19 @@ pub fn local_config_gen_params(
         .collect();
 
     // Generate the P2P and API URL on 2 different ports for each peer
-    let connections: BTreeMap<PeerId, PeerServerParams> = peers
+    let connections: BTreeMap<PeerId, PeerConnectionInfo> = peers
         .iter()
         .map(|peer| {
             let peer_port = base_port + u16::from(*peer) * 2;
             let p2p_url = format!("fedimint://127.0.0.1:{peer_port}");
             let api_url = format!("ws://127.0.0.1:{}", peer_port + 1);
 
-            let params: PeerServerParams = PeerServerParams {
-                cert: tls_keys[peer].0.clone(),
+            let params = PeerConnectionInfo {
+                cert: tls_keys[peer].0.clone().0,
                 p2p_url: p2p_url.parse().expect("Should parse"),
                 api_url: api_url.parse().expect("Should parse"),
                 name: format!("peer-{}", peer.to_usize()),
-                status: None,
+                federation_name: None,
             };
             (*peer, params)
         })
@@ -336,7 +337,6 @@ pub fn local_config_gen_params(
                     api_auth: ApiAuth("pass".to_string()),
                     p2p_bind: p2p_bind.parse().expect("Valid address"),
                     api_bind: api_bind.parse().expect("Valid address"),
-                    max_connections: 10,
                 },
                 consensus: ConfigGenParamsConsensus {
                     peers: connections.clone(),

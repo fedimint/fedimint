@@ -1109,6 +1109,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2225b558afc76c596898f5f1b3fc35cfce0eb1b13635cbd7d1b2a7177dc10ccd"
 
 [[package]]
+name = "bs58"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf88ba1141d185c399bee5288d850d63b8369520c1eafc32a0430b5b6c287bf4"
+dependencies = [
+ "tinyvec",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2724,6 +2733,7 @@ dependencies = [
  "bitcoin-units",
  "bitvec",
  "bls12_381",
+ "bs58",
  "erased-serde 0.4.5",
  "fedimint-derive",
  "fedimint-logging",
@@ -3693,7 +3703,6 @@ dependencies = [
  "fedimint-dummy-common",
  "fedimint-dummy-server",
  "fedimint-logging",
- "fedimint-portalloc",
  "fedimint-server",
  "fedimint-testing-core",
  "futures",

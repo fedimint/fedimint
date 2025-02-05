@@ -10,7 +10,7 @@ use fedimint_aead::{encrypt, get_encryption_key, random_salt};
 use fedimint_api_client::api::{
     FederationStatus, GuardianConfigBackup, P2PConnectionStatus, PeerStatus, StatusResponse,
 };
-use fedimint_core::admin_client::ServerStatus;
+use fedimint_core::admin_client::{ServerStatus, ServerStatusLegacy};
 use fedimint_core::backup::{
     BackupStatistics, ClientBackupKey, ClientBackupKeyPrefix, ClientBackupSnapshot,
 };
@@ -28,9 +28,9 @@ use fedimint_core::endpoint_constants::{
     BACKUP_STATISTICS_ENDPOINT, CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT,
     FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
     INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
-    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SHUTDOWN_ENDPOINT,
-    SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
-    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    SERVER_STATUS_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
+    SESSION_STATUS_V2_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT,
+    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -634,11 +634,18 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
+            SERVER_STATUS_ENDPOINT,
+            ApiVersion::new(0, 0),
+            async |_f: &ConsensusApi, _c, _v: ()| -> ServerStatus {
+                Ok(ServerStatus::ConsensusRunning)
+            }
+        },
+        api_endpoint! {
             STATUS_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> StatusResponse {
                 Ok(StatusResponse {
-                    server: ServerStatus::ConsensusRunning,
+                    server: ServerStatusLegacy::ConsensusRunning,
                     federation: Some(fedimint.get_federation_status().await?)
                 })
             }

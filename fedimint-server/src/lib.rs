@@ -39,8 +39,9 @@ use fedimint_server_core::ServerModuleInitRegistry;
 use net::api::ApiSecrets;
 use tracing::{info, warn};
 
-use crate::config::api::{ConfigGenApi, ConfigGenSettings};
+use crate::config::api::ConfigGenApi;
 use crate::config::io::{write_server_config, SALT_FILE};
+use crate::config::ConfigGenSettings;
 use crate::db::{ServerInfo, ServerInfoKey};
 use crate::metrics::initialize_gauge_metrics;
 use crate::net::api::announcement::start_api_announcement_service;
@@ -75,7 +76,6 @@ pub async fn run(
                 settings.clone(),
                 db.clone(),
                 code_version_str.clone(),
-                task_group.make_subgroup(),
                 force_api_secrets.clone(),
             )
             .await?
@@ -155,7 +155,6 @@ pub async fn run_config_gen(
     settings: ConfigGenSettings,
     db: Database,
     code_version_str: String,
-    task_group: TaskGroup,
     force_api_secrets: ApiSecrets,
 ) -> anyhow::Result<ServerConfig> {
     info!(target: LOG_CONSENSUS, "Starting config gen");
@@ -164,15 +163,7 @@ pub async fn run_config_gen(
 
     let (cfg_sender, mut cfg_receiver) = tokio::sync::mpsc::channel(1);
 
-    let config_gen = ConfigGenApi::new(
-        settings.p2p_bind,
-        settings.clone(),
-        db.clone(),
-        cfg_sender,
-        &task_group,
-        code_version_str.clone(),
-        force_api_secrets.get_active(),
-    );
+    let config_gen = ConfigGenApi::new(settings.clone(), db.clone(), cfg_sender);
 
     let mut rpc_module = RpcHandlerCtx::new_module(config_gen);
 
@@ -194,6 +185,14 @@ pub async fn run_config_gen(
         .expect("Config api should still be running");
 
     api_handler.stopped().await;
+
+    let cfg = ServerConfig::distributed_gen(
+        settings.p2p_bind,
+        &cfg,
+        settings.registry.clone(),
+        code_version_str.clone(),
+    )
+    .await?;
 
     // TODO: Make writing password optional
     write_new(data_dir.join(PLAINTEXT_PASSWORD), &cfg.private.api_auth.0)?;
