@@ -29,9 +29,8 @@ use fedimint_logging::TracingSetup;
 use fedimint_meta_server::{MetaGenParams, MetaInit};
 use fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
 use fedimint_mint_server::MintInit;
-use fedimint_server::config::api::ConfigGenSettings;
 use fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
-use fedimint_server::config::ServerConfig;
+use fedimint_server::config::{ConfigGenSettings, ServerConfig};
 use fedimint_server::core::{ServerModuleInit, ServerModuleInitRegistry};
 use fedimint_server::net::api::ApiSecrets;
 use fedimint_unknown_common::config::UnknownGenParams;
@@ -528,13 +527,11 @@ async fn run(
     };
     // TODO: meh, move, refactor
     let settings = ConfigGenSettings {
-        download_token_limit: None,
         p2p_bind: opts.bind_p2p,
         api_bind: opts.bind_api,
         p2p_url: opts.p2p_url,
         api_url: opts.api_url,
         default_params,
-        max_connections: fedimint_server::config::max_connections(),
         registry: module_inits.clone(),
     };
 
