@@ -129,7 +129,9 @@
 <a href="#128" id="128">128</a>
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
@@ -180,6 +182,8 @@
 </span><span class="kw">pub const </span>FM_BITCOIN_RPC_KIND_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_BITCOIN_RPC_KIND"</span>;
 <span class="doccomment">/// Env var for bitcoin URL (obsolete, use FM_DEFAULT_* instead)
 </span><span class="kw">pub const </span>FM_BITCOIN_RPC_URL_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_BITCOIN_RPC_URL"</span>;
+<span class="doccomment">/// Env var how often to poll bitcoin source
+</span><span class="kw">pub const </span>FM_BITCOIN_POLLING_INTERVAL_SECS_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_BITCOIN_POLLING_INTERVAL_SECS"</span>;
 
 <span class="doccomment">/// Env var for bitcoin RPC kind (default, used only as a default value for DKG
 /// config settings)
