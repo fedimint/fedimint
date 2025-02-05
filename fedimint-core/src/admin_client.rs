@@ -1,18 +1,21 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 
+use anyhow::ensure;
 use fedimint_core::util::SafeUrl;
 use serde::{Deserialize, Serialize};
 #[cfg(not(target_family = "wasm"))]
 use tokio_rustls::rustls::Certificate as RustlsCertificate;
 
 use crate::config::ServerModuleConfigGenParamsRegistry;
+use crate::encoding::{Decodable, Encodable};
+use crate::module::registry::ModuleDecoderRegistry;
 use crate::PeerId;
 
 /// The state of the server returned via APIs
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Eq, PartialEq, Encodable, Decodable)]
 #[serde(rename_all = "snake_case")]
-pub enum ServerStatus {
+pub enum ServerStatusLegacy {
     /// Server needs a password to read configs
     #[default]
     AwaitingPassword,
@@ -33,8 +36,18 @@ pub enum ServerStatus {
     SetupRestarted,
 }
 
+/// The state of the server returned via APIs
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ServerStatus {
+    AwaitingLocalParams,
+    /// Waiting for peers to share the config gen params
+    CollectingConnectionInfo(Vec<String>),
+    /// Consensus is running
+    ConsensusRunning,
+}
+
 #[cfg(target_family = "wasm")]
-#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd, Encodable, Decodable)]
 struct RustlsCertificate(pub Vec<u8>);
 
 /// Sent by admin user to the API
@@ -47,7 +60,7 @@ pub struct ConfigGenConnectionsRequest {
     pub leader_api_url: Option<SafeUrl>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Encodable)]
 /// Connection information sent between peers in order to start config gen
 pub struct PeerServerParams {
     /// TLS cert is necessary for P2P auth during DKG and  consensus
@@ -60,7 +73,50 @@ pub struct PeerServerParams {
     /// Name of the peer, used in TLS auth
     pub name: String,
     /// Status of the peer if known
-    pub status: Option<ServerStatus>,
+    pub status: Option<ServerStatusLegacy>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SetLocalParamsRequest {
+    /// Name of the peer, used in TLS auth
+    pub name: String,
+    /// Federation name set by the leader
+    pub federation_name: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Encodable, Decodable)]
+/// Connection information sent between peers in order to start config gen
+pub struct PeerConnectionInfo {
+    /// TLS cert is necessary for P2P auth during DKG and consensus
+    pub cert: Vec<u8>,
+    /// P2P is the network for running DKG and consensus
+    pub p2p_url: SafeUrl,
+    /// API for secure websocket requests
+    pub api_url: SafeUrl,
+    /// Name of the peer, used in TLS auth
+    pub name: String,
+    /// Federation name set by the leader
+    pub federation_name: Option<String>,
+}
+
+impl PeerConnectionInfo {
+    pub fn encode_base58(&self) -> String {
+        format!(
+            "fedimint{}",
+            bs58::encode(&self.consensus_encode_to_vec()).into_string()
+        )
+    }
+
+    pub fn decode_base58(s: &str) -> anyhow::Result<Self> {
+        ensure!(s.starts_with("fedimint"), "Invalid Prefix");
+
+        let params = Self::consensus_decode_whole(
+            &bs58::decode(&s[8..]).into_vec()?,
+            &ModuleDecoderRegistry::default(),
+        )?;
+
+        Ok(params)
+    }
 }
 
 /// The config gen params that need to be in consensus, sent by the config gen
@@ -68,7 +124,7 @@ pub struct PeerServerParams {
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ConfigGenParamsConsensus {
     /// Endpoints of all servers
-    pub peers: BTreeMap<PeerId, PeerServerParams>,
+    pub peers: BTreeMap<PeerId, PeerConnectionInfo>,
     /// Guardian-defined key-value pairs that will be passed to the client
     pub meta: BTreeMap<String, String>,
     /// Module init params (also contains local params from us)

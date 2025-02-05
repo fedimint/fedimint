@@ -8,22 +8,24 @@ use bitcoin::hashes::sha256;
 use bitcoin::secp256k1;
 use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams,
+    ServerStatus, SetLocalParamsRequest,
 };
 use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::endpoint_constants::{
-    ADD_CONFIG_GEN_PEER_ENDPOINT, API_ANNOUNCEMENTS_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT,
-    AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
-    BACKUP_STATISTICS_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT, CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
-    DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
-    GUARDIAN_CONFIG_BACKUP_ENDPOINT, RECOVER_ENDPOINT, RESTART_FEDERATION_SETUP_ENDPOINT,
-    RUN_DKG_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT,
-    SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
-    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, SHUTDOWN_ENDPOINT,
-    SIGN_API_ANNOUNCEMENT_ENDPOINT, START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT,
-    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT,
-    VERIFY_CONFIG_HASH_ENDPOINT,
+    ADD_CONFIG_GEN_PEER_ENDPOINT, ADD_PEER_CONNECTION_INFO_ENDPOINT, API_ANNOUNCEMENTS_ENDPOINT,
+    AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT,
+    BACKUP_ENDPOINT, BACKUP_STATISTICS_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
+    CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
+    FEDIMINTD_VERSION_ENDPOINT, GET_PEER_CONNECTION_INFO_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
+    RECOVER_ENDPOINT, RESTART_FEDERATION_SETUP_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+    SERVER_STATUS_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
+    SESSION_STATUS_V2_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
+    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT,
+    SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT, START_CONSENSUS_ENDPOINT,
+    START_DKG_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
 };
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -364,6 +366,46 @@ where
             .await
     }
 
+    async fn server_status(&self, auth: ApiAuth) -> FederationResult<ServerStatus> {
+        self.request_admin(SERVER_STATUS_ENDPOINT, ApiRequestErased::default(), auth)
+            .await
+    }
+
+    async fn set_local_params(
+        &self,
+        name: String,
+        federation_name: Option<String>,
+        auth: ApiAuth,
+    ) -> FederationResult<()> {
+        self.request_admin(
+            SET_LOCAL_PARAMS_ENDPOINT,
+            ApiRequestErased::new(SetLocalParamsRequest {
+                name,
+                federation_name,
+            }),
+            auth,
+        )
+        .await
+    }
+
+    async fn get_peer_connection_info(&self, auth: ApiAuth) -> FederationResult<String> {
+        self.request_admin(
+            GET_PEER_CONNECTION_INFO_ENDPOINT,
+            ApiRequestErased::default(),
+            auth,
+        )
+        .await
+    }
+
+    async fn add_peer_connection_info(&self, info: String, auth: ApiAuth) -> FederationResult<()> {
+        self.request_admin(
+            ADD_PEER_CONNECTION_INFO_ENDPOINT,
+            ApiRequestErased::new(info),
+            auth,
+        )
+        .await
+    }
+
     async fn set_config_gen_connections(
         &self,
         info: ConfigGenConnectionsRequest,
@@ -420,8 +462,8 @@ where
         .await
     }
 
-    async fn run_dkg(&self, auth: ApiAuth) -> FederationResult<()> {
-        self.request_admin(RUN_DKG_ENDPOINT, ApiRequestErased::default(), auth)
+    async fn start_dkg(&self, auth: ApiAuth) -> FederationResult<()> {
+        self.request_admin(START_DKG_ENDPOINT, ApiRequestErased::default(), auth)
             .await
     }
 

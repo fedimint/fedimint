@@ -39,10 +39,7 @@ use fedimint_client::meta::{FetchKind, LegacyMetaSource, MetaSource};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
 use fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandleArc};
-use fedimint_core::admin_client::{ConfigGenConnectionsRequest, ConfigGenParamsRequest};
-use fedimint_core::config::{
-    FederationId, FederationIdPrefix, ServerModuleConfigGenParamsRegistry,
-};
+use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{Database, DatabaseValue};
 use fedimint_core::invite_code::InviteCode;
@@ -363,7 +360,7 @@ enum AdminCmd {
     /// Download guardian config to back it up
     GuardianConfigBackup,
 
-    Dkg(DkgAdminArgs),
+    ConfigGen(ConfigGenAdminArgs),
     /// Sign and announce a new API endpoint. The previous one will be
     /// invalidated
     SignApiAnnouncement {
@@ -384,7 +381,7 @@ enum AdminCmd {
 }
 
 #[derive(Debug, Clone, Args)]
-struct DkgAdminArgs {
+struct ConfigGenAdminArgs {
     #[arg(long, env = "FM_WS_URL")]
     ws: SafeUrl,
 
@@ -392,10 +389,10 @@ struct DkgAdminArgs {
     api_secret: Option<String>,
 
     #[clap(subcommand)]
-    subcommand: DkgAdminCmd,
+    subcommand: ConfigGenAdminCmd,
 }
 
-impl DkgAdminArgs {
+impl ConfigGenAdminArgs {
     fn ws_admin_client(&self, api_secret: &Option<String>) -> DynGlobalApi {
         let ws = self.ws.clone();
         DynGlobalApi::from_pre_peer_id_admin_endpoint(ws, api_secret)
@@ -403,35 +400,18 @@ impl DkgAdminArgs {
 }
 
 #[derive(Debug, Clone, Subcommand)]
-enum DkgAdminCmd {
-    // These commands are roughly in the order they should be called
-    /// Allow to access the `status` endpoint in a pre-dkg phase
-    WsStatus,
-    SetPassword,
-    GetDefaultConfigGenParams,
-    SetConfigGenParams {
-        /// Guardian-defined key-value pairs that will be passed to the client
-        /// Must be a valid JSON object (Map<String, String>)
+enum ConfigGenAdminCmd {
+    ServerStatus,
+    SetLocalParams {
+        name: String,
         #[clap(long)]
-        meta_json: String,
-        /// Set the params (if leader) or just the local params (if follower)
-        #[clap(long)]
-        modules_json: String,
+        federation_name: Option<String>,
     },
-    SetConfigGenConnections {
-        /// Our guardian name
-        #[clap(long)]
-        our_name: String,
-        /// URL of "leader" guardian to send our connection info to
-        /// Will be `None` if we are the leader
-        #[clap(long)]
-        leader_api_url: Option<SafeUrl>,
+    GetPeerConnectionInfo,
+    AddPeerConnectionInfo {
+        info: String,
     },
-    GetConfigGenPeers,
-    ConsensusConfigGenParams,
-    RunDkg,
-    GetVerifyConfigHash,
-    StartConsensus,
+    StartDkg,
 }
 
 #[derive(Debug, Clone, Subcommand)]
@@ -894,7 +874,7 @@ impl FedimintCli {
                         .map_err_cli_msg("invalid response")?,
                 ))
             }
-            Command::Admin(AdminCmd::Dkg(dkg_args)) => {
+            Command::Admin(AdminCmd::ConfigGen(dkg_args)) => {
                 self.handle_admin_dkg_command(cli, dkg_args).await
             }
             Command::Admin(AdminCmd::SignApiAnnouncement {
@@ -1270,73 +1250,44 @@ impl FedimintCli {
         }
     }
 
-    async fn handle_admin_dkg_command(&self, cli: Opts, dkg_args: DkgAdminArgs) -> CliOutputResult {
+    async fn handle_admin_dkg_command(
+        &self,
+        cli: Opts,
+        dkg_args: ConfigGenAdminArgs,
+    ) -> CliOutputResult {
         let client = dkg_args.ws_admin_client(&dkg_args.api_secret);
         match &dkg_args.subcommand {
-            DkgAdminCmd::WsStatus => {
-                let status = client.status().await?;
-                Ok(CliOutput::Raw(
-                    serde_json::to_value(status).map_err_cli_msg("invalid response")?,
-                ))
-            }
-            DkgAdminCmd::SetPassword => {
-                client.set_password(cli.auth()?).await?;
-                Ok(CliOutput::Raw(Value::Null))
-            }
-            DkgAdminCmd::GetDefaultConfigGenParams => {
-                let default_params = client.get_default_config_gen_params(cli.auth()?).await?;
-                Ok(CliOutput::Raw(
-                    serde_json::to_value(default_params).map_err_cli_msg("invalid response")?,
-                ))
-            }
-            DkgAdminCmd::SetConfigGenParams {
-                meta_json,
-                modules_json,
+            ConfigGenAdminCmd::ServerStatus => Ok(CliOutput::Raw(
+                serde_json::to_value(client.server_status(cli.auth()?).await?)
+                    .map_err_cli_msg("Invalid JSON")?,
+            )),
+            ConfigGenAdminCmd::SetLocalParams {
+                name,
+                federation_name,
             } => {
-                let meta: BTreeMap<String, String> =
-                    serde_json::from_str(meta_json).map_err_cli_msg("Invalid JSON")?;
-                let modules: ServerModuleConfigGenParamsRegistry =
-                    serde_json::from_str(modules_json).map_err_cli_msg("Invalid JSON")?;
-                let params = ConfigGenParamsRequest { meta, modules };
-                client.set_config_gen_params(params, cli.auth()?).await?;
+                client
+                    .set_local_params(name.clone(), federation_name.clone(), cli.auth()?)
+                    .await?;
+
                 Ok(CliOutput::Raw(Value::Null))
             }
-            DkgAdminCmd::SetConfigGenConnections {
-                our_name,
-                leader_api_url,
-            } => {
-                let req = ConfigGenConnectionsRequest {
-                    our_name: our_name.to_owned(),
-                    leader_api_url: leader_api_url.to_owned(),
-                };
-                client.set_config_gen_connections(req, cli.auth()?).await?;
+            ConfigGenAdminCmd::GetPeerConnectionInfo => {
+                let params = client.get_peer_connection_info(cli.auth()?).await?;
+
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(params).map_err_cli_msg("invalid response")?,
+                ))
+            }
+            ConfigGenAdminCmd::AddPeerConnectionInfo { info } => {
+                client
+                    .add_peer_connection_info(info.clone(), cli.auth()?)
+                    .await?;
+
                 Ok(CliOutput::Raw(Value::Null))
             }
-            DkgAdminCmd::GetConfigGenPeers => {
-                let peer_server_params = client.get_config_gen_peers().await?;
-                Ok(CliOutput::Raw(
-                    serde_json::to_value(peer_server_params).map_err_cli_msg("invalid response")?,
-                ))
-            }
-            DkgAdminCmd::ConsensusConfigGenParams => {
-                let config_gen_params_response = client.consensus_config_gen_params().await?;
-                Ok(CliOutput::Raw(
-                    serde_json::to_value(config_gen_params_response)
-                        .map_err_cli_msg("invalid response")?,
-                ))
-            }
-            DkgAdminCmd::RunDkg => {
-                client.run_dkg(cli.auth()?).await?;
-                Ok(CliOutput::Raw(Value::Null))
-            }
-            DkgAdminCmd::GetVerifyConfigHash => {
-                let hashes_by_peer = client.get_verify_config_hash(cli.auth()?).await?;
-                Ok(CliOutput::Raw(
-                    serde_json::to_value(hashes_by_peer).map_err_cli_msg("invalid response")?,
-                ))
-            }
-            DkgAdminCmd::StartConsensus => {
-                client.start_consensus(cli.auth()?).await?;
+            ConfigGenAdminCmd::StartDkg => {
+                client.start_dkg(cli.auth()?).await?;
+
                 Ok(CliOutput::Raw(Value::Null))
             }
         }

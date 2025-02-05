@@ -3,9 +3,9 @@ use std::env;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use anyhow::{bail, format_err, Context};
+use anyhow::{bail, ensure, format_err, Context};
 use fedimint_api_client::api::P2PConnectionStatus;
-use fedimint_core::admin_client::ConfigGenParamsConsensus;
+use fedimint_core::admin_client::{ConfigGenParamsConsensus, ConfigGenParamsRequest};
 pub use fedimint_core::config::{
     serde_binary_human_readable, ClientConfig, DkgPeerMessage, FederationId, GlobalClientConfig,
     JsonWithKind, ModuleInitRegistry, PeerUrl, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -20,6 +20,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::net::peers::{IP2PConnections, Recipient};
 use fedimint_core::task::{sleep, timeout, TaskGroup};
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{secp256k1, timing, NumPeersExt, PeerId};
 use fedimint_logging::LOG_NET_PEER_DKG;
 use fedimint_server_core::{DynServerModuleInit, ServerModuleInitRegistry};
@@ -30,7 +31,6 @@ use tokio::sync::watch;
 use tokio_rustls::rustls;
 use tracing::{error, info};
 
-use crate::config::api::ConfigGenParamsLocal;
 use crate::config::distributedgen::PeerHandleOps;
 use crate::envs::FM_MAX_CLIENT_CONNECTIONS_ENV;
 use crate::fedimint_core::encoding::Encodable;
@@ -151,6 +151,23 @@ pub struct ServerConfigLocal {
     pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
 }
 
+/// All the info we configure prior to config gen starting
+#[derive(Debug, Clone)]
+pub struct ConfigGenSettings {
+    /// Bind address for our P2P connection
+    pub p2p_bind: SocketAddr,
+    /// Bind address for our API connection
+    pub api_bind: SocketAddr,
+    /// URL for our P2P connection
+    pub p2p_url: SafeUrl,
+    /// URL for our API connection
+    pub api_url: SafeUrl,
+    /// The default params for the modules
+    pub default_params: ConfigGenParamsRequest,
+    /// Registry for config gen
+    pub registry: ServerModuleInitRegistry,
+}
+
 #[derive(Debug, Clone)]
 /// All the parameters necessary for generating the `ServerConfig` during setup
 ///
@@ -159,6 +176,21 @@ pub struct ServerConfigLocal {
 pub struct ConfigGenParams {
     pub local: ConfigGenParamsLocal,
     pub consensus: ConfigGenParamsConsensus,
+}
+
+/// Config gen params that are only used locally, shouldn't be shared
+#[derive(Debug, Clone)]
+pub struct ConfigGenParamsLocal {
+    /// Our peer id
+    pub our_id: PeerId,
+    /// Our TLS private key
+    pub our_private_key: rustls::PrivateKey,
+    /// Secret API auth string
+    pub api_auth: ApiAuth,
+    /// Bind address for P2P communication
+    pub p2p_bind: SocketAddr,
+    /// Bind address for API communication
+    pub api_bind: SocketAddr,
 }
 
 impl ServerConfigConsensus {
@@ -429,7 +461,6 @@ impl ServerConfig {
         p2p_bind_addr: SocketAddr,
         params: &ConfigGenParams,
         registry: ServerModuleInitRegistry,
-        task_group: &TaskGroup,
         code_version_str: String,
     ) -> anyhow::Result<Self> {
         let _timing /* logs on drop */ = timing::TimeReporter::new("distributed-gen").info();
@@ -466,10 +497,12 @@ impl ServerConfig {
             p2p_status_receivers.insert(peer, p2p_receiver);
         }
 
+        let task_group = TaskGroup::new();
+
         let connections = ReconnectP2PConnections::new(
             params.local.our_id,
             connector,
-            task_group,
+            &task_group,
             Some(p2p_status_senders),
         )
         .await
@@ -485,6 +518,32 @@ impl ServerConfig {
             );
 
             sleep(Duration::from_secs(1)).await;
+        }
+
+        info!(
+            target: LOG_NET_PEER_DKG,
+            "Comparing peer connection info checksum..."
+        );
+
+        let checksum = params.consensus.peers.consensus_hash_sha256();
+
+        connections
+            .send(Recipient::Everyone, DkgPeerMessage::Checksum(checksum))
+            .await;
+
+        for peer in params
+            .peer_ids()
+            .into_iter()
+            .filter(|p| *p != params.local.our_id)
+        {
+            ensure!(
+                connections
+                    .receive_from_peer(peer)
+                    .await
+                    .context("Unexpected shutdown of p2p connections")?
+                    == DkgPeerMessage::Checksum(checksum),
+                "Peer {peer} has not send the correct checksum message"
+            );
         }
 
         info!(
@@ -519,6 +578,41 @@ impl ServerConfig {
             module_cfgs.insert(module_id, cfg);
         }
 
+        let cfg = ServerConfig::from(
+            params.clone(),
+            params.local.our_id,
+            broadcast_public_keys,
+            broadcast_sk,
+            module_cfgs,
+            code_version_str,
+        );
+
+        info!(
+            target: LOG_NET_PEER_DKG,
+            "Comparing consensus config checksum..."
+        );
+
+        let checksum = cfg.consensus.consensus_hash_sha256();
+
+        connections
+            .send(Recipient::Everyone, DkgPeerMessage::Checksum(checksum))
+            .await;
+
+        for peer in params
+            .peer_ids()
+            .into_iter()
+            .filter(|p| *p != params.local.our_id)
+        {
+            ensure!(
+                connections
+                    .receive_from_peer(peer)
+                    .await
+                    .context("Unexpected shutdown of p2p connections")?
+                    == DkgPeerMessage::Checksum(checksum),
+                "Peer {peer} has not send the correct checksum message"
+            );
+        }
+
         info!(
             target: LOG_NET_PEER_DKG,
             "Distributed key generation has completed successfully!"
@@ -543,16 +637,9 @@ impl ServerConfig {
             error!(target: LOG_NET_PEER_DKG, "Timeout waiting for dkg completion confirmation");
         }
 
-        let server = ServerConfig::from(
-            params.clone(),
-            params.local.our_id,
-            broadcast_public_keys,
-            broadcast_sk,
-            module_cfgs,
-            code_version_str,
-        );
+        task_group.shutdown_join_all(None).await?;
 
-        Ok(server)
+        Ok(cfg)
     }
 }
 
@@ -596,7 +683,7 @@ impl ConfigGenParams {
         self.consensus
             .peers
             .iter()
-            .map(|(id, peer)| (*id, peer.cert.clone()))
+            .map(|(id, peer)| (*id, rustls::Certificate(peer.cert.clone())))
             .collect::<BTreeMap<_, _>>()
     }
 

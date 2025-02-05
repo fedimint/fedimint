@@ -10,7 +10,7 @@ use std::{env, unreachable};
 use anyhow::{anyhow, bail, format_err, Context, Result};
 use fedimint_api_client::api::StatusResponse;
 use fedimint_core::admin_client::{
-    ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams,
+    ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams, ServerStatus,
 };
 use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 use fedimint_core::envs::is_env_var_set;
@@ -688,6 +688,121 @@ impl FedimintCli {
             "--ws",
             endpoint,
             "set-password",
+        )
+        .run()
+        .await
+    }
+
+    pub async fn set_local_leader_params(
+        self,
+        name: &str,
+        federation_name: &str,
+        auth: &ApiAuth,
+        endpoint: &str,
+    ) -> Result<()> {
+        cmd!(
+            self,
+            "--password",
+            &auth.0,
+            "admin",
+            "config-gen",
+            "--ws",
+            endpoint,
+            "set-local-params",
+            name,
+            "--federation-name",
+            federation_name
+        )
+        .run()
+        .await
+    }
+
+    pub async fn set_local_follower_params(
+        self,
+        name: String,
+        auth: &ApiAuth,
+        endpoint: &str,
+    ) -> Result<()> {
+        cmd!(
+            self,
+            "--password",
+            &auth.0,
+            "admin",
+            "config-gen",
+            "--ws",
+            endpoint,
+            "set-local-params",
+            name
+        )
+        .run()
+        .await
+    }
+
+    pub async fn get_peer_connection_info(self, auth: &ApiAuth, endpoint: &str) -> Result<String> {
+        let json = cmd!(
+            self,
+            "--password",
+            &auth.0,
+            "admin",
+            "config-gen",
+            "--ws",
+            endpoint,
+            "get-peer-connection-info",
+        )
+        .out_json()
+        .await?;
+
+        Ok(serde_json::from_value(json)?)
+    }
+
+    pub async fn add_peer_connection_info(
+        self,
+        params: &str,
+        auth: &ApiAuth,
+        endpoint: &str,
+    ) -> Result<()> {
+        cmd!(
+            self,
+            "--password",
+            &auth.0,
+            "admin",
+            "config-gen",
+            "--ws",
+            endpoint,
+            "add-peer-connection-info",
+            params
+        )
+        .run()
+        .await
+    }
+
+    pub async fn server_status(self, auth: &ApiAuth, endpoint: &str) -> Result<ServerStatus> {
+        let json = cmd!(
+            self,
+            "--password",
+            &auth.0,
+            "admin",
+            "config-gen",
+            "--ws",
+            endpoint,
+            "server-status",
+        )
+        .out_json()
+        .await?;
+
+        Ok(serde_json::from_value(json)?)
+    }
+
+    pub async fn start_dkg(self, auth: &ApiAuth, endpoint: &str) -> Result<()> {
+        cmd!(
+            self,
+            "--password",
+            &auth.0,
+            "admin",
+            "config-gen",
+            "--ws",
+            endpoint,
+            "start-dkg"
         )
         .run()
         .await
