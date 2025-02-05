@@ -31,9 +31,9 @@ bitcoin = { workspace = true }
 clap = { workspace = true }
 clap_complete = "4.5.42"
 fedimint-aead = { workspace = true }
-fedimint-api-client = { path = "../fedimint-api-client", version = "=0.6.0-rc.1" }
+fedimint-api-client = { path = "../fedimint-api-client", version = "=0.6.0-rc.2" }
 fedimint-bip39 = { workspace = true }
-fedimint-client = { path = "../fedimint-client", version = "=0.6.0-rc.1" }
+fedimint-client = { path = "../fedimint-client", version = "=0.6.0-rc.2" }
 fedimint-core = { workspace = true }
 fedimint-eventlog = { workspace = true }
 fedimint-ln-client = { workspace = true, features = ["cli"] }
