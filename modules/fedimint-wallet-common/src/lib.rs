@@ -41,16 +41,6 @@ pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVers
 pub const SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION: ModuleConsensusVersion =
     ModuleConsensusVersion::new(2, 2);
 
-/// Used for estimating a feerate that will confirm within a target number of
-/// blocks.
-///
-/// Since the wallet's UTXOs are a shared resource, we need to reduce the risk
-/// of a peg-out transaction getting stuck in the mempool, hence we use a low
-/// confirmation target. Other fee bumping techniques, such as RBF and CPFP, can
-/// help mitigate this problem but are out-of-scope for this version of the
-/// wallet.
-pub const CONFIRMATION_TARGET: u16 = 1;
-
 /// To further mitigate the risk of a peg-out transaction getting stuck in the
 /// mempool, we multiply the feerate estimate returned from the backend by this
 /// value.
@@ -494,8 +484,6 @@ pub enum WalletCreationError {
     RpcError(String),
     #[error("Feerate source error: {0}")]
     FeerateSourceError(String),
-    #[error("Block count source error: {0}")]
-    BlockCountSourceError(String),
 }
 
 #[derive(Debug, Error, Encodable, Decodable, Hash, Clone, Eq, PartialEq)]

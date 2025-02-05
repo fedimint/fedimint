@@ -35,6 +35,8 @@ pub mod bitcoincore;
 mod esplora;
 mod feerate_source;
 
+pub mod shared;
+
 // <https://blockstream.info/api/block-height/0>
 const MAINNET_GENESIS_BLOCK_HASH: &str =
     "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
@@ -199,7 +201,7 @@ impl DynBitcoindRpc {
         self,
         task_group: &TaskGroup,
         on_update: impl Fn(u64) + Send + Sync + 'static,
-    ) -> anyhow::Result<()> {
+    ) {
         let mut desired_interval = get_bitcoin_polling_interval();
 
         // Note: atomic only to workaround Send+Sync async closure limitation
@@ -238,7 +240,6 @@ impl DynBitcoindRpc {
                 }
             }
         });
-        Ok(())
     }
 
     /// Spawns a background task that queries the feerate periodically and sends

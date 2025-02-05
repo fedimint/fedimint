@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use anyhow::bail;
@@ -76,6 +77,7 @@ pub async fn run(
         &None,
         &Connector::Tcp,
     );
+    let shared_anymap = Arc::new(RwLock::new(BTreeMap::default()));
 
     for (module_id, module_cfg) in &cfg.consensus.modules {
         match module_init_registry.get(&module_cfg.kind) {
@@ -99,6 +101,7 @@ pub async fn run(
                         task_group,
                         cfg.local.identity,
                         global_api.with_module(*module_id),
+                        shared_anymap.clone(),
                     )
                     .await?;
 

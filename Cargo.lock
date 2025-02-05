@@ -2524,6 +2524,7 @@ dependencies = [
  "esplora-client 0.10.0",
  "fedimint-core",
  "fedimint-logging",
+ "fedimint-server-core",
  "futures",
  "hex",
  "jaq-core",
@@ -3614,6 +3615,7 @@ dependencies = [
  "async-trait",
  "fedimint-api-client",
  "fedimint-core",
+ "tokio",
 ]
 
 [[package]]
@@ -3915,6 +3917,7 @@ dependencies = [
  "bitcoincore-rpc",
  "devimint",
  "fedimint-api-client",
+ "fedimint-bitcoind",
  "fedimint-client",
  "fedimint-core",
  "fedimint-dummy-client",
