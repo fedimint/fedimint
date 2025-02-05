@@ -463,10 +463,13 @@
 <a href="#462" id="462">462</a>
 <a href="#463" id="463">463</a>
 <a href="#464" id="464">464</a>
-<a href="#465" id="465">465</a></pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::ensure;
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a></pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::ensure;
 <span class="kw">use </span>devimint::devfed::DevJitFed;
 <span class="kw">use </span>devimint::federation::Client;
-<span class="kw">use </span>devimint::version_constants::VERSION_0_5_0_ALPHA;
+<span class="kw">use </span>devimint::version_constants::{VERSION_0_5_0_ALPHA, VERSION_0_7_0_ALPHA};
 <span class="kw">use </span>devimint::{cmd, util, Gatewayd};
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::envs::{is_env_var_set, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV};
@@ -770,26 +773,29 @@
     // relative fee. Gateway receives: 1_000_000 payment.
     </span>test_fees(fed_id, <span class="kw-2">&amp;</span>client, gw_lnd, gw_ldk, <span class="number">1_000_000 </span>- <span class="number">1_000 </span>- <span class="number">1_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="macro">info!</span>(<span class="string">"Testing payment summary..."</span>);
-    <span class="kw">let </span>lnd_payment_summary = gw_lnd.payment_summary().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">assert_eq!</span>(lnd_payment_summary.outgoing.total_success, <span class="number">4</span>);
-    <span class="macro">assert_eq!</span>(lnd_payment_summary.outgoing.total_failure, <span class="number">2</span>);
-    <span class="macro">assert_eq!</span>(lnd_payment_summary.incoming.total_success, <span class="number">3</span>);
-    <span class="macro">assert_eq!</span>(lnd_payment_summary.incoming.total_failure, <span class="number">0</span>);
-    <span class="macro">assert!</span>(lnd_payment_summary.outgoing.median_latency.is_some());
-    <span class="macro">assert!</span>(lnd_payment_summary.outgoing.average_latency.is_some());
-    <span class="macro">assert!</span>(lnd_payment_summary.incoming.median_latency.is_some());
-    <span class="macro">assert!</span>(lnd_payment_summary.incoming.average_latency.is_some());
+    <span class="kw">let </span>gatewayd_version = util::Gatewayd::version_or_default().<span class="kw">await</span>;
+    <span class="kw">if </span>gatewayd_version &gt;= <span class="kw-2">*</span>VERSION_0_7_0_ALPHA {
+        <span class="macro">info!</span>(<span class="string">"Testing payment summary..."</span>);
+        <span class="kw">let </span>lnd_payment_summary = gw_lnd.payment_summary().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">assert_eq!</span>(lnd_payment_summary.outgoing.total_success, <span class="number">4</span>);
+        <span class="macro">assert_eq!</span>(lnd_payment_summary.outgoing.total_failure, <span class="number">2</span>);
+        <span class="macro">assert_eq!</span>(lnd_payment_summary.incoming.total_success, <span class="number">3</span>);
+        <span class="macro">assert_eq!</span>(lnd_payment_summary.incoming.total_failure, <span class="number">0</span>);
+        <span class="macro">assert!</span>(lnd_payment_summary.outgoing.median_latency.is_some());
+        <span class="macro">assert!</span>(lnd_payment_summary.outgoing.average_latency.is_some());
+        <span class="macro">assert!</span>(lnd_payment_summary.incoming.median_latency.is_some());
+        <span class="macro">assert!</span>(lnd_payment_summary.incoming.average_latency.is_some());
 
-    <span class="kw">let </span>ldk_payment_summary = gw_ldk.payment_summary().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">assert_eq!</span>(ldk_payment_summary.outgoing.total_success, <span class="number">4</span>);
-    <span class="macro">assert_eq!</span>(ldk_payment_summary.outgoing.total_failure, <span class="number">2</span>);
-    <span class="macro">assert_eq!</span>(ldk_payment_summary.incoming.total_success, <span class="number">4</span>);
-    <span class="macro">assert_eq!</span>(ldk_payment_summary.incoming.total_failure, <span class="number">0</span>);
-    <span class="macro">assert!</span>(ldk_payment_summary.outgoing.median_latency.is_some());
-    <span class="macro">assert!</span>(ldk_payment_summary.outgoing.average_latency.is_some());
-    <span class="macro">assert!</span>(ldk_payment_summary.incoming.median_latency.is_some());
-    <span class="macro">assert!</span>(ldk_payment_summary.incoming.average_latency.is_some());
+        <span class="kw">let </span>ldk_payment_summary = gw_ldk.payment_summary().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">assert_eq!</span>(ldk_payment_summary.outgoing.total_success, <span class="number">4</span>);
+        <span class="macro">assert_eq!</span>(ldk_payment_summary.outgoing.total_failure, <span class="number">2</span>);
+        <span class="macro">assert_eq!</span>(ldk_payment_summary.incoming.total_success, <span class="number">4</span>);
+        <span class="macro">assert_eq!</span>(ldk_payment_summary.incoming.total_failure, <span class="number">0</span>);
+        <span class="macro">assert!</span>(ldk_payment_summary.outgoing.median_latency.is_some());
+        <span class="macro">assert!</span>(ldk_payment_summary.outgoing.average_latency.is_some());
+        <span class="macro">assert!</span>(ldk_payment_summary.incoming.median_latency.is_some());
+        <span class="macro">assert!</span>(ldk_payment_summary.incoming.average_latency.is_some());
+    }
 
     <span class="prelude-val">Ok</span>(())
 }

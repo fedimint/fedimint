@@ -2414,7 +2414,9 @@
 <a href="#2413" id="2413">2413</a>
 <a href="#2414" id="2414">2414</a>
 <a href="#2415" id="2415">2415</a>
-<a href="#2416" id="2416">2416</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2416" id="2416">2416</a>
+<a href="#2417" id="2417">2417</a>
+<a href="#2418" id="2418">2418</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -4311,14 +4313,16 @@
     <span class="doccomment">/// Iterates through all of the federations the gateway is registered with
     /// and requests to remove the registration record.
     </span><span class="kw">pub async fn </span>unannounce_from_all_federations(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
-        <span class="kw">let </span>gateway_keypair = dbtx.load_gateway_keypair_assert_exists().<span class="kw">await</span>;
+        <span class="kw">if </span><span class="self">self</span>.is_running_lnv1() {
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
+            <span class="kw">let </span>gateway_keypair = dbtx.load_gateway_keypair_assert_exists().<span class="kw">await</span>;
 
-        <span class="self">self</span>.federation_manager
-            .read()
-            .<span class="kw">await
-            </span>.unannounce_from_all_federations(gateway_keypair)
-            .<span class="kw">await</span>;
+            <span class="self">self</span>.federation_manager
+                .read()
+                .<span class="kw">await
+                </span>.unannounce_from_all_federations(gateway_keypair)
+                .<span class="kw">await</span>;
+        }
     }
 
     <span class="kw">fn </span>create_lightning_client(
