@@ -49,6 +49,8 @@ macro_rules! fedimint_build_code_version_env {
 pub const FM_BITCOIN_RPC_KIND_ENV: &str = "FM_BITCOIN_RPC_KIND";
 /// Env var for bitcoin URL (obsolete, use FM_DEFAULT_* instead)
 pub const FM_BITCOIN_RPC_URL_ENV: &str = "FM_BITCOIN_RPC_URL";
+/// Env var how often to poll bitcoin source
+pub const FM_BITCOIN_POLLING_INTERVAL_SECS_ENV: &str = "FM_BITCOIN_POLLING_INTERVAL_SECS";
 
 /// Env var for bitcoin RPC kind (default, used only as a default value for DKG
 /// config settings)
