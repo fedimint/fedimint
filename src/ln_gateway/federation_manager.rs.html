@@ -306,11 +306,11 @@
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, NonCommittable};
 <span class="kw">use </span>fedimint_core::util::Spanned;
 <span class="kw">use </span>fedimint_gw_client::GatewayClientModule;
+<span class="kw">use </span>fedimint_gwv2_client::GatewayClientModuleV2;
 <span class="kw">use </span>tracing::info;
 
 <span class="kw">use </span><span class="kw">crate</span>::db::GatewayDbtxNcExt;
 <span class="kw">use </span><span class="kw">crate</span>::error::{AdminGatewayError, FederationNotConnected};
-<span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::GatewayClientModuleV2;
 <span class="kw">use </span><span class="kw">crate</span>::rpc::FederationInfo;
 <span class="kw">use </span><span class="kw">crate</span>::AdminResult;
 

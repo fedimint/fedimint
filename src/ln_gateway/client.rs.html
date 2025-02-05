@@ -236,10 +236,10 @@
 <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_gw_client::GatewayClientInit;
+<span class="kw">use </span>fedimint_gwv2_client::GatewayClientInitV2;
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{FederationConfig, GatewayDbExt};
 <span class="kw">use </span><span class="kw">crate</span>::error::AdminGatewayError;
-<span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::GatewayClientInitV2;
 <span class="kw">use crate</span>::{AdminResult, Gateway};
 
 <span class="attr">#[derive(Debug, Clone)]

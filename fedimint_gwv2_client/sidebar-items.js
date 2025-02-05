@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["EXPIRATION_DELTA_MINIMUM_V2"],"enum":["FinalReceiveState","GatewayClientStateMachinesV2"],"mod":["api","complete_sm","events","receive_sm","send_sm"],"struct":["GatewayClientContextV2","GatewayClientInitV2","GatewayClientModuleV2","GatewayOperationMetaV2"],"trait":["IGatewayClientV2"]};

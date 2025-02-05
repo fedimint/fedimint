@@ -102,22 +102,20 @@
 <a href="#101" id="101">101</a>
 <a href="#102" id="102">102</a>
 <a href="#103" id="103">103</a>
-<a href="#104" id="104">104</a>
-<a href="#105" id="105">105</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#104" id="104">104</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{SystemTime, UNIX_EPOCH};
 
 <span class="kw">use </span>fedimint_client::ClientHandle;
 <span class="kw">use </span>fedimint_eventlog::{
     DBTransactionEventLogExt, Event, EventKind, EventLogId, PersistedLogEntry,
 };
-<span class="kw">use </span>fedimint_mint_client::event::{OOBNotesReissued, OOBNotesSpent};
-<span class="kw">use </span>fedimint_wallet_client::events::{DepositConfirmed, WithdrawRequest};
-
-<span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::events::{
+<span class="kw">use </span>fedimint_gwv2_client::events::{
     CompleteLightningPaymentSucceeded, IncomingPaymentFailed, IncomingPaymentStarted,
     IncomingPaymentSucceeded, OutgoingPaymentFailed, OutgoingPaymentStarted,
     OutgoingPaymentSucceeded,
 };
+<span class="kw">use </span>fedimint_mint_client::event::{OOBNotesReissued, OOBNotesSpent};
+<span class="kw">use </span>fedimint_wallet_client::events::{DepositConfirmed, WithdrawRequest};
 
 <span class="kw">pub const </span>ALL_GATEWAY_EVENTS: [EventKind; <span class="number">11</span>] = [
     OutgoingPaymentStarted::KIND,
