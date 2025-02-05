@@ -20,3 +20,4 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-core = { workspace = true }
+tokio = { workspace = true }

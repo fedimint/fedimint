@@ -37,6 +37,7 @@ use common::{
 };
 use envs::get_feerate_multiplier;
 use fedimint_api_client::api::{DynModuleApi, FederationApiExt};
+use fedimint_bitcoind::shared::ServerModuleSharedBitcoin;
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -82,7 +83,7 @@ use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::{
     Rbf, UnknownWalletInputVariantError, WalletInputError, WalletOutputError, WalletOutputV0,
-    CONFIRMATION_TARGET, MODULE_CONSENSUS_VERSION,
+    MODULE_CONSENSUS_VERSION,
 };
 use futures::future::join_all;
 use futures::{FutureExt, StreamExt};
@@ -295,6 +296,7 @@ impl ServerModuleInit for WalletInit {
             args.task_group(),
             args.our_peer_id(),
             args.module_api().clone(),
+            &args.shared(),
         )
         .await?
         .into())
@@ -1003,7 +1005,7 @@ pub struct Wallet {
     /// Block count updated periodically by a background task
     block_count_rx: watch::Receiver<Option<u64>>,
     /// Fee rate updated periodically by a background task
-    fee_rate_rx: watch::Receiver<Feerate>,
+    fee_rate_rx: watch::Receiver<Option<Feerate>>,
 
     /// Broadcasting pending txes can be triggered immediately with this
     broadcast_pending: Arc<Notify>,
@@ -1022,50 +1024,48 @@ impl Wallet {
         task_group: &TaskGroup,
         our_peer_id: PeerId,
         module_api: DynModuleApi,
+        shared_bitcoin: &ServerModuleSharedBitcoin,
     ) -> anyhow::Result<Wallet> {
         let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
-        Ok(Self::new_with_bitcoind(cfg, db, btc_rpc, task_group, our_peer_id, module_api).await?)
+        Ok(Self::new_with_bitcoind(
+            cfg,
+            db,
+            btc_rpc,
+            task_group,
+            our_peer_id,
+            module_api,
+            shared_bitcoin,
+        )
+        .await?)
     }
 
     pub async fn new_with_bitcoind(
         cfg: WalletConfig,
         db: &Database,
-        bitcoind: DynBitcoindRpc,
+        btc_rpc: DynBitcoindRpc,
         task_group: &TaskGroup,
         our_peer_id: PeerId,
         module_api: DynModuleApi,
+        shared_bitcoin: &ServerModuleSharedBitcoin,
     ) -> Result<Wallet, WalletCreationError> {
-        let (block_count_tx, block_count_rx) = watch::channel(None);
-        let (fee_rate_tx, fee_rate_rx) = watch::channel(cfg.consensus.default_fee);
+        let fee_rate_rx = shared_bitcoin
+            .feerate_receiver(cfg.consensus.network.0, btc_rpc.clone())
+            .await
+            .map_err(|e| {
+                WalletCreationError::FeerateSourceError(e.fmt_compact_anyhow().to_string())
+            })?;
+        let block_count_rx = shared_bitcoin
+            .block_count_receiver(cfg.consensus.network.0, btc_rpc.clone())
+            .await;
         let broadcast_pending = Arc::new(Notify::new());
-        Self::spawn_broadcast_pending_task(task_group, &bitcoind, db, broadcast_pending.clone());
-        bitcoind
-            .clone()
-            .spawn_fee_rate_update_task(task_group, cfg.consensus.network.0, CONFIRMATION_TARGET, {
-                move |feerate| {
-                    debug!(target: LOG_MODULE_WALLET, %feerate, "New feerate");
-                    let _ = fee_rate_tx.send(feerate);
-                }
-            })
-            .map_err(|e| WalletCreationError::FeerateSourceError(e.to_string()))?;
-        bitcoind
-            .clone()
-            .spawn_block_count_update_task(task_group, {
-                move |count| {
-                    debug!(target: LOG_MODULE_WALLET, %count, "New block count");
-                    let _ = block_count_tx.send(Some(count));
-                }
-            })
-            .map_err(|e| WalletCreationError::BlockCountSourceError(e.to_string()))?;
+        Self::spawn_broadcast_pending_task(task_group, &btc_rpc, db, broadcast_pending.clone());
 
         let peer_supported_consensus_version =
             Self::spawn_peer_supported_consensus_version_task(module_api, task_group);
 
-        let bitcoind_rpc = bitcoind;
-
         let bitcoind_net = NetworkLegacyEncodingWrapper(
             retry("verify network", backoff_util::aggressive_backoff(), || {
-                bitcoind_rpc.get_network()
+                btc_rpc.get_network()
             })
             .await
             .map_err(|e| WalletCreationError::RpcError(e.to_string()))?,
@@ -1080,7 +1080,7 @@ impl Wallet {
         let wallet = Wallet {
             cfg,
             secp: Default::default(),
-            btc_rpc: bitcoind_rpc,
+            btc_rpc,
             our_peer_id,
             block_count_rx,
             fee_rate_rx,
@@ -1210,7 +1210,11 @@ impl Wallet {
         #[allow(clippy::cast_precision_loss)]
         #[allow(clippy::cast_sign_loss)]
         Feerate {
-            sats_per_kvb: ((self.fee_rate_rx.borrow().sats_per_kvb as f64
+            sats_per_kvb: ((self
+                .fee_rate_rx
+                .borrow()
+                .unwrap_or(self.cfg.consensus.default_fee)
+                .sats_per_kvb as f64
                 * get_feerate_multiplier())
             .round()) as u64,
         }

@@ -10,6 +10,7 @@ use std::time::Duration;
 use anyhow::{anyhow, ensure, format_err, Context};
 use bls12_381::{G1Projective, Scalar};
 use fedimint_bitcoind::create_bitcoind;
+use fedimint_bitcoind::shared::ServerModuleSharedBitcoin;
 use fedimint_core::bitcoin::hashes::sha256;
 use fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -24,7 +25,7 @@ use fedimint_core::module::{
     ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
     TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
-use fedimint_core::task::{timeout, TaskGroup};
+use fedimint_core::task::timeout;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
@@ -62,7 +63,7 @@ use tokio::sync::watch;
 use tpe::{
     derive_pk_share, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare, SecretKeyShare,
 };
-use tracing::{debug, trace};
+use tracing::trace;
 
 use crate::db::{
     BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, DecryptionKeyShareKey,
@@ -188,7 +189,9 @@ impl ServerModuleInit for LightningInit {
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
-        Ok(Lightning::new(args.cfg().to_typed()?, args.task_group())?.into())
+        Ok(Lightning::new(args.cfg().to_typed()?, &args.shared())
+            .await?
+            .into())
     }
 
     fn trusted_dealer_gen(
@@ -632,13 +635,14 @@ impl ServerModule for Lightning {
 }
 
 impl Lightning {
-    fn new(cfg: LightningConfig, task_group: &TaskGroup) -> anyhow::Result<Self> {
-        let (block_count_tx, block_count_rx) = watch::channel(None);
+    async fn new(
+        cfg: LightningConfig,
+        shared_bitcoin: &ServerModuleSharedBitcoin,
+    ) -> anyhow::Result<Self> {
         let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
-        btc_rpc.spawn_block_count_update_task(task_group, move |count| {
-            debug!(target: LOG_MODULE_LNV2, %count, "New block count");
-            let _ = block_count_tx.send(Some(count));
-        })?;
+        let block_count_rx = shared_bitcoin
+            .block_count_receiver(cfg.consensus.network, btc_rpc.clone())
+            .await;
 
         Ok(Lightning {
             cfg,

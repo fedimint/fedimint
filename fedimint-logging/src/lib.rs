@@ -23,6 +23,7 @@ use tracing_subscriber::{EnvFilter, Layer};
 
 pub const LOG_CONSENSUS: &str = "fm::consensus";
 pub const LOG_CORE: &str = "fm::core";
+pub const LOG_SERVER: &str = "fm::server";
 pub const LOG_DB: &str = "fm::db";
 pub const LOG_DEVIMINT: &str = "fm::devimint";
 pub const LOG_NET: &str = "fm::net";
@@ -56,6 +57,7 @@ pub const LOG_GATEWAY: &str = "fm::gw";
 pub const LOG_BITCOIND_ESPLORA: &str = "fm::bitcoind::esplora";
 pub const LOG_BITCOIND_CORE: &str = "fm::bitcoind::bitcoincore";
 pub const LOG_BITCOIND: &str = "fm::bitcoind";
+pub const LOG_BITCOIN: &str = "fm::bitcoin";
 
 /// Consolidates the setup of server tracing into a helper
 #[derive(Default)]

@@ -7,6 +7,7 @@ use assert_matches::assert_matches;
 use bitcoin::secp256k1;
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::DynGlobalApi;
+use fedimint_bitcoind::shared::ServerModuleSharedBitcoin;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::ClientHandleArc;
 use fedimint_core::db::mem_impl::MemDatabase;
@@ -19,7 +20,7 @@ use fedimint_core::{sats, Amount, BitcoinHash, Feerate, InPoint, PeerId, Transac
 use fedimint_dummy_client::DummyClientInit;
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
-use fedimint_server::core::ServerModule;
+use fedimint_server::core::{ServerModule, ServerModuleShared as _};
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::envs::{FM_TEST_BACKEND_BITCOIN_RPC_KIND_ENV, FM_TEST_USE_REAL_DAEMONS_ENV};
 use fedimint_testing::fixtures::Fixtures;
@@ -658,6 +659,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
         PeerId::from(0),
         // FIXME: use proper mock
         DynGlobalApi::from_endpoints([], &None, &Connector::Tcp).with_module(module_instance_id),
+        &ServerModuleSharedBitcoin::new(task_group.clone()),
     )
     .await?;
 
