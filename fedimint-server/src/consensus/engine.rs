@@ -601,7 +601,7 @@ impl ConsensusEngine {
         let session_checkpoint_dir = checkpoint_dir.join(format!("{session_index}"));
 
         {
-            let _timing /* logs on drop */ = timing::TimeReporter::new("database-checkpoint").level(Level::DEBUG);
+            let _timing /* logs on drop */ = timing::TimeReporter::new("database-checkpoint").level(Level::TRACE);
             match self.db.checkpoint(&session_checkpoint_dir) {
                 Ok(()) => {
                     debug!(target: LOG_CONSENSUS, ?session_checkpoint_dir, ?session_index, "Created db checkpoint");
@@ -614,7 +614,7 @@ impl ConsensusEngine {
 
         {
             // Check if any old checkpoint need to be cleaned up
-            let _timing /* logs on drop */ = timing::TimeReporter::new("remove-database-checkpoint").level(Level::DEBUG);
+            let _timing /* logs on drop */ = timing::TimeReporter::new("remove-database-checkpoint").level(Level::TRACE);
             if let Err(e) = self.delete_old_database_checkpoint(session_index, &checkpoint_dir) {
                 warn!(target: LOG_CONSENSUS, ?e, "Could not delete old checkpoints");
             }
