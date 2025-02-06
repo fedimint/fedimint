@@ -246,6 +246,8 @@ let
         moreutils-ts
         parallel
         time
+
+        removeReferencesTo
       ]
       ++ builtins.attrValues { inherit (pkgs) cargo-nextest; }
       ++ [
@@ -285,6 +287,15 @@ let
     # and in case of errors and panics, would like to see the
     # line numbers etc.
     dontStrip = true;
+
+    postFixup = ''
+      # the toolchain package itself is handled by crane, so it's easiest
+      # to just recover its path from the current rustc binary itself
+      rust_toolchain_pkg=$(dirname $(dirname $(which rustc)))
+      >&2 echo "Removing references to $rust_toolchain_pkg"
+
+      find "$out" -type f -executable -exec remove-references-to -t $rust_toolchain_pkg '{}' +
+    '';
   };
 
   commonCliTestArgs = commonArgs // {
