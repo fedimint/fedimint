@@ -540,6 +540,15 @@ jobs:
             if [[ $GITHUB_REF_TYPE == "tag" ]]; then
               >&2 echo "Building: $bin"
               nix build -L .#$bin
+
+              closure_size=$(nix path-info -rS --json .#bin| jq '. | to_entries[] | select(.value.ultimate == true) | .value.narSize')
+              >&2 echo "$bin's Nix closure size: $closure_size"
+
+              if [ 150000000 -lt $closure_size ]; then
+                >&2 echo "$bin's Nix closure size seems too big: $closure_size"
+                exit 1
+              fi
+
               >&2 echo "Pushing to cachix: $bin"
               cachix push fedimint -c 8 -j 8 $(nix-store --query --references $(readlink -f result)) $(readlink -f result)
               >&2 echo "Pining in cachix: fedimint-release-$bin:$BUILD_ID"
