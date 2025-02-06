@@ -1619,7 +1619,7 @@ impl MintClientModule {
     }
 
     /// Fetches and removes notes from the wallet to be sent to the recipient
-    /// out of band. The not selection algorithm is determined by
+    /// out of band. The note selection algorithm is determined by
     /// `note_selector`. See the [`NotesSelector`] trait for available
     /// implementations.
     ///
