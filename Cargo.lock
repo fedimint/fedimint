@@ -5671,9 +5671,9 @@ dependencies = [
 
 [[package]]
 name = "jaq-json"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8daf2b52304419d7bf5ec32891884c65274a3eedc0b5834b84627099901a1176"
+checksum = "01d103d9e961e2d60c31c57b31869351ba3fa01717f2dde499eaf20da9cedd96"
 dependencies = [
  "foldhash",
  "hifijson",
@@ -5685,9 +5685,9 @@ dependencies = [
 
 [[package]]
 name = "jaq-std"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80e2c65cceafd4c0019f15a0dac7c0dd659b0fcf5182fc3a10d15b89d89ac6e8"
+checksum = "df355eccf9f27755ebc5d0b220d4878b7017349b904acde126909155ba33fba1"
 dependencies = [
  "aho-corasick",
  "base64 0.22.1",
